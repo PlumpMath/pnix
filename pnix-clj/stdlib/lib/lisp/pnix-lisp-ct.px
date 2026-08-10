@@ -1,0 +1,1139 @@
+# ════════════════════════════════════════════════════════════════════════
+# stdlib/lib/lisp/pnix-lisp-ct.px — pnix-lisp CT surface: morphism pipeline
+# (idea.md §18.3 — CT 직접표현, 값계산 ❌)
+# ════════════════════════════════════════════════════════════════════════
+#
+# pnix-lisp의 *표면(surface)* 은 CT다 — 숫자/값계산이 아니라 **morphism(화살)**
+# 과 **composition**. 표기 = composition pipeline:
+#     (A->B  B->C)  =  A→C       (codomain=domain 체인)
+#     (a->x:f x->y:g) = a→y      (:via 라벨 = 그 화살의 함수/이름)
+# 합성이 안 되면(codomain ≠ domain) = **Held** = functor 법칙 위반 = §1 verify
+# (white blood cell). 객체는 이름/문자열/문장(= graph DB 노드; 문장은 NL converge
+# 축이 처리, 여기선 라벨로만 들고 있음). substrate(pnix-lisp.px lambda/eval=engine)
+# 과 이 surface(CT)는 분리(§18.3 불가침).
+
+let
+  lisp  = import ./pnix-lisp.px;             # substrate: reader only (값 eval 안 씀)
+  trace = import ../math/solver-step-trace.px;  # ★ 수렴: 정본 step bead (§16, NOT parallel)
+  blackboard = import ../math/solver-blackboard.px;  # ★ 수렴: graph DB (resident edge store)
+  asps = import ../coding/algorithm-source-to-pnix-sequence.px;  # ★ 수렴: code→morphism normalize
+  alias = import ../math/solver-nl-entity-alias.px;  # ★ 수렴: universal symbol(號) @ref_kind:name#idx
+  ft    = import ../math/fact-temporality.px;        # ★ 수렴: ordered(시간함의)/timeless(선언) 분류
+  pr    = import ../coding/partiality-registry.px;   # ★ 단일 부분성 등록처(analysis-bundle 와 공유, 순환 0)
+  td    = import ./term-dag.px;                       # ★ slice 2: first-order term layer (구조 매칭/left-linearity)
+  tierKo = import ../knowledge/genesis-tier-korean.px;  # ★ slice 21: tier↔한국어 라벨 단일 source(인라인 하드코딩 제거)
+  mathKo = import ../knowledge/math-symbol-korean.px;   # ★ slice 22: math 심볼/규칙패턴↔한국어(english) 단일 source
+  unitsKo = import ../knowledge/standard-units-korean.px;  # ★ A: 표준단위(SI)↔한국어(english) 단일 source
+  B = builtins;
+  splitOn = re: s: B.filter B.isString (B.split re s);
+
+  # parse a morphism atom "A->B" or "A->B:via" → { from; to; via }
+  parseMorph = name:
+    let ab = splitOn "->" name; in
+    if B.length ab != 2 then { held = "not a morphism (need from->to): " + name; }
+    else let rest = splitOn ":" (B.elemAt ab 1); in
+         { from = B.elemAt ab 0;
+           to   = B.elemAt rest 0;
+           via  = if B.length rest >= 2 then B.elemAt rest 1 else null; };
+
+  # ── ★ ONE composition-law gate (codomain==domain), field-name agnostic ──────
+  # The {from;to} morphism view and the {before;after} canonical-bead view are
+  # the SAME gate — one fold, two thin field-name adapters (NO parallel lane).
+  # functor/composition law: codomain of step i == domain of step i+1, else Held.
+  composeChain = domF: codF: items:
+    let n = B.length items;
+        go = i: accCod: accSteps:
+          if i >= n then { cod = accCod; steps = accSteps; }
+          else let m = B.elemAt items i; mDom = B.getAttr domF m; in
+               if accCod != mDom
+               then { held = "composition broken at step " + (B.toString i)
+                            + ": codomain '" + accCod + "' ≠ domain '" + mDom + "'"; }
+               else go (i + 1) (B.getAttr codF m) (accSteps ++ [ m ]);
+    in if n == 0 then { held = "empty pipeline"; }
+       else let f = B.elemAt items 0; r = go 1 (B.getAttr codF f) [ f ]; in
+            if r ? held then r else { dom = B.getAttr domF f; cod = r.cod; steps = r.steps; };
+
+  # compose [ {from;to;via} … ] → composed morphism OR Held (thin adapter on composeChain).
+  composeMorphs = ms:
+    let r = composeChain "from" "to" ms;
+    in if r ? held then r else { from = r.dom; to = r.cod; steps = r.steps; };
+
+  # pipe : string → composed morphism or Held.  "(A->B B->C)" → {from=A;to=C;…}
+  pipe = s:
+    let data = lisp.read s;                          # [ {sym="A->B"} {sym="B->C"} ]
+        ms   = B.map (d: parseMorph d.sym) data;
+    in composeMorphs ms;
+
+  # ── ★ CONVERGENCE: a morphism IS a canonical mkStep bead (idea.md §18.5) ──
+  # No parallel structure — pnix-lisp-ct PRODUCES the §16 step bead
+  # {step_id;role;before;after;operation;relation;why;render_ko}; the gate runs
+  # on bead.before/after (= composition law). morphism = step, relation = morphism
+  # id, why = receipt. Downstream (blackboard/trace/NL) consumes these unchanged.
+  viaOf  = m: if (m ? via) && m.via != null then m.via else (m.from + "->" + m.to);
+  toStep = m:                                        # morphism {from;to;via;defined_when?;grading?} → bead
+    let base = trace.mkStep ("m:" + m.from + "->" + m.to) "transform" m.from m.to
+                 (viaOf m) (viaOf m) ("morphism " + m.from + " -> " + m.to) (m.from + " → " + m.to);
+        withDW = if (m ? defined_when) && m.defined_when != null
+                 then base // { defined_when = m.defined_when; } else base;   # 정의역 측면조건
+    in if m ? grading then withDW // { grading = m.grading; } else withDW;
+
+  # ── ★ graded/modal/coeffect 타입층 (effect lattice 심화, defined_when 일반화) ──
+  # 각 morphism이 grading{effect·modality·coeffect}를 *데이터*로 짊(Rust 박힘 아님 = unlimited:
+  # 새 effect/modality/coeffect를 데이터로 추가, 거울이 자기 타입규칙 메타프로그래밍). 합성 =
+  # effect 합집합(graded monad) · modality meet(shared `!` vs linear 제한공유) · coeffect 합집합.
+  # defined_when = effect "partial:<cond>"의 sugar. soundness 게이트는 partial grade(=정의역 의무).
+  dedupS     = xs: B.foldl' (acc: x: if B.elem x acc then acc else acc ++ [ x ]) [ ] xs;
+  countS     = x: xs: B.length (B.filter (y: y == x) xs);   # linear 소비 횟수
+  hasPrefixS = pfx: s: B.stringLength s >= B.stringLength pfx
+                       && (B.substring 0 (B.stringLength pfx) s) == pfx;
+  emptyGrading = { effect = [ ]; modality = "shared"; coeffect = [ ]; };
+  # ★ 불변식(적대검증 w01rngj92): grading.effect 가 의무의 *단일 정본*. bead 의 tier/obligations
+  #   필드를 canonical 로 신뢰 금지 — 의무는 *항상* 여기서 grading.effect(+defined_when fold)로 재추출.
+  #   (freeze 가 grading 을 보존하고 toStep 이 grading 을 전파하므로 frozen 재사용도 재검됨.)
+  gradingOf = b:                                     # bead/morphism → grading (defaults + defined_when fold)
+    let g = if b ? grading then b.grading else { };
+        eff = (if g ? effect then g.effect else [ ])
+              ++ (if (b ? defined_when) && b.defined_when != null then [ "partial:" + b.defined_when ] else [ ]);
+    in { effect = eff;
+         modality = if g ? modality then g.modality else "shared";
+         coeffect = if g ? coeffect then g.coeffect else [ ]; };
+  knownMods = [ "linear" "affine" "relevant" "shared" ];
+  combineGrading = a: b:
+    let ms = [ a.modality b.modality ];                                         # 가장 restrictive 보존(2-way collapse 방지)
+    in {
+      effect   = dedupS (a.effect ++ b.effect);                                 # graded monad: 합집합
+      modality = if B.elem "linear" ms then "linear"
+                 else if B.elem "affine" ms then "affine"
+                 else if B.elem "relevant" ms then "relevant" else "shared";
+      coeffect = dedupS (a.coeffect ++ b.coeffect);                             # 의존 맥락 합집합
+    };
+  # compose canonical step beads: composeChain(codomain==domain) + grading 합성 전파.
+  # ★ 감사 ⓵: partial grade(정의역 조건)를 obligations로 — codomain==domain만으론 0=1 unsound 차단.
+  composeStepBeads = beads:
+    let r = composeChain "before" "after" beads;
+    in if r ? held then r
+       else let grading = B.foldl' (acc: b: combineGrading acc (gradingOf b)) emptyGrading r.steps;
+                obligations = B.filter (hasPrefixS "partial:") grading.effect;
+                # ★ 중복금지 modality: linear(정확히 1)·affine(≤1)은 자원 중복 소비(같은 via 2회+) 금지;
+                # relevant(≥1)·shared(∞)는 중복 허용. (must-use 구분=linear/affine/relevant는 usage-env 필요=다음.)
+                noDupIds   = B.map (s: s.relation) (B.filter (s: B.elem (gradingOf s).modality [ "linear" "affine" ]) r.steps);
+                linearDup  = B.filter (id: (countS id noDupIds) >= 2) (dedupS noDupIds);
+                # ⓵ fail-closed: 알 수 없는 modality(오타 등)는 shared로 묵인 안 함 → 위반으로 노출.
+                invalidMods = dedupS (B.filter (m: !(B.elem m knownMods)) (B.map (s: (gradingOf s).modality) r.steps));
+            in { before = r.dom; after = r.cod; steps = r.steps;
+                 grading = grading;                       # graded/modal/coeffect (데이터, 합성됨)
+                 conditional = obligations != [ ];        # partial grade 미해소 = 조건부로만 정의됨
+                 obligations = obligations;
+                 linear_violations = linearDup;           # linear/affine 자원 중복 소비
+                 invalid_modalities = invalidMods; };     # 알 수 없는 modality (fail-closed)
+  # ★ ONE gate (discharge-aware, slice 4b): partial(discharge 후 잔여)→linear→modality→coeffect.
+  # proven = 재사용 맥락에서 *증명된* 정의역 조건 집합 → 해당 partial 의무 해소(freeze 에 baking 아님,
+  # 합성-시점 재검 = audit fatal#1 의 정확한 discharge). ctx.coeffects = 가용 맥락. 셋 다 한 로직.
+  dropPartialPfx = o: if hasPrefixS "partial:" o then B.substring 8 (B.stringLength o) o else o;
+  # discharge 가능한 의무 = *진짜 정의역 조건*만. 구조적 사실(left-linearity)·미가드 partial op·
+  # ill-formed when 은 *증명 불가* → proven 으로 못 없앰(operator 가 "structural:…" 를 proven 에 넣어도 무시).
+  dischargeable = cond: !(hasPrefixS "structural:" cond) && !(hasPrefixS "undischarged-partial:" cond)
+                        && !(hasPrefixS "illformed-when:" cond);
+  gateComposed = proven: ctx: c:
+    let joinC = xs: B.foldl' (acc: o: if acc == "" then o else acc + ", " + o) "" xs;
+        remaining = B.filter (o: let cond = dropPartialPfx o;
+                                 in !((dischargeable cond) && (B.elem cond proven))) c.obligations;   # ★ discharge(진짜 조건만)
+        available = if ctx ? coeffects then ctx.coeffects else [ ];
+        missing   = B.filter (r: !(B.elem r available)) c.grading.coeffect;
+    in if remaining != [ ]                                                # ⓵ partial: 미해소(discharge 후)
+       then { held = "undischarged definedness obligation"; obligations = remaining;
+              before = c.before; after = c.after;
+              reason = "partial 합성: 정의역 조건 미해소 [" + (joinC remaining) + "]"; }
+       else if c.linear_violations != [ ]                                 # ⓸ linear/affine: 자원 중복
+       then { held = "linear resource duplicated"; linear_violations = c.linear_violations;
+              before = c.before; after = c.after;
+              reason = "linear/affine morphism이 합성 path에서 2회+ 소비됨 [" + (joinC c.linear_violations) + "] — 자원 위반"; }
+       else if (c ? invalid_modalities) && c.invalid_modalities != [ ]    # 알 수 없는 modality = fail-closed
+       then { held = "unknown modality"; invalid_modalities = c.invalid_modalities;
+              before = c.before; after = c.after;
+              reason = "알 수 없는 modality [" + (joinC c.invalid_modalities) + "] — {linear,affine,relevant,shared}만 허용 (fail-open 차단)"; }
+       else if missing != [ ]                                             # coeffect: 요구 맥락 미제공
+       then { held = "missing coeffect context"; missing_coeffects = missing;
+              required = c.grading.coeffect; available = available; before = c.before; after = c.after;
+              reason = "합성이 요구하는 맥락 [" + (joinC missing) + "] 이 현재 context에 없음 — 실행/생성 불가"; }
+       else c;
+  # 강한 게이트 — sound 합성만 통과(미해소 definedness/linear/modality/coeffect → Held).
+  composeSound = beads: let c = composeStepBeads beads; in if c ? held then c else gateComposed [ ] { coeffects = [ ]; } c;
+  composeSoundIn = ctx: beads: let c = composeStepBeads beads; in if c ? held then c else gateComposed [ ] ctx c;
+  # ★ slice 4b: composition-시점 discharge — proven(증명된 조건집합)이 partial 의무 해소.
+  # conditioned 법칙(x/x=1 | x≠0)을 *재사용 맥락에서 x≠0 가 증명*되면 sound 통과(아니면 Held).
+  composeSoundProven = proven: ctx: beads: let c = composeStepBeads beads; in if c ? held then c else gateComposed proven ctx c;
+  # pipeSteps : "(A->B B->C)" → composed trajectory of CANONICAL mkStep beads
+  pipeSteps = s: composeStepBeads (B.map (d: toStep (parseMorph d.sym)) (lisp.read s));
+
+  # ── ★ CONVERGENCE: gate the trajectory against the resident edge store ───
+  # (solver-blackboard, idea.md §0/§1+§14). Each step.relation is a KNOWN
+  # verified edge (resident) or NOVEL (self-gap → held for verification). This
+  # is the gate-graph's known/novel gate, reusing the existing store — no new DB.
+  edgeOf = rel: { edge_id = rel; canonical_key = rel; why = "verified"; };
+  checkAgainstStore = store: composed:
+    if composed ? held then composed
+    else let
+      relOf = s: s.relation;
+      resident = B.filter (s: (blackboard.lookup store (relOf s)).hit) composed.steps;
+      novel    = B.filter (s: !((blackboard.lookup store (relOf s)).hit)) composed.steps;
+    in composed // {
+      resident_edges = B.map relOf resident;
+      novel_edges    = B.map relOf novel;        # = self-gap: held for verification
+      all_known      = novel == [ ];
+    };
+  pipeStepsChecked = store: s: checkAgainstStore store (pipeSteps s);
+
+  # ── ★ CONVERGENCE: code → NL = the trajectory's render_ko lines (§16 conv.) ─
+  # Each canonical bead already carries render_ko (NL). Richer held→NL or
+  # multi-language reverse delegates to `nl/universal-nl-reverse-composer.px`.
+  renderKoLines = composed:
+    if composed ? held then [ composed.held ]
+    else B.map (s: s.render_ko) composed.steps;
+
+  # ── ★ CONVERGENCE: code algorithm → normalized morphism trajectory ───────
+  # `coding/algorithm-source-to-pnix-sequence.px::morphismFor kind` ALREADY
+  # returns a stage chain [s0 s1 … sn]; consecutive pairs ARE morphisms, so the
+  # whole is a composition pipeline. This is the §18.4 normalize INPUT (모든 언어
+  # 알고리즘 패턴 → 통일 gate-graph 표기), reusing the existing owner — no parallel.
+  chainToMorphs = stages:
+    let n = B.length stages;
+        go = i: if i + 1 >= n then [ ]
+                else [ { from = B.elemAt stages i; to = B.elemAt stages (i + 1); via = null; } ]
+                     ++ (go (i + 1));
+    in go 0;
+  fromAlgorithm = kind:                                # algorithm KIND → canonical bead trajectory
+    composeStepBeads (B.map toStep (chainToMorphs (asps.morphismFor kind)));
+
+  # ── ★ CONVERGENCE: universal symbol (號) aliasing — WHOLE + PARTS ────────
+  # idea.md §18.5/§18.7: every part of the trajectory gets a @ref_kind:name#idx
+  # handle via `math/solver-nl-entity-alias.px` (號) — the whole (@gate), each
+  # object (@symbol), each morphism/step (@morphism). This is the macro's premise:
+  # 號 addresses the parts so a (later) domain-switch macro can reference them.
+  allObjects = steps:
+    let raw = (B.map (s: s.before) steps) ++ (B.map (s: s.after) steps);
+    in B.foldl' (acc: x: if B.elem x acc then acc else acc ++ [ x ]) [ ] raw;
+  aliasTrajectory = composed:                          # → 號 alias table (whole + parts)
+    if composed ? held then composed
+    else let
+      # typed-layer 號: 궤적 전체=@gate(합성 gate-graph), 각 객체=@symbol, 각 step=@morphism.
+      wholeEnt = { name = composed.before + "→" + composed.after; role = "trajectory"; ref_kind = "gate"; };
+      objEnts  = B.map (o: { name = o; role = "object"; ref_kind = "symbol"; }) (allObjects composed.steps);
+      stepEnts = B.map (s: { name = s.step_id; role = "morphism"; ref_kind = "morphism"; }) composed.steps;
+    in alias.aliasAll ([ wholeEnt ] ++ objEnts ++ stepEnts);
+
+  # ── domain-switch functor over the gate-graph (idea.md §18.1/§18.7) ─────────
+  # ⚠ 정직: 이건 reader→expander 를 거치는 진짜 매크로(code-as-data 변환)가 *아니라*
+  # 이미-합성된 trajectory 를 받는 런타임 변환 함수다(매크로는 §18.1 의 의미적 역할;
+  # expander 통합은 deferred). A functor = object-rewrite map `fmap` over 號-addressed
+  # objects (A ↦ A'). composeStepBeads 가 합성을 재검사하나, attrset fmap 의 *일관*
+  # rename 은 합성을 깰 수 없으므로 이 gate 는 **형식적**(실질 보호 약함)이다 — 정직히.
+  renameObj = fmap: o: if B.hasAttr o fmap then B.getAttr o fmap else o;
+  domainSwitch = fmap: composed:
+    if composed ? held then composed
+    else composeStepBeads (B.map (b: b // {
+        before    = renameObj fmap b.before;
+        after     = renameObj fmap b.after;
+        why       = "domain-switch: " + b.why;
+        render_ko = (renameObj fmap b.before) + " → " + (renameObj fmap b.after);
+      }) composed.steps);
+
+  # ── ★ SYNTHESIZE (생성): 마디 라이브러리에서 D→…→C 경로 탐색 + 조립 ──────────
+  # 운영자 §18: 분석=생성 한 거울. 가진 morphism 부품(library)으로 target(domain→codomain)
+  # 합성 = bounded DFS path-find(=과거 control 휴리스틱/모세혈관/미개척 graph 탐색); 찾은
+  # path를 composeStepBeads로 gate(codomain==domain). 경로 없으면 Held(새 마디/domainSwitch 필요).
+  # library=[{from;to;via}], target={from;to}. "그 .git엔 없던 것을 부품으로 생성"의 핵.
+  synthesize = library: target:
+    let
+      findPath = cur: visited: depth:
+        if cur == target.to then [ ]
+        else if depth <= 0 then null
+        else let
+          tryEdges = es:
+            if es == [ ] then null
+            else let m = B.head es;
+                     sub = findPath m.to (visited ++ [ m.to ]) (depth - 1);
+                 in if sub == null then tryEdges (B.tail es) else [ m ] ++ sub;
+        in tryEdges (B.filter (m: m.from == cur && !(B.elem m.to visited)) library);
+      path = findPath target.from [ target.from ] 8;
+    in if path == null
+       then { held = "no synthesis path"; from = target.from; to = target.to;
+              reason = "라이브러리에 " + target.from + "→…→" + target.to + " 다리 없음 (새 마디/domain-switch 필요)"; }
+       # ★ 건전성 enforce: partial/linear/affine/unknown-modality + coeffect(target.context, 기본 []=fail-closed:
+       # coeffect 요구 morphism인데 context 미제공이면 Held). composeSoundIn이 composeSound 포함.
+       else composeSoundIn { coeffects = (if target ? context then target.context else [ ]); } (B.map toStep path);
+
+  # ── ★ SYNTHESIZE + BRIDGE: 불일치를 known domain-switch 다리로 연결 ──────────
+  # synthesize가 직접 경로 못 찾을 때, 알려진 type-correspondence(bridges = functor 다리)를
+  # library에 더해 재탐색. 찾은 path의 via="↔bridge" step = 삽입된 다리. = 운영자 "원하는
+  # 부분에 마음대로 연결"(과거 control 휴리스틱/모세혈관). bridges = [{from;to}](closed 대응).
+  synthesizeWithBridge = library: bridges: target:
+    let bridgeEdges = B.map (b: { from = b.from; to = b.to; via = "↔bridge"; }) bridges;
+    in synthesize (library ++ bridgeEdges) target;
+
+  # ── ★ MACRO (expand/group): NL 문장 → 號-grouped concept (idea.md §18.8) ────
+  # 매크로의 본질(운영자 2026-06-15): NL 문장을 extraction → "시간 함의가 드러난
+  # 알고리즘 문장"으로 확장 = universal symbol(號)로 여러 부분문장을 그룹핑+명명
+  # (손실 0). 그룹 = ① ordered(시간함의=sequenced 알고리즘 순서) + ② unfixed(순서
+  # 미정=부분순서=베이지안 seam) + ③ timeless(선언적 수학 조건식=order-free). 이
+  # 그룹핑 = 수학 개념을 boundary 짓는 지칭 = 號의 본질. 분류=fact-temporality,
+  # 명명=solver-nl-entity-alias 수렴(새 구조 0). 역(group→NL)=n-piece NLG=lossy.
+  # ⚠ 정직: parts 는 호출자가 {name, fact_shape} 로 *이미 구조화*해 제공(NL 문장 →
+  # parts 추출 owner 는 아직 부재 = §18.8 deferred). 이 함수는 분류·그룹핑·명명만.
+  conceptGroup = name: parts:
+    let
+      classified = B.map (p:
+        let c = ft.classifyFact { fact_shape = p.fact_shape; };
+        in p // {
+          category = if c ? category then c.category else "held";
+          classify_outcome = if c ? outcome then c.outcome else "classified";
+        }) parts;
+      unclassifiable = B.filter (p: p.category == "held") classified;
+    in
+    # fail-closed: 분류 안 되는 part 하나라도 있으면 전체 Held (silent drop 금지)
+    if unclassifiable != [ ]
+    then { held = "unclassifiable parts (unknown fact_shape)";
+           unknown_parts = B.map (p: { name = p.name; fact_shape = p.fact_shape; outcome = p.classify_outcome; }) unclassifiable;
+           known_shapes = [ "single-statement" "set-of-statements" "fact-of-fact"
+                            "step-sequence" "derivation-chain" "construction-procedure" "algorithm" ]; }
+    else let
+      isOrd = p: p.category == "ordered";
+      fixed = p: if p ? order_fixed then p.order_fixed else true;
+      orderedFixed   = B.filter (p: isOrd p && fixed p) classified;
+      orderedUnfixed = B.filter (p: isOrd p && !(fixed p)) classified;
+      timeless       = B.filter (p: p.category == "timeless") classified;
+      ents = [ { name = name; role = "concept"; ref_kind = "thing"; } ]
+             ++ B.map (p: { name = p.name; role = p.category; ref_kind = "symbol"; }) classified;
+      aliases = alias.aliasAll ents;
+    in {
+      concept = name;
+      concept_alias = (B.head aliases.reference_table).alias;   # @thing:name = 개념 boundary 號
+      ordered_sequence       = B.map (p: p.name) orderedFixed;  # 시간함의 = 알고리즘 순서
+      unfixed_order          = B.map (p: p.name) orderedUnfixed;# 순서 미정 = 부분순서(베이지안 seam)
+      declarative_conditions = B.map (p: p.name) timeless;      # 선언적 수학 조건식 = order-free
+      parts = aliases.reference_table;                          # 號 alias of whole + each part
+      # lossless = 모든 part 가 정확히 한 버킷에 들어갈 때만 참(fail-closed 가 위에서 보장).
+      lossless = (B.length orderedFixed) + (B.length orderedUnfixed) + (B.length timeless)
+                 == (B.length classified);
+    };
+
+  # ── named type-signatures (Haskell-like) + type-match composition gate ─
+  # "f : A -> B" = a NAMED morphism (name = the function/arrow). Composing named
+  # morphisms by name reuses the SAME composition-law gate as a TYPE check
+  # (codomain ≠ domain → Held). = the gate-graph's type-check gate (§18.3/.4):
+  # the common notation is `name : type`, and the gate refuses ill-typed flow.
+  parseSig = s:
+    let norm  = B.replaceStrings [ " " ] [ "" ] s;    # "f : A -> B" → "f:A->B"
+        parts = splitOn ":" norm; in
+    if B.length parts != 2 then { held = "bad signature (need 'name : A->B'): " + s; }
+    else { name = B.elemAt parts 0; morph = parseMorph (B.elemAt parts 1); };
+  sigContext = sigs:                                  # ["f : A -> B" …] → { f = {from;to;via=f}; … }
+    B.listToAttrs (B.map (s: let p = parseSig s; in
+      { name = p.name; value = p.morph // { via = p.name; }; }) sigs);
+  composeNamed = ctx: names:                          # compose named morphisms (type-match gate)
+    composeMorphs (B.map (n: B.getAttr n ctx) names);
+
+  # ── emit gate: ONE canonical morphism → every language profile (diverge) ─
+  # idea.md §18.2: 각 화살 = functor(타입/문법 보존). `emitPreserves` re-parses the
+  # emitted Haskell type-sig and HOLDS if emit broke the type = the emit gate.
+  # ⚠ 수렴(갈라치기 금지, idea.md §18.5): 이 emit은 *type-signature tier* 만.
+  # full-program codegen은 `coding/generic-language-emitter.px`(35+ lang, atom-level)
+  # 에 delegate; `langs`도 `coding/language-syntax-profile.px` 레지스트리로 수렴 예정.
+  langs = [ "haskell" "python" "rust" "typescript" ];
+  emit = lang: m:
+    let nm = if (m ? via) && m.via != null then m.via else "f"; in
+    if lang == "haskell"        then nm + " :: " + m.from + " -> " + m.to
+    else if lang == "python"     then "def " + nm + "(x: " + m.from + ") -> " + m.to + ": ..."
+    else if lang == "rust"       then "fn " + nm + "(x: " + m.from + ") -> " + m.to + " { todo!() }"
+    else if lang == "typescript" then "function " + nm + "(x: " + m.from + "): " + m.to + " {}"
+    else "?";
+  emitAll = m: B.listToAttrs (B.map (l: { name = l; value = emit l m; }) langs);
+  emitPreserves = m:                                   # functor law: emit∘parse recovers type
+    let hs   = emit "haskell" m;                        # "f :: A -> B"  (Haskell '::')
+        back = parseSig (B.replaceStrings [ "::" ] [ ":" ] hs); in   # '::' → ':' for re-parse
+    if (back ? morph) && back.morph.from == m.from && back.morph.to == m.to
+    then { ok = true; emitted = emitAll m; }
+    else { held = "emit broke type preservation"; };
+
+  # ════════════════════════════════════════════════════════════════════════
+  # ── @rewrite-rule / @law (1차 슬라이스) — typed/conditioned rewrite ──────────
+  # ════════════════════════════════════════════════════════════════════════
+  # 감사 정본(deep-research): codomain==domain 만으론 rewrite UNSOUND — "x/x→1" 을
+  # 0/0 에 적용하면 1(거짓) ⇒ 0=1 증명. 건전한 기계 = TYPED/CONDITIONED rewrite:
+  # 규칙이 정의역 조건(defined_when)을 짊고, 가드 없는 partial op 를 건드리는 규칙은
+  # *적용이 아니라 거부(Held)*. ★ one-mirror: rewrite-rule = morphism
+  # {from=lhs; to=rhs; via; defined_when?}; law = 양방향 rewrite-rule; 건전성은
+  # *기존* composeSound/composeSoundIn 을 그대로 통과 — 새 게이트 0개.
+  # (설계·적대검증: workflow w7kdm2h76 — judge 만장일치 morphism-reuse + 3 회의론 fix.)
+
+  # ── 부분성 구조 탐지 (적대검증 hole#1: 표면 토큰화는 buried op 놓침) ──
+  # "x/x" 의 토큰은 통째 "x/x" 라 "/" 못 봄; "(first xs)" 도 "first" 못 봄. → 단어 op 는
+  # 토큰-동일성으로('sin' 이 'sine' 안에서 오탐 안 됨), 기호 op('/')은 부분문자열로
+  # (division 은 항상 partial=보수적). 둘 다 검사 — 정·역 방향 모두 구조적으로 건전.
+  wordPartials   = pr.partialOps ++ pr.partialArithWords;
+  symbolPartials = pr.partialArithSymbols;
+  ruleText  = r: (if r ? lhs then r.lhs else "") + " "
+              + (if r ? rhs then r.rhs else "") + " "
+              + (if (r ? via) && r.via != null then r.via else "");
+  wordToks  = s: B.filter (t: t != "") (splitOn "[^[:alnum:]_-]+" s);
+  # 부분문자열 검사 — 정규식 아님(needle 에 regex 메타문자 '(' '/' 등 안전; byte-scan).
+  hasInfix  = needle: hay:
+    let ln = B.stringLength needle; lh = B.stringLength hay;
+        go = i: if i + ln > lh then false
+                else if (B.substring i ln hay) == needle then true else go (i + 1);
+    in if ln == 0 then false else go 0;
+  rulePartialHits = r:
+    let txt = ruleText r; toks = wordToks txt; in
+    (B.filter (p: B.elem p toks) wordPartials)            # 단어 op = 토큰 동일성
+    ++ (B.filter (sym: hasInfix sym txt) symbolPartials); # 기호 op = 부분문자열(보수)
+
+  # ── when 절 well-formedness (적대검증 hole#5: garbage 'when' 차단, fail-closed) ──
+  # 진짜 정의역 조건 = 관계식(≠ = < > ∈ …) 또는 술어적용("p(x)"의 괄호). blank/무관계어 = 미가드.
+  blankS    = s: B.replaceStrings [ " " "\t" ] [ "" "" ] s;
+  relTokens = [ "=" "≠" "!=" "==" "<" ">" "≤" "≥" "<=" ">=" "∈" "∉" "⊆" "⊇" "(" ];
+  validWhen = w:
+    (w != null) && (B.isString w) && (blankS w != "")
+    && (B.any (t: hasInfix t w) relTokens);
+
+  # ── rewrite-rule {lhs;rhs;via?;when?;grading?;_proven?} → morphism ──
+  # ★ 부분성 주입(정직, 전부 같은 통로 defined_when→gradingOf fold — 별도 게이트 0):
+  #   _proven=true(외부 증명으로 discharge) → 주입 안 함(=core morphism, 합성 통과);
+  #   valid when → 그 조건을 defined_when(이름붙은 의무); when 있는데 ill-formed →
+  #   "illformed-when:"(절대 silent total 금지); when 없고 partial op → "undischarged-partial:<op>".
+  # ★ slice 2a: term-dag 구조 게이트 (적대검증 woordyb9m fatal#2: left-linearity 미구현 → 구현).
+  # 정본(Nishida/Sakai/Sakabe): conditioned rewrite 는 left-linear ∨ (right-linear ∧ non-erasing)
+  # 일 때만 sound. 위반 = 비-discharge Held. + rhs⊆lhs(dangling metavar) 차단. 변수 없는 규칙은 통과.
+  ruleStructReason = r:
+    if !(r ? lhs) || !(r ? rhs) then null                              # rule 아님(from/to morphism) → pass
+    else if (r.lhs == null) || (r.rhs == null) || !(B.isString r.lhs) || !(B.isString r.rhs)
+    then "malformed-rule"                                              # 적대검증 w6ljisd4w: null/비-string → 크래시 대신 Held
+    else let lhs = td.parse r.lhs; rhs = td.parse r.rhs;
+             vL = td.vars lhs; vR = td.vars rhs;
+             subset = a: b: B.foldl' (acc: v: acc && (B.elem v b)) true a;
+             leftLin = td.isLinear lhs; rightLin = td.isLinear rhs;
+             nonErase = subset vL vR;             # lhs 변수 안 버림(non-erasing)
+             wellF = subset vR vL;                # rhs 새 변수 도입 안 함
+             # ★ 적대검증 w56zssj3g: 함수자 위치 변수((?g0 ?x ?g1) 처럼 head 가 metavar)는 *모든 application*
+             #   매칭 = 메타패턴(metaGeneralize 산물) = 재작성으론 거의 거짓. 구조적으로 거부(플래그 의존 아닌
+             #   게이트 차단·canary 사각 무관). 동일-함수자 일반화((f ?x)⇒(g ?x), head=f 구체)는 통과.
+             headMetaVar =
+               if (B.isList lhs) && (lhs != [ ]) then td.isMetaVar (B.head lhs)
+               else if (lhs ? vec) && (lhs.vec != [ ]) then td.isMetaVar (B.head lhs.vec)
+               else false;
+         in if td.isMetaVar lhs then "variable-lhs"        # lhs=단일 변수 → 모든 항 매칭(표준 TRS 금지)
+            else if headMetaVar then "metavar-head"        # 함수자 위치 변수 → 모든 application 매칭(메타패턴, 재작성 아님)
+            else if !wellF then "unbound-rhs-metavar"
+            else if !(leftLin || (rightLin && nonErase)) then "nonlinear-erasing-rewrite"
+            else null;
+  ruleToMorph = r:
+    let
+      via0    = if r ? via then r.via else null;
+      structR = ruleStructReason r;
+      proven  = (r ? _proven) && (r._proven == true);
+      whenRaw = if r ? when then r.when else null;
+      hasWhen = whenRaw != null;
+      whenOk  = hasWhen && (validWhen whenRaw);
+      hits    = rulePartialHits r;
+      dw = if structR != null then "structural:" + structR   # ★ 최우선·비discharge(구조 unsound = 등록 거부)
+           else if proven then null
+           else if whenOk then whenRaw
+           else if hasWhen then "illformed-when:" + whenRaw
+           else if hits != [ ] then "undischarged-partial:" + (B.head hits)
+           else null;
+    in { from = if B.isString r.lhs then r.lhs else "⊥";   # null-safe(malformed → ⊥, structural:malformed-rule 가 Held)
+         to   = if B.isString r.rhs then r.rhs else "⊥"; via = via0; }
+       // (if dw != null then { defined_when = dw; } else { })
+       // (if r ? grading then { grading = r.grading; } else { });
+  ruleToStep = r: toStep (ruleToMorph r);
+
+  # ── slice 2b: 실제 rewrite 적용 (term-dag, sound-gated) ──
+  # applyRule = 구조게이트 통과한 규칙만 적용(unsound → Held). normalize = 규칙 SET 을
+  # fixpoint 까지 반복(★ bounded: 종료순서/confluence 아직 없음 → step 상한, 도달 시 bounded=true).
+  applyRule = rule: termStr:
+    let sr = ruleStructReason rule; in
+    if sr != null then { held = "structurally-unsound rule"; reason = sr; }
+    else let r = td.rewriteOnce { lhs = td.parse rule.lhs; rhs = td.parse rule.rhs; } (td.parse termStr);
+         in { result = td.serialize r.term; fired = r.fired; };
+  normalize = rules: termStr:
+    let sound = B.filter (rule: (ruleStructReason rule) == null) rules;
+        stepOnce = term:
+          let go = i: if i >= (B.length sound) then { term = term; fired = false; }
+                      else let rl = B.elemAt sound i;
+                               r = td.rewriteOnce { lhs = td.parse rl.lhs; rhs = td.parse rl.rhs; } term;
+                           in if r.fired then { term = r.term; fired = true; } else go (i + 1);
+          in go 0;
+        loop = n: term: st: if n <= 0 then { term = term; bounded = true; steps = st; }
+                            else let s = stepOnce term;
+                                 in if s.fired then loop (n - 1) s.term (st + 1) else { term = term; bounded = false; steps = st; };
+        res = loop 200 (td.parse termStr) 0;
+    in { result = td.serialize res.term; term = res.term; bounded = res.bounded; steps = res.steps;  # cost(=rewrite 횟수)
+         dropped = (B.length rules) - (B.length sound); };   # 구조-unsound 규칙 제외 수
+
+  # reductionKeys = leftmost 재작성으로 방문한 *모든* term 의 alpha-정규 key 집합(사이클/bound 정지).
+  # ★ 최종 NF(normalize.result)만 보면 collapse 후 발산이 NF 를 가려 joinability 가 fail-open
+  #   (적대검증 we0fzx5zb FATAL: 루프 규칙이 canary 한 변을 발산시켜 |−1|=−1 유도를 은폐). 방문집합은
+  #   collapse 가 일어난 *그 순간*의 공통 reduct 를 포착 → 발산 무관, fail-CLOSED. = path 교집합 joinability.
+  reductionKeys = rules: termStr:
+    let sound = B.filter (rule: (ruleStructReason rule) == null) rules;
+        stepOnce = term:
+          let go = i: if i >= (B.length sound) then { term = term; fired = false; }
+                      else let rl = B.elemAt sound i;
+                               r = td.rewriteOnce { lhs = td.parse rl.lhs; rhs = td.parse rl.rhs; } term;
+                           in if r.fired then { term = r.term; fired = true; } else go (i + 1);
+          in go 0;
+        ak = t: td.key (td.alphaCanon t);
+        loop = n: term: acc:
+          let k = ak term; in
+          if B.elem k acc then acc                          # 사이클(leftmost=결정적) → 방문집합 안정, 정지
+          else if n <= 0 then acc ++ [ k ]                  # bound 도달 → 지금까지 집합
+          else let s = stepOnce term;
+               in if s.fired then loop (n - 1) s.term (acc ++ [ k ]) else acc ++ [ k ];  # 정규형
+    in loop 200 (td.parse termStr) [ ];
+
+  # ── slice 2c: content-addressed rule identity (audit high#7 positional 號 → 안정 주소) ──
+  # ruleKey = 구조 정규(td.key 단사) → run 간 안정·whitespace 무관; A/B functor 매핑·dedup 전제.
+  ruleKey = rule:
+    (td.key (td.parse rule.lhs)) + " => " + (td.key (td.parse rule.rhs))
+    + (if (rule ? when) && (rule.when != null) && (blankS rule.when != "")
+       then " | " + (blankS rule.when) else "");                       # when 정규화(공백 무관, 적대검증 w6ljisd4w)
+  # ★ dedup: key 충돌 시 _proven 변형 우선(적대검증 w6ljisd4w HIGH: proven 규칙이 silently 버려지면 discharge 손실).
+  dedupRules = rules:
+    let keys = dedupS (B.map ruleKey rules);                           # 고유 key(순서 보존)
+        isProven = r: (r ? _proven) && (r._proven == true);
+        pick = k: let cands = B.filter (r: (ruleKey r) == k) rules;
+                      proven = B.filter isProven cands;
+                  in if proven != [ ] then B.head proven else B.head cands;
+        kept = B.map pick keys;
+    in { kept = kept; removed = (B.length rules) - (B.length kept); };
+
+  # ── slice 3b: critical-pair confluence 사전검사 (audit high#3; ROOT overlap, subterm=3c) ──
+  # 두 sound 규칙의 lhs 가 unify 하면 root critical overlap → 두 reduct 가 규칙SET 으로 같은
+  # 정규형에 도달(joinable)해야 confluent. 미joinable critical pair = non-confluent(비결정 canonicalize).
+  criticalPairRoot = r1: r2:
+    let mgu = td.unify (td.parse r1.lhs) (td.parse r2.lhs); in
+    if mgu == null then null
+    else { redex   = td.serialize (td.substFull mgu (td.parse r1.lhs));
+           reduct1 = td.serialize (td.substFull mgu (td.parse r1.rhs));
+           reduct2 = td.serialize (td.substFull mgu (td.parse r2.rhs)); };
+  confluentRoot = rules:
+    let sound = B.filter (r: (ruleStructReason r) == null) rules;
+        idx   = let go = i: if i >= (B.length sound) then [ ] else [ i ] ++ go (i + 1); in go 0;
+        pairs = B.foldl' (acc: i:
+                  B.foldl' (acc2: j:
+                    if i < j then
+                      let cp = criticalPairRoot (B.elemAt sound i) (B.elemAt sound j); in
+                      if cp == null then acc2
+                      else let n1 = normalize sound cp.reduct1; n2 = normalize sound cp.reduct2;
+                               joinable = (n1.result == n2.result) && (!n1.bounded) && (!n2.bounded);
+                           in acc2 ++ [ (cp // { joinable = joinable; }) ]
+                    else acc2) acc idx) [ ] idx;
+        nonjoin = B.filter (p: !p.joinable) pairs;
+    in { confluent = (nonjoin == [ ]); critical_pairs = B.length pairs; nonjoinable = nonjoin; };
+
+  # ── slice 3c: FULL critical pairs (subterm overlap 포함, 변수 rename) — audit high#3 완결 ──
+  # r1 의 모든 비-변수 위치 p 에서 subterm 이 r2.lhs(rename)와 unify → critical pair:
+  # r1 을 root 에 적용(σ rhs1) vs r2 를 p 에 적용(σ (lhs1[p:=rhs2])). 둘 다 σ(lhs1) 의 reduct.
+  criticalPairs = r1: r2:
+    let l1 = td.parse r1.lhs; rh1 = td.parse r1.rhs;
+        l2 = td.renameTerm "#2" (td.parse r2.lhs); rh2 = td.renameTerm "#2" (td.parse r2.rhs);
+    in B.foldl' (acc: p:
+         let sub = td.at l1 p; in
+         if td.isMetaVar sub then acc                        # 변수 위치 overlap 제외(표준 KB)
+         else let mgu = td.unify sub l2; in
+              if mgu == null then acc
+              else acc ++ [ { pos = p;
+                              reduct1 = td.serialize (td.substFull mgu rh1);
+                              reduct2 = td.serialize (td.substFull mgu (td.replaceAtPath l1 p rh2)); } ])
+       [ ] (td.positions l1);
+  # 적대검증 wcn4hzhd9: ① bounded=undecided(≠non-joinable) ② alpha-정규화 후 joinable 비교(?x vs ?x#2 동치).
+  confluent = rules:
+    let sound = B.filter (r: (ruleStructReason r) == null) rules;
+        idx = let go = i: if i >= (B.length sound) then [ ] else [ i ] ++ go (i + 1); in go 0;
+        allCP = B.foldl' (acc: i: B.foldl' (acc2: j:
+                  acc2 ++ (criticalPairs (B.elemAt sound i) (B.elemAt sound j))) acc idx) [ ] idx;
+        ak = t: td.key (td.alphaCanon t);                              # alpha-canonical key
+        judged = B.map (cp:
+                   if cp.reduct1 == cp.reduct2 then cp // { bounded = false; joinable = true; }  # 자명 동일(self-overlap 등)
+                   else let n1 = normalize sound cp.reduct1; n2 = normalize sound cp.reduct2;
+                            bnd = n1.bounded || n2.bounded;
+                        in cp // { bounded = bnd; joinable = (!bnd) && ((ak n1.term) == (ak n2.term)); }) allCP;
+        nonjoin = B.filter (cp: (!cp.bounded) && (!cp.joinable)) judged;  # 종료+상이 = PROVEN non-confluent
+        undecid = B.filter (cp: cp.bounded) judged;                      # bound 초과 = 미결(거짓 거부 방지)
+    in { confluent = (nonjoin == [ ]) && (undecid == [ ]);               # 완전 입증 confluent
+         proven_non_confluent = (nonjoin != [ ]);
+         nonjoinable = nonjoin; undecided = undecid; critical_pairs = B.length judged; };
+
+  # ── slice 4a: freeze (audit fatal#1) — 검증 궤적을 한 symbol 로 압축하되 *obligation 보존* ──
+  # 망가진 freeze(조건 버리고 CORE 등록) → 재사용서 0=1 재개통. 올바른 freeze: 의무를 grading
+  # (effect 의 partial:)에 짊은 채 CONDITIONED morphism 으로(의무 0 이면 CORE). 재합성 때 gradingOf
+  # 가 의무 재검 → 미discharge 면 Held. = conditioned 법칙(x/x=1 | x≠0)을 unconditioned 정본으로
+  # 안 얼림. frozen_from = 압축 출처 궤적(receipt). 깨진 합성은 freeze 불가.
+  freeze = name: beads:
+    let c = composeStepBeads beads; in
+    if c ? held then c
+    # ★ 의무 단일 정본 = grading(아래). tier/obligations 필드는 *receipt/hint 전용*(정본 아님) —
+    #   재사용 재검은 toStep→gradingOf 가 grading.effect 에서 재추출(w01rngj92 불변식). defined_when 은
+    #   일부러 안 둠(grading.effect 에 이미 있어 중복 카운트 방지).
+    else { from = c.before; to = c.after; via = name;
+           grading = c.grading;                              # ★ partial/coeffect/modality 의무 전부 보존(정본)
+           # conditioned = 재검 필요한 의무 있음(partial 정의역 · coeffect 맥락 · linear/affine 자원). core = 무조건.
+           tier = if (c.obligations != [ ]) || (c.grading.coeffect != [ ])
+                     || (B.elem c.grading.modality [ "linear" "affine" ])
+                  then "conditioned" else "core";
+           obligations = c.obligations;
+           frozen_from = B.map (s: s.relation) c.steps; };
+
+  # ── slice 5a: false-equation canary (thorn-DB) + cost-aware A/B arena (=두 run functor) ──
+  # canary = 알려진 거짓식. 규칙SET 추가 후 canary 의 lhs/rhs 가 같은 정규형 → 거짓식 유도 = 위반.
+  # ★ 구조적 sound 이나 *의미적* 거짓인 규칙(0=>1 은 ruleStructReason 통과)을 잡는 immutable thorn.
+  # 핵심 가시(불변) + 확장 코퍼스(thorn-corpus.px, auditable 성장). reductionKeys PATH 교집합으로 검사.
+  falseEquationCanary = [
+    { lhs = "0"; rhs = "1"; }                              # 0 = 1
+    { lhs = "(abs (neg one))"; rhs = "(neg one)"; }        # |−1| = −1
+    { lhs = "true"; rhs = "false"; }                       # true = false
+  ] ++ (import ./thorn-corpus.px);
+  canaryViolations = rules:
+    # ★ joinability = 두 변의 reduction PATH(방문집합) 교집합 ≠ ∅ (공통 reduct = 거짓식 유도).
+    #   최종 NF 동일성 + !bounded 가드는 collapse-후-발산에서 fail-OPEN(we0fzx5zb FATAL) → path 교집합으로
+    #   fail-CLOSED 전환: (abs ?x)⇒?x 가 (abs (neg one))→(neg one) 으로 1스텝 collapse 하면, 이후 루프가
+    #   발산해도 방문집합이 (neg one) 을 공유 → 위반 포착. 발산 자체가 은폐 수단이 못 됨.
+    let derivesFalse = c:
+          let ka = reductionKeys rules c.lhs; kb = reductionKeys rules c.rhs;
+          in B.any (x: B.elem x kb) ka;
+    in B.filter derivesFalse falseEquationCanary;
+  canaryPasses = rules: (canaryViolations rules) == [ ];
+
+  # A/B arena: baseline run vs (candidate 우선 + baseline) run 을 corpus 로 비교(functor: 같은 task,
+  # 바뀐 건 candidate 가 압축한 부분). promote = canary 통과(soundness) ∧ 정답 안 줄고 ∧ 비용↓ 또는
+  # 정답↑(cost-aware utility). soundness 가 dispose, utility 가 rank. corpus=[{term; expected}].
+  # ★ 적대검증 wzjrb9wft fix#2: bounded(발산) run 의 steps 를 유한 cost 로 세면 ranking 역전 →
+  #   per-term 비교, cost 는 *둘 다 종료*한 term 만(bounded=무한대 취급, race 제외).
+  arenaAB = baseline: candidate: corpus:
+    let withC = candidate ++ baseline;                                   # candidate 우선(학습 shortcut)
+        perTerm = B.map (t:
+          let nb = normalize baseline t.term; nc = normalize withC t.term;
+          in { base_ok = (nb.result == t.expected) && (!nb.bounded);
+               cand_ok = (nc.result == t.expected) && (!nc.bounded);
+               both_term = (!nb.bounded) && (!nc.bounded); bs = nb.steps; cs = nc.steps; }) corpus;
+        cnt = f: B.length (B.filter f perTerm);
+        base_correct = cnt (p: p.base_ok); cand_correct = cnt (p: p.cand_ok);
+        costTerms = B.filter (p: p.both_term) perTerm;                   # ★ 둘 다 종료한 term 만 cost race
+        base_cost = B.foldl' (a: p: a + p.bs) 0 costTerms;
+        cand_cost = B.foldl' (a: p: a + p.cs) 0 costTerms;
+        canaryOk = canaryPasses withC;
+        noRegress  = cand_correct >= base_correct;
+        utilityWin = (cand_correct > base_correct)
+                     || ((cand_correct == base_correct) && (cand_cost < base_cost));
+    in { baseline_correct = base_correct; candidate_correct = cand_correct;
+         baseline_steps = base_cost; candidate_steps = cand_cost;
+         canary_ok = canaryOk; utility_win = utilityWin;
+         promote = canaryOk && noRegress && utilityWin;                  # ★ soundness ∧ utility
+         reason = if !canaryOk then "canary 위반(거짓식 유도)"
+                  else if !noRegress then "regression(정답 감소)"
+                  else if !utilityWin then "utility 없음(정답·비용 개선 0)"
+                  else "promote"; };
+
+  # ── slice 5b: symbol synthesis gate (ChatGPT 설계) — candidate 승격 = soundness ∧ utility ──
+  # 적대검증 wzjrb9wft fix#1,3,4 배선: ① 각 규칙 sound(composeRules Held=구조/partial/modality 의무
+  # + strict left-linear[승격엔 right-linear escape 금지] + self-application[비종료]) ② 전역 confluence
+  # (confluent; validateRuleSet 의 contradictory-lhs 는 confluent shortcut[a→b·a→d]을 오거부하므로 confluent
+  # 직접 사용) ③ canary ④ A/B arena(cost-aware) → discard / inline(trace) / promote(core).
+  promoteCandidate = baseline: candidate: corpus:
+    let unsoundRule = r:
+          ((composeRules [ r ]) ? held)                                              # 구조/partial/modality 미해소
+          || ((r ? lhs) && (B.isString r.lhs) && !(td.isLinear (td.parse r.lhs)))    # 승격=strict left-linear
+          || ((r ? lhs) && (r ? rhs) && (B.isString r.lhs) && (B.isString r.rhs)
+              && (r.lhs != r.rhs) && (containsTerm r.lhs r.rhs));                     # self-application(비종료)
+        unsoundRules = B.filter unsoundRule candidate;
+        cfl = confluent (baseline ++ candidate);                                      # 전역 confluence(shortcut 허용)
+        arena = arenaAB baseline candidate corpus;
+    in if unsoundRules != [ ]
+       then { decision = "discard"; tier = "rejected"; reason = "candidate rule unsound (구조/partial/non-left-linear/self-app)";
+              unsound = B.map (r: r.lhs + " => " + r.rhs) unsoundRules; }
+       else if cfl.proven_non_confluent
+       then { decision = "discard"; tier = "rejected"; reason = "non-confluent (critical-pair 미joinable)"; nonjoinable = cfl.nonjoinable; }
+       else if !arena.canary_ok
+       then { decision = "discard"; tier = "rejected"; reason = "canary 위반(거짓식 유도)"; arena = arena; }
+       else if !arena.promote
+       then { decision = "inline"; tier = "trace"; reason = arena.reason; arena = arena; }   # sound but no utility
+       else { decision = "promote"; tier = "core"; reason = "sound ∧ utility"; arena = arena;
+              keys = B.map ruleKey candidate; };                                              # registry content-addr
+
+  # ── slice 6b: 살아있는 registry 운영 logic (영속 bytes = redb host; logic = .px) ──
+  # tier 생애주기: candidate → conditioned/canonical(승격) | trace(inline) | rejected(discard) | quarantined(stale).
+  mkRegistryEntry = name: rules: promotion:
+    { name = name;
+      key = if rules == [ ] then name else ruleKey (B.head rules);     # content-addressed
+      rules = rules; decision = promotion.decision; reason = promotion.reason;
+      tier = if promotion.decision == "promote" then "canonical"
+             else if promotion.decision == "inline" then "trace" else "rejected"; };
+  # requalify: entry 를 *현재* 게이트 + resident registry 로 재검(oracle 확장 등) → stale 면 quarantine.
+  # = audit "partiality-registry 변경 시 frozen symbol re-certify/quarantine" + "full-resident-store 재검".
+  # ★ 정밀: entry 가 *새로* 충돌을 도입했을 때만 quarantine. resident 자체가 이미 non-confluent 면
+  #   (다른 두 entry 가 충돌) 무고한 entry 를 탓하지 않음(residentBad 가드). 충돌 쌍은 각자 자기
+  #   resident(나머지)와 검사될 때 잡힘.
+  requalify = residentRules: entry:
+    let structBad = B.any (r: (ruleStructReason r) != null) entry.rules;
+        residentBad = (confluent residentRules).proven_non_confluent;       # resident 자체가 이미 비결정
+        cflNew = confluent (residentRules ++ entry.rules);
+    in if structBad then entry // { tier = "quarantined"; requalify_note = "stale: 구조 unsound (현 게이트)"; }
+       else if cflNew.proven_non_confluent && (!residentBad)                 # entry 가 새 충돌 도입
+       then entry // { tier = "quarantined"; requalify_note = "stale: non-confluent (resident 와 충돌)"; }
+       else entry // { requalify_note = "ok"; };
+  # registry 모니터링: tier 히스토그램(bloat 감시 = Minton/Soar utility 파국 조기경보).
+  registryStats = entries:
+    let cnt = t: B.length (B.filter (e: e.tier == t) entries);
+    in { canonical = cnt "canonical"; conditioned = cnt "conditioned"; trace = cnt "trace";
+         quarantined = cnt "quarantined"; rejected = cnt "rejected"; total = B.length entries; };
+
+  # ── slice 6c: genesis 루프 한 바퀴 — 채굴 → 심사 → 승격 → baseline 합류(자기개선) ──
+  # mineShortcut: baseline 으로 termStr 를 풀어 (termStr ⇒ 정규형) 압축 shortcut 후보 채굴
+  # (E=mc² collapse). ≤1step/발산은 압축가치 0 → null. = "일반화는 궤적에서 자라난다".
+  mineShortcut = baseline: termStr:
+    let n = normalize baseline termStr;
+    in if n.bounded || n.steps <= 1 then null else { lhs = termStr; rhs = n.result; };
+  # genesisRound: candidate 들 promoteCandidate 심사 → registry entry → 승격(canonical)된 규칙은
+  # baseline 에 합류 = 다음 문제풀이에서 재사용(self-improvement). soundness ∧ utility 통과만.
+  genesisRound = baseline: candidates: corpus:
+    let idx = let go = i: if i >= (B.length candidates) then [ ] else [ i ] ++ go (i + 1); in go 0;
+        entries = B.map (i: let c = B.elemAt candidates i;
+                            in mkRegistryEntry ("g" + (B.toString i)) [ c ]
+                                 (promoteCandidate baseline [ c ] corpus)) idx;
+        promoted = B.filter (e: e.tier == "canonical") entries;
+        newRules = B.foldl' (acc: e: acc ++ e.rules) [ ] promoted;
+    in { entries = entries; stats = registryStats entries;
+         promoted_count = B.length promoted; new_baseline = baseline ++ newRules; };
+
+  # ── slice 8: live trajectory genesis — 여러 성공 궤적 → anti-unification 일반화 → 심사 ──
+  # mineShortcut 은 ground shortcut(A⇒D *기억* = 메모이제이션). 진짜 *일반화*는 여러 궤적의 LGG:
+  #   (f a)⇒(g a), (f b)⇒(g b)  →  (f ?g0)⇒(g ?g0).  = "일반화는 (수동 propose 아니라) 성공
+  #   궤적에서 자라난다". 미가드 일반화((f a)⇒c, (f b)⇒d → rhs var ⊄ lhs)는 wellFormed=false →
+  #   promoteCandidate 가 거부(unsound). lhs·rhs 가로질러 metavar consistency = 항 packing 후
+  #   antiUnify(공유 store)로 한 번에.
+  # packing 전용 marker: 직접 생성(parse 경유 X)·unpack 은 위치 1/2 만 serialize(위치 0 재파싱 X) →
+  # 어떤 *파싱된* term 도 이 atom 과 구조적으로 같을 수 없어 충돌 불가(glyph 희소성 아님, we0fzx5zb).
+  ruleMarker    = { sym = "⟪rule⟫"; };
+  packRule      = r: [ ruleMarker (td.parse r.lhs) (td.parse r.rhs) ];
+  ruleAntiUnify = r1: r2:
+    let g = td.antiUnify (packRule r1) (packRule r2);                        # [ marker lhs' rhs' ]
+    in { lhs = td.serialize (B.elemAt g 1); rhs = td.serialize (B.elemAt g 2); };
+  generalizeRules = rules:                                                   # ground 규칙들 → 하나의 LGG
+    if rules == [ ] then null
+    else B.foldl' ruleAntiUnify (B.head rules) (B.tail rules);
+  isGeneralization = rule: (td.vars (td.parse rule.lhs)) != [ ];             # lhs metavar 有 = 귀납 도약
+
+  # mineTrajectories: 실제 풀이 시작항들 → 각 ground shortcut 채굴(null=압축가치0 제외).
+  mineTrajectories = baseline: starts:
+    B.filter (s: s != null) (B.map (mineShortcut baseline) starts);
+  # genesisFromTrajectories: 라이브 라운드 — 궤적 채굴 → LGG 일반화 → promoteCandidate 심사 →
+  # ★ 정직한 tier(증명된 것만 신뢰):
+  #   · ground(metavar無)=baseline 의 *증명된 정리* → promo 결정 그대로(canonical 가능), 합류
+  #   · 일반화 + promote + proven-confluent = sound 보존확장 → conditioned conjecture(합류·flagged·반증가능)
+  #   · 일반화 + promote + confluence 미결(bounded) = 미신뢰 추측 → quarantined(기록만·합류 안 함) = fail-closed
+  #   = "증명된 것만 KEEP[신뢰], 모르는 것[추측]은 [기록하되] Held[신뢰 보류]".
+  genesisFromTrajectories = baseline: starts:
+    let grounds = (dedupRules (mineTrajectories baseline starts)).kept;     # 중복 궤적 dedup → witness/corpus 과대계상 방지(we0fzx5zb)
+        general = generalizeRules grounds;
+        corpus  = B.map (g: { term = g.lhs; expected = g.rhs; }) grounds;     # 각 궤적 = utility witness
+    in if general == null
+       then { decision = "skip"; reason = "압축가능 궤적 없음(≤1step/발산)";
+              ground_count = B.length grounds; new_baseline = baseline; }
+       else let promo = promoteCandidate baseline [ general ] corpus;
+                conjectural = isGeneralization general;
+                cfl = confluent (baseline ++ [ general ]);
+                # ★ slice 9: 출생 기록(provenance) — symbol 이 *어떤 궤적에서 태어났는가 / 어떤 조건에서만
+                #   참인가* (운영자 #3 "영혼"의 가용분; 한국어 표면은 NL 배선 후). compressed=압축한 step 수.
+                prov = { born_from = B.map (g: g.lhs + " ⇒ " + g.rhs) grounds;       # 태어난 witness 궤적
+                         witness_count = B.length grounds;
+                         compressed = if (promo ? arena)
+                                      then { baseline_steps = promo.arena.baseline_steps;
+                                             candidate_steps = promo.arena.candidate_steps;
+                                             saved = promo.arena.baseline_steps - promo.arena.candidate_steps; }
+                                      else null;
+                         conditions = let cr = composeRules [ general ];             # 어떤 조건(의무)에서만 참
+                                      in if (cr ? grading) then cr.grading.effect else [ ]; };
+                entry0 = (mkRegistryEntry "traj" [ general ] promo) // { provenance = prov; };
+                entry = if !conjectural then entry0                            # ground: promo 그대로
+                        else if promo.decision != "promote"
+                        then entry0 // { conjecture = true; witnesses = B.length grounds; }  # inline/discard
+                        # ★ slice 26: 일반화가 baseline 의 *무조건 일반 규칙* 합성으로 연역 증명되면 conjecture 가
+                        #   아니라 *정리* = canonical(deductive). 귀납 도약이 실은 증명 가능한 경우 정직 격상.
+                        else if deductiveJustify baseline general
+                        then entry0 // { tier = "canonical"; justification = "deductive"; conjecture = false;
+                                         witnesses = B.length grounds;
+                                         justify_note = "baseline 일반 규칙 합성으로 연역적 정당화(deductively justified)"; }
+                        else if cfl.confluent
+                        then entry0 // { tier = "conditioned"; conjecture = true; witnesses = B.length grounds;
+                                         requalify_note = "inductive(proven-confluent): "
+                                                          + (B.toString (B.length grounds)) + " witness, 반증 시 quarantine"; }
+                        else entry0 // { tier = "quarantined"; conjecture = true; witnesses = B.length grounds;
+                                         requalify_note = "inductive(confluence 미결): 미신뢰 — witness/proof 부족"; };
+                trusted = (entry.tier == "canonical") || (entry.tier == "conditioned");
+            in { ground_count = B.length grounds; generalized = general; promotion = promo;
+                 entry = entry // { korean = koreanSurface entry; };   # 레벨-1 한국어 surface(교육과정 용어)
+                 audit = metaNLAudit entry;                            # ★ slice 20: 매 genesis 자기감사(tier↔증거 정합)
+                 conjecture = conjectural; confluence_proven = cfl.confluent;
+                 new_baseline = if trusted then baseline ++ [ general ] else baseline; };
+
+  # ── slice 13: 일반화의 일반화 + 비교검증 안정 성장 (운영자 directive: "비교검증 안정적으로 자라남") ──
+  # subsumes A B = A 가 B 보다 *일반*(B 는 A 의 인스턴스): packRule 매칭으로 A 의 metavar 가 B 부분에
+  #   일관 바인딩되면 참. = 일반화 격자(lattice)의 순서(비교의 기반). moreGeneral = strict.
+  subsumes    = a: b: (td.match (packRule a) (packRule b)) != null;
+  moreGeneral = a: b: (subsumes a b) && (!(subsumes b a));
+  # subsumptionDedup = 격자 upper-frontier: 더 일반적인 규칙이 subsume 하는 specific 규칙 제거(중복정리).
+  subsumptionDedup = rules:
+    B.filter (r: !(B.any (r2: moreGeneral r2 r) rules)) rules;
+
+  # ★ metaGeneralize = *일반화의 일반화*: 여러 일반화(또는 ground)의 LGG. 결과는 *재작성 규칙 아님* —
+  #   구조 PATTERN(개념). 예: (plus ?x zero)⇒?x, (mul ?x one)⇒?x → (?g0 ?x ?g1)⇒?x ("우항등원" 패턴).
+  #   메타패턴은 거의 항상 *재작성으론 거짓*(모든 op 에 참 아님) → baseline 절대 미합류(rewriting=false).
+  #   용도 = propose guidance(이런 류 규칙을 찾아보라). 비교검증 = g 가 모든 입력 subsume(충실한 추상).
+  #   = propose/dispose 가 한 층 더: 메타패턴이 *제안*, 각 구체 인스턴스는 여전히 sound 게이트가 *처분*.
+  metaGeneralize = rules:
+    let g = generalizeRules rules; in
+    if g == null then null
+    else { rule = g; tier = "pattern"; rewriting = false; inputs = B.length rules;
+           subsumes_all = !(B.any (r: !(subsumes g r)) rules);     # 비교검증(충실성: 모든 입력을 subsume)
+           wellformed = td.wellFormed { lhs = td.parse g.lhs; rhs = td.parse g.rhs; };
+           reason = "구조 패턴(개념) — propose guidance, 재작성 baseline 미합류"; };
+
+  # ★ stablePromote = *안정적 성장*: conditioned conjecture 가 라운드 누적 distinct witness 가 threshold
+  #   넘고 반증 없으면 canonical 승격. = 비교검증을 *시간축*으로(새 witness 마다 비교 → 확증/반증).
+  #   단일 귀납 도약이 아니라 *점진 확증*. priorW/newW = born_from witness 합집합. refuted=canary/confluence 반증.
+  stablePromote = threshold: priorWitnesses: entry: newWitnesses: refuted:
+    let cum = dedupS (priorWitnesses ++ newWitnesses);              # 누적 distinct witness
+        eff = if threshold < 1 then 1 else threshold;               # ★ w56zssj3g: 비양수 threshold 방어
+        stable = (B.length cum) >= eff;                            #   (0≥0 자명참 → witness 0 승격 차단; ≥1 증거 필수)
+    in if refuted
+       then entry // { tier = "quarantined"; cumulative_witnesses = cum;
+                       stable_note = "반증됨 → quarantine"; }
+       # ★ slice 19 정직화: witness 누적 = *귀납적* → "강한 귀납적 추측"(NOT canonical). canonical=연역적
+       #   정당화는 deductivePromote(증명) 전용. = Korean surface 가 드러낸 귀납/연역 mislabel 수정.
+       else if stable && (entry.tier == "conditioned")
+       then entry // { tier = "strong_conjecture"; cumulative_witnesses = cum;
+                       stable_note = "강한 귀납적 추측(≥" + (B.toString eff) + " witness · 무반증) — 연역 증명은 별도"; }
+       else entry // { cumulative_witnesses = cum;
+                       stable_note = "성장중(" + (B.toString (B.length cum)) + "/" + (B.toString eff) + " witness)"; };
+
+  # ── slice 19: 연역적 정당화 (purpose: 참의 *증명* 발견·기계화) ──
+  # deductiveJustify = 규칙이 *이미 연역적으로 정당화된(canonical) 일반 규칙들*의 합성으로 도출되나.
+  #   normalize 로 lhs 를 canonGenerals 로 재작성 → rhs(alpha) 도달이면, 그 일반 규칙들이 모든 x 에
+  #   대해 성립하므로(proven generals 의 transitivity) 추측도 *모든 x 에 대해 증명* = 연역. witness(귀납)와
+  #   질적으로 다름: 증거 누적이 아니라 *증명*. ★ canonGenerals 는 호출자가 canonical+pattern 만 거른 것.
+  deductiveJustify = canonGenerals: rule:
+    # ★ wbts8izsw FATAL: 조건부(when/partial) general 을 normalize 가 무조건 firing → 거짓 for-all 증명
+    #   (audit fatal#1 의무-버림 0=1 재발). fail-closed: *무조건적*(의무 없는) general 만 사용. 무조건성은
+    #   기존 obligation 게이트(composeRules)로 판정 — held 면 미discharge 의무 있음 → deduction 불가.
+    #   조건부 일반의 가드 discharge 추적은 별도(추후); 지금은 무조건 일반만으로 증명(못 하면 Held).
+    let usable = B.filter (g: !((composeRules [ g ]) ? held)) canonGenerals;
+        n = normalize usable rule.lhs;
+        ak = t: td.key (td.alphaCanon t);
+    in (!n.bounded) && (n.steps >= 1) && ((ak n.term) == (ak (td.parse rule.rhs)));
+  # deductivePromote = 추측 entry 를 canonGenerals 로 연역 정당화 시도 → 되면 canonical(연역적). 아니면 그대로.
+  deductivePromote = canonGenerals: entry:
+    let r = if (entry ? rules) && (entry.rules != [ ]) then B.head entry.rules else null;
+    in if (r != null) && (deductiveJustify canonGenerals r)
+       then entry // { tier = "canonical"; justification = "deductive";
+                       justify_note = "proven generals 합성으로 연역적 정당화(deductively justified via composition)"; }
+       else entry;
+
+  # ── slice 14: synthesize ↔ genesis 배선 (운영자 A, dry-run) — 실제 성공 궤적을 genesis 가 학습 ──
+  # synthesize 결과의 .steps(각 step: before/after/relation)=실제 성공 경로(receipt). 이를 genesis 가
+  #   읽는 형태로 변환(step 2): 경로 규칙 [{lhs=before;rhs=after}] + 시작항(before). 그리고 *기존 genesis
+  #   엔진*(genesisFromTrajectories: mine→LGG→정직 tier→provenance)에 그대로 흘림 = 새 lane 아님(one-mirror).
+  #   ★ dry-run: verdict 만 반환(영속은 host 가 결정). = "일반화는 (fixture 아닌) 실제 성공 궤적에서 자라난다".
+  synthSteps = result:                                                    # 성공 synthesis → 경로 규칙
+    if (result ? steps) && (result.steps != [ ])
+    then B.map (s: { lhs = s.before; rhs = s.after; }) result.steps else [ ];
+  learnFromSyntheses = results:
+    let valid    = B.filter (r: (r ? steps) && (r.steps != [ ]) && (r ? before)) results;  # held 제외
+        baseline = (dedupRules (B.foldl' (acc: r: acc ++ (synthSteps r)) [ ] valid)).kept; # 경로 규칙 union(dedup)
+        starts   = B.map (r: r.before) valid;                            # 각 synthesis 시작항
+    in if valid == [ ]
+       then { decision = "skip"; reason = "성공 synthesis 궤적 없음(held/empty)"; }
+       else genesisFromTrajectories baseline starts;                     # 기존 엔진 그대로(정직 tier·provenance·canary)
+
+  # ── slice 15: registry → synthesize 재사용 (운영자 A step 5) — learn → solve 닫음 ──
+  # 운영자 규율: synthesize 새로 만들지 말 것 · 기존 owner 에 registry rules 를 library 로 주입 ·
+  #   quarantined 제외 · canonical=fast-path · conditioned=조건 표시(재검). synthesizeWithBridge 와
+  #   같은 패턴(library 확장, synthesize 불변 = one-mirror). registryEdges = registry → library edge:
+  #   ground rule → 직접 edge; conditioned/canonical *패턴* rule → target.from 에 instantiate(매칭되면)
+  #   = (f a),(f b) 에서 배운 (f ?x)⇒(g ?x) 가 새 인스턴스 (f c) 를 1스텝에("풀수록 더 잘 봄").
+  # ⚠ host 책임: 영속 store 의 quarantine 은 별도 `genesis-quarantine:` 마커이므로(원본 blob tier 불변),
+  #   host 는 registryEdges 호출 전 마커가 가리키는 entry 의 tier 를 "quarantined" 로 *덮어* 넘겨야 함
+  #   (run_genesis_registry 의 표시 로직과 동일). 그래야 여기 exclusion 이 효력.
+  registryEdges = entries: target:
+    let nonQ = B.filter (e: (e.tier != "quarantined")) entries;            # quarantined 제외
+        edgesOfEntry = e: B.foldl' (acc: r:
+          if (ruleStructReason r) != null then acc                        # ★ w_hfnxsnl3: 구조 unsound 규칙(unbound-rhs-
+                                                                          #   metavar·metavar-head 등) → malformed edge 방지
+          else acc ++ (if (td.vars (td.parse r.lhs)) == [ ]               # ground → 직접 edge(fast-path)
+                  then [ { from = r.lhs; to = r.rhs; via = "learned:" + e.tier; } ]
+                  else let m = td.match (td.parse r.lhs) (td.parse target.from);  # 패턴 → target.from instantiate
+                       in if m == null then [ ]                            # target 에 안 맞으면 직접주입 불가(guidance 잔류)
+                          else [ { from = target.from;
+                                   to = td.serialize (td.subst m (td.parse r.rhs));
+                                   via = "conjecture:" + e.tier; } ])) [ ] e.rules;
+        raw = B.foldl' (acc: e: acc ++ (edgesOfEntry e)) [ ] nonQ;
+    # ★ goal-reaching edge(to==target.to)=완전 shortcut 을 앞으로 → findPath(DFS first-found)가 *먼저* 시도
+    #   = "풀수록 빨라짐"이 실제로 발현(긴 체인 edge 보다 shortcut 우선). synthesize 불변, 순서만 조정.
+    in (B.filter (ed: ed.to == target.to) raw) ++ (B.filter (ed: ed.to != target.to) raw);
+  # synthesizeWithRegistry = registry edge 를 *먼저*(fast-path) 얹어 재탐색. 결과가 conjecture edge 에
+  #   의존하면 conjectural=true + relied(어떤 conjecture) 표시(조건 표시/재검 — 운영자 규율).
+  synthesizeWithRegistry = entries: library: target:
+    let r = synthesize ((registryEdges entries target) ++ library) target;
+        usedConj = if (r ? steps)
+                   then B.filter (s: (s ? relation) && (B.substring 0 10 s.relation == "conjecture")) r.steps
+                   else [ ];
+    in if r ? held then r
+       else r // { conjectural = (usedConj != [ ]);
+                   relied_on_conjecture = B.map (s: s.before + "→" + s.after) usedConj; };
+
+  # ── slice 18: 레벨-1 한국어 surface (한국 수학교육 표준 용어, `한국어(english)` bilingual) ──
+  # 운영자: 한국수학·미국수학 공통 처리 위해 한국어(english name). pnix tier/process ↔ 교육과정 개념
+  #   (2022 개정 "변화와 관계"): canonical=연역적 정당화·conditioned=귀납적 추측·quarantine=반증·
+  #   ground=규칙·일반화=규칙성→일반화. ★ 레벨 1(지위/과정 용어)만 — "덧셈의 항등원이다" 같은 개념-내용
+  #   주장 X(그건 vocab 그라운딩 후 레벨 2). 토이 vocab 에서도 비공허(pnix 구조 자체가 교육계 용어).
+  # ★ slice 21: 단일 source(../knowledge/genesis-tier-korean.px) 조회 — 인라인 하드코딩 제거(갈라치기 청소).
+  koreanStatus = tier:
+    if B.hasAttr tier tierKo.status then B.getAttr tier tierKo.status else tier;
+  koreanKind = rule:
+    if (rule == null) then "?"
+    else if (td.vars (td.parse rule.lhs)) == [ ] then tierKo.kind.rule else tierKo.kind.generalization;
+  koreanJustification = tier:
+    if B.hasAttr tier tierKo.justification then B.getAttr tier tierKo.justification else "해당없음(n/a)";
+  # ★ slice 22: 학습된 규칙을 *명명된 수학 개념*으로 재인(perceive) — math-symbol-korean.px 사전과 alpha-동치 비교.
+  #   = Level-2 의미: (plus ?g0 zero)⇒?g0 → "덧셈의 항등원(additive identity)". 개념을 *짓는* 게 아니라 *명명*만
+  #   (governing law 정합). 못 알아보면 null(Held — 모르는 건 이름 안 붙임).
+  canonRuleKey = r: td.key (td.alphaCanon (packRule r));        # alpha-정규 규칙 key(metavar 이름 무관)
+  mathConceptOf = rule:
+    if !((rule ? lhs) && (rule ? rhs)) then null
+    else let rk = canonRuleKey rule;
+             hit = B.filter (c: (canonRuleKey (parseRule c.pattern)) == rk) mathKo.concepts;
+         in if hit == [ ] then null
+            else let c = B.head hit; in { ko = c.ko; en = c.en; surface = c.ko + "(" + c.en + ")"; };
+  # ★ A: 표준단위 재인 — 심볼(m/s/kg/N…) → 한국어(english) + 측정량. 수치/측정 NL grounding.
+  unitOf = sym:
+    let all = unitsKo.base ++ unitsKo.derived;
+        hit = B.filter (u: u.sym == sym) all;
+    in if hit == [ ] then null
+       else let u = B.head hit;
+            in { ko = u.ko; en = u.en; surface = u.ko + "(" + u.en + ")";
+                 quantity = u.quantity_ko + "(" + u.quantity_en + ")"; };
+  # ★ 역방향(perceive): NL 개념명(한국어/영어/`한국어(english)`) → 규칙 패턴. = "이 개념 아는 거네" 재인 토대.
+  conceptToRule = name:
+    let hit = B.filter (c: (c.ko == name) || (c.en == name) || ((c.ko + "(" + c.en + ")") == name))
+                       mathKo.concepts;
+    in if hit == [ ] then null else parseRule (B.head hit).pattern;
+  # ── slice 28: 구조보존 term ↔ NL (운영자: "NL 이 안쪽 math 구조 끊으면 안 됨") ──
+  # ★ flat 문장(korean-nl-mirror proposition)은 중첩 math 를 납작하게 = math 끊김. 그래서 *재귀적*(트리
+  #   따라가며) 실현 — 괄호로 중첩 보존 → NL→math 복원 가능(끊기지 않음). math=중심구조, code⊂math
+  #   (term 이 곧 실행가능), NL=math 의 표면 투영. expr-mirror(tree↔RPN)와 같은 reflection, 표면만 NL.
+  mathTermVocab = sym:                                       # pnix 심볼 → 한국어(없으면 sym 그대로=구조 보존)
+    let o = B.filter (x: x.sym == sym) mathKo.operators;
+        e = B.filter (x: x.sym == sym) mathKo.elements;
+    in if o != [ ] then (B.head o).verb_ko                   # 연산 → 동사형(더하기)
+       else if e != [ ] then (B.head e).ko                   # 원소 → 명사(영)
+       else sym;
+  termToKo = t:                                              # td term → 한국어(재귀, 괄호로 중첩 보존)
+    if (t ? sym) then
+      (if td.isMetaVar t then (B.substring 1 (B.stringLength t.sym) t.sym)   # ?x → x
+       else mathTermVocab t.sym)
+    else if (B.isList t) && (t != [ ]) then
+      let op = B.head t; args = B.tail t;
+          opKo = if (op ? sym) then mathTermVocab op.sym else "?";
+      in if (B.length args) == 2                             # 이항 연산 → 중위 + 괄호(구조 보존)
+         then "(" + (termToKo (B.elemAt args 0)) + " " + opKo + " " + (termToKo (B.elemAt args 1)) + ")"
+         else opKo + "(" + (B.concatStringsSep ", " (B.map termToKo args)) + ")"  # 그 외 → 함수형
+    else "?";
+  # 규칙 → "lhs = rhs" 구조보존 NL(등식). 운영자: math↔code 도 안 끊김 = 같은 term 의 두 얼굴.
+  ruleToKo = rule:
+    if !((rule ? lhs) && (rule ? rhs)) then null
+    else (termToKo (td.parse rule.lhs)) + " = " + (termToKo (td.parse rule.rhs));
+
+  # NL 개념명 + registry entries → "이 개념을 아는가?": 개념의 규칙이 registry 에 alpha-동치로 있나.
+  #   = meta-NL skill-DB 재인("이 문제 아는 거네"). 모르는 개념 / 개념만 알고 규칙 없음 / 학습됨 3분.
+  recognizeConcept = name: entries:
+    let rule = conceptToRule name;
+    in if rule == null then { decision = "unknown-concept"; }
+       else let rk = canonRuleKey rule;
+                hits = B.filter (e: B.any (r: (canonRuleKey r) == rk) (if e ? rules then e.rules else [ ])) entries;
+                eq = ruleToKo rule;                                 # ★ 구조보존 NL 등식(대화 답변용)
+            in if hits == [ ]
+               then { decision = "concept-known"; rule = rule; learned = false; equation = eq; }
+               else { decision = "known"; rule = rule; learned = true; tier = (B.head hits).tier;
+                      status_ko = koreanStatus (B.head hits).tier; equation = eq; };
+  koreanSurface = entry:
+    let r  = if (entry ? rules) && (entry.rules != [ ]) then B.head entry.rules else null;
+        nW = if (entry ? witnesses) then entry.witnesses
+             else if (entry ? provenance) && (entry.provenance ? witness_count)
+             then entry.provenance.witness_count else null;
+    in { status = koreanStatus entry.tier;                          # 지위(귀납/연역/반증)
+         kind = koreanKind r;                                       # 규칙/일반화된 규칙성
+         concept = if r == null then null else mathConceptOf r;     # ★ slice 22: 명명된 수학 개념(재인되면)
+         equation = if r == null then null else ruleToKo r;         # ★ slice 28: 구조보존 NL 등식(중첩 안 끊김)
+         justified = (entry.tier == "canonical");                   # 연역적 정당화 여부
+         witnesses = nW;                                            # 귀납 근거(witness) 수
+         note = "규칙성→일반화(generalization), 정당화(justification)="
+                + (koreanJustification entry.tier); };          # 단일 source(인라인 중복 제거, strong_conjecture 누락 버그 수정)
+
+  # ── slice 20: metaNLAudit — 시스템이 *스스로* tier↔의미↔증거 정합성 감사 (운영자: 사람이 눈치채길 X) ──
+  # 각 entry 가 자기 한국어 지위(koreanStatus)에 *걸맞은 내부 증거*를 갖는가? 불일치 = 결핍 → held + 한국어 사유.
+  # ★ slice 19 버그(canonical 일반화인데 연역 증명 근거 없음)를 이게 있었으면 *시스템이 스스로* 잡았음.
+  #   = "내가 눈치채길 기다림"을 "시스템이 자문함"으로. 설명이 *불변식 검사기*가 됨.
+  metaNLAudit = entry:
+    let tier = if (entry ? tier) then entry.tier else "?";
+        rule = if (entry ? rules) && (entry.rules != [ ]) then B.head entry.rules else null;
+        isGen = (rule != null) && ((td.vars (td.parse rule.lhs)) != [ ]);        # 일반화(pattern lhs)?
+        nW = if (entry ? cumulative_witnesses) then B.length entry.cumulative_witnesses
+             else if (entry ? witnesses) then entry.witnesses
+             else if (entry ? provenance) && (entry.provenance ? witness_count) then entry.provenance.witness_count
+             else null;
+        just = if (entry ? justification) then entry.justification else null;
+        hasProv = (entry ? provenance) || (nW != null);
+        # 한국어 지위 ↔ 내부 증거 불변식. 위반 = 자기이름값 못 하는 entry.
+        problem =
+          if      tier == "canonical" && isGen && (just != "deductive")
+          then "canonical=연역적으로 정당화됨(deductively justified) 표시인데 일반화 규칙이 증명 근거(justification=deductive) 없음 — 귀납을 연역이라 부름"
+          else if tier == "strong_conjecture" && ((nW == null) || (nW < 1))
+          then "strong_conjecture=강한 귀납적 추측(strong inductive conjecture) 표시인데 관찰 사례(witness) 없음"
+          else if tier == "conditioned" && (!hasProv)
+          then "conditioned=귀납적 추측(inductive conjecture) 표시인데 provenance/witness 없음"
+          else if tier == "quarantined" && !((entry ? requalify_note) || (entry ? stable_note))
+          then "quarantined=반증됨(refuted) 표시인데 반증 사유(requalify_note/stable_note) 없음"
+          else null;
+    in if problem == null
+       then { ok = true; tier = tier; status_ko = koreanStatus tier; }
+       else { ok = false; held = true; tier = tier; reason_ko = problem; };
+
+  # ── 건전 합성: [rule…] → 기존 composeSoundIn (partial→linear→modality→coeffect) ──
+  composeRulesIn = ctx: rules: composeSoundIn ctx (B.map ruleToStep rules);
+  composeRules   = rules: composeRulesIn { coeffects = [ ]; } rules;
+
+  # ── discharge(정직): 외부 증명집합 proven 이 규칙 when 을 보증하면 가드 해제 ──
+  # 적대검증 hole#3: 의무가 effect 격자에 있어 coeffect-context 로 직접 discharge 불가(맞음).
+  # → *게이트를 안 건드리고* 규칙-수준 pre-transform 으로: 증명된 조건이면 _proven 표시 →
+  #   ruleToMorph 가 의무 주입 생략 → core morphism = 합성 통과. proven=[] (기본) ⇒ 모든
+  #   partial 규칙 Held = fail-closed. 증명 제공 = 명시적 운영자 행위(coeffect context 제공과 동형).
+  dischargeIn = proven: r:
+    if (r ? when) && (validWhen r.when) && (B.elem r.when proven)
+    then r // { _proven = true; } else r;
+  composeRulesProven = proven: rules:
+    composeRulesIn { coeffects = [ ]; } (B.map (dischargeIn proven) rules);
+
+  # ── law = 양방향 rewrite-rule (정·역 둘 다 건전해야 law) ──
+  # ★ 비대칭 부분성 차단: rhs→lhs 가 partial 미가드면 reverse Held ⇒ asymmetric 0=1 봉쇄.
+  reverseRule = r: (r // { lhs = r.rhs; rhs = r.lhs; })
+                   // (if (r ? via) && (r.via != null) then { via = r.via + "⁻¹"; } else { });
+  makeLaw = r:
+    let fwd = composeRules [ r ];
+        rev = composeRules [ (reverseRule r) ]; in
+    if fwd ? held then { held = "law not bidirectional (forward held)"; direction = "forward"; reason = fwd.reason; }
+    else if rev ? held then { held = "law not bidirectional (reverse held)"; direction = "reverse"; reason = rev.reason; }
+    else { law = r.lhs + " = " + r.rhs; lhs = r.lhs; rhs = r.rhs;
+           bidirectional = true; forward = fwd; reverse = rev;
+           via = if r ? via then r.via else null; };
+
+  # ── 규칙 SET 위생 (e-graph/Knuth-Bendix 진입 전 거부; 적대검증 hole#2: 토큰-경계 매칭) ──
+  # (1) 같은 lhs → 다른 rhs (둘 다 무가드) = 모순. (2) self-application: rhs 가 lhs 를 항으로
+  #     재포함 = 비종료 위험. ★ 부분문자열 아닌 *토큰 연속부분열* 매칭('a' 가 'apple' 안에서
+  #     오탐 안 됨; 'f(x)' 는 'g(f(x))' 안에서 정탐).
+  rangeUpTo = n: let go = i: if i >= n then [ ] else [ i ] ++ go (i + 1); in go 0;
+  isContigSub = needle: hay:                            # needle 토큰열 = hay 의 연속부분열?
+    let nn = B.length needle; nh = B.length hay;
+        matchAt = off: let chk = k: if k >= nn then true
+                                    else if (B.elemAt needle k) == (B.elemAt hay (off + k)) then chk (k + 1) else false;
+                       in chk 0;
+        scan = off: if off + nn > nh then false else if matchAt off then true else scan (off + 1);
+    in if nn == 0 then false else scan 0;
+  containsTerm = needle: hay: isContigSub (wordToks needle) (wordToks hay);
+  ruleSetConflicts = rules:
+    let idxs = rangeUpTo (B.length rules);
+        sameLhsDiff = a: b: (a.lhs == b.lhs) && (a.rhs != b.rhs)
+                            && !(validWhen (if a ? when then a.when else null))
+                            && !(validWhen (if b ? when then b.when else null));
+        pairConf = B.foldl' (acc: i:
+          B.foldl' (acc2: j:
+            let a = B.elemAt rules i; b = B.elemAt rules j; in
+            if (i < j) && (sameLhsDiff a b)
+            then acc2 ++ [ ("contradictory-lhs: '" + a.lhs + "' → '" + a.rhs + "' vs '" + b.rhs + "'") ]
+            else acc2) acc idxs) [ ] idxs;
+        selfApp = B.map (r: "self-application: rhs '" + r.rhs + "' re-contains lhs '" + r.lhs + "'")
+                    (B.filter (r: (r ? lhs) && (r.lhs != "") && (r.lhs != r.rhs) && (containsTerm r.lhs r.rhs)) rules);
+    in pairConf ++ selfApp;
+  validateRuleSet = rules:
+    let conf = ruleSetConflicts rules;
+        cfl  = confluent rules; in                                      # ★ slice 3c 배선: FULL critical-pair(subterm 포함)
+    if conf != [ ] then { held = "rewrite rule-set conflicts"; conflicts = conf;
+                          reason = "규칙 집합 위생 위반(모순 lhs / self-application) — e-graph 진입 전 거부"; }
+    else if cfl.proven_non_confluent then { held = "non-confluent rule-set"; nonjoinable = cfl.nonjoinable;
+                          reason = "critical-pair 미joinable(종료+상이) — canonicalize 비결정(e-graph 진입 전 거부)"; }
+    else { ok = true; rules = B.length rules; confluent = cfl.confluent;   # 미결(bound 초과) pair 는 undecided 로 표면화
+           undecided = B.length cfl.undecided; };
+
+  # ── 號 tagging: @rewrite-rule:name / @law:name (예약된 ref_kind + 항=@term) ──
+  aliasRewriteRule = name: r:
+    alias.aliasAll [ { name = name; role = "rule"; ref_kind = "rewrite-rule"; }
+                     { name = r.lhs; role = "lhs"; ref_kind = "term"; }
+                     { name = r.rhs; role = "rhs"; ref_kind = "term"; } ];
+  aliasLaw = name: r:
+    alias.aliasAll [ { name = name; role = "law"; ref_kind = "law"; }
+                     { name = r.lhs; role = "lhs"; ref_kind = "term"; }
+                     { name = r.rhs; role = "rhs"; ref_kind = "term"; } ];
+
+  # ── parse/emit: 정규 표기 "lhs => rhs" / "lhs => rhs | when" (functor round-trip) ──
+  trimS = s: let m = B.match "[[:space:]]*(.*[^[:space:]])[[:space:]]*" s; in if m == null then "" else B.head m;
+  parseRule = s:
+    let ab = splitOn "=>" s; in
+    if B.length ab != 2 then { held = "not a rewrite-rule (need 'lhs => rhs'): " + s; }
+    else let wparts = splitOn "\\|" (B.elemAt ab 1); in
+         { lhs = trimS (B.elemAt ab 0);
+           rhs = trimS (B.elemAt wparts 0);
+           when = if B.length wparts >= 2 then trimS (B.elemAt wparts 1) else null; };
+  emitCanonRule = r:
+    r.lhs + " => " + r.rhs
+    + (if (r ? when) && (r.when != null) && (blankS r.when != "") then " | " + r.when else "");
+  emitRewritePreserves = r:                              # functor law: emit∘parse 가 lhs/rhs/when 복원
+    let s = emitCanonRule r; back = parseRule s;
+        rWhen = if (r ? when) && (r.when != null) && (blankS r.when != "") then r.when else null; in
+    if (back ? lhs) && (back.lhs == r.lhs) && (back.rhs == r.rhs) && (back.when == rWhen)
+    then { ok = true; emitted = s; }
+    else { held = "rewrite emit broke round-trip"; emitted = s; recovered = back; };
+  emitRewriteRule = lang: r:                             # 언어 프로파일(표현 tier; round-trip은 canon)
+    let wStr = if (r ? when) && (r.when != null) && (blankS r.when != "") then r.when else null;
+        nm   = if (r ? via) && (r.via != null) then r.via else "r";
+        core = if lang == "haskell"      then "{-# RULES \"" + nm + "\" " + r.lhs + " = " + r.rhs + " #-}"
+               else if lang == "python"  then "assert (" + r.lhs + ") == (" + r.rhs + ")"
+               else "// rewrite: " + r.lhs + " => " + r.rhs; in
+    if wStr == null then core
+    else core + (if lang == "haskell" then "  -- when " else "  # when ") + wStr;
+  emitRewriteAll = r: B.listToAttrs (B.map (l: { name = l; value = emitRewriteRule l r; }) langs);
+
+in {
+  inherit parseMorph composeMorphs pipe parseSig sigContext composeNamed
+          emit emitAll emitPreserves langs
+          toStep composeStepBeads composeSound composeSoundIn composeSoundProven pipeSteps   # ★ bead + definedness/modality/coeffect 게이트(+discharge)
+          edgeOf checkAgainstStore pipeStepsChecked   # ★ blackboard store gate 수렴
+          renderKoLines                               # ★ code→NL (render_ko) 수렴
+          chainToMorphs fromAlgorithm                 # ★ code algorithm → morphism normalize 수렴
+          allObjects aliasTrajectory                  # ★ universal symbol(號) aliasing 수렴
+          renameObj domainSwitch                      # ★ domain-switch MACRO (§18.7 functor)
+          conceptGroup                                # ★ expand/group MACRO (§18.8 號-grouping)
+          synthesize synthesizeWithBridge             # ★ SYNTHESIZE (생성): 마디 path-find+조립(+다리)
+          # ★ @rewrite-rule / @law (typed/conditioned rewrite, 1차 슬라이스)
+          rulePartialHits ruleStructReason validWhen ruleToMorph ruleToStep applyRule normalize
+          ruleKey dedupRules criticalPairRoot confluentRoot criticalPairs confluent freeze
+          falseEquationCanary canaryViolations canaryPasses arenaAB promoteCandidate
+          mkRegistryEntry requalify registryStats mineShortcut genesisRound
+          ruleAntiUnify generalizeRules isGeneralization mineTrajectories genesisFromTrajectories
+          subsumes moreGeneral subsumptionDedup metaGeneralize stablePromote
+          deductiveJustify deductivePromote
+          synthSteps learnFromSyntheses registryEdges synthesizeWithRegistry
+          koreanStatus koreanKind koreanJustification koreanSurface metaNLAudit
+          canonRuleKey mathConceptOf conceptToRule recognizeConcept unitOf
+          mathTermVocab termToKo ruleToKo
+          composeRules composeRulesIn dischargeIn composeRulesProven
+          reverseRule makeLaw containsTerm ruleSetConflicts validateRuleSet
+          aliasRewriteRule aliasLaw
+          parseRule emitCanonRule emitRewritePreserves emitRewriteRule emitRewriteAll;
+}

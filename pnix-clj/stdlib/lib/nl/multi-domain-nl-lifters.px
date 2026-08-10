@@ -1,0 +1,176 @@
+let
+  ownerName = "stdlib.nl.multi-domain-nl-lifters";
+
+  # === Multi-domain NL lifters (Axioms #44-48) =====================
+  #
+  # 사용자 directive (2026-05-28): "NL super-set bidirectional + 모든 substrate
+  # 양방향". 한 owner 에 5 lifter 묶음 — 같은 routing pattern.
+  #
+  # #44 bio markup NL (Axiom #28 — 14 markup schemas)
+  # #45 ERP NL (Axiom #37 — 170 plates × 26 categories)
+  # #46 benchmark NL (Axiom #12 + #16 — math/algo/diagram battery)
+  # #47 engine integration NL (Axiom #30 — fyrox/wgpu/ui)
+  # #48 freecat surface NL (Axiom #24 — 13 freecat plates)
+  #
+  # 모든 lifter 동일 pattern: en + ko keyword × Held-honest 헌법.
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  # === Axiom #44: bio markup NL ====================================
+  knownBioMarkupNLPatterns = [
+    { schema = "sbml"; en_keywords = [ "SBML" "systems biology" "biological reaction" "pathway model" "metabolic network" ]; ko_keywords = [ "SBML" "시스템 생물학" "생물 반응" "대사 네트워크" "생물학적 반응 모델" ]; }
+    { schema = "cellml"; en_keywords = [ "CellML" "cell model" "physiological model" "cardiac model" ]; ko_keywords = [ "CellML" "세포 모델" "생리 모델" "심장 모델" "세포 모형" ]; }
+    { schema = "neuroml"; en_keywords = [ "NeuroML" "neuron model" "spiking" "synaptic plasticity" ]; ko_keywords = [ "NeuroML" "뉴런 모델" "스파이킹" "신경 모델" "시냅스 가소성" ]; }
+    { schema = "cml"; en_keywords = [ "CML" "chemical markup" "molecule structure" "molecular formula" ]; ko_keywords = [ "CML" "화학 markup" "분자 구조" "화학 분자" "분자식" ]; }
+    { schema = "pdbml"; en_keywords = [ "PDB" "protein structure" "crystallography" "macromolecule" ]; ko_keywords = [ "PDB" "단백질 구조" "결정학" "거대분자" "단백질 구조 모델" ]; }
+  ];
+
+  liftToBioSchema = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownBioMarkupNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-bio-schema-matched"; known_schemas = builtins.map (p: p.schema) knownBioMarkupNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-bio-candidates"; candidates = builtins.map (x: x.schema) m; }
+      else { outcome = "bio-schema-lifted"; schema = (builtins.head m).schema; axiom_origin = "axiom-28-bio-markup-schema-registry"; };
+
+  # === Axiom #45: ERP NL ===========================================
+  knownErpCategoryNLPatterns = [
+    { category = "authority"; en_keywords = [ "authority" "lifecycle" "collapse" "revocation" "waiver" "permission revoke" ]; ko_keywords = [ "권한" "권한 lifecycle" "콜랩스" "취소" "유예" "권한 취소" "권한 부여" ]; }
+    { category = "approval"; en_keywords = [ "approval" "ladder" "decision" "fallback" "reopen" "sign off" ]; ko_keywords = [ "승인" "결재" "리오픈" "승인 요청" "결재 라인" ]; }
+    { category = "channel"; en_keywords = [ "channel governance" "lineage" "trust decay" "channel trust" ]; ko_keywords = [ "채널 거버넌스" "신뢰 감소" "채널 신뢰도" "채널 라인age" ]; }
+    { category = "proof"; en_keywords = [ "proof minimum" "coverage metric" "loss ledger" "audit proof" ]; ko_keywords = [ "증명 최소" "커버리지" "손실 원장" "감사 증명" "증명 메트릭" ]; }
+    { category = "owner"; en_keywords = [ "owner waiver" "debt ledger" "owner drift" "responsible owner" ]; ko_keywords = [ "소유자" "부채 원장" "오너 드리프트" "책임자" "소유 권한" ]; }
+    { category = "deadlock"; en_keywords = [ "backpressure" "cutoff" "budget signal" "circuit" "deadlock detection" ]; ko_keywords = [ "백프레셔" "컷오프" "회로" "교착 상태" "데드락" ]; }
+    { category = "confidence"; en_keywords = [ "confidence cap" "renewal" "restoration" "trust score" ]; ko_keywords = [ "신뢰도" "갱신" "복구" "신뢰 점수" ]; }
+    { category = "artifact"; en_keywords = [ "artifact canonicalization" "projection retention" "audit artifact" ]; ko_keywords = [ "아티팩트" "보존" "프로젝션" "감사 산출물" ]; }
+  ];
+
+  liftToErpCategory = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownErpCategoryNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-erp-category-matched"; known_categories = builtins.map (p: p.category) knownErpCategoryNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-erp-candidates"; candidates = builtins.map (x: x.category) m; }
+      else { outcome = "erp-category-lifted"; category = (builtins.head m).category; axiom_origin = "axiom-37-erp-substrate-registry"; };
+
+  # === Axiom #46: benchmark NL =====================================
+  knownBenchmarkKindNLPatterns = [
+    { kind = "math-benchmark"; en_keywords = [ "math benchmark" "math battery" "math problem set" "math test set" ]; ko_keywords = [ "수학 벤치마크" "수학 문제 세트" "수학 시험 세트" ]; }
+    { kind = "algorithm-benchmark"; en_keywords = [ "algorithm benchmark" "algorithm battery" "algorithm verifier" "algo test" ]; ko_keywords = [ "알고리즘 벤치마크" "알고리즘 검증기" "알고리즘 테스트" ]; }
+    { kind = "diagram-benchmark"; en_keywords = [ "diagram benchmark" "diagram battery" "diagram test set" ]; ko_keywords = [ "다이어그램 벤치마크" "다이어그램 테스트" ]; }
+    { kind = "language-benchmark"; en_keywords = [ "lang-ava" "language battery" "lang battery" "language test set" ]; ko_keywords = [ "언어 배터리" "언어 테스트 세트" "lang ava" ]; }
+    { kind = "roundtrip-benchmark"; en_keywords = [ "roundtrip" "round-trip" "bidirectional verify" "two-way check" ]; ko_keywords = [ "라운드트립" "양방향 검증" "왕복 검증" ]; }
+  ];
+
+  liftToBenchmarkKind = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownBenchmarkKindNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-benchmark-kind-matched"; known_kinds = builtins.map (p: p.kind) knownBenchmarkKindNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-benchmark-candidates"; candidates = builtins.map (x: x.kind) m; }
+      else { outcome = "benchmark-kind-lifted"; kind = (builtins.head m).kind; axiom_origin = "axiom-12-roundtrip + axiom-16-benchmark-battery"; };
+
+  # === Axiom #47: engine integration NL =============================
+  knownEngineFamilyNLPatterns = [
+    { family = "fyrox"; en_keywords = [ "fyrox" "game scene" "play asset" "fyrox scene" "game engine" ]; ko_keywords = [ "fyrox" "게임 씬" "게임 자산" "게임 엔진" "게임 화면" ]; }
+    { family = "wgpu"; en_keywords = [ "wgpu" "GPU pipeline" "render frame" "compute shader" "rasterization" ]; ko_keywords = [ "wgpu" "GPU 파이프라인" "렌더링" "셰이더" "래스터화" "GPU 컴퓨트" "프래그먼트" ]; }
+    { family = "ui"; en_keywords = [ "ui surface" "draw widget" "user interface" "GUI widget" ]; ko_keywords = [ "UI 표면" "위젯" "사용자 인터페이스" "GUI 위젯" ]; }
+  ];
+
+  liftToEngineFamily = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownEngineFamilyNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-engine-family-matched"; known_families = builtins.map (p: p.family) knownEngineFamilyNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-engine-candidates"; candidates = builtins.map (x: x.family) m; }
+      else { outcome = "engine-family-lifted"; family = (builtins.head m).family; axiom_origin = "axiom-30-engine-integration-registry"; };
+
+  # === Axiom #48: freecat surface NL ================================
+  knownFreecatSurfaceNLPatterns = [
+    { surface = "animation"; en_keywords = [ "animation" "keyframe" "tween" "animate frame" ]; ko_keywords = [ "애니메이션" "키프레임" "트윈" "프레임 애니" ]; }
+    { surface = "camera"; en_keywords = [ "camera view" "perspective" "ortho" "viewport camera" ]; ko_keywords = [ "카메라" "투영" "원근" "뷰포트 카메라" "직교 투영" ]; }
+    { surface = "physics"; en_keywords = [ "rigid body" "physics simulation" "collision" "soft body" ]; ko_keywords = [ "강체" "물리 시뮬레이션" "충돌" "물리 엔진" "유체" ]; }
+    { surface = "skeleton"; en_keywords = [ "skeleton" "rigging" "bone hierarchy" "armature" ]; ko_keywords = [ "스켈레톤" "리깅" "본" "아마추어" "골격" ]; }
+    { surface = "x3d-compat"; en_keywords = [ "x3d export" "x3d compat" "web3d" "X3D scene" ]; ko_keywords = [ "x3d 내보내기" "web3d" "X3D 씬" "web3d 변환" ]; }
+  ];
+
+  liftToFreecatSurface = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownFreecatSurfaceNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-freecat-surface-matched"; known_surfaces = builtins.map (p: p.surface) knownFreecatSurfaceNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-freecat-candidates"; candidates = builtins.map (x: x.surface) m; }
+      else { outcome = "freecat-surface-lifted"; surface = (builtins.head m).surface; axiom_origin = "axiom-24-freecat-surface-registry"; };
+
+  # === Plate entry — single dispatcher with kind ====================
+
+  applyMultiDomainNlLifterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then { outcome = "held-missing-utterance-field"; }
+    else if !(builtins.hasAttr "lifter_kind" request) then { outcome = "held-missing-lifter-kind"; known_kinds = [ "bio" "erp" "benchmark" "engine" "freecat" ]; }
+    else
+      let k = request.lifter_kind; u = request.utterance;
+      in
+        if k == "bio" then liftToBioSchema u
+        else if k == "erp" then liftToErpCategory u
+        else if k == "benchmark" then liftToBenchmarkKind u
+        else if k == "engine" then liftToEngineFamily u
+        else if k == "freecat" then liftToFreecatSurface u
+        else { outcome = "held-unknown-lifter-kind"; kind = k; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axioms-44-to-48";
+    lifter_count = 5;
+    lifters = [
+      { id = "bio"; axiom = 28; patterns = builtins.length knownBioMarkupNLPatterns; }
+      { id = "erp"; axiom = 37; patterns = builtins.length knownErpCategoryNLPatterns; }
+      { id = "benchmark"; axiom = 12; patterns = builtins.length knownBenchmarkKindNLPatterns; }
+      { id = "engine"; axiom = 30; patterns = builtins.length knownEngineFamilyNLPatterns; }
+      { id = "freecat"; axiom = 24; patterns = builtins.length knownFreecatSurfaceNLPatterns; }
+    ];
+    new_decision_count = 0;
+    bilingual = true;
+    routed_substrates = [
+      "stdlib/lib/integration/bio-markup-schema-registry.px (Axiom #28)"
+      "stdlib/lib/integration/erp-substrate-registry.px (Axiom #37)"
+      "stdlib/lib/benchmark/math-algorithm-diagram-battery.px (Axiom #12 + #16)"
+      "stdlib/lib/integration/engine-integration-registry.px (Axiom #30)"
+      "stdlib/lib/integration/freecat-surface-registry.px (Axiom #24)"
+    ];
+  };
+
+in {
+  inherit
+    ownerName containsAny
+    knownBioMarkupNLPatterns knownErpCategoryNLPatterns
+    knownBenchmarkKindNLPatterns knownEngineFamilyNLPatterns
+    knownFreecatSurfaceNLPatterns
+    liftToBioSchema liftToErpCategory liftToBenchmarkKind
+    liftToEngineFamily liftToFreecatSurface
+    applyMultiDomainNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL multi-domain lifters (Axioms #44-48)";
+    owner = ownerName;
+    base = "multi-domain-nl-lifters-v0";
+    rev_note = "사용자 directive (2026-05-28). 5 lifters 묶음 (bio / erp / "
+      + "benchmark / engine / freecat) — 같은 routing pattern. en + ko "
+      + "bilingual. DO NOT REBUILD — 모두 기존 substrate 재사용 (Axioms "
+      + "#28 bio + #37 erp + #12 benchmark + #30 engine + #24 freecat).";
+  };
+}

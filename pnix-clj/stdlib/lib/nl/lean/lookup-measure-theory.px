@@ -1,0 +1,709 @@
+# AUTO-GENERATED — measure-theory
+# Entries: 100
+let
+  ownerName = "stdlib.nl.lean.lookup-measure-theory";
+  category = "measure-theory";
+  entries = [
+    {
+      full_name = "MeasurableSpace.map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 55;
+      code_preview = "protected def map (f : α → β) (m : MeasurableSpace α) : MeasurableSpace β where   MeasurableSet' s := MeasurableSet[m] <| f ⁻¹' s   measurableSet_empty := m.measurableSet_empty   measurableSet_compl _ hs := m.measurableSet_compl _ hs   measurableSet_iUnion f hf := by simpa only [preimage_iUnion] usi";
+    }
+    {
+      full_name = "MeasurableSpace.map_def";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 63;
+      code_preview = "lemma map_def {s : Set β} : MeasurableSet[m.map f] s ↔ MeasurableSet[m] (f ⁻¹' s) := Iff.rfl";
+    }
+    {
+      full_name = "MeasurableSpace.map_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 65;
+      code_preview = "@[simp] theorem map_id : m.map id = m";
+    }
+    {
+      full_name = "MeasurableSpace.map_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 69;
+      code_preview = "@[simp] theorem map_comp {f : α → β} {g : β → γ} : (m.map f).map g = m.map (g ∘ f)";
+    }
+    {
+      full_name = "MeasurableSpace.comap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 73;
+      code_preview = "protected def comap (f : α → β) (m : MeasurableSpace β) : MeasurableSpace α where   MeasurableSet' s := ∃ s', MeasurableSet[m] s' ∧ f ⁻¹' s' = s   measurableSet_empty := ⟨∅, m.measurableSet_empty, rfl⟩   measurableSet_compl := fun _ ⟨s', h₁, h₂⟩ => ⟨s'ᶜ, m.measurableSet_compl _ h₁, h₂ ▸ rfl⟩   measu";
+    }
+    {
+      full_name = "MeasurableSpace.measurableSet_comap";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 83;
+      code_preview = "lemma measurableSet_comap {m : MeasurableSpace β} :     MeasurableSet[m.comap f] s ↔ ∃ s', MeasurableSet[m] s' ∧ f ⁻¹' s' = s := .rfl";
+    }
+    {
+      full_name = "MeasurableSpace.comap_eq_generateFrom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 86;
+      code_preview = "theorem comap_eq_generateFrom (m : MeasurableSpace β) (f : α → β) :     m.comap f = generateFrom { t | ∃ s, MeasurableSet s ∧ f ⁻¹' s = t }";
+    }
+    {
+      full_name = "MeasurableSpace.comap_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 90;
+      code_preview = "@[simp] theorem comap_id : m.comap id = m";
+    }
+    {
+      full_name = "MeasurableSpace.comap_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 94;
+      code_preview = "@[simp] theorem comap_comp {f : β → α} {g : γ → β} : (m.comap f).comap g = m.comap (f ∘ g)";
+    }
+    {
+      full_name = "MeasurableSpace.comap_le_iff_le_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 99;
+      code_preview = "theorem comap_le_iff_le_map {f : α → β} : m'.comap f ≤ m ↔ m' ≤ m.map f";
+    }
+    {
+      full_name = "MeasurableSpace.gc_comap_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 102;
+      code_preview = "theorem gc_comap_map (f : α → β) :     GaloisConnection (MeasurableSpace.comap f) (MeasurableSpace.map f)";
+    }
+    {
+      full_name = "MeasurableSpace.map_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 106;
+      code_preview = "theorem map_mono (h : m₁ ≤ m₂) : m₁.map f ≤ m₂.map f";
+    }
+    {
+      full_name = "MeasurableSpace.monotone_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 109;
+      code_preview = "theorem monotone_map : Monotone (MeasurableSpace.map f)";
+    }
+    {
+      full_name = "MeasurableSpace.comap_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 111;
+      code_preview = "theorem comap_mono (h : m₁ ≤ m₂) : m₁.comap g ≤ m₂.comap g";
+    }
+    {
+      full_name = "MeasurableSpace.monotone_comap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 114;
+      code_preview = "theorem monotone_comap : Monotone (MeasurableSpace.comap g)";
+    }
+    {
+      full_name = "MeasurableSpace.comap_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 116;
+      code_preview = "@[simp] theorem comap_bot : (⊥ : MeasurableSpace α).comap g = ⊥";
+    }
+    {
+      full_name = "MeasurableSpace.comap_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 120;
+      code_preview = "@[simp] theorem comap_sup : (m₁ ⊔ m₂).comap g = m₁.comap g ⊔ m₂.comap g";
+    }
+    {
+      full_name = "MeasurableSpace.comap_iSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 124;
+      code_preview = "@[simp] theorem comap_iSup {m : ι → MeasurableSpace α} : (⨆ i, m i).comap g = ⨆ i, (m i).comap g";
+    }
+    {
+      full_name = "MeasurableSpace.map_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 128;
+      code_preview = "@[simp] theorem map_top : (⊤ : MeasurableSpace α).map f = ⊤";
+    }
+    {
+      full_name = "MeasurableSpace.map_inf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 132;
+      code_preview = "@[simp] theorem map_inf : (m₁ ⊓ m₂).map f = m₁.map f ⊓ m₂.map f";
+    }
+    {
+      full_name = "MeasurableSpace.map_iInf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 136;
+      code_preview = "@[simp] theorem map_iInf {m : ι → MeasurableSpace α} : (⨅ i, m i).map f = ⨅ i, (m i).map f";
+    }
+    {
+      full_name = "MeasurableSpace.comap_map_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 140;
+      code_preview = "theorem comap_map_le : (m.map f).comap f ≤ m";
+    }
+    {
+      full_name = "MeasurableSpace.le_map_comap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 143;
+      code_preview = "theorem le_map_comap : m ≤ (m.comap g).map g";
+    }
+    {
+      full_name = "MeasurableSpace.map_const";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 148;
+      code_preview = "@[simp] theorem map_const {m} (b : β) : MeasurableSpace.map (fun _a : α ↦ b) m = ⊤";
+    }
+    {
+      full_name = "MeasurableSpace.comap_const";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 151;
+      code_preview = "@[simp] theorem comap_const {m} (b : β) : MeasurableSpace.comap (fun _a : α => b) m = ⊥";
+    }
+    {
+      full_name = "MeasurableSpace.comap_generateFrom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 154;
+      code_preview = "theorem comap_generateFrom {f : α → β} {s : Set (Set β)} :     (generateFrom s).comap f = generateFrom (preimage f '' s)";
+    }
+    {
+      full_name = "measurable_iff_le_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 167;
+      code_preview = "theorem measurable_iff_le_map {m₁ : MeasurableSpace α} {m₂ : MeasurableSpace β} {f : α → β} :     Measurable f ↔ m₂ ≤ m₁.map f";
+    }
+    {
+      full_name = "measurable_iff_comap_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 173;
+      code_preview = "theorem measurable_iff_comap_le {m₁ : MeasurableSpace α} {m₂ : MeasurableSpace β} {f : α → β} :     Measurable f ↔ m₂.comap f ≤ m₁";
+    }
+    {
+      full_name = "comap_measurable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 179;
+      code_preview = "theorem comap_measurable {m : MeasurableSpace β} (f : α → β) : Measurable[m.comap f] f";
+    }
+    {
+      full_name = "Measurable.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 182;
+      code_preview = "theorem Measurable.mono {ma ma' : MeasurableSpace α} {mb mb' : MeasurableSpace β} {f : α → β}     (hf : @Measurable α β ma mb f) (ha : ma ≤ ma') (hb : mb' ≤ mb) : @Measurable α β ma' mb' f";
+    }
+    {
+      full_name = "Measurable.iSup'";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 186;
+      code_preview = "lemma Measurable.iSup' {mα : ι → MeasurableSpace α} {_ : MeasurableSpace β} {f : α → β} (i₀ : ι)     (h : Measurable[mα i₀] f) :     Measurable[⨆ i, mα i] f :=   h.mono (le_iSup mα i₀) le_rfl";
+    }
+    {
+      full_name = "Measurable.sup_of_left";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 191;
+      code_preview = "lemma Measurable.sup_of_left {mα mα' : MeasurableSpace α} {_ : MeasurableSpace β} {f : α → β}     (h : Measurable[mα] f) :     Measurable[mα ⊔ mα'] f :=   h.mono le_sup_left le_rfl";
+    }
+    {
+      full_name = "Measurable.sup_of_right";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 196;
+      code_preview = "lemma Measurable.sup_of_right {mα mα' : MeasurableSpace α} {_ : MeasurableSpace β} {f : α → β}     (h : Measurable[mα'] f) :     Measurable[mα ⊔ mα'] f :=   h.mono le_sup_right le_rfl";
+    }
+    {
+      full_name = "measurable_id''";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 201;
+      code_preview = "theorem measurable_id'' {m mα : MeasurableSpace α} (hm : m ≤ mα) : @Measurable α α mα m id";
+    }
+    {
+      full_name = "measurable_from_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 204;
+      code_preview = "@[measurability] theorem measurable_from_top [MeasurableSpace β] {f : α → β} : Measurable[⊤] f";
+    }
+    {
+      full_name = "measurable_generateFrom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 207;
+      code_preview = "theorem measurable_generateFrom [MeasurableSpace α] {s : Set (Set β)} {f : α → β}     (h : ∀ t ∈ s, MeasurableSet (f ⁻¹' t)) : @Measurable _ _ _ (generateFrom s) f";
+    }
+    {
+      full_name = "Subsingleton.measurable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 217;
+      code_preview = "@[nontriviality, measurability] theorem Subsingleton.measurable [Subsingleton α] : Measurable f";
+    }
+    {
+      full_name = "measurable_of_subsingleton_codomain";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 221;
+      code_preview = "@[nontriviality, measurability] theorem measurable_of_subsingleton_codomain [Subsingleton β] (f : α → β) : Measurable f";
+    }
+    {
+      full_name = "measurable_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 225;
+      code_preview = "@[to_additive (attr := measurability, fun_prop)] theorem measurable_one [One α] : Measurable (1 : β → α)";
+    }
+    {
+      full_name = "measurable_of_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 229;
+      code_preview = "theorem measurable_of_empty [IsEmpty α] (f : α → β) : Measurable f";
+    }
+    {
+      full_name = "measurable_of_empty_codomain";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 232;
+      code_preview = "theorem measurable_of_empty_codomain [IsEmpty β] (f : α → β) : Measurable f";
+    }
+    {
+      full_name = "measurable_const'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 235;
+      code_preview = "theorem measurable_const' {f : β → α} (hf : ∀ x y, f x = f y) : Measurable f";
+    }
+    {
+      full_name = "measurable_natCast";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 243;
+      code_preview = "@[measurability] theorem measurable_natCast [NatCast α] (n : ℕ) : Measurable (n : β → α)";
+    }
+    {
+      full_name = "measurable_intCast";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 247;
+      code_preview = "@[measurability] theorem measurable_intCast [IntCast α] (n : ℤ) : Measurable (n : β → α)";
+    }
+    {
+      full_name = "measurable_of_countable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 251;
+      code_preview = "theorem measurable_of_countable [Countable α] [MeasurableSingletonClass α] (f : α → β) :     Measurable f";
+    }
+    {
+      full_name = "measurable_of_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 255;
+      code_preview = "theorem measurable_of_finite [Finite α] [MeasurableSingletonClass α] (f : α → β) : Measurable f";
+    }
+    {
+      full_name = "Measurable.iterate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 262;
+      code_preview = "@[measurability] theorem Measurable.iterate {f : α → α} (hf : Measurable f) : ∀ n, Measurable f^[n]";
+    }
+    {
+      full_name = "measurableSet_preimage";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 269;
+      code_preview = "@[measurability] theorem measurableSet_preimage {t : Set β} (hf : Measurable f) (ht : MeasurableSet t) :     MeasurableSet (f ⁻¹' t)";
+    }
+    {
+      full_name = "MeasurableSet.preimage";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 274;
+      code_preview = "protected theorem MeasurableSet.preimage {t : Set β} (ht : MeasurableSet t) (hf : Measurable f) :     MeasurableSet (f ⁻¹' t)";
+    }
+    {
+      full_name = "Measurable.piecewise";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/MeasurableSpace/Basic.lean";
+      start_line = 278;
+      code_preview = "@[measurability, fun_prop] protected theorem Measurable.piecewise {_ : DecidablePred (· ∈ s)} (hs : MeasurableSet s)     (hf : Measurable f) (hg : Measurable g) : Measurable (piecewise s f g)";
+    }
+    {
+      full_name = "MeasureTheory.ae_isMeasurablyGenerated";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 97;
+      code_preview = "instance ae_isMeasurablyGenerated : IsMeasurablyGenerated (ae μ) :=   ⟨fun _s hs =>     let ⟨t, hst, htm, htμ⟩ := exists_measurable_superset_of_null hs     ⟨tᶜ, compl_mem_ae_iff.2 htμ, htm.compl, compl_subset_comm.1 hst⟩⟩";
+    }
+    {
+      full_name = "MeasureTheory.ae_uIoc_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 102;
+      code_preview = "theorem ae_uIoc_iff [LinearOrder α] {a b : α} {P : α → Prop} :     (∀ᵐ x ∂μ, x ∈ Ι a b → P x) ↔ (∀ᵐ x ∂μ, x ∈ Ioc a b → P x) ∧ ∀ᵐ x ∂μ, x ∈ Ioc b a → P x";
+    }
+    {
+      full_name = "MeasureTheory.measure_union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 107;
+      code_preview = "theorem measure_union (hd : Disjoint s₁ s₂) (h : MeasurableSet s₂) : μ (s₁ ∪ s₂) = μ s₁ + μ s₂";
+    }
+    {
+      full_name = "MeasureTheory.measure_union'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 110;
+      code_preview = "theorem measure_union' (hd : Disjoint s₁ s₂) (h : MeasurableSet s₁) : μ (s₁ ∪ s₂) = μ s₁ + μ s₂";
+    }
+    {
+      full_name = "MeasureTheory.measure_inter_add_diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 113;
+      code_preview = "theorem measure_inter_add_diff (s : Set α) (ht : MeasurableSet t) : μ (s ∩ t) + μ (s \\ t) = μ s";
+    }
+    {
+      full_name = "MeasureTheory.measure_diff_add_inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 116;
+      code_preview = "theorem measure_diff_add_inter (s : Set α) (ht : MeasurableSet t) : μ (s \\ t) + μ (s ∩ t) = μ s";
+    }
+    {
+      full_name = "MeasureTheory.measure_diff_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 119;
+      code_preview = "theorem measure_diff_eq_top (hs : μ s = ∞) (ht : μ t ≠ ∞) : μ (s \\ t) = ∞";
+    }
+    {
+      full_name = "MeasureTheory.measure_union_add_inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 124;
+      code_preview = "theorem measure_union_add_inter (s : Set α) (ht : MeasurableSet t) :     μ (s ∪ t) + μ (s ∩ t) = μ s + μ t";
+    }
+    {
+      full_name = "MeasureTheory.measure_union_add_inter'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 130;
+      code_preview = "theorem measure_union_add_inter' (hs : MeasurableSet s) (t : Set α) :     μ (s ∪ t) + μ (s ∩ t) = μ s + μ t";
+    }
+    {
+      full_name = "MeasureTheory.measure_symmDiff_eq";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 134;
+      code_preview = "lemma measure_symmDiff_eq (hs : NullMeasurableSet s μ) (ht : NullMeasurableSet t μ) :     μ (s ∆ t) = μ (s \\ t) + μ (t \\ s) := by   simpa only [symmDiff_def, sup_eq_union]     using measure_union₀ (ht.diff hs) disjoint_sdiff_sdiff.aedisjoint";
+    }
+    {
+      full_name = "MeasureTheory.measure_symmDiff_le";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 139;
+      code_preview = "lemma measure_symmDiff_le (s t u : Set α) :     μ (s ∆ u) ≤ μ (s ∆ t) + μ (t ∆ u) :=   le_trans (μ.mono <| symmDiff_triangle s t u) (measure_union_le (s ∆ t) (t ∆ u))";
+    }
+    {
+      full_name = "MeasureTheory.measure_symmDiff_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 143;
+      code_preview = "theorem measure_symmDiff_eq_top (hs : μ s ≠ ∞) (ht : μ t = ∞) : μ (s ∆ t) = ∞";
+    }
+    {
+      full_name = "MeasureTheory.measure_add_measure_compl";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 146;
+      code_preview = "theorem measure_add_measure_compl (h : MeasurableSet s) : μ s + μ sᶜ = μ univ";
+    }
+    {
+      full_name = "MeasureTheory.measure_biUnion₀";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 149;
+      code_preview = "theorem measure_biUnion₀ {s : Set β} {f : β → Set α} (hs : s.Countable)     (hd : s.Pairwise (AEDisjoint μ on f)) (h : ∀ b ∈ s, NullMeasurableSet (f b) μ) :     μ (⋃ b ∈ s, f b) = ∑' p : s, μ (f p)";
+    }
+    {
+      full_name = "MeasureTheory.measure_biUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 156;
+      code_preview = "theorem measure_biUnion {s : Set β} {f : β → Set α} (hs : s.Countable) (hd : s.PairwiseDisjoint f)     (h : ∀ b ∈ s, MeasurableSet (f b)) : μ (⋃ b ∈ s, f b) = ∑' p : s, μ (f p)";
+    }
+    {
+      full_name = "MeasureTheory.measure_sUnion₀";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 160;
+      code_preview = "theorem measure_sUnion₀ {S : Set (Set α)} (hs : S.Countable) (hd : S.Pairwise (AEDisjoint μ))     (h : ∀ s ∈ S, NullMeasurableSet s μ) : μ (⋃₀ S) = ∑' s : S, μ s";
+    }
+    {
+      full_name = "MeasureTheory.measure_sUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 164;
+      code_preview = "theorem measure_sUnion {S : Set (Set α)} (hs : S.Countable) (hd : S.Pairwise Disjoint)     (h : ∀ s ∈ S, MeasurableSet s) : μ (⋃₀ S) = ∑' s : S, μ s";
+    }
+    {
+      full_name = "MeasureTheory.measure_biUnion_finset₀";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 168;
+      code_preview = "theorem measure_biUnion_finset₀ {s : Finset ι} {f : ι → Set α}     (hd : Set.Pairwise (↑s) (AEDisjoint μ on f)) (hm : ∀ b ∈ s, NullMeasurableSet (f b) μ) :     μ (⋃ b ∈ s, f b) = ∑ p ∈ s, μ (f p)";
+    }
+    {
+      full_name = "MeasureTheory.measure_biUnion_finset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 174;
+      code_preview = "theorem measure_biUnion_finset {s : Finset ι} {f : ι → Set α} (hd : PairwiseDisjoint (↑s) f)     (hm : ∀ b ∈ s, MeasurableSet (f b)) : μ (⋃ b ∈ s, f b) = ∑ p ∈ s, μ (f p)";
+    }
+    {
+      full_name = "MeasureTheory.tsum_meas_le_meas_iUnion_of_disjoint₀";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 178;
+      code_preview = "theorem tsum_meas_le_meas_iUnion_of_disjoint₀ {ι : Type*} {_ : MeasurableSpace α} (μ : Measure α)     {As : ι → Set α} (As_mble : ∀ i : ι, NullMeasurableSet (As i) μ)     (As_disj : Pairwise (AEDisjoint μ on As)) : (∑' i, μ (As i)) ≤ μ (⋃ i, As i)";
+    }
+    {
+      full_name = "MeasureTheory.tsum_meas_le_meas_iUnion_of_disjoint";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 189;
+      code_preview = "theorem tsum_meas_le_meas_iUnion_of_disjoint {ι : Type*} {_ : MeasurableSpace α} (μ : Measure α)     {As : ι → Set α} (As_mble : ∀ i : ι, MeasurableSet (As i))     (As_disj : Pairwise (Disjoint on As)) : (∑' i, μ (As i)) ≤ μ (⋃ i, As i)";
+    }
+    {
+      full_name = "MeasureTheory.tsum_measure_preimage_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 197;
+      code_preview = "theorem tsum_measure_preimage_singleton {s : Set β} (hs : s.Countable) {f : α → β}     (hf : ∀ y ∈ s, MeasurableSet (f ⁻¹' {y})) : (∑' b : s, μ (f ⁻¹' {↑b})) = μ (f ⁻¹' s)";
+    }
+    {
+      full_name = "MeasureTheory.measure_preimage_eq_zero_iff_of_countable";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 203;
+      code_preview = "lemma measure_preimage_eq_zero_iff_of_countable {s : Set β} {f : α → β} (hs : s.Countable) :     μ (f ⁻¹' s) = 0 ↔ ∀ x ∈ s, μ (f ⁻¹' {x}) = 0 := by   rw [← biUnion_preimage_singleton, measure_biUnion_null_iff hs]";
+    }
+    {
+      full_name = "MeasureTheory.sum_measure_preimage_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 207;
+      code_preview = "theorem sum_measure_preimage_singleton (s : Finset β) {f : α → β}     (hf : ∀ y ∈ s, MeasurableSet (f ⁻¹' {y})) : (∑ b ∈ s, μ (f ⁻¹' {b})) = μ (f ⁻¹' ↑s)";
+    }
+    {
+      full_name = "MeasureTheory.sum_measure_singleton";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 214;
+      code_preview = "@[simp] lemma sum_measure_singleton {s : Finset α} [MeasurableSingletonClass α] :     ∑ x ∈ s, μ {x} = μ s := by   trans ∑ x ∈ s, μ (id ⁻¹' {x})   · simp   rw [sum_measure_preimage_singleton]   · simp   · simp";
+    }
+    {
+      full_name = "MeasureTheory.measure_diff_null'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 222;
+      code_preview = "theorem measure_diff_null' (h : μ (s₁ ∩ s₂) = 0) : μ (s₁ \\ s₂) = μ s₁";
+    }
+    {
+      full_name = "MeasureTheory.measure_add_diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 225;
+      code_preview = "theorem measure_add_diff (hs : NullMeasurableSet s μ) (t : Set α) :     μ s + μ (t \\ s) = μ (s ∪ t)";
+    }
+    {
+      full_name = "MeasureTheory.measure_diff'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 229;
+      code_preview = "theorem measure_diff' (s : Set α) (hm : NullMeasurableSet t μ) (h_fin : μ t ≠ ∞) :     μ (s \\ t) = μ (s ∪ t) - μ t";
+    }
+    {
+      full_name = "MeasureTheory.measure_diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 233;
+      code_preview = "theorem measure_diff (h : s₂ ⊆ s₁) (h₂ : NullMeasurableSet s₂ μ) (h_fin : μ s₂ ≠ ∞) :     μ (s₁ \\ s₂) = μ s₁ - μ s₂";
+    }
+    {
+      full_name = "MeasureTheory.le_measure_diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 236;
+      code_preview = "theorem le_measure_diff : μ s₁ - μ s₂ ≤ μ (s₁ \\ s₂)";
+    }
+    {
+      full_name = "MeasureTheory.measure_eq_top_iff_of_symmDiff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 240;
+      code_preview = "theorem measure_eq_top_iff_of_symmDiff (hμst : μ (s ∆ t) ≠ ∞) : μ s = ∞ ↔ μ t = ∞";
+    }
+    {
+      full_name = "MeasureTheory.measure_ne_top_iff_of_symmDiff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 254;
+      code_preview = "theorem measure_ne_top_iff_of_symmDiff (hμst : μ (s ∆ t) ≠ ∞) : μ s ≠ ∞ ↔ μ t ≠ ∞";
+    }
+    {
+      full_name = "MeasureTheory.measure_diff_lt_of_lt_add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 259;
+      code_preview = "theorem measure_diff_lt_of_lt_add (hs : NullMeasurableSet s μ) (hst : s ⊆ t) (hs' : μ s ≠ ∞)     {ε : ℝ≥0∞} (h : μ t < μ s + ε) : μ (t \\ s) < ε";
+    }
+    {
+      full_name = "MeasureTheory.measure_diff_le_iff_le_add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 264;
+      code_preview = "theorem measure_diff_le_iff_le_add (hs : NullMeasurableSet s μ) (hst : s ⊆ t) (hs' : μ s ≠ ∞)     {ε : ℝ≥0∞} : μ (t \\ s) ≤ ε ↔ μ t ≤ μ s + ε";
+    }
+    {
+      full_name = "MeasureTheory.measure_eq_measure_of_null_diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 268;
+      code_preview = "theorem measure_eq_measure_of_null_diff {s t : Set α} (hst : s ⊆ t) (h_nulldiff : μ (t \\ s) = 0) :     μ s = μ t";
+    }
+    {
+      full_name = "MeasureTheory.measure_eq_measure_of_between_null_diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 272;
+      code_preview = "theorem measure_eq_measure_of_between_null_diff {s₁ s₂ s₃ : Set α} (h12 : s₁ ⊆ s₂) (h23 : s₂ ⊆ s₃)     (h_nulldiff : μ (s₃ \\ s₁) = 0) : μ s₁ = μ s₂ ∧ μ s₂ = μ s₃";
+    }
+    {
+      full_name = "MeasureTheory.measure_eq_measure_smaller_of_between_null_diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 283;
+      code_preview = "theorem measure_eq_measure_smaller_of_between_null_diff {s₁ s₂ s₃ : Set α} (h12 : s₁ ⊆ s₂)     (h23 : s₂ ⊆ s₃) (h_nulldiff : μ (s₃ \\ s₁) = 0) : μ s₁ = μ s₂";
+    }
+    {
+      full_name = "MeasureTheory.measure_eq_measure_larger_of_between_null_diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 287;
+      code_preview = "theorem measure_eq_measure_larger_of_between_null_diff {s₁ s₂ s₃ : Set α} (h12 : s₁ ⊆ s₂)     (h23 : s₂ ⊆ s₃) (h_nulldiff : μ (s₃ \\ s₁) = 0) : μ s₂ = μ s₃";
+    }
+    {
+      full_name = "MeasureTheory.measure_compl₀";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 291;
+      code_preview = "lemma measure_compl₀ (h : NullMeasurableSet s μ) (hs : μ s ≠ ∞) :     μ sᶜ = μ Set.univ - μ s := by   rw [← measure_add_measure_compl₀ h, ENNReal.add_sub_cancel_left hs]";
+    }
+    {
+      full_name = "MeasureTheory.measure_compl";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 295;
+      code_preview = "theorem measure_compl (h₁ : MeasurableSet s) (h_fin : μ s ≠ ∞) : μ sᶜ = μ univ - μ s";
+    }
+    {
+      full_name = "MeasureTheory.measure_inter_conull'";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 298;
+      code_preview = "lemma measure_inter_conull' (ht : μ (s \\ t) = 0) : μ (s ∩ t) = μ s := by   rw [← diff_compl, measure_diff_null']; rwa [← diff_eq]";
+    }
+    {
+      full_name = "MeasureTheory.measure_inter_conull";
+      kind = "lemma";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 301;
+      code_preview = "lemma measure_inter_conull (ht : μ tᶜ = 0) : μ (s ∩ t) = μ s := by   rw [← diff_compl, measure_diff_null ht]";
+    }
+    {
+      full_name = "MeasureTheory.union_ae_eq_left_iff_ae_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 304;
+      code_preview = "@[simp] theorem union_ae_eq_left_iff_ae_subset : (s ∪ t : Set α) =ᵐ[μ] s ↔ t ≤ᵐ[μ] s";
+    }
+    {
+      full_name = "MeasureTheory.union_ae_eq_right_iff_ae_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 313;
+      code_preview = "@[simp] theorem union_ae_eq_right_iff_ae_subset : (s ∪ t : Set α) =ᵐ[μ] t ↔ s ≤ᵐ[μ] t";
+    }
+    {
+      full_name = "MeasureTheory.ae_eq_of_ae_subset_of_measure_ge";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 317;
+      code_preview = "theorem ae_eq_of_ae_subset_of_measure_ge (h₁ : s ≤ᵐ[μ] t) (h₂ : μ t ≤ μ s)     (hsm : NullMeasurableSet s μ) (ht : μ t ≠ ∞) : s =ᵐ[μ] t";
+    }
+    {
+      full_name = "MeasureTheory.ae_eq_of_subset_of_measure_ge";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 324;
+      code_preview = "theorem ae_eq_of_subset_of_measure_ge (h₁ : s ⊆ t) (h₂ : μ t ≤ μ s) (hsm : NullMeasurableSet s μ)     (ht : μ t ≠ ∞) : s =ᵐ[μ] t";
+    }
+    {
+      full_name = "MeasureTheory.measure_iUnion_congr_of_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 329;
+      code_preview = "theorem measure_iUnion_congr_of_subset {ι : Sort*} [Countable ι] {s : ι → Set α} {t : ι → Set α}     (hsub : ∀ i, s i ⊆ t i) (h_le : ∀ i, μ (t i) ≤ μ (s i)) : μ (⋃ i, s i) = μ (⋃ i, t i)";
+    }
+    {
+      full_name = "MeasureTheory.measure_union_congr_of_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 357;
+      code_preview = "theorem measure_union_congr_of_subset {t₁ t₂ : Set α} (hs : s₁ ⊆ s₂) (hsμ : μ s₂ ≤ μ s₁)     (ht : t₁ ⊆ t₂) (htμ : μ t₂ ≤ μ t₁) : μ (s₁ ∪ t₁) = μ (s₂ ∪ t₂)";
+    }
+    {
+      full_name = "MeasureTheory.measure_iUnion_toMeasurable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 362;
+      code_preview = "@[simp] theorem measure_iUnion_toMeasurable {ι : Sort*} [Countable ι] (s : ι → Set α) :     μ (⋃ i, toMeasurable μ (s i)) = μ (⋃ i, s i)";
+    }
+    {
+      full_name = "MeasureTheory.measure_biUnion_toMeasurable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/MeasureTheory/Measure/MeasureSpace.lean";
+      start_line = 368;
+      code_preview = "theorem measure_biUnion_toMeasurable {I : Set β} (hc : I.Countable) (s : β → Set α) :     μ (⋃ b ∈ I, toMeasurable μ (s b)) = μ (⋃ b ∈ I, s b)";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

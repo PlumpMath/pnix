@@ -1,0 +1,893 @@
+# stdlib.nl.symbolic-interpretation-frame
+#
+# Service-critical NL front-door frame:
+#
+#   utterance + context
+#     -> sentence surfaces
+#     -> symbolic operation candidates
+#     -> arbitration / ambiguity gate
+#     -> route manifest
+#
+# This owner does NOT execute the route. It is the missing interpretation layer
+# before dispatch: the decision "solve vs judge vs code emit vs world3d vs
+# general" is represented as candidate data with canonical meaning ids. The
+# dispatcher consumes the chosen manifest and calls the existing substrate owner.
+let
+  sub  = builtins.substring;
+  slen = builtins.stringLength;
+
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+
+  containsAny = utterance: cues:
+    builtins.any (cue: hasInfix cue utterance) cues;
+
+  attrOr = attrs: key: fallback:
+    if (builtins.isAttrs attrs) && (builtins.hasAttr key attrs)
+    then builtins.getAttr key attrs else fallback;
+
+  nonEmptyStringOr = value: fallback:
+    if builtins.isString value && value != "" then value else fallback;
+
+  contextReferenceCues = [
+    "이걸" "이것" "이거" "그걸" "그것" "그거" "방금" "앞의" "이전"
+    "that" "it" "previous" "last"
+  ];
+
+  contextLastExpression = context:
+    let
+      last = attrOr context "last_dispatch" { };
+      result = attrOr last "result" { };
+      extracted = nonEmptyStringOr (attrOr last "extracted_expression" "") "";
+      resultInput = nonEmptyStringOr (attrOr result "input" "") "";
+    in
+      if extracted != "" then extracted else resultInput;
+
+  trimL = s: let n = slen s; go = i: if (i < n) && ((sub i 1 s) == " ") then go (i + 1) else sub i (n - i) s; in go 0;
+  trimR = s: let go = i: if (i > 0) && ((sub (i - 1) 1 s) == " ") then go (i - 1) else sub 0 i s; in go (slen s);
+  trim = s: trimR (trimL s);
+
+  splitSentences = utterance:
+    let
+      normalized = builtins.replaceStrings
+        [ ". " ".\n" "? " "?\n" "! " "!\n" "\n" ]
+        [ ".\n" ".\n" "?\n" "?\n" "!\n" "!\n" "\n" ]
+        utterance;
+      rows = builtins.filter (x: builtins.isString x) (builtins.split "\n" normalized);
+    in builtins.filter (s: s != "") (builtins.map trim rows);
+
+  canonicalRegistry = {
+    math_solve = {
+      canonical_meaning = "math.equation.solve";
+      operation_kind = "equation";
+      route = "stdlib/lib/math/equation-solving-procedure.px::beginSolveProcedure";
+      executable = true;
+      expected_receipt_kind = "math-solve-receipt";
+    };
+    math_eval = {
+      canonical_meaning = "math.expression.evaluate";
+      operation_kind = "arithmetic";
+      route = "stdlib/lib/math/numeric-evaluator.px::evaluateNumericExpression";
+      executable = true;
+      expected_receipt_kind = "math-eval-receipt";
+    };
+    math_judge = {
+      canonical_meaning = "math.statement.judge";
+      operation_kind = "math-judge";
+      route = "stdlib/lib/math/nl-conjecture-lifter.px::liftAndJudge";
+      executable = true;
+      expected_receipt_kind = "math-judge-receipt";
+    };
+    math_factor = {
+      canonical_meaning = "math.expression.factor";
+      operation_kind = "math-factor";
+      route = "stdlib/lib/math/factor-executor-bridge.px::factorEquation";
+      executable = true;
+      expected_receipt_kind = "math-factor-receipt";
+    };
+    math_diff = {
+      canonical_meaning = "math.expression.differentiate";
+      operation_kind = "math-diff";
+      route = "stdlib/lib/math/derivative-executor-bridge.px::differentiateExpression";
+      executable = true;
+      expected_receipt_kind = "math-diff-receipt";
+    };
+    symbolic_code_result = {
+      canonical_meaning = "code.emit.symbolic-result";
+      operation_kind = "symbolic-code";
+      route = "stdlib/lib/math/symbolic-code-witness.px::emitSymbolicCode";
+      executable = true;
+      expected_receipt_kind = "emit-witness-receipt";
+    };
+    symbolic_code_algorithm = {
+      canonical_meaning = "code.emit.symbolic-algorithm";
+      operation_kind = "symbolic-code-algorithm";
+      route = "stdlib/lib/math/symbolic-algorithm-code-emitter.px::emitAlgorithmCode";
+      executable = true;
+      expected_receipt_kind = "algorithm-code-receipt";
+    };
+    code_transform = {
+      canonical_meaning = "code.transform.patch";
+      operation_kind = "code-transform";
+      route = "stdlib/lib/coding/coding-candidate-dispatcher.px";
+      executable = true;
+      expected_receipt_kind = "code-transform-receipt";
+    };
+    code_generate = {
+      canonical_meaning = "code.generate.behavior-atoms";
+      operation_kind = "code-generation";
+      route = "stdlib/lib/coding/utterance-decomposer.px::decomposeUtterance";
+      executable = true;
+      expected_receipt_kind = "code-atom-list";
+    };
+    world3d_command = {
+      canonical_meaning = "world3d.command.live-mutation";
+      operation_kind = "world3d-command";
+      route = "stdlib/lib/agent/nl-live-coding-incremental-command-contract.px + web-freecat-live-code-emit-contract.px";
+      executable = true;
+      expected_receipt_kind = "world3d-live-code-receipt";
+    };
+    freecat_js_construction = {
+      canonical_meaning = "freecat.js.construction";
+      operation_kind = "freecat-js";
+      route = "stdlib/lib/freecat/freecat-js-api-projector.px::projectFreecatJs";
+      executable = true;
+      expected_receipt_kind = "freecat-js-api-projection-receipt";
+    };
+    context_update = {
+      canonical_meaning = "conversation.context.update";
+      operation_kind = "context-update";
+      route = "stdlib/lib/agent/discourse-context-mirror.px";
+      executable = true;
+      expected_receipt_kind = "context-update-receipt";
+    };
+    service_proof = {
+      canonical_meaning = "codebase-gate.service-proof";
+      operation_kind = "service-proof";
+      route = "project-wiki/context-packs/service-codebase-gate.md + project-wiki/checklists/service-proof.md";
+      executable = false;
+      expected_receipt_kind = "service-proof-held-receipt";
+    };
+    policy_artifact = {
+      canonical_meaning = "puck.policy-evaluation-artifact.summary";
+      operation_kind = "policy-artifact";
+      route = "docs/puck/* policy/evaluation artifacts";
+      executable = false;
+      expected_receipt_kind = "policy-artifact-held-receipt";
+    };
+    pnix_sample_input = {
+      canonical_meaning = "pnix.sample-input.eval-held";
+      operation_kind = "pnix-sample-input";
+      route = "docs/pnix-sample-inputs.md + pnix eval input gate";
+      executable = false;
+      expected_receipt_kind = "eval-input-held-receipt";
+    };
+    weather_tool_needed = {
+      canonical_meaning = "weather.temporal-factual.live-tool-required";
+      operation_kind = "weather-tool-needed";
+      route = "crates/pnixc-meta/src/nl_corpus/dialogue_derive.rs::WeatherHeld";
+      executable = false;
+      expected_receipt_kind = "weather-tool-needed-held-receipt";
+    };
+    finance_tool_needed = {
+      canonical_meaning = "finance.temporal-factual.live-tool-required";
+      operation_kind = "finance-tool-needed";
+      route = "live finance/market data tool provenance gate";
+      executable = false;
+      expected_receipt_kind = "finance-tool-needed-held-receipt";
+    };
+    sports_tool_needed = {
+      canonical_meaning = "sports.temporal-factual.live-tool-required";
+      operation_kind = "sports-tool-needed";
+      route = "live sports score/schedule provenance gate";
+      executable = false;
+      expected_receipt_kind = "sports-tool-needed-held-receipt";
+    };
+    time_tool_needed = {
+      canonical_meaning = "time.temporal-factual.live-tool-required";
+      operation_kind = "time-tool-needed";
+      route = "live time/clock provenance gate";
+      executable = false;
+      expected_receipt_kind = "time-tool-needed-held-receipt";
+    };
+    calendar_tool_needed = {
+      canonical_meaning = "calendar.personal-factual.live-tool-required";
+      operation_kind = "calendar-tool-needed";
+      route = "live calendar/event provenance gate";
+      executable = false;
+      expected_receipt_kind = "calendar-tool-needed-held-receipt";
+    };
+    logistics_tool_needed = {
+      canonical_meaning = "logistics.personal-factual.live-tool-required";
+      operation_kind = "logistics-tool-needed";
+      route = "live logistics/delivery provenance gate";
+      executable = false;
+      expected_receipt_kind = "logistics-tool-needed-held-receipt";
+    };
+    secure_memory_needed = {
+      canonical_meaning = "secure-memory.sensitive-secret.authenticated-memory-required";
+      operation_kind = "secure-memory-needed";
+      route = "authenticated secret memory provenance gate";
+      executable = false;
+      expected_receipt_kind = "secure-memory-needed-held-receipt";
+    };
+    general_answer = {
+      canonical_meaning = "nl.answer.general";
+      operation_kind = "general";
+      route = "stdlib/lib/nl/universal-nl-reverse-composer.px";
+      executable = true;
+      expected_receipt_kind = "general-answer-receipt";
+    };
+    project_test = {
+      canonical_meaning = "project.workflow.test";
+      operation_kind = "test";
+      route = "stdlib/lib/coding/project-patch-request-lifter.px::liftProjectPatchRequest";
+      executable = true;
+      expected_receipt_kind = "project-test-workflow-receipt";
+    };
+    project_build = {
+      canonical_meaning = "project.workflow.build";
+      operation_kind = "build";
+      route = "stdlib/lib/coding/project-patch-request-lifter.px::liftProjectPatchRequest";
+      executable = true;
+      expected_receipt_kind = "project-build-workflow-receipt";
+    };
+  };
+
+  solveCues = [ "풀" "풀이" "solve" "root" "roots" "해를 구" "미지수" "구해" ];
+  judgeCues = [ "참" "맞" "성립" "인가" "?" "true" "false" "prove" "증명" ];
+  factorCues = [ "인수분해" "factorize" "factorise" "factor x" "factor y" "factor it" "factor polynomial" "factor expression" ];
+  diffCues = [ "미분" "differentiate" "derivative of" "take derivative" ];
+  simplifyCues = [ "간단히" "simplify" "정리" ];
+  algorithmCues = [ "알고리즘" "algorithm" "계산하는 코드" "solve program" "풀이 코드" ];
+  codeGenCues = [
+    "코드로" "코드화" "코드 작성" "코드 만들어" "코드 생성" "함수 코드" "소스 코드"
+    "write code" "generate code" "emit code" "code emit" "write program" "program code"
+    "function code" "write function" "source code"
+  ];
+  transformCues = [ "rename " "refactor" "patch request" "패치 요청" "이름 바꿔" "리팩터" "변경 요청" "교체 요청" ];
+  worldVerbCues = [ "추가" "만들" "add" "create" "spawn" "회전" "돌려" "rotate" "paint" "색" "지워" "clear" ];
+  # Shape-less live verbs (Round 115 catalog): clear/explode/wave/animate/scale
+  # and selector verbs without a shape token in the utterance.
+  worldVerbOnlyCues = [
+    "clear" "explode" "wave" "animate" "scale" "spin" "turn"
+    "지워" "초기화" "폭발" "물결" "흔들" "회전" "돌려" "빨갛게" "파랗게" "녹색으로"
+  ];
+  worldShapeCues = [ "원뿔" "큐브" "박스" "구체" "sphere" "cone" "cube" "box" "cylinder" "원기둥" ];
+  constructionCues = [
+    "작도" "지오지브라" "geogebra" "construction"
+    "중점" "수직" "수직이등분" "평행" "교점"
+    "외접원" "세 점을 지나는 원" "정삼각형" "정다각형"
+    "midpoint" "perpendicular" "parallel" "intersection"
+    "circumcircle" "circle through" "regular polygon" "equilateral"
+  ];
+  worldControlCues = [
+    "확대" "줌" "zoom" "fit" "전체 보기" "전체보기"
+    "orbit" "view" "카메라"
+  ];
+  conceptQuestionCues = [
+    "무엇인지" "뭐야" "뜻하는지" "뜻을 설명" "의미를 설명"
+    "을 설명" "를 설명"
+    "what is " "what are " "what does " " mean"
+  ];
+  projectTestRunCues = [
+    "run test" "run tests" "cargo test" "npm test" "pytest" "go test"
+    "테스트 돌" "테스트 실행" "테스트 해" "검증해" "verify"
+  ];
+  projectBuildRunCues = [
+    "cargo build" "npm run build" "go build" "빌드해" "빌드 실행" "compile"
+  ];
+  serviceProofProductCues = [
+    "service-proof" "service proof" "codebase gate" "Pnix Gate for Codebases"
+    "Pnix Gate" "Gate for Codebases" "service wedge"
+  ];
+  serviceProofArtifactCues = [
+    "feature tree" "architecture map" "risk map" "gate map" "risk/gate map"
+    "affected slice" "verify target" "verify target list" "rollback path"
+    "semantic review" "semantic review receipt" "policy feed" "policy candidate"
+    "context-pack" "service-proof workflow" "service-proof checklist"
+    "full service-proof"
+  ];
+  policyArtifactProductCues = [
+    "docs/puck" "freecat" "puck" "counterfactual evaluation" "policy simulator"
+    "autofix" "AutoFixPatchBundleResult" "PolicyApprovalPacket"
+    "CounterfactualEvaluationReport" "PolicySimulationScenario" "PolicySimulationResult"
+  ];
+  policyArtifactActionCues = [
+    "artifact" "artifact가" "산출물" "문서" "요약" "summarize" "summary"
+    "무엇을 평가" "무엇을 결정" "평가/결정" "evaluation" "policy"
+    "OPE" "DM/IPW/DR" "LCB/UCB" "propose_patch" "decision"
+  ];
+  pnixSampleProductCues = [
+    "docs/pnix-sample-inputs.md" "pnix 샘플" "pnix sample" "pnix sample-input"
+    "sample input" "pnix 테스트" "pnix 데모"
+  ];
+  pnixEvalActionCues = [
+    "이 입력" "평가" "평가하거나" "평가 불가" "eval" "evaluate" "input"
+    "held" "Held" "불가 사유"
+  ];
+  pnixEvalContextCues = [
+    "pnix" "eval" "evaluate" "입력" "평가" "sample" "샘플"
+    "docs/pnix-sample-inputs.md"
+  ];
+  weatherTopicCues = [ "날씨" "weather" "forecast" "기상" "비 " "비가" "눈 " "눈이" ];
+  weatherTemporalCues = [ "오늘" "내일" "모레" "today" "tomorrow" "day after tomorrow" ];
+  weatherLocationCues = [
+    "서울" "부산" "대구" "인천" "광주" "대전" "울산" "제주"
+    "Seoul" "Busan" "Daegu" "Incheon" "Gwangju" "Daejeon" "Ulsan" "Jeju"
+  ];
+  financeTopicCues = [
+    "주가" "시세" "비트코인 가격" "stock price" "share price"
+    "crypto price" "bitcoin price" "AAPL" "BTC"
+  ];
+  financeTemporalCues = [ "오늘" "현재" "지금" "today" "current" "now" ];
+  financeRequestCues = [ "알려줘" "알려 줘" "얼마" "가격 알려" "price today" "current price" ];
+  sportsTopicCues = [
+    "경기 결과" "경기 일정" "야구 경기" "축구 경기" "농구 경기" "스코어" "점수"
+    "Lakers score" "lakers score" "score today" "standings"
+    "game schedule" "Game schedule" "Lakers schedule" "lakers schedule"
+  ];
+  sportsTemporalCues = [ "오늘" "내일" "어제" "today" "tomorrow" "yesterday" ];
+  sportsRequestCues = [ "알려줘" "알려 줘" "뭐야" "어때" "결과" "일정" "score today" ];
+  timeTopicCues = [ "몇 시" "몇시" "현재 시간" "지금 시간" "what time" "current time" "time in " ];
+  timeLiveCues = [ "지금" "현재" "now" "Seoul" "seoul" "서울" "UTC" "timezone" "time zone" ];
+  calendarTopicCues = [
+    "회의" "일정" "캘린더" "약속" "calendar" "Calendar" "meeting" "Meeting" "agenda" "Agenda"
+  ];
+  calendarScopeCues = [
+    "오늘" "내일" "어제" "이번 주" "다음 주" "몇 시" "몇시" "언제" "정리"
+    "알려줘" "알려 줘" "요약" "schedule" "Schedule" "today" "tomorrow" "when"
+  ];
+  logisticsTopicCues = [
+    "택배" "배송" "소포" "운송장" "parcel" "Parcel" "package" "Package" "delivery" "Delivery" "tracking" "Tracking"
+  ];
+  logisticsScopeCues = [
+    "언제" "어디" "상태" "조회" "알려줘" "알려 줘"
+    "when" "where" "status"
+  ];
+  secureMemoryTopicCues = [
+    "비밀번호" "암호" "password" "Password" "passcode" "Passcode" "인증번호" "보안코드"
+  ];
+  secureMemoryRequestCues = [
+    "뭐였지" "뭐야" "알려줘" "알려 줘" "찾아" "기억" "what was" "What was" "tell me" "Tell me"
+  ];
+
+  scopeCacheOf = context:
+    let direct = attrOr context "project_scope_cache" { };
+    in if builtins.isAttrs direct then direct else { };
+
+  manifestOf = context:
+    let
+      direct = attrOr context "project_manifest" { };
+      scoped = attrOr (scopeCacheOf context) "project_manifest" { };
+    in if builtins.isAttrs direct && direct != { } then direct else scoped;
+
+  manifestCommand = context: key:
+    nonEmptyStringOr (attrOr (manifestOf context) key "") "";
+
+  hasEquation = expr: hasInfix "=" expr;
+
+  candidateId = op: idx:
+    "cand-" + op + "-" + (builtins.toString idx);
+
+  mkCandidate = idx: regKey: score: basis: extra:
+    let row = builtins.getAttr regKey canonicalRegistry;
+    in row // extra // {
+      candidate_id = candidateId row.operation_kind idx;
+      sentence_index = idx;
+      score = score;
+      confidence_basis = basis;
+      reversible = true;
+      registry_key = regKey;
+    };
+
+  deferredChainEnvelope = sentence:
+    {
+      outcome = "chain-held";
+      public = {
+        user_intent_summary_en = "General utterance — full 4-piece chain deferred on slow path.";
+        user_intent_summary_ko = "일반 발화 — slow path 에서 4-piece chain 지연.";
+        next_action_en = "Use general-answer fallback.";
+        next_action_ko = "general-answer fallback 사용.";
+        requires_clarification = false;
+      };
+      carry = {
+        routing_rule = "R-7-default-held";
+        primary_substrate_owner = null;
+        secondary_substrate_owners = [];
+        inferred_intent_kind = null;
+        chain_deferred = true;
+        source_sentence = sentence;
+      };
+    };
+
+  collectForSentence = context: idx: sentence:
+    let
+      extractor = import ../math/nl-symbolic-extractor.px;
+      numeric = import ../math/numeric-evaluator.px;
+      symCode = import ../math/symbolic-code-witness.px;
+      ext = extractor.extractExpression sentence;
+      explicitExpr = ext.expression;
+      contextExpr = contextLastExpression context;
+      usesContextExpr =
+        explicitExpr == ""
+        && contextExpr != ""
+        && containsAny sentence contextReferenceCues;
+      expr = if usesContextExpr then contextExpr else explicitExpr;
+      hasExpr = expr != "";
+      eqLike = hasExpr && hasEquation expr;
+      evaluated = if hasExpr then numeric.evaluateNumericExpression expr { } else { ok = false; };
+      wantsCode = symCode.wantsCode sentence;
+      lang = symCode.detectLanguage sentence;
+      solveCue = containsAny sentence solveCues;
+      judgeCue = containsAny sentence judgeCues;
+      factorCue = containsAny sentence factorCues;
+      diffCue = containsAny sentence diffCues;
+      simplifyCue = containsAny sentence simplifyCues;
+      algorithmCue = containsAny sentence algorithmCues;
+      transformCue = containsAny sentence transformCues;
+      codeCue = containsAny sentence codeGenCues;
+      worldCue =
+        (containsAny sentence worldVerbOnlyCues)
+        || ((containsAny sentence worldVerbCues) && (containsAny sentence worldShapeCues));
+      constructionCue = containsAny sentence constructionCues;
+      worldControlCue = containsAny sentence worldControlCues;
+      conceptQuestionCue = containsAny sentence conceptQuestionCues;
+      projectTestRunCue = (!conceptQuestionCue) && (containsAny sentence projectTestRunCues);
+      projectBuildRunCue = (!conceptQuestionCue) && (containsAny sentence projectBuildRunCues);
+      serviceProofProductCue = (!conceptQuestionCue) && (containsAny sentence serviceProofProductCues);
+      serviceProofArtifactCue = (!conceptQuestionCue) && (containsAny sentence serviceProofArtifactCues);
+      serviceProofCue = (!conceptQuestionCue) && serviceProofProductCue && serviceProofArtifactCue;
+      policyArtifactCue =
+        (!conceptQuestionCue)
+        && (containsAny sentence policyArtifactProductCues)
+        && (containsAny sentence policyArtifactActionCues);
+      pnixDocCue = containsAny sentence pnixSampleProductCues;
+      pnixEvalCue = (!conceptQuestionCue) && (containsAny sentence pnixEvalActionCues);
+      pnixLetSurface = (containsAny sentence [ "let " ]) && (containsAny sentence [ " in " "; in " "; in" ]);
+      pnixAttrSurface =
+        (containsAny sentence [ "{ " "{" ])
+        && (containsAny sentence [ " = " "=" ])
+        && (containsAny sentence [ "; }" ";}" ]);
+      pnixListSurface = (containsAny sentence [ "[ " "[" ]) && (containsAny sentence [ " ]" "]" ]);
+      pnixEvalSurface = pnixLetSurface || pnixAttrSurface || pnixListSurface;
+      pnixSampleInputCue =
+        (!conceptQuestionCue)
+        && ((pnixDocCue && (pnixEvalCue || pnixEvalSurface))
+        || (pnixEvalSurface && (containsAny sentence pnixEvalContextCues)));
+      weatherCue = containsAny sentence weatherTopicCues;
+      weatherTemporalCue = containsAny sentence weatherTemporalCues;
+      weatherLocationCue = containsAny sentence weatherLocationCues;
+      temporalWeatherCue = weatherCue && (weatherTemporalCue || weatherLocationCue);
+      financeCue = containsAny sentence financeTopicCues;
+      financeTemporalCue = containsAny sentence financeTemporalCues;
+      financeRequestCue = containsAny sentence financeRequestCues;
+      temporalFinanceCue = financeCue && (financeTemporalCue || financeRequestCue);
+      sportsCue = containsAny sentence sportsTopicCues;
+      sportsTemporalCue = containsAny sentence sportsTemporalCues;
+      sportsRequestCue = containsAny sentence sportsRequestCues;
+      temporalSportsCue = sportsCue && (sportsTemporalCue || sportsRequestCue);
+      timeCue = containsAny sentence timeTopicCues;
+      timeLiveCue = containsAny sentence timeLiveCues;
+      temporalTimeCue = timeCue && timeLiveCue;
+      calendarCue = containsAny sentence calendarTopicCues;
+      calendarScopeCue = containsAny sentence calendarScopeCues;
+      temporalCalendarCue = calendarCue && calendarScopeCue;
+      logisticsCue = containsAny sentence logisticsTopicCues;
+      logisticsScopeCue = containsAny sentence logisticsScopeCues;
+      temporalLogisticsCue = logisticsCue && logisticsScopeCue && (!conceptQuestionCue);
+      secureMemoryCue = containsAny sentence secureMemoryTopicCues;
+      secureMemoryRequestCue = containsAny sentence secureMemoryRequestCues;
+      secureMemoryNeededCue = secureMemoryCue && secureMemoryRequestCue;
+      needsFullChain = transformCue || projectTestRunCue || projectBuildRunCue;
+      testAxiomActive =
+        if projectTestRunCue then
+          let testAx = import ./test-axioms.px;
+          in (builtins.length (testAx.axiomsActivatedBy sentence)) > 0
+        else false;
+      buildAxiomActive =
+        if projectBuildRunCue then
+          let buildAx = import ./build-axioms.px;
+          in (builtins.length (buildAx.axiomsActivatedBy sentence)) > 0
+        else false;
+      testCmd = manifestCommand context "test_command";
+      buildCmd = manifestCommand context "build_command";
+      chain =
+        if needsFullChain then
+          let ssm = import ./sentence-substrate-mapping.px;
+          in ssm.resolveChain sentence
+        else deferredChainEnvelope sentence;
+      chainIntent =
+        if (builtins.isAttrs chain) && (chain ? carry) && (chain.carry ? inferred_intent_kind)
+        then chain.carry.inferred_intent_kind else null;
+      domain =
+        if codeCue && !hasExpr then
+          let pipeline = import ./nl-universal-pipeline.px;
+          in pipeline.classifyDomain sentence
+        else { outcome = "domain-deferred"; domain = null; };
+      domainName = if (domain ? outcome) && domain.outcome == "domain-classified" then domain.domain else null;
+
+      symbolicBase =
+        { extracted_symbolic = expr; extraction = ext; source_sentence = sentence; }
+        // (if usesContextExpr then {
+          context_reference = {
+            kind = "session-last-dispatch-expression";
+            source = "context.last_dispatch";
+            resolved_expression = contextExpr;
+          };
+        } else { });
+      mathBasis = [ "symbolic-expression" ] ++ (if ext.has_math_words then [ "word-math-extraction" ] else [ "ascii-symbolic-span" ]);
+
+      cs =
+        (if hasExpr && wantsCode && lang != null && algorithmCue then [
+          (mkCandidate idx "symbolic_code_algorithm" 120
+            (mathBasis ++ [ "code-cue" "language-cue" "algorithm-cue" ])
+            (symbolicBase // { target_language = lang; requires = [ "math-solve-or-eval" ]; }))
+        ] else [ ])
+        ++ (if hasExpr && wantsCode && lang != null && !algorithmCue then [
+          (mkCandidate idx "symbolic_code_result" 100
+            (mathBasis ++ [ "code-cue" "language-cue" ])
+            (symbolicBase // { target_language = lang; requires = [ "math-solve-or-eval" ]; }))
+        ] else [ ])
+        ++ (if hasExpr && factorCue then [
+          (mkCandidate idx "math_factor" 95 (mathBasis ++ [ "factor-cue" ]) symbolicBase)
+        ] else [ ])
+        ++ (if hasExpr && diffCue && transformCue then [
+          (mkCandidate idx "code_transform" 118
+            (mathBasis ++ [ "transform-cue" "differentiate-cue" "project-patch" ])
+            { source_sentence = sentence; chain = chain; extracted_symbolic = expr; })
+        ] else [ ])
+        ++ (if hasExpr && diffCue then [
+          (mkCandidate idx "math_diff" (if wantsCode && !algorithmCue then 110 else 95)
+            (mathBasis ++ [ "differentiate-cue" ] ++ (if wantsCode then [ "code-compatible" ] else [ ]))
+            symbolicBase)
+        ] else [ ])
+        ++ (if hasExpr && judgeCue && !solveCue && !wantsCode then [
+          (mkCandidate idx "math_judge" 90 (mathBasis ++ [ "question-or-judge-cue" ]) symbolicBase)
+        ] else [ ])
+        ++ (if eqLike && !diffCue && (!factorCue || solveCue) then [
+          (mkCandidate idx "math_solve" (if solveCue then 88 else if judgeCue && !solveCue then 70 else 78)
+            (mathBasis ++ (if solveCue then [ "solve-cue" ] else [ "equation-form" ]))
+            symbolicBase)
+        ] else [ ])
+        ++ (if hasExpr && !eqLike && !wantsCode && evaluated.ok then [
+          (mkCandidate idx "math_eval" 72 mathBasis symbolicBase)
+        ] else [ ])
+        ++ (if transformCue || chainIntent == "refactor" then [
+          (mkCandidate idx "code_transform" 82
+            ([ "transform-cue" ] ++ (if chainIntent == "refactor" then [ "symbolic-4piece-refactor" ] else [ ]))
+            { source_sentence = sentence; chain = chain; })
+        ] else [ ])
+        ++ (if codeCue && !hasExpr && domainName == "code-emission" then [
+          (mkCandidate idx "code_generate" 76 [ "code-cue" "domain-code-emission" ]
+            { source_sentence = sentence; domain = domain; })
+        ] else [ ])
+        ++ (if worldCue then [
+          (mkCandidate idx "world3d_command" 84 [ "world3d-verb-cue" "world3d-shape-cue" ]
+            { source_sentence = sentence; })
+        ] else [ ])
+        ++ (if constructionCue || worldControlCue then [
+          (mkCandidate idx "freecat_js_construction" (if constructionCue then 96 else 86)
+            ([ "freecat-public-js-api-cue" ]
+              ++ (if constructionCue then [ "geometric-construction-cue" ] else [ ])
+              ++ (if worldControlCue then [ "world3d-control-cue" ] else [ ]))
+            { source_sentence = sentence; })
+        ] else [ ])
+        ++ (if temporalWeatherCue then [
+          (mkCandidate idx "weather_tool_needed" 106
+            ([ "weather-topic-cue" ]
+              ++ (if weatherTemporalCue then [ "temporal-cue" ] else [ ])
+              ++ (if weatherLocationCue then [ "location-cue" ] else [ ]))
+            {
+              source_sentence = sentence;
+              held_kind = "weather-tool-needed";
+              reason = "현재/미래 날씨 질문은 live weather tool provenance 없이는 답을 단정할 수 없습니다.";
+              host_execution_deferred = false;
+              required_evidence = [
+                "live-weather-tool-result"
+                "timestamp"
+                "location"
+                "forecast-source"
+              ];
+            })
+        ] else [ ])
+        ++ (if temporalFinanceCue then [
+          (mkCandidate idx "finance_tool_needed" 106
+            ([ "finance-topic-cue" ]
+              ++ (if financeTemporalCue then [ "temporal-cue" ] else [ ])
+              ++ (if financeRequestCue then [ "price-request-cue" ] else [ ]))
+            {
+              source_sentence = sentence;
+              held_kind = "finance-tool-needed";
+              reason = "현재 시세·주가 질문은 live finance tool provenance 없이는 답을 단정할 수 없습니다.";
+              host_execution_deferred = false;
+              required_evidence = [
+                "live-finance-tool-result"
+                "timestamp"
+                "ticker-or-asset"
+                "market-source"
+              ];
+            })
+        ] else [ ])
+        ++ (if temporalSportsCue then [
+          (mkCandidate idx "sports_tool_needed" 106
+            ([ "sports-topic-cue" ]
+              ++ (if sportsTemporalCue then [ "temporal-cue" ] else [ ])
+              ++ (if sportsRequestCue then [ "score-or-schedule-request-cue" ] else [ ]))
+            {
+              source_sentence = sentence;
+              held_kind = "sports-tool-needed";
+              reason = "스포츠 경기 결과·일정 질문은 live sports tool provenance 없이는 답을 단정할 수 없습니다.";
+              host_execution_deferred = false;
+              required_evidence = [
+                "live-sports-tool-result"
+                "timestamp"
+                "league-or-team"
+                "schedule-or-score-source"
+              ];
+            })
+        ] else [ ])
+        ++ (if temporalTimeCue then [
+          (mkCandidate idx "time_tool_needed" 106
+            [ "time-topic-cue" "temporal-or-timezone-cue" ]
+            {
+              source_sentence = sentence;
+              held_kind = "time-tool-needed";
+              reason = "현재 시각 질문은 live time tool provenance 없이는 답을 단정할 수 없습니다.";
+              host_execution_deferred = false;
+              required_evidence = [
+                "live-time-tool-result"
+                "timestamp"
+                "timezone-or-location"
+                "source-clock"
+              ];
+            })
+        ] else [ ])
+        ++ (if temporalCalendarCue then [
+          (mkCandidate idx "calendar_tool_needed" 106
+            [ "calendar-topic-cue" "temporal-or-request-cue" ]
+            {
+              source_sentence = sentence;
+              held_kind = "calendar-tool-needed";
+              reason = "회의·일정 질문은 live calendar provenance 없이는 답을 단정할 수 없습니다.";
+              host_execution_deferred = false;
+              required_evidence = [
+                "live-calendar-tool-result"
+                "timestamp"
+                "calendar-or-account"
+                "event-source"
+              ];
+            })
+        ] else [ ])
+        ++ (if temporalLogisticsCue then [
+          (mkCandidate idx "logistics_tool_needed" 106
+            [ "logistics-topic-cue" "status-or-arrival-cue" ]
+            {
+              source_sentence = sentence;
+              held_kind = "logistics-tool-needed";
+              reason = "택배·배송 상태 질문은 live logistics provenance 없이는 답을 단정할 수 없습니다.";
+              host_execution_deferred = false;
+              required_evidence = [
+                "live-logistics-tool-result"
+                "timestamp"
+                "carrier-or-tracking-id"
+                "delivery-source"
+              ];
+            })
+        ] else [ ])
+        ++ (if secureMemoryNeededCue then [
+          (mkCandidate idx "secure_memory_needed" 106
+            [ "secure-memory-topic-cue" "sensitive-secret-request-cue" ]
+            {
+              source_sentence = sentence;
+              held_kind = "secure-memory-needed";
+              reason = "민감한 비밀값은 인증된 secret memory provenance 없이는 답할 수 없습니다.";
+              host_execution_deferred = false;
+              required_evidence = [
+                "authenticated-secret-store-result"
+                "secret-scope"
+                "requester-authority"
+                "audit-receipt"
+              ];
+            })
+        ] else [ ])
+        ++ (if pnixSampleInputCue then [
+          (mkCandidate idx "pnix_sample_input" 112
+            ([ "pnix-sample-input-cue" "eval-input-surface-cue" ]
+              ++ (if pnixDocCue then [ "docs-pnix-sample-inputs-cue" ] else [ ])
+              ++ (if pnixLetSurface then [ "let-in-surface" ] else [ ])
+              ++ (if pnixAttrSurface then [ "attrset-surface" ] else [ ])
+              ++ (if pnixListSurface then [ "list-surface" ] else [ ])
+              ++ (if eqLike then [ "equation-fragment-shadowed-by-eval-surface" ] else [ ]))
+            {
+              source_sentence = sentence;
+              source_surface = sentence;
+              held_kind = "eval-input.held";
+              reason = "pnix sample/eval input은 구조 전체를 평가해야 하며 equation solver가 일부를 잘라 답하면 안 됩니다; live eval/dry-run evidence 없이는 Held입니다.";
+              host_execution_deferred = false;
+              workflow_operation = false;
+              required_artifacts = [
+                "whole pnix input surface"
+                "pnix eval owner/provenance"
+                "dry-run result or unsupported-eval reason"
+              ];
+            })
+        ] else [ ])
+        ++ (if policyArtifactCue then [
+          (mkCandidate idx "policy_artifact" 108
+            ([ "puck-policy-artifact-cue" "policy-evaluation-artifact-cue" ]
+              ++ (if projectTestRunCue then [ "project-test-cue-shadowed-by-policy-artifact" ] else [ ])
+              ++ (if transformCue then [ "patch-cue-shadowed-by-policy-artifact" ] else [ ]))
+            {
+              source_sentence = sentence;
+              held_kind = "policy-artifact.summary-required";
+              reason = "docs/puck policy/evaluation artifact 요청은 프로젝트 테스트 실행 예약이 아니라 artifact가 무엇을 평가/결정하는지 요약해야 하는 Held입니다.";
+              host_execution_deferred = false;
+              required_artifacts = [
+                "artifact snapshot"
+                "artifact kind"
+                "decision/evaluation target"
+                "policy candidate or result"
+                "verification/provenance evidence"
+              ];
+            })
+        ] else [ ])
+        ++ (if serviceProofCue then [
+          (mkCandidate idx "service_proof" 104
+            ([ "service-proof-product-cue" "codebase-gate-artifact-cue" ]
+              ++ (if projectTestRunCue then [ "project-test-cue-shadowed-by-service-proof" ] else [ ]))
+            {
+              source_sentence = sentence;
+              held_kind = "service-proof.missing-evidence";
+              reason = "codebase gate/service-proof artifact 요청은 테스트 실행 예약이 아니라 repo snapshot/file refs/verify target/rollback evidence가 필요한 Held입니다.";
+              required_artifacts = [
+                "repo snapshot"
+                "feature tree"
+                "architecture map"
+                "risk map"
+                "gate map"
+                "affected slice"
+                "verify target list"
+                "rollback path"
+                "semantic review receipt"
+                "policy candidate feed"
+              ];
+            })
+        ] else [ ])
+        ++ (if projectTestRunCue then [
+          (mkCandidate idx "project_test"
+            (if testCmd != "" then 92 else 78)
+            ([ "project-test-run-cue" ]
+              ++ (if testAxiomActive then [ "test-axiom-activated" ] else [ ])
+              ++ (if testCmd != "" then [ "project-manifest-test-command" ] else [ ]))
+            {
+              source_sentence = sentence;
+              workflow_operation = true;
+              host_execution_deferred = true;
+              project_manifest_test_command_present = testCmd != "";
+            })
+        ] else [ ])
+        ++ (if projectBuildRunCue then [
+          (mkCandidate idx "project_build"
+            (if buildCmd != "" then 92 else 78)
+            ([ "project-build-run-cue" ]
+              ++ (if buildAxiomActive then [ "build-axiom-activated" ] else [ ])
+              ++ (if buildCmd != "" then [ "project-manifest-build-command" ] else [ ]))
+            {
+              source_sentence = sentence;
+              workflow_operation = true;
+              host_execution_deferred = true;
+              project_manifest_build_command_present = buildCmd != "";
+            })
+        ] else [ ])
+        ++ (if chainIntent == "info-statement" then [
+          (mkCandidate idx "context_update" 22 [ "symbolic-4piece-statement" ]
+            { source_sentence = sentence; chain = chain; })
+        ] else [ ])
+        ++ [
+          (mkCandidate idx "general_answer" 10 [ "fallback-general" ]
+            { source_sentence = sentence; chain = chain; })
+        ];
+    in cs;
+
+  collectIndexed = context: sentences:
+    let
+      n = builtins.length sentences;
+      go = i:
+        if i >= n then [ ]
+        else (collectForSentence context i (builtins.elemAt sentences i)) ++ (go (i + 1));
+    in go 0;
+
+  bestPair = candidates:
+    let
+      step = acc: c:
+        if acc.best == null || c.score > acc.best.score then { best = c; second = acc.best; }
+        else if acc.second == null || c.score > acc.second.score then acc // { second = c; }
+        else acc;
+    in builtins.foldl' step { best = null; second = null; } candidates;
+
+  rejectReceiptFor = utterance: chosen: c:
+    let
+      neg = import ../agent/negative-receipt-mirror.px;
+    in neg.mkNegative utterance c.route "failed-route" "candidate-not-chosen"
+      ("lower priority than " + chosen.candidate_id + " (" + chosen.canonical_meaning + ")");
+in
+rec {
+  name = "stdlib.nl.symbolic-interpretation-frame";
+
+  inherit canonicalRegistry splitSentences collectForSentence contextLastExpression;
+
+  interpret = req:
+    let
+      utterance =
+        if builtins.isString req then req
+        else if (builtins.isAttrs req) && (req ? utterance) && builtins.isString req.utterance then req.utterance
+        else "";
+      context =
+        if (builtins.isAttrs req) && (req ? context) then req.context else { };
+      sentences = splitSentences utterance;
+      candidates = collectIndexed context sentences;
+      routeEq = import ../agent/route-equivalence-mirror.px;
+      routeCheck = routeEq.checkSymbolicCandidateRoutes { utterance = utterance; candidates = candidates; };
+      pair = bestPair candidates;
+      checkedChosenSummary = routeCheck.chosen_candidate;
+      chosen =
+        if checkedChosenSummary == null then null
+        else
+          let hits = builtins.filter
+            (c: c.candidate_id == checkedChosenSummary.candidate_id)
+            candidates;
+          in if hits == [ ] then pair.best else builtins.head hits;
+      second = pair.second;
+      ambiguous =
+        routeCheck.verdict == "ambiguous";
+      conflicting =
+        routeCheck.verdict == "conflicting";
+      rejected =
+        if chosen == null then candidates
+        else builtins.filter (c: c.candidate_id != chosen.candidate_id) candidates;
+      negs =
+        if chosen == null || ambiguous then [ ]
+        else builtins.map (rejectReceiptFor utterance chosen) rejected;
+    in {
+      kind = "symbolic-interpretation-frame";
+      owner = name;
+      outcome =
+        if utterance == "" then "held-empty-utterance"
+        else if conflicting then "held-conflicting-routes"
+        else if ambiguous then "held-ambiguous-candidates"
+        else "frame-interpreted";
+      utterance = utterance;
+      session_context = context;
+      surfaces = sentences;
+      sentence_count = builtins.length sentences;
+      symbolic_candidates = candidates;
+      candidate_count = builtins.length candidates;
+      chosen = if ambiguous then null else chosen;
+      ambiguity = {
+        is_ambiguous = ambiguous;
+        top_candidate = chosen;
+        competing_candidate = second;
+        reason =
+          if ambiguous then "top candidates have equal score; challenge/held instead of guessing"
+          else null;
+      };
+      rejected_candidates = rejected;
+      negative_receipts = negs;
+      route_equivalence_checked = {
+        verdict = routeCheck.verdict;
+        primary_relation = routeCheck.primary_relation;
+        relations = routeCheck.relations;
+        composed_route = routeCheck.composed_route;
+        conflict = routeCheck.conflict;
+        receipt = routeCheck.receipt;
+      };
+      preservation_invariant = "surface -> canonical_meaning -> route manifest; no endpoint-specific execution in frame";
+      morphism_trace = {
+        stage = [ "surface" "sentence-split" "symbolic-candidate-collection" "arbitration" "route-manifest" ];
+        registry_owner = name;
+      };
+    };
+}

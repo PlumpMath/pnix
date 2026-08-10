@@ -1,0 +1,100 @@
+# stdlib.nl.nl-definition-query
+#
+# **사전 질문 처리 (.px, one-mirror 정본): "X가 뭐야?" → pnix-owned 정의 답.**
+#
+# 운영자(2026-06-15): math/code 지식(ko-math-coding senses 등)을 거울이 *답*으로 쓰는
+# 첫 칸. 발화가 정의 질문이면 lemma 추출 → sense 조회 → 정의 답. 산술 pipeline 의
+# 자매(둘 다 거울 dispatch).
+#
+# 안티-transcript: 정의 surface 는 *project-owned sense*(license-gated, pnix 저작)에서만
+# 온다. 외부 corpus prose verbatim 금지(CLAUDE.md). senses 는 host 가 push(평가기 readFile
+# 없음 — 순수). hits 0 = held 정직.
+#
+# 재구현 0: 조사 strip = korean-taxonomy-lift, substring = definition-meaning-map.hasInfix.
+let
+  lift = import nl/korean-taxonomy-lift.px;
+  dmm  = import nl/definition-meaning-map.px;
+
+  filter = builtins.filter;
+  head = builtins.head;
+  any = builtins.any;
+  len = builtins.length;
+  elemAt = builtins.elemAt;
+
+  hasInfix = dmm.hasInfix;
+  splitSp = lift.splitSp;
+  endsWith = lift.endsWith;
+  stripSuffix = lift.stripSuffix;
+  fieldOr = a: k: d: if a ? ${k} then a.${k} else d;
+
+  firstMatch = list: pred:
+    let go = i: if i >= (len list) then null else if pred (elemAt list i) then (elemAt list i) else go (i + 1);
+    in go 0;
+
+  # 정의 질문 마커 (보수적 닫힌 표)
+  defMarkers = [ "뭐야" "뭐예요" "무엇" "무엇인가" "뜻" "란 무엇" "정의" "뜻이 뭐" ];
+  isDefQuery = u: any (m: hasInfix m u) defMarkers;
+
+  # 첫 어절 → 조사/정의마커 strip → lemma
+  lemmaParticles = [ "이란" "란" "가" "는" "이" "의" "을" "를" "은" ];
+  extractLemma = u:
+    let words = splitSp u;
+    in
+      if words == [ ] then null
+      else
+        let w = head words;
+            m = firstMatch lemmaParticles (p: endsWith p w);
+        in if m == null then w else stripSuffix m w;
+
+  # senses: [ { lemma; pos; definition_surface; ... } ] (host push; project-owned)
+  findSense = senses: lemma:
+    let hits = filter (s: s.lemma == lemma) senses;
+    in if hits == [ ] then null else head hits;
+
+  # ★ 사전 질문 → 답 ★
+  answerDefinition = senses: utterance:
+    if ! (isDefQuery utterance) then
+      { kind = "not-definition-query"; text = "정의 질문이 아닙니다."; }
+    else
+      let
+        lemma = extractLemma utterance;
+        sense = if lemma == null then null else findSense senses lemma;
+      in
+        if sense == null then
+          { kind = "held"; text = "그 말의 뜻을 아직 모릅니다."; held_lemma = lemma; }
+        else
+          let
+            def = fieldOr sense "definition_surface" (fieldOr sense "definition" "");
+            # ★ recursive dict 그래프 live: 정의 안에 나오는 *다른 아는 용어* (관련어) ★
+            #   definition-meaning-map.mentionedLemmas 재사용(self 제외, ≥1음초과).
+            related = dmm.mentionedLemmas lemma def (builtins.map (s: s.lemma) senses);
+            relatedStr =
+              if related == [ ] then ""
+              else " (관련: " + (builtins.concatStringsSep ", " related) + ")";
+          in {
+            kind = "answer";
+            lemma = lemma;
+            pos = fieldOr sense "pos" "";
+            related = related;
+            # 구조 조립(project-owned sense): "lemma: 정의 (관련: …)"
+            text = lemma + ": " + def + relatedStr;
+          };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.nl-definition-query";
+    consumes = "korean-taxonomy-lift(조사 strip) + definition-meaning-map.hasInfix; project-owned senses(host push)";
+    role = "사전 질문('X가 뭐야?')→lemma 추출→sense 조회→정의 답. math/code 지식을 거울 답으로 쓰는 첫 칸. held=정직.";
+    boundary = "senses=host push(readFile 없음); 정의 surface=project-owned sense만(안티-transcript). 마커/조사 bounded 닫힌 표.";
+    note = "산술 pipeline(nl-meaning-pipeline)의 자매. Rust dialogue/projection 측 = Phase 2/3 검토.";
+  };
+
+in {
+  inherit isDefQuery extractLemma findSense answerDefinition inventorySummary;
+  ownerName = "stdlib.nl.nl-definition-query";
+  meta = {
+    source = "stdlib nl nl-definition-query (.px: 사전 질문→정의 답; one-mirror)";
+    owner = "stdlib.nl.nl-definition-query";
+    base = "nl-definition-query-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1: math/code 지식을 거울 답으로 쓰는 첫 칸. answerDefinition: 정의 질문 인식(닫힌 마커표)→첫 어절 조사 strip(korean-taxonomy-lift 재사용)→project-owned sense 조회→'lemma: 정의' 조립(안티-transcript, sense 에서만). 검증: '소수가 뭐야?'+senses→'소수: 1과 자기 자신만을...'; 미수록→held 정직. senses=host push(평가기 readFile 없음). Rust dialogue/projection=Phase 2/3 검토.";
+  };
+}

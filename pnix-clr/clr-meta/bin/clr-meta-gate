@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Primary gate for clr-meta: evaluator gen0-2 + tool + C0-C3 stage family.
+# Prefer real rg (/usr/local/bin/rg). Avoid putting ../bin first (old rg shim).
+set -euo pipefail
+META_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+export PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
+MODE="${1:---no-build}"
+case "$MODE" in
+  --no-build|primary)
+    exec "$META_DIR/scripts/clr-meta-gate" --no-build
+    ;;
+  --build|full)
+    exec "$META_DIR/scripts/clr-meta-gate"
+    ;;
+  eval-only)
+    # Lighter floor: evaluator + tool only (not full C1-C3 rebuild)
+    ROOT="$(cd "$META_DIR/.." && pwd)"
+    dll="$ROOT/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
+    test -f "$dll"
+    export CLOJURE_LOAD_PATH="$META_DIR/src:$META_DIR/test"
+    dotnet "$dll" -m pnix.clr-meta.bootstrap-test
+    "$META_DIR/scripts/clr-meta-tool-gate"
+    echo "clr-meta-gate (eval-only): PASS"
+    ;;
+  *)
+    echo "usage: clr-meta-gate [--no-build|primary|--build|full|eval-only]" >&2
+    exit 2
+    ;;
+esac

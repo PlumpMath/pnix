@@ -1,0 +1,45 @@
+# ClearlyDefined definitions bounded metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No source archives/notices/legal advice/graph wiring.
+let
+  B = builtins;
+  genPath = ./clearlydefined-definitions.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "license.clearlydefined.definitions.v1";
+    source = "ClearlyDefined definitions API bounded metadata";
+    license = "CC0-1.0 curated data";
+    summary = { records = 0; records_total_downloaded = 0; type_kinds = 0; provider_kinds = 0; limit = 0; pages_downloaded = 0; has_next_continuation_token = false; };
+    policy = "bounded component license metadata only";
+    manifest = { };
+    files = [ ]; type_counts = [ ]; provider_counts = [ ]; declared_license_counts = [ ]; definitions = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "clearlydefined-definitions-load-v0";
+      source_lens = "stdlib/lib/corpus/clearlydefined-definitions-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "license.clearlydefined.definitions.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "clearlydefined-definitions-query-v0";
+      source_lens = "stdlib/lib/corpus/clearlydefined-definitions-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "license.clearlydefined.definitions.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

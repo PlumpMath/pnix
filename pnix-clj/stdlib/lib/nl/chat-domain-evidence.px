@@ -1,0 +1,65 @@
+# stdlib/lib/nl/chat-domain-evidence.px
+#
+# C단계(post-L0): P7 reasoning을 chat에 *병치*. 발화의 구조화된 힌트(catalog_terms / math_query)로부터
+#   catalog_readback_evidence(출처-attributed) + math_evidence(derivation)를 만든다.
+#
+# deep-research(reference_faithful_evidence_composition_verdict) 규율:
+#   ★병치(juxtaposition) NOT synthesis — evidence를 자유 NL로 섞지 않고 *별도 typed 블록*으로.
+#   ★종류 엄격 분리(anti-post-rationalization): recall(memory)·evidence(catalog)·derivation(math)는 서로
+#     권위 빌리기 금지 = 별도 키. ★grounding≠attribution: 각 블록이 자기 source_schema/owner_version 보유.
+#   ★fail-closed: 힌트 없으면 빈 evidence(비파괴) · 미인식/미해결 = held(추측 0).
+#   ★자유-NL 충실 합성은 Held → 여기선 *구조 evidence*까지만(문장 realize는 D/realizeSentence가 결정론으로).
+#
+# ★새 거울/schema/owner 0: catalog-readback(A)·kr-math-query(P7) 재사용, 병치 빌더만. read-only.
+let
+  B = builtins;
+  cr = import ../corpus/catalog-readback.px;
+  kmq = import ../math/kr-math-query.px;
+
+  # catalog_terms: [{ source_schema; key; key_kind; }] → 각 readbackByExactKey → publicProjection(leak-safe).
+  buildCatalogEntries = terms:
+    B.map (t:
+      let schema = if t ? source_schema then t.source_schema else "";
+          key = if t ? key then t.key else (if t ? term then t.term else "");
+          kk = if t ? key_kind then t.key_kind else "";
+      in cr.publicProjection (cr.readbackByExactKey { source_schema = schema; key = key; key_kind = kk; })
+    ) terms;
+
+  # math_query: { a, op, b } → kr-math-query.solveKoreanQuery → derivation 판정(leak-safe 투영).
+  buildMathEvidence = mq:
+    if mq == null then null
+    else let r = kmq.solveKoreanQuery mq;
+         in {
+           evidence_kind = "math.derivation";                              # ★derivation(회상/증거와 구별)
+           verdict = if r ? verdict then r.verdict else "no-analysis";
+           held_reasons = if r ? held_reasons then r.held_reasons else [ ];
+           resolved_op = if r ? resolved_op then r.resolved_op else "";
+           a_label = if r ? a_label then r.a_label else "";
+           b_label = if r ? b_label then r.b_label else "";
+           durable_truth = false; accepted_as_truth = false; ontology_assert_allowed = false;
+           proposer_only = true;
+         };
+
+  # mkDomainEvidence { catalog_terms?, math_query? } → 병치된 두 typed 블록(fail-closed, 비파괴).
+  mkDomainEvidence = args:
+    let terms = if args ? catalog_terms then args.catalog_terms else [ ];
+        mq = if args ? math_query then args.math_query else null;
+    in {
+      catalog_readback_evidence = {
+        evidence_kind = "catalog.readback.bundle";                         # ★evidence(출처-attributed)
+        entries = buildCatalogEntries terms;
+        entry_count = B.length terms;
+        durable_truth = false; accepted_as_truth = false; ontology_assert_allowed = false;
+        proposer_only = true;
+      };
+      math_evidence = buildMathEvidence mq;                                # null = 도출 없음(비파괴)
+    };
+
+  # publicProjection: 두 블록 모두 이미 leak-safe(catalog는 cr.publicProjection·math는 투영). 통째 통과.
+  publicProjection = d: {
+    catalog_readback_evidence = d.catalog_readback_evidence;
+    math_evidence = if d ? math_evidence then d.math_evidence else null;
+  };
+in {
+  inherit mkDomainEvidence buildCatalogEntries buildMathEvidence publicProjection;
+}

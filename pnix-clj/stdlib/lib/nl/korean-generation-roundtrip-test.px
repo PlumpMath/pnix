@@ -1,0 +1,56 @@
+# stdlib/lib/nl/korean-generation-roundtrip-test.px
+#
+# F8 lock (audit w6vx4gwd8): 생성 round-trip 매트릭스 감사가 잡은 ★하다-동사 버그 + 확장 차원 대칭.
+#   ★핵심 버그: refoldRieulOpenStem 이 dict-미인식 하-어간(말하/공부하/못하…)에 ㄹ 오복원
+#     → 말한다→말할(이해 깨짐). 단일 하-guard("X할다" 용언 부재=구조 안전)로 봉인.
+#     이건 한국어 최다빈 동사군(말하다/공부하다/사랑하다/일하다/못하다…) 전체 round-trip 을 복구한다.
+#   Bug A(다음절 ㄴ다: 말한다)·Bug B(합니다 hasipsio: 못합니다)·inability-long(못하=하다-동사) 한 guard로 동시 해결.
+let
+  knm = import ./korean-nl-mirror.px;
+  lift = import ./korean-taxonomy-lift.px;
+  B = builtins;
+  rt = knm.roundTrip;
+  av = w: (lift.analyzeVerb w).action;
+  ag = { entity = "철수"; role = "agent"; };
+  ob = { entity = "사과"; role = "object"; };
+  base = {
+    roles = [ ag ob ]; action = "먹"; tense = "present"; mood = "declarative"; level = "haera";
+    polarity = "positive"; negation_form = "none"; modality = "plain"; modality_form = "none";
+    aspect = "plain"; aspect_form = "none"; honorific = "none"; predicate_kind = "verb"; predicate_nominal = null;
+  };
+  rtOk = p:
+    let r = rt p; b = r.recovered;
+    in (b.action == p.action) && (b.tense == p.tense) && (b.mood == p.mood)
+       && (b.modality == p.modality) && (b.aspect == p.aspect) && (b.polarity == p.polarity)
+       && (b.honorific == p.honorific) && (b.predicate_kind == p.predicate_kind)
+       && (b.predicate_nominal == p.predicate_nominal);
+  hadaBase = stem: base // { roles = [ ag ]; action = stem; };
+in {
+  av_malhanda = av "말한다";
+  rt_malha = (rt (hadaBase "말하")).sentence;
+  all_ok =
+    # ★하다-동사 어간복원 (하-guard) — 다음절 전부 X하 (X할 아님)
+       (av "말한다" == "말하") && (av "공부한다" == "공부하") && (av "사랑한다" == "사랑하") && (av "일한다" == "일하")
+    # 회귀 control: 인식 어간/비-하다는 그대로
+    && (av "한다" == "하") && (av "먹는다" == "먹") && (av "간다" == "가")
+    # ★하다-동사 현재평서 round-trip 닫힘
+    && (rtOk (hadaBase "말하")) && (rtOk (hadaBase "공부하")) && (rtOk (hadaBase "사랑하"))
+    # ★inability-long(못하=하다-동사): 단/장형·전 화계 round-trip 닫힘 (Bug B hasipsio 포함)
+    && (rtOk (base // { modality = "inability"; modality_form = "long"; }))
+    && (rtOk (base // { modality = "inability"; modality_form = "long"; level = "hasipsio"; }))
+    && (rtOk (base // { modality = "inability"; modality_form = "long"; level = "haeyo"; }))
+    && (rtOk (base // { modality = "inability"; modality_form = "short"; }))
+    # ★확장 차원 대칭 (aspect/modality/polarity/honorific/copula/adjective)
+    && (rtOk (base // { aspect = "progressive"; })) && (rtOk (base // { aspect = "resultative"; }))
+    && (rtOk (base // { modality = "obligation"; })) && (rtOk (base // { modality = "prospective"; }))
+    && (rtOk (base // { polarity = "negative"; negation_form = "short"; }))
+    && (rtOk (base // { polarity = "negative"; negation_form = "long"; }))
+    && (rtOk (base // { honorific = "subject"; }))
+    && (rtOk (base // { roles = [ ag ]; action = "be"; predicate_kind = "copula"; predicate_nominal = "학생"; }))
+    && (rtOk (base // { roles = [ ag ]; action = "be"; predicate_kind = "copula"; predicate_nominal = "학생"; tense = "past"; }))
+    && (rtOk (base // { roles = [ ag ]; action = "예쁘"; predicate_kind = "adjective"; }))
+    # ★F8(P5,audit): 청유 haeyo 무시제 강제 — 과거/미래 청유가 "먹었어요"(과거-평서)로 silent leak 안 함(평서와 구별)
+    && ((knm.realizeVerbLevel "먹" "past" "propositive" "haeyo") == "먹어요")
+    && ((knm.realizeVerbLevel "먹" "future" "propositive" "haeyo") == "먹어요")
+    && ((knm.realizeVerbLevel "먹" "past" "propositive" "haeyo") != (knm.realizeVerbLevel "먹" "past" "declarative" "haeyo"));
+}

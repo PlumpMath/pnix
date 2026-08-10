@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Deprecated alias kept for backward compatibility. 표준국어대사전은 stdict JSON 기준입니다.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${PNIX_WORKSPACE_ROOT:-$(git -C "$SCRIPT_DIR/.." rev-parse --show-toplevel 2>/dev/null || pwd)}"
+
+: "${DICTIONARY_STDICT_DIR:=${DICTIONARY_STARDICT_DIR:-${REPO_ROOT}/ingest/dictionary/stdict}}"
+: "${DICTIONARY_STDICT_LICENSE_MANIFEST:=${DICTIONARY_STARDICT_LICENSE_MANIFEST:-${REPO_ROOT}/corpus/dictionary/LICENSES/stdict.license.json}}"
+: "${DICTIONARY_STDICT_SHARDS_DIR:=${DICTIONARY_STARDICT_SHARDS_DIR:-/tmp/pnix-dictionary-stdict-shards}}"
+: "${DICTIONARY_STDICT_SOURCE_ID:=${DICTIONARY_STARDICT_SOURCE_ID:-stdict}}"
+: "${DICTIONARY_STDICT_DOMAIN:=${DICTIONARY_STARDICT_DOMAIN:-}}"
+
+export DICTIONARY_STDICT_DIR="$DICTIONARY_STDICT_DIR"
+export DICTIONARY_STDICT_LICENSE_MANIFEST="$DICTIONARY_STDICT_LICENSE_MANIFEST"
+export DICTIONARY_STDICT_SHARDS_DIR="$DICTIONARY_STDICT_SHARDS_DIR"
+export DICTIONARY_STDICT_SOURCE_ID="$DICTIONARY_STDICT_SOURCE_ID"
+export DICTIONARY_STDICT_DOMAIN="$DICTIONARY_STDICT_DOMAIN"
+
+exec "$SCRIPT_DIR/dictionary-stdict-ingest.sh" "$@"

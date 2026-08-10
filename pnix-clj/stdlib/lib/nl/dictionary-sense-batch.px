@@ -1,0 +1,77 @@
+# stdlib.nl.dictionary-sense-batch
+#
+# **K2/K3/K6 통합 batch (.px, one-mirror 정본): 사전 sense 다발 → 의미 매핑 전체.**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): ingest 의미 매핑 batch pass 는
+# Rust(`nl_corpus/dictionary_sense_sheet.rs`의 whole-batch 패스)가 아니라 거울(.px)
+# 하나에. 이 owner 가 그 통합 진입점(Phase 2 재배선 표적)이다.
+#
+# 흐름(셋 정본 합성, 재구현 0):
+#   raw senses ─→ definition-meaning-map.meaningMap (CSF + mood + 언급 lemma)
+#             ─→ lemma→addr 해소 ─→ relation-graph.definitionMentionEdges (A→B; 합성불가)
+# = 사전→뜻풀이→사전 재귀 그래프 한 패스. mention 은 *전체 lemma 집합*에 대해 검출하므로
+#   batch(단일 sense 아님)가 정본 경계.
+#
+# 경계(host): addr(sense_id)·map_id·relation_id digest(sha) 발급 = host. 이 owner 는
+# addr 를 *받아서* 구조/그래프만 만든다. (Rust=바이트/hash, 거울=의미.)
+let
+  dmm = import nl/definition-meaning-map.px;
+  rg  = import nl/relation-graph.px;
+
+  map = builtins.map;
+  filter = builtins.filter;
+  len = builtins.length;
+  elemAt = builtins.elemAt;
+
+  # lemma → addr (첫 매치; addr=host 발급 sense_id). 없으면 null.
+  lookupAddr = senses: lemma:
+    let hits = filter (s: s.lemma == lemma) senses;
+    in if hits == [ ] then null else (elemAt hits 0).addr;
+
+  # ★ sense 다발 → 의미 매핑 전체 ★
+  #   senses: [ { lemma; pos; definition; addr } ]  (addr = host 발급)
+  mapBatch = senses:
+    let
+      lemmas = map (s: s.lemma) senses;
+      perSense = map (s:
+        let mm = dmm.meaningMap s.lemma s.definition lemmas;
+        in {
+          addr = s.addr;
+          lemma = s.lemma;
+          pos = s.pos;
+          definition_canonical = mm.canonical_text;       # CSF (held=null 정직)
+          csf_outcome = mm.csf_outcome;
+          sentence_mood = mm.sentence_mood;
+          mentioned_lemmas = mm.mentioned_lemmas;
+          # 언급 lemma → addr (relation target; 미해소는 drop = 정직)
+          mention_addrs = filter (a: a != null) (map (lookupAddr senses) mm.mentioned_lemmas);
+        }) senses;
+      # definition.mentions edges (sense.addr → mentioned addr; family=definition, 합성불가)
+      relSenses = map (p: { addr = p.addr; mentions = p.mention_addrs; evidence = p.addr; }) perSense;
+      relations = rg.definitionMentionEdges relSenses;
+    in {
+      schema = "pnixc-meta.dictionary-sense-batch.v0";
+      sense_count = len senses;
+      senses = perSense;
+      relations = relations;
+      relation_count = len relations;
+    };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.dictionary-sense-batch";
+    consumes = "definition-meaning-map.meaningMap + relation-graph.definitionMentionEdges (재구현 0)";
+    role = "K2/K3/K6 통합 batch: 사전 sense 다발 → CSF + meaning map + definition.mentions relation. ingest 의미 매핑 .px 단일 진입점(Phase 2 재배선 표적).";
+    boundary = "addr/map_id/relation_id digest(sha) 발급 = host; 이 owner 는 addr 받아 구조/그래프만.";
+    note = "mention=전체 lemma 집합 기준 ⇒ batch 가 정본 경계. Rust dictionary_sense_sheet.rs whole-batch 패스 = Phase 2/3 삭제 대상.";
+  };
+
+in {
+  inherit lookupAddr mapBatch inventorySummary;
+  ownerName = "stdlib.nl.dictionary-sense-batch";
+  meta = {
+    source = "stdlib nl dictionary-sense-batch (.px K2/K3/K6 통합 batch; one-mirror 정본)";
+    owner = "stdlib.nl.dictionary-sense-batch";
+    base = "dictionary-sense-batch-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1 capstone: ingest 의미 매핑 batch pass 의 .px 통합 정본. definition-meaning-map + relation-graph 합성(재구현0): senses→per-sense meaningMap(CSF+mood+언급lemma)→lemma→addr 해소→definitionMentionEdges. mention 은 전체 lemma 집합 기준이라 batch 경계. addr/digest=host. 검증: 더하다 정의가 수량·전체 언급→sense/A→B,A→C definition.mentions. Rust dictionary_sense_sheet.rs whole-batch=Phase 2/3 삭제. Phase 2 가 serve/ingest→이 owner via_px 호출.";
+  };
+}

@@ -1,0 +1,45 @@
+# NIST AI RMF Playbook structural metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No prose/advice/runtime/graph wiring.
+let
+  B = builtins;
+  genPath = ./nist-ai-rmf.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "ml.nist_ai_rmf.playbook.v1";
+    source = "NIST AI RMF Playbook structural metadata";
+    license = "US-PD / NIST public information";
+    summary = { subcategories = 0; functions = 0; categories = 0; actor_tags = 0; topic_tags = 0; };
+    policy = "function/category/subcategory/actor/topic taxonomy plus prose hashes only";
+    manifest = { };
+    files = [ ]; functions = [ ]; categories = [ ]; ai_actors = [ ]; topics = [ ]; subcategories = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "nist-ai-rmf-load-v0";
+      source_lens = "stdlib/lib/corpus/nist-ai-rmf-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "ml.nist_ai_rmf.playbook.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "nist-ai-rmf-query-v0";
+      source_lens = "stdlib/lib/corpus/nist-ai-rmf-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "ml.nist_ai_rmf.playbook.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

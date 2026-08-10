@@ -1,0 +1,60 @@
+# stdlib.nl.nl-operation-dispatch-slow-quick — shallow benign classifier (O-008-slow P3).
+# No rec {} — import stays bounded; used before cheap/heavy owners load.
+let
+  slen = s: builtins.stringLength s;
+  sub = start: len: s: builtins.substring start len s;
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+  containsAny = utterance: cues:
+    builtins.any (cue: hasInfix cue utterance) cues;
+
+  # Phrase/word cues first — avoid UTF-8 single-byte false positives on CJK text.
+  # Bare domain nouns like `factor`, `derivative`, or generic `eval` are
+  # concept mentions in many corpora; only explicit action-ish surfaces should
+  # force the utterance out of the quick-general lane.
+  domainPhraseCues = [
+    "print" "println" "def " "fn " "class " "import " "let " "var "
+    "코드" "출력" "방정식" "풀어" "계산" "더하기" "곱하기" "나누" "미분" "인수분해"
+    "factorize" "factorise" "factor x" "factor y" "factor polynomial" "factor expression"
+    "differentiate" "derivative of" "take derivative" "solve" "equation" "pnix eval" "eval-input" "emit"
+    "설명해줘" "이게 뭐야" "뭐야" "무엇인지" "무슨 뜻" "why" "what is" "what does"
+    "rust" "python" "javascript" "typescript" "go " "java" "kotlin"
+	    "world3d" "rotate" "blender" "rhino" "freecat" "mesh" "cone" "sphere"
+	    "rename" "refactor" "patch" "build" "test " "pytest" "cargo"
+	    "날씨" "weather" "forecast" "기상"
+	    "docs/puck" "policy" "artifact" "evaluation" "counterfactual" "autofix" "propose_patch"
+	    "docs/pnix-sample-inputs.md" "pnix sample" "pnix 샘플" "이 입력" "평가 불가"
+	    "x=" "y=" "z=" " x " " y " " z "
+	  ];
+  domainSymbolCues = [ "=" "+" "-" "*" "/" "^" "%" "(" ")" ];
+
+  quickGeneralIfBenign = utterance:
+    if !(builtins.isString utterance) || (builtins.stringLength utterance) == 0 then null
+    else if containsAny utterance domainPhraseCues then null
+    else if containsAny utterance domainSymbolCues then null
+    else {
+      operation_kind = "general";
+      outcome = "classified-general";
+      dispatched_to = "nl-operation-dispatch-slow";
+      classification = { ambient = "intent-statement"; family = "nl"; via = "quick-general"; };
+      result = { ambient = "intent-statement"; family = "nl"; };
+      receipt = { kind = "general-utterance-classified"; via = "quick-general"; };
+      note = "도메인 cue 없음 — 경량 일반 분류 (symbolic frame/graph 생략).";
+    };
+
+  cheapSlowPathTerminal = result:
+    (builtins.isAttrs result)
+    && (result ? outcome)
+    && (
+         result.outcome == "dispatched"
+         || result.outcome == "classified-general"
+       )
+    && (result ? operation_kind)
+    && result.operation_kind != "none";
+in {
+  name = "stdlib.nl.nl-operation-dispatch-slow-quick";
+  quickGeneralIfBenign = quickGeneralIfBenign;
+  cheapSlowPathTerminal = cheapSlowPathTerminal;
+}

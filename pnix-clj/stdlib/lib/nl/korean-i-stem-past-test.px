@@ -1,0 +1,26 @@
+# stdlib/lib/nl/korean-i-stem-past-test.px — ㅣ-stem 과거 이+었→였 축약(pastStem) lock.
+#
+# 코덱이 모든 ㅣ-stem을 비축약(가지→가지었다)하던 걸, cho가 ㅈ/ㄹ인 ㅣ-stem만 축약(가지→가졌다·기다리→기다렸다).
+# ★비균일: 비다→비었다(정문)/볐다(비문), 가지다→가졌다(정문)/가지었다(비표준) — 전체축약 불가라 cho ㅈ/ㄹ만(보수적·사운드).
+# 비/피(ㅂ/ㅍ cho)는 비축약 유지(정문). lift가 축약형(가졌다→가지) 역읽기 확인 → round-trip 안전.
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  past = stem: knm.realizeVerbLevel stem "past" "declarative" "haera";
+  rtAct = stem: (knm.liftToProposition ("철수가 " + (past stem))).action;
+in {
+  gaji = past "가지"; gidari = past "기다리"; dolli = past "돌리";
+  bi = past "비"; pi = past "피";
+  all_ok =
+    # ★ㅈ/ㄹ ㅣ-stem 축약(정문) + round-trip 닫힘
+       (past "가지" == "가졌다") && (rtAct "가지" == "가지")
+    && (past "기다리" == "기다렸다") && (rtAct "기다리" == "기다리")
+    && (past "던지" == "던졌다") && (past "돌리" == "돌렸다") && (past "내리" == "내렸다")
+    # ★다음절 ㅣ-stem 전반 축약(cho 무관): 다니→다녔다·꾸미→꾸몄다·새기→새겼다
+    && (past "다니" == "다녔다") && (rtAct "다니" == "다니")
+    && (past "꾸미" == "꾸몄다") && (past "새기" == "새겼다")
+    # ★단음절 ㅈ 축약: 지→졌다(졌다 정문)
+    && (past "지" == "졌다")
+    # ★비/피(ㅂ/ㅍ cho)는 비축약 유지(정문, 볐다/비축약 비문 방지)
+    && (past "비" == "비었다") && (past "피" == "피었다")
+    # ★회귀: 자음어간·개음절 과거 불변
+    && (past "먹" == "먹었다") && (past "가" == "갔다") && (past "보" == "보았다") && (past "하" == "했다");
+}

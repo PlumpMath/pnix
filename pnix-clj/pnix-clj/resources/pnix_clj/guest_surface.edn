@@ -1,0 +1,20 @@
+{:kind :guest-surface-registry
+ :schema :pnix-clj.guest-surface.v0
+ :lineage
+ {:captured-at "2026-07-07"
+  :oracle "nix-instantiate (Nix) 2.34.7 -- builtins.attrNames builtins"
+  :doctrine "two languages, no blending (owner 2026-07-07): a guest EXTENSION adds names real Nix lacks (portability caveat, never semantic blending); a HOST LEAK changes the meaning of a valid Nix program and is a DEFECT. This registry pins the extension set so any new name is a conscious, reviewed act."}
+ ;; builtins.* names we expose that real Nix does not have. Categories:
+ ;;   nixpkgs-lib flavored helpers, math, operator mirrors, list/attr
+ ;;   conveniences and pnixMounts.
+ ;; NONE of these alter the meaning of a valid Nix program (host-leak
+ ;; audit, R2 Phase D session): they only accept MORE programs.
+ :extensions ["abs" "and" "append" "assertMsg" "atan2" "attrByPath" "boolToString" "concatMapStrings" "concatMapStringsSep" "concatStrings" "cons" "const" "cos" "count" "drop" "eq" "exp" "filterAttrs" "filterAttrsRecursive" "find" "findFirst" "fix" "flatten" "flip" "foldl" "foldlAttrs" "foldr" "ge" "genAttrs" "get" "getAttrFromPath" "getAttrFromPathOr" "getName" "getVersion" "gt" "hasAttrByPath" "hasInfix" "hasPrefix" "hasSuffix" "id" "imap0" "imap1" "implies" "init" "intersectLists" "keys" "last" "le" "ln" "lt" "mapAttrs'" "mapAttrsRecursive" "mapAttrsToList" "max" "merge" "min" "mod" "nameValuePair" "neg" "not" "optional" "optionalAttrs" "optionalString" "optionals" "or" "pipe" "pnixMounts" "pow" "product" "range" "recursiveUpdate" "removePrefix" "removeSuffix" "replicate" "reverseList" "set" "sin" "splitString" "sqrt" "stringToCharacters" "subtractLists" "sum" "take" "toInt" "toLower" "toUpper" "unique" "updateManyAttrs" "values" "when" "zip" "zipAttrs" "zipLists" "zipListsWith"]
+ ;; real-Nix builtins we do not (yet) expose. Mostly the impurity/store
+ ;; boundary (fetchers, currentTime, toFile, filterSource, nixPath, flake
+ ;; refs -- conformance Phase D territory), plus pure frontiers (toXML,
+ ;; fromTOML, hashFile) and callable import/scopedImport entries.
+ ;; The value entries builtins.builtins/true/false/null are now covered.
+ ;; the oracle-captured real-Nix builtin name list the drift gate diffs against
+ :captured-real-nix ["abort" "add" "addDrvOutputDependencies" "addErrorContext" "all" "any" "appendContext" "attrNames" "attrValues" "baseNameOf" "bitAnd" "bitOr" "bitXor" "break" "builtins" "catAttrs" "ceil" "compareVersions" "concatLists" "concatMap" "concatStringsSep" "convertHash" "currentSystem" "currentTime" "deepSeq" "derivation" "derivationStrict" "dirOf" "div" "elem" "elemAt" "false" "fetchGit" "fetchMercurial" "fetchTarball" "fetchTree" "fetchurl" "filter" "filterSource" "findFile" "flakeRefToString" "floor" "foldl'" "fromJSON" "fromTOML" "functionArgs" "genList" "genericClosure" "getAttr" "getContext" "getEnv" "getFlake" "groupBy" "hasAttr" "hasContext" "hashFile" "hashString" "head" "import" "intersectAttrs" "isAttrs" "isBool" "isFloat" "isFunction" "isInt" "isList" "isNull" "isPath" "isString" "langVersion" "length" "lessThan" "listToAttrs" "map" "mapAttrs" "match" "mul" "nixPath" "nixVersion" "null" "parseDrvName" "parseFlakeRef" "partition" "path" "pathExists" "placeholder" "readDir" "readFile" "readFileType" "removeAttrs" "replaceStrings" "scopedImport" "seq" "sort" "split" "splitVersion" "storeDir" "storePath" "stringLength" "sub" "substring" "tail" "throw" "toFile" "toJSON" "toPath" "toString" "toXML" "trace" "traceVerbose" "true" "tryEval" "typeOf" "unsafeDiscardOutputDependency" "unsafeDiscardStringContext" "unsafeGetAttrPos" "warn" "zipAttrsWith"]
+ :missing-vs-nix-2-34 ["addDrvOutputDependencies" "convertHash" "currentTime" "fetchMercurial" "fetchTree" "filterSource" "findFile" "flakeRefToString" "fromTOML" "getFlake" "hashFile" "import" "nixPath" "parseFlakeRef" "path" "readFileType" "scopedImport" "traceVerbose"]}

@@ -1,0 +1,130 @@
+# stdlib.nl.phrase-normalization
+#
+# Lightweight shared NL phrase normalization.
+#
+# This is not a judge and not a parser. It factors the deterministic ASCII
+# normalization helpers that were originally embedded in
+# `math/nl-conjecture-lifter.px` so coding intent/candidate owners can reuse
+# the same substrate without importing the full math judge. Non-ASCII callers
+# must still guard with `isAsciiOnly` before byte-walking the string.
+
+let
+  ownerName = "stdlib.nl.phrase-normalization";
+
+  asciiLowerCharMap = {
+    "A" = "a"; "B" = "b"; "C" = "c"; "D" = "d"; "E" = "e";
+    "F" = "f"; "G" = "g"; "H" = "h"; "I" = "i"; "J" = "j";
+    "K" = "k"; "L" = "l"; "M" = "m"; "N" = "n"; "O" = "o";
+    "P" = "p"; "Q" = "q"; "R" = "r"; "S" = "s"; "T" = "t";
+    "U" = "u"; "V" = "v"; "W" = "w"; "X" = "x"; "Y" = "y";
+    "Z" = "z";
+  };
+
+  lowerChar = c:
+    if asciiLowerCharMap ? "${c}" then asciiLowerCharMap."${c}" else c;
+
+  asciiLower = s:
+    let
+      n = builtins.stringLength s;
+      step = i: acc:
+        if i >= n then acc
+        else step (i + 1) (acc + lowerChar (builtins.substring i 1 s));
+    in step 0 "";
+
+  whitespaceChars = [ " " "\t" "\n" ];
+  isWs = c: builtins.elem c whitespaceChars;
+
+  collapseWhitespace = s:
+    let
+      n = builtins.stringLength s;
+      step = i: lastWasWs: acc:
+        if i >= n then acc
+        else
+          let c = builtins.substring i 1 s; in
+          if isWs c then
+            if lastWasWs || acc == "" then step (i + 1) true acc
+            else step (i + 1) true acc
+          else
+            if lastWasWs && acc != "" then step (i + 1) false (acc + " " + c)
+            else step (i + 1) false (acc + c);
+    in step 0 false "";
+
+  synonymCanonical = {
+    is = "equals";
+    and = "plus";
+    minus = "minus";
+    smaller = "less";
+    larger = "greater";
+  };
+
+  splitWords = s:
+    let
+      n = builtins.stringLength s;
+      step = i: cur: acc:
+        if i >= n then
+          if cur == "" then acc else acc ++ [ cur ]
+        else
+          let c = builtins.substring i 1 s; in
+          if c == " " then
+            step (i + 1) ""
+              (if cur == "" then acc else acc ++ [ cur ])
+          else step (i + 1) (cur + c) acc;
+    in step 0 "" [];
+
+  applyWordSynonyms = s:
+    let
+      words = splitWords s;
+      replaceOne = w:
+        if synonymCanonical ? "${w}" then synonymCanonical."${w}" else w;
+      replaced = builtins.map replaceOne words;
+    in builtins.concatStringsSep " " replaced;
+
+  multiWordSynonyms = [
+    [ "added to" "plus" ]
+    [ "subtracted from" "minus" ]
+    [ "multiplied by" "times" ]
+    [ "is equal to" "equals" ]
+    [ "is the same as" "equals" ]
+    [ "less than or equal to" "less or equals" ]
+    [ "greater than or equal to" "greater or equals" ]
+  ];
+
+  applyMultiWordSynonyms = s:
+    let
+      aliases = builtins.map (p: builtins.elemAt p 0) multiWordSynonyms;
+      canonicals = builtins.map (p: builtins.elemAt p 1) multiWordSynonyms;
+    in builtins.replaceStrings aliases canonicals s;
+
+  normalizePhrase = s:
+    let
+      lowered = asciiLower s;
+      collapsed = collapseWhitespace lowered;
+      multiWord = applyMultiWordSynonyms collapsed;
+    in applyWordSynonyms multiWord;
+
+  isAsciiOnly = s:
+    builtins.match "[\t\n -~]*" s != null;
+
+in {
+  inherit
+    ownerName
+    asciiLowerCharMap
+    asciiLower
+    collapseWhitespace
+    synonymCanonical
+    splitWords
+    applyWordSynonyms
+    multiWordSynonyms
+    applyMultiWordSynonyms
+    normalizePhrase
+    isAsciiOnly;
+
+  inventorySummary = {
+    owner = ownerName;
+    role = "lightweight deterministic ASCII phrase normalization";
+    extracted_from = "stdlib/lib/math/nl-conjecture-lifter.px";
+    non_ascii_policy = "caller must guard with isAsciiOnly before byte-walking";
+    synonym_count = builtins.length (builtins.attrNames synonymCanonical);
+    multi_word_synonym_count = builtins.length multiWordSynonyms;
+  };
+}

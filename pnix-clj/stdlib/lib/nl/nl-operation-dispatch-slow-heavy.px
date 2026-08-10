@@ -1,0 +1,729 @@
+# stdlib.nl.nl-operation-dispatch-slow-heavy
+#
+# Symbolic frame/graph slow path — imported lazily from nl-operation-dispatch-slow.px
+# so pnix-eval module deep_force on import stays bounded for benign utterances.
+let
+in
+rec {
+  name = "stdlib.nl.nl-operation-dispatch-slow-heavy";
+
+  mkResult = kind: to: classification: result: {
+    operation_kind = kind;
+    outcome = "dispatched";
+    dispatched_to = to;
+    classification = classification;
+    result = result;
+  };
+
+  isHeldOutcome = r:
+    (builtins.isAttrs r) && (r ? outcome) && (builtins.isString r.outcome)
+    && ((builtins.substring 0 4 r.outcome) == "held");
+
+  keywordDispatch = utterance:
+    (import ./nl-operation-dispatch-slow-keyword.px).dispatchByKeyword utterance;
+
+  # === SYMBOLIC dispatch — derive operation-kind from the 4-piece chain ======
+  # sentence-substrate-mapping.resolveChain interprets the utterance through the
+  # symbolic 4-piece structure (atoms → morphism → invariant → meta) and yields
+  # inferred_intent_kind (math / refactor / info-request / info-statement / ...)
+  # plus meta correction-override (R1) / trailing-meta (R2). operation-kind is
+  # derived from that SYMBOLIC structure, NOT surface keywords (first.md
+  # service-critical: 인식 = symbolic engine 중간해석).
+  dispatchFromChain = utterance: chain:
+    let
+      intent = chain.carry.inferred_intent_kind;
+      eqOwner = import ../math/equation-solving-procedure.px;
+      numOwner = import ../math/numeric-evaluator.px;
+      judgeOwner = import ../math/nl-conjecture-lifter.px;
+    in
+      if intent == "math" then
+        let solved = eqOwner.beginSolveProcedure utterance;
+        in
+          if solved.outcome == "solved"
+          then mkResult "equation" "equation-solving-procedure" chain solved
+          else
+            let arith = numOwner.evaluateNumericExpression utterance { };
+            in if arith.ok
+               then mkResult "arithmetic" "numeric-evaluator" chain
+                      { outcome = "evaluated"; value = arith.value; input = utterance; }
+               else mkResult "math-judge" "nl-conjecture-lifter" chain
+                      (judgeOwner.liftAndJudge utterance)
+      else if intent == "refactor" then
+        let c = import ../coding/coding-candidate-dispatcher.px;
+        in mkResult "code-transform" "coding-candidate-dispatcher" chain
+             (c.dispatch { path = "/coding/candidate"; method = "POST"; body = { utterance = utterance; }; })
+      else if intent == "info-request" then
+        let arith = numOwner.evaluateNumericExpression utterance { };
+        in if arith.ok
+           then mkResult "arithmetic" "numeric-evaluator" chain
+                  { outcome = "evaluated"; value = arith.value; input = utterance; }
+           else
+             let judged = judgeOwner.liftAndJudge utterance;
+             in if !(isHeldOutcome judged)
+                then mkResult "math-judge" "nl-conjecture-lifter" chain judged
+                else keywordDispatch utterance
+      else
+        # resolveChain ↔ decomposeUtterance bridge: when 4-piece intent is not
+        # math/refactor/info-request, still honor classifyDomain code-emission
+        # before keyword fallback (single-hole preserved — same decomposer owner).
+        let
+          pipelineOwner =
+            import ./nl-universal-pipeline.px;
+          domain = pipelineOwner.classifyDomain utterance;
+        in
+          if domain.outcome == "domain-classified" && domain.domain == "code-emission" then
+            let dec = import ../coding/utterance-decomposer.px;
+            in mkResult "code-generation" "utterance-decomposer" chain
+                 (dec.decomposeUtterance utterance)
+                 // {
+                   via = "resolveChain-decompose-bridge";
+                   symbolic_intent = intent;
+                   domain_classification = domain;
+                 }
+          else
+            keywordDispatch utterance;
+
+  # === Symbolic-first dispatch (4-piece chain → keyword fallback) ============
+  # The symbolic 4-piece chain is the PRIMARY classifier. Only when it cannot
+  # decompose (terminator-less fragments like a bare "x + 1 = 0") do we fall
+  # back to the keyword scaffold — so nothing regresses.
+  dispatchSymbolicFirst = utterance:
+    if !(builtins.isString utterance) then { operation_kind = "none"; outcome = "held-non-string"; }
+    else if (builtins.stringLength utterance) == 0 then { operation_kind = "none"; outcome = "held-empty"; }
+    else
+      let
+        ssmOwner =
+          import ./sentence-substrate-mapping.px;
+        chain = ssmOwner.resolveChain utterance;
+      in
+        if (builtins.isAttrs chain) && (chain ? outcome) && (chain.outcome == "chain-resolved")
+        then (dispatchFromChain utterance chain)
+             // { via = "symbolic-4piece"; symbolic_intent = chain.carry.inferred_intent_kind; }
+        else (keywordDispatch utterance) // { via = "keyword-fallback"; };
+
+  # === Manifest consumer: interpretation frame -> existing executor =========
+  # The frame chooses the canonical operation candidate. This function only
+  # consumes that manifest and calls the existing owner. No endpoint/keyword
+  # policy lives here anymore.
+  withFrame = frame: result:
+    result // {
+      interpretation_frame = frame;
+      chosen_candidate = frame.chosen;
+      rejected_candidates = frame.rejected_candidates;
+      negative_receipts = frame.negative_receipts;
+      route_equivalence_checked = frame.route_equivalence_checked;
+      preservation_invariant = frame.preservation_invariant;
+    };
+
+  withGraph = graph: result:
+    result // {
+      symbolic_context_graph = graph;
+      context_steps = graph.steps;
+      context_facts = graph.facts;
+      context_bindings = graph.bindings;
+      route_equivalence_checked = graph.route_equivalence_checked;
+      preservation_invariant = graph.preservation_invariant;
+    };
+
+  dispatchContextGraph = graph:
+    if !(builtins.isAttrs graph) || !(graph ? outcome) then {
+      operation_kind = "none";
+      outcome = "held-malformed-context-graph";
+      result = { };
+    }
+    else if graph.final == null then
+      withGraph graph {
+        operation_kind = "context-update";
+        outcome = "context-graph-manifested";
+        dispatched_to = "symbolic-context-graph";
+        classification = graph;
+        result = {
+          outcome = "context-graph-facts-only";
+          fact_count = builtins.length graph.facts;
+          binding_count = builtins.length graph.bindings;
+          world_entity_count = builtins.length graph.world.entities;
+        };
+        via = "symbolic-context-graph";
+      }
+    else
+      let f = graph.final; op = f.operation_kind;
+      in
+        if op == "context-query" then
+          withGraph graph (mkResult "context-query" "symbolic-context-graph" graph {
+            outcome = "context-query-evaluated";
+            variable = f.variable;
+            value = f.value;
+            summary = f.summary;
+          } // { via = "symbolic-context-graph"; })
+        else if op == "context-code" then
+          withGraph graph (mkResult "context-code" "symbolic-context-graph" graph {
+            outcome = "context-code-emitted";
+            language = f.language;
+            source_text = f.source_text;
+            summary = f.summary;
+          } // { via = "symbolic-context-graph"; })
+        else if op == "world3d-volume" then
+          withGraph graph (mkResult "world3d-volume" "symbolic-context-graph" graph {
+            outcome = "world3d-volume-computed";
+            summary = f.summary;
+            volume = f.volume;
+          } // { via = "symbolic-context-graph"; })
+        else if op == "context-clear" then
+          withGraph graph (mkResult "context-clear" "symbolic-context-graph" graph {
+            outcome = "context-cleared";
+            summary = f.summary;
+            receipt = {
+              kind = "symbolic-session-context-clear-receipt";
+              reason = "user-clear";
+            };
+          } // { via = "symbolic-context-graph"; })
+        else if op == "route-chain" then
+          let factor = import ../math/factor-executor-bridge.px;
+              composed = factor.factorThenSolve f.extracted_symbolic;
+          in withGraph graph (mkResult "route-chain" "factor-executor-bridge" graph composed
+             // { via = "symbolic-context-graph"; extracted_expression = f.extracted_symbolic; })
+        else
+          withGraph graph {
+            operation_kind = op;
+            outcome = "held-unknown-context-graph-final";
+            dispatched_to = "symbolic-context-graph";
+            classification = graph;
+            result = f;
+            via = "symbolic-context-graph";
+          };
+
+  dispatchFrame = frame:
+    if !(builtins.isAttrs frame) || !(frame ? outcome) then {
+      operation_kind = "none";
+      outcome = "held-malformed-interpretation-frame";
+      result = { };
+    }
+    else if frame.outcome == "held-conflicting-routes" then {
+      operation_kind = "ambiguous";
+      outcome = "held-conflicting-routes";
+      classification = frame;
+      challenge =
+        if frame.route_equivalence_checked.conflict == null
+        then "서로 충돌하는 route 지시가 있습니다 — 어느 쪽인지 확인해 주세요."
+        else frame.route_equivalence_checked.conflict.clarification;
+      result = {
+        outcome = "held-conflicting-routes";
+        route_equivalence_checked = frame.route_equivalence_checked;
+      };
+      via = "symbolic-interpretation-frame";
+    }
+    else if frame.outcome == "held-ambiguous-candidates" then {
+      operation_kind = "ambiguous";
+      outcome = "held-ambiguous-interpretation";
+      classification = frame;
+      challenge = "여러 symbolic route 후보가 동률입니다 — solve/code/judge/world3d 중 무엇인지 더 구체적으로 말해 주세요.";
+      result = { };
+    }
+    else if frame.chosen == null then {
+      operation_kind = "none";
+      outcome = "held-no-chosen-candidate";
+      classification = frame;
+      result = { };
+    }
+    else
+      let
+        c = frame.chosen;
+        op = c.operation_kind;
+        utterance = frame.utterance;
+        expr = if c ? extracted_symbolic && c.extracted_symbolic != "" then c.extracted_symbolic else utterance;
+        heldUnsupported = reason: {
+          operation_kind = op;
+          outcome = "held-route-not-executable";
+          dispatched_to = c.route;
+          classification = frame;
+          reason = reason;
+          result = {
+            outcome = "held-route-not-executable";
+            reason = reason;
+            candidate = c;
+          };
+          via = "symbolic-interpretation-frame";
+        };
+      in
+        if op == "symbolic-code" then
+          let
+            symbolicCodeOwner =
+              import ../math/symbolic-code-witness.px;
+            emitted = symbolicCodeOwner.emitSymbolicCode {
+            utterance = utterance;
+            expression = expr;
+            language = c.target_language;
+            require_code_cue = false;
+          };
+          in withFrame frame (mkResult "symbolic-code" "symbolic-code-witness" frame emitted
+             // { via = "symbolic-interpretation-frame"; extracted_expression = emitted.expression; })
+        else if op == "symbolic-code-algorithm" then
+          let
+            symbolicAlgorithmCodeOwner =
+              import ../math/symbolic-algorithm-code-emitter.px;
+            emitted = symbolicAlgorithmCodeOwner.emitAlgorithmCode {
+            utterance = utterance;
+            expression = expr;
+            language = c.target_language;
+          };
+          in withFrame frame (mkResult "symbolic-code-algorithm" "symbolic-algorithm-code-emitter" frame emitted
+             // { via = "symbolic-interpretation-frame"; extracted_expression = expr; })
+        else if op == "equation" then
+          let eq = import ../math/equation-solving-procedure.px;
+          in withFrame frame (mkResult "equation" "equation-solving-procedure" frame (eq.beginSolveProcedureWithContext utterance expr)
+             // { via = "symbolic-interpretation-frame"; extracted_expression = expr; })
+        else if op == "arithmetic" then
+          let num = import ../math/numeric-evaluator.px;
+              evaluated = num.evaluateNumericExpression expr { };
+          in withFrame frame (mkResult "arithmetic" "numeric-evaluator" frame
+             { outcome = "evaluated"; value = evaluated.value; input = utterance; }
+             // { via = "symbolic-interpretation-frame"; extracted_expression = expr; })
+        else if op == "math-judge" then
+          let judge = import ../math/nl-conjecture-lifter.px;
+          in withFrame frame (mkResult "math-judge" "nl-conjecture-lifter" frame (judge.liftAndJudge utterance)
+             // { via = "symbolic-interpretation-frame"; extracted_expression = expr; })
+        else if op == "math-factor" then
+          let factor = import ../math/factor-executor-bridge.px;
+          in withFrame frame (mkResult "math-factor" "factor-executor-bridge" frame (factor.factorEquation expr)
+             // { via = "symbolic-interpretation-frame"; extracted_expression = expr; })
+        else if op == "math-diff" then
+          let
+            deriv = import ../math/derivative-executor-bridge.px;
+            codeHits = builtins.filter
+              (cand: (cand ? canonical_meaning) && cand.canonical_meaning == "code.emit.symbolic-result")
+              frame.symbolic_candidates;
+            codeCand = if codeHits == [ ] then null else builtins.head codeHits;
+            lang = if codeCand != null && (codeCand ? target_language) then codeCand.target_language else null;
+            at = deriv.evaluationPointFromUtterance "x" utterance;
+            req = { utterance = utterance; expression = expr; } // (if lang == null then { } else { language = lang; });
+          in
+            if codeCand != null then
+              withFrame frame (mkResult "math-diff-code" "derivative-executor-bridge" frame
+                (deriv.differentiateThenEmitCode req)
+                // { via = "symbolic-interpretation-frame"; extracted_expression = expr; })
+            else if at != null then
+              withFrame frame (mkResult "math-diff-eval" "derivative-executor-bridge" frame
+                (deriv.differentiateThenEvaluate (req // { at = at; }))
+                // { via = "symbolic-interpretation-frame"; extracted_expression = expr; })
+            else
+              withFrame frame (mkResult "math-diff" "derivative-executor-bridge" frame
+                (deriv.differentiateExpression req)
+                // { via = "symbolic-interpretation-frame"; extracted_expression = expr; })
+        else if op == "code-transform" then
+          let cdisp = import ../coding/coding-candidate-dispatcher.px;
+          in withFrame frame (mkResult "code-transform" "coding-candidate-dispatcher" frame
+             (cdisp.dispatch { path = "/coding/candidate"; method = "POST"; body = { utterance = utterance; }; })
+             // { via = "symbolic-interpretation-frame"; })
+        else if op == "code-generation" then
+          let dec = import ../coding/utterance-decomposer.px;
+          in withFrame frame (mkResult "code-generation" "utterance-decomposer" frame
+             (dec.decomposeUtterance utterance)
+             // { via = "symbolic-interpretation-frame"; })
+        else if op == "world3d-command" then
+          let
+            live = import ../agent/nl-live-coding-incremental-command-contract.px;
+            emit = import ../agent/web-freecat-live-code-emit-contract.px;
+            envelope = live.resolveLiveCommand { utterance = utterance; };
+          in withFrame frame (mkResult "world3d-command" "web-freecat-live-code-emit" frame
+             (emit.emitLiveCodeJsSource envelope)
+             // { via = "symbolic-interpretation-frame"; })
+        else if op == "freecat-js" then
+          let freecatJs = import ../freecat/freecat-js-api-projector.px;
+          in withFrame frame (mkResult "freecat-js" "freecat-js-api-projector" frame
+             (freecatJs.projectFreecatJs { utterance = utterance; })
+             // { via = "symbolic-interpretation-frame"; })
+        else if op == "context-update" then
+          withFrame frame {
+            operation_kind = "context-update";
+            outcome = "context-update-manifested";
+            dispatched_to = "discourse-context-mirror";
+            classification = frame;
+            result = { outcome = "context-update-candidate"; surface = utterance; };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "service-proof" then
+          withFrame frame {
+            operation_kind = "service-proof";
+            outcome = "dispatched";
+            dispatched_to = "service-codebase-gate";
+            classification = frame;
+            result = {
+              outcome = "service-proof.missing-evidence";
+              held_kind = "service-proof.missing-evidence";
+              reason = "codebase gate/service-proof artifact 요청은 테스트 실행 예약이 아니라 repo snapshot/file refs/verify target/rollback evidence가 필요한 Held입니다.";
+              required_artifacts =
+                if c ? required_artifacts then c.required_artifacts else [
+                  "repo snapshot"
+                  "feature tree"
+                  "architecture map"
+                  "risk map"
+                  "gate map"
+                  "affected slice"
+                  "verify target list"
+                  "rollback path"
+                  "semantic review receipt"
+                  "policy candidate feed"
+                ];
+              host_execution_deferred = false;
+              next_gate = "provide-service-proof-evidence";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "policy-artifact" then
+          withFrame frame {
+            operation_kind = "policy-artifact";
+            outcome = "held";
+            dispatched_to = "puck-policy-evaluation-artifact-frame";
+            classification = frame;
+            result = {
+              outcome = "policy-artifact.summary-required";
+              held_kind = "policy-artifact.summary-required";
+              reason =
+                if c ? reason then c.reason
+                else "docs/puck policy/evaluation artifact 요청은 프로젝트 테스트 실행 예약이 아니라 artifact가 무엇을 평가/결정하는지 요약해야 하는 Held입니다.";
+              required_artifacts =
+                if c ? required_artifacts then c.required_artifacts else [
+                  "artifact snapshot"
+                  "artifact kind"
+                  "decision/evaluation target"
+                  "policy candidate or result"
+                  "verification/provenance evidence"
+                ];
+              public_text_normal =
+                "Held: docs/puck policy/evaluation artifact 요청은 프로젝트 테스트 실행 예약이 아니라 artifact가 무엇을 평가/결정하는지 요약해야 하는 Held입니다. (held_kind=policy-artifact.summary-required)";
+              host_execution_deferred = false;
+              workflow_operation = false;
+              next_gate = "provide-policy-artifact-snapshot";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "pnix-sample-input" then
+          withFrame frame {
+            operation_kind = "pnix-sample-input";
+            outcome = "held";
+            dispatched_to = "pnix-sample-input-eval-gate";
+            classification = frame;
+            result = {
+              outcome = "eval-input.held";
+              held_kind = "eval-input.held";
+              reason =
+                if c ? reason then c.reason
+                else "pnix sample/eval input은 구조 전체를 평가해야 하며 equation solver가 일부를 잘라 답하면 안 됩니다; live eval/dry-run evidence 없이는 Held입니다.";
+              source_surface =
+                if c ? source_surface then c.source_surface else utterance;
+              required_artifacts =
+                if c ? required_artifacts then c.required_artifacts else [
+                  "whole pnix input surface"
+                  "pnix eval owner/provenance"
+                  "dry-run result or unsupported-eval reason"
+                ];
+              public_text_normal =
+                "Held: pnix sample/eval input은 구조 전체를 평가해야 하며 equation solver가 일부를 잘라 답하면 안 됩니다; live eval/dry-run evidence 없이는 Held입니다. (held_kind=eval-input.held)";
+              host_execution_deferred = false;
+              workflow_operation = false;
+              next_gate = "provide-pnix-eval-evidence-or-dry-run";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "weather-tool-needed" then
+          withFrame frame {
+            operation_kind = "weather-tool-needed";
+            outcome = "held";
+            dispatched_to = "weather-live-provenance-gate";
+            classification = frame;
+            result = {
+              outcome = "weather-tool-needed";
+              held_kind = "weather-tool-needed";
+              reason =
+                if c ? reason then c.reason
+                else "현재/미래 날씨 질문은 live weather tool provenance 없이는 답을 단정할 수 없습니다.";
+              required_evidence =
+                if c ? required_evidence then c.required_evidence else [
+                  "live-weather-tool-result"
+                  "timestamp"
+                  "location"
+                  "forecast-source"
+                ];
+              public_text_normal =
+                "Held: 현재/미래 날씨 질문은 live weather tool provenance 없이는 답을 단정할 수 없습니다. (held_kind=weather-tool-needed)";
+              host_execution_deferred = false;
+              next_gate = "provide-live-weather-tool-evidence";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "finance-tool-needed" then
+          withFrame frame {
+            operation_kind = "finance-tool-needed";
+            outcome = "held";
+            dispatched_to = "finance-live-provenance-gate";
+            classification = frame;
+            result = {
+              outcome = "finance-tool-needed";
+              held_kind = "finance-tool-needed";
+              reason =
+                if c ? reason then c.reason
+                else "현재 시세·주가 질문은 live finance tool provenance 없이는 답을 단정할 수 없습니다.";
+              required_evidence =
+                if c ? required_evidence then c.required_evidence else [
+                  "live-finance-tool-result"
+                  "timestamp"
+                  "ticker-or-asset"
+                  "market-source"
+                ];
+              public_text_normal =
+                "Held: 현재 시세·주가 질문은 live finance tool provenance 없이는 답을 단정할 수 없습니다. (held_kind=finance-tool-needed)";
+              host_execution_deferred = false;
+              next_gate = "provide-live-finance-tool-evidence";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "sports-tool-needed" then
+          withFrame frame {
+            operation_kind = "sports-tool-needed";
+            outcome = "held";
+            dispatched_to = "sports-live-provenance-gate";
+            classification = frame;
+            result = {
+              outcome = "sports-tool-needed";
+              held_kind = "sports-tool-needed";
+              reason =
+                if c ? reason then c.reason
+                else "스포츠 경기 결과·일정 질문은 live sports tool provenance 없이는 답을 단정할 수 없습니다.";
+              required_evidence =
+                if c ? required_evidence then c.required_evidence else [
+                  "live-sports-tool-result"
+                  "timestamp"
+                  "league-or-team"
+                  "schedule-or-score-source"
+                ];
+              public_text_normal =
+                "Held: 스포츠 경기 결과·일정 질문은 live sports tool provenance 없이는 답을 단정할 수 없습니다. (held_kind=sports-tool-needed)";
+              host_execution_deferred = false;
+              next_gate = "provide-live-sports-tool-evidence";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "time-tool-needed" then
+          withFrame frame {
+            operation_kind = "time-tool-needed";
+            outcome = "held";
+            dispatched_to = "time-live-provenance-gate";
+            classification = frame;
+            result = {
+              outcome = "time-tool-needed";
+              held_kind = "time-tool-needed";
+              reason =
+                if c ? reason then c.reason
+                else "현재 시각 질문은 live time tool provenance 없이는 답을 단정할 수 없습니다.";
+              required_evidence =
+                if c ? required_evidence then c.required_evidence else [
+                  "live-time-tool-result"
+                  "timestamp"
+                  "timezone-or-location"
+                  "source-clock"
+                ];
+              public_text_normal =
+                "Held: 현재 시각 질문은 live time tool provenance 없이는 답을 단정할 수 없습니다. (held_kind=time-tool-needed)";
+              host_execution_deferred = false;
+              next_gate = "provide-live-time-tool-evidence";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "calendar-tool-needed" then
+          withFrame frame {
+            operation_kind = "calendar-tool-needed";
+            outcome = "held";
+            dispatched_to = "calendar-live-provenance-gate";
+            classification = frame;
+            result = {
+              outcome = "calendar-tool-needed";
+              held_kind = "calendar-tool-needed";
+              reason =
+                if c ? reason then c.reason
+                else "회의·일정 질문은 live calendar provenance 없이는 답을 단정할 수 없습니다.";
+              required_evidence =
+                if c ? required_evidence then c.required_evidence else [
+                  "live-calendar-tool-result"
+                  "timestamp"
+                  "calendar-or-account"
+                  "event-source"
+                ];
+              public_text_normal =
+                "Held: 회의·일정 질문은 live calendar provenance 없이는 답을 단정할 수 없습니다. (held_kind=calendar-tool-needed)";
+              host_execution_deferred = false;
+              next_gate = "provide-live-calendar-tool-evidence";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "logistics-tool-needed" then
+          withFrame frame {
+            operation_kind = "logistics-tool-needed";
+            outcome = "held";
+            dispatched_to = "logistics-live-provenance-gate";
+            classification = frame;
+            result = {
+              outcome = "logistics-tool-needed";
+              held_kind = "logistics-tool-needed";
+              reason =
+                if c ? reason then c.reason
+                else "택배·배송 상태 질문은 live logistics provenance 없이는 답을 단정할 수 없습니다.";
+              required_evidence =
+                if c ? required_evidence then c.required_evidence else [
+                  "live-logistics-tool-result"
+                  "timestamp"
+                  "carrier-or-tracking-id"
+                  "delivery-source"
+                ];
+              public_text_normal =
+                "Held: 택배·배송 상태 질문은 live logistics provenance 없이는 답을 단정할 수 없습니다. (held_kind=logistics-tool-needed)";
+              host_execution_deferred = false;
+              next_gate = "provide-live-logistics-tool-evidence";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "secure-memory-needed" then
+          withFrame frame {
+            operation_kind = "secure-memory-needed";
+            outcome = "held";
+            dispatched_to = "secure-memory-provenance-gate";
+            classification = frame;
+            result = {
+              outcome = "secure-memory-needed";
+              held_kind = "secure-memory-needed";
+              reason =
+                if c ? reason then c.reason
+                else "민감한 비밀값은 인증된 secret memory provenance 없이는 답할 수 없습니다.";
+              required_evidence =
+                if c ? required_evidence then c.required_evidence else [
+                  "authenticated-secret-store-result"
+                  "secret-scope"
+                  "requester-authority"
+                  "audit-receipt"
+                ];
+              public_text_normal =
+                "Held: 민감한 비밀값은 인증된 secret memory provenance 없이는 답할 수 없습니다. (held_kind=secure-memory-needed)";
+              host_execution_deferred = false;
+              next_gate = "provide-authenticated-secret-memory-evidence";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "test" then
+          withFrame frame {
+            operation_kind = "test";
+            outcome = "dispatched";
+            dispatched_to = "project-patch-request-lifter";
+            classification = frame;
+            result = {
+              outcome = "project-workflow-manifested";
+              operation_kind = "test";
+              canonical_meaning = c.canonical_meaning;
+              workflow_operation = true;
+              host_execution_deferred = true;
+              next_gate = "client-command-scheduling";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else if op == "build" then
+          withFrame frame {
+            operation_kind = "build";
+            outcome = "dispatched";
+            dispatched_to = "project-patch-request-lifter";
+            classification = frame;
+            result = {
+              outcome = "project-workflow-manifested";
+              operation_kind = "build";
+              canonical_meaning = c.canonical_meaning;
+              workflow_operation = true;
+              host_execution_deferred = true;
+              next_gate = "client-command-scheduling";
+            };
+            via = "symbolic-interpretation-frame";
+          }
+        else
+          withFrame frame {
+            operation_kind = "general";
+            outcome = "classified-general";
+            dispatched_to = "symbolic-interpretation-frame";
+            classification = frame;
+            result = { ambient = "general"; family = "nl"; };
+            receipt = { kind = "general-utterance-classified"; };
+            note = "코드/수학/world3d 연산이 아닌 일반 발화 — 날조 답 없음.";
+            via = "symbolic-interpretation-frame";
+          };
+
+  finishSlowPath = utterance: context: frameResult:
+    let
+      frameConcrete =
+        (builtins.isAttrs frameResult)
+        && (frameResult ? outcome)
+        && frameResult.outcome == "dispatched"
+        && (frameResult ? operation_kind)
+        && frameResult.operation_kind != "general"
+        && frameResult.operation_kind != "none";
+    in
+      if frameConcrete then frameResult
+      else
+        let
+          algorithmProjectionOwner =
+            import ../coding/algorithm-projection-front-door.px;
+          projection = algorithmProjectionOwner.projectAlgorithmRequest utterance;
+          projectionFired =
+            (builtins.isAttrs projection)
+            && (projection ? operation_kind)
+            && projection.operation_kind != "none"
+            && !(projection.is_held or false);
+        in
+          if projectionFired then
+            mkResult projection.operation_kind "algorithm-projection-front-door" { outcome = "algorithm-projection-front-door"; } projection
+          else frameResult;
+
+  graphHasPayload = graph:
+    let isMultiSentence = graph.sentence_count > 1;
+    in
+      (graph.has_final
+        || graph.facts != [ ]
+        || graph.bindings != [ ]
+        || (isMultiSentence && graph.world.entities != [ ]))
+      || (graph.has_final
+          && (graph.final ? operation_kind)
+          && graph.final.operation_kind == "route-chain");
+
+  runSymbolicSlowPath = utterance: context:
+    let
+      frameOwner =
+        import ./symbolic-interpretation-frame.px;
+      sentences = frameOwner.splitSentences utterance;
+      isMultiSentence = (builtins.length sentences) > 1;
+    in
+      if isMultiSentence then
+        let
+          contextGraphOwner =
+            import ./symbolic-context-graph.px;
+          graph = contextGraphOwner.interpret { utterance = utterance; context = context; };
+        in
+          if graphHasPayload graph
+          then dispatchContextGraph graph
+          else finishSlowPath utterance context
+               (dispatchFrame (frameOwner.interpret { utterance = utterance; context = context; }))
+      else
+        let
+          frameResult = dispatchFrame (frameOwner.interpret { utterance = utterance; context = context; });
+          frameConcrete =
+            (builtins.isAttrs frameResult)
+            && (frameResult ? outcome)
+            && frameResult.outcome == "dispatched"
+            && (frameResult ? operation_kind)
+            && frameResult.operation_kind != "general"
+            && frameResult.operation_kind != "none";
+        in
+          if frameConcrete then frameResult
+          else
+            let
+              contextGraphOwner =
+                import ./symbolic-context-graph.px;
+              graph = contextGraphOwner.interpret { utterance = utterance; context = context; };
+            in
+              if graphHasPayload graph
+              then dispatchContextGraph graph
+              else finishSlowPath utterance context frameResult;
+}

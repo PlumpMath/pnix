@@ -1,0 +1,749 @@
+let
+  ownerName = "stdlib.nl.math-axioms-nl-layer";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Math Axioms NL Layer (agent-NL-121) =========================
+  #
+  # 사용자 vision 의 *피 네 번째 방울* — 수학 axioms NL bridge.
+  #
+  # 박힌 수학 substrate (CLAUDE.md anchor):
+  #   - numeric-evaluator.px (산술 evaluator + checkUniversalOverFiniteDomain)
+  #   - problem-kernel-substrate.px (8 check_id)
+  #   - axiom-plate.px (Peano 5 + Group 3 + Equality 3)
+  #   - theorem-store.px (lifecycle)
+  #   - conjecture-generator / judge / equivalence
+  #   - transformation-pipeline (commutativity / associativity)
+  #   - induction-step.px
+  #   - semantic-equivalence.px (canonical form)
+  #
+  # 이 owner = NL 발화 → 어떤 수학 axiom 활성 + 박힌 substrate 의 defer_to.
+  # 사용자가 "교환법칙으로 풀이" / "induction 으로 증명" 같은 발화 시
+  # 매칭된 axiom 의 sub-tree walk + 박힌 verifier 호출 path 제공.
+  #
+  # 5 family:
+  #   1. arithmetic-axiom (commutative, associative, distributive, identity)
+  #   2. ordering-axiom (reflexive, transitive, antisymmetric, total)
+  #   3. logic-axiom (modus ponens, contradiction, excluded middle, ...)
+  #   4. quantifier-axiom (universal, existential, unique-existential)
+  #   5. proof-technique (direct, contradiction, induction, case-analysis)
+
+  stepKind = "math-axiom-nl-bridge";
+  framework_step =
+    "axiom content — 5 수학 family + 박힌 수학 substrate 의 defer_to";
+
+  # === Defer-to constants ==========================================
+
+  defer_numeric = "stdlib/lib/math/numeric-evaluator.px";
+  defer_problem_kernel = "stdlib/lib/math/problem-kernel-substrate.px";
+  defer_axiom_plate = "stdlib/lib/math/axiom-plate.px";
+  defer_theorem_store = "stdlib/lib/math/theorem-store.px";
+  defer_induction = "stdlib/lib/math/induction-step.px";
+  defer_semantic_eq = "stdlib/lib/math/semantic-equivalence.px";
+  defer_transformation = "stdlib/lib/math/transformation-pipeline.px";
+
+  # === Round 0-36 의 Lean reference substrate defers (Phase 1 의 피 wire) ====
+  # 사용자 vision: "수학 substrate 가 algorithm pipeline 의 control flow
+  #                 안의 피가 됨."
+  # 각 math family 가 단순 *기존 substrate* defer 외에 *외부 Lean kernel-
+  # verified proxy* 까지 reach. paired claim / axiom dependency chain /
+  # 10 substrate axioms / 36 한글 axiom bindings / unified query 가
+  # 한 NL 발화에서 흐름.
+  defer_lean_paired = "stdlib/lib/nl/lean/paired-claim-aggregate.px";
+  defer_lean_axiom_dep = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+  defer_lean_korean_axiom = "stdlib/lib/nl/lean/substrate-axiom-korean-binding.px";
+  defer_lean_graph = "stdlib/lib/nl/lean/substrate-mathlib-graph.px";
+  defer_lean_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+  defer_lean_bridge = "stdlib/lib/nl/lean/nl-to-mathlib-bridge.px";
+  defer_lean_reverse = "stdlib/lib/nl/lean/lean-to-korean-reverse.px";
+  defer_lean_e2e = "stdlib/lib/nl/lean/end-to-end-chain-demo.px";
+  defer_lean_lookup = "stdlib/lib/nl/lean/lookup-aggregate.px";
+  defer_lean_grounded = "stdlib/lib/agent/lean-grounded-proof-mirror.px";
+  defer_lean_adversarial = "stdlib/lib/agent/lean-adversarial-corpus.px";
+  defer_lean_reasoning_dispatch =
+    "stdlib/lib/agent/reasoning-dispatch-mirror.px";
+  defer_lean_trace_kernel =
+    "stdlib/lib/math/lean-trace-certificate-kernel.px";
+
+  # === 1. Arithmetic Axioms ====================================
+
+  arithmeticAxiomTree = bt.composeBranchTree "arithmetic axiom" [
+    {
+      name = "commutativity";
+      cues = [ "commutative" "commute" "교환법칙" "교환" "a+b=b+a" "a*b=b*a" ];
+      sub_specs = [
+        { name = "addition-commute"; cues = [ "+ commute" "addition commutative" "덧셈 교환" ]; terminal = true; }
+        { name = "multiplication-commute"; cues = [ "* commute" "multiplication commutative" "곱셈 교환" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "associativity";
+      cues = [ "associative" "associate" "결합법칙" "결합" "(a+b)+c=a+(b+c)" ];
+      sub_specs = [
+        { name = "addition-associate"; cues = [ "addition associative" "덧셈 결합" ]; terminal = true; }
+        { name = "multiplication-associate"; cues = [ "multiplication associative" "곱셈 결합" ]; terminal = true; }
+        { name = "chain-fold"; cues = [ "chain" "n-ary" "여러 항" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "distributivity";
+      cues = [ "distributive" "distribute" "분배법칙" "분배" "a*(b+c)" ];
+      sub_specs = [
+        { name = "left-distribute"; cues = [ "left" "왼쪽" ]; terminal = true; }
+        { name = "right-distribute"; cues = [ "right" "오른쪽" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "identity-element";
+      cues = [ "identity" "항등원" "additive identity" "multiplicative identity" "0+n=n" "1*n=n" ];
+      sub_specs = [
+        { name = "additive-zero"; cues = [ "0+" "zero" "영" ]; terminal = true; }
+        { name = "multiplicative-one"; cues = [ "1*" "one" "일" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "absorption";
+      cues = [ "absorption" "흡수" "n*0=0" ];
+      sub_specs = [
+        { name = "multiplication-by-zero"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Ordering Axioms ======================================
+
+  orderingAxiomTree = bt.composeBranchTree "ordering axiom" [
+    {
+      name = "reflexivity";
+      cues = [ "reflexive" "반사" "a<=a" "x relates to x" ];
+      sub_specs = [
+        { name = "weak-reflexive"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "transitivity";
+      cues = [ "transitive" "이행" "transitive closure" "a<b<c" ];
+      sub_specs = [
+        { name = "strict-transitivity"; cues = [ "strict" "엄격" ]; terminal = true; }
+        { name = "weak-transitivity"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "antisymmetry";
+      cues = [ "antisymmetric" "반대칭" "a<=b and b<=a then a=b" ];
+      sub_specs = [
+        { name = "partial-order"; cues = [ "partial" "부분" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "total-order";
+      cues = [ "total order" "전순서" "totality" "comparable" ];
+      sub_specs = [
+        { name = "trichotomy"; cues = [ "trichotomy" "삼분" ]; terminal = true; }
+        { name = "linear-order"; cues = [ "linear" "선형 순서" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "well-founded";
+      cues = [ "well-founded" "well founded" "정초" "termination" ];
+      sub_specs = [
+        { name = "minimal-element"; cues = []; terminal = true; }
+        { name = "no-infinite-descent"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Logic Axioms =========================================
+
+  logicAxiomTree = bt.composeBranchTree "logic axiom" [
+    {
+      name = "modus-ponens";
+      cues = [ "modus ponens" "MP" "if P then Q" "전건 긍정" "P implies Q" ];
+      sub_specs = [
+        { name = "direct-application"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "modus-tollens";
+      cues = [ "modus tollens" "MT" "contrapositive" "대우" "후건 부정" ];
+      sub_specs = [
+        { name = "not-Q-then-not-P"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "contradiction";
+      cues = [ "contradiction" "모순" "P and not P" "false" ];
+      sub_specs = [
+        { name = "ex-falso"; cues = [ "ex falso" "explosion" "폭발" ]; terminal = true; }
+        { name = "consistency"; cues = [ "consistent" "일관" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "excluded-middle";
+      cues = [ "excluded middle" "LEM" "배중률" "P or not P" ];
+      sub_specs = [
+        { name = "classical-logic"; cues = [ "classical" "고전" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "de-morgan";
+      cues = [ "de morgan" "demorgan" "드 모르간" "not (P and Q)" ];
+      sub_specs = [
+        { name = "and-to-or"; cues = []; terminal = true; }
+        { name = "or-to-and"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Quantifier Axioms ====================================
+
+  quantifierAxiomTree = bt.composeBranchTree "quantifier axiom" [
+    {
+      name = "universal";
+      cues = [ "forall" "for all" "∀" "모든" "임의의" "universal" ];
+      sub_specs = [
+        { name = "instantiation"; cues = [ "instantiate" "대입" ]; terminal = true; }
+        { name = "generalization"; cues = [ "generalize" "일반화" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "existential";
+      cues = [ "exists" "∃" "존재" "there is" "there exists" ];
+      sub_specs = [
+        { name = "witness"; cues = [ "witness" "증인" ]; terminal = true; }
+        { name = "skolemize"; cues = [ "skolem" "스콜렘" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "unique-existence";
+      cues = [ "exists!" "unique" "유일" "exactly one" "단 하나" ];
+      sub_specs = [
+        { name = "uniqueness-proof"; cues = []; terminal = true; }
+        { name = "existence-proof"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "quantifier-exchange";
+      cues = [ "quantifier swap" "quantifier exchange" "한정자 교환" ];
+      sub_specs = [
+        { name = "forall-exists"; cues = []; terminal = true; }
+        { name = "exists-forall"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Proof Techniques =====================================
+
+  proofTechniqueAxiomTree = bt.composeBranchTree "proof technique axiom" [
+    {
+      name = "direct-proof";
+      cues = [ "direct proof" "직접 증명" "straight derivation" ];
+      sub_specs = [
+        { name = "step-by-step"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "induction";
+      cues = [ "induction" "귀납" "mathematical induction" "수학적 귀납법" ];
+      sub_specs = [
+        { name = "weak-induction"; cues = [ "weak" "약" ]; terminal = true; }
+        { name = "strong-induction"; cues = [ "strong" "강" "complete induction" ]; terminal = true; }
+        { name = "structural-induction"; cues = [ "structural" "구조적" ]; terminal = true; }
+        { name = "base-case"; cues = [ "base case" "기저" ]; terminal = true; }
+        { name = "inductive-step"; cues = [ "step case" "귀납 단계" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "proof-by-contradiction";
+      cues = [ "by contradiction" "reductio" "모순법" "귀류법" ];
+      sub_specs = [
+        { name = "assume-negation"; cues = []; terminal = true; }
+        { name = "derive-contradiction"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "case-analysis";
+      cues = [ "case analysis" "by cases" "경우의 수" "장소 분리" ];
+      sub_specs = [
+        { name = "exhaustive-cases"; cues = []; terminal = true; }
+        { name = "case-split"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "counterexample";
+      cues = [ "counterexample" "반례" "disprove" "반증" ];
+      sub_specs = [
+        { name = "find-witness"; cues = []; terminal = true; }
+        { name = "bounded-domain-search"; cues = [ "finite domain" "bounded" "한정" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "limit-continuity-topology";
+      cues = [ "limit" "continuity" "topology" "극한" "연속" "위상" ];
+      sub_specs = [
+        { name = "epsilon-delta-limit"; cues = [ "epsilon delta" "엡실론 델타" ]; terminal = true; }
+        { name = "uniform-continuity"; cues = [ "uniform continuity" "균등 연속" ]; terminal = true; }
+        { name = "open-and-closed-sets"; cues = [ "open set" "closed set" "열린 집합" ]; terminal = true; }
+        { name = "compactness"; cues = [ "compact" "콤팩트" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry of all 5 families with defer_to ===================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-math-001";
+      name = "arithmetic";
+      domain = "math";
+      activation_cues = [
+        "commutative" "associative" "distributive" "identity" "absorption"
+        "교환" "결합" "분배" "항등원"
+        "+" "*" "addition" "multiplication" "산술"
+      ];
+      tree = arithmeticAxiomTree;
+      sub_count = builtins.length arithmeticAxiomTree.branches;
+      defer_to = defer_axiom_plate;
+      verifier_defer = defer_numeric;
+      # Round 0-36 의 Lean external proxy wire (피의 흐름)
+      external_lean_axiom_id = "composability-qed";  # paper-QED Lemma 1
+      external_lean_path = defer_lean_axiom_dep;
+      external_mathlib_unified_path = defer_lean_unified;
+    }
+    {
+      axiom_id = "axiom-math-002";
+      name = "ordering";
+      domain = "math";
+      activation_cues = [
+        "ordering" "order" "less than" "greater than" "reflexive" "transitive"
+        "antisymmetric" "total order"
+        "순서" "이행" "반사" "전순서" "<=" ">=" "comparable"
+      ];
+      tree = orderingAxiomTree;
+      sub_count = builtins.length orderingAxiomTree.branches;
+      defer_to = defer_axiom_plate;
+      verifier_defer = defer_problem_kernel;
+      # Round 0-36 의 Lean external proxy
+      external_lean_axiom_id = "uniqueness-qed";  # paper-QED Lemma 2 (deterministic ordering = unique receipt)
+      external_lean_path = defer_lean_axiom_dep;
+      external_mathlib_unified_path = defer_lean_unified;
+    }
+    {
+      axiom_id = "axiom-math-003";
+      name = "logic";
+      domain = "math";
+      activation_cues = [
+        "modus ponens" "modus tollens" "contradiction" "excluded middle"
+        "implies" "if and only if" "iff"
+        "함의" "모순" "배중률" "전건 긍정" "대우"
+      ];
+      tree = logicAxiomTree;
+      sub_count = builtins.length logicAxiomTree.branches;
+      defer_to = defer_problem_kernel;
+      verifier_defer = defer_problem_kernel;
+      # Round 0-36 의 Lean external proxy
+      external_lean_axiom_id = "uc4-llm-impossibility";  # paper-QED Lemma 3 (logical determinism)
+      external_lean_path = defer_lean_axiom_dep;
+      external_mathlib_unified_path = defer_lean_unified;
+    }
+    {
+      axiom_id = "axiom-math-004";
+      name = "quantifier";
+      domain = "math";
+      activation_cues = [
+        "forall" "for all" "exists" "there exists" "unique"
+        "∀" "∃"
+        "모든" "임의의" "존재" "유일" "단 하나"
+      ];
+      tree = quantifierAxiomTree;
+      sub_count = builtins.length quantifierAxiomTree.branches;
+      defer_to = defer_axiom_plate;
+      verifier_defer = defer_numeric;
+      # Round 0-36 의 Lean external proxy
+      external_lean_axiom_id = "mode-11-yoneda-canonicalization";  # forall = Yoneda universal
+      external_lean_path = defer_lean_axiom_dep;
+      external_mathlib_unified_path = defer_lean_unified;
+    }
+    {
+      axiom_id = "axiom-math-005";
+      name = "proof-technique";
+      domain = "math";
+      activation_cues = [
+        "proof" "prove" "induction" "contradiction" "counterexample"
+        "case analysis" "direct proof"
+        "limit" "continuity" "topology" "compact" "epsilon delta"
+        "증명" "귀납" "귀류법" "반례" "경우 분리" "극한" "연속" "위상"
+      ];
+      tree = proofTechniqueAxiomTree;
+      sub_count = builtins.length proofTechniqueAxiomTree.branches;
+      defer_to = defer_theorem_store;
+      verifier_defer = defer_induction;
+      # Round 0-36 의 Lean external proxy
+      external_lean_axiom_id = "uc4-motivic-galois-invariance";  # paper-QED Lemma 6 (proof = motivic invariance)
+      external_lean_path = defer_lean_axiom_dep;
+      external_mathlib_unified_path = defer_lean_unified;
+    }
+    # ===== Round 37: 6번째 family — external Mathlib cross-reference ====
+    # *모든 math query 가 cross-cutting* — 어떤 family activate 되든
+    # 이 family 도 함께 activate (broad activation cues).
+    # 우리 Round 0-36 의 Lean reference network 전체 가 *피의 흐름* 으로
+    # algorithm control flow 안에 wire 됨.
+    {
+      axiom_id = "axiom-math-006";
+      name = "external-mathlib-cross-reference";
+      domain = "math";
+      activation_cues = [
+        # 한글 vocabulary 의 cross-family broad activation
+        "수학" "정리" "증명" "lemma" "theorem" "axiom" "Mathlib" "Lean"
+        "갈루아" "층" "코호몰로지" "타나카" "p진" "리만" "노름" "측도"
+        "격자" "그래프" "집합" "유한집합" "자연수" "정수" "환" "군" "가군"
+        # Round 0-36 의 substrate axiom keywords
+        "UC4" "Mode11" "Mode12" "Mode13" "Mode14" "AC3" "SC4" "G_mot"
+        "결합성" "유일성" "기계지능" "토포스" "요네다" "시간일관성" "맥락흐름"
+        # English fallback
+        "verify" "reference" "external" "validation"
+      ];
+      tree = bt.composeBranchTree "external mathlib cross-reference" [
+        {
+          name = "lean-paired-claim";
+          cues = [ "paired" "claim" "외부" "참조" ];
+          sub_specs = [
+            { name = "paired-lookup"; cues = [ "lookup" "찾기" ]; terminal = true; }
+            { name = "paired-verify"; cues = [ "verify" "검증" ]; terminal = true; }
+          ];
+        }
+        {
+          name = "lean-axiom-dependency";
+          cues = [ "dependency" "의존" "chain" "사슬" ];
+          sub_specs = [
+            { name = "axiom-coverage"; cues = [ "coverage" "커버리지" "%" ]; terminal = true; }
+            { name = "axiom-chain"; cues = [ "chain" "사슬" "graph" ]; terminal = true; }
+          ];
+        }
+        {
+          name = "lean-korean-binding";
+          cues = [ "한글" "Korean" "binding" "axiom" ];
+          sub_specs = [
+            { name = "ko-to-axiom"; cues = [ "한글" "Korean" "→" ]; terminal = true; }
+            { name = "axiom-to-paper"; cues = [ "paper-QED" "lemma" "index" ]; terminal = true; }
+          ];
+        }
+        {
+          name = "lean-mathlib-graph";
+          cues = [ "graph" "network" "1:N" "concept" ];
+          sub_specs = [
+            { name = "concept-refs"; cues = [ "references" "refs" ]; terminal = true; }
+          ];
+        }
+        {
+          name = "lean-unified-query";
+          cues = [ "unified" "single-entry" "통합" "단일" ];
+          sub_specs = [
+            { name = "routing-layer"; cues = [ "routing" "layer" "라우팅" ]; terminal = true; }
+          ];
+        }
+      ];
+      sub_count = 5;  # hardcoded; 5 sub-branches
+      # Cross-cutting defer — 5 sub-branches 가 각자 우리 Round 0-36 의
+      # 다른 Lean owner 에 defer
+      defer_to = defer_lean_axiom_dep;  # primary: substrate axiom dependency chain
+      verifier_defer = defer_lean_unified;  # primary: unified query entry
+      external_lean_axiom_id = "cross-family-aggregator";  # meta: 모든 axiom 의 aggregator
+      external_lean_path = defer_lean_axiom_dep;
+      external_mathlib_unified_path = defer_lean_unified;
+      external_real_corpus_grounding_path = defer_lean_grounded;
+      external_real_corpus_audit_path = defer_lean_adversarial;
+      external_reasoning_dispatch_path = defer_lean_reasoning_dispatch;
+      external_trace_certificate_kernel_path = defer_lean_trace_kernel;
+      external_real_corpus_ops = [
+        "ground-proof"
+        "ground-code-invariant"
+        "evidence-vs-proof"
+        "lean-corpus-audit"
+        "verify-trace-certificate"
+      ];
+      # 이 family 는 cross-cutting — 다른 5 family 와 함께 활성
+      is_cross_cutting = true;
+      cross_cutting_aggregates = [
+        defer_lean_paired
+        defer_lean_axiom_dep
+        defer_lean_korean_axiom
+        defer_lean_graph
+        defer_lean_unified
+        defer_lean_bridge
+        defer_lean_reverse
+        defer_lean_e2e
+        defer_lean_lookup
+        defer_lean_trace_kernel
+      ];
+    }
+  ];
+
+  # === Activation logic ===========================================
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple math axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "apply " + ax.name + " axiom";
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  # === defer_to chain — pnix 가 내부 계산 필요시 호출할 위치 ======
+  #
+  # 사용자 vision 의 "pnix 가 계산 필요에 의해 찾을 때만 계산":
+  # axiom 매칭된 후 *실제 verifier* 가 필요할 때 이 ref 가 가리킴.
+
+  deferTargetsFor = axiomName:
+    let
+      hits = builtins.filter (ax: ax.name == axiomName) knownAxioms;
+    in
+      if hits == [] then null
+      else
+        let ax = builtins.head hits; in {
+          definition_owner = ax.defer_to;
+          verifier_owner = ax.verifier_defer;
+          name = ax.name;
+          external_lean_axiom_id = ax.external_lean_axiom_id or null;
+          external_lean_path = ax.external_lean_path or null;
+          external_mathlib_unified_path = ax.external_mathlib_unified_path or null;
+          external_real_corpus_grounding_path =
+            ax.external_real_corpus_grounding_path or null;
+          external_real_corpus_audit_path =
+            ax.external_real_corpus_audit_path or null;
+          external_reasoning_dispatch_path =
+            ax.external_reasoning_dispatch_path or null;
+          external_trace_certificate_kernel_path =
+            ax.external_trace_certificate_kernel_path or null;
+          external_real_corpus_ops = ax.external_real_corpus_ops or [];
+          is_cross_cutting = ax.is_cross_cutting or false;
+          cross_cutting_aggregates = ax.cross_cutting_aggregates or [];
+        };
+
+  # === Plate entry =================================================
+
+  applyMathAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+        deferList = builtins.map (ax: {
+          name = ax.name;
+          defer_to = ax.defer_to;
+          verifier_defer = ax.verifier_defer;
+          external_lean_axiom_id = ax.external_lean_axiom_id or null;
+          external_lean_path = ax.external_lean_path or null;
+          external_mathlib_unified_path = ax.external_mathlib_unified_path or null;
+          external_real_corpus_grounding_path =
+            ax.external_real_corpus_grounding_path or null;
+          external_real_corpus_audit_path =
+            ax.external_real_corpus_audit_path or null;
+          external_reasoning_dispatch_path =
+            ax.external_reasoning_dispatch_path or null;
+          external_trace_certificate_kernel_path =
+            ax.external_trace_certificate_kernel_path or null;
+          external_real_corpus_ops = ax.external_real_corpus_ops or [];
+          is_cross_cutting = ax.is_cross_cutting or false;
+          cross_cutting_aggregates = ax.cross_cutting_aggregates or [];
+        }) activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          defer_targets = deferList;
+          axiom_origin =
+            "axiom-107-nl-math-axioms "
+            + "(composes axiom-98-tree + 박힌 수학 substrate)";
+        };
+      }
+    else if builtins.hasAttr "defer_for" request then
+      let dt = deferTargetsFor request.defer_for; in
+      if dt == null then {
+        outcome = "held-unknown-axiom";
+        axiom_name = request.defer_for;
+      }
+      else {
+        outcome = "defer-targets-returned";
+        public = dt;
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+              defer_to = ax.defer_to;
+              verifier_defer = ax.verifier_defer;
+              external_lean_axiom_id = ax.external_lean_axiom_id or null;
+              external_lean_path = ax.external_lean_path or null;
+              external_mathlib_unified_path = ax.external_mathlib_unified_path or null;
+              external_real_corpus_grounding_path =
+                ax.external_real_corpus_grounding_path or null;
+              external_real_corpus_audit_path =
+                ax.external_real_corpus_audit_path or null;
+              external_reasoning_dispatch_path =
+                ax.external_reasoning_dispatch_path or null;
+              external_trace_certificate_kernel_path =
+                ax.external_trace_certificate_kernel_path or null;
+              external_real_corpus_ops = ax.external_real_corpus_ops or [];
+              is_cross_cutting = ax.is_cross_cutting or false;
+              cross_cutting_aggregates = ax.cross_cutting_aggregates or [];
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms } | { activate_for = \"<NL>\" } | "
+        + "{ defer_for = \"<axiom name>\" } | { describe = \"<axiom name>\" }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-math-axioms-nl-layer-axiom-107";
+    composes =
+      "axiom-98-tree + 박힌 수학 substrate (numeric-evaluator / "
+      + "problem-kernel / axiom-plate / theorem-store / induction-step)";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = builtins.length knownAxioms;
+    families = [
+      "arithmetic (교환 / 결합 / 분배 / 항등원 / 흡수)"
+      "ordering (반사 / 이행 / 반대칭 / 전순서 / 정초)"
+      "logic (modus ponens/tollens / 모순 / 배중률 / 드 모르간)"
+      "quantifier (∀ / ∃ / ∃! / 한정자 교환)"
+      "proof-technique (직접 / 귀납 / 모순법 / 경우 분리 / 반례)"
+      "external-mathlib-cross-reference (Lean/Mathlib paired claim / axiom dependency / unified query)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    defer_owners = [
+      defer_numeric defer_problem_kernel defer_axiom_plate
+      defer_theorem_store defer_induction
+    ];
+    external_lean_defer_owners = [
+      defer_lean_paired
+      defer_lean_axiom_dep
+      defer_lean_korean_axiom
+      defer_lean_graph
+      defer_lean_unified
+      defer_lean_bridge
+      defer_lean_reverse
+      defer_lean_e2e
+      defer_lean_lookup
+    ];
+    external_lean_grounding_owners = [
+      defer_lean_grounded
+      defer_lean_adversarial
+      defer_lean_reasoning_dispatch
+      defer_lean_trace_kernel
+    ];
+    external_lean_grounding_ops = [
+      "ground-proof"
+      "ground-code-invariant"
+      "evidence-vs-proof"
+      "lean-corpus-audit"
+      "verify-trace-certificate"
+    ];
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "defer-targets-returned"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    metaphor =
+      "혈관 위 *피의 네 번째 방울* — 사용자 vision 의 '수학 생성' 직접. "
+      + "박힌 수학 substrate (v0.10-Y 까지 풍부) 와 NL bridge. axiom "
+      + "활성 후 defer_to 로 실제 verifier 호출 path.";
+  };
+
+in {
+  inherit
+    ownerName
+    arithmeticAxiomTree orderingAxiomTree logicAxiomTree
+    quantifierAxiomTree proofTechniqueAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    deferTargetsFor
+    applyMathAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL math axioms NL layer (agent-NL-121)";
+    owner = ownerName;
+    base = "nl-math-axioms-nl-layer-v0";
+    rev_note = "agent-NL-121 (2026-05-29): 수학 axioms NL bridge. 5 family "
+      + "(arithmetic/ordering/logic/quantifier/proof-technique). 각 axiom "
+      + "이 defer_to (numeric-evaluator / problem-kernel / axiom-plate / "
+      + "theorem-store / induction-step) 가리켜 박힌 수학 substrate 호출 "
+      + "가능. Round 37: external-mathlib-cross-reference family 가 Lean "
+      + "paired/dependency/unified query owner 를 cross-cutting defer 로 노출. "
+      + "Round 38: same family also exposes real-corpus LeanDojo grounding "
+      + "and falsifiability owners without rebuilding them. "
+      + "사용자 vision '수학 생성' 직접 매핑. DO NOT REBUILD - 박힌 "
+      + "수학 substrate 와 branch-tree-substrate/Lean owner 만 사용.";
+  };
+}

@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/mlflow-registry-store-plan.px — MLflow registry schema metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# experiment values/artifacts/model files/credentials/live registry rows/invocation/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./mlflow-registry.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "ml.mlflow.registry_schema.v1";
+    source = { name = "MLflow official model registry schema metadata"; license = "Apache-2.0"; scope = "empty seed fallback"; };
+    summary = { source_file_count = 0; proto_file_count = 0; message_count = 0; registry_rpc_count = 0; };
+    source_files = [ ]; proto_files = [ ]; imports = [ ]; messages = [ ]; enums = [ ]; fields = [ ]; registry_rpcs = [ ]; entity_classes = [ ]; entity_attrs = [ ]; enum_tokens = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "mlflow-registry-load-v0";
+      source_lens = "stdlib/lib/corpus/mlflow-registry-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "ml.mlflow.registry_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "mlflow-registry-query-v0";
+      source_lens = "stdlib/lib/corpus/mlflow-registry-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "ml.mlflow.registry_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

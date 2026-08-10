@@ -1,0 +1,164 @@
+let
+  ownerName = "stdlib.nl.category-e2e-demo-v3";
+
+  demoV2 = import nl/category-e2e-demo-v2.px;
+  langCodom = import nl/category-language-codomain-functor.px;
+  verbs = import nl/category-verb-morphism-mapping.px;
+  newDomain = import nl/new-domain-axiom-families.px;
+
+  # === E2E Demo v3 (agent-NL-154) ==================================
+  #
+  # v2 was single-language per call. v3 fan-outs across all 28
+  # supported languages in a single call — true multi-language
+  # codomain functor demo.
+  #
+  # Flow:
+  #   utterance
+  #     ↓ verbs detect + decompose (140 verb table)
+  #     ↓ new-domain axiom family activation
+  #     ↓ codomain functor across ALL 28 languages
+  #     ↓ aggregate per-language emit
+  #     ↓ unified envelope with multi-lang results
+
+  stepKind = "categorical-e2e-demo-v3";
+  framework_step =
+    "v3: 28 lang multi fan-out + 140 verb + 21 axiom family + 12 cat primitives";
+
+  # === Fan-out across all 28 languages =============================
+
+  runFanOut = utterance:
+    let
+      decomp = verbs.buildMorphismsFromAllVerbs utterance;
+      morphisms = decomp.morphisms;
+      verbList = decomp.detected_verbs;
+      newDomActs = newDomain.axiomsActivatedBy utterance;
+      newDomNames = builtins.map (ax: ax.name) newDomActs;
+
+      allLanguages = langCodom.supportedLanguages;
+
+      emitPerLang = lang: {
+        language = lang;
+        emitted =
+          if morphisms == [] then []
+          else langCodom.emitChain morphisms lang;
+      };
+
+      perLangResults = builtins.map emitPerLang allLanguages;
+
+      # Aggregate unknowns
+      allUnknowns =
+        builtins.foldl' (acc: m: acc ++ m.unknowns) [] morphisms;
+      uniqUnknowns =
+        let add = acc: u:
+              if builtins.elem u acc then acc else acc ++ [ u ];
+        in builtins.foldl' add [] allUnknowns;
+
+      question_en =
+        if morphisms == [] then
+          "No verb detected. Clarify."
+        else if uniqUnknowns == [] then
+          builtins.toString (builtins.length morphisms)
+          + " morphisms across "
+          + builtins.toString (builtins.length allLanguages)
+          + " languages. Fully determined."
+        else
+          builtins.toString (builtins.length uniqUnknowns)
+          + " slots required: "
+          + builtins.concatStringsSep ", " uniqUnknowns;
+      question_ko =
+        if morphisms == [] then
+          "verb 감지 안 됨. 행동 명시 필요."
+        else if uniqUnknowns == [] then
+          builtins.toString (builtins.length morphisms)
+          + " morphisms × "
+          + builtins.toString (builtins.length allLanguages)
+          + " 언어. 완전 결정."
+        else
+          builtins.toString (builtins.length uniqUnknowns)
+          + " 개 슬롯 입력 후 실행: "
+          + builtins.concatStringsSep ", " uniqUnknowns;
+    in {
+      outcome = "e2e-demo-v3-fan-out-complete";
+      public = {
+        utterance = utterance;
+        detected_verbs = verbList;
+        verb_count = builtins.length verbList;
+        morphism_count = builtins.length morphisms;
+        step_actions = builtins.map (m: m.action) morphisms;
+        new_domain_axioms_activated = newDomNames;
+        unknown_slot_count = builtins.length uniqUnknowns;
+        unknown_slots = uniqUnknowns;
+        language_count = builtins.length allLanguages;
+        languages = allLanguages;
+        substrate_question_en = question_en;
+        substrate_question_ko = question_ko;
+      };
+      carry = {
+        verbs_decomp = decomp;
+        new_domain_activations = newDomActs;
+        per_language_results = perLangResults;
+        composed_substrates = [
+          "stdlib/lib/nl/category-e2e-demo-v2.px (#149)"
+          "stdlib/lib/nl/category-language-codomain-functor.px (#151+#152)"
+          "stdlib/lib/nl/category-verb-morphism-mapping.px (#139+#140+#141)"
+          "stdlib/lib/nl/new-domain-axiom-families.px (#142..#150)"
+        ];
+        axiom_origin =
+          "axiom-128-nl-category-e2e-demo-v3 "
+          + "(28-lang fan-out + 21 axiom family)";
+      };
+    };
+
+  # === Pick first-N languages for compact output ==================
+
+  runFanOutCompact = utterance: n:
+    let
+      full = runFanOut utterance;
+      compact = builtins.genList (i:
+        if i >= builtins.length full.carry.per_language_results then null
+        else builtins.elemAt full.carry.per_language_results i
+      ) n;
+    in full // {
+      public = full.public // {
+        compact_languages = compact;
+      };
+    };
+
+  # === Plate entry ===============================================
+
+  applyE2EDemoV3Plate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "utterance" request then
+      runFanOut request.utterance
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-category-e2e-demo-v3-axiom-128";
+    composes =
+      "axiom-127-e2e-v2 + axiom-124-lang + axiom-125-verbs + axiom-126-new-domain";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = true;
+    upgrade_over_v2 = {
+      v2_languages_per_call = 1;
+      v3_languages_per_call = builtins.length langCodom.supportedLanguages;
+      v2_axiom_families = 21;
+      v3_axiom_families = 21;
+      v2_verbs = 140;
+      v3_verbs = 140;
+    };
+    primary_outcomes = [
+      "e2e-demo-v3-fan-out-complete"
+    ];
+  };
+
+in {
+  inherit ownerName
+    runFanOut runFanOutCompact applyE2EDemoV3Plate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL category e2e demo v3 (agent-NL-154)";
+    owner = ownerName;
+  };
+}

@@ -1,0 +1,157 @@
+# stdlib.lib.math.bell-numbers
+#
+# OWNER-LAW (v0.12-ABD, div-math, 2026-05-22): Bell numbers and
+# Stirling numbers of the second kind.
+#
+# partition.px counts the partitions of an INTEGER n -- the ways
+# to write n as an unordered sum. This owner counts a different
+# object: the partitions of a SET of n elements -- the ways to
+# split n labelled items into non-empty blocks. The two are
+# genuinely different (p(3) = 3 integer partitions, B(3) = 5 set
+# partitions).
+#
+# # The Bell triangle, and Stirling's second kind
+#
+# `bellNumber` is computed by the Bell triangle (Aitken's array):
+# row 0 is [1]; each next row starts with the last entry of the
+# row above, and every further entry is the previous-in-row plus
+# the entry diagonally above. B(n) is the first entry of row n:
+# 1, 1, 2, 5, 15, 52, 203, 877, ...
+#
+# `stirlingSecond n k` counts the set partitions into EXACTLY k
+# blocks, by the recurrence S(n,k) = k*S(n-1,k) + S(n-1,k-1).
+# B(n) is the sum of S(n,k) over k -- a relation the owner can
+# exhibit.
+#
+# # Standalone, exact
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT integer partitions (partition.px).
+#   - NOT memoised; Bell numbers grow fast, so the plate caps n.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/bell-numbers.px";
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  lastOf = xs: builtins.elemAt xs (builtins.length xs - 1);
+
+  # The next row of the Bell triangle below `prevRow`: it starts
+  # with the last entry of prevRow, and each further entry is the
+  # previous-in-row plus the entry of prevRow at the same offset.
+  nextBellRow = prevRow:
+    let
+      go = i: acc:
+        if i >= builtins.length prevRow then acc
+        else
+          go (i + 1)
+             (acc ++ [ ((lastOf acc) + (builtins.elemAt prevRow i)) ]);
+    in go 0 [ (lastOf prevRow) ];
+
+  # Row n of the Bell triangle (row 0 = [1]).
+  bellTriangleRow = n:
+    let
+      go = k: row:
+        if k >= n then row else go (k + 1) (nextBellRow row);
+    in if n < 0 then [] else go 0 [ 1 ];
+
+  # B(n) -- the number of partitions of an n-element set.
+  bellNumber = n: builtins.head (bellTriangleRow n);
+
+  # [ B(0), B(1), ..., B(n) ].
+  bellList = n:
+    if n < 0 then []
+    else builtins.map bellNumber (rangeList 0 n);
+
+  # Stirling number of the second kind S(n,k): the number of ways
+  # to partition an n-set into exactly k non-empty blocks.
+  stirlingSecond = n: k:
+    if k == 0 then (if n == 0 then 1 else 0)
+    else if k > n then 0
+    else if k == n then 1
+    else k * (stirlingSecond (n - 1) k)
+         + (stirlingSecond (n - 1) (k - 1));
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "bell"
+    "bell-triangle-row"
+    "bell-list"
+    "stirling-second"
+  ];
+
+  bellLimit = 25;
+
+  applyBellNumbers = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      k  = if request ? k then request.k else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 0 then {
+        outcome = "held-negative-number";
+        operation = op;
+        n = n;
+      }
+      else if n > bellLimit then {
+        outcome = "held-argument-too-large";
+        operation = op;
+        n = n;
+        limit = bellLimit;
+        reason = "Bell numbers grow fast; n is capped to stay in 64-bit range";
+      }
+      else if op == "bell" then {
+        outcome = "bell-numbers-computed";
+        operation = op; n = n;
+        value = bellNumber n;
+      }
+      else if op == "bell-triangle-row" then {
+        outcome = "bell-numbers-computed";
+        operation = op; n = n;
+        row = bellTriangleRow n;
+      }
+      else if op == "bell-list" then {
+        outcome = "bell-numbers-computed";
+        operation = op; n = n;
+        list = bellList n;
+      }
+      else
+        # op == "stirling-second"
+        if k < 0 then {
+          outcome = "held-negative-block-count";
+          operation = op; k = k;
+        }
+        else {
+          outcome = "bell-numbers-computed";
+          operation = op; n = n; k = k;
+          value = stirlingSecond n k;
+        };
+
+in {
+  inherit
+    ownerName
+    nextBellRow
+    bellTriangleRow
+    bellNumber
+    bellList
+    stirlingSecond
+    knownOperations
+    applyBellNumbers;
+  meta = {
+    source = "stdlib math bell numbers";
+    owner = ownerName;
+    base = "parametric-math-bell-numbers-v0";
+    rev_note = "v0.12-ABD (div-math): Bell numbers and Stirling numbers of the second kind. bellNumber B(n) (set partitions of an n-set) via the Bell triangle / Aitken's array -- 1,1,2,5,15,52,203,877; stirlingSecond S(n,k) (set partitions into exactly k blocks) by S(n,k)=k*S(n-1,k)+S(n-1,k-1); B(n) is the sum of S(n,k). Distinct from partition.px (integer partitions). Standalone, exact. NOT memoised (n capped), NOT yet a registered lens.";
+  };
+}

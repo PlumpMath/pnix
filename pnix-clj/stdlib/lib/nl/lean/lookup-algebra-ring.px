@@ -1,0 +1,590 @@
+# AUTO-GENERATED — algebra-ring
+# Entries: 83
+let
+  ownerName = "stdlib.nl.lean.lookup-algebra-ring";
+  category = "algebra-ring";
+  entries = [
+    {
+      full_name = "Distrib";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 59;
+      code_preview = "class Distrib (R : Type*) extends Mul R, Add R where      protected left_distrib : ∀ a b c : R, a * (b + c) = a * b + a * c      protected right_distrib : ∀ a b c : R, (a + b) * c = a * c + b * c";
+    }
+    {
+      full_name = "LeftDistribClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 67;
+      code_preview = "class LeftDistribClass (R : Type*) [Mul R] [Add R] : Prop where      protected left_distrib : ∀ a b c : R, a * (b + c) = a * b + a * c";
+    }
+    {
+      full_name = "RightDistribClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 72;
+      code_preview = "class RightDistribClass (R : Type*) [Mul R] [Add R] : Prop where      protected right_distrib : ∀ a b c : R, (a + b) * c = a * c + b * c";
+    }
+    {
+      full_name = "Distrib.leftDistribClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 78;
+      code_preview = "instance (priority := 100) Distrib.leftDistribClass (R : Type*) [Distrib R] : LeftDistribClass R :=   ⟨Distrib.left_distrib⟩";
+    }
+    {
+      full_name = "Distrib.rightDistribClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 82;
+      code_preview = "instance (priority := 100) Distrib.rightDistribClass (R : Type*) [Distrib R] :     RightDistribClass R :=   ⟨Distrib.right_distrib⟩";
+    }
+    {
+      full_name = "left_distrib";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 86;
+      code_preview = "theorem left_distrib [Mul R] [Add R] [LeftDistribClass R] (a b c : R) :     a * (b + c) = a * b + a * c";
+    }
+    {
+      full_name = "right_distrib";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 92;
+      code_preview = "theorem right_distrib [Mul R] [Add R] [RightDistribClass R] (a b c : R) :     (a + b) * c = a * c + b * c";
+    }
+    {
+      full_name = "distrib_three_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 98;
+      code_preview = "theorem distrib_three_right [Mul R] [Add R] [RightDistribClass R] (a b c d : R) :     (a + b + c) * d = a * d + b * d + c * d";
+    }
+    {
+      full_name = "NonUnitalNonAssocSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 115;
+      code_preview = "class NonUnitalNonAssocSemiring (α : Type u) extends AddCommMonoid α, Distrib α, MulZeroClass α";
+    }
+    {
+      full_name = "NonUnitalSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 120;
+      code_preview = "class NonUnitalSemiring (α : Type u) extends NonUnitalNonAssocSemiring α, SemigroupWithZero α";
+    }
+    {
+      full_name = "NonAssocSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 123;
+      code_preview = "class NonAssocSemiring (α : Type u) extends NonUnitalNonAssocSemiring α, MulZeroOneClass α,     AddCommMonoidWithOne α";
+    }
+    {
+      full_name = "NonUnitalNonAssocRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 127;
+      code_preview = "class NonUnitalNonAssocRing (α : Type u) extends AddCommGroup α, NonUnitalNonAssocSemiring α";
+    }
+    {
+      full_name = "NonUnitalRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 130;
+      code_preview = "class NonUnitalRing (α : Type*) extends NonUnitalNonAssocRing α, NonUnitalSemiring α";
+    }
+    {
+      full_name = "NonAssocRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 133;
+      code_preview = "class NonAssocRing (α : Type*) extends NonUnitalNonAssocRing α, NonAssocSemiring α,     AddCommGroupWithOne α";
+    }
+    {
+      full_name = "Semiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 137;
+      code_preview = "class Semiring (α : Type u) extends NonUnitalSemiring α, NonAssocSemiring α, MonoidWithZero α";
+    }
+    {
+      full_name = "Ring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 142;
+      code_preview = "class Ring (R : Type u) extends Semiring R, AddCommGroup R, AddGroupWithOne R";
+    }
+    {
+      full_name = "add_one_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 153;
+      code_preview = "theorem add_one_mul [RightDistribClass α] (a b : α) : (a + 1) * b = a * b + b";
+    }
+    {
+      full_name = "mul_add_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 156;
+      code_preview = "theorem mul_add_one [LeftDistribClass α] (a b : α) : a * (b + 1) = a * b + a";
+    }
+    {
+      full_name = "one_add_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 159;
+      code_preview = "theorem one_add_mul [RightDistribClass α] (a b : α) : (1 + a) * b = b + a * b";
+    }
+    {
+      full_name = "mul_one_add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 162;
+      code_preview = "theorem mul_one_add [LeftDistribClass α] (a b : α) : a * (1 + b) = a + a * b";
+    }
+    {
+      full_name = "two_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 172;
+      code_preview = "theorem two_mul (n : α) : 2 * n = n + n";
+    }
+    {
+      full_name = "mul_two";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 176;
+      code_preview = "theorem mul_two (n : α) : n * 2 = n + n";
+    }
+    {
+      full_name = "ite_zero_mul";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 184;
+      code_preview = "lemma ite_zero_mul : ite P a 0 * b = ite P (a * b) 0 := by simp";
+    }
+    {
+      full_name = "mul_ite_zero";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 186;
+      code_preview = "lemma mul_ite_zero : a * ite P b 0 = ite P (a * b) 0 := by simp";
+    }
+    {
+      full_name = "ite_zero_mul_ite_zero";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 188;
+      code_preview = "lemma ite_zero_mul_ite_zero : ite P a 0 * ite Q b 0 = ite (P ∧ Q) (a * b) 0 := by   simp only [← ite_and, ite_mul, mul_ite, mul_zero, zero_mul, and_comm]";
+    }
+    {
+      full_name = "mul_boole";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 193;
+      code_preview = "theorem mul_boole {α} [MulZeroOneClass α] (P : Prop) [Decidable P] (a : α) :     (a * if P then 1 else 0) = if P then a else 0";
+    }
+    {
+      full_name = "boole_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 196;
+      code_preview = "theorem boole_mul {α} [MulZeroOneClass α] (P : Prop) [Decidable P] (a : α) :     (if P then 1 else 0) * a = if P then a else 0";
+    }
+    {
+      full_name = "NonUnitalNonAssocCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 199;
+      code_preview = "class NonUnitalNonAssocCommSemiring (α : Type u) extends NonUnitalNonAssocSemiring α, CommMagma α";
+    }
+    {
+      full_name = "NonUnitalCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 202;
+      code_preview = "class NonUnitalCommSemiring (α : Type u) extends NonUnitalSemiring α, CommSemigroup α";
+    }
+    {
+      full_name = "CommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 208;
+      code_preview = "class CommSemiring (R : Type u) extends Semiring R, CommMonoid R";
+    }
+    {
+      full_name = "CommSemiring.toNonUnitalCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 212;
+      code_preview = "instance (priority := 100) CommSemiring.toNonUnitalCommSemiring [CommSemiring α] :     NonUnitalCommSemiring α :=   { inferInstanceAs (CommMonoid α), inferInstanceAs (CommSemiring α) with }";
+    }
+    {
+      full_name = "CommSemiring.toCommMonoidWithZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 217;
+      code_preview = "instance (priority := 100) CommSemiring.toCommMonoidWithZero [CommSemiring α] :     CommMonoidWithZero α :=   { inferInstanceAs (CommMonoid α), inferInstanceAs (CommSemiring α) with }";
+    }
+    {
+      full_name = "add_mul_self_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 225;
+      code_preview = "theorem add_mul_self_eq (a b : α) : (a + b) * (a + b) = a * a + 2 * a * b + b * b";
+    }
+    {
+      full_name = "add_sq";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 228;
+      code_preview = "lemma add_sq (a b : α) : (a + b) ^ 2 = a ^ 2 + 2 * a * b + b ^ 2 := by   simp only [sq, add_mul_self_eq]";
+    }
+    {
+      full_name = "add_sq'";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 231;
+      code_preview = "lemma add_sq' (a b : α) : (a + b) ^ 2 = a ^ 2 + b ^ 2 + 2 * a * b := by   rw [add_sq, add_assoc, add_comm _ (b ^ 2), add_assoc]";
+    }
+    {
+      full_name = "HasDistribNeg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 240;
+      code_preview = "class HasDistribNeg (α : Type*) [Mul α] extends InvolutiveNeg α where      neg_mul : ∀ x y : α, -x * y = -(x * y)      mul_neg : ∀ x y : α, x * -y = -(x * y)";
+    }
+    {
+      full_name = "neg_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 254;
+      code_preview = "@[simp] theorem neg_mul (a b : α) : -a * b = -(a * b)";
+    }
+    {
+      full_name = "mul_neg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 258;
+      code_preview = "@[simp] theorem mul_neg (a b : α) : a * -b = -(a * b)";
+    }
+    {
+      full_name = "neg_mul_neg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 262;
+      code_preview = "theorem neg_mul_neg (a b : α) : -a * -b = a * b";
+    }
+    {
+      full_name = "neg_mul_eq_neg_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 264;
+      code_preview = "theorem neg_mul_eq_neg_mul (a b : α) : -(a * b) = -a * b";
+    }
+    {
+      full_name = "neg_mul_eq_mul_neg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 267;
+      code_preview = "theorem neg_mul_eq_mul_neg (a b : α) : -(a * b) = a * -b";
+    }
+    {
+      full_name = "neg_mul_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 270;
+      code_preview = "theorem neg_mul_comm (a b : α) : -a * b = a * -b";
+    }
+    {
+      full_name = "neg_eq_neg_one_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 278;
+      code_preview = "theorem neg_eq_neg_one_mul (a : α) : -a = -1 * a";
+    }
+    {
+      full_name = "mul_neg_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 280;
+      code_preview = "theorem mul_neg_one (a : α) : a * -1 = -a";
+    }
+    {
+      full_name = "neg_one_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 284;
+      code_preview = "theorem neg_one_mul (a : α) : -1 * a = -a";
+    }
+    {
+      full_name = "MulZeroClass.negZeroClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 294;
+      code_preview = "instance (priority := 100) MulZeroClass.negZeroClass : NegZeroClass α where   __ := inferInstanceAs (Zero α); __ := inferInstanceAs (InvolutiveNeg α)   neg_zero := by rw [← zero_mul (0 : α), ← neg_mul, mul_zero, mul_zero]";
+    }
+    {
+      full_name = "NonUnitalNonAssocRing.toHasDistribNeg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 310;
+      code_preview = "instance (priority := 100) NonUnitalNonAssocRing.toHasDistribNeg : HasDistribNeg α where   neg := Neg.neg   neg_neg := neg_neg   neg_mul a b := eq_neg_of_add_eq_zero_left <| by rw [← right_distrib, neg_add_cancel, zero_mul]   mul_neg a b := eq_neg_of_add_eq_zero_left <| by rw [← left_distrib, neg_ad";
+    }
+    {
+      full_name = "mul_sub_left_distrib";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 316;
+      code_preview = "theorem mul_sub_left_distrib (a b c : α) : a * (b - c) = a * b - a * c";
+    }
+    {
+      full_name = "mul_sub_right_distrib";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 321;
+      code_preview = "theorem mul_sub_right_distrib (a b c : α) : (a - b) * c = a * c - b * c";
+    }
+    {
+      full_name = "sub_one_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Defs.lean";
+      start_line = 332;
+      code_preview = "theorem sub_one_mul (a b : α) : (a - 1) * b = a * b - b";
+    }
+    {
+      full_name = "AddHom.mulLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 29;
+      code_preview = "@[simps -fullyApplied] def mulLeft [Distrib R] (r : R) : AddHom R R where   toFun := (r * ·)   map_add' := mul_add r";
+    }
+    {
+      full_name = "AddHom.mulRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 35;
+      code_preview = "@[simps -fullyApplied] def mulRight [Distrib R] (r : R) : AddHom R R where   toFun a := a * r   map_add' _ _ := add_mul _ _ r";
+    }
+    {
+      full_name = "AddMonoidHom.mulLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 45;
+      code_preview = "def mulLeft [NonUnitalNonAssocSemiring R] (r : R) : R →+ R where   toFun := (r * ·)   map_zero' := mul_zero r   map_add' := mul_add r";
+    }
+    {
+      full_name = "AddMonoidHom.coe_mulLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 51;
+      code_preview = "@[simp] theorem coe_mulLeft [NonUnitalNonAssocSemiring R] (r : R) :     (mulLeft r : R → R) = HMul.hMul r";
+    }
+    {
+      full_name = "AddMonoidHom.mulRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 56;
+      code_preview = "def mulRight [NonUnitalNonAssocSemiring R] (r : R) : R →+ R where   toFun a := a * r   map_zero' := zero_mul r   map_add' _ _ := add_mul _ _ r";
+    }
+    {
+      full_name = "AddMonoidHom.coe_mulRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 62;
+      code_preview = "@[simp] theorem coe_mulRight [NonUnitalNonAssocSemiring R] (r : R) :     (mulRight r) = (· * r)";
+    }
+    {
+      full_name = "AddMonoidHom.mulRight_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 67;
+      code_preview = "theorem mulRight_apply [NonUnitalNonAssocSemiring R] (a r : R) :     mulRight r a = a * r";
+    }
+    {
+      full_name = "MulOpposite.instHasDistribNeg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 81;
+      code_preview = "instance MulOpposite.instHasDistribNeg : HasDistribNeg αᵐᵒᵖ where   neg_mul _ _ := unop_injective <| mul_neg _ _   mul_neg _ _ := unop_injective <| neg_mul _ _";
+    }
+    {
+      full_name = "vieta_formula_quadratic";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 95;
+      code_preview = "theorem vieta_formula_quadratic {b c x : α} (h : x * x - b * x + c = 0) :     ∃ y : α, y * y - b * y + c = 0 ∧ x + y = b ∧ x * y = c";
+    }
+    {
+      full_name = "succ_ne_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 107;
+      code_preview = "theorem succ_ne_self {α : Type*} [NonAssocRing α] [Nontrivial α] (a : α) : a + 1 ≠ a";
+    }
+    {
+      full_name = "pred_ne_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 110;
+      code_preview = "theorem pred_ne_self {α : Type*} [NonAssocRing α] [Nontrivial α] (a : α) : a - 1 ≠ a";
+    }
+    {
+      full_name = "IsLeftCancelMulZero.to_noZeroDivisors";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 117;
+      code_preview = "lemma IsLeftCancelMulZero.to_noZeroDivisors [MulZeroClass α]     [IsLeftCancelMulZero α] : NoZeroDivisors α where   eq_zero_or_eq_zero_of_mul_eq_zero {x _} h :=     or_iff_not_imp_left.mpr fun ne ↦ mul_left_cancel₀ ne ((mul_zero x).symm ▸ h)";
+    }
+    {
+      full_name = "IsRightCancelMulZero.to_noZeroDivisors";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 122;
+      code_preview = "lemma IsRightCancelMulZero.to_noZeroDivisors [MulZeroClass α]     [IsRightCancelMulZero α] : NoZeroDivisors α where   eq_zero_or_eq_zero_of_mul_eq_zero {_ y} h :=     or_iff_not_imp_right.mpr fun ne ↦ mul_right_cancel₀ ne ((zero_mul y).symm ▸ h)";
+    }
+    {
+      full_name = "NoZeroDivisors.to_isCancelMulZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 127;
+      code_preview = "instance (priority := 100) NoZeroDivisors.to_isCancelMulZero     [NonUnitalNonAssocRing α] [NoZeroDivisors α] :     IsCancelMulZero α where   mul_left_cancel_of_ne_zero ha h := by     rw [← sub_eq_zero, ← mul_sub] at h     exact sub_eq_zero.1 ((eq_zero_or_eq_zero_of_mul_eq_zero h).resolve_left ha)  ";
+    }
+    {
+      full_name = "isCancelMulZero_iff_noZeroDivisors";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 137;
+      code_preview = "lemma isCancelMulZero_iff_noZeroDivisors [NonUnitalNonAssocRing α] :     IsCancelMulZero α ↔ NoZeroDivisors α :=   ⟨fun _ => IsRightCancelMulZero.to_noZeroDivisors _, fun _ => inferInstance⟩";
+    }
+    {
+      full_name = "NoZeroDivisors.to_isDomain";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 142;
+      code_preview = "lemma NoZeroDivisors.to_isDomain [Ring α] [h : Nontrivial α] [NoZeroDivisors α] :     IsDomain α :=   { NoZeroDivisors.to_isCancelMulZero α, h with .. }";
+    }
+    {
+      full_name = "IsDomain.to_noZeroDivisors";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 146;
+      code_preview = "instance (priority := 100) IsDomain.to_noZeroDivisors [Semiring α] [IsDomain α] :     NoZeroDivisors α :=   IsRightCancelMulZero.to_noZeroDivisors α";
+    }
+    {
+      full_name = "Subsingleton.to_isCancelMulZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 150;
+      code_preview = "instance Subsingleton.to_isCancelMulZero [Mul α] [Zero α] [Subsingleton α] : IsCancelMulZero α where   mul_right_cancel_of_ne_zero hb := (hb <| Subsingleton.eq_zero _).elim   mul_left_cancel_of_ne_zero hb := (hb <| Subsingleton.eq_zero _).elim";
+    }
+    {
+      full_name = "Subsingleton.to_noZeroDivisors";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 154;
+      code_preview = "instance Subsingleton.to_noZeroDivisors [Mul α] [Zero α] [Subsingleton α] : NoZeroDivisors α where   eq_zero_or_eq_zero_of_mul_eq_zero _ := .inl (Subsingleton.eq_zero _)";
+    }
+    {
+      full_name = "isDomain_iff_cancelMulZero_and_nontrivial";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 157;
+      code_preview = "lemma isDomain_iff_cancelMulZero_and_nontrivial [Semiring α] :     IsDomain α ↔ IsCancelMulZero α ∧ Nontrivial α :=   ⟨fun _ => ⟨inferInstance, inferInstance⟩, fun ⟨_, _⟩ => {}⟩";
+    }
+    {
+      full_name = "isCancelMulZero_iff_isDomain_or_subsingleton";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 161;
+      code_preview = "lemma isCancelMulZero_iff_isDomain_or_subsingleton [Semiring α] :     IsCancelMulZero α ↔ IsDomain α ∨ Subsingleton α := by   refine ⟨fun t ↦ ?_, fun h ↦ h.elim (fun _ ↦ inferInstance) (fun _ ↦ inferInstance)⟩   rw [or_iff_not_imp_right, not_subsingleton_iff_nontrivial]   exact fun _ ↦ {}";
+    }
+    {
+      full_name = "isDomain_iff_noZeroDivisors_and_nontrivial";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 167;
+      code_preview = "lemma isDomain_iff_noZeroDivisors_and_nontrivial [Ring α] :     IsDomain α ↔ NoZeroDivisors α ∧ Nontrivial α := by   rw [← isCancelMulZero_iff_noZeroDivisors, isDomain_iff_cancelMulZero_and_nontrivial]";
+    }
+    {
+      full_name = "noZeroDivisors_iff_isDomain_or_subsingleton";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 171;
+      code_preview = "lemma noZeroDivisors_iff_isDomain_or_subsingleton [Ring α] :     NoZeroDivisors α ↔ IsDomain α ∨ Subsingleton α := by   rw [← isCancelMulZero_iff_noZeroDivisors, isCancelMulZero_iff_isDomain_or_subsingleton]";
+    }
+    {
+      full_name = "one_div_neg_one_eq_neg_one";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 180;
+      code_preview = "lemma one_div_neg_one_eq_neg_one : (1 : R) / -1 = -1 :=   have : -1 * -1 = (1 : R) := by rw [neg_mul_neg, one_mul]   Eq.symm (eq_one_div_of_mul_eq_one_right this)";
+    }
+    {
+      full_name = "one_div_neg_eq_neg_one_div";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 184;
+      code_preview = "lemma one_div_neg_eq_neg_one_div (a : R) : 1 / -a = -(1 / a) :=   calc     1 / -a = 1 / (-1 * a) := by rw [neg_eq_neg_one_mul]     _ = 1 / a * (1 / -1) := by rw [one_div_mul_one_div_rev]     _ = 1 / a * -1 := by rw [one_div_neg_one_eq_neg_one]     _ = -(1 / a) := by rw [mul_neg, mul_one]";
+    }
+    {
+      full_name = "div_neg_eq_neg_div";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 191;
+      code_preview = "lemma div_neg_eq_neg_div (a b : R) : b / -a = -(b / a) :=   calc     b / -a = b * (1 / -a) := by rw [← inv_eq_one_div, division_def]     _ = b * -(1 / a) := by rw [one_div_neg_eq_neg_one_div]     _ = -(b * (1 / a)) := by rw [neg_mul_eq_mul_neg]     _ = -(b / a) := by rw [mul_one_div]";
+    }
+    {
+      full_name = "neg_div";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 198;
+      code_preview = "lemma neg_div (a b : R) : -b / a = -(b / a) := by   rw [neg_eq_neg_one_mul, mul_div_assoc, ← neg_eq_neg_one_mul]";
+    }
+    {
+      full_name = "neg_div'";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 201;
+      code_preview = "@[field_simps] lemma neg_div' (a b : R) : -(b / a) = -b / a := by simp [neg_div]";
+    }
+    {
+      full_name = "neg_div_neg_eq";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 204;
+      code_preview = "@[simp] lemma neg_div_neg_eq (a b : R) : -a / -b = a / b := by rw [div_neg_eq_neg_div, neg_div, neg_neg]";
+    }
+    {
+      full_name = "neg_inv";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 207;
+      code_preview = "lemma neg_inv : -a⁻¹ = (-a)⁻¹ := by rw [inv_eq_one_div, inv_eq_one_div, div_neg_eq_neg_div]";
+    }
+    {
+      full_name = "div_neg";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 209;
+      code_preview = "lemma div_neg (a : R) : a / -b = -(a / b) := by rw [← div_neg_eq_neg_div]";
+    }
+    {
+      full_name = "inv_neg";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 211;
+      code_preview = "@[simp] lemma inv_neg : (-a)⁻¹ = -a⁻¹ := by rw [neg_inv]";
+    }
+    {
+      full_name = "inv_neg_one";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Ring/Basic.lean";
+      start_line = 217;
+      code_preview = "lemma inv_neg_one : (-1 : R)⁻¹ = -1 := by rw [← neg_inv, inv_one]";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

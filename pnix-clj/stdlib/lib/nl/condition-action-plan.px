@@ -1,0 +1,53 @@
+# MR13 -- condition->action plan owner.
+#
+# Judges `algorithm.if-then` candidates lifted by the nl_corpus generic rule
+# lane (MR11/MR12): the cue stream and rule rows produced a candidate with
+# condition/action stems + event kinds + an obligation flag; THIS owner decides
+# whether that candidate is a well-formed plan candidate or Held. Rust ferries
+# the typed request and the verdict only (no semantic branching host-side).
+#
+# Constitution: candidate_only stays true and effect_allowed stays false --
+# a plan candidate is evidence for a later execution gate, never an action.
+# Lens-registry registration (mirror introspection row) is the next slice;
+# this owner-direct ferry is the transport witness for it.
+{
+  liftConditionActionPlan = request:
+    let
+      relation = if request ? relation_kind then request.relation_kind else "";
+      conditionStem = if request ? condition_stem then request.condition_stem else "";
+      actionStem = if request ? action_stem then request.action_stem else "";
+      conditionEvent = if request ? condition_event then request.condition_event else "";
+      actionEvent = if request ? action_event then request.action_event else "";
+      obligation = if request ? modality_obligation then request.modality_obligation else false;
+      cueRefCount = if request ? cue_ref_count then request.cue_ref_count else 0;
+      held = outcome: reason: {
+        inherit outcome reason;
+        relation_kind = relation;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/condition-action-plan.px";
+      };
+    in
+    if relation != "algorithm.if-then" then
+      held "held-unknown-relation" "owner only judges algorithm.if-then candidates"
+    else if conditionStem == "" || conditionEvent == "" then
+      held "held-missing-condition" "condition stem/event evidence incomplete"
+    else if actionStem == "" || actionEvent == "" then
+      held "held-missing-action" "action stem/event evidence incomplete"
+    else {
+      outcome = "plan-candidate-ready";
+      plan = {
+        kind = "if-then";
+        condition = { event = conditionEvent; stem = conditionStem; };
+        action = { event = actionEvent; stem = actionStem; obligation = obligation; };
+      };
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/condition-action-plan.px";
+      receipt = {
+        verdict = "plan-candidate-ready";
+        cue_ref_count = cueRefCount;
+        next_gate = "execution-approval-gate";
+      };
+    };
+}

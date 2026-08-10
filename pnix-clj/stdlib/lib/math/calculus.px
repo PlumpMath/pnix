@@ -1,0 +1,160 @@
+# stdlib.lib.math.calculus
+#
+# OWNER-LAW (v0.12-AAH, div-math, 2026-05-21): exact polynomial
+# calculus.
+#
+# polynomial.px gave the math kernel the formal derivative of a
+# polynomial. Its other half -- the integral -- was missing,
+# because integration leaves the integers: the antiderivative of
+# `x` is `x^2 / 2`, a rational coefficient. This owner closes the
+# pair by representing antiderivatives with exact rational
+# coefficients.
+#
+# # Exact, by the power rule
+#
+#   d/dx of  a_i x^i      = i a_i x^(i-1)
+#   integral of a_i x^i   = a_i/(i+1) x^(i+1)
+#
+# `integratePolynomial` takes an integer-coefficient polynomial
+# and returns the antiderivative as a list of exact RATIONAL
+# coefficients (the constant of integration is fixed at 0).
+#
+# `definiteIntegral` evaluates F(hi) - F(lo) for that
+# antiderivative F -- the Fundamental Theorem of Calculus -- and
+# the result is one exact rational. The signed area under a
+# polynomial, with no rounding.
+#
+# # Kernel layering
+#
+# calculus -> rational -> number-theory. Integer-coefficient
+# polynomials are the input; rational coefficients are the output.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT symbolic calculus beyond polynomials -- no chain rule,
+#     no transcendental functions, no limits.
+#   - NOT numerical integration -- this is exact, by the power
+#     rule, not a quadrature approximation.
+#   - NOT multivariate.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/calculus.px";
+
+  rational = import ./rational.px;
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  intPow = base: exp:
+    if exp == 0 then 1 else base * (intPow base (exp - 1));
+
+  # Formal derivative of an integer-coefficient polynomial
+  # [a0 a1 a2 ...]: drop a0, scale each remaining a_i by i. The
+  # derivative of a constant is [0].
+  derivativePolynomial = coeffs:
+    let n = builtins.length coeffs;
+    in
+      if n <= 1 then [ 0 ]
+      else builtins.map
+             (i: i * (builtins.elemAt coeffs i))
+             (rangeList 1 (n - 1));
+
+  # Antiderivative of an integer-coefficient polynomial, as a list
+  # of exact RATIONAL coefficients. Index 0 is the constant of
+  # integration, fixed at 0; index i+1 is a_i/(i+1).
+  integratePolynomial = coeffs:
+    let n = builtins.length coeffs;
+    in
+      [ rational.ratZero ]
+      ++ builtins.map
+           (i: rational.mkRational (builtins.elemAt coeffs i) (i + 1))
+           (rangeList 0 (n - 1));
+
+  # Evaluate a rational-coefficient polynomial at an integer x.
+  evalRationalPoly = ratCoeffs: x:
+    let
+      n = builtins.length ratCoeffs;
+      term = i:
+        rational.ratMul
+          (builtins.elemAt ratCoeffs i)
+          (rational.ratFromInt (intPow x i));
+    in
+      if n == 0 then rational.ratZero
+      else
+        builtins.foldl'
+          (acc: i: rational.ratAdd acc (term i))
+          rational.ratZero
+          (rangeList 0 (n - 1));
+
+  # The definite integral of an integer-coefficient polynomial
+  # from lo to hi, by the Fundamental Theorem of Calculus:
+  # F(hi) - F(lo) for the antiderivative F. Exact rational.
+  definiteIntegral = coeffs: lo: hi:
+    let
+      antideriv = integratePolynomial coeffs;
+    in
+      rational.ratSub
+        (evalRationalPoly antideriv hi)
+        (evalRationalPoly antideriv lo);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "derivative"
+    "integral"
+    "definite-integral"
+  ];
+
+  applyCalculus = request:
+    let
+      op = request.operation;
+      coeffs = if request ? coeffs then request.coeffs else [];
+      lo = if request ? lo then request.lo else 0;
+      hi = if request ? hi then request.hi else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "derivative" then {
+        outcome = "calculus-computed";
+        operation = op;
+        coefficients = derivativePolynomial coeffs;
+      }
+      else if op == "integral" then {
+        outcome = "calculus-computed";
+        operation = op;
+        coefficient_texts =
+          builtins.map rational.ratToString
+            (integratePolynomial coeffs);
+      }
+      else
+        # op == "definite-integral"
+        let v = definiteIntegral coeffs lo hi;
+        in {
+          outcome = "calculus-computed";
+          operation = op;
+          lo = lo; hi = hi;
+          num = v.num;
+          den = v.den;
+          text = rational.ratToString v;
+        };
+
+in {
+  inherit
+    ownerName
+    derivativePolynomial
+    integratePolynomial
+    evalRationalPoly
+    definiteIntegral
+    knownOperations
+    applyCalculus;
+  meta = {
+    source = "stdlib math calculus";
+    owner = ownerName;
+    base = "parametric-math-calculus-v0";
+    rev_note = "v0.12-AAH (div-math): exact polynomial calculus owner -- the integral half that polynomial.px's derivative lacked. derivativePolynomial (integer coefficients) and integratePolynomial (exact rational coefficients, by the power rule a_i/(i+1)); definiteIntegral evaluates F(hi)-F(lo) by the Fundamental Theorem of Calculus, returning one exact rational -- the signed area, no rounding. Kernel layering: calculus -> rational. NOT symbolic calculus beyond polynomials, NOT numerical quadrature, NOT multivariate, NOT yet a registered lens.";
+  };
+}

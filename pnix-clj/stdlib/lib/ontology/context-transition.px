@@ -1,0 +1,375 @@
+# stdlib.lib.ontology.context-transition
+#
+# Candidate context transition contract over typed predicate morphisms. This
+# owner does not materialize a context graph, query or emit ontology facts,
+# promote facts, persist discourse state, or write pnix-db. It shapes the
+# transition candidate that later semantic-chain/materialized-view owners can
+# consume.
+let
+  ownerName = "stdlib.lib.ontology.context-transition";
+
+  predicateMorphismOwner = import ./predicate-morphism.px;
+  canonicalFactKeyPolicy = import ./canonical-fact-key-policy.px;
+  factBuilderPolicy = import ../gate/conversation-fact-builder-policy.px;
+  heldReopenCycle = import ../agent/held-reopen-cycle-contract.px;
+  provenanceSupersede = import ../provenance/provenance-supersede-substrate.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  listAttrOr = attrs: key:
+    let v = getAttrOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  predicateMorphismFrom = req:
+    if hasAttr req "predicate_morphism" && builtins.isAttrs req.predicate_morphism then
+      req.predicate_morphism
+    else if hasAttr req "predicate_morphism_contract" && builtins.isAttrs req.predicate_morphism_contract then
+      req.predicate_morphism_contract
+    else if hasAttr req "plan" && builtins.isAttrs req.plan then
+      req.plan
+    else { };
+
+  utteranceFactFrom = req:
+    if hasAttr req "utterance_fact" && builtins.isAttrs req.utterance_fact then
+      req.utterance_fact
+    else if hasAttr req "fact" && builtins.isAttrs req.fact then
+      req.fact
+    else { };
+
+  factKeyFor = fact:
+    canonicalFactKeyPolicy.applyCanonicalFactKeyPolicy {
+      fact = fact;
+    };
+
+  factKeyOk = keyVerdict:
+    builtins.isAttrs keyVerdict
+    && stringAttrOr keyVerdict "verdict" "" == "canonical-key-emitted"
+    && stringAttrOr keyVerdict "canonical_key" "" != "";
+
+  sourcePredicateMorphismOk = plan:
+    builtins.isAttrs plan
+    && stringAttrOr plan "schema" "" == "puncheetah.ontology-predicate-morphism.v0"
+    && stringAttrOr plan "outcome" "" == "ontology-predicate-morphism-built"
+    && getBool plan "verified" false == true
+    && getBool plan "predicate_morphism_contract_built" false == true
+    && getBool plan "candidate_only" false == true
+    && getBool plan "object_type_ontology_introduced" true == false
+    && getBool plan "composition_execution_allowed" true == false
+    && getBool plan "predicate_chain_execution_allowed" true == false
+    && getBool plan "ontology_query_allowed" true == false
+    && getBool plan "ontology_emit_allowed" true == false
+    && getBool plan "ontology_promote_allowed" true == false
+    && getBool plan "accepted_fact_promotion_allowed" true == false
+    && getBool plan "learning_promotion_allowed" true == false
+    && getBool plan "memory_write_allowed" true == false
+    && getBool plan "db_write_allowed" true == false
+    && getBool plan "policy_persistence_allowed" true == false;
+
+  validJudgementActions = [
+    "Accept"
+    "Hold"
+    "Reopen"
+    "Supersede"
+  ];
+
+  lifecycleStatusFor = action:
+    if action == "Accept" then "Candidate"
+    else if action == "Hold" then "Held"
+    else if action == "Reopen" then "Reopened"
+    else if action == "Supersede" then "Superseded"
+    else "Held";
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "predicate_chain_execution_requested" false
+    || getBool req "context_transition_execution_requested" false
+    || getBool req "semantic_chain_traversal_requested" false
+    || getBool req "materialized_context_graph_write_requested" false
+    || getBool req "context_graph_write_requested" false
+    || getBool req "discourse_state_write_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  reopenRequestOk = reopenRequest:
+    builtins.isAttrs reopenRequest
+    && stringAttrOr reopenRequest "kind" "" == "held-reopen-cycle-envelope"
+    && stringAttrOr reopenRequest "verdict" "" == "reopen-request-built"
+    && getBool reopenRequest "is_held" true == false
+    && builtins.isAttrs (getAttrOr reopenRequest "reopen_request" { });
+
+  supersedePairOk = pair:
+    builtins.isAttrs pair
+    && stringAttrOr pair "outcome" "" == "supersede-pair-built"
+    && builtins.isAttrs (getAttrOr pair "old_receipt_marked_superseded" { })
+    && builtins.isAttrs (getAttrOr pair "new_receipt" { });
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.ontology-context-transition.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    context_transition_contract_built = false;
+    source_predicate_morphism_verified = false;
+    candidate_only = true;
+    materialized_context_graph_write_allowed = false;
+    discourse_state_write_allowed = false;
+    semantic_chain_traversal_allowed = false;
+    context_transition_execution_allowed = false;
+    predicate_chain_execution_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    reason = reason;
+    negative_receipt = {
+      kind = "ontology-context-transition-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "context transition contracts cannot execute semantic traversal, materialize graph views, query/emit/promote ontology facts, write memory/DB, persist discourse state, or accept facts";
+    };
+    receipt = {
+      kind = "ontology-context-transition-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      materialized_context_graph_write_allowed = false;
+      discourse_state_write_allowed = false;
+      semantic_chain_traversal_allowed = false;
+      accepted_fact_promotion_allowed = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName validJudgementActions;
+
+  buildOntologyContextTransition = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-ontology-context-transition-non-attr-request" "Context transition request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-ontology-context-transition-effect-blocked" "Context transition is contract-only; it cannot execute traversal, materialize graph/discourse state, query/emit/promote ontology facts, write memory/DB, persist policy, route, or write code." { }
+    else
+      let
+        source = predicateMorphismFrom req;
+        fact = utteranceFactFrom req;
+        factKey = factKeyFor fact;
+        fromContext = stringAttrOr req "from_context" "";
+        toContext =
+          let explicit = stringAttrOr req "to_context" "";
+          in if explicit != "" then explicit else fromContext + "::transition-candidate";
+        action = stringAttrOr req "judgement_action" "";
+        activeFacts = listAttrOr req "active_facts";
+        heldJudgements = listAttrOr req "held_judgements";
+        reopenRequest = getAttrOr req "held_reopen_request" { };
+        supersedePair = getAttrOr req "supersede_pair" { };
+        predicateContract = getAttrOr source "predicate_morphism" { };
+        compositionLaws = listAttrOr predicateContract "composition_laws";
+        factDefaults =
+          factBuilderPolicy.applyConversationFactBuilderPolicy {
+            build_mode = "both";
+          };
+        activeFactKeys = builtins.map factKeyFor activeFacts;
+      in
+        if source == { } then
+          mkHeld "held-ontology-context-transition-predicate-morphism-required" "Context transition requires a verified predicate morphism contract." { }
+        else if !sourcePredicateMorphismOk source then
+          mkHeld "held-ontology-context-transition-predicate-morphism-unverified" "Context transition requires a verified effect-locked predicate morphism contract." {
+            predicate_morphism = source;
+          }
+        else if fromContext == "" then
+          mkHeld "held-ontology-context-transition-from-context-required" "Context transition requires from_context." {
+            predicate_morphism = source;
+          }
+        else if fact == { } then
+          mkHeld "held-ontology-context-transition-utterance-fact-required" "Context transition requires an utterance_fact or fact attrset." {
+            predicate_morphism = source;
+            from_context = fromContext;
+          }
+        else if !(factKeyOk factKey) then
+          mkHeld "held-ontology-context-transition-utterance-fact-malformed" "Context transition utterance_fact must satisfy canonical ContextualFact key slots: context, layer, subj, pred, obj." {
+            utterance_fact = fact;
+            fact_key_verdict = factKey;
+          }
+        else if !(builtins.elem action validJudgementActions) then
+          mkHeld "held-ontology-context-transition-judgement-action-required" "Context transition requires judgement_action in Accept, Hold, Reopen, or Supersede." {
+            judgement_action = action;
+            valid_judgement_actions = validJudgementActions;
+          }
+        else if action == "Reopen" && !(reopenRequestOk reopenRequest) then
+          mkHeld "held-ontology-context-transition-reopen-request-required" "Reopen transition requires a verified held-reopen-cycle-contract reopen request." {
+            held_reopen_request = reopenRequest;
+          }
+        else if action == "Supersede" && !(supersedePairOk supersedePair) then
+          mkHeld "held-ontology-context-transition-supersede-pair-required" "Supersede transition requires a provenance supersede pair." {
+            supersede_pair = supersedePair;
+          }
+        else {
+          schema = "puncheetah.ontology-context-transition.v0";
+          owner = ownerName;
+          outcome = "ontology-context-transition-built";
+          is_held = false;
+          verified = true;
+          context_transition_contract_built = true;
+          source_predicate_morphism_verified = true;
+          candidate_only = true;
+          from_context = fromContext;
+          to_context = toContext;
+          judgement_action = action;
+          lifecycle_status = lifecycleStatusFor action;
+          utterance_fact = fact;
+          utterance_fact_key = factKey.canonical_key;
+          active_fact_key_count = builtins.length activeFactKeys;
+          held_judgement_count = builtins.length heldJudgements;
+          context_transition = {
+            kind = "ontology-context-transition-v0";
+            status = "Candidate";
+            from_context = fromContext;
+            to_context = toContext;
+            trigger_fact_key = factKey.canonical_key;
+            trigger_predicate = stringAttrOr fact "pred" "";
+            predicate_morphism_name = source.predicate_name;
+            predicate_type_signature = source.type_signature;
+            morphism_chain = compositionLaws;
+            judgement_action = action;
+            lifecycle_status = lifecycleStatusFor action;
+            active_fact_keys = activeFactKeys;
+            held_judgements = heldJudgements;
+            reopen_request =
+              if action == "Reopen" then reopenRequest.reopen_request else null;
+            supersede_pair =
+              if action == "Supersede" then supersedePair else null;
+            fact_builder_defaults = factDefaults.defaults;
+            receipt_required = true;
+            candidate_only = true;
+            materialized_context_graph_write_allowed = false;
+            discourse_state_write_allowed = false;
+            accepted_fact_promotion_allowed = false;
+          };
+          source_owner_reuse = {
+            predicate_morphism_owner = predicateMorphismOwner.ownerName;
+            canonical_fact_key_policy = canonicalFactKeyPolicy.ownerName;
+            conversation_fact_builder_policy = factBuilderPolicy.ownerName;
+            held_reopen_cycle_contract = heldReopenCycle.ownerName;
+            provenance_supersede_substrate = provenanceSupersede.ownerName;
+            materialized_context_graph_replaced = false;
+            semantic_chain_traversal_replaced = false;
+            discourse_state_projection_replaced = false;
+            pnix_db_append_gate_replaced = false;
+          };
+          next_gate = "ontology-semantic-chain-traversal";
+          materialized_context_graph_write_allowed = false;
+          discourse_state_write_allowed = false;
+          semantic_chain_traversal_allowed = false;
+          context_transition_execution_allowed = false;
+          predicate_chain_execution_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "ontology-context-transition-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "ontology-context-transition-built";
+            from_context = fromContext;
+            to_context = toContext;
+            judgement_action = action;
+            lifecycle_status = lifecycleStatusFor action;
+            trigger_fact_key = factKey.canonical_key;
+            next_gate = "ontology-semantic-chain-traversal";
+            invariant = "context transition may shape candidate transition state, but cannot materialize graph views, execute traversal, promote facts, or write memory/DB";
+            materialized_context_graph_write_allowed = false;
+            discourse_state_write_allowed = false;
+            semantic_chain_traversal_allowed = false;
+            accepted_fact_promotion_allowed = false;
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "ontology-context-transition-v0";
+    role = "candidate context transition contract over predicate morphism and canonical ContextualFact keys";
+    source_gate = "ontology-predicate-morphism + canonical-fact-key-policy";
+    next_gate = "ontology-semantic-chain-traversal";
+    non_replacement_boundary = "does not replace durable context plan/result owners, held-reopen-cycle-contract, provenance-supersede-substrate, semantic-chain traversal, materialized context graph, discourse-state projection, ontology router, or pnix-db append gates";
+    effect_policy = "contract only; no semantic traversal execution, no materialized graph/discourse-state writes, no ontology query/emit/promote, no accepted fact promotion, no memory/DB write, no policy persistence, no route execution, and no code write";
+  };
+}

@@ -1,0 +1,235 @@
+let
+  ownerName = "stdlib.agent.nl-ambiguity-clarification-contract";
+
+  defer_converged_engine = "stdlib/lib/nl/converged-engine-entry.px";
+  defer_pair_contract =
+    "stdlib/lib/agent/nl-code-pair-resolution-contract.px";
+
+  # === NL ambiguity clarification contract (Round 82) =================
+  #
+  # 사용자 frontier directive: "held UX 가 필요함. Round 74 는 held
+  # verdict 도 잘 잡았다. freecat UI 에서는 이걸 사용자에게 잘 보여줘야
+  # 한다. 예: '이 변수'라고 했지만 a, b 두 후보가 있습니다. 어느 쪽을
+  # 말하나요? 이건 LLM 보다 중요한 UX다. 추측하지 않고 물어보는 것."
+  #
+  # 이 owner = Round 74 의 held verdict (특히 multiple-strong-candidates)
+  # 가 발생했을 때 *follow-up question 의 deterministic shape* 을 emit
+  # 하는 substrate-side schema. LLM 적 paraphrase 추측 없이 closed
+  # template 으로 NL 응답 생성.
+  #
+  # # CLAUDE.md 헌법 fit
+  #
+  # NL-generation word-guess minimisation axiom (Round 73 헌법):
+  # follow-up 도 *공개 vocab template* 으로만, 추측 paraphrase X.
+  # 같은 held verdict + 같은 candidates → 같은 follow-up text
+  # (deterministic).
+  #
+  # # Follow-up question template per held verdict
+  #
+  #   held-multiple-strong-candidates → "여러 후보 중 어느 것인가?"
+  #   held-no-code-element-match      → "코드의 어느 부분을 말하나?"
+  #   held-nl-no-anchor               → "조금 더 구체적으로 알려달라"
+  #   held-ambiguous-axiom-tree       → "axiom 충돌 — 어느 의미인가?"
+  #   held-unknown-language           → "language 명시 필요"
+  #   held-no-code-source             → "code 가 함께 첨부 필요"
+  #
+  # # Output verdict family
+  #
+  #   "clarification-emitted"           — follow-up question ready
+  #   "held-no-resolution-input"        — Round 74 envelope 없음
+  #   "held-not-actually-held"          — resolved verdict 였음
+  #   "held-unknown-held-kind"          — closed list 밖
+
+  stepKind = "nl-ambiguity-clarification";
+  framework_step =
+    "Round 74 held envelope → deterministic follow-up question template";
+
+  # ===================================================================
+  # === Closed follow-up templates per held verdict ===================
+  # ===================================================================
+  #
+  # 한글 + 영어 template. context (candidate list 등) 는 *데이터* 로
+  # 채워짐 — paraphrase 추측 X.
+
+  followUpTemplateForVerdict = {
+    "held-multiple-strong-candidates-need-clarification" = {
+      ko_template = "여러 후보가 있습니다. 어느 것을 말하나요?";
+      en_template = "Multiple matches. Which one?";
+      requires_candidate_list = true;
+      response_kind = "pick-one-of-candidates";
+    };
+    "held-no-code-element-match" = {
+      ko_template = "코드의 어느 부분을 말하나요?";
+      en_template = "Which part of the code do you mean?";
+      requires_candidate_list = false;
+      response_kind = "free-form-locate";
+    };
+    "held-nl-no-anchor" = {
+      ko_template = "조금 더 구체적으로 말씀해 주세요.";
+      en_template = "Please be more specific.";
+      requires_candidate_list = false;
+      response_kind = "free-form-clarify";
+    };
+    "held-ambiguous-axiom-tree" = {
+      ko_template = "axiom 충돌 — 어느 의미인가요?";
+      en_template = "Axiom conflict — which meaning?";
+      requires_candidate_list = true;
+      response_kind = "pick-meaning";
+    };
+    "held-unknown-language" = {
+      ko_template = "code language 를 명시해 주세요.";
+      en_template = "Please specify code language.";
+      requires_candidate_list = false;
+      response_kind = "specify-language";
+    };
+    "held-no-code-source" = {
+      ko_template = "관련 code 를 첨부해 주세요.";
+      en_template = "Please attach the related code.";
+      requires_candidate_list = false;
+      response_kind = "attach-code";
+    };
+  };
+
+  knownHeldVerdicts =
+    builtins.attrNames followUpTemplateForVerdict;
+
+  knownResponseKinds = [
+    "pick-one-of-candidates"
+    "pick-meaning"
+    "free-form-locate"
+    "free-form-clarify"
+    "specify-language"
+    "attach-code"
+  ];
+
+  knownLocales = [ "ko" "en" ];
+
+  # ===================================================================
+  # === Helpers ======================================================
+  # ===================================================================
+
+  hasKey = attrs: key: builtins.elem key (builtins.attrNames attrs);
+  isInClosedList = list: v: builtins.elem v list;
+  lookupOrNull = attrs: key:
+    if hasKey attrs key then builtins.getAttr key attrs else null;
+
+  # ===================================================================
+  # === Main contract function =======================================
+  # ===================================================================
+  #
+  # Input shape:
+  #   {
+  #     resolution_envelope = <Round 74 result>;
+  #     locale = "ko";  # or "en"
+  #     # optional: candidate_list — Round 74 candidates_per_anchor 에서
+  #     # 추출되었거나 host 가 별도로 supply
+  #     candidate_list = [ { name; line; category; } ... ];
+  #   }
+
+  emitClarification = req:
+    let
+      hasEnv = hasKey req "resolution_envelope";
+      env = if hasEnv then req.resolution_envelope else {};
+
+      hasLocale = hasKey req "locale";
+      locale = if hasLocale then req.locale else "ko";
+      localeKnown = isInClosedList knownLocales locale;
+
+      heldVerdict = if hasKey env "verdict" then env.verdict else "";
+      isHeld = hasKey env "is_held" && env.is_held == true;
+
+      heldKnown = isInClosedList knownHeldVerdicts heldVerdict;
+
+      template =
+        if heldKnown
+        then lookupOrNull followUpTemplateForVerdict heldVerdict
+        else null;
+
+      candidateList =
+        if hasKey req "candidate_list" then req.candidate_list else [];
+      hasCandidates = (builtins.length candidateList) > 0;
+
+      verdict =
+        if !hasEnv then "held-no-resolution-input"
+        else if !isHeld then "held-not-actually-held"
+        else if !heldKnown then "held-unknown-held-kind"
+        else if !localeKnown then "held-unknown-held-kind"
+        else "clarification-emitted";
+
+      isOutHeld = verdict != "clarification-emitted";
+
+      questionText =
+        if !isOutHeld
+        then
+          if locale == "ko" then template.ko_template
+          else template.en_template
+        else null;
+
+      responseKind =
+        if !isOutHeld then template.response_kind else null;
+
+      requiresList =
+        if !isOutHeld
+        then template.requires_candidate_list
+        else false;
+
+      providedListOk =
+        if !isOutHeld && requiresList
+        then hasCandidates
+        else true;
+
+    in {
+      kind = "nl-ambiguity-clarification-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      framework_step = framework_step;
+      verdict = verdict;
+      is_held = isOutHeld;
+      source_held_verdict = if heldKnown then heldVerdict else null;
+      locale = locale;
+      question_text = questionText;
+      response_kind = responseKind;
+      requires_candidate_list = requiresList;
+      candidate_list_provided = hasCandidates;
+      candidate_list_valid = providedListOk;
+      candidate_list = if !isOutHeld then candidateList else [];
+      held_diagnostics =
+        if !isOutHeld then null
+        else {
+          envelope_present = hasEnv;
+          is_held_input = isHeld;
+          held_kind_known = heldKnown;
+          locale_known = localeKnown;
+        };
+      derived_from = [
+        "nl-code-pair-resolution-contract (Round 74)"
+        "CLAUDE.md NL word-guess minimisation axiom"
+        "user frontier: held UX clarification protocol"
+      ];
+    };
+
+  # ===================================================================
+  # === Inventory summary ============================================
+  # ===================================================================
+
+  inventorySummary = {
+    owner = ownerName;
+    step_kind = stepKind;
+    template_count = builtins.length knownHeldVerdicts;
+    held_verdicts_covered = knownHeldVerdicts;
+    response_kind_count = builtins.length knownResponseKinds;
+    locale_count = builtins.length knownLocales;
+    role = "Round 74 held verdict → deterministic follow-up question";
+    no_paraphrase_guess = true;
+    provenance_import_policy =
+      "path-manifest-only; consumes already-produced pair held envelopes";
+    defer_to_converged_engine = defer_converged_engine;
+    defer_pair_contract = defer_pair_contract;
+  };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit followUpTemplateForVerdict knownHeldVerdicts;
+  inherit knownResponseKinds knownLocales;
+  inherit emitClarification inventorySummary;
+}

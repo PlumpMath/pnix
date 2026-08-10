@@ -1,0 +1,1287 @@
+# stdlib.nl.korean-taxonomy-lift
+#
+# **한글 문장 → 조사/어미 taxonomy lift → ontology proposition (역할 graph). 재조립 connector.**
+#
+# 운영자(2026-06-14): "한글 = taxonomy edge 를 표면에 드러내는 surface. 조사/어미 = taxonomy edge constructor.
+#  한글 문장 → 조사/어미 분석 → semantic role taxonomy → ontology proposition → code/math/API atom."
+#  "이거 전에 좀 했잖아 ... 재조립이 많을거다."
+#
+# 재조립 (테이블 *재구현 0*, 기존 자산 연결):
+#   - `knowledge/korean-morphology.px` (strip-suffixes 27행 조사/어미) — *직접 import 재사용*.
+#   - 역할 taxonomy 라벨(agent/object/recipient/instrument/location/…) = 기존
+#     `agent/conversation-particle-role-mapping-contract.px`(particleRoleTable, kind-keyed dispatch) +
+#     `coding/atom-slot-semantic-roles.px`(을/를→object, 이/가→subject, 에게→recipient, 에서→source, 으로→instrument)
+#     와 *같은 taxonomy*. 그 contract 는 KoreanParticleKind(Rust 분류)-keyed dispatch-only 이라, 여기선 그 같은
+#     역할 라벨에 맞춘 *조사-string→role* 브릿지만 둔다(string 분류가 .px 에 없던 한 조각).
+#   - 개념 후보 해소는 `math/disambiguate.px`(surface→후보→context→node) 와 연결 가능(별 호출).
+#
+# = 운영자 흐름의 .px 조립: 문장 → role graph(proposition). 비수정 data-only 조립.
+#
+# ★잔여 작업 와꾸(Codex 구현 / Claude 감사) = project-wiki/maps/korean-codec-remaining-plan.md
+#   §0 불변원칙(구조신호>dict-coincidence·결정론·over-fire금지·fail-closed·corpus lock) 위반 = 감사 reject.
+let
+  # ★ MERGE(운영자 "조사↔role 단일 source"): 조사→role 을 *기존* case-marker-lens(role→조사)의 *역*으로 derive.
+  #   손으로 짠 particleRoles 테이블 제거 → 조사↔case 단일 source = lens.
+  cm = import coding/korean-case-marker-lens.px;
+  hg = import ../math/hangul-mirror.px;   # 자모 산술(종성) — segmentMorphs 용. 새 거울 아님(apply).
+  mor = import ../knowledge/korean-morphology.px;   # ★F2/H1: clause-connectors(연결어미→관계) 정본 테이블 재사용(재구현 0).
+
+  # ★F2/H1 (연결어미 → discourse 관계 lift): 표면 마커가 edge를 *준다*의 L2(담화관계) 적용. 결정론 owner=.px
+  #   (현재 korean-morphology clause-connectors 를 Rust kernel 만 소비 → .px 소비로 헌법 정합화).
+  #   모호 연결어미(고=seq|elaboration·는데=bg|contrast·아서/어서=cause|seq)=candidate(C′/concept 패턴);
+  #   명확=determinate; 미등록=unresolved(fail-closed, 추측 0). ★graph 통합(liftDiscourse edge)은 후속 slice.
+  clauseConnectors = mor."clause-connectors";
+  ambiguousConnectives = [ "고" "는데" "아서" "어서" ];
+  connectiveToRelation = connective:
+    let m = builtins.filter (cc: cc.connector == connective) clauseConnectors;
+    in if m == [ ]
+       then { connective = connective; relation = null; ko = null; status = "unresolved"; }
+       else let cc = builtins.head m; amb = builtins.elem connective ambiguousConnectives;
+            in { connective = connective; relation = cc.relation; ko = cc.ko;
+                 status = if amb then "candidate" else "determinate"; };
+
+  # ★F2-graph (meaning-graph L2): 복문 → [{clause; connective; relation; status}]. connectiveToRelation + clause-connectors 재사용.
+  #   longest-suffix-match(려고>고)·명확=determinate·모호=candidate·단문=1절(connective null). theory-neutral 리스트
+  #   (RST/SDRT 풍부 그래프는 후속; deep-research wf_acb15ecb: 연결어미→관계 polysemous=candidate가 정본 — 정합).
+  #   ★F6 잔여: canonical-sentence-form.splitClauses(하드코딩 6)와 split 스켈레톤 중복 → 추후 이 함수로 수렴(canonical 21 테이블).
+  #   ⚠fusion 연결어미(오+아서→와서)는 표면 suffix 매칭 한계(비융합만; 융합 복원 후속 slice).
+  splitClauseRelations = sentence:
+    let words = splitSp sentence;
+        connOf = w:
+          let hits = builtins.filter (cc: endsWith cc.connector w) clauseConnectors;
+          in if hits == [ ] then null
+             else builtins.foldl' (acc: cc: if (slen cc.connector) > (slen acc.connector) then cc else acc) (builtins.head hits) hits;
+        go = acc: cur: ws:
+          if ws == [ ] then (if cur == [ ] then acc else acc ++ [ { clause = builtins.concatStringsSep " " cur; connective = null; relation = null; status = "clause-final"; } ])
+          else let w = builtins.head ws; rest = builtins.tail ws; cc = connOf w;
+                   # ★aux 룩어헤드: 고+있(진행 먹고 있)·고+싶(소망 먹고 싶)은 보조용언 한 단위 → 여기서 분리 금지(accumulate).
+                   #   다음 단어(있고/있으면/싶다…)의 *자기* 연결어미가 진짜 절경계. 있/싶은 명사 어두로 거의 안 나와 안전.
+                   #   ⚠intention(려고+하)은 하=하늘/하나 등 명사 어두 모호 → 제외(보수적). resultative(아/어 있)은 고 아님 → 무관.
+                   nextW = if rest == [ ] then null else builtins.head rest;
+                   nextSyl = if (nextW != null) && ((slen nextW) >= 3) then sub 0 3 nextW else "";
+                   auxInternal = (cc != null) && (cc.connector == "고") && ((nextSyl == "있") || (nextSyl == "싶"));
+               in if (cc != null) && (auxInternal == false)
+                  then let rel = connectiveToRelation cc.connector;
+                       in go (acc ++ [ { clause = builtins.concatStringsSep " " (cur ++ [ (stripSuffix cc.connector w) ]); connective = cc.connector; relation = rel.relation; status = rel.status; } ]) [ ] rest
+                  else go acc (cur ++ [ w ]) rest;
+    in go [ ] [ ] words;
+
+  # ★ S4-b: 사전 facts 정적 import — 품사로 용언/개체 분류 (위치 휴리스틱 보강).
+  #   거울 하나: 분류 정본 = dictionary-facts.px(무수정 재사용). facts = 프로젝트-소유 seed(정의문 제외=clean-room).
+  #   런타임 redb-query builtin 부재 → redb 미사용·정적 .px 마디 import (외부 대규모 사전 적재는 별 슬라이스).
+  df = import ./dictionary-facts.px;
+  seedFacts = (import ./dictionary-seed-facts.px).facts;
+  # ★ B: 로컬 대규모 사전 overlay (host-생성 facts-only, gitignored CC-BY-SA-clean). 있으면 seed 에 merge,
+  #   없으면 seed-only — committed lift=seed-only 이라 fresh-clone/CI gate 는 결정론(대규모 사전은 로컬 빌드).
+  #   redb-query builtin 부재지만 readFile/import 는 import 컨텍스트(Stage-1)서 작동 → Rust eval-binding 불요.
+  dictFacts =
+    let overlays = [ ./dictionary-rich-aeo.generated.px        # ★rich conjugation→aeo thin overlay(불규칙클래스 커버리지; gen-dictionary-rich-facts.sh)
+                     ./dictionary-dump-facts.generated.px      # 우리말샘 facts-only (gitignored)
+                     ./dictionary-stdict-facts.generated.px ]; # 표준국어대사전 facts-only (gitignored)
+                     # ★valency overlay 는 여기 *아님*: facts shape({lemma;pos}) 아니라 index shape({name;value})
+                     #   이라 loadOv `.facts` 와 비호환(로드 깨짐). valencyIdx 에 직접 merge(아래) = 올바른 소비 경로.
+        loadOv = acc: ov: if builtins.pathExists ov then acc ++ (import ov).facts else acc;
+    in builtins.foldl' loadOv seedFacts overlays;             # 있는 overlay 만 seed 에 merge (gate-safe)
+    # ★rich-aeo 를 *맨 앞*에 = 충돌 시 기존 facts-only(뒤)가 우선(buildAeoIndex last-wins) → 기존 검증 aeo 보존,
+    #   rich 는 OOV 갭만 채움(additive, 무회귀). homonym 충돌 stem 은 rich 에서 이미 drop(held). 없으면 seed-only.
+  stemIdx = df.buildStemIndex dictFacts;          # O(1) stem→best-pos 인덱스 1회 빌드(모듈 로드 시) — 대규모 사전 perf
+  stemKindIdx = stem: df.stemKindAt stemIdx stem; # best-kind lookup: predicate > entity > modifier > rest, OOV=null
+  stemPosIdx = stem: if stemIdx ? ${stem} then stemIdx.${stem} else null;
+  aeoIdx = df.buildAeoIndex dictFacts;            # optional facts-only 활용 exact: stem→아/어형(불규칙/fused만)
+  aeoRevIdx = df.buildAeoReverseIndex dictFacts;  # optional facts-only 활용 exact: 아/어형→stem
+  # ★thin valency overlay({name=stem; value=transitive|intransitive}, owner-list 기반)을 valencyIdx 에 직접 merge.
+  #   overlay records 가 곧 index shape(buildValencyIndex 산출과 동형) → listToAttrs 후 `//`. 조건부 pathExists(gate-safe).
+  #   overlay 우선(curated owner-list = 핵심동사 격틀 권위). 없으면 dict-derived only. 추측 0·미지정/충돌은 overlay 에서 이미 held.
+  valencyOverlay =
+    if builtins.pathExists ./dictionary-valency-overlay.generated.px
+    then builtins.listToAttrs (import ./dictionary-valency-overlay.generated.px).records
+    else { };
+  valencyIdx = (df.buildValencyIndex dictFacts) // valencyOverlay;   # 격틀/자동·타동 — 조사생략 역할 복원 + where-hole
+  stemValencyIdx = stem: df.valencyAt valencyIdx stem;
+  hadaCompoundIdx = df.buildHadaCompoundIndex dictFacts;  # facts-only 명사+하다 결합 가능성
+
+  slen = builtins.stringLength;
+  sub = builtins.substring;
+  len = builtins.length;
+  elemAt = builtins.elemAt;
+  map = builtins.map;
+  filter = builtins.filter;
+  genList = builtins.genList;
+  isString = builtins.isString;
+  elem = builtins.elem;
+  foldl' = builtins.foldl';
+  concatLists = builtins.concatLists;
+
+  endsWith = suf: s: let ls = slen suf; l = slen s; in (l >= ls) && ((sub (l - ls) ls s) == suf);
+  stripSuffix = suf: s: sub 0 ((slen s) - (slen suf)) s;
+  splitSp = s: filter (w: isString w && w != "") (builtins.split " " s);
+
+  # ── case ↔ semantic role 브릿지 (문법격 ↔ 의미역; lift=caseToRole, realize=roleToCase 가 서로 역) ──
+  caseToRole = case:
+    if case == "subject" then "agent"
+    else if case == "target" then "location"
+    else if case == "manner" then "instrument"
+    else if case == "comparative" then "comparison"
+    else if case == "terminative" then "boundary"
+    else if case == "inceptive" then "start"
+    else case;     # object/source/recipient/comitative/genitive/topic 동일
+  roleToCase = role:
+    if role == "agent" then "subject"
+    else if role == "location" then "target"
+    else if role == "instrument" then "manner"
+    else if role == "comparison" then "comparative"
+    else if role == "boundary" then "terminative"
+    else if role == "start" then "inceptive"
+    else if role == "complement" then "subject"   # ★되다 보어(의사가 된다)=주격 표지 가/이
+    else role;
+
+  # 명사-인자 표시 case 만 (predicate-condition 은 이/가를 subject 와 공유 → 제외)
+  argCases = [ "object" "target" "manner" "subject" "topic" "recipient" "source" "comitative" "genitive" "comparative" "terminative" "inceptive" ];
+
+  fieldOr = a: k: if (a ? ${k}) && (isString a.${k}) && (a.${k} != "") then a.${k} else null;
+  markersOf = rule:
+    let raw = filter (m: m != null) [ (fieldOr rule "rieul") (fieldOr rule "regular") (fieldOr rule "none") ];
+    in foldl' (acc: m: if elem m acc then acc else acc ++ [ m ]) [ ] raw;   # distinct
+
+  # ★ 조사→role = lens(role→조사)의 역 ★ : argCases 의 각 rule 마커 → caseToRole. 길이 내림차순.
+  derivedPairs = concatLists (map (rule:
+    if elem rule.role argCases
+    then map (m: { p = m; role = caseToRole rule.role; }) (markersOf rule)
+    else [ ]) cm.knownCaseMarkerRules);
+  particleRoles = builtins.sort (a: b: (slen a.p) > (slen b.p)) derivedPairs;
+
+  # 동사 어미 → tense/mood. ★다자 어미 먼저(firstMatch) → 종성-ㅆ 과거 → informal 현재 → 1자(자/다).
+  #   1자 '다'를 종성-ㅆ 과거(샀다=사+ㅆ+다) *뒤*에 둬야 '샀다'가 '다'로 오분해(샀/present)되지 않는다.
+  verbEndings = [   # 2자+ : formal(었다/았다/는다…) + informal(었어/았어/였어, 별개음절 과거)
+    { e = "었어"; tense = "past";    mood = "declarative"; }   # 먹었어→먹
+    { e = "았어"; tense = "past";    mood = "declarative"; }   # 받았어→받·뽑았어→뽑
+    { e = "였어"; tense = "past";    mood = "declarative"; }   # 하였어→하(끓였어→끓 근사)
+    { e = "었다"; tense = "past";    mood = "declarative"; }
+    { e = "았다"; tense = "past";    mood = "declarative"; }
+    { e = "였다"; tense = "past";    mood = "declarative"; }
+    { e = "겠다"; tense = "present"; mood = "declarative"; modality = "prospective"; }
+    { e = "는다"; tense = "present"; mood = "declarative"; }
+    { e = "어라"; tense = "present"; mood = "imperative"; }
+    { e = "아라"; tense = "present"; mood = "imperative"; }
+  ];
+  verbEndings1 = [  # 1자(종성-ㅆ 과거 뒤 시도)
+    { e = "자"; tense = "present"; mood = "propositive"; }
+    { e = "다"; tense = "present"; mood = "declarative"; }
+  ];
+  presentInformal = [   # 1자 informal 현재(종성-ㅆ 과거 *이후* — 샀어가 '어'로 오분해 안 되게)
+    { e = "지"; tense = "present"; mood = "declarative"; }     # 먹지·그렇지
+    { e = "네"; tense = "present"; mood = "declarative"; }     # 자네·오네
+    { e = "어"; tense = "present"; mood = "declarative"; }     # 먹어·읽어 (자음stem)
+    { e = "아"; tense = "present"; mood = "declarative"; }     # 받아·좋아
+    { e = "니"; tense = "present"; mood = "interrogative"; }   # ★먹니 (해라체 의문 — 먹까 아님)
+    { e = "냐"; tense = "present"; mood = "interrogative"; }   # 먹냐
+  ];
+
+  # ── ★ 종결어미 인벤토리 (화계 level × 서법 mood × 품사; 세종 EF 스킴). 데이터구동 generic codec 의 source ──
+  #   표면 = 어간 + [선어말 시제] + 종결어미. realize=lookup·analyze=역. level 기본 haera = 현 동작(byte-equiv).
+  #   ★까 정정: 까 = 하십시오체 '-습니까' + 추측 '-ㄹ까' 에만. 평서 의문 = 니/어/어요(억양). 현 '까' 무조건부착=버그.
+  #   조사: 세종 EF 태그셋(스킴, 저작권X) + 6화계 교차표(Wikipedia speech levels, ≥2 소스). 어미=언어사실=pnix 데이터 OK.
+  finalEndings = [
+    # 해라체 (plain; 현 기본 동작)
+    { level = "haera"; mood = "declarative";   verb_v = "ㄴ다"; verb_c = "는다"; adj = "다"; }
+    { level = "haera"; mood = "interrogative"; e = "니"; alt = "냐"; }            # ★먹니/먹냐
+    { level = "haera"; mood = "imperative";    harmony = true; }                  # 아라/어라(realizeVerb isYangStem)
+    { level = "haera"; mood = "propositive";   e = "자"; }
+    # 해요체 (informal polite; 가장 흔함)
+    { level = "haeyo"; mood = "declarative";   harmony = true; suf = "요"; }      # 아요/어요
+    { level = "haeyo"; mood = "interrogative"; harmony = true; suf = "요"; intonation = true; }  # 어요?(억양만)
+    { level = "haeyo"; mood = "imperative";    v = "세요"; c = "으세요"; sel = "eu"; }
+    { level = "haeyo"; mood = "propositive";   harmony = true; suf = "요"; }
+    # 하십시오체 (formal, highest)
+    { level = "hasipsio"; mood = "declarative";   v = "ㅂ니다"; c = "습니다"; sel = "batchim"; }
+    { level = "hasipsio"; mood = "interrogative"; v = "ㅂ니까"; c = "습니까"; sel = "batchim"; }  # ★유일 정당 '까'
+    { level = "hasipsio"; mood = "imperative";    v = "십시오"; c = "으십시오"; sel = "eu"; }
+    { level = "hasipsio"; mood = "propositive";   v = "ㅂ시다"; c = "읍시다"; sel = "batchim"; }
+  ];
+  # 선어말어미 (tense pre-final, 서법/화계와 직교): 어간 + [었/았/였/겠] + 종결어미. 과거=모음조화.
+  preFinals = [
+    { tense = "present"; mark = "";   harmony = false; }
+    { tense = "past";    mark = "았"; harmony = true;  cls = "yang"; }   # ㅏ/ㅗ
+    { tense = "past";    mark = "었"; harmony = true;  cls = "eum"; }    # else
+    { tense = "past";    mark = "였"; harmony = false; cls = "ha"; }     # 하→하였/했
+    { tense = "future";  mark = "겠"; harmony = false; }
+  ];
+  lookupFinal = level: mood: firstMatch finalEndings (f: (f.level == level) && (f.mood == mood));
+
+  firstMatch = list: pred: let go = i: if i >= (len list) then null else if pred (elemAt list i) then (elemAt list i) else go (i + 1); in go 0;
+  isKnownPredicateStem = stem: (stemKindIdx stem) == "predicate";
+  # 사전 overlay 가 없거나 잘린 로컬 facts 에서도 고빈도 lexical-ㅆ stem '있'은 축약과거(이+ㅆ)로 오분해하지 않는다.
+  # overlay/full dictionary 가 있으면 일반 경로(isKnownPredicateStem)가 같은 결정을 한다.
+  protectedLexicalSsaStems = [ "있" ];
+  protectedVerbStems = [ "알" "만들" "열" "먹이" "죽이" "끓이" "졸이" "자" ];
+  protectedAdjectiveStems = [
+    "좋" "크" "작" "많" "적" "같" "다르" "예쁘" "아름답" "있" "맛있" "재미있" "없" "춥" "덥" "쉽" "어렵"
+    "노랗" "파랗" "빨갛" "하얗" "까맣" "그렇" "이렇" "저렇" "어떻" "빠르" "마르"
+    "곱" "가볍" "무겁" "고맙" "맵" "귀엽" "두렵" "아깝" "즐겁" "반갑" "부럽" "새롭"
+  ];
+  protectedBieupIrregularStems = [
+    "돕" "곱" "춥" "덥" "쉽" "어렵" "아름답" "가볍" "무겁" "고맙" "맵" "귀엽" "두렵" "아깝" "즐겁" "반갑" "부럽" "새롭"
+    "줍" "눕" "굽"
+  ];
+  protectedReuIrregularStems = [ "모르" "빠르" "다르" "마르" "부르" "고르" "기르" "누르" "자르" "오르" "흐르" "이르" "들르" ];
+  protectedReoIrregularStems = [ "푸르" "노르" ];   # 러불규칙(닫힌 집합): 푸르→푸르러·노르→노르러. 이르(到)/누르(黃)는 동형이의(早/press=르 default)라 제외.
+  # ★닫힌집합 부사어(지시·시간·정도·양태): 무표지(조사 없는) 부가어 포착용. role="adjunct"로 명제에 보존(탈락 방지).
+  #   deictic(여기/지금/오늘)의 *의미*(발화맥락 상대)는 L4 context binding 소관 — 여기선 구조(좌표)만 포착. open-class 부사는 전체사전(L1) 대기.
+  #   ★단일소스 sub-list 5종 → adjunctAdverbs 는 그 union 으로 *파생*(수동 중복 금지=drift 0).
+  temporalPointAdverbs = [                                   # 시점(when): deictic(지금/오늘) + anaphoric(이때/그때)
+    "지금" "오늘" "내일" "어제" "모레" "그제" "방금" "아까" "이제" "벌써" "아직" "곧"
+    "이때" "그때" "저때" "이날" "그날" "저날"
+  ];
+  frequencyAdverbs = [ "항상" "늘" "자주" "가끔" ];           # 빈도(how-often) — temporal point 아님 → '그때' anaphor antecedent 부적격
+  sequenceAdverbs = [ "먼저" "다시" ];                         # 순서(order)
+  spatialAdjunctAdverbs = [ "여기" "저기" "거기" "이리" "저리" ];
+  degreeAdjunctAdverbs = [ "매우" "아주" "잘" "많이" "조금" "빨리" "천천히" "함께" "같이" "더" "덜" "또" "그만" "제일" ];
+  adjunctAdverbs = temporalPointAdverbs ++ frequencyAdverbs ++ sequenceAdverbs ++ spatialAdjunctAdverbs ++ degreeAdjunctAdverbs;
+  adjunctKindOf = entity:
+    if elem entity temporalPointAdverbs then "temporal"
+    else if elem entity frequencyAdverbs then "frequency"
+    else if elem entity sequenceAdverbs then "sequence"
+    else if elem entity spatialAdjunctAdverbs then "spatial-deictic"
+    else if elem entity degreeAdjunctAdverbs then "manner-degree"
+    else if (stemKindIdx entity) == "modifier" then "modifier"
+    else null;
+  protectedSieutIrregularStems = [ "짓" "낫" "붓" "잇" "긋" "젓" ];        # ㅅ불규칙(웃·씻·벗·솟·빗=정규)
+  protectedDigeutIrregularStems = [ "듣" "걷" "묻" "깨닫" "싣" "붇" "일컫" ];  # ㄷ불규칙(받·닫·믿·얻=정규)
+  regularHFinalStems = [ "좋" "많" "싫" "괜찮" "놓" "넣" "낳" "쌓" ];
+  protectedHonorificRootStems = [ "가" "오" "하" "되" "있" "없" "먹" "보" "주" "받" "읽" "듣" "앉" "아니" ];
+  isProtectedLexicalSsaStem = stem: (isKnownPredicateStem stem) || (elem stem protectedLexicalSsaStems) || (elem stem protectedAdjectiveStems);
+  predicateKindOfStem = stem:
+    let p = stemPosIdx stem;
+    in if (p == "형용사") || (p == "보조 형용사") || (elem stem protectedAdjectiveStems) then "adjective"
+       else if (p == "동사") || (p == "보조 동사") then "verb"
+       else "verb";
+  isHonorificRootStem = stem: (isKnownPredicateStem stem) || (elem stem protectedHonorificRootStems) || (elem stem protectedVerbStems);
+  isRecognizedPredicateStem = stem: (isKnownPredicateStem stem) || (elem stem protectedVerbStems) || (elem stem protectedAdjectiveStems) || (elem stem protectedBieupIrregularStems) || (elem stem protectedReuIrregularStems) || (elem stem protectedSieutIrregularStems) || (elem stem protectedDigeutIrregularStems);
+  isHFinalStem = stem:
+    let nc = nchar stem;
+    in (nc >= 1) && ((jongOf (cAt (nc - 1) stem)) == 27);
+  isHIrregularStem = stem:
+    ((dictIrregularClassOf stem) == "h")                       # 사전-파생(가장 generic): ㅎ탈락+모음변화 aeo 확정
+    || ((isHFinalStem stem)                                    # OOV 안전판: ㅎ받침 형용사 − 정규ㅎ 예외
+        && ((elem stem protectedAdjectiveStems) || ((stemPosIdx stem) == "형용사") || ((stemPosIdx stem) == "보조 형용사"))
+        && ((elem stem regularHFinalStems) == false));
+  selectKnownPredicateStem = stems:
+    let m = firstMatch stems (s: isRecognizedPredicateStem s);
+    in if m != null then m else elemAt stems 0;
+  # 종성-ㅆ 과거 축약 역후보. 첫 후보는 기존 openSyllable fallback(샀→사), 뒤 후보는 사전 검증용 역축약(했→하, 썼→쓰, 봤→보, 줬→주, 폈→피).
+  #   ★후보 순서 = fallback 우선도. 모호하지 않은 역축약(해→하·ㅘ→ㅗ·ㅝ→ㅜ·ㅕ→ㅣ)은 사전 없어도 정답이라 *앞*에 둔다
+  #   (openSyllable 은 그 경우 틀린 축약모음). 모호한 ㅓ(섰=서 vs 썼=쓰)만 openSyllable 을 앞에 두고 ㅡ후보는 사전 확정용.
+  reverseSsaStemPieces = hasPre: c:
+    let open = openSyllable c; code = hg.charToCode open;
+    in if (hg.isHangulSyllable code) == false then [ open ]
+	       else let d = hg.decompose code;
+	                mk = j: hg.codeToChar (hg.compose { cho = d.cho; jung = j; jong = 0; });
+	                mkH = j: hg.codeToChar (hg.compose { cho = d.cho; jung = j; jong = 27; });
+	            in if open == "해"     then [ "하" open ]            # 했→하 (de-contract 우선; 해는 stem 아님)
+	               else if d.jung == 1 then [ open (mkH 0) (mkH 4) ] # ㅎ불규칙 과거: 노랬→노랗, 그랬→그렇 (사전/보호 후보 선택)
+	               else if d.jung == 3 then [ open (mkH 2) ]         # 하얬→하얗
+	               else if d.jung == 7 then [ open (mkH 6) ]         # 뿌옜→뿌옇
+               else if d.jung == 9  then [ (mk 8)  open ]        # ㅘ←ㅗ 봤→보 (모호X)
+               else if d.jung == 14 then [ (mk 13) open ]        # ㅝ←ㅜ 줬→주 (모호X)
+               else if d.jung == 6  then [ (mk 20) open ]        # ㅕ←ㅣ 폈→피 (모호X)
+	               else if d.jung == 0  then (if hasPre then [ open (mk 18) ] else [ open ])  # ㅡ탈락 과거(양성 선행시만): 바빴→바쁘. 단음절 ㅏ(샀→사)는 ㅡ후보 spurious(쌌→쓰)라 차단
+	               else if d.jung == 4  then [ open (mk 18) ]        # ㅓ: 섰→서(openSyllable) / 썼→쓰(사전 확정) 모호
+	               else [ open ];                                    # ㅏ 등: 샀→사
+  # 해요체 현재 축약 역후보. 먹어요/받아요는 suffix strip 으로 닫히고, 해요/봐요/줘요/펴요/써요 같은 요 앞 단음절 축약만 여기서 복원.
+  reverseAeoStemPieces = hasPre: c:
+    let code = hg.charToCode c;
+    in if (hg.isHangulSyllable code) == false then [ c ]
+	       else let d = hg.decompose code;
+	                mk = j: hg.codeToChar (hg.compose { cho = d.cho; jung = j; jong = 0; });
+	                mkH = j: hg.codeToChar (hg.compose { cho = d.cho; jung = j; jong = 27; });
+	            in if d.jong != 0      then [ c ]
+	               else if c == "해"   then [ "하" c ]                  # 해요→하
+	               else if d.jung == 1  then [ c (mkH 0) (mkH 4) ]      # 노래요→노랗, 그래요→그렇 (사전/보호 후보 선택)
+	               else if d.jung == 3  then [ c (mkH 2) ]              # 하얘요→하얗
+	               else if d.jung == 7  then [ c (mkH 6) ]              # 뿌예요→뿌옇
+	               else if d.jung == 9  then [ (mk 8)  c ]              # 봐요→보
+               else if d.jung == 14 then [ (mk 13) c ]              # 줘요→주
+               else if d.jung == 6  then [ (mk 20) c ]              # 펴요→피
+	               else if d.jung == 0  then (if hasPre then [ c (mk 18) ] else [ c ])  # ㅡ탈락(양성 선행시만): 바빠요→바쁘. 단음절 ㅏ는 ㅡ후보 차단
+	               else if d.jung == 4  then [ c (mk 18) ]              # 써요↔서요: 사전 확정 전엔 open 유지
+	               else [ c ];
+  irregularAeoStems = [
+    { stem = "돕"; aeo = "도와"; cls = "bieup"; }
+    { stem = "듣"; aeo = "들어"; cls = "digeut"; }
+    { stem = "걷"; aeo = "걸어"; cls = "digeut"; }
+    { stem = "묻"; aeo = "물어"; cls = "digeut"; }
+    { stem = "모르"; aeo = "몰라"; cls = "reu"; }
+    { stem = "푸"; aeo = "퍼"; cls = "u"; }                       # 우불규칙 단일 lexeme
+  ];
+  irregularAeoStem = stem:
+    let d = df.aeoAt aeoIdx stem;
+        m = firstMatch irregularAeoStems (r: r.stem == stem);
+        b = bieupIrregularAeoStem stem;
+        s = sieutIrregularAeoStem stem;
+        dg = digeutIrregularAeoStem stem;
+    in if d != null then d else if m != null then m.aeo else if b != null then b
+       else if s != null then s else if dg != null then dg
+       else let r = reoIrregularAeoStem stem; in if r != null then r else reuIrregularAeoStem stem;
+  # ════════════════════════════════════════════════════════════════════════════════════════════
+  # ★ 불규칙 활용 클래스의 *사전-파생* (dictionary-derived irregular classification)
+  # ════════════════════════════════════════════════════════════════════════════════════════════
+  # 목적: "두 사전 generic" — 불규칙 어간 판정을 손-유지 protected 리스트가 아니라 *사전 활용형*에서
+  #   자동 도출한다. 하드코딩은 사전이 못 덮는 OOV 어간의 안전판으로만 강등(어미 하드코딩 금지 헌법).
+  #
+  # 핵심 통찰(왜 사전 aeo 하나로 판정 가능한가):
+  #   gen-dictionary-*.sh 가 활용형(aeo, 아/어 결합형)을 *정규 결합형과 다를 때만* 저장한다(select_aeo).
+  #   ∴ `aeoIdx` 에 어간이 있다(df.aeoAt ≠ null) ⟺ 그 어간은 비정규(불규칙/축약/fused) — 정규 동사는 애초에
+  #   인덱스에 없다(잡→잡아=정규라 미저장). 즉 *인덱스 멤버십 자체가 1차 불규칙 신호*다.
+  #
+  # 메커니즘(3단):
+  #   ① candidate(*Candidate*Aeo): 어간 *받침만 보고* 게이트 없이 각 클래스의 불규칙 표면을 계산(순수 자모 산술).
+  #      예: 돕→도와, 듣→들어, 짓→지어, 모르→몰라, 푸르→푸르러, 노랗→노래. 받침이 안 맞으면 null.
+  #   ② dictIrregularClassOf: 사전 aeo 를 각 candidate 와 대조 → 일치하는 클래스 문자열 반환(없으면 null).
+  #      정규 동사는 aeo 미수록→null; ㅎ-받침인데 좋아(정규)면 어떤 candidate 와도 불일치→null(오분류 0).
+  #   ③ is*IrregularStem = (elem protected 하드코딩) ‖ (dictIrregularClassOf == 해당-클래스).
+  #      → 사전에 있으면 자동 분류(가깝→가까우십니다), 없으면 하드코딩 OOV 안전판으로 fallback.
+  #   per-class aeo 함수(bieupIrregularAeoStem 등) = `if is* then candidate else null` — candidate 에 위임(중복 0).
+  #
+  # 클래스 표 (받침/형태 diff → candidate):
+  #   bieup  ㅂ받침(17)→ㅂ탈락+와/워     | digeut ㄷ받침(7)→ㄹ받침+아/어 | sieut ㅅ받침(19)→ㅅ탈락+아/어
+  #   reu    르→앞음절 ㄹ겹+라/러(르탈락) | reo    르 유지+러(닫힌 푸르/노르) | h     ㅎ받침(27)→ㅎ탈락+모음변화(ㅏ/ㅓ→ㅐ·ㅑ→ㅒ·ㅕ→ㅖ)
+  #
+  # 소비처(이 분류를 쓰는 곳): irregularAeoStem(생성; 단 df.aeoAt 를 *먼저* 직접 사용=사전형 우선, 본 함수들은
+  #   하드코딩-only 어간 fallback) · korean-nl-mirror.euStem(으-context: 듣→들으세요) · reverse*IrregularAeoStem(이해/파싱).
+  #
+  # ⚠주의:
+  #   - homonym(걷步=걸어/걷收=걷어, 묻問/埋): 어간 모양만으론 불판정 → *사전 per-lexeme aeo* 가 정본(중의는 별 슬라이스).
+  #   - 커버리지 갭: 사전 overlay 미수록 lemma(예 누렇)는 aeoIdx 부재→하드코딩에도 없으면 정규로 오처리(누렇어요).
+  #     이는 candidate/판정 결함이 아니라 *사전 수록* 문제(gen-script priority/cap·source) — 별 lane.
+  #   - candidate 는 받침-구조 순수함수라 is* 와 무순환(candidate↛is*); dictIrregularClassOf↛per-class aeo(위임은 단방향).
+  # ════════════════════════════════════════════════════════════════════════════════════════════
+  bieupCandidateAeo = stem:
+    let nc = nchar stem;
+    in if (nc < 1) || ((jongOf (cAt (nc - 1) stem)) != 17) then null
+       else let pre = if nc > 1 then sub 0 (3 * (nc - 1)) stem else "";
+                d = hg.decompose (hg.charToCode (cAt (nc - 1) stem));
+                open = hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 0; });
+            in pre + open + (if d.jung == 8 then "와" else "워");
+  digeutCandidateAeo = stem:
+    let nc = nchar stem;
+    in if (nc < 1) || ((jongOf (cAt (nc - 1) stem)) != 7) then null
+       else let pre = if nc > 1 then sub 0 (3 * (nc - 1)) stem else "";
+                d = hg.decompose (hg.charToCode (cAt (nc - 1) stem));
+                rieul = hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 8; });
+            in pre + rieul + (if (d.jung == 0) || (d.jung == 8) then "아" else "어");
+  sieutCandidateAeo = stem:
+    let nc = nchar stem;
+    in if (nc < 1) || ((jongOf (cAt (nc - 1) stem)) != 19) then null
+       else let pre = if nc > 1 then sub 0 (3 * (nc - 1)) stem else "";
+                d = hg.decompose (hg.charToCode (cAt (nc - 1) stem));
+                open = hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 0; });
+            in pre + open + (if (d.jung == 0) || (d.jung == 8) then "아" else "어");
+  reuCandidateAeo = stem:
+    let nc = nchar stem;
+    in if (nc < 2) || ((cAt (nc - 1) stem) != "르") then null
+       else let pre0 = sub 0 (3 * (nc - 1)) stem; pc = nchar pre0;
+            in if pc < 1 then null
+               else let pre = if pc > 1 then sub 0 (3 * (pc - 1)) pre0 else "";
+                        prev = cAt (pc - 1) pre0; code = hg.charToCode prev;
+                    in if (hg.isHangulSyllable code) == false then null
+                       else let d = hg.decompose code;
+                                suffix = if (d.jung == 0) || (d.jung == 8) then "라" else "러";
+                                doubled = hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 8; });
+                            in pre + doubled + suffix;
+  reoCandidateAeo = stem:
+    let nc = nchar stem; in if (nc >= 2) && ((cAt (nc - 1) stem) == "르") then stem + "러" else null;
+  hCandidateAeo = stem:                                       # ㅎ불규칙: ㅎ받침(27) 탈락 + 모음 변화(ㅏ/ㅓ→ㅐ·ㅑ→ㅒ·ㅕ→ㅖ) — 노랗→노래·그렇→그래
+    let nc = nchar stem;
+    in if (nc < 1) || ((jongOf (cAt (nc - 1) stem)) != 27) then null
+       else let pre = if nc > 1 then sub 0 (3 * (nc - 1)) stem else "";
+                d = hg.decompose (hg.charToCode (cAt (nc - 1) stem));
+                j = if (d.jung == 0) || (d.jung == 4) then 1 else if d.jung == 2 then 3 else if d.jung == 6 then 7 else d.jung;
+            in pre + (hg.codeToChar (hg.compose { cho = d.cho; jung = j; jong = 0; }));
+  dictIrregularClassOf = stem:
+    let aeo = df.aeoAt aeoIdx stem;
+    in if aeo == null then null
+       else if aeo == (bieupCandidateAeo stem) then "bieup"
+       else if aeo == (digeutCandidateAeo stem) then "digeut"
+       else if aeo == (sieutCandidateAeo stem) then "sieut"
+       else if aeo == (reuCandidateAeo stem) then "reu"
+       else if aeo == (reoCandidateAeo stem) then "reo"
+       else if aeo == (hCandidateAeo stem) then "h"
+       else null;
+  isBieupIrregularStem = stem:
+    (elem stem protectedBieupIrregularStems) || ((dictIrregularClassOf stem) == "bieup");
+  bieupIrregularAeoStem = stem: if (isBieupIrregularStem stem) then (bieupCandidateAeo stem) else null;
+  reverseBieupIrregularAeoStem = surface:
+    let nc = nchar surface;
+    in if nc < 2 then null
+       else let last = cAt (nc - 1) surface;
+            in if (last != "워") && (last != "와") then null
+               else let preOpen = sub 0 (3 * (nc - 1)) surface;
+                        pc = nchar preOpen;
+                    in if pc < 1 then null
+                       else let pre = if pc > 1 then sub 0 (3 * (pc - 1)) preOpen else "";
+                                prev = cAt (pc - 1) preOpen;
+                                code = hg.charToCode prev;
+                            in if (hg.isHangulSyllable code) == false then null
+                               else let d = hg.decompose code;
+                                        stem = pre + (hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 17; }));
+                                    in if isBieupIrregularStem stem then stem else null;
+  # ㅅ불규칙: ㅅ받침(19) 탈락, 모음 비축약 (짓+어→지어·낫+아→나아·붓+어→부어).
+  isSieutIrregularStem = stem: (elem stem protectedSieutIrregularStems) || ((dictIrregularClassOf stem) == "sieut");
+  sieutIrregularAeoStem = stem: if (isSieutIrregularStem stem) then (sieutCandidateAeo stem) else null;
+  reverseSieutIrregularAeoStem = surface:
+    let nc = nchar surface;
+    in if nc < 2 then null
+       else let last = cAt (nc - 1) surface;
+            in if (last != "아") && (last != "어") then null
+               else let preStr = sub 0 (3 * (nc - 1)) surface; pc = nchar preStr;
+                    in if pc < 1 then null
+                       else let pre = if pc > 1 then sub 0 (3 * (pc - 1)) preStr else "";
+                                prev = cAt (pc - 1) preStr; code = hg.charToCode prev;
+                            in if ((hg.isHangulSyllable code) == false) || ((hg.decompose code).jong != 0) then null
+                               else let d = hg.decompose code;
+                                        stem = pre + (hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 19; }));
+                                    in if isSieutIrregularStem stem then stem else null;
+  # ㄷ불규칙: ㄷ받침(7)→ㄹ받침(8), 모음 비축약 (듣+어→들어·깨닫+아→깨달아). table(듣/걷/묻)이 먼저, rule 이 나머지.
+  isDigeutIrregularStem = stem: (elem stem protectedDigeutIrregularStems) || ((dictIrregularClassOf stem) == "digeut");
+  digeutIrregularAeoStem = stem: if (isDigeutIrregularStem stem) then (digeutCandidateAeo stem) else null;
+  reverseDigeutIrregularAeoStem = surface:
+    let nc = nchar surface;
+    in if nc < 2 then null
+       else let last = cAt (nc - 1) surface;
+            in if (last != "아") && (last != "어") then null
+               else let preStr = sub 0 (3 * (nc - 1)) surface; pc = nchar preStr;
+                    in if pc < 1 then null
+                       else let pre = if pc > 1 then sub 0 (3 * (pc - 1)) preStr else "";
+                                prev = cAt (pc - 1) preStr; code = hg.charToCode prev;
+                            in if ((hg.isHangulSyllable code) == false) || ((hg.decompose code).jong != 8) then null
+                               else let d = hg.decompose code;
+                                        stem = pre + (hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 7; }));
+                                    in if isDigeutIrregularStem stem then stem else null;
+  isReuIrregularStem = stem: (elem stem protectedReuIrregularStems) || ((dictIrregularClassOf stem) == "reu");
+  reuIrregularAeoStem = stem: if (isReuIrregularStem stem) then (reuCandidateAeo stem) else null;
+  reverseReuIrregularAeoStem = surface:
+    let nc = nchar surface;
+    in if nc < 2 then null
+       else let last = cAt (nc - 1) surface;
+                prev = cAt (nc - 2) surface;
+            in if (last != "라") && (last != "러") then null
+               else if (jongOf prev) != 8 then null
+               else let pre = if nc > 2 then sub 0 (3 * (nc - 2)) surface else "";
+                        stem = pre + (openSyllable prev) + "르";
+                    in if isReuIrregularStem stem then stem else null;
+  # ★러불규칙(닫힌 집합 푸르/노르): 르 유지 + '러' 첨가 (푸르→푸르러, 르탈락 르불규칙과 다름). 과거=푸르렀(fuseJong ㅆ).
+  isReoIrregularStem = stem: (elem stem protectedReoIrregularStems) || ((dictIrregularClassOf stem) == "reo");
+  reoIrregularAeoStem = stem: if (isReoIrregularStem stem) then (reoCandidateAeo stem) else null;   # 아/어 자리 표면 = 어간+러
+  reverseReoIrregularAeoStem = surface:
+    let nc = nchar surface;
+    in if (nc < 2) || ((cAt (nc - 1) surface) != "러") then null
+       else let stem = sub 0 (3 * (nc - 1)) surface;
+            in if isReoIrregularStem stem then stem else null;
+  hIrregularAeoStem = stem: if (isHIrregularStem stem) then (hCandidateAeo stem) else null;
+  reverseIrregularAeoStem = surface:
+    let d = df.stemAtAeo aeoRevIdx surface;
+        m = firstMatch irregularAeoStems (r: r.aeo == surface);
+        r = reverseReuIrregularAeoStem surface;
+        ro = reverseReoIrregularAeoStem surface;
+        b = reverseBieupIrregularAeoStem surface;
+        s = reverseSieutIrregularAeoStem surface;
+        dg = reverseDigeutIrregularAeoStem surface;
+    in if d != null then d else if m != null then m.stem else if b != null then b
+       else if s != null then s else if dg != null then dg else if ro != null then ro else r;
+  pastLiteralMarkOfEnding = e:
+    if (e == "었어") || (e == "었다") then "었"
+    else if (e == "았어") || (e == "았다") then "았"
+    else if (e == "였어") || (e == "였다") then "였"
+    else null;
+  aeoLiteralMarkOfEnding = e:
+    if e == "어라" then "어" else if e == "아라" then "아" else null;
+  aeoLiteralStemFrom = stem0: vowel:
+    let ir = reverseIrregularAeoStem (stem0 + vowel);
+    in if ir == null then stem0 else ir;
+  pastLiteralStemFrom = stem0: mark:
+    let causativePassive = stem0 + "이";
+        vowel = if mark == "았" then "아" else if mark == "었" then "어" else "여";
+    in if (mark == "였") && (isRecognizedPredicateStem causativePassive) then causativePassive
+       else aeoLiteralStemFrom stem0 vowel;
+  openFinalSsa = surface:
+    let nc = nchar surface;
+    in if nc < 1 then surface
+       else let pre = sub 0 (3 * (nc - 1)) surface; last = cAt (nc - 1) surface;
+            in pre + openSyllable last;
+  reverseIrregularSsaStem = surface:
+    reverseIrregularAeoStem (openFinalSsa surface);
+  stripHonorificStem = stem:
+    if (stem == "계시") || (stem == "계") then { stem = "있"; honorific = "subject"; }
+    else if stem == "드시" then { stem = "먹"; honorific = "subject"; }
+    else if stem == "주무시" then { stem = "자"; honorific = "subject"; }
+    else if endsWith "으시" stem then { stem = stripSuffix "으시" stem; honorific = "subject"; }
+    else if endsWith "시" stem then
+      let root = stripSuffix "시" stem;
+      in if isHonorificRootStem root then { stem = root; honorific = "subject"; }
+         else { stem = stem; honorific = "none"; }
+    else { stem = stem; honorific = "none"; };
+  withHonorificVerb = r:
+    let h = stripHonorificStem r.action;
+        prior = if r ? honorific then r.honorific else "none";
+    in if (r.action == "계시") || (r.action == "계") then r // { action = "있"; honorific = "subject"; }
+       else r // { action = h.stem; honorific = if prior != "none" then prior else h.honorific; };
+  unfuseRieulStem = base:
+    let nc = nchar base;
+    in if (nc >= 1) && ((jongOf (cAt (nc - 1) base)) == 8)
+       then let pre = sub 0 (3 * (nc - 1)) base;
+                open = pre + (openSyllable (cAt (nc - 1) base));
+            in selectKnownPredicateStem [ open base ]                    # 갈까→가 우선; 살까는 표면상 사/살 ambiguous
+       else base;
+  refoldRieulOpenStem = base:
+    let nc = nchar base;
+    in if nc < 1 then base
+       else let last = cAt (nc - 1) base; code = hg.charToCode last;
+            in if (hg.isHangulSyllable code) == false then base
+               else let d = hg.decompose code;
+                    in if d.jong != 0 then base
+                       else let pre = if nc > 1 then sub 0 (3 * (nc - 1)) base else "";
+                                withRieul = pre + (hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 8; }));
+                            # ★결정론: base(모음어간 후보)가 *인식된 용언*이면 그대로(갑니다→가·삽니다→사), 아니면 ㄹ-어간.
+                            #   비동사 모음 단음절은 ㅂ니다 못 만듦 → base 미인식 = ㄹ탈락 확정(웁니다→울·압니다→알·만듭니다→만들).
+                            #   사전 의존 제거(dict-coincidence roulette 차단). 잔여=OOV 모음단음절 용언(쏘 등 seed밖)뿐.
+                            in if isRecognizedPredicateStem base then base
+                               else if endsWith "시" base then base           # 높임 시-어간(주무시·가시·먹으시)은 ㄹ복원 제외(주무실 오류 방지)
+                               else if endsWith "하" base then base           # ★F8(audit): 하다-용언(말하·공부하·못하·사랑하…)은 ㄹ복원 금지("X할다" 용언 부재=구조적 안전) — 말한다→말하·못합니다→못하 round-trip 닫음(dict-미인식 OOV 하다-용언 ㄹ오발 차단)
+                               else if base == "아니" then base               # ★audit: 부정계사 어근 아니(아닙니다→아니, 아닐 아님). isRecognizedPredicateStem 미등록이라 ㄹ오발 → 부정·계사·predicate_nominal 소실 차단
+                               else if d.cho == 5 then base                   # ★audit #10: base 마지막 음절 ㄹ-초성(리/라/로…)=규칙 리-stem(달리/걸리/돌리/날리)→ㄹ과복원 차단(달린다→달리·달립니다→달리). ㄹ-탈락 불규칙(살/울/만들)은 종성 ㄹ 탈락이라 base 마지막 음절 cho≠ㄹ(우/드/사)→무영향=회귀0. dict 무관·structural
+                               else withRieul;
+  # ★능력/관형형 V-ㄹ 어간 복원: 먹을→먹(을 strip)·갈→가/할→하/볼→보(ㄹ-jong unfuse, 인식 개음절 우선). -ㄹ 수 있다/없다 용.
+  parseLAdnominalBase = w:
+    let nc = nchar w;
+    in if (nc >= 2) && (endsWith "을" w) then stripSuffix "을" w
+       else if (nc >= 1) && ((jongOf (cAt (nc - 1) w)) == 8) then unfuseRieulStem w
+       else null;
+  # ★과거 관형형 V-ㄴ 어간 복원: 먹은→먹(은 strip)·간→가/본→보(ㄴ-jong=4 unfuse, refold #10 guard 경유). -ㄴ 적이 있다/없다(경험) 용.
+  parseNAdnominalBase = w:
+    let nc = nchar w;
+    in if (nc >= 2) && (endsWith "은" w) then stripSuffix "은" w
+       else if (nc >= 1) && ((jongOf (cAt (nc - 1) w)) == 4)
+            then refoldRieulOpenStem ((sub 0 (3 * (nc - 1)) w) + (openSyllable (cAt (nc - 1) w)))
+       else null;
+  parseLKkaBase = w:
+    let nc = nchar w;
+    in if endsWith "을까" w then stripSuffix "을까" w
+       else if (nc >= 2) && (cAt (nc - 1) w == "까") && ((jongOf (cAt (nc - 2) w)) == 8)
+            then unfuseRieulStem (stripSuffix "까" w)
+       else null;
+  parseAeoRaBase = w:
+    let nc = nchar w;
+    in if endsWith "거라" w then stripSuffix "거라" w
+       else if endsWith "너라" w then stripSuffix "너라" w
+       else if (nc >= 2) && (cAt (nc - 1) w == "라")
+       then let bare = stripSuffix "라" w;
+                bc = nchar bare;
+                pre = if bc > 1 then sub 0 (3 * (bc - 1)) bare else "";
+                ir = reverseIrregularAeoStem bare;
+                pieces = reverseAeoStemPieces (pre != "") (cAt (bc - 1) bare);
+            in if ir != null then ir else selectKnownPredicateStem (map (p: pre + p) pieces)
+       else null;
+  aeoSurfaceStem = surface:
+    let nc = nchar surface;
+        ir = reverseIrregularAeoStem surface;
+    in if ir != null then ir
+       else if endsWith "어" surface then aeoLiteralStemFrom (stripSuffix "어" surface) "어"
+       else if endsWith "아" surface then aeoLiteralStemFrom (stripSuffix "아" surface) "아"
+       else if nc >= 1 then
+         let pre = if nc > 1 then sub 0 (3 * (nc - 1)) surface else "";
+             pieces = reverseAeoStemPieces (pre != "") (cAt (nc - 1) surface);
+         in selectKnownPredicateStem (map (p: pre + p) pieces)
+       else surface;
+  parseAeoYaBase = w:
+    if endsWith "야" w then aeoSurfaceStem (stripSuffix "야" w) else null;
+  isAeoAuxSurface = w:
+    let nc = nchar w;
+    in if nc < 1 then false
+       else let c = cAt (nc - 1) w; code = hg.charToCode c;
+            in if (hg.isHangulSyllable code) == false then false
+               else let d = hg.decompose code;
+                    in (d.jong == 0) && ((d.jung == 0) || (d.jung == 1) || (d.jung == 4) || (d.jung == 6) || (d.jung == 9) || (d.jung == 14));
+  parseResultativeBase = w:
+    if (endsWith "고" w) || ((isAeoAuxSurface w) == false) then null else aeoSurfaceStem w;
+  parseFusedNdaBase = w:
+    let nc = nchar w;
+    in if (nc >= 2) && (cAt (nc - 1) w == "다") && ((jongOf (cAt (nc - 2) w)) == 4)
+       then refoldRieulOpenStem ((sub 0 (3 * (nc - 2)) w) + (openSyllable (cAt (nc - 2) w)))
+       else null;
+  # ★의문 간접인용 동사 의문형: 느냐(고 strip 후). '느냐'는 동사-전용(형용사=으냐/냐) → determinate.
+  #   먹느냐→먹·가느냐→가(모음 그대로)·사느냐→살(ㄹ복원, refoldRieulOpenStem 가 인식용언만 복원). bare 냐(먹냐)는 기존 냐 매처가 처리.
+  parseNeunyaBase = w:
+    if endsWith "느냐" w then refoldRieulOpenStem (stripSuffix "느냐" w) else null;
+
+  # ── ★ Slice3: 이형태 조화(harmony) 검증 — 'w 끝의 p 가 *진짜 조사*인가'를 앞 글자 받침으로 결정 ──
+  #   받침-class(은/이/을/과)는 받침(ㄹ포함) 뒤만, 모음-class(는/가/를/와)는 모음 뒤만, (으)로는 ㄹ-예외.
+  #   '사과'의 '과'는 모음(사) 뒤라 comitative 마커 불가 → strip 거부 → '사과' 명사 전체 보존(사+과 오분해 차단).
+  #   음운 규칙(데이터)이지 의미 큐레이션 아님(거울 하나, hangul-mirror 종성 재사용).
+  finalKind = w:                       # "none"(모음) | "rieul"(ㄹ) | "regular"(기타 받침)
+    let n = slen w;
+    in if n < 3 then "regular"
+       else let lastSyl = sub (n - 3) 3 w; code = hg.charToCode lastSyl;
+            in if (hg.isHangulSyllable code) == false then "regular"
+               else let j = (hg.decompose code).jong;
+                    in if j == 0 then "none" else if j == 8 then "rieul" else "regular";
+  allomorphOk = p: w:
+    let stem = stripSuffix p w; k = finalKind stem;
+    in if stem == "" then false                                                       # strip 후 빈 stem = 명사 전체
+       else if (p == "는") || (p == "가") || (p == "를") || (p == "와") then k == "none"   # 모음 뒤
+       else if (p == "은") || (p == "이") || (p == "을") || (p == "과") then k != "none"   # 받침(ㄹ포함) 뒤
+       else if p == "로" then (k == "none") || (k == "rieul")                            # 모음/ㄹ 뒤
+       else if p == "으로" then k == "regular"                                           # 기타받침 뒤
+       else true;                                                                        # 조화 무관(에/에게/에서/의…)
+
+  # 체언 어절 → {stem; particle; role} (조사 strip; 이형태 조화 통과 마커만)
+  analyzeArg = w:
+    let m = firstMatch particleRoles (pp: (endsWith pp.p w) && (allomorphOk pp.p w));
+    in if m == null then { entity = w; particle = null; role = "bare"; }
+       else { entity = stripSuffix m.p w; particle = m.p; role = m.role; };
+
+  # ★informal 축약과거: 종성 ㅆ(20) 가 '어/아' 앞 음절에 (샀어=사+ㅆ+어·했어=하+ㅆ·봤어=보+ㅆ). 종성 제거→어간 근사.
+  #   '먹었어'(별개 음절 었)는 verbEndings 리터럴이 먼저 잡음 → 여긴 *축약형*만 (사다→샀=정확, 하다→해=근사·round-trip 안정).
+  pastSsaContracted = w:
+    let nc = nchar w;
+    in if nc < 2 then null
+       else let lastc = cAt (nc - 1) w;
+                beforeEnding = sub 0 (3 * (nc - 1)) w;
+            in if ((lastc == "어") || (lastc == "아") || (lastc == "다")) && (isProtectedLexicalSsaStem beforeEnding)
+               then null
+	               else if ((lastc == "어") || (lastc == "아") || (lastc == "다")) && ((jongOf (cAt (nc - 2) w)) == 20)
+		               then let pre = sub 0 (3 * (nc - 2)) w;
+		                        ssaBase = pre + (cAt (nc - 2) w);
+		                        ir = reverseIrregularSsaStem ssaBase;
+		                        pieces = reverseSsaStemPieces (pre != "") (cAt (nc - 2) w);
+		                        stem = selectKnownPredicateStem ((if ir == null then [ ] else [ ir ]) ++ (map (p: pre + p) pieces));
+		                    in { action = stem; tense = "past"; mood = "declarative"; surface = w; }
+               else null;
+
+  # ── ★ 화계 직교 파싱(생성 realizeVerbLevel 의 역): 종결어미 strip → {level;mood;base=어간+선어말}, 그뒤 선어말 strip ──
+  #   현 슬라이스=하십시오체(습니다/습니까 리터럴, 갑니다=ㅂ니다 종성ㅂ17). base 에서 선어말(었/았/였/겠/종성ㅆ) 분리.
+  parseLevelFinal = w:
+    let nc = nchar w;
+    in if endsWith "습니다" w then { level = "hasipsio"; mood = "declarative";   base = stripSuffix "습니다" w; }
+       else if endsWith "습니까" w then { level = "hasipsio"; mood = "interrogative"; base = stripSuffix "습니까" w; }
+       else if endsWith "으십시오" w then { level = "hasipsio"; mood = "imperative"; base = stripSuffix "으십시오" w; }
+       else if endsWith "십시오" w then { level = "hasipsio"; mood = "imperative"; base = stripSuffix "십시오" w; }
+       else if endsWith "읍시다" w then { level = "hasipsio"; mood = "propositive"; base = stripSuffix "읍시다" w; }
+       else if (nc >= 3) && (cAt (nc - 2) w == "니") && (cAt (nc - 1) w == "다") && (jongOf (cAt (nc - 3) w) == 17)
+            then { level = "hasipsio"; mood = "declarative"; base = refoldRieulOpenStem ((sub 0 (3 * (nc - 3)) w) + (openSyllable (cAt (nc - 3) w))); }   # 갑니다→가, 압니다→알
+       else if (nc >= 3) && (cAt (nc - 2) w == "니") && (cAt (nc - 1) w == "까") && (jongOf (cAt (nc - 3) w) == 17)
+            then { level = "hasipsio"; mood = "interrogative"; base = refoldRieulOpenStem ((sub 0 (3 * (nc - 3)) w) + (openSyllable (cAt (nc - 3) w))); }
+       else if (nc >= 3) && (cAt (nc - 2) w == "시") && (cAt (nc - 1) w == "다") && (jongOf (cAt (nc - 3) w) == 17)
+            then { level = "hasipsio"; mood = "propositive"; base = refoldRieulOpenStem ((sub 0 (3 * (nc - 3)) w) + (openSyllable (cAt (nc - 3) w))); }   # 갑시다→가
+	       else if endsWith "까요" w then
+	            let stem = parseLKkaBase (stripSuffix "요" w);
+	            in if stem != null then { level = "haeyo"; mood = "deliberative"; base = stem; } else null
+	       else if w == "계세요" then { level = "haeyo"; mood = "declarative"; base = "계시"; }
+	       else if w == "드세요" then { level = "haeyo"; mood = "declarative"; base = "드시"; }
+	       else if w == "주무세요" then { level = "haeyo"; mood = "declarative"; base = "주무시"; }
+	       else if w == "아니에요" then { level = "haeyo"; mood = "declarative"; base = "아니"; }
+	       else if w == "아니세요" then { level = "haeyo"; mood = "declarative"; base = "아니시"; }
+	       else if endsWith "으세요" w then { level = "haeyo"; mood = "imperative"; base = stripSuffix "으세요" w; }  # 먹으세요
+       else if endsWith "세요" w then { level = "haeyo"; mood = "imperative"; base = stripSuffix "세요" w; }      # 가세요·하세요
+       else if endsWith "어요" w then
+            let bare = stripSuffix "요" w; ir = reverseIrregularAeoStem bare;
+            in { level = "haeyo"; mood = "declarative"; base = if ir == null then stripSuffix "어요" w else ir; }  # 먹어요·들어요
+       else if endsWith "아요" w then
+            let bare = stripSuffix "요" w; ir = reverseIrregularAeoStem bare;
+            in { level = "haeyo"; mood = "declarative"; base = if ir == null then stripSuffix "아요" w else ir; }  # 받아요·좋아요
+       else if (nc >= 2) && (cAt (nc - 1) w == "요")
+            then let bare = stripSuffix "요" w;
+                     bc = nchar bare;
+                     pre = sub 0 (3 * (bc - 1)) bare;
+                     pieces = reverseAeoStemPieces (pre != "") (cAt (bc - 1) bare);
+                     ir = reverseIrregularAeoStem bare;
+                     stem = if ir != null then ir else selectKnownPredicateStem (map (p: pre + p) pieces);
+                 in { level = "haeyo"; mood = "declarative"; base = stem; }      # 해요·가요·봐요·줘요·펴요
+       else null;
+  stripPreFinal = base:   # 어간+선어말 → {tense; stem; honorific}. 었/았/였/겠/종성ㅆ 처리 뒤 시 높임을 직교 strip.
+    let nc = nchar base;
+        raw =
+		      if endsWith "었" base then { tense = "past"; stem = pastLiteralStemFrom (stripSuffix "었" base) "었"; }
+		      else if endsWith "았" base then { tense = "past"; stem = pastLiteralStemFrom (stripSuffix "았" base) "았"; }
+		      else if endsWith "였" base then { tense = "past"; stem = pastLiteralStemFrom (stripSuffix "였" base) "였"; }
+	      else if endsWith "겠" base then (stripPreFinal (stripSuffix "겠" base)) // { modality = "prospective"; }   # ★겠 재귀: 먹었겠→먹/past·가시겠→가/honorific
+	      else if (nc >= 1) && ((jongOf (cAt (nc - 1) base)) == 20) && (isProtectedLexicalSsaStem base)
+	           then { tense = "present"; stem = base; }
+	      else if (nc >= 1) && ((jongOf (cAt (nc - 1) base)) == 20)   # 종성-ㅆ 축약과거 (샀→사)
+	           then let pre = sub 0 (3 * (nc - 1)) base;
+	                    ir = reverseIrregularSsaStem base;
+	                    pieces = reverseSsaStemPieces (pre != "") (cAt (nc - 1) base);
+	                    stem = selectKnownPredicateStem ((if ir == null then [ ] else [ ir ]) ++ (map (p: pre + p) pieces));
+	                in { tense = "past"; stem = stem; }
+	      else { tense = "present"; stem = base; };
+        h = stripHonorificStem raw.stem;
+    in raw // { stem = h.stem; honorific = if raw ? honorific then raw.honorific else h.honorific; };   # 겠 재귀가 이미 푼 honorific 보존(clobber 방지)
+
+  # 용언 어절 → {action;tense;mood}. 4단: ①verbEndings(다자: formal+리터럴 informal과거) ②종성-ㅆ 축약과거(샀다/샀어)
+  #   ③informal 현재(어/아/지/네) ④verbEndings1(1자 자/까/다). 종성-ㅆ가 1자 '다'보다 먼저=샀다 오분해 차단.
+  analyzeVerbBase = w:
+    if w == "다오" then { action = "달"; tense = "present"; mood = "imperative"; surface = w; }  # 오불규칙 parse-only: 표면 다오=달라(give-me) 전용. 생성 전역치환은 sense 부재로 금지.
+    else let m = firstMatch verbEndings (ve: endsWith ve.e w);
+    in if m != null then
+         let raw = stripSuffix m.e w;
+             mark = pastLiteralMarkOfEnding m.e;
+             aeo = aeoLiteralMarkOfEnding m.e;
+             action = if mark != null then pastLiteralStemFrom raw mark else if aeo != null then aeoLiteralStemFrom raw aeo else raw;
+         in { action = action; tense = m.tense; mood = m.mood; modality = if m ? modality then m.modality else "plain"; surface = w; }
+       else let ssa = pastSsaContracted w;
+            in if ssa != null then ssa
+               else let lk = parseLKkaBase w;
+                    in if lk != null then { action = lk; tense = "present"; mood = "deliberative"; surface = w; }
+                       else let ra = parseAeoRaBase w;
+                            in if ra != null then { action = ra; tense = "present"; mood = "imperative"; surface = w; }
+	                               else let ny = parseNeunyaBase w;
+	                                    in if ny != null then { action = ny; tense = "present"; mood = "interrogative"; surface = w; }
+	                               else let p = firstMatch presentInformal (pe: endsWith pe.e w);
+	                                    in if p != null then
+	                                         let pf = stripPreFinal (stripSuffix p.e w);
+	                                         in { action = pf.stem; tense = pf.tense; mood = p.mood; modality = if pf ? modality then pf.modality else "plain"; honorific = pf.honorific; surface = w; }
+	                                       else let fn = parseFusedNdaBase w;
+                                            in if fn != null then { action = fn; tense = "present"; mood = "declarative"; surface = w; }
+                                               else let aeoBare = aeoSurfaceStem w;
+                                                    in if aeoBare != w then { action = aeoBare; tense = "present"; mood = "declarative"; surface = w; }
+                                                           else let m1 = firstMatch verbEndings1 (ve: endsWith ve.e w);
+                                                                in if m1 != null then { action = stripSuffix m1.e w; tense = m1.tense; mood = m1.mood; surface = w; }
+                                                                   else { action = w; tense = "?"; mood = "?"; surface = w; };
+  # ★보고/추측 종결(예: 했대/했더라/갈아봤어) 파싱: 끝자리 '대/더라'를 보고 선어말만 재분석
+  #   split/합성에서 빠진 동사 형태를 회복해 과도한 held 방지를 막는다(명사말미는 verb stem 판별로 억제).
+  parseReportedSpeechBase = w:
+    let
+      parse = base: tenseOverride:
+        # 복합 종결(었다/았다/였다/했다)에서 '더라/더라고' 붙은 뒤에는 base 가 '<stem>다' 꼴이 될 수 있어
+        # 하나 더 원형 복원 시도 (먹었다더라 → base=먹었다 → 먹었).
+        let normBase = if (endsWith "었다" base) || (endsWith "았다" base) || (endsWith "였다" base) || (endsWith "했다" base)
+                          then stripSuffix "다" base
+                       else base;
+            pf = stripPreFinal normBase;
+            af = analyzeVerbBase normBase;
+        in if (pf.stem != "") && (pf.stem != normBase)
+           then { action = pf.stem; tense = if tenseOverride != null then tenseOverride else pf.tense; mood = "declarative";
+                  modality = if pf ? modality then pf.modality else "plain"; honorific = pf.honorific; surface = w; }
+           else if (af.action != normBase) && (af.mood != "?") && (af.tense != "?")
+                then { action = af.action; tense = if tenseOverride != null then tenseOverride else af.tense; mood = "declarative";
+                       modality = if af ? modality then af.modality else "plain"; honorific = if af ? honorific then af.honorific else "none"; surface = w; }
+               else if (tenseOverride != null) && (af.action == normBase)
+                 then { action = normBase; tense = tenseOverride; mood = "declarative";
+                        modality = if af ? modality then af.modality else "plain"; honorific = if af ? honorific then af.honorific else "none"; surface = w; }
+               else null;
+      # ★보고/추측 suffix가 실제 표면을 1~2음절로 뭉개는 경우,
+      #   marker 를 되돌린 base로 복구(먹었대=먹었, 예매했대=예매하)해 predicate 판별을 시도한다.
+      m1 = if endsWith "더라고" w then { base = stripSuffix "더라고" w; }
+           else if endsWith "더라" w then { base = stripSuffix "더라" w; }
+           else if endsWith "었대" w then { base = (stripSuffix "었대" w) + "었"; tense = "past"; }
+           else if endsWith "았대" w then { base = (stripSuffix "았대" w) + "았"; tense = "past"; }
+           else if endsWith "였대" w then { base = (stripSuffix "였대" w) + "였"; tense = "past"; }
+           else if endsWith "했대" w then { base = (stripSuffix "했대" w) + "하"; tense = "past"; }
+           else if endsWith "겠대" w then { base = stripSuffix "겠대" w; }
+           else if endsWith "대" w then { base = stripSuffix "대" w; }
+           else null;
+    in if m1 == null then null else parse m1.base (if m1 ? tense then m1.tense else null);
+  # ★화계 래퍼: 화계 종결어미면 직교 파싱(level+선어말), 아니면 기존 4단(level=haera 기본).
+	  analyzeVerb = w:
+	    let lf = parseLevelFinal w;
+	    in if lf != null
+	       then let pf = stripPreFinal lf.base;
+	            in { action = pf.stem; tense = pf.tense; mood = lf.mood; level = lf.level; honorific = pf.honorific; modality = if pf ? modality then pf.modality else "plain"; surface = w; }
+	       else let rs = parseReportedSpeechBase w;
+	            in if rs != null then rs // { level = "haera"; }
+	            else (withHonorificVerb (analyzeVerbBase w)) // { level = "haera"; };
+
+  # ── ★ segmentMorphs: 자모 수준 용언 head 분해 (어간 + 종결어미) — math 로 고정 ──
+  #   analyzeVerb 의 문자열 suffix strip 으로 못 잡는 *융합 종성* 어미(갑니다=가+ㅂ니다, 간다=가+ㄴ다)를
+  #   hangul-mirror 종성 산술로 분해. Rust nl_core/head.rs(split_head_morphology) 의 .px 대체.
+  #   3-phase longest-first: ① 다자 suffix(min stem 1) → ② 융합 종성(ㅂ니다=종성17/ㄴ다=종성4) → ③ 단자 suffix(min stem 2).
+  #   Korean 글자=3 UTF-8 byte. nchar/cAt 은 한글 어절 가정(체언 strip 은 analyzeArg 가 담당).
+  jongOf = ch: let code = hg.charToCode ch; in if hg.isHangulSyllable code then (hg.decompose code).jong else 0;
+  openSyllable = ch: let d = hg.decompose (hg.charToCode ch); in hg.codeToChar (hg.compose { cho = d.cho; jung = d.jung; jong = 0; });
+  nchar = s: (slen s) / 3;
+  cAt = i: s: sub (3 * i) 3 s;
+  headEndingMulti = [
+    { e = "었습니다"; c = "formal-polite"; } { e = "았습니다"; c = "formal-polite"; } { e = "겠습니다"; c = "formal-polite"; }
+    { e = "습니다"; c = "formal-polite"; } { e = "입니다"; c = "formal-polite"; } { e = "습니까"; c = "formal-interrogative"; }
+    { e = "이에요"; c = "polite"; } { e = "예요"; c = "polite"; } { e = "어요"; c = "polite"; } { e = "아요"; c = "polite"; }
+    { e = "네요"; c = "polite"; } { e = "세요"; c = "polite"; } { e = "는다"; c = "plain"; } { e = "었다"; c = "plain"; }
+    { e = "았다"; c = "plain"; } { e = "어라"; c = "imperative"; } { e = "아라"; c = "imperative"; }
+  ];
+  headEndingSingle = [
+    { e = "죠"; c = "polite"; } { e = "다"; c = "plain"; } { e = "요"; c = "polite"; }
+    { e = "자"; c = "propositive"; } { e = "까"; c = "interrogative"; } { e = "니"; c = "interrogative"; }
+  ];
+  splitHead = token:
+    let nc = nchar token; in
+    if nc < 2 then null
+    else let m1 = firstMatch headEndingMulti (t: endsWith t.e token); in
+    if (m1 != null) && ((nchar (stripSuffix m1.e token)) >= 1)
+      then { stem = stripSuffix m1.e token; ending = m1.e; ending_class = m1.c; }
+    # ② ㅂ니다: …[X+ㅂ]니다 → …X+가형 (종성 ㅂ=17 제거 후 재합성)
+    else if (nc >= 3) && (cAt (nc - 2) token == "니") && (cAt (nc - 1) token == "다") && (jongOf (cAt (nc - 3) token) == 17)
+      then { stem = refoldRieulOpenStem ((sub 0 (3 * (nc - 3)) token) + (openSyllable (cAt (nc - 3) token))); ending = "ㅂ니다"; ending_class = "formal-polite"; }
+    # ② ㄴ다: …[X+ㄴ]다 → …X+가형 (종성 ㄴ=4)
+    else if (cAt (nc - 1) token == "다") && (jongOf (cAt (nc - 2) token) == 4)
+      then { stem = (sub 0 (3 * (nc - 2)) token) + (openSyllable (cAt (nc - 2) token)); ending = "ㄴ다"; ending_class = "plain"; }
+    else let m3 = firstMatch headEndingSingle (t: endsWith t.e token); in
+    if (m3 != null) && ((nchar (stripSuffix m3.e token)) >= 2)
+      then { stem = stripSuffix m3.e token; ending = m3.e; ending_class = m3.c; }
+      else null;
+
+  # ── ★ S4-b: 사전 품사로 어절 분류 (용언후보 stem=splitHead/analyzeVerb, 체언후보=조사 strip 후) ──
+  #   citation('-다') ↔ lift stem 정규화는 dictionary-facts.stemKind 내부(stemOf)에서. null=미등록(OOV).
+  verbStemOf = w: let h = splitHead w; in if h != null then h.stem else (analyzeVerb w).action;
+  wordPredKind = w: stemKindIdx (verbStemOf w);       # 용언으로 봤을 때 사전 kind (predicate/…/null)
+  wordEntKind = w: stemKindIdx (analyzeArg w).entity;  # 체언으로 봤을 때 사전 kind (entity/…/null)
+  protectedCopulaNominals = [ "학생" "의사" "선생님" "사람" "친구" ];
+  isCopulaNominal = pred: (pred != "") && ((stemKindIdx pred) != "predicate");
+  isStrictCopulaNominal = pred: (isCopulaNominal pred) && (((stemKindIdx pred) == "entity") || (elem pred protectedCopulaNominals));
+  mkCopula = pred: tense: mood: level:
+    # ★F3 fail-open 차단: X였다/X이다가 *사동/피동*(X이+...)일 때 copula 로 오admit 금지. pred+이 가 인식 술어면
+    #   (죽→죽이·끓→끓이·먹→먹이·속→속이…) copula 거부 → analyzeVerb 의 사동복원(A2)에 위임. 학생/의사(학생이/의사이=비술어)는 copula 유지.
+    if (isCopulaNominal pred) && ((isRecognizedPredicateStem (pred + "이")) == false)
+    then { action = "be"; predicate_nominal = pred; tense = tense; mood = mood; level = level; polarity = "positive"; honorific = "none"; modality = "plain"; aspect = "plain"; }
+    else null;
+  mkCopulaHonorific = pred: tense: mood: level:
+    if isCopulaNominal pred then { action = "be"; predicate_nominal = pred; tense = tense; mood = mood; level = level; polarity = "positive"; honorific = "subject"; modality = "plain"; aspect = "plain"; }
+    else null;
+  mkCopulaHonorificStrict = pred: tense: mood: level:
+    if isStrictCopulaNominal pred then { action = "be"; predicate_nominal = pred; tense = tense; mood = mood; level = level; polarity = "positive"; honorific = "subject"; modality = "plain"; aspect = "plain"; }
+    else null;
+  parseCopulaWord = w:
+    if endsWith "이셨습니다" w then mkCopulaHonorific (stripSuffix "이셨습니다" w) "past" "declarative" "hasipsio"
+    else if endsWith "셨습니다" w then mkCopulaHonorificStrict (stripSuffix "셨습니다" w) "past" "declarative" "hasipsio"
+    else if endsWith "이셨습니까" w then mkCopulaHonorific (stripSuffix "이셨습니까" w) "past" "interrogative" "hasipsio"
+    else if endsWith "셨습니까" w then mkCopulaHonorificStrict (stripSuffix "셨습니까" w) "past" "interrogative" "hasipsio"
+    else if endsWith "이셨어요" w then mkCopulaHonorific (stripSuffix "이셨어요" w) "past" "declarative" "haeyo"
+    else if endsWith "셨어요" w then mkCopulaHonorificStrict (stripSuffix "셨어요" w) "past" "declarative" "haeyo"
+    else if endsWith "이셨다" w then mkCopulaHonorific (stripSuffix "이셨다" w) "past" "declarative" "haera"
+    else if endsWith "셨다" w then mkCopulaHonorificStrict (stripSuffix "셨다" w) "past" "declarative" "haera"
+    else if endsWith "이십니다" w then mkCopulaHonorific (stripSuffix "이십니다" w) "present" "declarative" "hasipsio"
+    else if endsWith "십니다" w then mkCopulaHonorificStrict (stripSuffix "십니다" w) "present" "declarative" "hasipsio"
+    else if endsWith "이십니까" w then mkCopulaHonorific (stripSuffix "이십니까" w) "present" "interrogative" "hasipsio"
+    else if endsWith "십니까" w then mkCopulaHonorificStrict (stripSuffix "십니까" w) "present" "interrogative" "hasipsio"
+    else if endsWith "이세요" w then mkCopulaHonorific (stripSuffix "이세요" w) "present" "declarative" "haeyo"
+    else if endsWith "세요" w then mkCopulaHonorificStrict (stripSuffix "세요" w) "present" "declarative" "haeyo"
+    else if endsWith "이시다" w then mkCopulaHonorific (stripSuffix "이시다" w) "present" "declarative" "haera"
+    else if endsWith "시다" w then mkCopulaHonorificStrict (stripSuffix "시다" w) "present" "declarative" "haera"
+    else if endsWith "이었습니다" w then mkCopula (stripSuffix "이었습니다" w) "past" "declarative" "hasipsio"
+    else if endsWith "였습니다" w then mkCopula (stripSuffix "였습니다" w) "past" "declarative" "hasipsio"
+    else if endsWith "이었어요" w then mkCopula (stripSuffix "이었어요" w) "past" "declarative" "haeyo"
+    else if endsWith "였어요" w then mkCopula (stripSuffix "였어요" w) "past" "declarative" "haeyo"
+    else if endsWith "이었다" w then mkCopula (stripSuffix "이었다" w) "past" "declarative" "haera"
+    else if endsWith "였다" w then mkCopula (stripSuffix "였다" w) "past" "declarative" "haera"
+    else if endsWith "입니다" w then mkCopula (stripSuffix "입니다" w) "present" "declarative" "hasipsio"
+    else if endsWith "입니까" w then mkCopula (stripSuffix "입니까" w) "present" "interrogative" "hasipsio"
+    else if endsWith "이에요" w then mkCopula (stripSuffix "이에요" w) "present" "declarative" "haeyo"
+    else if endsWith "예요" w then mkCopula (stripSuffix "예요" w) "present" "declarative" "haeyo"
+    else if endsWith "이다" w then mkCopula (stripSuffix "이다" w) "present" "declarative" "haera"
+    # ★audit #3: 모음종결 명사+bare다 계사(의사다=의사+Ø+다·바보다). 이X 미매칭 + 모음종결(jong0) + strict-entity 게이트 → 동사(간다=간 받침·가다=가 비체언) fail-closed 차단.
+    else if (endsWith "다" w) && (let base = stripSuffix "다" w; in (base != "") && ((jongOf (cAt ((nchar base) - 1) base)) == 0) && (isStrictCopulaNominal base)) then mkCopula (stripSuffix "다" w) "present" "declarative" "haera"
+    else null;
+
+  # 단문 codec 경계: 아직 복문/관형절/인용/수량구/보조용언을 구조 보존하지 못하면 math lane 으로 올리지 않는다.
+  # liftSentence 는 계속 최선의 얕은 proposition 을 만들되, convergeGate 가 scope_gap 을 보고 fail-closed 한다.
+  # ★P0 fail-OPEN 봉합: 보조사/접속조사가 체언과 함께 silent drop 된 채 math-keep 되는 것을 최소 held 로 차단.
+  #   단순 suffix-match 금지(포도/태도/사고/딸기 over-fire 재발). strip 뒤 base 가 체언처럼 보일 때만 잡는다.
+  unsupportedParticleSuffixes = [ "밖에" "조차" "부터" ];
+  focusParticleSuffixes = [ "밖에" "조차" "마저" "까지" "부터" "뿐" "도" "만" ];
+  bareCoordinationSuffixes = [ "이랑" "하고" "랑" ];
+  # 다/라/지/데/면서 포함 = 명사 말음절과 비충돌 → bareNonEntity 면 바로 절/인용.
+  distinctiveClauseSuffixes = [ "다고" "라고" "냐고" "자고" "면서" "지만" "는데" "으며" ];
+  gatedConnectiveSuffixes = [ "어서" "아서" "으면" ];   # 2글자 연결, strip 후 *용언 stem* 일 때만 (먹어서→먹✓·어서[부사]→""✗)
+  adnominalSuffixes = [ "은" "는" "을" "던" ];                    # gated (마을·수은·구름… 명사 오발 방지)
+  nominalSuffixes = [ "기" "음" ];                               # gated (딸기·마음·그림… 명사 오발 방지)
+  numberWords = [ "한" "두" "세" "네" "다섯" "여섯" "일곱" "여덟" "아홉" "열" "하나" "둘" "셋" "넷" ];
+  classifierEntities = [ "명" "개" "마리" "권" "장" "대" "잔" "병" "그릇" "번" "차례" ];
+  # ── ★수량구(numeral phrase): [명사 수사 분류사+조사] → {entity;count;classifier;role}. scaffolding(numberWords/classifierEntities) 위 구조 추출 ──
+  #   수사=관형형(한/두/세/네)·standalone(하나/둘/셋/넷) 둘 다 정수로. 분류사+조사(개를)는 analyzeArg 분해(개=분류사·를=object).
+  #   realizeQuantityPhrase(거울측)의 역방향. 분류사 어휘=닫힌집합이라 명사 오발 없음(개=분류사일 때만).
+  numberWordToInt = w:
+    if (w == "한") || (w == "하나") then 1
+    else if (w == "두") || (w == "둘") then 2
+    else if (w == "세") || (w == "셋") then 3
+    else if (w == "네") || (w == "넷") then 4
+    else if w == "다섯" then 5
+    else if w == "여섯" then 6
+    else if w == "일곱" then 7
+    else if w == "여덟" then 8
+    else if w == "아홉" then 9
+    else if w == "열" then 10
+    else null;
+  intToNumberWord = n:                        # 분류사 앞 관형형
+    if n == 1 then "한" else if n == 2 then "두" else if n == 3 then "세" else if n == 4 then "네"
+    else if n == 5 then "다섯" else if n == 6 then "여섯" else if n == 7 then "일곱" else if n == 8 then "여덟"
+    else if n == 9 then "아홉" else if n == 10 then "열" else null;
+  parseQuantityPhrase = words:
+    if (builtins.length words) != 3 then null
+    else let nounW = builtins.elemAt words 0; numW = builtins.elemAt words 1; clsW = builtins.elemAt words 2;
+             cnt = numberWordToInt numW;
+             clsA = analyzeArg clsW;
+         in if (cnt == null) || ((elem clsA.entity classifierEntities) == false) then null
+            else { entity = nounW; count = cnt; classifier = clsA.entity; role = clsA.role; };
+  # ★관형절 파싱 — 현재 동사 관형형(는)만: [roles] [동사+는] [head] → {head;action;tense;roles}. realizeRelativeNP 역방향.
+  #   stemKindIdx(stem)==predicate 게이트로 먹는(동사+는 관형) ⟂ 사과는(명사+는 주제) 구별. 은/을/ㄹ어간 중의=제외(held=null).
+  parseRelativeNP = words:
+    let n = builtins.length words;
+    in if n < 2 then null
+       else let adnW = builtins.elemAt words (n - 2); head = builtins.elemAt words (n - 1);
+                roleList = builtins.map (w: let a = analyzeArg w; in { entity = a.entity; role = a.role; }) (builtins.genList (i: builtins.elemAt words i) (n - 2));
+                mk = stem: tense: pk: { head = head; action = stem; tense = tense; predicate_kind = pk; roles = roleList; };
+            in if (endsWith "는" adnW) && ((stemKindIdx (stripSuffix "는" adnW)) == "predicate") then mk (stripSuffix "는" adnW) "present" "verb"
+               # ★은 중의 해소: predicateKindOfStem=adjective→형용사현재(작은), stemKindIdx=predicate→동사과거(먹은), 그외(명사 수은)=null(fail-closed).
+               else if (endsWith "은" adnW)
+                  then let stem = stripSuffix "은" adnW;
+                       in if (predicateKindOfStem stem) == "adjective" then mk stem "present" "adjective"
+                          else if (stemKindIdx stem) == "predicate" then mk stem "past" "verb"
+                          else null
+               else if (endsWith "을" adnW) && ((stemKindIdx (stripSuffix "을" adnW)) == "predicate") then mk (stripSuffix "을" adnW) "future" "verb"
+               # ★fused ㄴ 형용사 관형형(큰=크·예쁜=예쁘·바쁜=바쁘): literal 은 미매칭(쁜≠은)이라 위 분기서 누락 → parseNAdnominalBase로 ㄴ-unfuse 후 형용사일 때만.
+               #   ⚠형용사 게이트 필수: 동사과거 fused(간=가·산=사[사다])는 noun(산=mountain) 모호성 → verb-past fusion은 제외(literal 먹은만). 형용사 defused(크/예쁘)는 명사 충돌 없어 안전.
+               else (let nbase = parseNAdnominalBase adnW;
+                     in if (nbase != null) && ((predicateKindOfStem nbase) == "adjective")
+                        then mk nbase "present" "adjective" else null);
+  anySuffix = suffixes: w: builtins.any (s: endsWith s w) suffixes;
+  bareWord = w: (analyzeArg w).role == "bare";
+  # ★over-fire 차단 핵심: 어미 suffix-match 는 (a) bare 어절이고 (b) 사전 명사(entity) 아니고 (c) 닫힌집합 부사어 아닐 때만.
+  #   그리고 연결/관형/명사화 어미는 strip 후 남는 stem 이 *용언(predicate)* 일 때만(먹고→먹✓ / 광고→광✗·사고=entity✗).
+  bareNonEntity = w: (bareWord w) && ((stemKindIdx w) != "entity") && ((elem w adjunctAdverbs) == false);
+  stripLeavesPredicate = suffixes: w:
+    builtins.any (s: (endsWith s w) && ((stemKindIdx (stripSuffix s w)) == "predicate")) suffixes;
+  closedParticleBasePronouns = [ "나" "너" "저" "그" "이" "저" "뭐" "누구" ];
+  particleBaseLikeEntity = base:
+    (base != "") && (((stemKindIdx base) == "entity") || (elem base protectedCopulaNominals) || (elem base closedParticleBasePronouns) || ((nchar base) >= 2));
+  hasParticleBaseSuffix = suffixes: w:
+    let s = firstMatch suffixes (p: (endsWith p w) && (particleBaseLikeEntity (stripSuffix p w)));
+    in s != null;
+  hasFocusParticleGap = w:
+    (bareNonEntity w) && (hasParticleBaseSuffix focusParticleSuffixes w);
+  hasBareCoordinationGap = w:
+    (bareNonEntity w) && (hasParticleBaseSuffix bareCoordinationSuffixes w);
+  isCoreCoordFollower = w:
+    let r = (analyzeArg w).role;
+    in (r == "agent") || (r == "topic") || (r == "object");
+  isWaGwaComitativeWord = w:
+    let a = analyzeArg w;
+    in (a.role == "comitative") && ((a.particle == "와") || (a.particle == "과"));
+  hasLaterCoreArg = words: i:
+    let n = len words;
+        go = j: if j >= n then false else if isCoreCoordFollower (elemAt words j) then true else go (j + 1);
+    in go (i + 1);
+  hasWaGwaCoordinationGap = words:
+    let n = len words;
+        go = i: if i >= n then false
+                else if (isWaGwaComitativeWord (elemAt words i)) && (hasLaterCoreArg words i) then true
+                else go (i + 1);
+    in go 0;
+  scopeGapReason = argWords: roled:
+    if builtins.any (w: (bareNonEntity w) && (anySuffix distinctiveClauseSuffixes w)) argWords then "clause-or-quote"
+    else if builtins.any (w: (bareNonEntity w) && (stripLeavesPredicate gatedConnectiveSuffixes w)) argWords then "clause-or-quote"
+    # ★audit #5: 융합 모음어간 연결어미(가서=가+아서·와서=오+아서·봐도=보+아도) — 리터럴 아서/어서 미매칭이라 종속절 silent drop + scope_gap=null(fail-OPEN)이었음. aeoSurfaceStem 역융합(와→오·봐→보)으로 감지→fail-closed(held).
+    else if builtins.any (w: (bareNonEntity w) && (let suf = if endsWith "서" w then "서" else if endsWith "도" w then "도" else null; in (suf != null) && ((stemKindIdx (aeoSurfaceStem (stripSuffix suf w))) == "predicate"))) argWords then "clause-or-quote"
+    else if builtins.any (w: (bareNonEntity w) && (stripLeavesPredicate adnominalSuffixes w)) argWords then "adnominal-clause"
+    else if builtins.any (w: (bareNonEntity w) && (stripLeavesPredicate nominalSuffixes w)) argWords then "nominalized-clause"
+    else if (builtins.any (w: builtins.elem w numberWords) argWords)
+         && (builtins.any (a: builtins.elem a.entity classifierEntities) roled) then "numeral-classifier"
+    else if builtins.any (w: (bareNonEntity w) && ((stemKindIdx w) != "modifier")
+                             && (let r = parseResultativeBase w; in (r != null) && ((stemKindIdx r) == "predicate"))) argWords then "auxiliary-verb"
+    else if hasWaGwaCoordinationGap argWords then "coordination"
+    else if builtins.any hasBareCoordinationGap argWords then "coordination"
+    else if builtins.any hasFocusParticleGap argWords then "unsupported-particle"
+    else if builtins.any (w: (bareNonEntity w) && (anySuffix unsupportedParticleSuffixes w)) argWords then "unsupported-particle"
+    else null;
+
+  # ★ 문장 → ontology proposition (역할 graph) ★
+  liftSentence = sentence:
+    let
+      questionPunct = endsWith "?" sentence;
+      sentence0 = if questionPunct then stripSuffix "?" sentence else sentence;
+      words = splitSp sentence0;
+      n = len words;
+    in
+      if n == 0 then { outcome = "held-empty"; }
+      else
+        let
+          lastIdx = n - 1;
+          # 사전 보강(우선순위 dictionary > position): 마지막 어절이 사전상 *개체*(명사 등)이고 앞에 사전상
+          #   *용언*이 있으면 그 용언을 선택(scrambled 어순 교정). 미등록(OOV) 문장은 lastEntityKind=null →
+          #   verbIdx=lastIdx = 기존 위치 휴리스틱 그대로 (골든 문장 전부 OOV → byte-불변).
+          lastEntityKind = wordEntKind (elemAt words lastIdx);
+          findPred = i: if i >= lastIdx then null
+                        else if (wordPredKind (elemAt words i)) == "predicate" then i
+                        else findPred (i + 1);
+          predIdx = findPred 0;
+          verbIdx = if (lastEntityKind == "entity") && (predIdx != null) then predIdx else lastIdx;
+		          copula = parseCopulaWord (elemAt words verbIdx);
+		          verb = if copula != null then copula else analyzeVerb (elemAt words verbIdx);
+		          negativeCopulaArg =
+		            if (copula == null) && (verb.action == "아니") && (verbIdx > 0)
+		            then let a = analyzeArg (elemAt words (verbIdx - 1));
+		                 in if ((elem a.particle [ "이" "가" "은" "는" ]) && (isCopulaNominal a.entity)) then a else null
+		            else null;
+		          predicateNominalIdx = if negativeCopulaArg != null then verbIdx - 1 else null;
+		          isCopula = (copula != null) || (negativeCopulaArg != null);
+			          honorificVerbAction = if (verb.action == "계시") || (verb.action == "계") then "있" else verb.action;
+			          verbHonorific = if (verb.action == "계시") || (verb.action == "계") then "subject" else (verb.honorific or "none");
+			          longNegAux =
+			            (honorificVerbAction == "않")
+			            || (((honorificVerbAction == "마") || (honorificVerbAction == "말")) && ((verb.mood == "imperative") || (verb.mood == "propositive")));
+			          longNegHeadIdx =
+			            if (verbIdx > 0) && longNegAux && (endsWith "지" (elemAt words (verbIdx - 1)))
+			            then verbIdx - 1 else null;                 # 먹지 않았다/먹지 않아요 → action=먹, aux=않
+			          longUnableHeadIdx =
+			            if (verbIdx > 0) && (honorificVerbAction == "못하") && (endsWith "지" (elemAt words (verbIdx - 1)))
+			            then verbIdx - 1 else null;                 # 먹지 못했다/먹지 못해요 → action=먹, aux=못하
+			          progressiveHeadIdx =
+			            if (verbIdx > 0) && (honorificVerbAction == "있") && (endsWith "고" (elemAt words (verbIdx - 1))) && ((stemKindIdx (stripSuffix "고" (elemAt words (verbIdx - 1)))) == "predicate")
+			            then verbIdx - 1 else null;                 # 먹고 있다/먹고 있어요 → action=먹, aux=있
+			          desiderativeHeadIdx =
+			            if (verbIdx > 0) && (honorificVerbAction == "싶") && (endsWith "고" (elemAt words (verbIdx - 1)))
+			            then verbIdx - 1 else null;                 # 먹고 싶다/먹고 싶어요 → action=먹, modality=desiderative(보조용언 확장)
+			          # ★먹고 싶지 않다: V고 + 싶지 + 않- (장형부정 over desiderative). 싶=desiderative 전용 aux(동음content동사 없음)
+			          #   → 구조 유일(sound). verbIdx=않(aux), verbIdx-1="싶지", verbIdx-2 ends 고. action=V고에서 고 strip.
+			          negDesiderativeHeadIdx =
+			            if (verbIdx > 1) && (honorificVerbAction == "않")
+			               && ((elemAt words (verbIdx - 1)) == "싶지")
+			               && (endsWith "고" (elemAt words (verbIdx - 2)))
+			            then verbIdx - 2 else null;                 # head=V고 어절(action 운반)
+			          negDesiAuxIdx = if negDesiderativeHeadIdx != null then verbIdx - 1 else null;   # "싶지" 어절(별도 제외)
+			          resultativeHeadIdx =
+			            if (verbIdx > 0) && (honorificVerbAction == "있") && (let rb = parseResultativeBase (elemAt words (verbIdx - 1)); in (rb != null) && ((stemKindIdx rb) == "predicate"))
+			            then verbIdx - 1 else null;                 # 앉아 있다/열려 있어요 → action=앉/열리, aux=있 (★audit #9: rb=predicate 게이트 — '철수가 있다' 주격주어 resultative 오발화 차단, progressive #6과 동형)
+			          obligationHeadIdx =
+			            if (verbIdx > 0) && (honorificVerbAction == "하") && (parseAeoYaBase (elemAt words (verbIdx - 1)) != null)
+			            then verbIdx - 1 else null;                 # 먹어야 한다/해야 해요 → action=먹/하, aux=하
+          # ★능력/불능 보조용언 -ㄹ 수 있다/없다(3어절: V-ㄹ + 수 + 있/없). head=V-ㄹ(verbIdx-2), 수(verbIdx-1)=별도 제외.
+          #   갈 수 있다→action=가 modality=ability·먹을 수 없다→action=먹 modality=inability.
+          abilityHeadIdx =
+            if (verbIdx > 1) && ((honorificVerbAction == "있") || (honorificVerbAction == "없"))
+               && ((elemAt words (verbIdx - 1)) == "수")
+               && (parseLAdnominalBase (elemAt words (verbIdx - 2)) != null)
+            then verbIdx - 2 else null;
+          abilitySuIdx = if abilityHeadIdx != null then verbIdx - 1 else null;
+          abilityNeg = (abilityHeadIdx != null) && (honorificVerbAction == "없");
+          # ★경험 보조용언 -ㄴ 적이 있다/없다(3어절: V-ㄴ + 적이/적 + 있/없). head=V-ㄴ(verbIdx-2), 적이=별도 제외.
+          #   간 적이 있다→action=가 modality=experiential·먹은 적이 없다→action=먹 modality=inexperiential(둘 다 고유값=깨끗).
+          experienceHeadIdx =
+            if (verbIdx > 1) && ((honorificVerbAction == "있") || (honorificVerbAction == "없"))
+               && (((elemAt words (verbIdx - 1)) == "적이") || ((elemAt words (verbIdx - 1)) == "적"))
+               && (parseNAdnominalBase (elemAt words (verbIdx - 2)) != null)
+            then verbIdx - 2 else null;
+          experienceJeokIdx = if experienceHeadIdx != null then verbIdx - 1 else null;
+          experienceNeg = (experienceHeadIdx != null) && (honorificVerbAction == "없");
+          # ★기동(inchoative) 보조용언 -게 되다(2어절: V-게 + 되다). head=V-게(verbIdx-1, action=게 strip). 가게 된다→action=가 modality=inchoative.
+          #   되다=주동사(의사가 된다)와 구분: 직전 어절이 게-종결일 때만(의사가는 게 아님). unfusion 불요.
+          inchoativeHeadIdx =
+            if (verbIdx > 0) && (honorificVerbAction == "되")
+               && (endsWith "게" (elemAt words (verbIdx - 1)))
+               && ((stemKindIdx (stripSuffix "게" (elemAt words (verbIdx - 1)))) == "predicate")
+            then verbIdx - 1 else null;
+          # ★수혜(benefactive) -아/어 주다(2어절: V-아/어 + 주다). head=V-아/어(verbIdx-1). 도와 준다→action=돕 modality=benefactive.
+          #   주다 본동사(책을 준다)와 구분: 직전 어절이 *aeo-converb 술어*일 때만(parseResultativeBase=aeo stem, predicate 게이트).
+          benefactiveHeadIdx =
+            if (verbIdx > 0) && (honorificVerbAction == "주")
+               && (let b = parseResultativeBase (elemAt words (verbIdx - 1)); in (b != null) && ((stemKindIdx b) == "predicate"))
+            then verbIdx - 1 else null;
+          # ★의도(intention) -려고 하다(2어절: V-려고 + 하다). head=V-려고(verbIdx-1). 가려고 한다→action=가 modality=intention.
+          #   하 본동사와 구분: 직전 어절 려고-종결 술어일 때만. (려고=clause connector 이나 하다 동반 시 의도 단위 우선)
+          intentionHeadIdx =
+            if (verbIdx > 0) && (honorificVerbAction == "하")
+               && (endsWith "려고" (elemAt words (verbIdx - 1)))
+               && (let s0 = stripSuffix "려고" (elemAt words (verbIdx - 1)); s = if endsWith "으" s0 then stripSuffix "으" s0 else s0;
+                   in (stemKindIdx s) == "predicate")
+            then verbIdx - 1 else null;
+		          operatorHeadIdx =
+		            if negDesiderativeHeadIdx != null then negDesiderativeHeadIdx   # ★최우선: 싶지 않다가 longNeg로 오포착되어 action=싶 되는 것을 차단
+		            else if longNegHeadIdx != null then longNegHeadIdx
+		            else if longUnableHeadIdx != null then longUnableHeadIdx
+		            else if obligationHeadIdx != null then obligationHeadIdx
+		            else if desiderativeHeadIdx != null then desiderativeHeadIdx
+		            else if progressiveHeadIdx != null then progressiveHeadIdx
+		            else if abilityHeadIdx != null then abilityHeadIdx
+		            else if experienceHeadIdx != null then experienceHeadIdx
+		            else if inchoativeHeadIdx != null then inchoativeHeadIdx
+		            else if benefactiveHeadIdx != null then benefactiveHeadIdx
+		            else if intentionHeadIdx != null then intentionHeadIdx
+		            else resultativeHeadIdx;
+		          argIdxs = filter (i:
+		            (i != verbIdx)
+		            && ((operatorHeadIdx == null) || (i != operatorHeadIdx))
+		            && ((negDesiAuxIdx == null) || (i != negDesiAuxIdx))      # ★"싶지" 어절 별도 제외(3어절 chain)
+            && ((abilitySuIdx == null) || (i != abilitySuIdx))        # ★"수" 어절 별도 제외(능력 3어절 chain)
+            && ((experienceJeokIdx == null) || (i != experienceJeokIdx))  # ★"적이" 어절 별도 제외(경험 3어절 chain)
+		            && ((predicateNominalIdx == null) || (i != predicateNominalIdx))
+		          ) (genList (i: i) n);
+			          rawArgWords = map (i: elemAt words i) argIdxs;
+			          shortNegated = builtins.any (w: w == "안") rawArgWords;
+			          negDesiderative = negDesiderativeHeadIdx != null;
+			          longNegated = (longNegHeadIdx != null) || negDesiderative;
+			          negated = shortNegated || longNegated;
+			          shortUnable = builtins.any (w: w == "못") rawArgWords;
+			          longUnable = longUnableHeadIdx != null;
+			          obligation = obligationHeadIdx != null;
+			          unable = (shortUnable || longUnable) && (obligation == false);
+			          progressive = progressiveHeadIdx != null;
+			          desiderative = (desiderativeHeadIdx != null) || negDesiderative;
+			          resultative = resultativeHeadIdx != null;
+			          ability = abilityHeadIdx != null;            # ★-ㄹ 수 있다/없다
+			          experience = experienceHeadIdx != null;      # ★-ㄴ 적이 있다/없다
+			          inchoative = inchoativeHeadIdx != null;      # ★-게 되다(기동상)
+			          benefactive = benefactiveHeadIdx != null;    # ★-아/어 주다(수혜)
+			          intention = intentionHeadIdx != null;        # ★-려고 하다(의도)
+			          argWords = filter (w: (w != "안") && (w != "못")) rawArgWords;
+              args = map (w:
+                let a = analyzeArg w;
+                in if (elem w adjunctAdverbs)                                              # ★전체 어절이 닫힌집합 부사어면 조사분해보다 우선(많이=많+이 주격 오분해 방지; 이는 부사 종성)
+                   then { entity = w; role = "adjunct"; particle = null; adjunct_kind = adjunctKindOf w; }
+                   else if (a.role == "bare") && ((stemKindIdx a.entity) == "modifier")    # 사전 부사/관형사 POS(open-class)
+                   then a // { role = "adjunct"; adjunct_kind = adjunctKindOf a.entity; }
+                   else a
+              ) argWords;   # 무표지 부사어→adjunct 포착(닫힌집합 + 사전 modifier POS) + L4용 kind 좌표
+              roled = filter (a: a.role != "bare") args;
+              scopeGap = scopeGapReason argWords roled;
+              baseAction =
+                if isCopula then "be"
+                else if negDesiderative then stripSuffix "고" (elemAt words operatorHeadIdx)   # ★V고에서 고 strip (action=먹)
+                else if (longNegHeadIdx != null) || (longUnableHeadIdx != null) then stripSuffix "지" (elemAt words operatorHeadIdx)
+                else if obligation then parseAeoYaBase (elemAt words obligationHeadIdx)
+                else if progressive then stripSuffix "고" (elemAt words progressiveHeadIdx)
+                else if desiderative then stripSuffix "고" (elemAt words desiderativeHeadIdx)
+                else if resultative then parseResultativeBase (elemAt words resultativeHeadIdx)
+                else if ability then parseLAdnominalBase (elemAt words abilityHeadIdx)
+                else if experience then parseNAdnominalBase (elemAt words experienceHeadIdx)
+                else if inchoative then stripSuffix "게" (elemAt words inchoativeHeadIdx)
+                else if benefactive then parseResultativeBase (elemAt words benefactiveHeadIdx)
+                else if intention then (let s0 = stripSuffix "려고" (elemAt words intentionHeadIdx); in if endsWith "으" s0 then stripSuffix "으" s0 else s0)
+                else honorificVerbAction;
+              # ★조사생략 목적어 복원(P0 부분해결): 타동사인데 목적어 없고 bare 체언(보조사/접속 미탐지)이 있으면 → object.
+              #   포도 샀다→object 포도(math-keep, 전엔 bare drop→ill-formed). 철수도 같은 보조사 의심 bare 는
+              #   isParticleSuspect로 제외→held 유지(과포착·silent drop 없음). 타동성은 seed/overlay valency facts 에서 읽고,
+              #   fallback 은 OOV 안전판만 남긴다(D8/P1: full dict valency ingest 의 축소판).
+              transitiveVerbFallbackStems = [ ];
+              isTransitiveStem = stem:
+                let v = stemValencyIdx stem;
+                in (v == "transitive") || (v == "ambitransitive") || (elem stem transitiveVerbFallbackStems);
+              eligibleBareArgs = filter (a: (a.role == "bare") && ((hasFocusParticleGap a.entity) == false) && ((hasBareCoordinationGap a.entity) == false)) args;
+              # ★분리 표기 명사+하다 결합: "철수가 공부 했다"는 action=하가 아니라 공부하.
+              #   허용된 행위명사 1개만 결합한다. 미등록 bare+하다("밥 했다" 등)는 action=하 math-keep 대신 scope held.
+              #   derives_hada facts 에서 읽고 fallback 은 OOV 안전판만 남긴다.
+              hadaCompoundFallbackNouns = [ ];
+              isHadaCompoundNoun = entity: (df.hadaCompoundAt hadaCompoundIdx entity) || (elem entity hadaCompoundFallbackNouns);
+              hadaCompoundArg =
+                if (baseAction == "하") && ((len eligibleBareArgs) == 1) then elemAt eligibleBareArgs 0 else null;
+              hadaCompoundAction =
+                if (hadaCompoundArg != null) && (isHadaCompoundNoun hadaCompoundArg.entity)
+                then hadaCompoundArg.entity + "하" else null;
+              hadaUnknownGap =
+                (scopeGap == null) && (baseAction == "하") && (hadaCompoundArg != null) && (hadaCompoundAction == null);
+              captureObj =
+                if (isTransitiveStem baseAction) && ((builtins.any (a: a.role == "object") roled) == false)
+                then firstMatch eligibleBareArgs (a: true)
+                else null;
+              roledObj = roled ++ (if captureObj != null then [ (captureObj // { role = "object"; }) ] else [ ]);
+              # ★ㄹ탈락 표면 중의성: 산다/삽니다/사세요는 사다/살다 양쪽이 가능. 형태론 단독으로 살을 강제하면
+              #   "물건을 삽니다"가 깨진다. 따라서 문장 내부 role context가 장소("집에")를 줄 때만 살다로 선택.
+              hasLocationRole = builtins.any (a: a.role == "location") roledObj;
+              hasObjectRole = builtins.any (a: a.role == "object") roledObj;
+              # ★살다(live)=자동사라 목적어 불가. 목적어가 있으면 사다(buy)로 둔다(학교에 책을 샀다=buy≠살았다).
+              #   목적어 무시 시 의미상 malformed("책을 살았다")가 math-keep durable로 승격되는 fail-open 차단.
+              contextAction =
+                if hadaCompoundAction != null then hadaCompoundAction
+                else if (baseAction == "사") && hasLocationRole && (hasObjectRole == false) then "살"
+                else baseAction;
+              # ★조사생략 주어 복원: 자동사인데 agent/topic 이 없고 eligible bare 가 정확히 하나면 → agent.
+              #   철수 왔다·비 왔다→agent 복원. 다중 bare/보조사 의심(철수도)·타동사 문장은 캡처하지 않고 held 유지.
+              #   자동성도 seed/overlay valency facts 에서 읽고 fallback 은 OOV 안전판만 남긴다. 모르면 fact 에 넣지 말고 held 가 안전하다.
+              intransitiveVerbFallbackStems = [ ];
+              isIntransitiveStem = stem: ((stemValencyIdx stem) == "intransitive") || (elem stem intransitiveVerbFallbackStems);
+              hasSubjectRole = builtins.any (a: (a.role == "agent") || (a.role == "topic")) roledObj;
+              captureSubj =
+                if (isIntransitiveStem contextAction) && (hasSubjectRole == false) && (hasObjectRole == false) && ((len eligibleBareArgs) == 1)
+                then elemAt eligibleBareArgs 0
+                else null;
+              roled2pre = roledObj ++ (if captureSubj != null then [ (captureSubj // { role = "agent"; }) ] else [ ]);
+              # ★CC1: 되다 보어(의사가 된다)=주격 표지지만 agent 아닌 complement. 되다-인접(verbIdx-1) 주격 nominal → complement 재배정
+              #   → 이중 agent 버그(의사:agent + 철수:agent) 봉인 + 어순 복원(agent→complement→된다). 기동 -게 되다(inchoative)는 제외.
+              becomeComplementEntity =
+                if (contextAction == "되") && (inchoative == false) && (verbIdx > 0)
+                then (let a = analyzeArg (elemAt words (verbIdx - 1)); in if a.role == "agent" then a.entity else null)
+                else null;
+              roled2 = if becomeComplementEntity != null
+                       then map (a: if (a.role == "agent") && (a.entity == becomeComplementEntity) then a // { role = "complement"; } else a) roled2pre
+                       else roled2pre;
+              # ★A2 사동/피동 구조적 복원(dict 무관): X였다가 copula 로 잡혔는데 *목적어*가 있으면 copula(자동사)는 불가
+              #   → 사동 X이(소를 죽였다=죽이·경찰을 속였다=속이·물을 끓였다=끓이). copula nominal + 이 로 강제, predicate_kind=verb.
+              causOverride =
+                if (copula != null) && hasObjectRole && (copula.predicate_nominal != null) && (copula.predicate_nominal != "")
+                then copula.predicate_nominal + "이" else null;
+              scopeGap2 = if hadaUnknownGap then "hada-compound-unknown" else scopeGap;
+              finalAction = if causOverride != null then causOverride else contextAction;
+	        in {
+          outcome = "lifted";
+          sentence = sentence;
+              roles = map (a:
+                ({ entity = a.entity; role = a.role; particle = a.particle; kind = stemKindIdx a.entity; }
+                 // (if (a ? adjunct_kind) && (a.adjunct_kind != null) then { adjunct_kind = a.adjunct_kind; } else { }))
+              ) roled2;
+          role_count = len roled2;
+              scope_gap = scopeGap2 != null;
+              scope_gap_reason = scopeGap2;
+			          action = finalAction;
+			          predicate_kind =
+			            if causOverride != null then "verb"
+			            else if isCopula then "copula"
+			            else predicateKindOfStem finalAction;
+		          tense = verb.tense;
+		          mood = if questionPunct && (verb.mood == "declarative") then "interrogative" else verb.mood;
+		          level = verb.level or "haera";                     # ★화계(발화 레지스터; proposition 보존·term 제외)
+			          predicate_nominal = if causOverride != null then null else if copula != null then copula.predicate_nominal else if negativeCopulaArg != null then negativeCopulaArg.entity else null;
+			          honorific = verbHonorific;
+			          polarity = if negativeCopulaArg != null then "negative" else if negated then "negative" else "positive";
+		          negation_form = if longNegated then "long" else if shortNegated then "short" else "none";
+			          modality = if obligation then "obligation" else if unable then "inability" else if desiderative then "desiderative" else if ability then (if abilityNeg then "inability" else "ability") else if experience then (if experienceNeg then "inexperiential" else "experiential") else if benefactive then "benefactive" else if intention then "intention" else (verb.modality or "plain");
+		          modality_form = if obligation then "long" else if longUnable then "long" else if shortUnable then "short" else if ability then "long" else if experience then "long" else if benefactive then "long" else if intention then "long" else "none";
+		          aspect = if progressive then "progressive" else if resultative then "resultative" else if inchoative then "inchoative" else "plain";
+		          aspect_form = if progressive then "long" else if resultative then "aeo" else if inchoative then "long" else "none";
+	          verb_kind = wordPredKind (elemAt words verbIdx);   # 사전상 용언 검증: predicate=확인 / entity·null=미확인
+          reclassified = verbIdx != lastIdx;                 # 사전이 위치 휴리스틱을 교정했나
+          # ontology proposition 한 줄
+          proposition = (builtins.concatStringsSep ", " (map (a: a.role + "=" + a.entity) roled2))
+                        + " | action=" + verb.action + " (" + verb.tense + "/" + verb.mood + ")";
+        };
+
+  # 단일 source 근거: 조사→role 이 lens(role→조사)에서 derive 됐는가 (핵심 조사가 derive 결과에 있는가)
+  deriveCheck = _:
+    let core = [ "에서" "에게" "으로" "에" "을" "를" "은" "는" "이" "가" "의" "과" "와" ];
+        haveP = p: (filter (pr: pr.p == p) particleRoles) != [ ];
+        present = filter haveP core;
+    in { core_particles = len core; derived_from_lens = len present;
+         total_derived = len particleRoles;
+         aligned = (len present) == (len core); };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.korean-taxonomy-lift";
+    consumes = "coding/korean-case-marker-lens(role→조사; 역으로 derive) + case↔role 브릿지 (data-only; 비수정)";
+    role = "한글 문장 → 조사/어미 taxonomy lift → ontology proposition(역할 graph). 운영자 흐름 재조립 connector";
+    note = "조사=taxonomy edge constructor. ★MERGE: 조사↔case 단일 source=case-marker-lens(손table 제거, 역으로 derive). 개념 후보 해소는 disambiguate. 불규칙 활용/중의는 별 슬라이스.";
+  };
+
+in {
+  inherit
+    endsWith stripSuffix splitSp particleRoles verbEndings
+    headEndingMulti headEndingSingle
+    caseToRole roleToCase
+    irregularAeoStems irregularAeoStem hIrregularAeoStem bieupIrregularAeoStem reverseIrregularAeoStem reverseIrregularSsaStem
+    isBieupIrregularStem isSieutIrregularStem isDigeutIrregularStem isReuIrregularStem
+    bieupCandidateAeo digeutCandidateAeo sieutCandidateAeo reuCandidateAeo reoCandidateAeo hCandidateAeo dictIrregularClassOf
+    finalEndings preFinals lookupFinal
+    analyzeArg analyzeVerb splitHead liftSentence deriveCheck connectiveToRelation splitClauseRelations
+    numberWordToInt intToNumberWord parseQuantityPhrase parseRelativeNP
+    inventorySummary;
+  ownerName = "stdlib.nl.korean-taxonomy-lift";
+  meta = {
+    source = "stdlib nl korean-taxonomy-lift (Korean sentence -> 조사/어미 taxonomy -> ontology proposition; reassembly)";
+    owner = "stdlib.nl.korean-taxonomy-lift";
+    base = "korean-taxonomy-lift-v0";
+    rev_note = "idea.md (2026-06-14) 한글 문장 → 조사/어미 taxonomy lift → ontology proposition(역할 graph). 재조립 connector: knowledge/korean-morphology(strip-suffixes 27행 조사/어미) 직접 import 재사용 + 기존 역할 taxonomy 라벨(conversation-particle-role-mapping particleRoleTable[kind-keyed dispatch]·atom-slot-semantic-roles 을/를→object 등)에 맞춘 조사-string→role 브릿지(.px 에 없던 한 조각). liftSentence: 공백 split→체언 analyzeArg(조사 strip→role)+용언 analyzeVerb(어미→tense/mood)→proposition. 실측 '철수가 사과를 먹었다'→agent=철수,object=사과,action=먹(past/declarative). 운영자: 조사=taxonomy edge constructor, 한글=taxonomy lifting surface. 개념 후보 해소는 disambiguate 연결. 불규칙 활용/중의 별 슬라이스. 비수정 data-only 조립.";
+  };
+}

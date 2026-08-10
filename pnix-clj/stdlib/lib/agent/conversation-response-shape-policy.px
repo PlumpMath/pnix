@@ -1,0 +1,147 @@
+# stdlib.lib.agent.conversation-response-shape-policy
+#
+# OWNER-LAW (2026-05-31): doghouse conversation response envelope shape.
+#
+# # What this is for
+#
+# substrate response envelope 의 17 field declaration — judgement
+# lifecycle status, held reason/subject, transcript, related concepts,
+# formulas, semantic frames, sentence analysis, constraint violations,
+# semantic roles, clauses, tool handoff, output fragments.
+
+let
+  ownerName = "stdlib/lib/agent/conversation-response-shape-policy.px";
+
+  mkField = name: kind: required: hasDefault: skipOnNone: lensRef: comment:
+    { field_name = name; field_kind = kind;
+      required = required; has_serde_default = hasDefault;
+      skip_serializing_if_none = skipOnNone;
+      cross_lens_ref = lensRef;
+      semantic = comment; };
+
+  fields = [
+    (mkField "episode_id"             "string"               true  false false
+      null
+      "semantic episode id")
+    (mkField "summary"                "string"               true  false false
+      null
+      "response summary text")
+    (mkField "transcript"             "list-of-strings"      false true  false
+      null
+      "transcript lines (host-extracted)")
+    (mkField "follow_up_hint"         "string"               false true  false
+      null
+      "follow-up question hint for reopen")
+    (mkField "judgement_status"       "optional-MeaningStatus" false true true
+      "stdlib/lib/ontology/meaning-status-rank-policy.px (ee)"
+      "ontology lifecycle status")
+    (mkField "held_reason_key"        "optional-string"      false true  true
+      null
+      "canonical held reason key chosen by .px owner")
+    (mkField "held_subject"           "optional-string"      false true  true
+      null
+      "subject of held reason (for follow-up routing)")
+    (mkField "turn_count"             "usize"                true  false false
+      null
+      "turn count")
+    (mkField "related_concepts"       "list-of-RelatedConceptInfo" false true false
+      "stdlib/lib/ontology/related-concept-info-shape-policy.px (cccc)"
+      "related concepts extracted from .px/redb fact store")
+    (mkField "formulas"               "list-of-strings"      false true  false
+      null
+      "ontology-derived computable formulas")
+    (mkField "semantic_frames"        "list-of-strings"      false true  false
+      null
+      "FrameNet semantic frame names")
+    (mkField "sentence_verb"          "optional-string"      false true  true
+      null
+      "verb root (Korean morphological analysis)")
+    (mkField "sentence_mood"          "optional-string"      false true  true
+      "stdlib/lib/ontology/korean-sentence-mood-policy.px (mm)"
+      "sentence mood (declarative/interrogative/imperative/propositive)")
+    (mkField "constraint_violations"  "list-of-strings"      false true  false
+      null
+      "constraint violations (e.g. Sentient)")
+    (mkField "semantic_roles"         "list-of-pair-string-string" false true false
+      null
+      "semantic role assignment [(noun, role)]")
+    (mkField "clauses"                "list-of-triple-string" false true false
+      null
+      "complex clause info [(text, relation, type)]")
+    (mkField "handoff_code"           "optional-string"      false true  true
+      null
+      "tool handoff: .px or Python code for execution")
+    (mkField "handoff_runtime"        "optional-string"      false true  true
+      null
+      "tool handoff: target runtime (pnix/python/blender)")
+    (mkField "output_fragments"       "list-of-OutputFragment" false true  false
+      "stdlib/lib/gate/output-fragment-shape-policy.px (iii)"
+      "rendering fragments")
+  ];
+
+  validRequestKinds = [
+    "list-fields"
+    "validate-record"
+  ];
+
+  validVerdicts = [
+    "fields-listed"
+    "record-valid"
+    "record-invalid"
+    "held-unknown-request-kind"
+  ];
+
+  asAttrs = v: if builtins.isAttrs v then v else {};
+  asString = v: if builtins.isString v then v else "";
+
+  applyConversationResponseShapePolicy = request:
+    let
+      reqKind = asString (request.request_kind or "");
+    in
+      if reqKind == "list-fields" then {
+        verdict = "fields-listed";
+        fields = fields;
+        total_field_count = builtins.length fields;
+        required_field_count = builtins.length
+          (builtins.filter (f: f.required) fields);
+        cross_lens_count = builtins.length
+          (builtins.filter (f: f.cross_lens_ref != null) fields);
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "validate-record" then
+        let
+          record = asAttrs (request.record or {});
+          missing = builtins.foldl'
+            (acc: f:
+              if f.required && !(builtins.hasAttr f.field_name record)
+              then acc ++ [ f.field_name ]
+              else acc)
+            []
+            fields;
+        in
+          if missing == [] then {
+            verdict = "record-valid";
+            valid = true;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+          else {
+            verdict = "record-invalid";
+            valid = false;
+            missing_required_fields = missing;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+      else {
+        verdict = "held-unknown-request-kind";
+        request_kind = reqKind;
+        valid_request_kinds = validRequestKinds;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName fields validRequestKinds validVerdicts
+          applyConversationResponseShapePolicy;
+}

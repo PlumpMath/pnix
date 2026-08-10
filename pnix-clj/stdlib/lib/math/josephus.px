@@ -1,0 +1,143 @@
+# stdlib.lib.math.josephus
+#
+# OWNER-LAW (v0.12-AAY, div-math, 2026-05-22): the Josephus
+# problem.
+#
+# n people stand in a circle; counting by k, every k-th person is
+# eliminated, the count resuming from the next survivor, until one
+# remains. This owner answers both the closed-form question (who
+# survives) and the full process (the elimination order).
+#
+# # Two views, cross-checked
+#
+#   - `josephusPosition` uses the classic recurrence
+#     J(1) = 0,  J(n) = (J(n-1) + k) mod n
+#     -- the survivor's 0-indexed seat, in O(n) exact arithmetic.
+#   - `josephusOrder` simulates the circle directly and returns
+#     the elimination order. Its LAST entry is the survivor, so
+#     the two views agree by construction.
+#
+# `josephusSurvivor1` gives the 1-indexed seat (J(7,3) = 4).
+#
+# # Standalone, exact
+#
+# Imports nothing. n >= 1, k >= 1. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT the variable-step / general Josephus variants.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/josephus.px";
+
+  intMod = a: b: a - b * (a / b);
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  removeAt = lst: idx:
+    let n = builtins.length lst;
+    in
+      builtins.foldl'
+        (acc: i:
+          if i == idx then acc
+          else acc ++ [ (builtins.elemAt lst i) ])
+        []
+        (rangeList 0 (n - 1));
+
+  # The survivor's 0-indexed seat, via the recurrence
+  # J(1) = 0, J(i) = (J(i-1) + k) mod i.
+  josephusPosition = n: k:
+    let
+      go = i: acc:
+        if i > n then acc
+        else go (i + 1) (intMod (acc + k) i);
+    in go 2 0;
+
+  # The 1-indexed survivor seat.
+  josephusSurvivor1 = n: k: josephusPosition n k + 1;
+
+  # The full elimination order (0-indexed seats), by simulating
+  # the circle. The last entry is the survivor.
+  josephusOrder = n: k:
+    let
+      go = circle: idx: order:
+        if circle == [] then order
+        else
+          let
+            len = builtins.length circle;
+            rm = intMod (idx + k - 1) len;
+            elem = builtins.elemAt circle rm;
+          in go (removeAt circle rm) rm (order ++ [ elem ]);
+    in go (rangeList 0 (n - 1)) 0 [];
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "survivor"
+    "survivor-one-indexed"
+    "elimination-order"
+  ];
+
+  circleLimit = 5000;
+
+  applyJosephus = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 1;
+      k  = if request ? k then request.k else 1;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 1 then {
+        outcome = "held-non-positive-count";
+        operation = op;
+        n = n;
+      }
+      else if k < 1 then {
+        outcome = "held-non-positive-step";
+        operation = op;
+        k = k;
+      }
+      else if op == "elimination-order" && n > circleLimit then {
+        outcome = "held-circle-too-large";
+        operation = op;
+        n = n;
+        limit = circleLimit;
+      }
+      else if op == "survivor" then {
+        outcome = "josephus-computed";
+        operation = op; n = n; k = k;
+        value = josephusPosition n k;
+      }
+      else if op == "survivor-one-indexed" then {
+        outcome = "josephus-computed";
+        operation = op; n = n; k = k;
+        value = josephusSurvivor1 n k;
+      }
+      else {
+        # op == "elimination-order"
+        outcome = "josephus-computed";
+        operation = op; n = n; k = k;
+        order = josephusOrder n k;
+      };
+
+in {
+  inherit
+    ownerName
+    josephusPosition
+    josephusSurvivor1
+    josephusOrder
+    knownOperations
+    applyJosephus;
+  meta = {
+    source = "stdlib math josephus";
+    owner = ownerName;
+    base = "parametric-math-josephus-v0";
+    rev_note = "v0.12-AAY (div-math): the Josephus problem owner. josephusPosition (the survivor's 0-indexed seat by the recurrence J(n)=(J(n-1)+k) mod n), josephusSurvivor1 (1-indexed, J(7,3)=4), josephusOrder (the full elimination order by direct circle simulation; its last entry is the survivor, so the two views agree by construction). Standalone, exact. NOT the variable-step variants, NOT yet a registered lens.";
+  };
+}

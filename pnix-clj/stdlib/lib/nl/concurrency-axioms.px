@@ -1,0 +1,297 @@
+let
+  ownerName = "stdlib.nl.concurrency-axioms";
+  bt = import nl/branch-tree-substrate.px;
+  decomposer = import nl/sentence-decomposition-substrate.px;
+
+  threadAxiomTree = bt.composeBranchTree "thread axiom" [
+    {
+      name = "os-thread";
+      cues = [ "thread" "os thread" "스레드" ];
+      sub_specs = [
+        { name = "thread-create"; cues = [ "spawn" "fork thread" "생성" ]; terminal = true; }
+        { name = "thread-pool"; cues = [ "thread pool" "스레드 풀" ]; terminal = true; }
+        { name = "thread-local"; cues = [ "thread local" "TLS" "스레드 로컬" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "green-thread";
+      cues = [ "green thread" "fiber" "goroutine" "그린 스레드" "고루틴" ];
+      sub_specs = [
+        { name = "m-n-scheduling"; cues = [ "M:N" "m-n" ]; terminal = true; }
+        { name = "work-stealing"; cues = [ "work stealing" "작업 훔치기" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "thread-affinity";
+      cues = [ "affinity" "cpu pinning" "스레드 친화" ];
+      sub_specs = [
+        { name = "core-pinning"; cues = []; terminal = true; }
+        { name = "numa-aware"; cues = [ "numa" "NUMA" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  asyncAxiomTree = bt.composeBranchTree "async axiom" [
+    {
+      name = "async-await";
+      cues = [ "async" "await" "future" "promise" "비동기" ];
+      sub_specs = [
+        { name = "future-promise"; cues = [ "future" "promise" ]; terminal = true; }
+        { name = "stream-async"; cues = [ "stream" "async iterator" ]; terminal = true; }
+        { name = "select-race"; cues = [ "select" "race" "first" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "callback-style";
+      cues = [ "callback" "continuation" "콜백" ];
+      sub_specs = [
+        { name = "cps"; cues = [ "CPS" "continuation passing" ]; terminal = true; }
+        { name = "callback-hell"; cues = [ "callback hell" "콜백 지옥" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "event-loop";
+      cues = [ "event loop" "이벤트 루프" "reactor" ];
+      sub_specs = [
+        { name = "single-threaded-loop"; cues = []; terminal = true; }
+        { name = "multi-threaded-runtime"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "cancellation";
+      cues = [ "cancel" "cancellation" "취소" "abort signal" ];
+      sub_specs = [
+        { name = "cooperative-cancel"; cues = [ "cooperative" "협력" ]; terminal = true; }
+        { name = "timeout-cancel"; cues = [ "timeout" "시간 초과" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  syncPrimitiveAxiomTree = bt.composeBranchTree "synchronization primitive axiom" [
+    {
+      name = "lock";
+      cues = [ "lock" "mutex" "락" "뮤텍스" ];
+      sub_specs = [
+        { name = "mutex"; cues = [ "mutex" ]; terminal = true; }
+        { name = "rwlock"; cues = [ "rwlock" "rw lock" "read-write" "읽기 쓰기" ]; terminal = true; }
+        { name = "spinlock"; cues = [ "spinlock" "스핀락" ]; terminal = true; }
+        { name = "reentrant-lock"; cues = [ "reentrant" "재진입" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "atomic";
+      cues = [ "atomic" "compare and swap" "CAS" "원자적" ];
+      sub_specs = [
+        { name = "atomic-int"; cues = [ "atomic int" "atomic integer" ]; terminal = true; }
+        { name = "compare-and-swap"; cues = [ "CAS" "compare-and-swap" ]; terminal = true; }
+        { name = "memory-ordering"; cues = [ "memory ordering" "acquire release" "메모리 순서" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "condition-variable";
+      cues = [ "condition variable" "condvar" "조건 변수" ];
+      sub_specs = [
+        { name = "wait-notify"; cues = [ "wait" "notify" "대기 알림" ]; terminal = true; }
+        { name = "spurious-wakeup"; cues = [ "spurious wakeup" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "semaphore-barrier";
+      cues = [ "semaphore" "barrier" "세마포어" "장벽" ];
+      sub_specs = [
+        { name = "counting-semaphore"; cues = []; terminal = true; }
+        { name = "cyclic-barrier"; cues = [ "cyclic" "순환" ]; terminal = true; }
+        { name = "countdown-latch"; cues = [ "countdown" "countdown latch" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "lock-free";
+      cues = [ "lock-free" "lock free" "wait-free" "락 프리" ];
+      sub_specs = [
+        { name = "lock-free-queue"; cues = []; terminal = true; }
+        { name = "hazard-pointer"; cues = [ "hazard" "해저드" ]; terminal = true; }
+        { name = "epoch-reclamation"; cues = [ "epoch" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  messagePassingAxiomTree = bt.composeBranchTree "message passing axiom" [
+    {
+      name = "channel";
+      cues = [ "channel" "csp" "go channel" "채널" ];
+      sub_specs = [
+        { name = "unbuffered-channel"; cues = [ "unbuffered" "비버퍼" ]; terminal = true; }
+        { name = "buffered-channel"; cues = [ "buffered" "버퍼" ]; terminal = true; }
+        { name = "select-multiple-channels"; cues = [ "select" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "actor-model";
+      cues = [ "actor" "actor model" "erlang" "akka" "액터" ];
+      sub_specs = [
+        { name = "mailbox"; cues = [ "mailbox" "메일박스" ]; terminal = true; }
+        { name = "supervisor-tree"; cues = [ "supervisor" "감독자" ]; terminal = true; }
+        { name = "let-it-crash"; cues = [ "let it crash" "그냥 죽게" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "pubsub";
+      cues = [ "pub sub" "pubsub" "publish subscribe" "발행 구독" ];
+      sub_specs = [
+        { name = "topic-based"; cues = [ "topic" "토픽" ]; terminal = true; }
+        { name = "content-based"; cues = [ "content" "내용" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "shared-nothing";
+      cues = [ "shared nothing" "shared-nothing" "공유 없음" ];
+      sub_specs = [
+        { name = "process-isolation"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  parallelPatternAxiomTree = bt.composeBranchTree "parallel pattern axiom" [
+    {
+      name = "map-reduce";
+      cues = [ "map reduce" "mapreduce" "맵 리듀스" ];
+      sub_specs = [
+        { name = "parallel-map"; cues = [ "parallel map" "병렬 맵" ]; terminal = true; }
+        { name = "parallel-reduce"; cues = [ "parallel reduce" "병렬 리듀스" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "fork-join";
+      cues = [ "fork join" "fork-join" "포크 조인" ];
+      sub_specs = [
+        { name = "divide-and-conquer-parallel"; cues = [ "divide conquer" "분할 정복" ]; terminal = true; }
+        { name = "thread-pool-fork-join"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "pipeline-parallel";
+      cues = [ "pipeline" "stages" "파이프라인 병렬" ];
+      sub_specs = [
+        { name = "producer-consumer"; cues = [ "producer consumer" "생산자 소비자" ]; terminal = true; }
+        { name = "stream-stages"; cues = [ "stream stage" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "data-parallel";
+      cues = [ "data parallel" "SIMD" "데이터 병렬" ];
+      sub_specs = [
+        { name = "vectorization"; cues = [ "vectorize" "벡터화" ]; terminal = true; }
+        { name = "gpu-parallel"; cues = [ "gpu" "cuda" "opencl" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "race-and-deadlock";
+      cues = [ "race condition" "deadlock" "livelock" "경쟁 조건" "데드락" ];
+      sub_specs = [
+        { name = "race-detection"; cues = [ "race detection" "탐지" ]; terminal = true; }
+        { name = "deadlock-prevention"; cues = [ "deadlock prevention" "데드락 방지" ]; terminal = true; }
+        { name = "lock-ordering"; cues = [ "lock ordering" "락 순서" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "deadlock-livelock-detection";
+      cues = [ "wait-die" "wound-wait" "deadlock detection algorithm" "livelock detection" ];
+      sub_specs = [
+        { name = "wait-die-scheme"; cues = [ "wait-die" ]; terminal = true; }
+        { name = "wound-wait-scheme"; cues = [ "wound-wait" ]; terminal = true; }
+        { name = "cycle-detection-in-lock-graph"; cues = [ "cycle in lock graph" ]; terminal = true; }
+        { name = "livelock-avoidance"; cues = [ "livelock avoid" "라이브락 회피" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  knownAxioms = [
+    { axiom_id = "axiom-conc-001"; name = "thread"; domain = "concurrency";
+      activation_cues = [ "thread" "fiber" "goroutine" "green thread" "스레드" "고루틴" ];
+      tree = threadAxiomTree; sub_count = builtins.length threadAxiomTree.branches;
+      tool_role = "동시성 — 스레드 모델"; }
+    { axiom_id = "axiom-conc-002"; name = "async"; domain = "concurrency";
+      activation_cues = [ "async" "await" "future" "promise" "callback" "event loop" "cancel" "비동기" "이벤트 루프" ];
+      tree = asyncAxiomTree; sub_count = builtins.length asyncAxiomTree.branches;
+      tool_role = "동시성 — async/await"; }
+    { axiom_id = "axiom-conc-003"; name = "sync-primitive"; domain = "concurrency";
+      activation_cues = [ "mutex" "lock" "atomic" "semaphore" "barrier" "condition variable" "lock-free" "뮤텍스" "락" "원자적" "조건 변수" ];
+      tree = syncPrimitiveAxiomTree; sub_count = builtins.length syncPrimitiveAxiomTree.branches;
+      tool_role = "동시성 — 동기화 프리미티브"; }
+    { axiom_id = "axiom-conc-004"; name = "message-passing"; domain = "concurrency";
+      activation_cues = [ "channel" "actor" "pubsub" "publish subscribe" "shared nothing" "csp" "채널" "액터" "발행 구독" ];
+      tree = messagePassingAxiomTree; sub_count = builtins.length messagePassingAxiomTree.branches;
+      tool_role = "동시성 — 메시지 패싱"; }
+    { axiom_id = "axiom-conc-005"; name = "parallel-pattern"; domain = "concurrency";
+      activation_cues = [ "map reduce" "fork join" "pipeline" "SIMD" "data parallel" "race condition" "deadlock" "맵 리듀스" "병렬" "데이터 병렬" "데드락" ];
+      tree = parallelPatternAxiomTree; sub_count = builtins.length parallelPatternAxiomTree.branches;
+      tool_role = "동시성 — 병렬 패턴"; }
+  ];
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else builtins.filter (ax: decomposer.containsAny utterance ax.activation_cues) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then (builtins.head activations).tree
+    else bt.mkTree {
+      node_label = "multiple concurrency axioms activated";
+      branches = builtins.map (ax: bt.mkBranch {
+        name = ax.name; hypothesis = "use " + ax.name;
+        cues = ax.activation_cues; sub_branches = ax.tree.branches;
+      }) activations;
+    };
+
+  applyConcurrencyAxiomPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax: acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome = if activations == [] then "no-axiom-activated"
+                  else if builtins.length activations == 1 then "single-axiom-activated"
+                  else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names = builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations; composite_tree = composite;
+          axiom_origin = "axiom-115-nl-concurrency (composes axiom-98-tree)";
+        };
+      }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-concurrency-axiom-115";
+    composes = "axiom-98-tree";
+    framework_step = "axiom content — 동시성 도구 (thread / async / sync / msg / parallel)";
+    step_kind = "concurrency-tool-axiom";
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax: acc + ax.sub_count) 0 knownAxioms;
+  };
+
+in {
+  inherit ownerName threadAxiomTree asyncAxiomTree syncPrimitiveAxiomTree
+    messagePassingAxiomTree parallelPatternAxiomTree
+    knownAxioms axiomsActivatedBy compositeTreeFromActivations
+    applyConcurrencyAxiomPlate inventorySummary;
+  meta = { source = "stdlib NL concurrency axioms (agent-NL-129)"; owner = ownerName; };
+}

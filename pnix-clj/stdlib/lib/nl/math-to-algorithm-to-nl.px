@@ -1,0 +1,490 @@
+let
+  ownerName = "stdlib.nl.math-to-algorithm-to-nl";
+
+  # === Bidirectional Math ↔ Algorithm ↔ NL substrate ================
+  #
+  # 사용자 directive (2026-05-28):
+  # "작도math/혹은 순서없는 증명조건을 반대로 → 코드 알고리즘 → NL
+  # 문장생성해 설명. 일종의 단순 표시 역방향이 아니라, (코드/알고리즘)
+  # 생성 문장이 될라나?"
+  #
+  # # 양방향 axiom
+  #
+  # forward direction (이미 박힘 — congruence-to-code-bridge + math-
+  # congruence-nl-lifter):
+  #   NL utterance → math fact → algorithm code
+  #
+  # reverse direction (이 owner — 새 새 axiom):
+  #   math fact (timeless OR ordered) → algorithm step sequence
+  #   → NL explanation sentence
+  #
+  # 두 방향이 *같은 substrate 의 양면*. 한 axiom 으로 박는다.
+  #
+  # # 4-piece 와의 관계
+  #
+  # - timeless fact (4-piece Piece 3 invariant, congruence criterion):
+  #   forward = NL → criterion verdict
+  #   reverse = criterion verdict → "if condition then ... else ..." algorithm
+  #            → NL explanation
+  #
+  # - ordered procedure (fact-temporality 의 ordered 카테고리):
+  #   forward = NL request → procedure step sequence
+  #   reverse = procedure step sequence → algorithm (loop / sequence)
+  #            → NL step-by-step explanation
+  #
+  # # 학술 근거 (엄밀)
+  #
+  # - Curry-Howard correspondence (Curry 1934, Howard 1969) — proof ↔
+  #   program. 증명 step ↔ algorithm step.
+  # - Constructive mathematics (Bishop 1967) — proof = construction.
+  # - Literate programming (Knuth 1984) — code + NL 설명의 양면.
+  # - Program comprehension research (von Mayrhauser/Vans 1995) —
+  #   reverse direction (code → NL explanation) 의 학계 표준.
+  # - Euclid Elements (BC 300) — geometric construction = step sequence
+  #   + NL description (Greek prose).
+  #
+  # 사용자 substrate 의 자리: 양방향을 *deterministic + replay-stable*
+  # 한 단일 owner 로. silent guess 금지.
+
+  # === Known math facts — timeless 와 ordered 모두 ==================
+  #
+  # 사용자 substrate 의 v0: 엄밀히 정해진 fact 만 (사용자 헌법:
+  # "엄밀한 확실한것만 구현"). 5 timeless + 2 ordered.
+
+  knownMathFacts = [
+    # === TIMELESS facts ============================================
+    {
+      id = "pythagorean-theorem";
+      category = "timeless";
+      ambient_space = "R-2";
+      statement_canonical = "a^2 + b^2 = c^2 (right triangle)";
+      statement_nl_en = "In a right triangle, the square of the hypotenuse equals the sum of squares of the legs.";
+      statement_nl_ko = "직각삼각형에서, 빗변의 제곱은 두 다리의 제곱의 합과 같다.";
+      academic_ref = "Euclid Elements I.47";
+    }
+    {
+      id = "congruence-sss";
+      category = "timeless";
+      ambient_space = "R-2";
+      statement_canonical = "If all three sides of triangle A equal all three sides of triangle B, then A and B are congruent.";
+      statement_nl_en = "Two triangles with three equal sides are congruent.";
+      statement_nl_ko = "세 변이 같은 두 삼각형은 합동이다.";
+      academic_ref = "Euclid Elements I.8";
+    }
+    {
+      id = "triangle-angle-sum-r2";
+      category = "timeless";
+      ambient_space = "R-2";
+      statement_canonical = "Sum of interior angles of any triangle in R^2 equals 180 degrees.";
+      statement_nl_en = "The sum of the interior angles of a triangle is 180 degrees.";
+      statement_nl_ko = "삼각형 내각의 합은 180도이다.";
+      academic_ref = "Euclid Elements I.32";
+    }
+    {
+      id = "triangle-angle-sum-s2";
+      category = "timeless";
+      ambient_space = "S-2";
+      statement_canonical = "Sum of interior angles of a triangle on a unit sphere exceeds 180 degrees by spherical excess.";
+      statement_nl_en = "On a sphere, the sum of triangle angles exceeds 180 degrees by the spherical excess.";
+      statement_nl_ko = "구면에서 삼각형 내각의 합은 spherical excess 만큼 180도를 초과한다.";
+      academic_ref = "Girard 1629, Harriot 1603";
+    }
+    {
+      id = "circle-area-r2";
+      category = "timeless";
+      ambient_space = "R-2";
+      statement_canonical = "Area of a circle with radius r equals pi * r^2.";
+      statement_nl_en = "The area of a circle equals pi times the radius squared.";
+      statement_nl_ko = "원의 넓이는 파이 곱하기 반지름의 제곱이다.";
+      academic_ref = "Archimedes, Measurement of a Circle";
+    }
+    # === ORDERED procedures ========================================
+    {
+      id = "euclid-i-10-bisect-segment";
+      category = "ordered";
+      ambient_space = "R-2";
+      statement_canonical = "Bisect a given segment using compass and straightedge.";
+      statement_nl_en = "Bisect a straight line segment with compass and straightedge.";
+      statement_nl_ko = "주어진 선분을 컴퍼스와 자로 양 등분하라.";
+      step_count = 4;
+      academic_ref = "Euclid Elements I.10";
+    }
+    {
+      id = "euclidean-gcd";
+      category = "ordered";
+      ambient_space = "N";  # natural numbers
+      statement_canonical = "Compute gcd(a, b) by repeated remainder.";
+      statement_nl_en = "Find the greatest common divisor of two positive integers.";
+      statement_nl_ko = "두 자연수의 최대공약수를 구하라.";
+      step_count_variable = true;
+      academic_ref = "Euclid Elements VII.2";
+    }
+  ];
+
+  findFact = id:
+    let
+      matches = builtins.filter
+        (f: f.id == id) knownMathFacts;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # === Reverse: math fact → algorithm step sequence ==================
+  #
+  # Per-fact algorithm emitter. host language 별 (python / rust 등).
+  # capability-row pattern: 새 fact 추가 = 새 row 한 줄.
+
+  algorithmEmitters = {
+    pythagorean-theorem = {
+      python = ''
+        def pythagorean_check(a, b, c):
+            # Check if a^2 + b^2 == c^2 (right triangle property)
+            return a * a + b * b == c * c
+      '';
+      rust = ''
+        fn pythagorean_check(a: f64, b: f64, c: f64) -> bool {
+            // Check if a^2 + b^2 == c^2 (right triangle property)
+            (a * a + b * b - c * c).abs() < 1e-9
+        }
+      '';
+    };
+    congruence-sss = {
+      python = ''
+        def congruent_sss(sides_a, sides_b):
+            # SSS criterion (Euclid I.8): same multiset of side lengths → congruent
+            return sorted(sides_a) == sorted(sides_b)
+      '';
+      rust = ''
+        fn congruent_sss(sides_a: &[f64], sides_b: &[f64]) -> bool {
+            // SSS criterion (Euclid I.8): same multiset → congruent
+            let mut a: Vec<_> = sides_a.to_vec();
+            let mut b: Vec<_> = sides_b.to_vec();
+            a.sort_by(|x, y| x.partial_cmp(y).unwrap());
+            b.sort_by(|x, y| x.partial_cmp(y).unwrap());
+            a == b
+        }
+      '';
+    };
+    triangle-angle-sum-r2 = {
+      python = ''
+        def triangle_angle_sum_r2(angle_a, angle_b, angle_c):
+            # In R^2, interior angles always sum to 180
+            return angle_a + angle_b + angle_c == 180
+      '';
+    };
+    triangle-angle-sum-s2 = {
+      python = ''
+        import math
+        def triangle_angle_sum_s2(angle_a, angle_b, angle_c, sphere_radius=1.0):
+            # On S^2, sum exceeds 180 by spherical excess E
+            # E = (sum - pi) and area = E * R^2 (Girard's theorem)
+            total = angle_a + angle_b + angle_c
+            excess = total - math.pi  # angles in radians
+            area = excess * sphere_radius * sphere_radius
+            return {"total": total, "excess": excess, "area": area}
+      '';
+    };
+    circle-area-r2 = {
+      python = ''
+        import math
+        def circle_area(radius):
+            # Area = pi * r^2
+            return math.pi * radius * radius
+      '';
+    };
+    euclid-i-10-bisect-segment = {
+      python = ''
+        # Euclid Elements I.10: bisect segment AB with compass and straightedge.
+        # Step sequence (4 ordered turns):
+        def bisect_segment(point_a, point_b):
+            # Step 1: with center A and radius |AB|, draw circle C1.
+            radius = distance(point_a, point_b)
+            c1 = circle(point_a, radius)
+            # Step 2: with center B and radius |AB|, draw circle C2.
+            c2 = circle(point_b, radius)
+            # Step 3: C1 and C2 intersect at two points P and Q.
+            p, q = intersect_circles(c1, c2)
+            # Step 4: line PQ intersects AB at midpoint M.
+            m = intersect_lines(line(p, q), line(point_a, point_b))
+            return m
+      '';
+    };
+    euclidean-gcd = {
+      python = ''
+        def euclidean_gcd(a, b):
+            # Euclid Elements VII.2: repeatedly take remainder
+            # Each iteration is one mirror primitive turn:
+            #   ankh_pre  = (a, b)
+            #   turn rule = (a, b) → (b, a mod b)
+            #   ankh_post = (b, a mod b)
+            # Terminal: b == 0, then gcd = a
+            while b != 0:
+                a, b = b, a % b
+            return a
+      '';
+      rust = ''
+        fn euclidean_gcd(mut a: u64, mut b: u64) -> u64 {
+            // Euclid Elements VII.2
+            while b != 0 {
+                let t = b;
+                b = a % b;
+                a = t;
+            }
+            a
+        }
+      '';
+    };
+  };
+
+  emitAlgorithm = factId: hostLang:
+    let
+      fact = findFact factId;
+    in
+      if fact == null then {
+        outcome = "held-unknown-fact-id";
+        fact_id = factId;
+        known_ids = builtins.map (f: f.id) knownMathFacts;
+      }
+      else
+        let
+          row = algorithmEmitters.${factId} or null;
+        in
+          if row == null then {
+            outcome = "held-no-emitter-for-fact";
+            fact_id = factId;
+          }
+          else if !(row ? ${hostLang}) then {
+            outcome = "held-no-emitter-for-host-language";
+            fact_id = factId;
+            host_lang = hostLang;
+            available_langs = builtins.attrNames row;
+          }
+          else {
+            outcome = "algorithm-emitted";
+            fact_id = factId;
+            host_lang = hostLang;
+            category = fact.category;
+            ambient_space = fact.ambient_space;
+            algorithm_code = row.${hostLang};
+            academic_ref = fact.academic_ref;
+          };
+
+  # === Reverse: math fact / algorithm → NL explanation ===============
+  #
+  # NL 문장 생성. timeless 는 "If ... then ..." 형, ordered 는 step-by-
+  # step 형. 양 언어 (en/ko) 모두.
+
+  explanationGenerators = {
+    pythagorean-theorem = {
+      en = ''
+        Statement: In a right triangle, the square of the hypotenuse equals the sum of squares of the two legs.
+
+        Algorithm: Given three side lengths a, b, and c, compute a*a + b*b and compare to c*c. If they are equal, the triangle is a right triangle with c as the hypotenuse.
+
+        Why: This is Euclid Elements I.47. The square of the longest side equals the sum of the squares of the other two sides only when one angle is exactly 90 degrees.
+      '';
+      ko = ''
+        명제: 직각삼각형에서, 빗변의 제곱은 두 다리의 제곱의 합과 같다.
+
+        알고리즘: 세 변 a, b, c 가 주어지면, a*a + b*b 을 계산하고 c*c 와 비교한다. 같으면 직각삼각형이고 c 가 빗변이다.
+
+        이유: Euclid Elements I.47. 한 각이 정확히 90도일 때만 가장 긴 변의 제곱이 나머지 두 변의 제곱의 합과 같다.
+      '';
+    };
+    congruence-sss = {
+      en = ''
+        Statement: Two triangles with three equal sides are congruent.
+
+        Algorithm: Sort the three sides of triangle A and triangle B. If the sorted lists are equal, the two triangles are congruent.
+
+        Why: SSS criterion, Euclid Elements I.8. Three sides uniquely determine a triangle up to rigid motion (in R^2 ambient space).
+      '';
+      ko = ''
+        명제: 세 변이 같은 두 삼각형은 합동이다.
+
+        알고리즘: 삼각형 A 와 B 의 세 변을 정렬한 후 비교한다. 정렬된 리스트가 같으면 두 삼각형은 합동이다.
+
+        이유: SSS 정리, Euclid Elements I.8. (R^2 평면 ambient 가정에서) 세 변이 삼각형을 유일하게 결정한다.
+      '';
+    };
+    euclid-i-10-bisect-segment = {
+      en = ''
+        Goal: Bisect a given line segment AB with compass and straightedge.
+
+        Step 1: Place compass at point A. Set the radius to the length AB. Draw a full circle. Call it C1.
+
+        Step 2: Without changing the radius, place compass at point B. Draw a full circle. Call it C2.
+
+        Step 3: The two circles C1 and C2 intersect at exactly two points. Call them P (above AB) and Q (below AB).
+
+        Step 4: Draw a straight line from P to Q. This line crosses segment AB at one point M. M is the midpoint of AB.
+
+        Why: Euclid Elements I.10. Circles of equal radius centered at the endpoints are symmetric across the perpendicular bisector, so their intersection points lie on that bisector, which meets AB at its midpoint.
+      '';
+      ko = ''
+        목표: 컴퍼스와 자로 선분 AB 를 양 등분하라.
+
+        단계 1: 컴퍼스를 점 A 에 놓는다. 반지름을 AB 의 길이로 잡는다. 원을 하나 그린다. 이를 C1 이라 한다.
+
+        단계 2: 반지름을 그대로 둔 채, 컴퍼스를 점 B 로 옮긴다. 원을 하나 그린다. 이를 C2 라 한다.
+
+        단계 3: 두 원 C1 과 C2 는 정확히 두 점에서 만난다. AB 위쪽의 교점을 P, 아래쪽 교점을 Q 라 한다.
+
+        단계 4: P 에서 Q 로 직선을 그린다. 이 직선이 선분 AB 와 만나는 점을 M 이라 한다. M 이 AB 의 중점이다.
+
+        이유: Euclid Elements I.10. 양 끝점에서 같은 반지름으로 그린 두 원은 수직 이등분선에 대해 대칭이므로, 두 원의 교점이 그 이등분선 위에 있고, 이등분선이 AB 와 만나는 점이 중점이다.
+      '';
+    };
+    euclidean-gcd = {
+      en = ''
+        Goal: Find the greatest common divisor of two positive integers a and b.
+
+        Algorithm (Euclidean): Each step replaces the pair (a, b) with (b, a mod b). Repeat until b becomes 0. Then a is the gcd.
+
+        Why this works: gcd(a, b) = gcd(b, a mod b). Each step preserves the gcd while strictly decreasing b, so the process terminates. Euclid Elements VII.2.
+
+        Mirror primitive correspondence: each iteration is one turn. The ankh (state) is the pair (a, b). The rule is (a, b) → (b, a mod b). The receipt records the pre and post state of every turn.
+      '';
+      ko = ''
+        목표: 두 자연수 a 와 b 의 최대공약수를 구하라.
+
+        알고리즘 (Euclid 호제법): 각 단계마다 (a, b) 를 (b, a mod b) 로 교체한다. b 가 0 이 될 때까지 반복하면, 그때의 a 가 최대공약수다.
+
+        이유: gcd(a, b) = gcd(b, a mod b) 이고, 매 단계마다 b 가 엄격히 줄어들기 때문에 유한 단계 안에 끝난다. Euclid Elements VII.2.
+
+        Mirror primitive 대응: 각 반복이 한 turn. ankh (상태) 는 쌍 (a, b). rule 은 (a, b) → (b, a mod b). receipt 는 매 turn 의 pre/post 를 기록한다.
+      '';
+    };
+  };
+
+  generateExplanation = factId: nlLang:
+    let
+      fact = findFact factId;
+    in
+      if fact == null then {
+        outcome = "held-unknown-fact-id";
+        fact_id = factId;
+      }
+      else
+        let
+          row = explanationGenerators.${factId} or null;
+        in
+          if row == null then {
+            outcome = "held-no-explanation-for-fact";
+            fact_id = factId;
+          }
+          else if !(row ? ${nlLang}) then {
+            outcome = "held-no-explanation-for-language";
+            fact_id = factId;
+            nl_lang = nlLang;
+            available_langs = builtins.attrNames row;
+          }
+          else {
+            outcome = "explanation-generated";
+            fact_id = factId;
+            nl_lang = nlLang;
+            category = fact.category;
+            explanation_text = row.${nlLang};
+            academic_ref = fact.academic_ref;
+          };
+
+  # === Full reverse chain: math fact → algorithm + NL ===============
+  #
+  # 같은 fact 위에서 algorithm + NL 동시 생성. 사용자의 핵심 요청:
+  # "math (timeless or ordered) → 코드 알고리즘 → NL 설명 문장"
+
+  fullReverseChain = factId: hostLang: nlLang:
+    let
+      fact = findFact factId;
+      algo = emitAlgorithm factId hostLang;
+      expl = generateExplanation factId nlLang;
+    in
+      if fact == null then {
+        outcome = "held-unknown-fact-id";
+      }
+      else if algo.outcome != "algorithm-emitted" then algo
+      else if expl.outcome != "explanation-generated" then expl
+      else {
+        outcome = "reverse-chain-emitted";
+        fact_id = factId;
+        category = fact.category;
+        ambient_space = fact.ambient_space;
+        host_lang = hostLang;
+        nl_lang = nlLang;
+        algorithm_code = algo.algorithm_code;
+        explanation_text = expl.explanation_text;
+        academic_ref = fact.academic_ref;
+        bidirectional_axiom_note =
+          "forward chain (NL → math → code) 와 reverse chain (math → "
+          + "code → NL) 이 같은 fact 위에서 양면으로 동작. 같은 substrate, "
+          + "다른 direction.";
+      };
+
+  # === Mirror plate lens entry =======================================
+
+  applyMathToAlgorithmToNlPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(request ? operation) then {
+      outcome = "held-operation-required";
+      known_operations = [
+        "emit-algorithm" "generate-explanation" "full-reverse-chain"
+      ];
+    }
+    else if request.operation == "emit-algorithm" then
+      emitAlgorithm request.fact_id request.host_lang
+    else if request.operation == "generate-explanation" then
+      generateExplanation request.fact_id request.nl_lang
+    else if request.operation == "full-reverse-chain" then
+      fullReverseChain request.fact_id request.host_lang request.nl_lang
+    else {
+      outcome = "held-unknown-operation";
+      operation = request.operation;
+    };
+
+  # === Introspection =================================================
+
+  factCount = builtins.length knownMathFacts;
+  timelessFactIds = builtins.map (f: f.id)
+    (builtins.filter (f: f.category == "timeless") knownMathFacts);
+  orderedFactIds = builtins.map (f: f.id)
+    (builtins.filter (f: f.category == "ordered") knownMathFacts);
+
+  inventorySummary = _: {
+    owner = ownerName;
+    math_fact_count = factCount;
+    timeless_fact_count = builtins.length timelessFactIds;
+    ordered_fact_count = builtins.length orderedFactIds;
+    timeless_fact_ids = timelessFactIds;
+    ordered_fact_ids = orderedFactIds;
+    algorithm_emitter_count =
+      builtins.length (builtins.attrNames algorithmEmitters);
+    explanation_generator_count =
+      builtins.length (builtins.attrNames explanationGenerators);
+    axiom_class = "bidirectional-substrate-axiom";
+    correspondence_with_forward =
+      "forward (NL → math → code) = math-congruence-nl-lifter + "
+      + "congruence-to-code-bridge. reverse (math → code → NL) = "
+      + "this owner. 같은 fact 위에서 양면.";
+  };
+
+in {
+  inherit
+    ownerName
+    knownMathFacts
+    findFact
+    algorithmEmitters
+    explanationGenerators
+    emitAlgorithm
+    generateExplanation
+    fullReverseChain
+    applyMathToAlgorithmToNlPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib nl math-to-algorithm-to-nl bidirectional axiom";
+    owner = ownerName;
+    base = "math-to-algorithm-to-nl-v0";
+    rev_note = "사용자 directive (2026-05-28): '작도math/혹은 순서없는 증명조건을 반대로 → 코드 알고리즘 → NL 문장생성해 설명. 단순 표시 역방향이 아니라 (코드/알고리즘)생성 문장이 될라나?' Reverse direction substrate. 7 math facts (5 timeless: pythagorean / congruence-SSS / angle-sum-R2 / angle-sum-S2 / circle-area + 2 ordered: Euclid I.10 bisect / Euclidean GCD). emitAlgorithm: per-fact host-lang (python/rust). generateExplanation: per-fact NL (en/ko). fullReverseChain: 같은 fact 위에서 algorithm + NL 동시 생성. 학술 origin (Curry-Howard / Bishop constructive / Knuth literate / von Mayrhauser program comprehension / Euclid Elements). bidirectional axiom: forward (NL→math→code) 와 reverse (math→code→NL) 가 substrate 의 양면.";
+  };
+}

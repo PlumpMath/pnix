@@ -1,0 +1,52 @@
+# stdlib.nl.nl-operation-dispatch-slow-coding — refactor coding-intent lane (O-008-slow P3).
+let
+  slen = s: builtins.stringLength s;
+  sub = start: len: s: builtins.substring start len s;
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+  containsAny = utterance: cues:
+    builtins.any (cue: hasInfix cue utterance) cues;
+
+  mkResult = kind: to: classification: result: {
+    operation_kind = kind;
+    outcome = "dispatched";
+    dispatched_to = to;
+    classification = classification;
+    result = result;
+  };
+
+  # Broad nouns/verbs ("symbol", bare "바꿔", nominal "이름 변경") make
+  # explanation turns enter the expensive code-transform lane. Keep this gate
+  # on explicit edit surfaces; the lifter still owns the detailed parse.
+  refactorIntentCues = [
+    "rename " "rename symbol" "rename function" "rename variable" "rename identifier"
+    "refactor" "import " "unused"
+    "이름 바꿔" "이름 바꾸" "이름 변경해" "심볼 이름" "심볼 변경"
+    "함수 이름 " "변수 이름 " "미분 함수로 바꿔" "함수로 바꿔"
+  ];
+in {
+  name = "stdlib.nl.nl-operation-dispatch-slow-coding";
+
+  tryCodingIntentCodeTransform = utterance:
+    if !containsAny utterance refactorIntentCues then null
+    else
+      let
+        lifter = import ../coding/coding-intent-lifter.px;
+        classified = lifter.classifyCodingIntent utterance;
+      in
+        if (builtins.isAttrs classified)
+          && classified.outcome == "coding-intent-classified"
+          && classified.intent_kind == "refactor"
+        then
+          let
+            cdisp = import ../coding/coding-candidate-dispatcher.px;
+          in mkResult "code-transform" "coding-candidate-dispatcher" classified
+               (cdisp.dispatch {
+                 path = "/coding/candidate";
+                 method = "POST";
+                 body = { utterance = utterance; };
+               })
+        else null;
+}

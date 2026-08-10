@@ -1,0 +1,37 @@
+{:kind :forward-reference-lift-fixture-set
+ :schema-version 1
+ :lineage
+ {:source "pnix-clj rec/let forward-reference taxonomy"
+  :captured-at "2026-07-01"
+  :receipt "rec-forward-reference-taxonomy.md"
+  :lift-receipt "R1 frontier-lift implementation: clj-meta lazy-letrec lowering + px-runtime recursive thunk env"
+  :note
+  "Forward-reference cases that used to mark the clj-meta / clojure-stage15-mirror / px-runtime lanes as a declared frontier. R1 lifted the valid forward-reference rows: the clj-meta lane lowers pnix `let`/`rec` to `pnix.clj-meta.compiler/lazy-letrec`, and the internal .px evaluator registers recursive thunk env slots before forcing RHS values. `:forward-ok` rows now require all lanes to agree on :ok. Cycle/unbound rows are deterministic semantic failures, not frontier markers or policy holds."}
+ :lifted-lanes [:pnix-clj-lowering-clj-meta
+                :clojure-stage15-mirror
+                :px-runtime-pnix-mirror]
+ :cases
+ [{:name "rec-forward-ok"
+   :source "rec { x = y; y = 1; }.x"
+   :class :forward-ok
+   :expected-eval {:status :ok :value 1}}
+  {:name "let-forward-ok"
+   :source "let a = b + 1; b = 10; in a"
+   :class :forward-ok
+   :expected-eval {:status :ok :value 11}}
+  {:name "rec-mutual-ok"
+   :source "rec { a = b; b = c; c = 5; }.a"
+   :class :forward-ok
+   :expected-eval {:status :ok :value 5}}
+  {:name "rec-cycle"
+   :source "rec { a = a + 1; }.a"
+   :class :cycle-error
+   :expected-eval {:status :failed :reason :infinite-recursion}}
+  {:name "let-cycle"
+   :source "let a = a + 1; in a"
+   :class :cycle-error
+   :expected-eval {:status :failed :reason :infinite-recursion}}
+  {:name "rec-unbound"
+   :source "rec { a = z + 1; }.a"
+   :class :unbound-error
+   :expected-eval {:status :failed :reason :unbound-var}}]}

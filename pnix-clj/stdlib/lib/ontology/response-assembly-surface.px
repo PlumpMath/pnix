@@ -1,0 +1,388 @@
+# stdlib.lib.ontology.response-assembly-surface
+#
+# Candidate bridge from discourse-state projection to a public-safe response
+# envelope. It reuses the existing conversation response shape policy and wire
+# opacity contract; it does not emit a response, write state, or expose internal
+# substrate/owner structure.
+let
+  ownerName = "stdlib.lib.ontology.response-assembly-surface";
+
+  discourseProjectionOwner = import ./discourse-state-projection.px;
+  responseShapePolicy = import ../agent/conversation-response-shape-policy.px;
+  wireOpacity = import ../agent/wire-shape-opacity-contract.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  listAttrOr = attrs: key:
+    let v = getAttrOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  sourceFrom = req:
+    if hasAttr req "discourse_state_projection" && builtins.isAttrs req.discourse_state_projection then
+      req.discourse_state_projection
+    else if hasAttr req "discourse_state_projection_contract" && builtins.isAttrs req.discourse_state_projection_contract then
+      req.discourse_state_projection_contract
+    else if hasAttr req "source" && builtins.isAttrs req.source then
+      req.source
+    else if hasAttr req "plan" && builtins.isAttrs req.plan then
+      req.plan
+    else { };
+
+  projectionPayload = source:
+    if hasAttr source "discourse_state_projection" && builtins.isAttrs source.discourse_state_projection then
+      source.discourse_state_projection
+    else { };
+
+  anchorsFrom = source:
+    let payload = projectionPayload source;
+    in if hasAttr payload "exported_anchors" && builtins.isAttrs payload.exported_anchors then
+      payload.exported_anchors
+    else { };
+
+  sourceOk = source:
+    builtins.isAttrs source
+    && stringAttrOr source "schema" "" == "puncheetah.ontology-discourse-state-projection.v0"
+    && stringAttrOr source "outcome" "" == "ontology-discourse-state-projection-built"
+    && getBool source "verified" false == true
+    && getBool source "is_held" true == false
+    && getBool source "discourse_state_projection_built" false == true
+    && getBool source "source_materialized_context_view_verified" false == true
+    && getBool source "candidate_only" false == true
+    && getBool source "discourse_state_write_allowed" true == false
+    && getBool source "discourse_state_append_allowed" true == false
+    && getBool source "discourse_state_persistence_allowed" true == false
+    && getBool source "materialized_context_graph_write_allowed" true == false
+    && getBool source "ontology_query_allowed" true == false
+    && getBool source "ontology_emit_allowed" true == false
+    && getBool source "ontology_promote_allowed" true == false
+    && getBool source "accepted_fact_promotion_allowed" true == false
+    && getBool source "learning_promotion_allowed" true == false
+    && getBool source "memory_write_allowed" true == false
+    && getBool source "db_write_allowed" true == false
+    && getBool source "policy_persistence_allowed" true == false;
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "response_emit_requested" false
+    || getBool req "public_response_emit_requested" false
+    || getBool req "wire_write_requested" false
+    || getBool req "public_wire_write_requested" false
+    || getBool req "response_delivery_requested" false
+    || getBool req "discourse_state_write_requested" false
+    || getBool req "discourse_state_append_requested" false
+    || getBool req "discourse_state_persistence_requested" false
+    || getBool req "materialized_context_graph_write_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  leakRequested = req:
+    getBool req "internal_owner_path_exposure_requested" false
+    || getBool req "owner_path_exposure_requested" false
+    || getBool req "substrate_envelope_exposure_requested" false
+    || getBool req "construction_trace_exposure_requested" false
+    || getBool req "mirror_plate_exposure_requested" false
+    || getBool req "plate_application_exposure_requested" false
+    || getBool req "slot_binding_exposure_requested" false
+    || getBool req "debug_substrate_shape_exposure_requested" false;
+
+  mkResponseRecord = req: source:
+    let
+      anchors = anchorsFrom source;
+      operatorPanel = listAttrOr anchors "operator_panel_summary";
+      priorSummaries = listAttrOr anchors "prior_turn_summaries";
+      turnCount =
+        if operatorPanel != [ ] then builtins.length operatorPanel
+        else if priorSummaries != [ ] then builtins.length priorSummaries
+        else 1;
+      episodeId = stringAttrOr req "episode_id" (stringAttrOr source "thread_id" (stringAttrOr source "turn_id" "ontology-response-episode"));
+      summary = stringAttrOr req "summary" "Context transition recorded.";
+    in {
+      episode_id = episodeId;
+      summary = summary;
+      turn_count = turnCount;
+      judgement_status = "Candidate";
+      held_reason_key = null;
+      output_fragments = [
+        {
+          kind = "paragraph";
+          text = summary;
+        }
+      ];
+    };
+
+  responseRecordFrom = req: source:
+    if hasAttr req "response_record" && builtins.isAttrs req.response_record then
+      req.response_record
+    else
+      mkResponseRecord req source;
+
+  mkPublicEnvelope = req: source: responseRecord:
+    {
+      session_id = stringAttrOr req "session_id" (stringAttrOr source "thread_id" responseRecord.episode_id);
+      exchange_id = stringAttrOr req "exchange_id" ("response-assembly::" + stringAttrOr source "turn_id" "turn");
+      input_text = stringAttrOr req "input_text" "";
+      response_kind = stringAttrOr req "response_kind" "answer";
+      summary = stringAttrOr responseRecord "summary" "";
+      body = [
+        {
+          kind = "paragraph";
+          text = stringAttrOr responseRecord "summary" "";
+        }
+      ];
+      evidence = [ ];
+      confidence = stringAttrOr req "confidence" "medium";
+      held_reason =
+        if hasAttr responseRecord "held_reason_key" then responseRecord.held_reason_key else null;
+      responded_at_ms = getAttrOr req "responded_at_ms" 0;
+      rejected_creation_attempts = [ ];
+    };
+
+  publicEnvelopeFrom = req: source: responseRecord:
+    if hasAttr req "public_response_envelope" && builtins.isAttrs req.public_response_envelope then
+      req.public_response_envelope
+    else if hasAttr req "wire_envelope" && builtins.isAttrs req.wire_envelope then
+      req.wire_envelope
+    else
+      mkPublicEnvelope req source responseRecord;
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.ontology-response-assembly-surface.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    response_assembly_surface_built = false;
+    source_discourse_state_projection_verified = false;
+    response_shape_policy_verified = false;
+    public_wire_shape_opaque = false;
+    candidate_only = true;
+    public_response_emit_allowed = false;
+    response_delivery_allowed = false;
+    wire_write_allowed = false;
+    discourse_state_write_allowed = false;
+    discourse_state_append_allowed = false;
+    discourse_state_persistence_allowed = false;
+    materialized_context_graph_write_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    reason = reason;
+    negative_receipt = {
+      kind = "ontology-response-assembly-surface-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "response assembly surface may only shape a public-safe candidate response; it cannot emit, deliver, write, query, promote, or expose internal owner/substrate structure";
+    };
+    receipt = {
+      kind = "ontology-response-assembly-surface-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      public_response_emit_allowed = false;
+      response_delivery_allowed = false;
+      wire_write_allowed = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName sourceOk effectRequested leakRequested;
+
+  buildOntologyResponseAssemblySurface = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-ontology-response-assembly-surface-non-attr-request" "Response assembly request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-ontology-response-assembly-surface-effect-blocked" "Response assembly is contract-only; it cannot emit/deliver responses, write wire/state, query/emit/promote ontology facts, write memory/DB, route, or write code." { }
+    else if leakRequested req then
+      mkHeld "held-ontology-response-assembly-surface-internal-leak-requested" "Public response assembly cannot expose owner paths, substrate envelopes, construction traces, mirror plates, plate applications, or slot bindings." { }
+    else
+      let
+        source = sourceFrom req;
+        responseRecord = responseRecordFrom req source;
+        responseShape = responseShapePolicy.applyConversationResponseShapePolicy {
+          request_kind = "validate-record";
+          record = responseRecord;
+        };
+        publicEnvelope = publicEnvelopeFrom req source responseRecord;
+        publicCategory = stringAttrOr req "declared_public_category" "sanitised-prose";
+        wireCheck = wireOpacity.validateWireEnvelope {
+          direction = "outbound";
+          declared_category = publicCategory;
+          envelope_attrs = publicEnvelope;
+        };
+        anchors = anchorsFrom source;
+        operatorPanel = listAttrOr anchors "operator_panel_summary";
+        priorSummaries = listAttrOr anchors "prior_turn_summaries";
+      in
+        if source == { } then
+          mkHeld "held-ontology-response-assembly-surface-source-required" "Response assembly requires a verified discourse-state projection contract." { }
+        else if !sourceOk source then
+          mkHeld "held-ontology-response-assembly-surface-source-unverified" "Response assembly requires a verified effect-locked discourse-state projection contract." {
+            discourse_state_projection = source;
+          }
+        else if stringAttrOr responseShape "verdict" "" != "record-valid" then
+          mkHeld "held-ontology-response-assembly-surface-response-record-invalid" "Conversation response record must satisfy the existing response shape policy before public assembly." {
+            response_shape_policy_result = responseShape;
+          }
+        else if stringAttrOr wireCheck "verdict" "" != "wire-shape-opaque" then
+          mkHeld "held-ontology-response-assembly-surface-public-opacity" "Public response envelope must pass the existing wire shape opacity contract." {
+            public_wire_opacity_check = wireCheck;
+          }
+        else {
+          schema = "puncheetah.ontology-response-assembly-surface.v0";
+          owner = ownerName;
+          outcome = "ontology-response-assembly-surface-built";
+          is_held = false;
+          verified = true;
+          response_assembly_surface_built = true;
+          source_discourse_state_projection_verified = true;
+          response_shape_policy_verified = true;
+          public_wire_shape_opaque = true;
+          candidate_only = true;
+          turn_id = stringAttrOr source "turn_id" "";
+          thread_id = stringAttrOr source "thread_id" "";
+          actor_id = stringAttrOr source "actor_id" "";
+          tenant_id = stringAttrOr source "tenant_id" "";
+          response_record = responseRecord;
+          public_response_envelope = publicEnvelope;
+          response_assembly_surface = {
+            kind = "ontology-response-assembly-surface-v0";
+            status = "Candidate";
+            response_record = responseRecord;
+            public_response_envelope = publicEnvelope;
+            response_shape_policy_result = responseShape;
+            public_wire_opacity_check = wireCheck;
+            operator_panel_summary = operatorPanel;
+            prior_turn_summaries = priorSummaries;
+            public_response_emit_allowed = false;
+            response_delivery_allowed = false;
+            wire_write_allowed = false;
+            receipt_required = true;
+            candidate_only = true;
+          };
+          source_owner_reuse = {
+            discourse_state_projection_owner = discourseProjectionOwner.ownerName;
+            conversation_response_shape_policy_owner = responseShapePolicy.ownerName;
+            wire_shape_opacity_contract_owner = wireOpacity.ownerName;
+            discourse_state_owner_replaced = false;
+            response_shape_policy_replaced = false;
+            wire_opacity_contract_replaced = false;
+            public_opacity_smoke_replaced = false;
+            pnix_db_append_gate_replaced = false;
+            universal_receipt_discourse_composer_replaced = false;
+          };
+          next_gate = "public-response-delivery-receipt";
+          public_response_emit_allowed = false;
+          response_delivery_allowed = false;
+          wire_write_allowed = false;
+          discourse_state_write_allowed = false;
+          discourse_state_append_allowed = false;
+          discourse_state_persistence_allowed = false;
+          materialized_context_graph_write_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "ontology-response-assembly-surface-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "ontology-response-assembly-surface-built";
+            turn_id = stringAttrOr source "turn_id" "";
+            thread_id = stringAttrOr source "thread_id" "";
+            next_gate = "public-response-delivery-receipt";
+            invariant = "response assembly may shape a public candidate envelope from verified discourse-state projection only after response-shape and wire-opacity checks pass";
+            public_response_emit_allowed = false;
+            response_delivery_allowed = false;
+            wire_write_allowed = false;
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "ontology-response-assembly-surface-v0";
+    role = "candidate bridge from discourse-state projection to public-safe response envelope";
+    source_gate = "ontology-discourse-state-projection";
+    next_gate = "public-response-delivery-receipt";
+    non_replacement_boundary = "does not replace discourse-state, conversation-response-shape-policy, wire-shape-opacity-contract, receipt-discourse composers, public opacity smoke, host delivery, or pnix-db append gates";
+    effect_policy = "contract only; no response emit/delivery, no wire write, no discourse-state append/write/persistence, no ontology query/emit/promote, no accepted fact promotion, no memory/DB write, no policy persistence, no route execution, and no code write";
+  };
+}

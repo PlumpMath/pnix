@@ -1,0 +1,1 @@
+let mk = i: { id = i; sq = i * i; tags = [ "t${builtins.toString i}" "x" ]; }; range = n: if n == 0 then [] else (range (n - 1)) ++ [ (mk n) ]; in builtins.toJSON (range 12)

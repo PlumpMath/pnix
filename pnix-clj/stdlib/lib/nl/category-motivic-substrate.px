@@ -1,0 +1,346 @@
+let
+  ownerName = "stdlib.nl.category-motivic-substrate";
+
+  sheafCohom = import nl/category-sheaf-cohomology-substrate.px;
+  etaleD = import nl/category-etale-cohomology-and-derived-substrate.px;
+  spectral = import nl/category-spectral-sequences-substrate.px;
+  galois = import nl/category-galois-substrate.px;
+  hs = import nl/category-hochschild-serre-substrate.px;
+  ladic = import nl/category-derived-etale-and-l-adic-substrate.px;
+
+  # === Motivic Theory (agent-NL-185) ================================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Substrate motivic theory (universal cohomology theory)"
+  #
+  # Voevodsky 의 motives 와 같은 universal cohomology:
+  #   - 단일 *motive* M 가 모든 합당한 cohomology theory 에 mapping
+  #   - 각 cohomology = 'realization functor' 적용 결과
+  #   - motivic cohomology H^{p,q}_M : bi-graded (p = cohomological,
+  #     q = Tate twist)
+  #
+  # substrate 위:
+  #   - 각 receipt 의 'motivic class' [r] ∈ M_substrate
+  #   - 모든 박힌 cohomology theory (sheaf / étale / derived / spectral
+  #     / Galois / Hochschild-Serre / l-adic) 가 [r] 의 realization
+  #   - UC4 (LLM 불가능성) 은 *motivic* 사실 — 어느 realization
+  #     으로 봐도 보존되는 universal obstruction
+
+  stepKind = "motivic-substrate-universal-cohomology";
+  framework_step =
+    "universal cohomology — single motivic object, multiple realizations";
+
+  # =================================================================
+  # === The motivic category DM_substrate ===========================
+  # =================================================================
+
+  motivicCategory = {
+    category_id = "DM_substrate";
+    description_en = ''
+      DM_substrate := substrate's motivic derived category.
+
+      Objects: motivic complexes — abstract "shape" of receipts
+        before being realized in any specific cohomology.
+      Morphisms: motivic correspondences (formal pre-images of
+        cohomological morphisms).
+      Structure: triangulated, tensor (Tate twist as ⊗(1)).
+
+      Substrate-side: each receipt has a motivic class [r] in DM,
+      and applying a realization functor R yields R([r]) in the
+      target cohomology.
+    '';
+    triangulated = true;
+    tensor_unit = "1 = Z(0) (trivial Tate twist)";
+    tate_twist_object = "Z(1) (cyclotomic generator)";
+    bi_graded_motivic_cohomology = "H^{p,q}_M(X, Z) where p = cohomological degree, q = Tate weight";
+  };
+
+  # =================================================================
+  # === Realization functors ========================================
+  # =================================================================
+  #
+  # 박힌 모든 cohomology theory 가 motivic realization 으로 표현됨.
+
+  realizationFunctors = [
+    {
+      realization_id = "R-sheaf-cohomology";
+      target_theory = "Sheaf cohomology H^*(Site_coding, F)";
+      functor = "R_sheaf : DM_substrate → D(Sh(Site_coding))";
+      relates_to_lemma = "theorem-mode-14-15-16-sheaf-condition (#175)";
+      description_en = "Realize a motive as its sheaf-cohomology class";
+    }
+    {
+      realization_id = "R-etale";
+      target_theory = "Étale cohomology H^*_ét(EtaleSite, F)";
+      functor = "R_ét : DM_substrate → D(Sh_ét)";
+      relates_to_lemma = "category-etale-cohomology-and-derived-substrate (#180)";
+      description_en = "Étale realization — refines sheaf realization";
+    }
+    {
+      realization_id = "R-derived";
+      target_theory = "Derived category D(Sh)";
+      functor = "R_derived : DM_substrate → D^b(Sh_ét)";
+      relates_to_lemma = "derived category structure (#180)";
+      description_en = "Derived category realization — triangulated structure";
+    }
+    {
+      realization_id = "R-spectral";
+      target_theory = "Spectral sequence E_∞^{p,q}";
+      functor = "R_spectral : DM_substrate → SpectralSeq";
+      relates_to_lemma = "category-spectral-sequences-substrate (#181)";
+      description_en = "Spectral sequence realization — filtered computation";
+    }
+    {
+      realization_id = "R-galois";
+      target_theory = "Galois group cohomology H^*(G_pnix, F)";
+      functor = "R_Gal : DM_substrate → D(Rep_Gal G_pnix)";
+      relates_to_lemma = "category-galois-substrate (#182)";
+      description_en = "Galois realization — G_pnix-equivariant structure";
+    }
+    {
+      realization_id = "R-hochschild-serre";
+      target_theory = "Hochschild-Serre H^p(Q, H^q(N, F))";
+      functor = "R_HS : DM_substrate → SpectralSeq^{Q × N}";
+      relates_to_lemma = "category-hochschild-serre-substrate (#183)";
+      description_en = "Hochschild-Serre realization — group-extension SS";
+    }
+    {
+      realization_id = "R-l-adic";
+      target_theory = "l-adic completion H^*_ét(C, Z_l)";
+      functor = "R_l : DM_substrate → D(Sh(Z_l))";
+      relates_to_lemma = "category-derived-etale-and-l-adic-substrate (#184)";
+      description_en = "l-adic realization — verification-depth refinement";
+    }
+  ];
+
+  realizationCount = builtins.length realizationFunctors;
+
+  # =================================================================
+  # === Universal property ==========================================
+  # =================================================================
+  #
+  # Motivic category is the *universal* abelian (actually triangulated)
+  # category mapping to all realization categories with the required
+  # compatibility:
+  #   - For every reasonable cohomology theory H^*,
+  #     there's a unique realization R_H : DM → D(Sh^H)
+  #   - All R_H factor through DM uniquely.
+
+  universalProperty = {
+    statement_en = ''
+      Universal property of DM_substrate:
+
+      THEOREM. For any cohomology theory H^* on Site_coding satisfying
+      the standard axioms (homotopy invariance, Mayer-Vietoris,
+      Nisnevich descent), there exists a unique realization functor
+        R_H : DM_substrate → D(Sh^H)
+      compatible with tensor product, Tate twist, and distinguished
+      triangles.
+
+      In substrate: every cohomology theory박힌 in the substrate
+      (sheaf / étale / derived / spectral / Galois / H-S / l-adic) is
+      a realization of the universal motivic class.
+    '';
+    realization_count = realizationCount;
+    factorization_through_DM = "every R_H factors uniquely through the canonical functor X ↦ [X]_M";
+  };
+
+  # =================================================================
+  # === Motivic invariants of substrate facts =======================
+  # =================================================================
+  #
+  # 박힌 substrate 사실들이 motivic 수준에서 어떻게 표현되는지.
+
+  motivicInvariants = [
+    {
+      invariant_id = "M-composability";
+      substrate_fact = "Composability QED (#composability)";
+      motivic_class_en = "[composability] ∈ H^0_M (motivic H^0 — universal scalar invariant)";
+      preserved_in_all_realizations = true;
+      reason = "composability holds in every cohomology theory by lifting from the motivic level";
+    }
+    {
+      invariant_id = "M-uniqueness";
+      substrate_fact = "Uniqueness QED (#uniqueness)";
+      motivic_class_en = "[uniqueness] ∈ H^0_M";
+      preserved_in_all_realizations = true;
+    }
+    {
+      invariant_id = "M-UC4-LLM-impossibility";
+      substrate_fact = "UC4 LLM-substitution impossibility";
+      motivic_class_en = "[UC4] is a non-trivial element of motivic cohomology that maps to NON-VANISHING in every realization";
+      preserved_in_all_realizations = true;
+      decisive_meaning_en = ''
+        UC4 가 motivic invariant 라는 것은 *어떤* cohomology theory 로
+        바라봐도 LLM-substitution 이 불가능함을 의미.
+        Sheaf 에서 H^∞ obstruction.
+        Étale 에서 finer H^1_ét obstruction.
+        Galois 에서 G_pnix-invariant impossibility.
+        l-adic 에서 stable in every l-adic completion.
+        Motivic level 에서는 이들이 *하나의 universal obstruction*.
+      '';
+    }
+    {
+      invariant_id = "M-AC3-closure-via-Kan";
+      substrate_fact = "AC3 closure via Kan extension (#174)";
+      motivic_class_en = "[AC3] becomes trivial in DM after appending the Kan extension morphism";
+      preserved_in_all_realizations = false;  # AC3 is no longer obstruction
+      decisive_meaning_en = ''
+        Kan extension F' = motivic identification of AC3 with trivial
+        class. 모든 realization 에서 AC3 obstruction 사라짐.
+        Hochschild-Serre transgression 도 같은 사실의 다른 realization.
+      '';
+    }
+    {
+      invariant_id = "M-substrate-as-topos";
+      substrate_fact = "SC4: substrate is Grothendieck topos";
+      motivic_class_en = "[substrate-topos] is a motivic identity element (topos structure is motivic)";
+      preserved_in_all_realizations = true;
+    }
+  ];
+
+  # =================================================================
+  # === Motivic cohomology bi-grading ===============================
+  # =================================================================
+  #
+  # H^{p,q}_M(X, Z) — motivic cohomology of X with integer coefficients
+  #   p = cohomological degree (vertical)
+  #   q = Tate weight / motivic weight (horizontal)
+
+  motivicCohomologyAt = p: q: {
+    bi_degree = { p = p; q = q; };
+    name = "H^{" + builtins.toString p + "," + builtins.toString q + "}_M(X, Z)";
+    description_en = "Motivic cohomology at cohomological degree p, weight q";
+    realizes_to_sheaf_at = if q == 0 then "H^" + builtins.toString p + "(X, Z)" else null;
+    realizes_to_etale_at = if q >= 0 then "H^" + builtins.toString p + "_ét(X, Z_l(" + builtins.toString q + "))" else null;
+    relates_to_K_theory_when = "K_{2q-p}(X) (Beilinson-Soulé conjecture)";
+  };
+
+  # Predefined: motivic H^{0,0}, H^{1,1} (Picard), H^{2,1} (Chow), H^{2,2}, etc.
+  canonicalMotivicGroups = [
+    (motivicCohomologyAt 0 0)
+    (motivicCohomologyAt 1 1)
+    (motivicCohomologyAt 2 1)
+    (motivicCohomologyAt 2 2)
+    (motivicCohomologyAt 3 2)
+  ];
+
+  # =================================================================
+  # === Tate motives ================================================
+  # =================================================================
+
+  tateMotives = {
+    description_en = ''
+      Tate motives Z(n) ∈ DM_substrate are the basic building blocks:
+        Z(0) = 1 (unit)
+        Z(1) = motivic version of Tate twist
+        Z(n) = Z(1)^⊗n
+
+      Realizations:
+        R_sheaf(Z(n)) = constant sheaf Z
+        R_l(Z(n)) = Z_l(n) (l-adic Tate twist)
+        R_Gal(Z(n)) = chi^n (Galois cyclotomic character)
+    '';
+    primary_tate_motives = [
+      { motive = "Z(0)"; sheaf_realization = "Z constant"; ladic = "Z_l"; galois = "trivial action"; }
+      { motive = "Z(1)"; sheaf_realization = "Z constant"; ladic = "Z_l(1)"; galois = "chi (cyclotomic)"; }
+      { motive = "Z(2)"; sheaf_realization = "Z constant"; ladic = "Z_l(2)"; galois = "chi^2"; }
+      { motive = "Z(-1)"; sheaf_realization = "Z constant"; ladic = "Z_l(-1)"; galois = "chi^{-1}"; }
+    ];
+  };
+
+  # =================================================================
+  # === Beilinson regulator (motivic → Deligne-Beilinson) ===========
+  # =================================================================
+  #
+  # Beilinson regulator: H^{p,q}_M(X, Z) → H^p_D(X, Z(q))
+  # Maps motivic cohomology to Deligne cohomology (refined transcendental
+  # cohomology).
+
+  beilinsonRegulator = {
+    map_kind = "Beilinson-regulator";
+    source = "H^{p,q}_M(X, Z) (motivic)";
+    target = "H^p_D(X, Z(q)) (Deligne-Beilinson)";
+    substrate_meaning_en = ''
+      Substrate analog: map motivic class [r] to its "transcendental
+      refinement" — receipts viewed not just categorically but with
+      their dependencies on Galois action + l-adic depth.
+    '';
+    relates_to_L_values = ''
+      Beilinson regulator computes L-values (special values of
+      L-functions). Substrate analog: refined receipts have
+      'L-values' = weighted invariants summarizing depth, Galois
+      action, and verification stability.
+    '';
+  };
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _: {
+    owner = ownerName;
+    has_motivic_category = true;
+    realization_functor_count = realizationCount;
+    realization_targets = builtins.map (r: r.target_theory) realizationFunctors;
+    has_universal_property = true;
+    motivic_invariant_count = builtins.length motivicInvariants;
+    canonical_motivic_group_count = builtins.length canonicalMotivicGroups;
+    has_tate_motives = true;
+    primary_tate_motive_count = builtins.length tateMotives.primary_tate_motives;
+    has_beilinson_regulator = true;
+    bi_graded_cohomology = motivicCategory.bi_graded_motivic_cohomology;
+    inherits_from = [
+      sheafCohom.ownerName etaleD.ownerName spectral.ownerName
+      galois.ownerName hs.ownerName ladic.ownerName
+    ];
+    UC4_is_motivic_invariant = true;
+    AC3_trivializes_in_DM_after_Kan = true;
+    substrate_topos_is_motivic_identity = true;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyMotivicSubstratePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "motivic-substrate-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "motivic_category" request then {
+      outcome = "motivic-category-emitted"; receipt = motivicCategory;
+    }
+    else if builtins.hasAttr "realizations" request then {
+      outcome = "realization-functors-emitted"; receipt = realizationFunctors;
+    }
+    else if builtins.hasAttr "universal_property" request then {
+      outcome = "universal-property-emitted"; receipt = universalProperty;
+    }
+    else if builtins.hasAttr "invariants" request then {
+      outcome = "motivic-invariants-emitted"; receipt = motivicInvariants;
+    }
+    else if builtins.hasAttr "tate_motives" request then {
+      outcome = "tate-motives-emitted"; receipt = tateMotives;
+    }
+    else if builtins.hasAttr "cohomology_at" request then
+      let r = request.cohomology_at;
+      in { outcome = "motivic-cohomology-bigraded-emitted";
+           receipt = motivicCohomologyAt r.p r.q; }
+    else if builtins.hasAttr "beilinson_regulator" request then {
+      outcome = "beilinson-regulator-emitted"; receipt = beilinsonRegulator;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "motivic_category" "realizations" "universal_property"
+             "invariants" "tate_motives" "cohomology_at" "beilinson_regulator"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit motivicCategory realizationFunctors realizationCount;
+  inherit universalProperty motivicInvariants;
+  inherit motivicCohomologyAt canonicalMotivicGroups tateMotives;
+  inherit beilinsonRegulator inventorySummary applyMotivicSubstratePlate;
+}

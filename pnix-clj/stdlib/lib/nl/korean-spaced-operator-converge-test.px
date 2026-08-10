@@ -1,0 +1,30 @@
+# stdlib/lib/nl/korean-spaced-operator-converge-test.px
+#
+# F1 lock (audit w6vx4gwd8 I1): convergeGate spaced-operator fail-open 봉인.
+#   realizeSentence는 spaced형(먹지 못한다)을 생성하는데 detectOperators는 glued(지못)만 봐서,
+#   lift 오분해(action='못할')로 마커 우회 → 오파싱 명제가 math-keep(durable) silent admit 됐다.
+#   수정: 공백 정규화 후 마커 재검출 → spaced 연산자도 held-nl(operator-not-pure). 겠(future)은 제외=오탐 가드.
+let
+  knm = import ./korean-nl-mirror.px;
+  gNegSpaced = knm.convergeGate "철수가 사과를 먹지 못한다";   # ★spaced 부정 → held (was math-keep, fail-open)
+  gNegGlued  = knm.convergeGate "철수가 사과를 먹지못한다";    # glued 부정 → held (기존 보존)
+  gAspSpaced = knm.convergeGate "철수가 사과를 먹고 있다";     # ★spaced 진행상 → held
+  gOblSpaced = knm.convergeGate "철수가 사과를 먹어야 한다";   # ★spaced 당위 → held
+  gPlain     = knm.convergeGate "철수가 사과를 먹는다";        # 평이 → math-keep (오탐 아님)
+  gFuture    = knm.convergeGate "철수가 학교에 가겠다";        # 미래(겠) → 겠 제외라 spaced-check 무영향(기존 동작 보존)
+in {
+  neg_spaced = gNegSpaced.verdict;
+  asp_spaced = gAspSpaced.verdict;
+  obl_spaced = gOblSpaced.verdict;
+  plain = gPlain.verdict;
+  future = gFuture.verdict;        # 가시화용(겠 제외 가드 확인); all_ok 단정 제외
+  all_ok =
+    # ★spaced 연산자 = held-nl(operator-not-pure) — fail-open 봉인
+       (gNegSpaced.verdict == "held-nl") && (gNegSpaced.held_reason == "operator-not-pure")
+    && (gAspSpaced.verdict == "held-nl") && (gAspSpaced.held_reason == "operator-not-pure")
+    && (gOblSpaced.verdict == "held-nl") && (gOblSpaced.held_reason == "operator-not-pure")
+    # glued 보존
+    && (gNegGlued.verdict == "held-nl")
+    # ★오탐 가드: 평이 문장은 여전히 math-keep
+    && (gPlain.verdict == "math-keep");
+}

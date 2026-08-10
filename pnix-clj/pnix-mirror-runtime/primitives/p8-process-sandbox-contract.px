@@ -1,0 +1,112 @@
+# pnix-mirror-runtime primitive
+#
+# P8 — process-sandbox contract
+#
+# OWNER-LAW (2026-05-13): process isolation is part of the VM
+# runtime contract, not an incidental host detail. P8 owns the
+# cross-platform vocabulary used by doghouse-mirror-vm's sandbox
+# report. Rust adapters may enforce platform-specific mechanics,
+# but they MUST report in these terms so Linux/macOS/Windows do not
+# drift into incompatible VM surfaces.
+
+{
+  ownerName = "pnix-mirror-runtime/primitives/p8-process-sandbox-contract.px";
+  version = "0.1.0";
+
+  meta = {
+    source = "pnix-mirror-runtime primitive P8";
+    role = "cross-platform process sandbox contract for doghouse-mirror-vm child runtime";
+    consumed_by = [ "doghouse-core doghouse-mirror-vm" "cockpit / inspector consumers" ];
+    constitutional_alignment = [
+      "same VM contract on Linux/macOS/Windows"
+      "common baseline enforced everywhere"
+      "OS-specific hardening reported explicitly, never implied"
+      "unsupported hardening is surfaced as future work, not silently claimed"
+    ];
+  };
+
+  reportVersion = "p8-sandbox-report-v1";
+
+  # These are VM-contract requirements, independent of OS kernel.
+  # A doghouse-mirror-vm child that cannot satisfy these should not
+  # advertise itself as sandboxed.
+  commonRequiredFeatures = [
+    "child-process-jsonl"
+    "allow-root-path-capability"
+    "env-scrub"
+    "cwd-isolation"
+    "target-os-reporting"
+  ];
+
+  commonReportFields = [
+    "enabled"
+    "contract_owner"
+    "contract_version"
+    "target_os"
+    "target_family"
+    "allow_roots"
+    "path_capability"
+    "cwd"
+    "cwd_isolated"
+    "env_scrubbed"
+    "platform_backend"
+    "enforced_platform_features"
+    "future_platform_features"
+  ];
+
+  # Platform matrix. `required_common_features` are inherited from
+  # commonRequiredFeatures; rows only list OS-specific mechanics.
+  platformBackends = [
+    {
+      target_os = "linux";
+      backend = "linux-prctl-setrlimit";
+      enforced_platform_features = [
+        "linux-no-new-privs"
+        "unix-rlimit-core-zero"
+        "unix-rlimit-nofile-64"
+        "unix-rlimit-fsize-256mib"
+        "unix-rlimit-cpu-30s"
+      ];
+      future_platform_features = [
+        "linux-seccomp-filter"
+        "linux-mount-namespace"
+        "linux-user-namespace"
+        "linux-cgroup-limits"
+        "linux-uid-gid-drop"
+      ];
+    }
+    {
+      target_os = "macos";
+      backend = "macos-unix-rlimit";
+      enforced_platform_features = [
+        "unix-rlimit-core-zero"
+        "unix-rlimit-nofile-64"
+        "unix-rlimit-fsize-256mib"
+        "unix-rlimit-cpu-30s"
+      ];
+      future_platform_features = [
+        "macos-seatbelt-profile"
+        "macos-entitlement-minimization"
+        "macos-file-read-write-scope"
+      ];
+    }
+    {
+      target_os = "windows";
+      backend = "windows-process-baseline";
+      enforced_platform_features = [];
+      future_platform_features = [
+        "windows-job-object"
+        "windows-restricted-token"
+        "windows-process-mitigation-policy"
+        "windows-directory-acl-scope"
+      ];
+    }
+  ];
+
+  invariants = {
+    allow_root_required_for_io = "store/project paths MUST be under allow_roots after canonicalization or normalized-parent resolution";
+    no_false_platform_claims = "report MUST NOT list a platform feature as enforced unless the adapter applied it on this target";
+    common_before_platform = "commonRequiredFeatures are the portable VM baseline; OS backends add hardening but do not change the JSONL protocol";
+    child_process_boundary = "doghouse-mirror-vm MUST run as a separate OS process from the host caller";
+  };
+}

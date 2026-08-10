@@ -1,0 +1,44 @@
+# PubTables-1M / Table Transformer schema/catalog metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No dataset payload/prose/graph wiring.
+let
+  B = builtins;
+  genPath = ./pubtables1m-schema-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "doc.pubtables1m.layout_schema.v1";
+    source = "PubTables-1M / Table Transformer schema/catalog metadata";
+    license = "MIT repository/config metadata; dataset payloads excluded";
+    policy = "schema/catalog metadata only";
+    summary = { tasks = 0; label_rows = 0; archive_refs = 0; count_refs = 0; };
+    manifest = { }; task_label_maps = [ ]; archive_refs = [ ]; count_refs = [ ]; asset_types = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "pubtables1m-schema-catalog-load-v0";
+      source_lens = "stdlib/lib/corpus/pubtables1m-schema-catalog-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "doc.pubtables1m.layout_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "pubtables1m-schema-catalog-query-v0";
+      source_lens = "stdlib/lib/corpus/pubtables1m-schema-catalog-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "doc.pubtables1m.layout_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

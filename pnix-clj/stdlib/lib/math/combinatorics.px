@@ -1,0 +1,166 @@
+# stdlib.lib.math.combinatorics
+#
+# OWNER-LAW (v0.12-NN, div-math, 2026-05-21): exact discrete
+# combinatorics over the Nat literals.
+#
+# The math lane evaluates arithmetic, answers integer-structure
+# questions, represents exact fractions, and solves linear
+# equations. It had no *counting* primitives -- factorials,
+# binomial coefficients, permutation counts, Fibonacci, Catalan.
+# This owner adds them.
+#
+# Every result is an exact integer. There is no floating point and
+# no overflow-prone intermediate: the binomial coefficient is
+# computed by the multiplicative recurrence `C(n,i) = C(n,i-1) *
+# (n-i+1) / i`, whose every partial product is itself a binomial
+# coefficient -- so it stays an exact integer at every step and
+# never builds the full `n!`.
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt. `factorial`,
+# `fibonacci` are iterative/recursive folds; `binomial` and
+# `permutations` use exact multiplicative formulas; `catalan n`
+# is `C(2n,n) / (n+1)` (always an integer).
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT arbitrary-precision -- bounded by the host int range, so
+#     `factorial 21` already overflows a 64-bit host. The closed
+#     vocabulary keeps the inputs small.
+#   - NOT a generating-function or partition engine.
+#   - NOT yet a registered mirror-plate lens.
+#
+# # Plate-shaped entry
+#
+# `applyCombinatorics request` takes `{ operation; n; (k); }` and
+# returns a typed envelope. A negative argument, or `k` out of the
+# `0 <= k <= n` range where the operation needs it, is Held.
+
+let
+  ownerName = "stdlib/lib/math/combinatorics.px";
+
+  # n! -- assumes n >= 0 (the plate guards negatives).
+  factorial = n:
+    if n == 0 then 1 else n * factorial (n - 1);
+
+  # Binomial coefficient C(n, k) -- the number of k-element subsets
+  # of an n-element set. 0 when k is out of [0, n]. Computed by the
+  # multiplicative recurrence so no full factorial is ever built;
+  # `min(k, n-k)` symmetry keeps the loop short.
+  binomial = n: k:
+    if k < 0 || k > n then 0
+    else
+      let
+        kk = if k > n - k then n - k else k;
+        go = i: acc:
+          if i > kk then acc
+          else go (i + 1) ((acc * (n - i + 1)) / i);
+      in go 1 1;
+
+  # Permutation count P(n, k) = n! / (n-k)! -- the number of
+  # ordered k-tuples of distinct elements from an n-set. 0 when k
+  # is out of [0, n]. Product of k descending terms from n.
+  permutations = n: k:
+    if k < 0 || k > n then 0
+    else
+      let
+        go = i: acc:
+          if i >= k then acc else go (i + 1) (acc * (n - i));
+      in go 0 1;
+
+  # nth Fibonacci number: fib 0 = 0, fib 1 = 1, fib n =
+  # fib(n-1) + fib(n-2). Iterative two-accumulator fold -- linear,
+  # no exponential recursion.
+  fibonacci = n:
+    if n < 0 then 0
+    else
+      let
+        go = i: a: b: if i >= n then a else go (i + 1) b (a + b);
+      in go 0 0 1;
+
+  # nth Catalan number C(2n,n)/(n+1) -- counts balanced bracket
+  # sequences, binary trees, triangulations, ... Always an integer.
+  catalan = n:
+    if n < 0 then 0
+    else (binomial (2 * n) n) / (n + 1);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "factorial"
+    "binomial"
+    "permutations"
+    "fibonacci"
+    "catalan"
+  ];
+
+  # Operations whose `k` argument must satisfy 0 <= k <= n.
+  twoArgOps = [ "binomial" "permutations" ];
+
+  applyCombinatorics = request:
+    let
+      op = request.operation;
+      n  = request.n;
+      k  = if request ? k then request.k else 0;
+      needsK = builtins.elem op twoArgOps;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 0 then {
+        outcome = "held-negative-argument";
+        operation = op;
+        n = n;
+      }
+      else if op == "factorial" then {
+        outcome = "combinatorics-computed";
+        operation = op; n = n;
+        value = factorial n;
+      }
+      else if op == "fibonacci" then {
+        outcome = "combinatorics-computed";
+        operation = op; n = n;
+        value = fibonacci n;
+      }
+      else if op == "catalan" then {
+        outcome = "combinatorics-computed";
+        operation = op; n = n;
+        value = catalan n;
+      }
+      else if needsK && (k < 0 || k > n) then {
+        outcome = "held-k-out-of-range";
+        operation = op; n = n; k = k;
+        reason = "k must satisfy 0 <= k <= n";
+      }
+      else if op == "binomial" then {
+        outcome = "combinatorics-computed";
+        operation = op; n = n; k = k;
+        value = binomial n k;
+      }
+      else {
+        # op == "permutations"
+        outcome = "combinatorics-computed";
+        operation = op; n = n; k = k;
+        value = permutations n k;
+      };
+
+in {
+  inherit
+    ownerName
+    factorial
+    binomial
+    permutations
+    fibonacci
+    catalan
+    knownOperations
+    applyCombinatorics;
+  meta = {
+    source = "stdlib math combinatorics";
+    owner = ownerName;
+    base = "parametric-math-combinatorics-v0";
+    rev_note = "v0.12-NN (div-math): exact discrete combinatorics owner. factorial, binomial coefficient (multiplicative recurrence -- no full factorial built, stays integer every step), permutation count, Fibonacci (linear iterative), Catalan number. Standalone -- imports nothing. NOT arbitrary-precision (factorial 21 overflows a 64-bit host), NOT a partition engine, NOT yet a registered lens.";
+  };
+}

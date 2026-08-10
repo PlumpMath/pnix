@@ -1,0 +1,91 @@
+# stdlib.nl.relation-graph
+#
+# **K6 in .px (one-mirror 정본): meaning address 간 typed relation + 안전한 합성.**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): ingest 의미 매핑(relation
+# graph)은 Rust(`nl_corpus/relation_graph_sheet.rs`)가 아니라 거울(.px) 하나에.
+#
+# 안전 키스톤: relation family 를 SPLIT(lexical/role/discourse/definition/coding/
+# math/ct-like) — *모든 edge 가 CT morphism 인 척하지 못하게*. **오직 ct-like +
+# composition_allowed edge 만 합성**(A→B, B→C ⇒ candidate A→C, 양 parent evidence).
+# definition·lexical·role 등 나머지 family 는 **구조적으로 합성 제외**. 합성된 edge 는
+# 진리 승격이 아니라 candidate emission(confidence_kind=candidate).
+#
+# 경계(host): relation_id digest(sha16(kind|source|target)) = host; 이 owner 는
+# relation_id_basis 만 내놓는다. addr(sense_id/csf_id) 발급(hash)도 host. 그래프
+# 의미/합성-안전 규칙만 거울.
+let
+  concatLists = builtins.concatLists;
+  map = builtins.map;
+  filter = builtins.filter;
+  sort = builtins.sort;
+
+  families = {
+    lexical = "lexical"; role = "role"; discourse = "discourse";
+    definition = "definition"; coding = "coding"; math = "math";
+    ctLike = "ct-like";
+  };
+
+  mkRelationRow = kind: family: source: target: compositionAllowed: evidenceRefs: {
+    schema = "pnixc-meta.relation-row.v0";
+    # digest = host: host 가 이 basis 를 sha16 → rel/<...>.
+    relation_id_basis = kind + "|" + source + "|" + target;
+    relation_kind = kind;
+    relation_family = family;
+    source_addr = source;
+    target_addr = target;
+    composition_allowed = compositionAllowed;
+    evidence_refs = evidenceRefs;
+    confidence_kind = "candidate";   # 그래프 edge 는 candidate 로 진입; 검증은 별 gate.
+  };
+
+  # ── definition.mentions edges (정의가 다른 lemma 언급 → source→target) ──
+  #   family=definition, composition_allowed=false ⇒ *절대 합성 안 됨*(morphism 위장 차단).
+  #   senses: [ { addr; mentions = [ addr ... ]; evidence } ]  (addr 발급은 host)
+  definitionMentionEdges = senses:
+    concatLists (map (s:
+      map (m: mkRelationRow "definition.mentions" families.definition s.addr m false [ s.evidence ]) s.mentions
+    ) senses);
+
+  # ── ct-like edge constructor (합성 허용 family) ──
+  ctLikeEdge = kind: source: target: evidence:
+    mkRelationRow kind families.ctLike source target true [ evidence ];
+
+  # ── 1-hop walk (결정적: relation_id_basis sort) ──
+  walkOneHop = rows: fromAddr:
+    sort (a: b: a.relation_id_basis < b.relation_id_basis)
+      (filter (r: r.source_addr == fromAddr) rows);
+
+  # ── ct-like 합성만: A→B, B→C ⇒ candidate A→C (양 parent evidence) ──
+  #   isCt 아닌 edge(definition 등)는 ab/bc 양쪽 모두에서 구조적 제외.
+  composeCtLike = rows:
+    let
+      isCt = r: r.relation_family == families.ctLike && r.composition_allowed;
+      ctRows = filter isCt rows;
+    in
+      concatLists (map (ab:
+        map (bc: mkRelationRow "ct.compose" families.ctLike ab.source_addr bc.target_addr
+                   true [ ab.relation_id_basis bc.relation_id_basis ])
+          (filter (bc: bc.source_addr == ab.target_addr) ctRows)
+      ) ctRows);
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.relation-graph";
+    consumes = "definition-meaning-map.mentionedLemmas (definition.mentions source) — addr 발급은 host";
+    role = "K6 typed relation graph + 안전 합성. ct-like+composition_allowed만 A→B,B→C⇒A→C; 타 family 구조적 제외(morphism 위장 차단). ingest 의미 매핑 .px 정본.";
+    boundary = "relation_id digest(sha)·addr 발급(hash) = host; 그래프 의미/합성 규칙만 거울.";
+    note = "Rust nl_corpus/relation_graph_sheet.rs K6 = Phase 2/3 삭제 대상.";
+  };
+
+in {
+  inherit
+    families mkRelationRow definitionMentionEdges ctLikeEdge
+    walkOneHop composeCtLike inventorySummary;
+  ownerName = "stdlib.nl.relation-graph";
+  meta = {
+    source = "stdlib nl relation-graph (.px K6: typed relations + 안전 합성; one-mirror 정본)";
+    owner = "stdlib.nl.relation-graph";
+    base = "relation-graph-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1: ingest K6 relation graph 의 .px 정본화. family SPLIT(lexical/role/discourse/definition/coding/math/ct-like) — ct-like+composition_allowed만 합성(A→B,B→C⇒candidate A→C, 양 parent evidence); definition 등 나머지=구조적 합성 제외(morphism 위장 차단=안전 키스톤). definitionMentionEdges(comp=false)·ctLikeEdge·walkOneHop(결정적)·composeCtLike. digest(relation_id)·addr 발급=host 경계. 검증: definition A→B,B→C ⇏ A→C; ct-like A→B,B→C ⇒ A→C. Rust relation_graph_sheet.rs=Phase 2/3 삭제.";
+  };
+}

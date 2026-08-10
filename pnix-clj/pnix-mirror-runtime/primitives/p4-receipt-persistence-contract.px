@@ -1,0 +1,48 @@
+# P4 — receipt persistence contract
+#
+# OWNER-LAW (2026-05-13 next-slice): the `.px` side of the
+# persistent-receipt-store contract. Same pattern as
+# `stdlib/lib/gate/algorithm-synthesis/ankh-retrieval-cache.px` —
+# the `.px` owner declares the redb table contract; the Rust
+# transport reads this and emits byte-transport. No semantic law
+# in Rust.
+#
+# This contract is loaded by `pnix_query_runtime::persistent_table_contract::load_contract`
+# and consumed by the doghouse-side adapter (see Rust side).
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p4-receipt-persistence-contract.px";
+in {
+  inherit ownerName;
+
+  # Single redb table for the receipt stream. Append-only — each
+  # receipt is byte-immutable once written. Supersession produces a
+  # new receipt with parent_receipt_id referencing the prior one.
+  persistentTables = [
+    {
+      table_id = "mirror-receipts";
+      role = "append-only typed receipt store for P4 stream";
+      key_fields = [ "receipt_id" ];
+      key_separator = "|";
+      value_family = "json-v1";
+      value_root = "MirrorReceipt";
+      required_value_fields = [
+        "id"
+        "receipt_kind"
+        "emitted_at_ms"
+      ];
+      merge_policy = "append-only";
+      capability_required = "AppendMirrorReceipt";
+      restore_order = "by-stored-at-ms";
+      description = "every P4 receipt (mirror-spawn / ontology-extend / boundary-project / thunk-force / thunk-gc / mirror-despawn / fold-step / held) lands here keyed by its replay-stable id. Chain anchor preserved via parent_receipt_id field within the JSON payload. Rust adapter is byte transport only.";
+    }
+  ];
+
+  meta = {
+    source = "pnix-mirror-runtime primitive P4 — persistence contract";
+    owner = ownerName;
+    role = "declare the redb table contract for the persistent receipt stream";
+    consumed_by = [ "doghouse-core mirror_receipt_store Rust adapter" ];
+    pattern_reference = "same shape as stdlib/lib/gate/algorithm-synthesis/ankh-retrieval-cache.px persistentTables";
+  };
+}

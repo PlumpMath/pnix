@@ -1,0 +1,72 @@
+{:kind :nix-ground-truth-oracle-set
+ :schema-version 1
+ :lineage
+ {:source "Nix evaluator JSON oracle"
+  :captured-at "2026-07-01"
+  :command "nix-instantiate --eval --strict --json -E <source>"
+  :command-path "/run/current-system/sw/bin/nix-instantiate"
+  :command-version "nix-instantiate (Nix) 2.34.7"
+  :note "Repo-owned expected values copied from a real Nix evaluator. The command path/version are provenance only; normal pnix-clj reports do not shell out."}
+ :cases
+ [{:source-id :nix-ground-truth/int-42
+   :source "42"
+   :oracle-result {:status :ok :value 42}}
+  {:source-id :nix-ground-truth/bool-true
+   :source "true"
+   :oracle-result {:status :ok :value true}}
+  {:source-id :nix-ground-truth/bool-false
+   :source "false"
+   :oracle-result {:status :ok :value false}}
+  {:source-id :nix-ground-truth/null
+   :source "null"
+   :oracle-result {:status :ok :value nil}}
+  {:source-id :nix-ground-truth/string
+   :source "\"pnix\""
+   :oracle-result {:status :ok :value "pnix"}}
+  {:source-id :nix-ground-truth/list-basic
+   :source "[ 1 true \"x\" ]"
+   :oracle-result {:status :ok :value [1 true "x"]}}
+  {:source-id :nix-ground-truth/attrset-basic
+   :source "{ x = 1; y = \"z\"; flag = false; }"
+   :oracle-result {:status :ok :value {"x" 1
+                                       "y" "z"
+                                       "flag" false}}}
+  {:source-id :nix-ground-truth/arithmetic-int
+   :source "1 + 1"
+   :oracle-result {:status :ok :value 2}}
+  {:source-id :nix-ground-truth/arithmetic-float
+   :source "1 + 1.5"
+   :oracle-result {:status :ok :value 2.5}}
+  {:source-id :nix-ground-truth/attrset-merge-select
+   :source "({ a = 1; } // { b = 2; }).b"
+   :oracle-result {:status :ok :value 2}}
+  {:source-id :nix-ground-truth/lambda-apply
+   :source "(x: x + 1) 41"
+   :oracle-result {:status :ok :value 42}}
+  {:source-id :nix-ground-truth/elem-at
+   :source "builtins.elemAt [ 10 20 30 ] 1"
+   :oracle-result {:status :ok :value 20}}
+  {:source-id :nix-ground-truth/attr-select
+   :source "{ a = 1; b = 2; }.b"
+   :oracle-result {:status :ok :value 2}}
+  {:source-id :nix-ground-truth/attr-names
+   :source "builtins.attrNames { b = 2; a = 1; }"
+   :oracle-result {:status :ok :value ["a" "b"]}}
+  {:source-id :nix-ground-truth/list-length
+   :source "builtins.length [ 1 2 3 ]"
+   :oracle-result {:status :ok :value 3}}
+  {:source-id :nix-ground-truth/has-attr
+   :source "builtins.hasAttr \"a\" { a = 1; }"
+   :oracle-result {:status :ok :value true}}
+  {:source-id :nix-ground-truth/concat-strings-sep-empty
+   :source "builtins.concatStringsSep \"\" [ \"a\" \"b\" ]"
+   :oracle-result {:status :ok :value "ab"}}
+  {:source-id :nix-ground-truth/concat-strings-sep-dash
+   :source "builtins.concatStringsSep \"-\" [ \"a\" \"b\" \"c\" ]"
+   :oracle-result {:status :ok :value "a-b-c"}}
+  {:source-id :nix-ground-truth/to-json-attrset
+   :source "builtins.toJSON { a = 1; }"
+   :oracle-result {:status :ok :value "{\"a\":1}"}}
+  {:source-id :nix-ground-truth/is-attrs
+   :source "builtins.isAttrs { a = 1; }"
+   :oracle-result {:status :ok :value true}}]}

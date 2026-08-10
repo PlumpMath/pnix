@@ -1,0 +1,336 @@
+# stdlib.lib.coding.algorithm-code-witness
+#
+# v0 code -> pnix meaning witness for the deterministic symbolic algorithms
+# emitted by math/symbolic-algorithm-code-emitter.px.
+#
+# This is NOT a general Python/JavaScript parser yet. It is the first
+# code->pnix round-trip gate: generated algorithm source is recognized back as
+# a canonical algorithm meaning plus small algorithm atoms.
+let
+  ownerName = "stdlib/lib/coding/algorithm-code-witness.px";
+
+  sub  = builtins.substring;
+  slen = builtins.stringLength;
+
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+
+  containsAll = source: anchors:
+    builtins.all (a: hasInfix a source) anchors;
+
+  firstHit = f: xs:
+    builtins.foldl' (acc: x: if acc != null then acc else f x) null xs;
+
+  getAttrOr = attrs: key: dflt:
+    if (builtins.isAttrs attrs) && (builtins.hasAttr key attrs)
+    then builtins.getAttr key attrs else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  detectLanguage = source:
+    if hasInfix "def " source || hasInfix "range(" source then "python"
+    else if hasInfix "function " source || hasInfix "console.log" source then "javascript"
+    else null;
+
+  rows = [
+    {
+      algorithm_kind = "derivative";
+      canonical_meaning = "math.expression.differentiate";
+      expected_route_owner = "stdlib/lib/math/derivative-executor-bridge.px";
+      representation = "coefficient-list-polynomial";
+      anchors = {
+        python = [ "def differentiate_polynomial" "for power in range" "power * coeffs[power]" "return result" ];
+        javascript = [ "function differentiatePolynomial" "for (let power" "power * coeffs[power]" "return result" ];
+      };
+      recovered_algorithm_atoms = [
+        "loop-over-powers"
+        "multiply-coeff-by-power"
+        "append-derived-coeff"
+        "return-result"
+      ];
+    }
+    {
+      algorithm_kind = "quadratic-solve";
+      canonical_meaning = "math.equation.solve";
+      expected_route_owner = "stdlib/lib/math/equation-solving-procedure.px";
+      representation = "quadratic-discriminant";
+      anchors = {
+        python = [ "def solve_quadratic" "discriminant = b * b - 4 * a * c" "sqrt_d" "(-b + sqrt_d) / (2 * a)" ];
+        javascript = [ "function solveQuadratic" "discriminant = b * b - 4 * a * c" "Math.sqrt" "(-b + sqrtD) / (2 * a)" ];
+      };
+      recovered_algorithm_atoms = [
+        "compute-discriminant"
+        "branch-negative-discriminant"
+        "sqrt-discriminant"
+        "quadratic-root-formula"
+      ];
+    }
+    {
+      algorithm_kind = "factor";
+      canonical_meaning = "math.expression.factor";
+      expected_route_owner = "stdlib/lib/math/factor-executor-bridge.px";
+      representation = "monic-quadratic-integer-root-pair";
+      anchors = {
+        python = [ "def factor_monic_quadratic" "for r in range" "s = -b - r" "r * s == c" ];
+        javascript = [ "function factorMonicQuadratic" "for (let r" "const s = -b - r" "r * s === c" ];
+      };
+      recovered_algorithm_atoms = [
+        "search-integer-root-pair"
+        "derive-companion-root"
+        "verify-product-constant"
+        "return-factor-roots"
+      ];
+    }
+  ];
+
+  anchorsFor = row: language:
+    if builtins.hasAttr language row.anchors
+    then builtins.getAttr language row.anchors
+    else [ ];
+
+  rowMatches = language: source: row:
+    let anchors = anchorsFor row language;
+    in anchors != [ ] && containsAll source anchors;
+
+  findRow = language: source: explicitKind:
+    let
+      candidates =
+        if explicitKind == null || explicitKind == ""
+        then rows
+        else builtins.filter (r: r.algorithm_kind == explicitKind) rows;
+    in firstHit (r: if rowMatches language source r then r else null) candidates;
+
+  # Structural v1 for near-generated Python derivative code.
+  #
+  # Accept renamed identifiers such as:
+  #   def diff_poly(coefficients):
+  #       out = []
+  #       for i in range(1, len(coefficients)):
+  #           out.append(i * coefficients[i])
+  #       return out
+  #
+  # This is still not a general Python parser. It is a small structural witness:
+  # input variable, accumulator variable, loop variable, append target, and
+  # return target must cohere.
+  identifierChars = [
+    "_" "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"
+    "a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
+    "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
+    "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M"
+    "N" "O" "P" "Q" "R" "S" "T" "U" "V" "W" "X" "Y" "Z"
+  ];
+
+  indexFrom = needle: hay: from:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then (-1) else if (sub i n hay) == needle then i else go (i + 1);
+    in if n == 0 then (-1) else go from;
+
+  charAt = s: i: sub i 1 s;
+
+  isIdentChar = c: builtins.elem c identifierChars;
+
+  trimL = s:
+    let n = slen s;
+        go = i: if i < n && ((sub i 1 s) == " " || (sub i 1 s) == "\n" || (sub i 1 s) == "\t") then go (i + 1) else sub i (n - i) s;
+    in go 0;
+
+  trimR = s:
+    let go = i: if i > 0 && ((sub (i - 1) 1 s) == " " || (sub (i - 1) 1 s) == "\n" || (sub (i - 1) 1 s) == "\t") then go (i - 1) else sub 0 i s;
+    in go (slen s);
+
+  trim = s: trimR (trimL s);
+
+  readIdentifier = s: start:
+    let
+      n = slen s;
+      go = i:
+        if i >= n then i
+        else if isIdentChar (charAt s i) then go (i + 1)
+        else i;
+      stop = go start;
+    in if stop <= start then "" else sub start (stop - start) s;
+
+  sliceBetween = s: left: right: from:
+    let li = indexFrom left s from;
+    in if li < 0 then null
+       else
+         let start = li + slen left;
+             ri = indexFrom right s start;
+         in if ri < 0 then null else sub start (ri - start) s;
+
+  structuralDerivativePython = source:
+    let
+      defArgs = sliceBetween source "def " "):" 0;
+      openParen = if defArgs == null then (-1) else indexFrom "(" defArgs 0;
+      inputVar =
+        if defArgs == null || openParen < 0 then ""
+        else trim (sub (openParen + 1) ((slen defArgs) - openParen - 1) defArgs);
+      outIdx = indexFrom " = []" source 0;
+      accVar =
+        if outIdx < 0 then ""
+        else
+          let
+            before = sub 0 outIdx source;
+            # read the identifier after the last newline/indent by walking
+            # backwards over non-identifier chars, then identifier chars.
+            n = slen before;
+            skip = i:
+              if i <= 0 then 0
+              else if isIdentChar (charAt before (i - 1)) then i
+              else skip (i - 1);
+            end = skip n;
+            startGo = i:
+              if i <= 0 then 0
+              else if isIdentChar (charAt before (i - 1)) then startGo (i - 1)
+              else i;
+            start = startGo end;
+          in trim (sub start (end - start) before);
+      forIdx = indexFrom "for " source 0;
+      loopVar =
+        if forIdx < 0 then ""
+        else readIdentifier source (forIdx + 4);
+      hasRange = loopVar != "" && inputVar != "" && hasInfix ("for " + loopVar + " in range(1, len(" + inputVar + "))") source;
+      pyExpr1 = loopVar + " * " + inputVar + "[" + loopVar + "]";
+      pyExpr2 = inputVar + "[" + loopVar + "] * " + loopVar;
+      hasAppend =
+        accVar != "" &&
+        (hasInfix (accVar + ".append(" + pyExpr1 + ")") source
+         || hasInfix (accVar + ".append(" + pyExpr2 + ")") source);
+      hasReturn = accVar != "" && hasInfix ("return " + accVar) source;
+      ok = inputVar != "" && accVar != "" && loopVar != "" && hasRange && hasAppend && hasReturn;
+    in
+      if !ok then null else {
+        algorithm_kind = "derivative";
+        canonical_meaning = "math.expression.differentiate";
+        expected_route_owner = "stdlib/lib/math/derivative-executor-bridge.px";
+        representation = "coefficient-list-polynomial";
+        source_language = "python";
+        required_anchors = [ "def" "range(1, len(input))" "acc.append(loop * input[loop])" "return acc" ];
+        required_anchors_verified = true;
+        recovered_algorithm_atoms = [
+          "loop-over-powers"
+          "multiply-coeff-by-power"
+          "append-derived-coeff"
+          "return-result"
+        ];
+        structural_bindings = {
+          input_var = inputVar;
+          accumulator_var = accVar;
+          loop_var = loopVar;
+          append_expression = if hasInfix (accVar + ".append(" + pyExpr1 + ")") source then pyExpr1 else pyExpr2;
+        };
+        witness_strategy = "structural-derivative-python-v1";
+      };
+
+  structuralMatch = language: source: explicitKind:
+    if language == "python" && (explicitKind == "" || explicitKind == "derivative")
+    then structuralDerivativePython source
+    else null;
+
+  mkHeld = outcome: reason: extra: {
+    kind = "algorithm-code-witness-envelope";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    reason = reason;
+    verified = false;
+    recovered_algorithm_atoms = [ ];
+    receipt = {
+      kind = "code-to-pnix-witness-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName rows detectLanguage;
+
+  witnessAlgorithmCode = req:
+    let
+      source =
+        if builtins.isString req then req
+        else if (builtins.isAttrs req) then
+          let s1 = stringAttrOr req "source_text" "";
+              s2 = stringAttrOr req "code" "";
+          in if s1 != "" then s1 else s2
+        else "";
+      explicitLanguage =
+        if builtins.isAttrs req then stringAttrOr req "language" "" else "";
+      language = if explicitLanguage != "" then explicitLanguage else detectLanguage source;
+      explicitKind =
+        if builtins.isAttrs req then stringAttrOr req "algorithm_kind" "" else "";
+      matched =
+        if language == null then null else findRow language source explicitKind;
+      structural =
+        if language == null || matched != null then null
+        else structuralMatch language source explicitKind;
+    in
+      if source == "" then
+        mkHeld "held-empty-source" "witness할 source_text가 없습니다." { source_language = language; algorithm_kind = explicitKind; }
+      else if language == null then
+        mkHeld "held-unknown-language" "python/javascript algorithm source로 인식하지 못했습니다." { source_language = language; algorithm_kind = explicitKind; }
+      else if matched == null && structural == null then
+        mkHeld "held-algorithm-anchors-not-recognized" "지원되는 symbolic algorithm anchor set과 일치하지 않습니다." {
+          source_language = language;
+          algorithm_kind = explicitKind;
+          supported_algorithm_kinds = builtins.map (r: r.algorithm_kind) rows;
+        }
+      else
+        let
+          usedStructural = structural != null;
+          algKind = if usedStructural then structural.algorithm_kind else matched.algorithm_kind;
+          canonicalMeaning = if usedStructural then structural.canonical_meaning else matched.canonical_meaning;
+          routeOwner = if usedStructural then structural.expected_route_owner else matched.expected_route_owner;
+          representation = if usedStructural then structural.representation else matched.representation;
+          recoveredAtoms = if usedStructural then structural.recovered_algorithm_atoms else matched.recovered_algorithm_atoms;
+          anchors = if usedStructural then structural.required_anchors else anchorsFor matched language;
+        in {
+          kind = "algorithm-code-witness-envelope";
+          owner = ownerName;
+          outcome = "algorithm-code-witnessed";
+          is_held = false;
+          verified = true;
+          source_language = language;
+          algorithm_kind = algKind;
+          canonical_meaning = canonicalMeaning;
+          expected_route_owner = routeOwner;
+          representation = representation;
+          required_anchors = anchors;
+          required_anchors_verified =
+            if usedStructural then true else containsAll source anchors;
+          recovered_algorithm_atoms = recoveredAtoms;
+          witness_strategy =
+            if usedStructural then structural.witness_strategy else "exact-anchor-row-v0";
+          structural_bindings =
+            if usedStructural then structural.structural_bindings else { };
+          receipt = {
+            kind = "code-to-pnix-witness-receipt";
+            route = ownerName;
+            verified = true;
+            source_language = language;
+            canonical_meaning = canonicalMeaning;
+            algorithm_kind = algKind;
+            representation = representation;
+            recovered_algorithm_atoms = recoveredAtoms;
+            witness_strategy =
+              if usedStructural then structural.witness_strategy else "exact-anchor-row-v0";
+            structural_bindings =
+              if usedStructural then structural.structural_bindings else { };
+            invariant =
+              if usedStructural then "edited near-generated source -> structural algorithm meaning atoms"
+              else "generated algorithm source -> canonical algorithm meaning atoms";
+          };
+        };
+
+  meta = {
+    source = "stdlib coding algorithm-code witness";
+    owner = ownerName;
+    base = "algorithm-code-witness-v0";
+    rev_note = "2026-06-03: first code->pnix witness for generated symbolic algorithm code. Scope: deterministic Python/JavaScript derivative/quadratic-solve/factor algorithms emitted by symbolic-algorithm-code-emitter. Not a general parser; next step is tree-sitter/LSP surface AST -> pnix meaning.";
+  };
+}

@@ -1,0 +1,47 @@
+# stdlib/lib/nl/dictionary-facts-store-plan.px — 사전 facts 를 redb `dictionary_facts` 에 rec{}(pnix attrset)로 materialize
+#
+# ★사전 S3: dictionary-seed-facts.px(host-생성 lemma/pos 마디)를 redb 에 *pnix attrset 소스*로 올린다(JSON 아님).
+#   morph_rules store-plan 과 동형 — 이 .px 가 plan(의미) 정본, Rust(executor.rs)는 plan→redb 바이트 *실행만*(ferry).
+#   `--morph-rules-build stdlib/lib/nl/dictionary-facts-store-plan.px` (generic CLI 재사용) 으로 적재.
+#
+# ★sync = content-hash 키: key="<schema>/<sha256(value)>". 내용 같으면 idempotent. .px 마디 바뀌면 새 해시.
+#   외부 덤프(S4)는 같은 store-plan 패턴을 *샤드당* 반복(샤드 facts → 한 value_bytes append) — 시그니처 동형.
+let
+  seed = import ./dictionary-seed-facts.px;   # { schema; facts=[{lemma;pos}] } (host-생성, 정의문 없음=clean-room)
+  ser = import ./pnix-value-literal.px;        # 공유 pnix-소스 직렬화기 (단일 source, JSON 금지)
+  B = builtins;
+  valueSrc = ser.toPnixSource seed;            # pnix attrset 소스 (rec{} 계열, NOT JSON)
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "dictionary-facts-load-v0";
+      source_lens = "stdlib/lib/nl/dictionary-facts-store-plan.px";
+      source_verdict = "materialize-dictionary-facts";
+      operations = [
+        { op_kind = "append"; table = "dictionary_facts"; key = key; value_bytes = valueSrc; }
+      ];
+      receipt_owner = "dictionary.seed-facts.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+
+  mkQuery = args: {
+    plan = {
+      plan_id = "dictionary-facts-query-v0";
+      source_lens = "stdlib/lib/nl/dictionary-facts-store-plan.px";
+      source_verdict = "query-dictionary-facts";
+      operations = [
+        { op_kind = "scan-prefix"; table = "dictionary_facts"; key = ""; key_prefix = seed.schema + "/"; }
+      ];
+      receipt_owner = "dictionary.seed-facts.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

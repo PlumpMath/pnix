@@ -1,0 +1,1806 @@
+# pnixc-pnix.eval.evaluator
+#
+# OWNER-LAW (2026-05-14): the first `.px`-written evaluator for the
+# pnix subset. This is the meta-circular substrate's *Stage 2* —
+# Stage 1 (host eval, currently `pnix-eval`) boots this file, which
+# then evaluates user `.px` source via `runtime.parse_expr`.
+#
+# Until this owner landed, every "live-eval" claim in the
+# constitution was bridge-debt: a Rust evaluator pretending to be
+# the substrate's interpreter. With this evaluator + the matching
+# `pnixc-meta` thin shim, *.px* user code is evaluated by *.px*
+# evaluator code.
+#
+# # Calling shape
+#
+# Caller supplies `runtime` (= `pnixc-pnix/exec/runtime.px` attrset)
+# so this file does not rely on pnix-eval's cwd-anchored
+# relative-import resolution:
+#
+#   runtime = import .../pnixc-pnix/exec/runtime.px;
+#   ev      = (import .../pnixc-pnix/eval/evaluator.px) runtime;
+#   ev.run "1 + 1"        # → 2
+#
+# # AST shape this evaluator consumes
+#
+# The shapes match `runtime.parse_expr` output (parser-level
+# `mk_*` AST), NOT the unified `u_*` lowering shape. Concretely:
+#
+#   Int      { tag; value }
+#   Float    { tag; value }
+#   Bool     { tag; value }
+#   Null     { tag }
+#   String   { tag; value }
+#   Var      { tag; name }
+#   Lambda   { tag; param = { tag = "Ident"; name }; body }
+#   Let      { tag; bindings = [Assign...]; body }
+#   Assign   { tag; key_path = [string]; value }       (only in Let/AttrSet)
+#   If       { tag; cond; "then"; "else" }
+#   With     { tag; env; body }
+#   Apply    { tag; func; arg }
+#   Binary   { tag; op; lhs; rhs }
+#   Unary    { tag; op; arg }
+#   Select   { tag; base; attr }
+#   Index    { tag; base; index }
+#   HasAttr  { tag; base; attr }
+#   List     { tag; items }
+#   AttrSet  { tag; items = [Assign...]; recursive = bool }
+#
+# # Bounded subset (v0)
+#
+# Unsupported (return `mk_error`):
+#   full lazy recursive attrsets, `import`, dynamic select /
+#   dynamic hasattr, function-argument pattern application with defaults, attribute paths
+#   in `let` (multi-segment key_path), `inherit`, `builtins.*` lookup.
+#
+#   `let` and `rec { ... }` bind simple identifiers/attrs as lazy recursive
+#   value slots. The evaluator registers all names before forcing any RHS, so
+#   forward references and mutual recursion match the host evaluator lane.
+
+{ runtime, inputDir ? "/" }:
+
+let
+  ownerName = "pnixc-pnix/eval/evaluator.px";
+  schema = "pnixc-meta-evaluator-v0";
+
+  supportedTags = [
+    "Int" "Float" "Bool" "Null" "String"
+    "Var" "List" "AttrSet"
+    "Lambda" "Apply"
+    "If" "Let" "With"
+    "Assert"
+    "Binary" "Unary"
+    "Select" "HasAttr" "Index"
+  ];
+
+  supportedBinaryOps = [
+    "+" "-" "*" "/" "%"
+    "==" "!=" "<" "<=" ">" ">="
+    "&&" "||" "->"
+    "++" "//"
+  ];
+
+  supportedUnaryOps = [ "-" "!" ];
+
+  mk_error_as = errorClass: msg: {
+    status = "error";
+    error = msg;
+    failure = {
+      __pnix_model_schema = "pnix.machine.eval-error-model.v1";
+      __pnix_model_domain = "pnix.machine.eval-error-model.v1";
+      phase = "eval";
+      class = errorClass;
+      evidence = { };
+    };
+  };
+  mk_error = mk_error_as "unsupported-expression";
+  # v0.6.7: Nix tryEval catches ONLY throw/assert. Errors carry an explicit
+  # `catchable` flag; every other error (missing attr, bad pattern arg, ...)
+  # propagates THROUGH tryEval like the direct evaluator's held.
+  mk_catchable_error_as = errorClass: msg:
+    (mk_error_as errorClass msg) // { catchable = true; };
+  mk_catchable_error = mk_catchable_error_as "throw-builtin-called";
+  is_catchable_error = v: is_error v && v ? catchable && v.catchable == true;
+  is_error = v: builtins.isAttrs v && v ? status && v.status == "error";
+
+  mk_path = s: { __pnix_value_kind = "path"; path = s; };
+  is_path = v:
+    builtins.isAttrs v
+    && v ? __pnix_value_kind
+    && v.__pnix_value_kind == "path"
+    && v ? path
+    && builtins.isString v.path;
+
+  mk_closure = paramName: body: env:
+    { __pnixc_meta_tag = "Closure";
+      # Opaque per-construction token. Recursive equality wraps closure values
+      # in a host list so the host's Nix identity shortcut sees the SAME guest
+      # closure without structurally walking body/env; distinct constructions
+      # reach this function field and compare false.
+      __pnixc_meta_identity = (_: null);
+      param = paramName; body = body; env = env; };
+
+  # v0.6.5: pattern lambdas — the closure carries its formals so both
+  # application and functionArgs answer from the VALUE (no syntactic special
+  # cases; that lesson is written in blood on three lanes now).
+  mk_pattern_closure = bind: fields: ellipsis: body: env:
+    { __pnixc_meta_tag = "Closure"; __pnixc_meta_identity = (_: null);
+      param = null; bind = bind;
+      formals = fields; ellipsis = ellipsis; body = body; env = env; };
+
+  mk_rec_closure = paramName: body: env: recBindings:
+    {
+      __pnixc_meta_tag = "Closure";
+      __pnixc_meta_identity = (_: null);
+      __pnixc_meta_rec_bindings = recBindings;
+      param = paramName;
+      body = body;
+      env = env;
+    };
+
+  is_closure = v:
+    builtins.isAttrs v
+    && v ? __pnixc_meta_tag
+    && v.__pnixc_meta_tag == "Closure";
+
+  # v0.6.6: meta builtins. Some builtins must see the RAW meta value —
+  # `functionArgs` reads a pattern closure's `formals`, but the generic
+  # native-builtin path marshals closures into opaque host fns first
+  # (formals lost => silent {}). A MetaBuiltin is a tagged VALUE, so it
+  # flows through variables (`let g = builtins.functionArgs; in g f`)
+  # where a syntactic special case would go silent-wrong.
+  mk_meta_builtin = name: { __pnixc_meta_tag = "MetaBuiltin"; name = name; };
+  is_meta_builtin = v:
+    builtins.isAttrs v
+    && v ? __pnixc_meta_tag
+    && v.__pnixc_meta_tag == "MetaBuiltin";
+
+  # D15 (host-D2 parity): the Apply tail forces every native argument, which
+  # made the D2-lazy positions (map/filter/mapAttrs/sort function args,
+  # foldl' initial accumulator) over-strict on this lane. A lazy-native
+  # receives its NEXT argument unforced and does its own force/marshal in
+  # the Nix order.
+  mk_lazy_native = f: { __pnix_lazy_native = true; fn = f; };
+  is_lazy_native = v:
+    builtins.isAttrs v && v ? __pnix_lazy_native;
+
+  mk_thunk = name: compute:
+    { __pnixc_meta_tag = "Thunk"; name = name; force = compute; };
+
+  mk_recursive_thunk = name: compute:
+    { __pnixc_meta_tag = "RecursiveThunk";
+      # A fresh host closure is an opaque identity token for this recursive
+      # heap cell. Ordinary application thunks do not pay this cost.
+      __pnixc_meta_identity = (_: null);
+      name = name;
+      force = compute;
+    };
+
+  thunk_tag = v:
+    if builtins.isAttrs v && v ? __pnixc_meta_tag
+    then v.__pnixc_meta_tag
+    else null;
+
+  is_thunk = v:
+    let tag = thunk_tag v;
+    in tag == "Thunk" || tag == "RecursiveThunk";
+
+  is_recursive_thunk = v:
+    thunk_tag v == "RecursiveThunk";
+
+  attrByPathMissing = { __pnixc_meta_tag = "AttrByPathMissing"; };
+  findFirstMissing = { __pnixc_meta_tag = "FindFirstMissing"; };
+  withScopesKey = "__pnixc_meta_with_scopes";
+
+  is_attr_by_path_missing = v:
+    builtins.isAttrs v
+    && v ? __pnixc_meta_tag
+    && v.__pnixc_meta_tag == "AttrByPathMissing";
+
+  is_find_first_missing = v:
+    builtins.isAttrs v
+    && v ? __pnixc_meta_tag
+    && v.__pnixc_meta_tag == "FindFirstMissing";
+
+  forceStackKey = "__pnixc_meta_force_stack";
+
+  same_thunk_identity = a: b: [ a ] == [ b ];
+
+  force_thunk_with = stack: v:
+    if builtins.any
+         (token: same_thunk_identity token v.__pnixc_meta_identity)
+         stack
+    then mk_error_as "cycle-detected" "eval: infinite recursion"
+    else v.force ([ v.__pnixc_meta_identity ] ++ stack);
+
+  force_value_with = stack: v:
+    let tag = thunk_tag v;
+    in if tag == "RecursiveThunk" then force_thunk_with stack v
+    else if tag == "Thunk" then v.force null
+    else v;
+
+  force_value = v: force_value_with [] v;
+
+  force_stack = env:
+    if builtins.isAttrs env && builtins.hasAttr forceStackKey env
+    then builtins.getAttr forceStackKey env
+    else [];
+
+  eval_thunk = label: ast: env:
+    mk_thunk label (_: eval ast env);
+
+  eval_recursive_thunk = label: ast: env:
+    mk_recursive_thunk label
+      (stack: eval ast (env // { "${forceStackKey}" = stack; }));
+
+  with_scopes = env:
+    if builtins.isAttrs env && builtins.hasAttr withScopesKey env
+    then builtins.getAttr withScopesKey env
+    else [];
+
+  lookup_with_scope = name: scopes:
+    if builtins.length scopes == 0 then
+      mk_error_as "unknown-variable" ("eval: unknown variable `" + name + "`")
+    else
+      let scope = force_value (builtins.head scopes); in
+      if builtins.isAttrs scope && builtins.hasAttr name scope
+      then force_value (builtins.getAttr name scope)
+      else lookup_with_scope name (builtins.tail scopes);
+
+  deep_force_value = v:
+    let forced = force_value v; in
+    if is_error forced then forced
+    else if builtins.isList forced then
+      builtins.map deep_force_value forced
+    else if builtins.isAttrs forced && !(is_closure forced) && !(is_path forced) && !(is_thunk forced) then
+      let
+        step = acc: name:
+          if is_error acc then acc
+          else
+            let value = deep_force_value (builtins.getAttr name forced);
+            in if is_error value then value else acc // { ${name} = value; };
+      in builtins.foldl' step {} (builtins.attrNames forced)
+    else forced;
+
+  nix_equal_at = recursive_slot: a: b:
+    # Remember slot identity before forcing, but do not return early: a shared
+    # poison thunk must still raise. After both forces succeed this recovers
+    # Nix's shared NaN/function identity even though guest thunks are pure.
+    let same_slot = recursive_slot && [ a ] == [ b ];
+        af = force_value a;
+    in
+    if is_error af then af
+    else
+      let bf = force_value b; in
+      if is_error bf then bf
+      else if same_slot then true
+      else if (builtins.isInt af || builtins.isFloat af)
+           && (builtins.isInt bf || builtins.isFloat bf) then af == bf
+      else if is_path af || is_path bf then
+        is_path af && is_path bf && af.path == bf.path
+      else if is_closure af || is_closure bf || is_lazy_native af || is_lazy_native bf
+              || builtins.isFunction af || builtins.isFunction bf then
+        # Scalar functions are never equal. Within a list/attrset slot Nix
+        # short-circuits the SAME value by identity; wrapping in a host list
+        # invokes precisely that recursive host comparison mode.
+        if recursive_slot then [ af ] == [ bf ] else false
+      else if builtins.isList af && builtins.isList bf then
+        let
+          an = builtins.length af;
+          bn = builtins.length bf;
+          loop = i:
+            if i >= an then true
+            else
+              let r = nix_equal_at true (builtins.elemAt af i) (builtins.elemAt bf i);
+              in if is_error r then r else if r == true then loop (i + 1) else false;
+        in if an != bn then false else loop 0
+      else if builtins.isAttrs af && builtins.isAttrs bf
+           && !(is_path af) && !(is_path bf)
+           && !(is_closure af) && !(is_closure bf)
+           && !(is_thunk af) && !(is_thunk bf) then
+        let
+          ak = builtins.attrNames af;
+          bk = builtins.attrNames bf;
+          loop = keys:
+            if builtins.length keys == 0 then true
+            else
+              let
+                k = builtins.head keys;
+                r = nix_equal_at true (builtins.getAttr k af) (builtins.getAttr k bf);
+              in if is_error r then r else if r == true then loop (builtins.tail keys) else false;
+        in if ak != bk then false else loop ak
+      else af == bf;
+
+  nix_equal = nix_equal_at false;
+
+  nix_less_than = a: b:
+    let af = force_value a; in
+    if is_error af then af
+    else
+      let bf = force_value b; in
+      if is_error bf then bf
+      else if builtins.isList af && builtins.isList bf then
+        let
+          an = builtins.length af;
+          bn = builtins.length bf;
+          loop = i:
+            if i >= an then i < bn
+            else if i >= bn then false
+            else
+              let
+                av = builtins.elemAt af i;
+                bv = builtins.elemAt bf i;
+                eq = nix_equal_at true av bv;
+              in
+                if is_error eq then eq
+                else if eq then loop (i + 1)
+                else nix_less_than av bv;
+        in loop 0
+      else af < bf;
+
+  stringHasPrefix = prefix: s:
+    let
+      prefixLen = builtins.stringLength prefix;
+      sLen = builtins.stringLength s;
+    in prefix == builtins.substring 0 (if prefixLen < sLen then prefixLen else sLen) s;
+
+  stringHasSuffix = suffix: s:
+    let
+      suffixLen = builtins.stringLength suffix;
+      sLen = builtins.stringLength s;
+    in suffixLen <= sLen && suffix == builtins.substring (sLen - suffixLen) suffixLen s;
+
+  stringHasInfix = needle: s:
+    let
+      needleLen = builtins.stringLength needle;
+      sLen = builtins.stringLength s;
+      startCount = if needleLen > sLen then 0 else (sLen - needleLen + 1);
+      indexes = builtins.genList (i: i) startCount;
+      matches = builtins.filter
+        (i: builtins.substring i needleLen s == needle)
+        indexes;
+    in builtins.length matches > 0;
+
+  asciiLowerMap = {
+    A = "a"; B = "b"; C = "c"; D = "d"; E = "e"; F = "f"; G = "g"; H = "h"; I = "i";
+    J = "j"; K = "k"; L = "l"; M = "m"; N = "n"; O = "o"; P = "p"; Q = "q"; R = "r";
+    S = "s"; T = "t"; U = "u"; V = "v"; W = "w"; X = "x"; Y = "y"; Z = "z";
+  };
+
+  asciiUpperMap = {
+    a = "A"; b = "B"; c = "C"; d = "D"; e = "E"; f = "F"; g = "G"; h = "H"; i = "I";
+    j = "J"; k = "K"; l = "L"; m = "M"; n = "N"; o = "O"; p = "P"; q = "Q"; r = "R";
+    s = "S"; t = "T"; u = "U"; v = "V"; w = "W"; x = "X"; y = "Y"; z = "Z";
+  };
+
+  stringMapChars = table: s:
+    builtins.concatStringsSep ""
+      (builtins.map
+        (ch: if builtins.hasAttr ch table then builtins.getAttr ch table else ch)
+        (builtins.genList (i: builtins.substring i 1 s) (builtins.stringLength s)));
+
+  stringRemovePrefix = prefix: s:
+    if stringHasPrefix prefix s
+    then builtins.substring (builtins.stringLength prefix) (-1) s
+    else s;
+
+  stringRemoveSuffix = suffix: s:
+    if stringHasSuffix suffix s
+    then builtins.substring 0 (builtins.stringLength s - builtins.stringLength suffix) s
+    else s;
+
+  # v0.6.4: string-context — DELEGATED to the host builtins (this .px program
+  # runs on the pnix-clj evaluator, so builtins.hasContext/getContext/... ARE
+  # the single host implementation; reimplementing them here caused drift the
+  # moment host predicates hardened). isString guards keep hasContext off
+  # non-strings (where the host holds).
+  ctx_is_string = v: builtins.isString v && builtins.hasContext v;
+  ctx_content = v:
+    if ctx_is_string v then builtins.unsafeDiscardStringContext v else v;
+
+  ctx_path_string = p:
+    builtins.appendContext p { "${p}" = { path = true; }; };
+
+  throw_value = m:
+    let v = force_value m; in
+    if is_error v then v
+    else if builtins.isString v
+    then mk_catchable_error ("throw: " + ctx_content v)
+    else mk_error "eval: throw argument is not a string";
+
+  abort_value = m:
+    let v = force_value m; in
+    if is_error v then v
+    else if builtins.isString v
+    then mk_error ("abort: " + ctx_content v)
+    else mk_error "eval: abort argument is not a string";
+
+  stringDirOf = s:
+    let
+      len = builtins.stringLength s;
+      indexes = builtins.genList (i: i) len;
+      slashIndexes = builtins.filter (i: builtins.substring i 1 s == "/") indexes;
+      slashCount = builtins.length slashIndexes;
+      lastSlash = if slashCount == 0 then -1 else builtins.elemAt slashIndexes (slashCount - 1);
+    in
+      if lastSlash < 0 then "."
+      else if lastSlash == 0 then "/"
+      else builtins.substring 0 lastSlash s;
+
+  stringSplit = sep: s:
+    let
+      sepLen = builtins.stringLength sep;
+      sLen = builtins.stringLength s;
+      chars = builtins.genList (i: builtins.substring i 1 s) sLen;
+      go = start: i:
+        if i > sLen - sepLen then [ (builtins.substring start (-1) s) ]
+        else if builtins.substring i sepLen s == sep then
+          [ (builtins.substring start (i - start) s) ] ++ go (i + sepLen) (i + sepLen)
+        else go start (i + 1);
+    in if sepLen == 0 then chars else go 0 0;
+
+  attrByPath = path: default: attrs:
+    let
+      step = current: name:
+        if is_attr_by_path_missing current then current
+        else
+          let forced = force_value current; in
+          if builtins.isAttrs forced && builtins.hasAttr name forced
+          then builtins.getAttr name forced
+          else attrByPathMissing;
+      result = builtins.foldl' step attrs (deep_force_value path);
+    in if is_attr_by_path_missing result then default else force_value result;
+
+  recursiveUpdate = left: right:
+    let
+      l = force_value left;
+      r = force_value right;
+    in
+    if builtins.isAttrs l && !(is_closure l) && !(is_path l) && !(is_thunk l)
+        && builtins.isAttrs r && !(is_closure r) && !(is_path r) && !(is_thunk r)
+      then
+        builtins.foldl'
+          (acc: key:
+            acc // {
+              "${key}" =
+                if builtins.hasAttr key l && builtins.hasAttr key r
+                then recursiveUpdate (builtins.getAttr key l) (builtins.getAttr key r)
+                else builtins.getAttr key r;
+            })
+          l
+          (builtins.attrNames r)
+      else r;
+
+  bitOpNonNegative = op: a: b:
+    if a == 0 && b == 0 then 0
+    else
+      let
+        ar = a - (a / 2) * 2;
+        br = b - (b / 2) * 2;
+        low =
+          if op == "and" then
+            if ar == 1 && br == 1 then 1 else 0
+          else if op == "or" then
+            if ar == 1 || br == 1 then 1 else 0
+          else
+            if ar != br then 1 else 0;
+      in low + 2 * bitOpNonNegative op (a / 2) (b / 2);
+
+  bitOp = op: a: b:
+    if a < 0 || b < 0 then
+      mk_error "eval: bitAnd/bitOr/bitXor negative operands remain a signed-i64 frontier"
+    else bitOpNonNegative op a b;
+
+  # Sequential formal binding: present attrs bind their (possibly thunked)
+  # slot lazily; a missing formal's default evaluates in the ACCUMULATED env
+  # (earlier formals visible, mirroring the host bind loop); missing without
+  # default errors; extra keys are accepted (host semantics; ellipsis unused).
+  # D19 (oracle-gated): real Nix pattern semantics — the argument must be an
+  # attrset; REQUIRED formals are checked in pattern order BEFORE the
+  # extra-key check; without `...` an extra key errors; defaults are LAZY
+  # thunks in a KNOT-TIED recursive scope (the pnix `let` below is recursive,
+  # so envF/formalsMap knot for free — a default sees EVERY formal and @bind,
+  # an unused default never evaluates, a cycle is the thunk blackhole); `@`
+  # binds the ACTUAL argument only. All errors uncatchable (mk_error).
+  apply_pattern_closure = f: arg:
+    let m = force_value arg;
+    in if is_error m then m
+    else if !(builtins.isAttrs m) || is_closure m || is_path m || is_thunk m then
+      mk_error "eval: pattern lambda argument is not an attrset"
+    else
+      let missing = builtins.foldl'
+            (acc: field:
+              if acc != null then acc
+              else if field ? default then null
+              else if builtins.hasAttr field.name m then null
+              else field.name)
+            null
+            f.formals;
+      in if missing != null then
+        mk_error_as "attribute-missing" ("eval: missing pattern argument `" + missing + "`")
+      else
+        let names = builtins.map (field: field.name) f.formals;
+            extras = builtins.filter (k: !(builtins.elem k names))
+                       (builtins.attrNames m);
+        in if !(f ? ellipsis && f.ellipsis) && builtins.length extras > 0 then
+          mk_error ("eval: unexpected pattern argument `"
+                    + builtins.head extras + "`")
+        else
+          let env0 = closureEnv f
+                     // (if f ? bind && f.bind != null
+                         then { "${f.bind}" = m; } else { });
+              envF = env0 // formalsMap;
+              formalsMap = builtins.listToAttrs
+                (builtins.map
+                  (field:
+                    { name = field.name;
+                      value =
+                        if builtins.hasAttr field.name m
+                        then builtins.getAttr field.name m
+                        else eval_recursive_thunk field.name field.default envF; })
+                  f.formals);
+          in eval f.body envF;
+
+  apply_meta_builtin = b: arg:
+    if b.name == "functionArgs" then
+      let f = force_value arg;
+      in if is_closure f && f ? formals
+         then builtins.listToAttrs
+                (builtins.map (fl: { name = fl.name; value = fl ? default; })
+                  f.formals)
+         else if is_closure f || is_meta_builtin f || is_lazy_native f
+                 || builtins.isFunction f then {}
+         else mk_error "eval: functionArgs target is not a function"
+    else mk_error ("eval: unknown meta builtin `" + b.name + "`");
+
+  applyValue = f: arg:
+    if is_meta_builtin f then
+      apply_meta_builtin f arg
+    else if is_closure f && f ? formals then
+      apply_pattern_closure f arg
+    else if is_closure f then
+      eval f.body (closureEnv f // { "${f.param}" = arg; })
+    else if is_lazy_native f then
+      f.fn arg
+    else if builtins.isFunction f then
+      # NO forcing here: applyValue serves table-wrapper internals, whose
+      # host-fn callees are closure_to_host marshals that re-enter this
+      # evaluator and force on Var read — forcing would evaluate ignored
+      # lazy slots (caught live by the lazy-zip/mapAttrsToList corpus).
+      f (marshal_to_host arg)
+    else
+      mk_error "eval: interpolation __toString target is not callable";
+
+  ensureFunction = label: f0:
+    let f = force_value f0;
+    in if is_closure f || builtins.isFunction f then f
+    else mk_error_as "not-callable" ("eval: " + label + " target is not callable");
+
+  interpolateString = value:
+    let forced = force_value value; in
+    if is_error forced then forced
+    else if builtins.isString forced then forced
+    else if is_path forced then ctx_path_string forced.path
+    # a contextful string interpolates as itself; the template's + join
+    # unions the contexts (host + is ctx-aware on realized tagged maps)
+    else if ctx_is_string (deep_force_value forced) then deep_force_value forced
+    else if builtins.isAttrs forced && !(is_closure forced) && !(is_thunk forced) then
+      if forced ? __toString then
+        let f = force_value forced.__toString; in
+        if is_error f then f
+        else
+          let r = applyValue f forced; in
+          if is_error r then r else interpolateString r
+      else if forced ? outPath then
+        interpolateString forced.outPath
+      else
+        mk_error_as "string-interpolation-coercion-failed"
+          "eval: cannot coerce value to string in interpolation"
+    else
+      mk_error_as "string-interpolation-coercion-failed"
+        "eval: cannot coerce value to string in interpolation";
+
+  # v0.1 (2026-05-14): native builtins. The evaluator's initial
+  # environment is pre-populated with `builtins.X` as host functions.
+  # When user code says `builtins.foldl' f init xs`, parser produces
+  # `Apply (Apply (Apply (Select (Var "builtins") "foldl'") f) init) xs`
+  # — evaluator's Var lookup hits `nativeBuiltins`, Select gets the
+  # host function, Apply dispatches via the `builtins.isFunction`
+  # branch below. Trampoline through host: my evaluator decides
+  # *that* a builtin runs; the host runs it. That's still
+  # meta-circular — the dispatch trace is `.px`, the primitive
+  # operation is host (same role as CPU instructions for Scheme).
+  # Some host builtins (`concatStringsSep`, `foldl'`, `getAttr`,
+  # `hasAttr`, `elem`, `elemAt`, `map`, `filter`, ...) require all
+  # their args at the same call site in pnix-eval — they don't
+  # curry naturally on the host side. Wrap them as `.px` curried
+  # closures so my Apply path stages args correctly and only hands
+  # the full N-tuple to the host. Single-arg builtins
+  # (`attrNames`, `isAttrs`, `length`, etc.) pass through unwrapped.
+    nativeBuiltins = {
+    # ── single-arg passthrough ──
+    inherit (builtins)
+      attrNames
+      isList isString isFloat isBool isNull isInt
+      length
+      stringLength
+      fromJSON
+      tail
+      reverseList
+      tryEval;
+    throw = throw_value;
+    abort = abort_value;
+    currentSystem = builtins.currentSystem;
+    builtins = nativeBuiltins;
+    "true" = true;
+    "false" = false;
+    "null" = null;
+    langVersion = builtins.langVersion;
+    nixVersion = builtins.nixVersion;
+    storeDir = builtins.storeDir;
+    break = v: builtins.break (force_value v);
+    toPath = v: builtins.toPath (deep_force_value v);
+    isAttrs = v: builtins.isAttrs v && !(is_path v);
+    isPath = v: is_path v;
+    typeOf = v:
+      if is_path v then "path"
+      else if is_meta_builtin v then "lambda"
+      else if is_lazy_native v then "lambda"
+      else builtins.typeOf v;
+    isFunction = v: is_meta_builtin v || is_lazy_native v || builtins.isFunction v;
+    toString = v:
+      let d = deep_force_value v;
+      in if is_path d then d.path else builtins.toString d;
+    __pnixInterpolateString = v: interpolateString v;
+    baseNameOf = v: builtins.baseNameOf (if is_path v then v.path else v);
+    dirOf = v:
+      let
+        d = stringDirOf (if is_path v then v.path else v);
+      in
+        if is_path v then mk_path d else d;
+    pnixMount = name: builtins.pnixMount name;
+    pnixUmount = name: builtins.pnixUmount name;
+    pnixRun = name: args: builtins.pnixRun name args;
+    pnixMounts = mk_error "eval: builtins.pnixMounts is a pnix extension, not Nix builtin coverage";
+    pathExists = path: mk_error "eval: builtins.pathExists purity-gated (path-exists effect disabled)";
+    readFile = path: mk_error "eval: builtins.readFile purity-gated (file-read effect disabled)";
+    readDir = path: mk_error "eval: builtins.readDir purity-gated (directory-read effect disabled)";
+    getEnv = name: mk_error "eval: builtins.getEnv purity-gated (env-read effect disabled)";
+    # ── curried wrappers for N-arg host builtins ──
+    add = a: b: builtins.add a b;
+    sub = a: b: builtins.sub a b;
+    mul = a: b: builtins.mul a b;
+    div = a: b: builtins.div a b;
+    mod = a: b: builtins.mod a b;
+    neg = a: builtins.neg a;
+    abs = a: builtins.abs a;
+    pow = a: b: builtins.pow a b;
+    sqrt = a: builtins.sqrt a;
+    floor = a: builtins.floor a;
+    ceil = a: builtins.ceil a;
+    exp = a: builtins.exp a;
+    ln = a: builtins.ln a;
+    sin = a: builtins.sin a;
+    cos = a: builtins.cos a;
+    atan2 = a: b: builtins.atan2 a b;
+    # hashString validates/forces the selector before touching payload. Probe
+    # the selector against an empty payload, then return a second lazy-native
+    # stage; invalid/contextful/raw-byte selectors therefore cannot force an
+    # erroring data thunk.
+    hashString = mk_lazy_native (algorithm:
+      let algorithm_ = force_value algorithm; in
+      if is_error algorithm_ then algorithm_
+      else
+        let validated = builtins.hashString algorithm_ ""; in
+        if builtins.isString validated then
+          mk_lazy_native (data:
+            let data_ = force_value data; in
+            if is_error data_ then data_
+            else builtins.hashString algorithm_ data_)
+        else mk_error "eval: hashString selector validation failed");
+    and = a: b: builtins.and a b;
+    or = a: b: builtins.or a b;
+    not = a: builtins.not a;
+    eq = a: b: builtins.eq a b;
+    lt = a: b: builtins.lt a b;
+    le = a: b: builtins.le a b;
+    gt = a: b: builtins.gt a b;
+    ge = a: b: builtins.ge a b;
+    compareVersions = a: b: builtins.compareVersions a b;
+    bitAnd = a: b: bitOp "and" a b;
+    bitOr = a: b: bitOp "or" a b;
+    bitXor = a: b: bitOp "xor" a b;
+    splitVersion = s: builtins.splitVersion s;
+    parseDrvName = s: builtins.parseDrvName s;
+    seq = a: b:
+      let forced = force_value a;
+      in if is_error forced then forced else b;
+    deepSeq = a: b:
+      let forced = deep_force_value a;
+      in if is_error forced then forced else b;
+    trace = msg: value: builtins.trace msg value;
+    lessThan = a: b: builtins.lessThan a b;
+    toJSON = value: builtins.toJSON (deep_force_value value);
+    head = xs: deep_force_value (builtins.head xs);
+    listToAttrs = xs:
+      builtins.listToAttrs (
+        builtins.map
+          (row:
+            let row_ = force_value row; in
+            { name = force_value row_.name; value = row_.value; })
+          (force_value xs)
+      );
+    concatLists = xss: builtins.concatLists (builtins.map force_value (force_value xss));
+    keys = set: builtins.attrNames set;
+    values = set:
+      let set_ = force_value set; in
+      builtins.map
+        (name: builtins.getAttr name set_)
+        (builtins.attrNames set_);
+    attrValues = set:
+      let set_ = force_value set; in
+      builtins.map
+        (name: builtins.getAttr name set_)
+        (builtins.attrNames set_);
+    flatten = xs: builtins.flatten (deep_force_value xs);
+    concatStrings = xs: builtins.concatStringsSep "" (deep_force_value xs);
+    concatStringsSep = sep: xs: builtins.concatStringsSep sep (deep_force_value xs);
+    hasPrefix = prefix: s: stringHasPrefix prefix s;
+    hasSuffix = suffix: s: stringHasSuffix suffix s;
+    concatMap = f: xs: builtins.concatMap f (force_value xs);
+    append = xs: ys: builtins.append xs ys;
+    take = n: xs: builtins.take n xs;
+    drop = n: xs: builtins.drop n xs;
+    zip = xs: ys: builtins.zip xs ys;
+    cons = value: xs: [ value ] ++ xs;
+    find = x: xs:
+      let needle = deep_force_value x; in
+      if is_error needle then needle
+      else
+        let xs_ = force_value xs; in
+        if is_error xs_ then xs_
+        else
+          let
+            go = remaining:
+              if builtins.length remaining == 0 then null
+              else
+                let
+                  item = builtins.head remaining;
+                  eq = nix_equal needle item;
+                in
+                  if is_error eq then eq
+                  else if eq then force_value item
+                  else go (builtins.tail remaining);
+          in go xs_;
+    elem = x: xs:
+      let xs_ = force_value xs; in
+      if is_error xs_ then xs_
+      else
+        let
+          go = remaining:
+            if builtins.length remaining == 0 then false
+            else
+              let eq = nix_equal x (builtins.head remaining);
+              in if is_error eq then eq else if eq then true else go (builtins.tail remaining);
+        in go xs_;
+    elemAt = xs: i: deep_force_value (builtins.elemAt xs i);
+    filter = mk_lazy_native (f: xs:
+      # D15: empty list short-circuits before the predicate is forced.
+      let xs_ = force_value xs;
+      in if is_error xs_ then xs_
+         else if xs_ == [] then []
+         else
+           let f_ = ensureFunction "filter" f;
+           in if is_error f_ then f_
+              else builtins.filter (marshal_to_host f_) xs_);
+    # D15: foldl' takes op strictly (Nix forces it even on an empty list)
+    # but the INITIAL ACCUMULATOR lazily -- an operator that ignores it
+    # never evaluates it; per-iteration and final results stay forced.
+    foldl' = op: mk_lazy_native (init: xs:
+      let
+        op_ = ensureFunction "foldl'" op;
+        xs_ = force_value xs;
+        go = acc: remaining:
+          if builtins.length remaining == 0 then force_value acc
+          else
+            let step = applyValue op_ acc;
+            in if is_error step then step
+               else
+                 let v = force_value (applyValue step (builtins.head remaining));
+                 in if is_error v then v
+                    else go v (builtins.tail remaining);
+      in
+        if is_error op_ then op_
+        else if is_error xs_ then xs_
+        else go init xs_);
+    foldl = op: mk_lazy_native (init: xs:
+      let
+        op_ = ensureFunction "foldl" op;
+        xs_ = force_value xs;
+        go = acc: remaining:
+          if builtins.length remaining == 0 then force_value acc
+          else
+            let step = applyValue op_ acc;
+            in if is_error step then step
+               else
+                 let v = force_value (applyValue step (builtins.head remaining));
+                 in if is_error v then v
+                    else go v (builtins.tail remaining);
+      in
+        if is_error op_ then op_
+        else if is_error xs_ then xs_
+        else go init xs_);
+    map = mk_lazy_native (f: xs:
+      # D15 (host-D2 parity): an EMPTY list never forces the function
+      # argument -- Nix early-returns before forceFunction, and the host
+      # lane has done the same since D2.
+      let
+        xs_ = force_value xs;
+      in
+        if is_error xs_ then xs_
+        else if xs_ == [] then []
+        else
+          let f_ = ensureFunction "map" f;
+          in if is_error f_ then f_
+          else builtins.genList
+            (i: mk_thunk "map-item" (_: applyValue f_ (builtins.elemAt xs_ i)))
+            (builtins.length xs_));
+    genList = f: n: builtins.genList (i: mk_thunk "genList-item" (_: f i)) n;
+    mapAttrs = mk_lazy_native (f: set:
+      # D15 (host-D2 parity): an EMPTY attrset never forces the function.
+      let
+        attrs = force_value set;
+      in
+        if is_error attrs then attrs
+        else if attrs == {} then {}
+        else
+          let f_ = ensureFunction "mapAttrs" f;
+          in if is_error f_ then f_
+          else builtins.foldl'
+          (acc: name:
+            acc // {
+              "${name}" = mk_thunk "mapAttrs-value" (_:
+                let first = applyValue f_ name;
+                in if is_error first then first
+                   else applyValue first (builtins.getAttr name attrs));
+            })
+          {}
+          (builtins.attrNames attrs));
+    mapAttrsToList = f: set:
+      let
+        f_ = ensureFunction "mapAttrsToList" f;
+        attrs = force_value set;
+        names = if is_error attrs then [] else builtins.attrNames attrs;
+      in
+        if is_error f_ then f_
+        else if is_error attrs then attrs
+        else builtins.genList
+          (i:
+            let name = builtins.elemAt names i;
+            in mk_thunk "mapAttrsToList-item" (_:
+              let first = applyValue f_ name;
+              in if is_error first then first
+                 else applyValue first (builtins.getAttr name attrs)))
+          (builtins.length names);
+    mapAttrs' = f: set:
+      let attrs = force_value set; in
+      builtins.foldl'
+        (acc: name:
+          let
+            pair = force_value (f name (builtins.getAttr name attrs));
+            pairName = force_value pair.name;
+          in
+            if builtins.hasAttr pairName acc
+            then acc
+            else acc // { "${pairName}" = pair.value; })
+        {}
+        (builtins.attrNames attrs);
+    genAttrs = names: f:
+      builtins.listToAttrs
+        (builtins.map
+          (name: { inherit name; value = f name; })
+          (deep_force_value names));
+    nameValuePair = name: value: { inherit name value; };
+    foldlAttrs = f: init: set:
+      let attrs = force_value set; in
+      builtins.foldl'
+        (acc: name: f acc name (builtins.getAttr name attrs))
+        init
+        (builtins.attrNames attrs);
+    addErrorContext = _ctx: value: value;
+    filterAttrs = f: set: builtins.filterAttrs f (force_value set);
+    intersectAttrs = left: right: builtins.intersectAttrs (force_value left) (force_value right);
+    # v0.6.6: MetaBuiltin marker — applied via apply_meta_builtin with the
+    # RAW meta value (never marshalled), so pattern-closure formals survive.
+    functionArgs = mk_meta_builtin "functionArgs";
+    zipAttrsWith = f: xs:
+      let
+        f_ = ensureFunction "zipAttrsWith" f;
+        rows = builtins.map force_value (force_value xs);
+      in
+        if is_error f_ then f_
+        else builtins.zipAttrsWith
+          (name: values:
+            mk_thunk "zipAttrsWith-value" (_:
+              let first = applyValue f_ name;
+              in if is_error first then first
+                 else applyValue first values))
+          rows;
+    attrByPath = attrByPath;
+    groupBy = f: xs: builtins.groupBy f (force_value xs);
+    partition = f: xs: builtins.partition f (deep_force_value xs);
+    get = set: name: deep_force_value (builtins.get set name);
+    set = set: name: value: builtins.set set name value;
+    merge = left: right: builtins.merge left right;
+    getAttr = name: set: deep_force_value (builtins.getAttr name set);
+    hasAttr = name: set: builtins.hasAttr name set;
+    removeAttrs = set: names: builtins.removeAttrs set (deep_force_value names);
+    catAttrs = name: xs:
+      builtins.catAttrs name (builtins.map force_value (force_value xs));
+    all = f: xs: builtins.all f (force_value xs);
+    any = f: xs: builtins.any f (force_value xs);
+    optional = cond: value: if cond then [ value ] else [];
+    optionals = cond: values: if cond then force_value values else [];
+    min = a: b: if a < b then a else b;
+    max = a: b: if a > b then a else b;
+    optionalString = cond: s: if cond then s else "";
+    removePrefix = prefix: s: stringRemovePrefix prefix s;
+    removeSuffix = suffix: s: stringRemoveSuffix suffix s;
+    hasInfix = needle: s: stringHasInfix needle s;
+    boolToString = value: if value then "true" else "false";
+    stringToCharacters = s:
+      builtins.genList (i: builtins.substring i 1 s) (builtins.stringLength s);
+    toLower = s: stringMapChars asciiLowerMap s;
+    toUpper = s: stringMapChars asciiUpperMap s;
+    splitString = sep: s: stringSplit sep s;
+    toInt = s: builtins.fromJSON s;
+    range = from: to:
+      if from > to then []
+      else builtins.genList (i: from + i) (to - from + 1);
+    replicate = n: value:
+      let slot = mk_thunk "replicate-value" (_: value);
+      in builtins.genList (_: slot) n;
+    last = xs:
+      let n = builtins.length xs; in
+      deep_force_value (builtins.elemAt xs (n - 1));
+    init = xs:
+      let n = builtins.length xs; in
+      if n == 0 then mk_error "init of empty list"
+      else builtins.take (n - 1) xs;
+    unique = xs:
+      let
+        contains = item: seen:
+          let
+            go = remaining:
+              if builtins.length remaining == 0 then false
+              else
+                let eq = nix_equal item (builtins.head remaining); in
+                if is_error eq then eq
+                else if eq then true
+                else go (builtins.tail remaining);
+          in go seen;
+        step = acc: item:
+          if is_error acc then acc
+          else
+          let hit = contains item acc.seen; in
+          if is_error hit then hit
+          else if hit
+          then acc
+          else {
+            seen = acc.seen ++ [ item ];
+            out = acc.out ++ [ item ];
+          };
+        result = builtins.foldl' step { seen = []; out = []; } (force_value xs);
+      in if is_error result then result else result.out;
+    concatMapStrings = f: xs:
+      builtins.concatStringsSep ""
+        (builtins.map (x: builtins.toString (f x)) (force_value xs));
+    concatMapStringsSep = sep: f: xs:
+      builtins.concatStringsSep sep
+        (builtins.map (x: builtins.toString (f x)) (force_value xs));
+    count = pred: xs:
+      builtins.length (builtins.filter pred (force_value xs));
+    zipListsWith = f: xs: ys:
+      let
+        f_ = ensureFunction "zipListsWith" f;
+        xs_ = force_value xs;
+        ys_ = force_value ys;
+        xn = builtins.length xs_;
+        yn = builtins.length ys_;
+        n = if xn < yn then xn else yn;
+      in
+        if is_error f_ then f_
+        else if is_error xs_ then xs_
+        else if is_error ys_ then ys_
+        else builtins.genList
+          (i:
+            mk_thunk "zipListsWith-item" (_:
+              let first = applyValue f_ (builtins.elemAt xs_ i);
+              in if is_error first then first
+                 else applyValue first (builtins.elemAt ys_ i)))
+          n;
+    imap0 = f: xs:
+      let
+        f_ = ensureFunction "imap0" f;
+        xs_ = force_value xs;
+      in
+        if is_error f_ then f_
+        else if is_error xs_ then xs_
+        else builtins.genList
+          (i:
+            mk_thunk "imap0-item" (_:
+              let first = applyValue f_ i;
+              in if is_error first then first
+                 else applyValue first (builtins.elemAt xs_ i)))
+          (builtins.length xs_);
+    imap1 = f: xs:
+      let
+        f_ = ensureFunction "imap1" f;
+        xs_ = force_value xs;
+      in
+        if is_error f_ then f_
+        else if is_error xs_ then xs_
+        else builtins.genList
+          (i:
+            mk_thunk "imap1-item" (_:
+              let first = applyValue f_ (i + 1);
+              in if is_error first then first
+                 else applyValue first (builtins.elemAt xs_ i)))
+          (builtins.length xs_);
+    pipe = value: fns:
+      builtins.foldl' (acc: f: (marshal_to_host f) acc) value (deep_force_value fns);
+    findFirst = pred: default: xs:
+      let
+        step = acc: item:
+          if !(is_find_first_missing acc) then acc
+          else if pred item then item
+          else findFirstMissing;
+        result = builtins.foldl' step findFirstMissing (force_value xs);
+      in if is_find_first_missing result then default else result;
+    foldr = f: init: xs:
+      let
+        xs_ = force_value xs;
+        n = builtins.length xs_;
+        indexes = builtins.genList (i: n - i - 1) n;
+      in builtins.foldl' (acc: i: f (builtins.elemAt xs_ i) acc) init indexes;
+    genericClosure = spec:
+      let
+        operator = marshal_to_host (force_value spec.operator);
+        go = worklist: seen: out:
+          if builtins.length worklist == 0 then out
+          else
+            let
+              item = force_value (builtins.head worklist);
+              restWork = builtins.tail worklist;
+              key = deep_force_value item.key;
+            in
+              if builtins.elem key seen
+              then go restWork seen out
+              else
+                let nextItems = force_value (operator item); in
+                go (restWork ++ nextItems) (seen ++ [ key ]) (out ++ [ item ]);
+      in go (force_value spec.startSet) [] [];
+    recursiveUpdate = recursiveUpdate;
+    id = value: value;
+    flip = f: a: b: f b a;
+    sort = mk_lazy_native (cmp: xs:
+      # D15: empty list short-circuits before the comparator is forced;
+      # non-empty delegates to the host sort (element WHNF forcing = D2).
+      let xs_ = force_value xs;
+      in if is_error xs_ then xs_
+         else if xs_ == [] then []
+         else
+           let cmp_ = ensureFunction "sort" cmp;
+           in if is_error cmp_ then cmp_
+              else builtins.sort (marshal_to_host cmp_) xs_);
+    replaceStrings = from: to: s:
+      builtins.replaceStrings (deep_force_value from) (deep_force_value to) s;
+    split = re: s: builtins.split re s;
+    substring = start: len: s: builtins.substring start len s;
+    # v0.6.3.3: `match` returns null or a list of capture groups.
+    # POSIX ERE; anchored to the full string by Nix.
+    match = re: s: builtins.match re s;
+    # v0.6.4: string-context builtins mirror the host evaluator semantics
+    # (empty-info no-op, kinds encode/decode, per-path merge).
+    # v0.6.5: derivation family — same delegation principle (host builtins
+    # ARE the single implementation; pseudo store paths and outPath context
+    # come from the one place that computes them).
+    derivation = attrs: builtins.derivation (deep_force_value attrs);
+    derivationStrict = attrs: builtins.derivationStrict (deep_force_value attrs);
+    placeholder = output: builtins.placeholder (deep_force_value output);
+    storePath = p: builtins.storePath (deep_force_value p);
+    hasContext = v: builtins.hasContext (deep_force_value v);
+    getContext = v: builtins.getContext (deep_force_value v);
+    unsafeDiscardStringContext = v:
+      builtins.unsafeDiscardStringContext (deep_force_value v);
+    unsafeDiscardOutputDependency = v:
+      builtins.unsafeDiscardOutputDependency (deep_force_value v);
+    appendContext = s: ctxAttrs:
+      builtins.appendContext (deep_force_value s) (deep_force_value ctxAttrs);
+  };
+
+  initialEnv = {
+    builtins = nativeBuiltins;
+    # `throw` / `abort` are syntactic in real Nix but the pnix
+    # parser produces `Apply (Var "throw") msg`. Bound as host
+    # functions in initialEnv.
+    throw = throw_value;
+    abort = abort_value;
+    # v0.1+: `import` and `scopedImport` delegate to host-runtime
+    # callbacks so user `.px` source can import in-memory modules.
+    "import" = p: runtime.import p;
+    # Nix `scopedImport scope path`: scope FIRST, path SECOND. The scope is
+    # only WHNF-forced here (the attrset itself must be real); its VALUES
+    # cross the boundary as px Thunks, which the host wraps into its own
+    # call-by-need thunks (px_runtime/bridge-px-scope-value) -- so an
+    # erroring UNUSED scope key never evaluates: real Nix laziness, on this
+    # lane too (roadmap px-scope-laziness lifted).
+    "scopedImport" = scope: path: runtime.scopedImport (force_value scope) path;
+    # D14 (host-D13 parity): real Nix binds a fixed subset of builtins
+    # UNPREFIXED at the top level. Seeding them here gives the correct
+    # precedence for free: the Var branch checks env BEFORE with-scopes,
+    # so `let` shadows them while `with` does not (oracle-confirmed).
+    map = nativeBuiltins.map;
+    toString = nativeBuiltins.toString;
+    isNull = nativeBuiltins.isNull;
+    baseNameOf = nativeBuiltins.baseNameOf;
+    dirOf = nativeBuiltins.dirOf;
+    removeAttrs = nativeBuiltins.removeAttrs;
+    null = null;
+    "true" = true;
+    "false" = false;
+  };
+
+  # Extract the parameter *name* from a Lambda's `param` node.
+  # Parser wraps as `{ tag = "Ident"; name = "x"; }`. Patterns with
+  # defaults (`{x ? 0}`) are deferred.
+  lambdaParamName = paramNode:
+    if builtins.isAttrs paramNode
+      && paramNode ? tag
+      && paramNode.tag == "Ident"
+      && paramNode ? name
+    then paramNode.name
+    else null;
+
+  simpleLambdaBinding = b:
+    builtins.isAttrs b
+    && b ? tag && b.tag == "Binding"
+    && b ? pattern
+    && builtins.isAttrs b.pattern
+    && b.pattern ? tag
+    && b.pattern.tag == "Ident"
+    && b ? value
+    && builtins.isAttrs b.value
+    && b.value ? tag
+    && b.value.tag == "Lambda"
+    && lambdaParamName b.value.param != null;
+
+  is_lambda_ast = ast:
+    builtins.isAttrs ast && ast ? tag && ast.tag == "Lambda";
+
+  is_var_ast = ast:
+    builtins.isAttrs ast && ast ? tag && ast.tag == "Var";
+
+  lazy_value_slot = label: ast: env:
+    if is_lambda_ast ast then eval ast env
+    else if is_var_ast ast
+         && ast.name != withScopesKey
+         && builtins.hasAttr ast.name env
+    then builtins.getAttr ast.name env
+    else eval_thunk label ast env;
+
+  is_static_attrset_ast = ast:
+    builtins.isAttrs ast
+    && ast ? tag && ast.tag == "AttrSet"
+    && ast ? items
+    && builtins.all
+         (assign:
+           builtins.isAttrs assign
+           && assign ? tag && assign.tag == "Assign"
+           && assign ? key_path
+           && builtins.length assign.key_path == 1
+           && builtins.isString (builtins.elemAt assign.key_path 0))
+         ast.items;
+
+  # These expressions reach WHNF without forcing any user payload. Keeping
+  # their constructed value in the let environment supplies the sharing that
+  # the pure guest Thunk record (call-by-name) cannot memoize by itself.
+  is_shareable_whnf_ast = ast:
+    is_lambda_ast ast
+    || (builtins.isAttrs ast && ast ? tag && ast.tag == "List")
+    || is_static_attrset_ast ast;
+
+  recClosureFor = baseEnv: recBindings: b:
+    mk_rec_closure (lambdaParamName b.value.param) b.value.body baseEnv recBindings;
+
+  closureEnv = closure:
+    if closure ? __pnixc_meta_rec_bindings then
+      closure.env // builtins.listToAttrs (
+        builtins.map
+          (b: {
+            name = b.pattern.name;
+            value = recClosureFor closure.env closure.__pnixc_meta_rec_bindings b;
+          })
+          closure.__pnixc_meta_rec_bindings
+      )
+    else closure.env;
+
+  # ── eval ────────────────────────────────────────────────────────
+  # S8-lite perf slice (2026-06-11): tag arms reordered hot-first
+  # (Var/Apply/Binary/Select/If lead; literals follow; Path/Unary/
+  # HasAttr/Index trail). Each `else if` costs the HOST interpreter a
+  # full Binary("==") evaluation, and the recursion-carrying tags sat
+  # 12th-15th in the chain. Reordering is semantics-identical (tags
+  # are mutually exclusive; missing-tag error unchanged) and measured
+  # ~3% on a Stage-2 fold workload. The S8 attrset-dispatch design
+  # from the perf map was probed and REJECTED: `builtins.getAttr t
+  # tagDispatch` pays a whole-table deep clone per dispatch under the
+  # host's by-value Var lookup — measured 26% SLOWER (see perf map
+  # 2026-06-11 S8 verdict).
+  eval = ast: env:
+    if !(builtins.isAttrs ast) || !(ast ? tag) then
+      mk_error "eval: input is not a parser AST node (missing `tag`)"
+    else
+      let t = ast.tag; in
+      if t == "Var" then
+        if ast.name != withScopesKey && builtins.hasAttr ast.name env
+        then
+          let
+            value = builtins.getAttr ast.name env;
+            tag = thunk_tag value;
+          in if tag == "RecursiveThunk"
+             then force_thunk_with (force_stack env) value
+             else if tag == "Thunk" then value.force null
+             else value
+        else lookup_with_scope ast.name (with_scopes env)
+      else if t == "Apply" then evalApply ast env
+      else if t == "Binary" then evalBinary ast env
+      else if t == "Select" then evalSelect ast env
+      else if t == "If" then evalIf ast env
+      else if t == "Int" then ast.value
+      else if t == "String" then ast.value
+      else if t == "Let" then evalLet ast env
+      else if t == "With" then evalWith ast env
+      else if t == "Assert" then evalAssert ast env
+      else if t == "Lambda" then evalLambda ast env
+      else if t == "List" then
+        builtins.map
+          (item: lazy_value_slot "list-item" item env)
+          ast.items
+      else if t == "AttrSet" then evalAttrSet ast env
+      else if t == "Bool" then ast.value
+      else if t == "Float" then ast.value
+      else if t == "Null" then null
+      else if t == "Path" then
+        # Canonical path value, not a host filesystem path. Path resolution and
+        # store/string-context effects are outside this pure evaluator lane.
+        mk_path ast.value
+      else if t == "Unary" then evalUnary ast env
+      else if t == "HasAttr" then evalHasAttr ast env
+      else if t == "Index" then evalIndex ast env
+      else mk_error ("eval: unsupported AST tag `" + t + "`");
+
+  evalAttrSet = ast: env:
+    let
+      items = if ast ? items then ast.items else [];
+    in
+    if ast ? recursive && ast.recursive == true then
+      evalRecAttrSet items env
+    else
+      let pairs = builtins.map (assignToPair env) items;
+      in
+        # D20: an eval-time key collision (only reachable via dynamic keys —
+        # static duplicates are parse errors) is an ERROR like real Nix
+        # ("dynamic attribute already defined"), never a silent overwrite.
+        builtins.foldl'
+          (acc: p:
+            if is_error p then p
+            else if is_error acc then acc
+            else if builtins.hasAttr p.name acc then
+              mk_error ("eval: dynamic attribute `" + p.name
+                        + "` already defined")
+            else acc // { "${p.name}" = p.value; })
+          {}
+          pairs;
+
+  evalRecAttrSet = items: env:
+    let
+      validStaticAssign = assign:
+        builtins.isAttrs assign
+        && assign ? tag
+        && assign.tag == "Assign"
+        && assign ? key_path
+        && builtins.length assign.key_path == 1
+        && builtins.isString (builtins.elemAt assign.key_path 0);
+      invalid = builtins.filter (assign: !(validStaticAssign assign)) items;
+      thunkPair = recEnv: assign:
+        let name = builtins.elemAt assign.key_path 0; in
+        { name = name;
+          value =
+            if is_lambda_ast assign.value then eval assign.value recEnv
+            else eval_recursive_thunk name assign.value recEnv; };
+      recAttrs = builtins.listToAttrs (builtins.map (thunkPair recEnv) items);
+      recEnv = env // recAttrs;
+      names = builtins.map (assign: builtins.elemAt assign.key_path 0) items;
+      _names = builtins.map (assign: builtins.elemAt assign.key_path 0) items;
+    in
+      if builtins.length invalid > 0 then
+        mk_error "eval: rec attrset binding must be a simple static key in v0"
+      else recAttrs;
+
+  # Attrset uses `Assign` (key_path); Let uses `Binding` (pattern).
+  # D20: a dynamic key value must be a STRING — real Nix errors instead of
+  # coercing (the old toString silently stringified integers).
+  evalAttrKey = env: key:
+    if builtins.isString key then key
+    else if builtins.isAttrs key && key ? dynamic && key.dynamic == true && key ? expr then
+      let v = force_value (eval key.expr env); in
+      if is_error v then v
+      else if builtins.isString v then v
+      else mk_error "eval: dynamic attr key is not a string"
+    else mk_error "eval: unsupported dynamic attr key";
+
+  assignToPair = env: assign:
+    if !(builtins.isAttrs assign) || !(assign ? tag) then
+      mk_error "eval: attrset binding missing `tag`"
+    else if assign.tag != "Assign" then
+      mk_error ("eval: attrset binding has unexpected tag `" + assign.tag + "`")
+    else if !(assign ? key_path) || builtins.length assign.key_path != 1 then
+      mk_error "eval: multi-segment attribute paths not supported in v0"
+    else
+      let k = evalAttrKey env (builtins.elemAt assign.key_path 0);
+      in if is_error k then k
+      else {
+        name = k;
+        value = lazy_value_slot k assign.value env;
+      };
+
+  bindingToPair = env: binding:
+    if !(builtins.isAttrs binding) || !(binding ? tag) then
+      mk_error "eval: let binding missing `tag`"
+    else if binding.tag != "Binding" then
+      mk_error ("eval: let binding has unexpected tag `" + binding.tag + "`")
+    else if !(binding ? pattern)
+      || !(builtins.isAttrs binding.pattern)
+      || !(binding.pattern ? tag)
+      || binding.pattern.tag != "Ident"
+    then
+      mk_error "eval: let binding pattern must be a simple identifier in v0"
+    else
+      let v = eval binding.value env; in
+      if is_error v then v
+      else { name = binding.pattern.name; value = v; };
+
+  evalIf = ast: env:
+    let c = eval ast.cond env; in
+    if is_error c then c
+    else if c == true then eval ast."then" env
+    else if c == false then eval ast."else" env
+    else mk_error_as "non-boolean-condition" "eval: If condition is not a boolean";
+
+  evalAssert = ast: env:
+    let c = eval ast.cond env; in
+    if is_error c then c
+    else if c == true then eval ast.body env
+    else if c == false then
+      mk_catchable_error_as "assertion-failed" "eval: assertion failed"
+    else mk_error_as "non-boolean-condition" "eval: Assert condition is not a boolean";
+
+  evalWith = ast: env:
+    let scope = force_value (eval ast.env env); in
+    if is_error scope then scope
+    else if builtins.isAttrs scope
+         && !(is_closure scope)
+         && !(is_path scope)
+         && !(is_thunk scope) then
+      eval ast.body (env // { "${withScopesKey}" = [ scope ] ++ with_scopes env; })
+    else mk_error "eval: with expression is not an attrset";
+
+  # pnix-clj bootstrap slice (2026-06-29): evaluate user `let`
+  # bindings without relying on the host evaluator's lazy recursive
+  # attrset fixpoint. The previous `rec_env = ... rec_env ...`
+  # shape is valid pnix, but it forces the Clojure bootstrap lane to
+  # implement full laziness before the internal `.px` runtime can run
+  # non-recursive corpus cases. This strict left-to-right slice keeps
+  # recursive/forward-reference lets honestly held by the normal
+  # unknown-variable path instead of creating an untrackable
+  # bootstrap dependency on host laziness.
+  evalLet = ast: env:
+    let
+      bindings = if ast ? bindings then ast.bindings else [];
+      validBinding = b:
+        builtins.isAttrs b
+        && b ? tag && b.tag == "Binding"
+        && b ? pattern
+        && builtins.isAttrs b.pattern
+        && b.pattern ? tag
+        && b.pattern.tag == "Ident";
+      invalid = builtins.filter (b: !(validBinding b)) bindings;
+    in
+      if builtins.length invalid > 0 then
+        mk_error "eval: let binding has unsupported pattern in v0"
+      else
+        let
+          thunkPair = recEnv: b:
+            { name = b.pattern.name;
+              value =
+                if is_shareable_whnf_ast b.value then eval b.value recEnv
+                else eval_recursive_thunk b.pattern.name b.value recEnv; };
+          env2 = env // builtins.listToAttrs (builtins.map (thunkPair env2) bindings);
+        in if is_error env2 then env2 else eval ast.body env2;
+
+  evalLambda = ast: env:
+    let name = lambdaParamName ast.param; in
+    if name != null then mk_closure name ast.body env
+    else if builtins.isAttrs ast.param
+      && ast.param ? tag && ast.param.tag == "AttrSet"
+      && ast.param ? fields
+    then mk_pattern_closure null ast.param.fields
+           (ast.param ? ellipsis && ast.param.ellipsis) ast.body env
+    else if builtins.isAttrs ast.param
+      && ast.param ? tag && ast.param.tag == "AttrSetWithBind"
+      && ast.param ? fields && ast.param ? bind_name
+    then mk_pattern_closure ast.param.bind_name ast.param.fields
+           (ast.param ? ellipsis && ast.param.ellipsis) ast.body env
+    else mk_error "eval: lambda parameter pattern not supported in v0";
+
+  # v0.1: convert a `.px` closure to a host-callable function. Host
+  # builtins like `builtins.foldl'` expect their arg to be applicable
+  # at the host level. When user code passes a `.px`-defined lambda
+  # to such a builtin, we wrap it: the host receives a host fn that
+  # re-enters this evaluator's `eval` for each call. This is the
+  # bridge that lets `.px`-defined transforms feed `.px`-evaluator-
+  # native primitives, all in the same meta-circular pass.
+  # Convert a `.px` closure into a host-callable function that
+  # re-enters this evaluator's `eval` on each invocation. The
+  # returned value is itself recursively marshalled — so a
+  # curried `.px` lambda passed to `builtins.foldl'` returns a
+  # *host* function on each partial-apply step, which `foldl'`
+  # can then apply natively.
+  closure_to_host = closure:
+    a:
+      let r = if closure ? formals
+              then apply_pattern_closure closure a
+              else eval closure.body (closureEnv closure // { "${closure.param}" = a; });
+      in marshal_to_host r;
+
+  marshal_to_host = v:
+    if is_closure v then closure_to_host v
+    else v;
+
+  evalApply = ast: env:
+    let
+      directTryEval =
+        builtins.isAttrs ast.func
+        && ast.func ? tag && ast.func.tag == "Select"
+        && ast.func ? attr && ast.func.attr == "tryEval"
+        && ast.func ? base
+        && builtins.isAttrs ast.func.base
+        && ast.func.base ? tag && ast.func.base.tag == "Var"
+        && ast.func.base ? name && ast.func.base.name == "builtins";
+      directElem =
+        builtins.isAttrs ast.func
+        && ast.func ? tag && ast.func.tag == "Select"
+        && ast.func ? attr && ast.func.attr == "elem"
+        && ast.func ? base
+        && builtins.isAttrs ast.func.base
+        && ast.func.base ? tag && ast.func.base.tag == "Var"
+        && ast.func.base ? name && ast.func.base.name == "builtins";
+      directOptional =
+        builtins.isAttrs ast.func
+        && ast.func ? tag && ast.func.tag == "Apply"
+        && ast.func ? func
+        && builtins.isAttrs ast.func.func
+        && ast.func.func ? tag && ast.func.func.tag == "Select"
+        && ast.func.func ? attr && ast.func.func.attr == "optional"
+        && ast.func.func ? base
+        && builtins.isAttrs ast.func.func.base
+        && ast.func.func.base ? tag && ast.func.func.base.tag == "Var"
+        && ast.func.func.base ? name && ast.func.func.base.name == "builtins";
+      directOptionalString =
+        builtins.isAttrs ast.func
+        && ast.func ? tag && ast.func.tag == "Apply"
+        && ast.func ? func
+        && builtins.isAttrs ast.func.func
+        && ast.func.func ? tag && ast.func.func.tag == "Select"
+        && ast.func.func ? attr && ast.func.func.attr == "optionalString"
+        && ast.func.func ? base
+        && builtins.isAttrs ast.func.func.base
+        && ast.func.func.base ? tag && ast.func.func.base.tag == "Var"
+        && ast.func.func.base ? name && ast.func.func.base.name == "builtins";
+      directReplicate =
+        builtins.isAttrs ast.func
+        && ast.func ? tag && ast.func.tag == "Apply"
+        && ast.func ? func
+        && builtins.isAttrs ast.func.func
+        && ast.func.func ? tag && ast.func.func.tag == "Select"
+        && ast.func.func ? attr && ast.func.func.attr == "replicate"
+        && ast.func.func ? base
+        && builtins.isAttrs ast.func.func.base
+        && ast.func.func.base ? tag && ast.func.func.base.tag == "Var"
+        && ast.func.func.base ? name && ast.func.func.base.name == "builtins";
+      func = eval ast.func env;
+      # v0.6.8: call-by-need application — the argument is a thunk; Var
+      # reads force_value, pattern/meta/native consumers force explicitly,
+      # so `(x: 1) (1 / 0)` never evaluates the argument. (px thunks are
+      # pure recompute-on-force — call-by-name; values identical.)
+      arg = lazy_value_slot "apply-arg" ast.arg env;
+    in
+    if directOptional then
+      let cond = eval ast.func.arg env; in
+      if is_error cond then cond
+      else if cond then [ (eval_thunk "optional-value" ast.arg env) ]
+      else []
+    else if directOptionalString then
+      let cond = eval ast.func.arg env; in
+      if is_error cond then cond
+      else if cond then eval ast.arg env
+      else ""
+    else if directReplicate then
+      let n = eval ast.func.arg env; in
+      if is_error n then n
+      else
+        let slot = eval_thunk "replicate-value" ast.arg env;
+        in builtins.genList (_: slot) n
+    else if directElem then
+      if is_error func then func
+      else
+        xs:
+          let xs_ = force_value xs; in
+          if is_error xs_ then xs_
+          else
+            let
+              go = remaining:
+                if builtins.length remaining == 0 then false
+                else
+                  let
+                    needle = eval ast.arg env;
+                    eq = if is_error needle then needle else nix_equal_at true needle (builtins.head remaining);
+                  in if is_error eq then eq else if eq then true else go (builtins.tail remaining);
+            in go xs_
+    else if directTryEval then
+      if is_error func then func
+      else
+        let a = force_value arg;
+        in if is_catchable_error a then { success = false; value = false; }
+        else if is_error a then a
+        else { success = true; value = a; }
+    else if is_error func then func
+    else if is_meta_builtin func then
+      apply_meta_builtin func arg
+    else if is_closure func && func ? formals then
+      apply_pattern_closure func arg
+    else if is_closure func then
+      eval func.body (closureEnv func // { "${func.param}" = arg; })
+    # D15: a lazy-native takes its argument UNFORCED (the wrapper forces
+    # and marshals internally in the Nix order — host-D2 parity).
+    else if is_lazy_native func then
+      func.fn arg
+    else if builtins.isFunction func then
+      # Host (native) function — e.g., `builtins.attrNames`. Native
+      # builtins are strict, so the thunk is forced HERE (the lazy win
+      # lives in the closure branch); errors surface before the host
+      # call, closures marshal AFTER forcing.
+      let a = force_value arg;
+      in if is_error a then a
+         else func (marshal_to_host a)
+    else mk_error_as "not-callable" "eval: Apply target is not a function (closure or host)";
+
+  evalBinary = ast: env:
+    let op = ast.op; in
+    # D18: && || -> require BOOLEAN operands like real Nix (evalIf pattern:
+    # == true / == false / else type error). Each operand is checked when
+    # (and only when) it is evaluated, so short-circuits stay lazy.
+    if op == "&&" then
+      let l = eval ast.lhs env; in
+      if is_error l then l
+      else if l == false then false
+      else if l == true then
+        let r = eval ast.rhs env; in
+        if is_error r then r
+        else if r == true then true
+        else if r == false then false
+        else mk_error_as "non-boolean-condition" "eval: && operand is not a boolean"
+      else mk_error_as "non-boolean-condition" "eval: && operand is not a boolean"
+    else if op == "||" then
+      let l = eval ast.lhs env; in
+      if is_error l then l
+      else if l == true then true
+      else if l == false then
+        let r = eval ast.rhs env; in
+        if is_error r then r
+        else if r == true then true
+        else if r == false then false
+        else mk_error_as "non-boolean-condition" "eval: || operand is not a boolean"
+      else mk_error_as "non-boolean-condition" "eval: || operand is not a boolean"
+    else if op == "->" then
+      let l = eval ast.lhs env; in
+      if is_error l then l
+      else if l == false then true
+      else if l == true then
+        let r = eval ast.rhs env; in
+        if is_error r then r
+        else if r == true then true
+        else if r == false then false
+        else mk_error_as "non-boolean-condition" "eval: -> operand is not a boolean"
+      else mk_error_as "non-boolean-condition" "eval: -> operand is not a boolean"
+    else
+      let
+        l = eval ast.lhs env;
+        r = eval ast.rhs env;
+      in
+      if is_error l then l
+      else if is_error r then r
+      else
+        if op == "+" then
+          # string-context: fully realize both sides so the HOST + (which is
+          # ctx-aware) sees the tagged maps and unions contexts; plain values
+          # keep the untouched fast path.
+          let
+            lf = deep_force_value l;
+            rf = deep_force_value r;
+          in
+            if ctx_is_string lf || ctx_is_string rf
+            then lf + rf
+            else l + r
+        else if op == "-" then l - r
+        else if op == "*" then l * r
+        else if op == "/" then
+          if r == 0 then mk_error_as "division-by-zero" "eval: division by zero"
+          else l / r
+        else if op == "%" then
+          if r == 0 then mk_error_as "division-by-zero" "eval: division by zero"
+          else l - (l / r) * r
+        else if op == "==" then nix_equal l r
+        else if op == "!=" then
+          let eq = nix_equal l r;
+          in if is_error eq then eq else !eq
+        else if op == "<" then nix_less_than l r
+        else if op == "<=" then
+          let gt = nix_less_than r l;
+          in if is_error gt then gt else !gt
+        else if op == ">" then nix_less_than r l
+        else if op == ">=" then
+          let lt = nix_less_than l r;
+          in if is_error lt then lt else !lt
+        else if op == "++" then l ++ r
+        else if op == "//" then l // r
+        else mk_error ("eval: unsupported binary op `" + op + "`");
+
+  evalUnary = ast: env:
+    let a = eval ast.arg env; in
+    if is_error a then a
+    else if ast.op == "-" then 0 - a
+    else if ast.op == "!" then !a
+    else mk_error ("eval: unsupported unary op `" + ast.op + "`");
+
+  evalSelect = ast: env:
+    let base = eval ast.base env; in
+    if is_error base then
+      if ast ? default
+         && builtins.isString base.error
+         && stringHasPrefix "eval: Select missing attr" base.error
+      then eval ast.default env
+      else base
+    else if builtins.isAttrs base && builtins.hasAttr ast.attr base
+      then force_value (builtins.getAttr ast.attr base)
+    else if ast ? default then eval ast.default env
+    else mk_error_as "attribute-missing" ("eval: Select missing attr `" + ast.attr + "`");
+
+  evalHasAttr = ast: env:
+    let base = eval ast.base env; in
+    if is_error base then base
+    else builtins.isAttrs base && builtins.hasAttr ast.attr base;
+
+  evalIndex = ast: env:
+    let
+      base = eval ast.base env;
+      idx = eval ast.index env;
+    in
+    if is_error base then base
+    else if is_error idx then idx
+    else if builtins.isList base then force_value (builtins.elemAt base idx)
+    else if builtins.isAttrs base && builtins.isString idx
+      then force_value (builtins.getAttr idx base)
+    else mk_error "eval: Index target unsupported";
+
+  # ── public entry ────────────────────────────────────────────────
+  run = source:
+    let parsed = runtime.parse_expr source; in
+    if is_error parsed then parsed
+    else if !(builtins.isAttrs parsed) || !(parsed ? tag) then
+      mk_error "run: parser returned non-AST shape"
+    else deep_force_value (eval parsed initialEnv);
+
+  runMirror = source:
+    let
+      parsed = runtime.parse_expr source;
+      base = {
+        mirror_schema = "pnixc-pnix.eval.run-mirror.v0";
+        owner = ownerName;
+        evaluator_schema = schema;
+        parser = "runtime.parse_expr";
+        source_length = builtins.stringLength source;
+      };
+    in
+      if is_error parsed then
+        base // {
+          status = "error";
+          phase = "parse";
+          ast_tag = null;
+          error = parsed.error;
+          result = parsed;
+        }
+      else if !(builtins.isAttrs parsed) || !(parsed ? tag) then
+        base // {
+          status = "error";
+          phase = "parse";
+          ast_tag = null;
+          error = "run: parser returned non-AST shape";
+          result = mk_error "run: parser returned non-AST shape";
+        }
+      else
+        let value = deep_force_value (eval parsed initialEnv); in
+        if is_error value then
+          base // {
+            status = "error";
+            phase = "eval";
+            ast_tag = parsed.tag;
+            error = value.error;
+            result = value;
+          }
+        else
+          base // {
+            status = "ok";
+            phase = "eval";
+            ast_tag = parsed.tag;
+            value = value;
+          };
+
+  evaluatorInvariants = {
+    bounded_subset =
+      "v0 evaluator covers `supportedTags` only. Unsupported tags emit "
+      + "`{status=\"error\"; error=...}` — never silent default behaviour.";
+    parser_shape_native =
+      "Evaluator consumes the parser-level AST (mk_* shapes) directly, "
+      + "not the unified u_* lowering shape. Attrsets use `items`+`Assign` "
+      + "rather than `pairs`+`{key;value}`.";
+    recursive_attrset_bootstrap =
+      "`let` and `rec` attrsets register simple names as lazy recursive "
+      + "value slots before RHS evaluation, so forward references and mutual "
+      + "recursion resolve in the internal .px evaluator lane.";
+    short_circuit_bool =
+      "`&&` / `||` evaluate the right-hand side only when needed.";
+    closure_environment =
+      "Lambda captures the env at definition time; Apply extends that env "
+      + "with the parameter binding, then evaluates the body.";
+    parser_is_runtime_px =
+      "`run` delegates parsing to `runtime.parse_expr` so AST shapes stay "
+      + "in lockstep with the existing parser.";
+  };
+in {
+  inherit
+    ownerName
+    schema
+    supportedTags
+    supportedBinaryOps
+    supportedUnaryOps
+    eval
+    run
+    runMirror
+    mk_closure
+    is_closure
+    is_error
+    evaluatorInvariants;
+  meta = {
+    source = "pnixc-pnix evaluator";
+    owner = ownerName;
+    base = "pnixc-meta-evaluator-v0";
+    rev_note =
+      "First `.px`-written evaluator over the parser-level AST. Stage 2 "
+      + "of the meta-circular substrate: host (pnix-eval) loads this file; "
+      + "this file evaluates user `.px` source via `runtime.parse_expr` "
+      + "+ a tag-dispatch eval. Takes runtime as a parameter to avoid "
+      + "cwd-anchored relative imports.";
+  };
+}

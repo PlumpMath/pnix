@@ -1,0 +1,25 @@
+# stdlib/lib/nl/dictionary-facts-store-plan-test.px — 사전 S3: rec{} store-plan 구조 회귀 (게이트-테스트)
+#
+# dictionary-facts-store-plan 이 dictionary_facts 테이블에 *pnix attrset* value_bytes 로 append 하는 op-plan 을
+# 내는지 검증(실 redb 적재/round-trip 은 --morph-rules-build/verify CLI 로 별도 확인=IN SYNC). morph_rules 와 동형.
+let
+  sp = import ./dictionary-facts-store-plan.px;
+  B = builtins;
+  p = sp.mkPlan { built_at_ms = 0; };
+  op = B.head p.plan.operations;
+  vb = op.value_bytes;
+  q = sp.mkQuery { built_at_ms = 0; };
+  qop = B.head q.plan.operations;
+in {
+  table = op.table;                                   # dictionary_facts
+  op_kind = op.op_kind;                               # append
+  value_starts_brace = (B.substring 0 1 vb) == "{";   # pnix attrset (NOT JSON array)
+  value_len = p.value_bytes_len;
+  hash_len = B.stringLength p.content_hash;            # 64 (sha256 hex)
+  query_op = qop.op_kind;                             # scan-prefix
+  query_table = qop.table;                            # dictionary_facts
+  all_ok = (op.table == "dictionary_facts") && (op.op_kind == "append")
+           && ((B.substring 0 1 vb) == "{") && (p.value_bytes_len > 100)
+           && (B.stringLength p.content_hash == 64)
+           && (qop.op_kind == "scan-prefix") && (qop.table == "dictionary_facts");
+}

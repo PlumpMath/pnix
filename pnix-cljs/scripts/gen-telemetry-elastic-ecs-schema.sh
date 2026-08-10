@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="${ECS_SCHEMA_SRC:-$ROOT/ingest/telemetry/elastic-ecs-schema}"
+OUT="${OUT:-$ROOT/stdlib/lib/corpus/elastic-ecs-schema.generated.px}"
+FIELD_LIMIT="${ECS_FIELD_LIMIT:-1600}"
+python3 - "$SRC" "$OUT" "$FIELD_LIMIT" <<'PY'
+import json,re,sys
+from pathlib import Path
+src=Path(sys.argv[1]); out=Path(sys.argv[2]); limit=int(sys.argv[3]); receipt=json.loads((src/'source-receipt.json').read_text())
+def lit(v):
+    if isinstance(v,bool): return 'true' if v else 'false'
+    if isinstance(v,int): return str(v)
+    if isinstance(v,str): return json.dumps(v,ensure_ascii=False)
+    if isinstance(v,list): return '[ ' + ' '.join(lit(x) for x in v) + ' ]'
+    if isinstance(v,dict): return '{ ' + ' '.join(json.dumps(str(k),ensure_ascii=False)+' = '+lit(v[k])+';' for k in sorted(v)) + ' }'
+    if v is None: return 'null'
+    raise TypeError(type(v))
+source_files=[]; fieldsets=[]; fields=[]; normalizers=[]; otel=[]
+skip_scalar={'description','short','example','note','title'}
+for rec in receipt['files']:
+    source_files.append({'source_path':rec['source_path'],'sha256':rec['sha256'],'bytes':rec['bytes']})
+    text=(src/'raw'/rec['local_file']).read_text(encoding='utf-8',errors='replace')
+    current_set=None; in_fields=False; current_field=None; in_norm=False; in_otel=False; pending_otel=None
+    for line in text.splitlines():
+        if line.startswith('#') or not line.strip():
+            continue
+        mset=re.match(r'^- name:\s*(.+?)\s*$',line)
+        if mset:
+            current_set={'file':rec['source_path'],'name':mset.group(1).strip('"\''),'type':'','root':False,'group':''}
+            fieldsets.append(current_set); in_fields=False; current_field=None; continue
+        if current_set and re.match(r'^  (root|type|group):\s*',line) and not in_fields:
+            k,v=line.strip().split(':',1); v=v.strip().strip('"\'')
+            current_set[k]= (v=='true') if k=='root' else v
+            continue
+        if re.match(r'^  fields:\s*$',line):
+            in_fields=True; continue
+        mf=re.match(r'^    - name:\s*(.+?)\s*$',line)
+        if in_fields and mf:
+            name=mf.group(1).strip('"\'')
+            current_field={'file':rec['source_path'],'fieldset':current_set['name'] if current_set else '','name':name,'type':'','level':'','required':False,'object_type':'','normalize_count':0,'otel_relation_count':0}
+            if len(fields)<limit: fields.append(current_field)
+            in_norm=False; in_otel=False; pending_otel=None; continue
+        if not current_field:
+            continue
+        ms=re.match(r'^      (type|level|required|object_type):\s*(.+?)\s*$',line)
+        if ms:
+            k,v=ms.group(1),ms.group(2).strip().strip('"\'')
+            current_field[k]=(v=='true') if k=='required' else v
+            continue
+        if re.match(r'^      normalize:\s*$',line): in_norm=True; in_otel=False; continue
+        if re.match(r'^      otel:\s*$',line): in_otel=True; in_norm=False; continue
+        mn=re.match(r'^        -\s*(.+?)\s*$',line)
+        if in_norm and mn:
+            current_field['normalize_count']+=1
+            if len(normalizers)<1000: normalizers.append({'field':current_field['name'],'value':mn.group(1).strip().strip('"\'')})
+            continue
+        mo=re.match(r'^        - relation:\s*(.+?)\s*$',line)
+        if in_otel and mo:
+            pending_otel={'field':current_field['name'],'relation':mo.group(1).strip().strip('"\''),'attribute':'','otlp_field':'','stability':''}
+            current_field['otel_relation_count']+=1
+            if len(otel)<1000: otel.append(pending_otel)
+            continue
+        mo2=re.match(r'^          (attribute|otlp_field|stability):\s*(.+?)\s*$',line)
+        if in_otel and pending_otel and mo2:
+            pending_otel[mo2.group(1)]=mo2.group(2).strip().strip('"\'')
+obj={'schema':'telemetry.elastic.ecs_schema.v1','source':{'name':'Elastic Common Schema official schema YAML','license':'Apache-2.0','source_urls':['https://github.com/elastic/ecs','https://github.com/elastic/ecs/tree/'+receipt.get('ref','')+'/schemas'],'receipt':receipt,'generator':'scripts/gen-telemetry-elastic-ecs-schema.sh','scope':'schema YAML structural fields only; prose/examples/real logs/PII/detections/execution/graph wiring excluded'},'summary':{'source_file_count':len(source_files),'fieldset_count':len(fieldsets),'field_count_total_observed':len(fields),'field_count_stored':len(fields),'field_limit':limit,'normalizer_count':len(normalizers),'otel_relation_count':len(otel),'prose_ingested':False,'examples_ingested':False,'real_logs_or_elasticsearch_snapshots_ingested':False,'pii_payloads_ingested':False,'detection_or_alert_routing_enabled':False,'execution_enabled':False,'mirror_graph_wiring':False},'source_files':source_files,'fieldsets':fieldsets,'fields':fields,'normalizers':normalizers,'otel_relations':otel}
+out.parent.mkdir(parents=True,exist_ok=True)
+out.write_text('# GENERATED by scripts/update-telemetry-elastic-ecs-schema.sh && scripts/gen-telemetry-elastic-ecs-schema.sh; do not commit.\n'+lit(obj)+'\n',encoding='utf-8')
+print(f'generated {out}: files={len(source_files)} fieldsets={len(fieldsets)} fields_stored={len(fields)} normalizers={len(normalizers)} otel={len(otel)} bytes={out.stat().st_size}')
+PY

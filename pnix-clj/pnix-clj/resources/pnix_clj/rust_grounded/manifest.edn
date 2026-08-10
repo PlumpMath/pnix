@@ -1,0 +1,85 @@
+{:kind :rust-grounded-invariant-manifest
+ :schema-version 1
+ :source-revision
+ {:repo "~/pnix-old"
+  :commit "f5ce48fe9a1f7a371d7c9f96a8e0c7366e232437"
+  :captured-at "2026-06-29"
+  :copied-paths-clean true
+  :runtime-dependency false
+  :normal-report-path "pnix_clj/rust_grounded/invariance_corpus"
+  :note "development-time source revision for the currently vendored Rust-grounded fixtures"}
+ :authority-order
+ [{:rank 1
+   :id :pnix-rust-evaluator
+   :paths ["~/pnix-old/crates/pnix-eval/src/interpret.rs"
+           "~/pnix-old/crates/pnix-eval/tests/*.rs"]
+   :role "primary evaluator semantics and test corpus authority"}
+  {:rank 2
+   :id :real-nix-compatible-subset
+   :role "secondary oracle only for Nix-compatible cases"}
+  {:rank 3
+   :id :pnixc-meta-v0
+   :role "optional live binary oracle; unsupported there is not a pnix-clj failure"}]
+ :pnix-clj-lanes
+ [:pnix-clj-evaluator
+  :pnix-clj-lowering-clj-meta
+  :clojure-stage15-mirror
+  :px-runtime-pnix-mirror]
+ :required-suites
+ [{:id :RUST_EVAL_CORPUS
+   :source-path "~/pnix-old/crates/pnix-eval/tests/eval_basics.rs"
+   :repo-path "pnix_clj/rust_grounded/suite_sources/eval_basics.rs"
+   :source-hash "bf6344eadc9032486f1983e09123eef2ffec4d2e539bf73c0964f7cff4a718f9"
+   :pnix-hy-count 41
+   :imported-test-count 41
+   :status :imported-source
+   :role "core Rust evaluator value/error semantics"}
+  {:id :RUST_BUILTIN_CORPUS
+   :source-path "~/pnix-old/crates/pnix-eval/tests/builtin_parity.rs"
+   :repo-path "pnix_clj/rust_grounded/suite_sources/builtin_parity.rs"
+   :source-hash "647d8dae560e3f4659f37ec14cb5edb3a8588c080eb72bceabf32c571723e4b5"
+   :pnix-hy-count 51
+   :imported-test-count 34
+   :status :imported-source
+   :role "builtin parity including strings, attrs, lists, arithmetic"}
+  {:id :RUST_OVERFLOW_CORPUS
+   :source-path "~/pnix-old/crates/pnix-eval/tests/eval_arith_builtin_overflow.rs"
+   :repo-path "pnix_clj/rust_grounded/suite_sources/eval_arith_builtin_overflow.rs"
+   :source-hash "359c4964295b134fea0c90005cf5a3b2634e8b995739d579f688cba81bfb6d16"
+   :pnix-hy-count 10
+   :imported-test-count 16
+   :status :imported-source
+   :role "i64 checked overflow semantics"}
+  {:id :RUST_FUNCTIONAL_LAZY_TYPE_CORPUS
+   :source-path "~/pnix-old/crates/pnix-eval/tests/eval_functional_lazy.rs and related type tests"
+   :status :not-yet-imported
+   :role "functions, laziness, thunks, type guards"}
+  {:id :RUST_COMPARE_VERSION_CORPUS
+   :source-path "~/pnix-old/crates/pnix-eval/tests/eval_compare_versions.rs"
+   :status :not-yet-imported
+   :role "version ordering/splitting semantics"}
+  {:id :RUST_CYCLE_GUARD_CORPUS
+   :source-path "~/pnix-old/crates/pnix-eval/tests/eval_*cycle*.rs"
+   :status :not-yet-imported
+   :role "recursive value and equality/compare cycle guards"}
+  {:id :RUST_JSON_TOML_DATA_CORPUS
+   :source-path "~/pnix-old/crates/pnix-eval/tests/eval_json_builtins.rs and data parser tests"
+   :status :not-yet-imported
+   :role "JSON/TOML/data parser boundaries"}
+  {:id :RUST_REGEX_CORPUS
+   :source-path "~/pnix-old/crates/pnix-eval/tests/eval_regex_ops.rs"
+   :status :not-yet-imported
+   :role "regex match/split and invalid regex handling"}
+  {:id :STAGE7_CORE_CASES
+   :source-path "~/pnix-hy/pnix-hy SELF_TEST_CASES / HY_RUNTIME_CORE_CASES"
+   :repo-path "pnix_clj/stage7_core/cases.edn"
+   :imported-count 5
+   :status :imported-first-slice
+   :role "stage7 core lock-ins that must run across all four mirror lanes"}
+  {:id :RUST_INVARIANCE_CORPUS
+   :source-path "~/pnix-old/crates/pxalloc/bench/invariance-corpus"
+   :repo-path "pnix_clj/rust_grounded/invariance_corpus"
+   :source-commit "f5ce48fe9a1f7a371d7c9f96a8e0c7366e232437"
+   :imported-count 10
+   :status :imported-held
+   :role "Rust-grounded invariance pressure batch currently vendored in pnix-clj"}]}

@@ -1,0 +1,142 @@
+# stdlib.lib.math.base-conversion
+#
+# OWNER-LAW (v0.12-YY, div-math, 2026-05-21): exact positional
+# numeral-base conversion.
+#
+# The div-math kernel reasons about integers but always in base
+# ten. This owner adds the other side: the same integer written
+# in base 2, base 16, or any base from 2 to 36.
+#
+# # Two directions, exact, round-trip stable
+#
+#   toBaseDigits n b    -> the digits of n in base b, MSB first
+#   fromBaseDigits ds b -> the integer those base-b digits denote
+#
+# These are exact inverses: `fromBaseDigits (toBaseDigits n b) b`
+# is `n` for every n >= 0 and every base b in [2, 36]. The
+# round-trip identity is the owner's decisive property.
+#
+# `toBaseString` renders the digit list as text, using 0-9 then
+# a-z for digit values 10-35 (so base 16 prints `ff`, base 2
+# prints `1101`).
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT bases above 36 (no canonical digit alphabet) or below 2.
+#   - NOT negative numbers or fractional bases.
+#   - NOT a bignum string parser -- host int range.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/base-conversion.px";
+
+  intMod = a: b: a - b * (a / b);
+
+  minBase = 2;
+  maxBase = 36;
+
+  # The digit alphabet: index 0..35 -> character.
+  digitAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+  # Character for a digit value 0..35.
+  digitChar = d: builtins.substring d 1 digitAlphabet;
+
+  # Digits of n (n >= 0) in base b, most-significant first.
+  # 0 renders as the single digit [0]. Repeated divmod.
+  toBaseDigits = n: b:
+    if n < b then [ n ]
+    else (toBaseDigits (n / b) b) ++ [ (intMod n b) ];
+
+  # The integer denoted by a base-b digit list (MSB first), by
+  # Horner's method: acc = acc*b + digit.
+  fromBaseDigits = digits: b:
+    builtins.foldl' (acc: d: acc * b + d) 0 digits;
+
+  # Render a base-b digit list as text.
+  toBaseString = n: b:
+    let chars = builtins.map digitChar (toBaseDigits n b);
+    in builtins.concatStringsSep "" chars;
+
+  # Whether every digit is a valid base-b digit (0 <= d < b).
+  digitsValidForBase = digits: b:
+    builtins.all (d: d >= 0 && d < b) digits;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "to-digits"
+    "from-digits"
+    "to-string"
+  ];
+
+  applyBaseConversion = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      b  = request.base;
+      digits = if request ? digits then request.digits else [];
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if b < minBase || b > maxBase then {
+        outcome = "held-base-out-of-range";
+        operation = op;
+        base = b;
+        min_base = minBase;
+        max_base = maxBase;
+      }
+      else if (op == "to-digits" || op == "to-string") && n < 0 then {
+        outcome = "held-negative-number";
+        operation = op;
+        n = n;
+      }
+      else if op == "from-digits" && !(digitsValidForBase digits b) then {
+        outcome = "held-invalid-digit-for-base";
+        operation = op;
+        base = b;
+        reason = "every digit must satisfy 0 <= d < base";
+      }
+      else if op == "to-digits" then {
+        outcome = "base-converted";
+        operation = op; n = n; base = b;
+        digits = toBaseDigits n b;
+      }
+      else if op == "from-digits" then {
+        outcome = "base-converted";
+        operation = op; base = b;
+        value = fromBaseDigits digits b;
+      }
+      else {
+        # op == "to-string"
+        outcome = "base-converted";
+        operation = op; n = n; base = b;
+        text = toBaseString n b;
+      };
+
+in {
+  inherit
+    ownerName
+    minBase
+    maxBase
+    digitAlphabet
+    digitChar
+    toBaseDigits
+    fromBaseDigits
+    toBaseString
+    digitsValidForBase
+    knownOperations
+    applyBaseConversion;
+  meta = {
+    source = "stdlib math base conversion";
+    owner = ownerName;
+    base = "parametric-math-base-conversion-v0";
+    rev_note = "v0.12-YY (div-math): exact positional numeral-base conversion owner. toBaseDigits / fromBaseDigits are exact inverses (round-trip identity for every n >= 0 and base in [2,36]); toBaseString renders with the 0-9a-z alphabet. Standalone. NOT bases outside [2,36], NOT negative or fractional, NOT a bignum parser, NOT yet a registered lens.";
+  };
+}

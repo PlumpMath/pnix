@@ -1,0 +1,45 @@
+# NHTSA Recalls API bounded metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No VINs/prose/advice/legal judgment/graph wiring.
+let
+  B = builtins;
+  genPath = ./nhtsa-recalls-api.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "transport.nhtsa_recalls.api_schema.v1";
+    source = "NHTSA Recalls API bounded metadata";
+    license = "US-PD / US federal public API metadata";
+    summary = { recalls = 0; api_count = 0; make = ""; model = ""; model_year = ""; };
+    policy = "bounded recall campaign metadata and schema only";
+    manifest = { };
+    files = [ ]; endpoint_schema = { }; recalls = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "nhtsa-recalls-api-load-v0";
+      source_lens = "stdlib/lib/corpus/nhtsa-recalls-api-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "transport.nhtsa_recalls.api_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "nhtsa-recalls-api-query-v0";
+      source_lens = "stdlib/lib/corpus/nhtsa-recalls-api-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "transport.nhtsa_recalls.api_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

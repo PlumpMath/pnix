@@ -1,0 +1,626 @@
+{:kind :mirror-pair-fixture-set
+ :schema-version 1
+ :lineage
+ {:source "pnix-clj curated internal runtime basics"
+  :captured-at "2026-06-30"
+  :note "Host-local mirror-pair fixtures. These prove the current clojure mirror -> internal .px runtime -> pnix mirror receipt path for small pnix runtime cases only."}
+ :cases
+ [{:name "literal-int"
+   :source "42"
+   :oracle-result {:status :ok :value 42}}
+  {:name "attr-select"
+   :source "{ a = 1; b = 2; }.b"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lambda-apply"
+   :source "(x: x + 1) 41"
+   :oracle-result {:status :ok :value 42}}
+  {:name "list-builtin"
+   :source "builtins.elemAt [ 10 20 30 ] 1"
+   :oracle-result {:status :ok :value 20}}
+  {:name "ctx-append-has-context"
+   :source "builtins.hasContext (builtins.appendContext \"a\" { \"/nix/store/p\" = { path = true; }; })"
+   :oracle-result {:status :ok :value true}}
+  {:name "ctx-get-context-kinds"
+   :source "builtins.getContext (builtins.appendContext \"a\" { \"/d.drv\" = { allOutputs = true; outputs = [\"out\"]; }; })"
+   :oracle-result {:status :ok :value {"/d.drv" {"allOutputs" true "outputs" ["out"]}}}}
+  {:name "ctx-discard-string-context"
+   :source "builtins.unsafeDiscardStringContext (builtins.appendContext \"abc\" { \"/nix/store/p\" = { path = true; }; })"
+   :oracle-result {:status :ok :value "abc"}}
+  {:name "ctx-empty-info-no-op"
+   :source "builtins.hasContext (builtins.appendContext \"a\" { \"/p\" = {}; })"
+   :oracle-result {:status :ok :value false}}
+  {:name "ctx-plus-unions-context"
+   :source "builtins.getContext ((builtins.appendContext \"a\" { \"/p1\" = { path = true; }; }) + (builtins.appendContext \"b\" { \"/p2\" = { path = true; }; }))"
+   :oracle-result {:status :ok :value {"/p1" {"path" true} "/p2" {"path" true}}}}
+  {:name "ctx-template-carries-context"
+   :source "let c = builtins.appendContext \"a\" { \"/p\" = { path = true; }; }; in builtins.unsafeDiscardStringContext \"pre ${c} post\""
+   :oracle-result {:status :ok :value "pre a post"}}
+  {:name "drv-outpath-has-context"
+   :source "builtins.hasContext (builtins.derivation { name = \"t\"; system = \"s\"; builder = \"b\"; }).outPath"
+   :oracle-result {:status :ok :value true}}
+  {:name "drv-strict-attr-names"
+   :source "builtins.attrNames (builtins.derivationStrict { name = \"t\"; system = \"s\"; builder = \"b\"; outputs = [\"out\" \"dev\"]; })"
+   :oracle-result {:status :ok :value ["dev" "drvPath" "out"]}}
+  {:name "rec-attr"
+   :source "rec { x = 1; y = x + 41; }.y"
+   :oracle-result {:status :ok :value 42}}
+  {:name "assert-true-body"
+   :source "assert true; 7"
+   :oracle-result {:status :ok :value 7}}
+  {:name "not-false"
+   :source "!false"
+   :oracle-result {:status :ok :value true}}
+  {:name "neg-int"
+   :source "-5"
+   :oracle-result {:status :ok :value -5}}
+  {:name "and-right-branch"
+   :source "true && false"
+   :oracle-result {:status :ok :value false}}
+  {:name "and-short-circuit"
+   :source "false && (1 / 0)"
+   :oracle-result {:status :ok :value false}}
+  {:name "or-right-branch"
+   :source "false || true"
+   :oracle-result {:status :ok :value true}}
+  {:name "or-short-circuit"
+   :source "true || (1 / 0)"
+   :oracle-result {:status :ok :value true}}
+  {:name "implies-false-short-circuit"
+   :source "false -> (1 / 0)"
+   :oracle-result {:status :ok :value true}}
+  {:name "implies-true-right-branch"
+   :source "true -> false"
+   :oracle-result {:status :ok :value false}}
+  {:name "implies-right-assoc"
+   :source "true -> false -> false"
+   :oracle-result {:status :ok :value true}}
+  {:name "not-equal-int"
+   :source "1 != 2"
+   :oracle-result {:status :ok :value true}}
+  {:name "less-or-equal-equal"
+   :source "2 <= 2"
+   :oracle-result {:status :ok :value true}}
+  {:name "greater-or-equal"
+   :source "3 >= 2"
+   :oracle-result {:status :ok :value true}}
+  {:name "with-basic"
+   :source "with { a = 1; b = 2; }; a + b"
+   :oracle-result {:status :ok :value 3}}
+  {:name "with-lexical-shadow"
+   :source "let a = 10; in with { a = 1; b = 2; }; a + b"
+   :oracle-result {:status :ok :value 12}}
+  {:name "with-inner-shadow"
+   :source "with { a = 1; }; with { a = 2; }; a"
+   :oracle-result {:status :ok :value 2}}
+  {:name "with-closure-capture"
+   :source "(with { f = x: x + 1; }; (z: f z)) 41"
+   :oracle-result {:status :ok :value 42}}
+  {:name "lazy-attr-select"
+   :source "let s = { a = 1 / 0; b = 5; }; in s.b"
+   :oracle-result {:status :ok :value 5}}
+  {:name "lazy-list-head"
+   :source "builtins.head [ 1 (1 / 0) ]"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-list-length"
+   :source "builtins.length [ (1 / 0) ]"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-list-elem-at"
+   :source "builtins.elemAt [ (1 / 0) 7 ] 1"
+   :oracle-result {:status :ok :value 7}}
+  {:name "lazy-take-zero-length"
+   :source "builtins.length (builtins.take 0 [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 0}}
+  {:name "lazy-drop-length"
+   :source "builtins.length (builtins.drop 1 [ (1 / 0) 2 ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-append-length"
+   :source "builtins.length (builtins.append [ (1 / 0) ] [ 2 ])"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lazy-intersect-attrnames"
+   :source "builtins.attrNames (builtins.intersectAttrs { a = 1; } { a = 1 / 0; b = 2; })"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-zip-length"
+   :source "builtins.length (builtins.zip [ (1 / 0) ] [ 2 ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-sort-length"
+   ;; D2 oracle correction (nix-instantiate 2.34.7): real Nix sort FORCES each
+   ;; element to WHNF, so a bare (1 / 0) element is division-by-zero; only a
+   ;; NESTED poison stays lazy. The old source pinned our too-lazy behavior.
+   :source "builtins.length (builtins.sort (a: b: true) [ [ (1 / 0) ] ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-map-attrs-attrnames"
+   :source "builtins.attrNames (builtins.mapAttrs (name: value: name) { a = 1 / 0; b = 2; })"
+   :oracle-result {:status :ok :value ["a" "b"]}}
+  {:name "lazy-map-attrs-to-list"
+   :source "builtins.mapAttrsToList (name: value: name) { a = 1 / 0; b = 2; }"
+   :oracle-result {:status :ok :value ["a" "b"]}}
+  {:name "lazy-filter-attrs-attrnames"
+   :source "builtins.attrNames (builtins.filterAttrs (name: value: name == \"a\") { a = 1 / 0; b = 2; })"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-zip-lists-with-length"
+   :source "builtins.length (builtins.zipListsWith (a: b: 1) [ (1 / 0) ] [ 2 ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-zip-lists-with-head-ignores-right"
+   :source "builtins.head (builtins.zipListsWith (a: b: a) [1] [ (2 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-zip-lists-with-elemat-ignores-right"
+   :source "builtins.elemAt (builtins.zipListsWith (a: b: a) [1] [ (2 / 0) ]) 0"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-zip-lists-with-head-ignores-right-tail-lhs"
+   :source "builtins.head (builtins.zipListsWith (a: b: a) [1 (1 / 0)] [2])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-zip-lists-with-left-empty-ignores-right"
+   :source "builtins.length (builtins.zipListsWith (a: b: 1) [] [ (2 / 0) ])"
+   :oracle-result {:status :ok :value 0}}
+  {:name "lazy-zip-lists-with-right-empty-ignores-left"
+   :source "builtins.length (builtins.zipListsWith (a: b: 1) [ (2 / 0) ] [])"
+   :oracle-result {:status :ok :value 0}}
+  {:name "lazy-zip-lists-with-empty-both-ignores-f"
+   :source "builtins.length (builtins.zipListsWith (a: b: 1 / 0) [] [])"
+   :oracle-result {:status :ok :value 0}}
+  {:name "seq-list-whnf-lazy"
+   :source "builtins.seq [ (1 / 0) ] 2"
+   :oracle-result {:status :ok :value 2}}
+  {:name "seq-attrset-whnf-lazy"
+   :source "builtins.seq { a = 1 / 0; } 2"
+   :oracle-result {:status :ok :value 2}}
+  {:name "deep-seq-attrset-ok"
+   :source "builtins.deepSeq { a = 1; } 2"
+   :oracle-result {:status :ok :value 2}}
+  {:name "to-json-attrset"
+   :source "builtins.toJSON { a = 1; b = [ true null ]; }"
+   :oracle-result {:status :ok :value "{\"a\":1,\"b\":[true,null]}"}}
+  {:name "to-json-list"
+   :source "builtins.toJSON [1 true null]"
+   :oracle-result {:status :ok :value "[1,true,null]"}}
+  {:name "from-json-attr-select"
+   :source "(builtins.fromJSON \"{\\\"a\\\":1}\").a"
+   :oracle-result {:status :ok :value 1}}
+  {:name "replace-strings-basic"
+   :source "builtins.replaceStrings [\"a\"] [\"x\"] \"aba\""
+   :oracle-result {:status :ok :value "xbx"}}
+  {:name "regex-match-capture"
+   :source "builtins.match \"a(b)\" \"ab\""
+   :oracle-result {:status :ok :value ["b"]}}
+  {:name "regex-split-capture"
+   :source "builtins.split \"(b)\" \"abc\""
+   :oracle-result {:status :ok :value ["a" ["b"] "c"]}}
+  {:name "compare-versions-order"
+   :source "builtins.compareVersions \"1.2\" \"1.10\""
+   :oracle-result {:status :ok :value -1}}
+  {:name "parse-drv-name-version"
+   :source "(builtins.parseDrvName \"foo-1.2\").version"
+   :oracle-result {:status :ok :value "1.2"}}
+  {:name "split-version-parts"
+   :source "builtins.splitVersion \"1.2pre3\""
+   :oracle-result {:status :ok :value ["1" "2" "pre" "3"]}}
+  {:name "floor-number"
+   :source "builtins.floor 3.9"
+   :oracle-result {:status :ok :value 3}}
+  {:name "ceil-number"
+   :source "builtins.ceil 3.1"
+   :oracle-result {:status :ok :value 4}}
+  {:name "bit-and-positive"
+   :source "builtins.bitAnd 12 10"
+   :oracle-result {:status :ok :value 8}}
+  {:name "bit-or-positive"
+   :source "builtins.bitOr 12 10"
+   :oracle-result {:status :ok :value 14}}
+  {:name "bit-xor-positive"
+   :source "builtins.bitXor 12 10"
+   :oracle-result {:status :ok :value 6}}
+  {:name "try-eval-throw"
+   :source "builtins.tryEval (builtins.throw \"boom\")"
+   :oracle-result {:status :ok :value {"success" false
+                                       "value" false}}}
+  {:name "generic-closure-chain"
+   :source "builtins.genericClosure { startSet = [{ key = 1; }]; operator = item: if item.key < 3 then [{ key = item.key + 1; }] else []; }"
+   :oracle-result {:status :ok :value [{"key" 1} {"key" 2} {"key" 3}]}}
+  {:name "is-bool-false"
+   :source "builtins.isBool false"
+   :oracle-result {:status :ok :value true}}
+  {:name "is-int"
+   :source "builtins.isInt 42"
+   :oracle-result {:status :ok :value true}}
+  {:name "is-float"
+   :source "builtins.isFloat 1.5"
+   :oracle-result {:status :ok :value true}}
+  {:name "is-string"
+   :source "builtins.isString \"x\""
+   :oracle-result {:status :ok :value true}}
+  {:name "is-list"
+   :source "builtins.isList [1 2]"
+   :oracle-result {:status :ok :value true}}
+  {:name "is-null"
+   :source "builtins.isNull null"
+   :oracle-result {:status :ok :value true}}
+  {:name "is-function"
+   :source "builtins.isFunction (x: x)"
+   :oracle-result {:status :ok :value true}}
+  {:name "lazy-map-length-ignored-input"
+   :source "builtins.length (builtins.map (x: 1) [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-filter-length-ignored-input"
+   :source "builtins.length (builtins.filter (x: true) [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-concat-map-empty-ignored-input"
+   :source "builtins.length (builtins.concatMap (x: []) [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 0}}
+  {:name "lazy-all-ignored-input"
+   :source "builtins.all (x: true) [ (1 / 0) ]"
+   :oracle-result {:status :ok :value true}}
+  {:name "lazy-any-ignored-input"
+   :source "builtins.any (x: false) [ (1 / 0) ]"
+   :oracle-result {:status :ok :value false}}
+  {:name "lazy-count-ignored-input"
+   :source "builtins.count (x: true) [ (1 / 0) ]"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-foldl-ignored-input"
+   :source "builtins.foldl' (acc: x: acc) 7 [ (1 / 0) ]"
+   :oracle-result {:status :ok :value 7}}
+  {:name "lazy-foldr-ignored-input"
+   :source "builtins.foldr (x: acc: acc) 7 [ (1 / 0) ]"
+   :oracle-result {:status :ok :value 7}}
+  {:name "lazy-find-first-miss-ignored-input"
+   :source "builtins.findFirst (x: false) 9 [ (1 / 0) ]"
+   :oracle-result {:status :ok :value 9}}
+  {:name "lazy-group-by-attrnames-ignored-input"
+   :source "builtins.attrNames (builtins.groupBy (x: \"k\") [ (1 / 0) ])"
+   :oracle-result {:status :ok :value ["k"]}}
+  {:name "lazy-imap0-length-ignored-input"
+   :source "builtins.length (builtins.imap0 (i: x: i) [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-imap1-length-ignored-input"
+   :source "builtins.length (builtins.imap1 (i: x: i) [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-list-to-attrs-attrnames"
+   :source "builtins.attrNames (builtins.listToAttrs [ { name = \"a\"; value = 1 / 0; } ])"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-zip-attrs-with-attrnames"
+   :source "builtins.attrNames (builtins.zipAttrsWith (name: values: 1) [ { a = 1 / 0; } ])"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-zip-attrs-with-empty-rows-ignores-f"
+   :source "builtins.attrNames (builtins.zipAttrsWith (name: values: 1 / 0) [])"
+   :oracle-result {:status :ok :value []}}
+  {:name "lazy-zip-attrs-with-empty-rows-ignores-f-length"
+   :source "builtins.length (builtins.attrValues (builtins.zipAttrsWith (name: values: 1 / 0) []))"
+   :oracle-result {:status :ok :value 0}}
+  {:name "lazy-cat-attrs-length"
+   :source "builtins.length (builtins.catAttrs \"a\" [ { a = 1 / 0; } ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-foldl-attrs-ignored-value"
+   :source "builtins.foldlAttrs (acc: name: value: acc) 7 { a = 1 / 0; }"
+   :oracle-result {:status :ok :value 7}}
+  {:name "lazy-map-attrs-prime-attrnames"
+   :source "builtins.attrNames (builtins.mapAttrs' (name: value: { name = name; value = 1; }) { a = 1 / 0; })"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-gen-attrs-attrnames"
+   :source "builtins.attrNames (builtins.genAttrs [\"a\"] (name: 1 / 0))"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "elem-numeric-equality"
+   :source "builtins.elem 1 [ 1.0 ]"
+   :oracle-result {:status :ok :value true}}
+  {:name "lazy-elem-stops-before-tail-error"
+   :source "builtins.elem 1 [ 1 (1 / 0) ]"
+   :oracle-result {:status :ok :value true}}
+  {:name "lazy-elem-empty-list-needle"
+   :source "builtins.elem (1 / 0) []"
+   :oracle-result {:status :ok :value false}}
+  {:name "lazy-attr-values-length"
+   :source "builtins.length (builtins.attrValues { a = 1 / 0; b = 2; })"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lazy-attr-values-elem-at"
+   :source "builtins.elemAt (builtins.attrValues { a = 1 / 0; b = 2; }) 1"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lazy-values-alias-length"
+   :source "builtins.length (builtins.values { a = 1 / 0; })"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-concat-lists-length"
+   :source "builtins.length (builtins.concatLists [ [ 1 ] [ (1 / 0) ] ])"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lazy-concat-lists-elem-at"
+   :source "builtins.elemAt (builtins.concatLists [ [ 1 ] [ (1 / 0) ] ]) 0"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-reverse-list-length"
+   :source "builtins.length (builtins.reverseList [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-reverse-list-elem-at"
+   :source "builtins.elemAt (builtins.reverseList [ (1 / 0) 2 ]) 0"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lazy-unique-singleton-length"
+   :source "builtins.length (builtins.unique [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "find-numeric-equality"
+   :source "builtins.find 1 [ 1.0 ]"
+   :oracle-result {:status :ok :value 1.0}}
+  {:name "lazy-find-stops-before-tail-error"
+   :source "builtins.find 1 [ 1 (1 / 0) ]"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-optionals-true-length"
+   :source "builtins.length (builtins.optionals true [ (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-zip-attrs-with-values-length"
+   :source "(builtins.zipAttrsWith (name: values: builtins.length values) [ { a = 1 / 0; } ]).a"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-recursive-update-nested-select"
+   :source "(builtins.recursiveUpdate { a = { x = 1 / 0; }; } { a = { y = 2; }; }).a.y"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lazy-optional-false-value"
+   :source "builtins.optional false (1 / 0)"
+   :oracle-result {:status :ok :value []}}
+  {:name "lazy-optional-true-length"
+   :source "builtins.length (builtins.optional true (1 / 0))"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-optional-string-false"
+   :source "builtins.optionalString false (1 / 0)"
+   :oracle-result {:status :ok :value ""}}
+  {:name "lazy-gen-list-length"
+   :source "builtins.length (builtins.genList (i: 1 / 0) 1)"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-replicate-length"
+   :source "builtins.length (builtins.replicate 1 (1 / 0))"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-map-result-length"
+   :source "builtins.length (builtins.map (x: 1 / 0) [1])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-imap0-result-length"
+   :source "builtins.length (builtins.imap0 (i: x: 1 / 0) [1])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-imap1-result-length"
+   :source "builtins.length (builtins.imap1 (i: x: 1 / 0) [1])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-zip-lists-with-result-length"
+   :source "builtins.length (builtins.zipListsWith (a: b: 1 / 0) [1] [2])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-map-attrs-result-attrnames"
+   :source "builtins.attrNames (builtins.mapAttrs (name: value: 1 / 0) { a = 1; })"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-map-attrs-to-list-result-length"
+   :source "builtins.length (builtins.mapAttrsToList (name: value: 1 / 0) { a = 1; })"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-map-attrs-prime-result-attrnames"
+   :source "builtins.attrNames (builtins.mapAttrs' (name: value: { name = name; value = 1 / 0; }) { a = 1; })"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-zip-attrs-with-result-attrnames"
+   :source "builtins.attrNames (builtins.zipAttrsWith (name: values: 1 / 0) [ { a = 1; } ])"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-map-identity-head"
+   :source "builtins.head (builtins.map (x: x) [ 1 (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-filter-true-head"
+   :source "builtins.head (builtins.filter (x: true) [ 1 (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-concat-map-identity-head"
+   :source "builtins.head (builtins.concatMap (x: [ x ]) [ 1 (1 / 0) ])"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-sort-constant-comparator-length-two"
+   ;; D2 oracle correction: as lazy-sort-length — sort element WHNF-forcing is
+   ;; real Nix semantics, so the poison moves one level down.
+   :source "builtins.length (builtins.sort (a: b: true) [ [ (1 / 0) ] [ 2 ] ])"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lazy-filter-attrs-true-attrnames"
+   :source "builtins.attrNames (builtins.filterAttrs (name: value: true) { a = 1 / 0; })"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "lazy-map-attrs-identity-values-length"
+   :source "builtins.length (builtins.attrValues (builtins.mapAttrs (name: value: value) { a = 1 / 0; }))"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-zip-attrs-with-head-values-length"
+   :source "builtins.length (builtins.attrValues (builtins.zipAttrsWith (name: values: builtins.head values) [ { a = 1 / 0; } ]))"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-concat-lists-map-result-length"
+   :source "builtins.length (builtins.concatLists (builtins.map (x: [ (1 / 0) ]) [1]))"
+   :oracle-result {:status :ok :value 1}}
+  {:name "dynamic-attr-key-select"
+   :source "let k = \"a\"; in { ${k} = 1; }.a"
+   :oracle-result {:status :ok :value 1}}
+  {:name "dynamic-attr-key-attrnames"
+   :source "let k = \"a\"; in builtins.attrNames { ${k} = 1; }"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "dynamic-attr-key-merge-attrnames"
+   :source "let name = \"a\"; in builtins.attrNames ({} // { ${name} = 1; })"
+   :oracle-result {:status :ok :value ["a"]}}
+  {:name "dynamic-select"
+   :source "let k = \"a\"; in { a = 1; }.${k}"
+   :oracle-result {:status :ok :value 1}}
+  {:name "dynamic-has-attr"
+   :source "let k = \"a\"; in { a = 1; } ? ${k}"
+   :oracle-result {:status :ok :value true}}
+  {:name "dynamic-select-default"
+   :source "let k = \"b\"; in { a = 1; }.${k} or 9"
+   :oracle-result {:status :ok :value 9}}
+  {:name "dynamic-string-template-has-attr"
+   :source "let k = \"a\"; in { a = 1; } ? \"${k}\""
+   :oracle-result {:status :ok :value true}}
+  {:name "select-or-present"
+   :source "{ a = 1; }.a or 9"
+   :oracle-result {:status :ok :value 1}}
+  {:name "select-or-missing"
+   :source "{ a = 1; }.b or 9"
+   :oracle-result {:status :ok :value 9}}
+  {:name "select-or-nested-present"
+   :source "{ a = { b = 2; }; }.a.b or 9"
+   :oracle-result {:status :ok :value 2}}
+  {:name "select-or-missing-intermediate"
+   :source "{ a = {}; }.a.b or 9"
+   :oracle-result {:status :ok :value 9}}
+  {:name "select-or-parenthesized-if-default"
+   :source "{ a = 1; }.b or (if true then 8 else 9)"
+   :oracle-result {:status :ok :value 8}}
+  {:name "path-literal"
+   :source "./foo"
+   :oracle-result {:status :ok
+                   :value {"__pnix_value_kind" "path"
+                           "path" "./foo"}}}
+  {:name "absolute-path-literal"
+   :source "/foo"
+   :oracle-result {:status :ok
+                   :value {"__pnix_value_kind" "path"
+                           "path" "/foo"}}}
+  {:name "path-is-path"
+   :source "builtins.isPath ./foo"
+   :oracle-result {:status :ok :value true}}
+  {:name "absolute-path-is-path"
+   :source "builtins.isPath /foo"
+   :oracle-result {:status :ok :value true}}
+  {:name "path-typeof"
+   :source "builtins.typeOf ./foo"
+   :oracle-result {:status :ok :value "path"}}
+  {:name "path-is-not-attrs"
+   :source "builtins.isAttrs ./foo"
+   :oracle-result {:status :ok :value false}}
+  {:name "path-equality"
+   :source "./foo == ./foo"
+   :oracle-result {:status :ok :value true}}
+  {:name "numeric-equality-int-float"
+   :source "1 == 1.0"
+   :oracle-result {:status :ok :value true}}
+  {:name "numeric-equality-list-int-float"
+   :source "[1] == [1.0]"
+   :oracle-result {:status :ok :value true}}
+  {:name "numeric-equality-attrset-int-float"
+   :source "{ a = 1; } == { a = 1.0; }"
+   :oracle-result {:status :ok :value true}}
+  {:name "path-to-string-pure"
+   :source "builtins.toString ./foo"
+   :oracle-result {:status :ok :value "./foo"}}
+  {:name "absolute-path-to-string-pure"
+   :source "builtins.toString /foo"
+   :oracle-result {:status :ok :value "/foo"}}
+  {:name "path-base-name"
+   :source "builtins.baseNameOf ./foo/bar.txt"
+   :oracle-result {:status :ok :value "bar.txt"}}
+  {:name "path-dir-of"
+   :source "builtins.dirOf ./foo/bar.txt"
+   :oracle-result {:status :ok
+                   :value {"__pnix_value_kind" "path"
+                           "path" "./foo"}}}
+  {:name "path-dir-of-type"
+   :source "builtins.typeOf (builtins.dirOf ./foo/bar.txt)"
+   :oracle-result {:status :ok :value "path"}}
+  {:name "interpolation-out-path"
+   :source "let x = { outPath = \"/nix/store/x\"; }; in \"${x}\""
+   :oracle-result {:status :ok :value "/nix/store/x"}}
+  {:name "interpolation-to-string"
+   :source "let x = { __toString = self: \"hello\"; }; in \"${x}\""
+   :oracle-result {:status :ok :value "hello"}}
+  {:name "interpolation-to-string-self"
+   :source "let x = { __toString = self: self.label; label = \"abc\"; }; in \"${x}\""
+   :oracle-result {:status :ok :value "abc"}}
+  {:name "pattern-lambda-default"
+   :source "({ a ? 1 }: a) {}"
+   :oracle-result {:status :ok :value 1}}
+  {:name "pattern-lambda-default-sees-previous"
+   :source "({ a, b ? a + 1 }: b) { a = 10; }"
+   :oracle-result {:status :ok :value 11}}
+  {:name "pattern-lambda-ellipsis-lazy-extra"
+   :source "({ a, ... }: a) { a = 1; boom = 1 / 0; }"
+   :oracle-result {:status :ok :value 1}}
+  {:name "pattern-lambda-through-map"
+   :source "builtins.map ({ x, ... }: x + 1) [ { x = 1; } { x = 2; y = 9; } ]"
+   :oracle-result {:status :ok :value [2 3]}}
+  {:name "function-args-literal"
+   :source "builtins.functionArgs ({ a, b ? 1 }: a)"
+   :oracle-result {:status :ok :value {"a" false "b" true}}}
+  {:name "function-args-via-var"
+   :source "let f = { a ? 1 }: a; in builtins.functionArgs f"
+   :oracle-result {:status :ok :value {"a" true}}}
+  {:name "function-args-via-alias"
+   :source "let g = builtins.functionArgs; in g ({ x, y ? 2 }: x)"
+   :oracle-result {:status :ok :value {"x" false "y" true}}}
+  {:name "at-pattern-trailing"
+   :source "({ a }@args: a + args.a) { a = 21; }"
+   :oracle-result {:status :ok :value 42}}
+  {:name "at-pattern-leading"
+   :source "(args@{ a }: a + args.a) { a = 21; }"
+   :oracle-result {:status :ok :value 42}}
+  {:name "at-pattern-default-sees-binding"
+   :source "(args@{ a, b ? args.a + 1 }: b) { a = 10; }"
+   :oracle-result {:status :ok :value 11}}
+  {:name "at-pattern-binds-actual-argument"
+   :source "({ a ? 5 }@args: args) {}"
+   :oracle-result {:status :ok :value {}}}
+  {:name "builtin-value-position-map"
+   :source "let g = builtins.map; in g (x: x + 1) [ 1 2 ]"
+   :oracle-result {:status :ok :value [2 3]}}
+  {:name "builtin-value-position-partial"
+   :source "let m = builtins.map (x: x + 1); in m [ 1 2 ]"
+   :oracle-result {:status :ok :value [2 3]}}
+  {:name "builtins-whole-set-as-value"
+   :source "let b = builtins; in b.map (x: x + 1) [ 5 ]"
+   :oracle-result {:status :ok :value [6]}}
+  {:name "builtin-value-bridge-stays-lazy"
+   :source "let g = builtins.map; in builtins.length (g (x: 1 / 0) [ 1 2 ])"
+   :oracle-result {:status :ok :value 2}}
+  {:name "builtins-lexical-shadowing"
+   :source "let builtins = 5; in builtins"
+   :oracle-result {:status :ok :value 5}}
+  {:name "try-eval-assert-failure"
+   :source "builtins.tryEval (assert false; 1)"
+   :oracle-result {:status :ok :value {"success" false "value" false}}}
+  {:name "try-eval-bare-throw"
+   :source "builtins.tryEval (throw \"bare\")"
+   :oracle-result {:status :ok :value {"success" false "value" false}}}
+  {:name "try-eval-success-accessor"
+   :source "let r = builtins.tryEval (builtins.throw \"x\"); in r.success"
+   :oracle-result {:status :ok :value false}}
+  {:name "lazy-application-unused-arg"
+   :source "(x: 1) (1 / 0)"
+   :oracle-result {:status :ok :value 1}}
+  {:name "lazy-application-curried-unused"
+   :source "(x: y: x) 7 (1 / 0)"
+   :oracle-result {:status :ok :value 7}}
+  {:name "lazy-application-arg-into-lazy-list"
+   :source "let f = x: builtins.length [ x ]; in f (1 / 0)"
+   :oracle-result {:status :ok :value 1}}
+  {:name "try-eval-direct-select"
+   :source "(builtins.tryEval (builtins.throw \"x\")).success"
+   :oracle-result {:status :ok :value false}}
+  {:name "try-eval-attr-names"
+   :source "builtins.attrNames (builtins.tryEval (builtins.throw \"x\"))"
+   :oracle-result {:status :ok :value ["success" "value"]}}
+  {:name "import-in-memory-module"
+   :source "import ./mod.px"
+   :import-modules {"./mod.px" "40 + 2"}
+   :oracle-result {:status :ok :value 42}}
+  {:name "import-arith-through-module"
+   :source "(import ./five.px) + 10"
+   :import-modules {"./five.px" "5"}
+   :oracle-result {:status :ok :value 15}}
+  {:name "import-nested-transitive"
+   :source "import ./a.px"
+   :import-modules {"./a.px" "import ./b.px" "./b.px" "7"}
+   :oracle-result {:status :ok :value 7}}
+  {:name "import-attrset-module-select"
+   :source "(import ./s.px).x"
+   :import-modules {"./s.px" "{ x = 99; }"}
+   :oracle-result {:status :ok :value 99}}
+  {:name "scoped-import-empty-scope"
+   :source "scopedImport {} ./mod.px"
+   :import-modules {"./mod.px" "40 + 2"}
+   :oracle-result {:status :ok :value 42}}
+  {:name "scoped-import-two-key-scope"
+   :source "scopedImport { x = 10; y = 5; } ./m.px"
+   :import-modules {"./m.px" "x + y"}
+   :oracle-result {:status :ok :value 15}}
+  {:name "scoped-import-scope-alongside-builtins"
+   :source "scopedImport { x = 7; } ./m.px"
+   :import-modules {"./m.px" "builtins.add x 1"}
+   :oracle-result {:status :ok :value 8}}
+  {:name "scoped-import-scope-shadows-global"
+   :source "scopedImport { map = 42; } ./m.px"
+   :import-modules {"./m.px" "map"}
+   :oracle-result {:status :ok :value 42}}
+  {:name "scoped-import-lazy-unused-scope-attr"
+   :source "scopedImport { used = 40; boom = builtins.throw \"never\"; } ./m.px"
+   :import-modules {"./m.px" "used + 2"}
+   :oracle-result {:status :ok :value 42}}
+  {:name "scoped-import-lazy-nested-unused-attr"
+   :source "scopedImport { cfg = { a = 1; bad = builtins.throw \"no\"; }; } ./m.px"
+   :import-modules {"./m.px" "cfg.a + 1"}
+   :oracle-result {:status :ok :value 2}}
+  {:name "nested-let-same-name-shadowing"
+   :source "(let v = 0; in (v + (let v = 0; in (v + 0))))"
+   :oracle-result {:status :ok :value 0}}
+  {:name "triple-nested-let-shadowing"
+   :source "(let v = 1; in (let v = 2; in (let v = 3; in v)))"
+   :oracle-result {:status :ok :value 3}}]}

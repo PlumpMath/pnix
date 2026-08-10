@@ -1,0 +1,138 @@
+# P7 — receipt → NL projection
+#
+# OWNER-LAW (2026-05-13): inverse of P6. Given a typed P4 receipt,
+# render a deterministic NL sentence. Substrate owns the templates
+# (what to say); Rust adapter is the placeholder-substitution
+# transport.
+#
+# Why this is needed:
+#   - P6 closes NL → spawn (input)
+#   - P7 closes spawn → NL (output)
+#   - Together they give the host a *bidirectional* NL surface
+#     without any LLM. Same receipt → same sentence (RT).
+#
+# # Non-goals
+#
+# - NOT fluent LLM-style generation. P7 produces short, accurate
+#   audit narration — one sentence per receipt. Cockpit / logs /
+#   replays consume this surface.
+# - NOT translation. Each (receipt_kind, locale) pair has its own
+#   template; there's no machine translation between locales.
+# - NO synthesis of novel claims. Output is mechanical projection
+#   of the receipt's own fields.
+#
+# # Placeholder grammar
+#
+# Templates use `{placeholder}` tokens. The Rust resolver knows how
+# to fill these from a `MirrorReceipt`:
+#
+#   {kind}            — receipt.receipt_kind
+#   {id_short}        — last 8 hex of receipt.id
+#   {mirror_short}    — last 8 of related_mirror_id (or "none")
+#   {ontology_short}  — last 8 of related_ontology_id (or "none")
+#   {ankh}            — related_ankh_id (or "none")
+#   {ms}              — emitted_at_ms
+#   {ev.X}            — evidence.X top-level
+#   {ev.X.Y}          — evidence.X.Y nested
+#
+# Missing placeholders render as the literal `{ev.X}` so missing
+# data is visible, not silently dropped.
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p7-nl-projection.px";
+
+  validLocales = [ "en" "ko" ];
+  defaultLocale = "en";
+
+  mkTemplate = receipt_kind: locale: template:
+    { inherit receipt_kind locale template; };
+
+  sentenceTemplates = [
+    # mirror-spawn — a new mirror was created
+    (mkTemplate "mirror-spawn" "en"
+      "Mirror {mirror_short} spawned from {ev.source_ankh_path} at index {ev.spawn_index}")
+    (mkTemplate "mirror-spawn" "ko"
+      "거울 {mirror_short} 가 {ev.source_ankh_path} 에서 spawn 됨 (index {ev.spawn_index})")
+
+    # ontology-extend — meaning delta committed
+    (mkTemplate "ontology-extend" "en"
+      "Ontology extended by {ev.delta.added_count} meanings (now {ev.delta.after_count}, was {ev.delta.before_count})")
+    (mkTemplate "ontology-extend" "ko"
+      "ontology 에 의미 {ev.delta.added_count} 개 추가됨 ({ev.delta.before_count} → {ev.delta.after_count})")
+
+    # boundary-project — outside view created
+    (mkTemplate "boundary-project" "en"
+      "Boundary projection ({ev.projection_kind}) built for ankh `{ankh}` in mirror {mirror_short}")
+    (mkTemplate "boundary-project" "ko"
+      "경계 projection ({ev.projection_kind}) 가 거울 {mirror_short} 의 ankh `{ankh}` 에 생성됨")
+
+    # nl-transduction — Ready
+    (mkTemplate "nl-transduction" "en"
+      "NL utterance transduced as intent `{ev.intent}` (slots: {ev.extracted_slots}, cue: `{ev.matched_cue_pattern}`)")
+    (mkTemplate "nl-transduction" "ko"
+      "발화가 intent `{ev.intent}` 로 transduced 됨 (slots: {ev.extracted_slots}, cue: `{ev.matched_cue_pattern}`)")
+
+    # held — generic held receipt
+    (mkTemplate "held" "en"
+      "Held: {ev.reason}")
+    (mkTemplate "held" "ko"
+      "Held: {ev.reason}")
+
+    # mirror-despawn — future event, declared so cockpit can render
+    (mkTemplate "mirror-despawn" "en"
+      "Mirror {mirror_short} despawned at {ms}")
+    (mkTemplate "mirror-despawn" "ko"
+      "거울 {mirror_short} 가 {ms} 에 despawn 됨")
+
+    # thunk-force / thunk-gc / fold-step — future events; minimal
+    # fallback so cockpit always has something to render.
+    (mkTemplate "thunk-force" "en" "Thunk forced for ankh `{ankh}` at {ms}")
+    (mkTemplate "thunk-force" "ko" "ankh `{ankh}` 의 thunk 가 {ms} 에 force 됨")
+    (mkTemplate "thunk-gc" "en" "Thunk gc'd for ankh `{ankh}` at {ms}")
+    (mkTemplate "thunk-gc" "ko" "ankh `{ankh}` 의 thunk 가 {ms} 에 gc 됨")
+    # P10.a fold-step receipts carry {ev.step_kind} +
+    # {ev.description}. This template surfaces both as a single
+    # short sentence per step. fold-step receipts from other
+    # owners that don't set these fields will show the missing-
+    # marker — visibility over silence.
+    (mkTemplate "fold-step" "en" "[{ev.step_kind}] {ev.description}")
+    (mkTemplate "fold-step" "ko" "[{ev.step_kind}] {ev.description}")
+  ];
+
+  # Fallback template when no (kind, locale) pair matches. Used
+  # for unknown receipt kinds — substrate refuses to silently
+  # drop receipts from cockpit narration.
+  fallbackTemplate = {
+    en = "[{kind}] receipt {id_short} at {ms}";
+    ko = "[{kind}] receipt {id_short} ({ms})";
+  };
+
+  # Markers the resolver substitutes verbatim when the requested
+  # placeholder is missing from the receipt. Visibility-over-
+  # silence: a missing field shows as a marker so cockpit can
+  # flag drift.
+  missingPlaceholderMarker = "‹missing›";
+  noneMarker = "‹none›";
+in {
+  inherit
+    ownerName
+    validLocales
+    defaultLocale
+    sentenceTemplates
+    fallbackTemplate
+    missingPlaceholderMarker
+    noneMarker;
+  meta = {
+    source = "pnix-mirror-runtime primitive P7";
+    owner = ownerName;
+    role = "deterministic projection: typed receipt → NL sentence (locale-selectable)";
+    consumes = [ "P4 typed receipts" ];
+    consumed_by = [ "doghouse-core nl_projector Rust adapter" "cockpit / log / viz" ];
+    constitutional_alignment = [
+      "no LLM — pure template substitution"
+      "deterministic — same receipt → same sentence"
+      "no synthesis — output mechanically follows receipt fields"
+      "missing fields surface as markers, not silent drops"
+    ];
+  };
+}

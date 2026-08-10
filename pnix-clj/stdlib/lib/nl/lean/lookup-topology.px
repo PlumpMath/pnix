@@ -1,0 +1,2844 @@
+# AUTO-GENERATED — topology
+# Entries: 405
+let
+  ownerName = "stdlib.nl.lean.lookup-topology";
+  category = "topology";
+  entries = [
+    {
+      full_name = "TopologicalSpace.ofClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 36;
+      code_preview = "def TopologicalSpace.ofClosed {X : Type u} (T : Set (Set X)) (empty_mem : ∅ ∈ T)     (sInter_mem : ∀ A, A ⊆ T → ⋂₀ A ∈ T)     (union_mem : ∀ A, A ∈ T → ∀ B, B ∈ T → A ∪ B ∈ T) : TopologicalSpace X where   IsOpen X := Xᶜ ∈ T   isOpen_univ := by simp [empty_mem]   isOpen_inter s t hs ht := by simpa on";
+    }
+    {
+      full_name = "isOpen_mk";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 52;
+      code_preview = "lemma isOpen_mk {p h₁ h₂ h₃} : IsOpen[⟨p, h₁, h₂, h₃⟩] s ↔ p s := Iff.rfl";
+    }
+    {
+      full_name = "TopologicalSpace.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 54;
+      code_preview = "@[ext (iff := false)] protected theorem TopologicalSpace.ext :     ∀ {f g : TopologicalSpace X}, IsOpen[f] = IsOpen[g] → f = g";
+    }
+    {
+      full_name = "TopologicalSpace.ext_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 59;
+      code_preview = "protected theorem TopologicalSpace.ext_iff {t t' : TopologicalSpace X} :     t = t' ↔ ∀ s, IsOpen[t] s ↔ IsOpen[t'] s";
+    }
+    {
+      full_name = "isOpen_fold";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 63;
+      code_preview = "theorem isOpen_fold {t : TopologicalSpace X} : t.IsOpen s = IsOpen[t] s";
+    }
+    {
+      full_name = "isOpen_iUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 68;
+      code_preview = "theorem isOpen_iUnion {f : ι → Set X} (h : ∀ i, IsOpen (f i)) : IsOpen (⋃ i, f i)";
+    }
+    {
+      full_name = "isOpen_biUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 71;
+      code_preview = "theorem isOpen_biUnion {s : Set α} {f : α → Set X} (h : ∀ i ∈ s, IsOpen (f i)) :     IsOpen (⋃ i ∈ s, f i)";
+    }
+    {
+      full_name = "IsOpen.union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 75;
+      code_preview = "theorem IsOpen.union (h₁ : IsOpen s₁) (h₂ : IsOpen s₂) : IsOpen (s₁ ∪ s₂)";
+    }
+    {
+      full_name = "isOpen_iff_of_cover";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 78;
+      code_preview = "lemma isOpen_iff_of_cover {f : α → Set X} (ho : ∀ i, IsOpen (f i)) (hU : (⋃ i, f i) = univ) :     IsOpen s ↔ ∀ i, IsOpen (f i ∩ s) := by   refine ⟨fun h i ↦ (ho i).inter h, fun h ↦ ?_⟩   rw [← s.inter_univ, inter_comm, ← hU, iUnion_inter]   exact isOpen_iUnion fun i ↦ h i";
+    }
+    {
+      full_name = "isOpen_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 84;
+      code_preview = "@[simp] theorem isOpen_empty : IsOpen (∅ : Set X)";
+    }
+    {
+      full_name = "Set.Finite.isOpen_sInter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 87;
+      code_preview = "theorem Set.Finite.isOpen_sInter {s : Set (Set X)} (hs : s.Finite) (h : ∀ t ∈ s, IsOpen t) :     IsOpen (⋂₀ s)";
+    }
+    {
+      full_name = "Set.Finite.isOpen_biInter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 95;
+      code_preview = "theorem Set.Finite.isOpen_biInter {s : Set α} {f : α → Set X} (hs : s.Finite)     (h : ∀ i ∈ s, IsOpen (f i)) :     IsOpen (⋂ i ∈ s, f i)";
+    }
+    {
+      full_name = "isOpen_iInter_of_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 100;
+      code_preview = "theorem isOpen_iInter_of_finite [Finite ι] {s : ι → Set X} (h : ∀ i, IsOpen (s i)) :     IsOpen (⋂ i, s i)";
+    }
+    {
+      full_name = "isOpen_biInter_finset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 104;
+      code_preview = "theorem isOpen_biInter_finset {s : Finset α} {f : α → Set X} (h : ∀ i ∈ s, IsOpen (f i)) :     IsOpen (⋂ i ∈ s, f i)";
+    }
+    {
+      full_name = "isOpen_const";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 108;
+      code_preview = "@[simp] theorem isOpen_const {p : Prop} : IsOpen { _x : X | p }";
+    }
+    {
+      full_name = "IsOpen.and";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 111;
+      code_preview = "theorem IsOpen.and : IsOpen { x | p₁ x } → IsOpen { x | p₂ x } → IsOpen { x | p₁ x ∧ p₂ x }";
+    }
+    {
+      full_name = "isOpen_compl_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 114;
+      code_preview = "@[simp] theorem isOpen_compl_iff : IsOpen sᶜ ↔ IsClosed s";
+    }
+    {
+      full_name = "TopologicalSpace.ext_iff_isClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 117;
+      code_preview = "theorem TopologicalSpace.ext_iff_isClosed {X} {t₁ t₂ : TopologicalSpace X} :     t₁ = t₂ ↔ ∀ s, IsClosed[t₁] s ↔ IsClosed[t₂] s";
+    }
+    {
+      full_name = "isClosed_const";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 124;
+      code_preview = "theorem isClosed_const {p : Prop} : IsClosed { _x : X | p }";
+    }
+    {
+      full_name = "isClosed_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 126;
+      code_preview = "@[simp] theorem isClosed_empty : IsClosed (∅ : Set X)";
+    }
+    {
+      full_name = "isClosed_univ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 128;
+      code_preview = "@[simp] theorem isClosed_univ : IsClosed (univ : Set X)";
+    }
+    {
+      full_name = "IsOpen.isLocallyClosed";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 130;
+      code_preview = "lemma IsOpen.isLocallyClosed (hs : IsOpen s) : IsLocallyClosed s :=   ⟨_, _, hs, isClosed_univ, (inter_univ _).symm⟩";
+    }
+    {
+      full_name = "IsClosed.isLocallyClosed";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 133;
+      code_preview = "lemma IsClosed.isLocallyClosed (hs : IsClosed s) : IsLocallyClosed s :=   ⟨_, _, isOpen_univ, hs, (univ_inter _).symm⟩";
+    }
+    {
+      full_name = "IsClosed.union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 136;
+      code_preview = "theorem IsClosed.union : IsClosed s₁ → IsClosed s₂ → IsClosed (s₁ ∪ s₂)";
+    }
+    {
+      full_name = "isClosed_sInter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 139;
+      code_preview = "theorem isClosed_sInter {s : Set (Set X)} : (∀ t ∈ s, IsClosed t) → IsClosed (⋂₀ s)";
+    }
+    {
+      full_name = "isClosed_iInter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 142;
+      code_preview = "theorem isClosed_iInter {f : ι → Set X} (h : ∀ i, IsClosed (f i)) : IsClosed (⋂ i, f i)";
+    }
+    {
+      full_name = "isClosed_biInter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 145;
+      code_preview = "theorem isClosed_biInter {s : Set α} {f : α → Set X} (h : ∀ i ∈ s, IsClosed (f i)) :     IsClosed (⋂ i ∈ s, f i)";
+    }
+    {
+      full_name = "isClosed_compl_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 149;
+      code_preview = "@[simp] theorem isClosed_compl_iff {s : Set X} : IsClosed sᶜ ↔ IsOpen s";
+    }
+    {
+      full_name = "IsOpen.sdiff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 155;
+      code_preview = "theorem IsOpen.sdiff (h₁ : IsOpen s) (h₂ : IsClosed t) : IsOpen (s \\ t)";
+    }
+    {
+      full_name = "IsClosed.inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 158;
+      code_preview = "theorem IsClosed.inter (h₁ : IsClosed s₁) (h₂ : IsClosed s₂) : IsClosed (s₁ ∩ s₂)";
+    }
+    {
+      full_name = "IsClosed.sdiff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 163;
+      code_preview = "theorem IsClosed.sdiff (h₁ : IsClosed s) (h₂ : IsOpen t) : IsClosed (s \\ t)";
+    }
+    {
+      full_name = "Set.Finite.isClosed_biUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 166;
+      code_preview = "theorem Set.Finite.isClosed_biUnion {s : Set α} {f : α → Set X} (hs : s.Finite)     (h : ∀ i ∈ s, IsClosed (f i)) :     IsClosed (⋃ i ∈ s, f i)";
+    }
+    {
+      full_name = "isClosed_biUnion_finset";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 172;
+      code_preview = "lemma isClosed_biUnion_finset {s : Finset α} {f : α → Set X} (h : ∀ i ∈ s, IsClosed (f i)) :     IsClosed (⋃ i ∈ s, f i) :=   s.finite_toSet.isClosed_biUnion h";
+    }
+    {
+      full_name = "isClosed_iUnion_of_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 176;
+      code_preview = "theorem isClosed_iUnion_of_finite [Finite ι] {s : ι → Set X} (h : ∀ i, IsClosed (s i)) :     IsClosed (⋃ i, s i)";
+    }
+    {
+      full_name = "isClosed_imp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 181;
+      code_preview = "theorem isClosed_imp {p q : X → Prop} (hp : IsOpen { x | p x }) (hq : IsClosed { x | q x }) :     IsClosed { x | p x → q x }";
+    }
+    {
+      full_name = "IsClosed.not";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 185;
+      code_preview = "theorem IsClosed.not : IsClosed { a | p a } → IsOpen { a | ¬p a }";
+    }
+    {
+      full_name = "le_nhds_lim";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 200;
+      code_preview = "theorem le_nhds_lim {f : Filter X} (h : ∃ x, f ≤ 𝓝 x) : f ≤ 𝓝 (@lim _ _ (nonempty_of_exists h) f)";
+    }
+    {
+      full_name = "tendsto_nhds_limUnder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 207;
+      code_preview = "theorem tendsto_nhds_limUnder {f : Filter α} {g : α → X} (h : ∃ x, Tendsto g f (𝓝 x)) :     Tendsto g f (𝓝 (@limUnder _ _ _ (nonempty_of_exists h) f g))";
+    }
+    {
+      full_name = "limUnder_of_not_tendsto";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Basic.lean";
+      start_line = 215;
+      code_preview = "theorem limUnder_of_not_tendsto [hX : Nonempty X] {f : Filter α} {g : α → X}     (h : ¬ ∃ x, Tendsto g f (𝓝 x)) :     limUnder f g = Classical.choice hX";
+    }
+    {
+      full_name = "IsCompact.exists_clusterPt";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 32;
+      code_preview = "lemma IsCompact.exists_clusterPt (hs : IsCompact s) {f : Filter X} [NeBot f] (hf : f ≤ 𝓟 s) :     ∃ x ∈ s, ClusterPt x f := hs hf";
+    }
+    {
+      full_name = "IsCompact.exists_mapClusterPt";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 35;
+      code_preview = "lemma IsCompact.exists_mapClusterPt {ι : Type*} (hs : IsCompact s) {f : Filter ι} [NeBot f]     {u : ι → X} (hf : Filter.map u f ≤ 𝓟 s) :     ∃ x ∈ s, MapClusterPt x f u := hs hf";
+    }
+    {
+      full_name = "IsCompact.exists_clusterPt_of_frequently";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 39;
+      code_preview = "lemma IsCompact.exists_clusterPt_of_frequently {l : Filter X} (hs : IsCompact s)     (hl : ∃ᶠ x in l, x ∈ s) : ∃ a ∈ s, ClusterPt a l :=   let ⟨a, has, ha⟩ := @hs _ (frequently_mem_iff_neBot.mp hl) inf_le_right   ⟨a, has, ha.mono inf_le_left⟩";
+    }
+    {
+      full_name = "IsCompact.exists_mapClusterPt_of_frequently";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 44;
+      code_preview = "lemma IsCompact.exists_mapClusterPt_of_frequently {l : Filter ι} {f : ι → X} (hs : IsCompact s)     (hf : ∃ᶠ x in l, f x ∈ s) : ∃ a ∈ s, MapClusterPt a l f :=   hs.exists_clusterPt_of_frequently hf";
+    }
+    {
+      full_name = "IsCompact.compl_mem_sets";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 48;
+      code_preview = "theorem IsCompact.compl_mem_sets (hs : IsCompact s) {f : Filter X} (hf : ∀ x ∈ s, sᶜ ∈ 𝓝 x ⊓ f) :     sᶜ ∈ f";
+    }
+    {
+      full_name = "IsCompact.compl_mem_sets_of_nhdsWithin";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 56;
+      code_preview = "theorem IsCompact.compl_mem_sets_of_nhdsWithin (hs : IsCompact s) {f : Filter X}     (hf : ∀ x ∈ s, ∃ t ∈ 𝓝[s] x, tᶜ ∈ f) : sᶜ ∈ f";
+    }
+    {
+      full_name = "IsCompact.induction_on";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 67;
+      code_preview = "@[elab_as_elim] theorem IsCompact.induction_on (hs : IsCompact s) {p : Set X → Prop} (he : p ∅)     (hmono : ∀ ⦃s t⦄, s ⊆ t → p t → p s) (hunion : ∀ ⦃s t⦄, p s → p t → p (s ∪ t))     (hnhds : ∀ x ∈ s, ∃ t ∈ 𝓝[s] x, p t) : p s";
+    }
+    {
+      full_name = "IsCompact.inter_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 77;
+      code_preview = "theorem IsCompact.inter_right (hs : IsCompact s) (ht : IsClosed t) : IsCompact (s ∩ t)";
+    }
+    {
+      full_name = "IsCompact.inter_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 86;
+      code_preview = "theorem IsCompact.inter_left (ht : IsCompact t) (hs : IsClosed s) : IsCompact (s ∩ t)";
+    }
+    {
+      full_name = "IsCompact.diff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 90;
+      code_preview = "theorem IsCompact.diff (hs : IsCompact s) (ht : IsOpen t) : IsCompact (s \\ t)";
+    }
+    {
+      full_name = "IsCompact.of_isClosed_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 94;
+      code_preview = "theorem IsCompact.of_isClosed_subset (hs : IsCompact s) (ht : IsClosed t) (h : t ⊆ s) :     IsCompact t";
+    }
+    {
+      full_name = "IsCompact.image_of_continuousOn";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 99;
+      code_preview = "theorem IsCompact.image_of_continuousOn {f : X → Y} (hs : IsCompact s) (hf : ContinuousOn f s) :     IsCompact (f '' s)";
+    }
+    {
+      full_name = "IsCompact.image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 113;
+      code_preview = "theorem IsCompact.image {f : X → Y} (hs : IsCompact s) (hf : Continuous f) : IsCompact (f '' s)";
+    }
+    {
+      full_name = "IsCompact.adherence_nhdset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 116;
+      code_preview = "theorem IsCompact.adherence_nhdset {f : Filter X} (hs : IsCompact s) (hf₂ : f ≤ 𝓟 s)     (ht₁ : IsOpen t) (ht₂ : ∀ x ∈ s, ClusterPt x f → x ∈ t) : t ∈ f";
+    }
+    {
+      full_name = "isCompact_iff_ultrafilter_le_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 126;
+      code_preview = "theorem isCompact_iff_ultrafilter_le_nhds :     IsCompact s ↔ ∀ f : Ultrafilter X, ↑f ≤ 𝓟 s → ∃ x ∈ s, ↑f ≤ 𝓝 x";
+    }
+    {
+      full_name = "isCompact_iff_ultrafilter_le_nhds'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 135;
+      code_preview = "theorem isCompact_iff_ultrafilter_le_nhds' :     IsCompact s ↔ ∀ f : Ultrafilter X, s ∈ f → ∃ x ∈ s, ↑f ≤ 𝓝 x";
+    }
+    {
+      full_name = "IsCompact.le_nhds_of_unique_clusterPt";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 141;
+      code_preview = "lemma IsCompact.le_nhds_of_unique_clusterPt (hs : IsCompact s) {l : Filter X} {y : X}     (hmem : s ∈ l) (h : ∀ x ∈ s, ClusterPt x l → x = y) : l ≤ 𝓝 y := by   refine le_iff_ultrafilter.2 fun f hf ↦ ?_   rcases hs.ultrafilter_le_nhds' f (hf hmem) with ⟨x, hxs, hx⟩   convert ← hx   exact h x hxs (.mo";
+    }
+    {
+      full_name = "IsCompact.tendsto_nhds_of_unique_mapClusterPt";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 150;
+      code_preview = "lemma IsCompact.tendsto_nhds_of_unique_mapClusterPt {Y} {l : Filter Y} {y : X} {f : Y → X}     (hs : IsCompact s) (hmem : ∀ᶠ x in l, f x ∈ s) (h : ∀ x ∈ s, MapClusterPt x l f → x = y) :     Tendsto f l (𝓝 y) :=   hs.le_nhds_of_unique_clusterPt (mem_map.2 hmem) h";
+    }
+    {
+      full_name = "IsCompact.elim_directed_cover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 158;
+      code_preview = "theorem IsCompact.elim_directed_cover {ι : Type v} [hι : Nonempty ι] (hs : IsCompact s)     (U : ι → Set X) (hUo : ∀ i, IsOpen (U i)) (hsU : s ⊆ ⋃ i, U i) (hdU : Directed (· ⊆ ·) U) :     ∃ i, s ⊆ U i";
+    }
+    {
+      full_name = "IsCompact.elim_finite_subcover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 172;
+      code_preview = "theorem IsCompact.elim_finite_subcover {ι : Type v} (hs : IsCompact s) (U : ι → Set X)     (hUo : ∀ i, IsOpen (U i)) (hsU : s ⊆ ⋃ i, U i) : ∃ t : Finset ι, s ⊆ ⋃ i ∈ t, U i";
+    }
+    {
+      full_name = "IsCompact.elim_nhds_subcover_nhdsSet'";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 179;
+      code_preview = "lemma IsCompact.elim_nhds_subcover_nhdsSet' (hs : IsCompact s) (U : ∀ x ∈ s, Set X)     (hU : ∀ x hx, U x hx ∈ 𝓝 x) : ∃ t : Finset s, (⋃ x ∈ t, U x.1 x.2) ∈ 𝓝ˢ s := by   rcases hs.elim_finite_subcover (fun x : s ↦ interior (U x x.2)) (fun _ ↦ isOpen_interior)     fun x hx ↦ mem_iUnion.2 ⟨⟨x, hx⟩, me";
+    }
+    {
+      full_name = "IsCompact.elim_nhds_subcover_nhdsSet";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 188;
+      code_preview = "lemma IsCompact.elim_nhds_subcover_nhdsSet (hs : IsCompact s) {U : X → Set X}     (hU : ∀ x ∈ s, U x ∈ 𝓝 x) : ∃ t : Finset X, (∀ x ∈ t, x ∈ s) ∧ (⋃ x ∈ t, U x) ∈ 𝓝ˢ s := by   let ⟨t, ht⟩ := hs.elim_nhds_subcover_nhdsSet' (fun x _ => U x) hU   classical   exact ⟨t.image (↑), fun x hx =>     let ⟨y, _";
+    }
+    {
+      full_name = "IsCompact.elim_nhds_subcover'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 197;
+      code_preview = "theorem IsCompact.elim_nhds_subcover' (hs : IsCompact s) (U : ∀ x ∈ s, Set X)     (hU : ∀ x (hx : x ∈ s), U x ‹x ∈ s› ∈ 𝓝 x) : ∃ t : Finset s, s ⊆ ⋃ x ∈ t, U (x : s) x.2";
+    }
+    {
+      full_name = "IsCompact.elim_nhds_subcover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 201;
+      code_preview = "theorem IsCompact.elim_nhds_subcover (hs : IsCompact s) (U : X → Set X) (hU : ∀ x ∈ s, U x ∈ 𝓝 x) :     ∃ t : Finset X, (∀ x ∈ t, x ∈ s) ∧ s ⊆ ⋃ x ∈ t, U x";
+    }
+    {
+      full_name = "IsCompact.elim_nhdsWithin_subcover'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 205;
+      code_preview = "theorem IsCompact.elim_nhdsWithin_subcover' (hs : IsCompact s) (U : ∀ x ∈ s, Set X)     (hU : ∀ x (hx : x ∈ s), U x hx ∈ 𝓝[s] x) : ∃ t : Finset s, s ⊆ ⋃ x ∈ t, U x x.2";
+    }
+    {
+      full_name = "IsCompact.elim_nhdsWithin_subcover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 212;
+      code_preview = "theorem IsCompact.elim_nhdsWithin_subcover (hs : IsCompact s) (U : X → Set X)     (hU : ∀ x ∈ s, U x ∈ 𝓝[s] x) : ∃ t : Finset X, (∀ x ∈ t, x ∈ s) ∧ s ⊆ ⋃ x ∈ t, U x";
+    }
+    {
+      full_name = "IsCompact.disjoint_nhdsSet_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 219;
+      code_preview = "theorem IsCompact.disjoint_nhdsSet_left {l : Filter X} (hs : IsCompact s) :     Disjoint (𝓝ˢ s) l ↔ ∀ x ∈ s, Disjoint (𝓝 x) l";
+    }
+    {
+      full_name = "IsCompact.disjoint_nhdsSet_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 232;
+      code_preview = "theorem IsCompact.disjoint_nhdsSet_right {l : Filter X} (hs : IsCompact s) :     Disjoint l (𝓝ˢ s) ↔ ∀ x ∈ s, Disjoint l (𝓝 x)";
+    }
+    {
+      full_name = "IsCompact.elim_directed_family_closed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 239;
+      code_preview = "theorem IsCompact.elim_directed_family_closed {ι : Type v} [Nonempty ι] (hs : IsCompact s)     (t : ι → Set X) (htc : ∀ i, IsClosed (t i)) (hst : (s ∩ ⋂ i, t i) = ∅)     (hdt : Directed (· ⊇ ·) t) : ∃ i : ι, s ∩ t i = ∅";
+    }
+    {
+      full_name = "IsCompact.elim_finite_subfamily_closed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 255;
+      code_preview = "theorem IsCompact.elim_finite_subfamily_closed {ι : Type v} (hs : IsCompact s)     (t : ι → Set X) (htc : ∀ i, IsClosed (t i)) (hst : (s ∩ ⋂ i, t i) = ∅) :     ∃ u : Finset ι, (s ∩ ⋂ i ∈ u, t i) = ∅";
+    }
+    {
+      full_name = "IsCompact.inter_iInter_nonempty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 264;
+      code_preview = "theorem IsCompact.inter_iInter_nonempty {ι : Type v} (hs : IsCompact s) (t : ι → Set X)     (htc : ∀ i, IsClosed (t i)) (hst : ∀ u : Finset ι, (s ∩ ⋂ i ∈ u, t i).Nonempty) :     (s ∩ ⋂ i, t i).Nonempty";
+    }
+    {
+      full_name = "IsCompact.nonempty_iInter_of_directed_nonempty_isCompact_isClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 272;
+      code_preview = "theorem IsCompact.nonempty_iInter_of_directed_nonempty_isCompact_isClosed     {ι : Type v} [hι : Nonempty ι] (t : ι → Set X) (htd : Directed (· ⊇ ·) t)     (htn : ∀ i, (t i).Nonempty) (htc : ∀ i, IsCompact (t i)) (htcl : ∀ i, IsClosed (t i)) :     (⋂ i, t i).Nonempty";
+    }
+    {
+      full_name = "IsCompact.nonempty_sInter_of_directed_nonempty_isCompact_isClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 289;
+      code_preview = "theorem IsCompact.nonempty_sInter_of_directed_nonempty_isCompact_isClosed     {S : Set (Set X)} [hS : Nonempty S] (hSd : DirectedOn (· ⊇ ·) S) (hSn : ∀ U ∈ S, U.Nonempty)     (hSc : ∀ U ∈ S, IsCompact U) (hScl : ∀ U ∈ S, IsClosed U) : (⋂₀ S).Nonempty";
+    }
+    {
+      full_name = "IsCompact.nonempty_iInter_of_sequence_nonempty_isCompact_isClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 298;
+      code_preview = "theorem IsCompact.nonempty_iInter_of_sequence_nonempty_isCompact_isClosed (t : ℕ → Set X)     (htd : ∀ i, t (i + 1) ⊆ t i) (htn : ∀ i, (t i).Nonempty) (ht0 : IsCompact (t 0))     (htcl : ∀ i, IsClosed (t i)) : (⋂ i, t i).Nonempty";
+    }
+    {
+      full_name = "IsCompact.elim_finite_subcover_image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 309;
+      code_preview = "theorem IsCompact.elim_finite_subcover_image {b : Set ι} {c : ι → Set X} (hs : IsCompact s)     (hc₁ : ∀ i ∈ b, IsOpen (c i)) (hc₂ : s ⊆ ⋃ i ∈ b, c i) :     ∃ b', b' ⊆ b ∧ Set.Finite b' ∧ s ⊆ ⋃ i ∈ b', c i";
+    }
+    {
+      full_name = "isCompact_of_finite_subcover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 319;
+      code_preview = "theorem isCompact_of_finite_subcover     (h : ∀ {ι : Type u} (U : ι → Set X), (∀ i, IsOpen (U i)) → (s ⊆ ⋃ i, U i) →       ∃ t : Finset ι, s ⊆ ⋃ i ∈ t, U i) :     IsCompact s";
+    }
+    {
+      full_name = "isCompact_of_finite_subfamily_closed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 335;
+      code_preview = "theorem isCompact_of_finite_subfamily_closed     (h : ∀ {ι : Type u} (t : ι → Set X), (∀ i, IsClosed (t i)) → (s ∩ ⋂ i, t i) = ∅ →       ∃ u : Finset ι, (s ∩ ⋂ i ∈ u, t i) = ∅) :     IsCompact s";
+    }
+    {
+      full_name = "isCompact_iff_finite_subcover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 347;
+      code_preview = "theorem isCompact_iff_finite_subcover :     IsCompact s ↔ ∀ {ι : Type u} (U : ι → Set X),       (∀ i, IsOpen (U i)) → (s ⊆ ⋃ i, U i) → ∃ t : Finset ι, s ⊆ ⋃ i ∈ t, U i";
+    }
+    {
+      full_name = "isCompact_iff_finite_subfamily_closed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 354;
+      code_preview = "theorem isCompact_iff_finite_subfamily_closed :     IsCompact s ↔ ∀ {ι : Type u} (t : ι → Set X),       (∀ i, IsClosed (t i)) → (s ∩ ⋂ i, t i) = ∅ → ∃ u : Finset ι, (s ∩ ⋂ i ∈ u, t i) = ∅";
+    }
+    {
+      full_name = "IsCompact.mem_nhdsSet_prod_of_forall";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 362;
+      code_preview = "theorem IsCompact.mem_nhdsSet_prod_of_forall {K : Set X} {Y} {l : Filter Y} {s : Set (X × Y)}     (hK : IsCompact K) (hs : ∀ x ∈ K, s ∈ 𝓝 x ×ˢ l) : s ∈ (𝓝ˢ K) ×ˢ l";
+    }
+    {
+      full_name = "IsCompact.nhdsSet_prod_eq_biSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 375;
+      code_preview = "theorem IsCompact.nhdsSet_prod_eq_biSup {K : Set X} (hK : IsCompact K) {Y} (l : Filter Y) :     (𝓝ˢ K) ×ˢ l = ⨆ x ∈ K, 𝓝 x ×ˢ l";
+    }
+    {
+      full_name = "IsCompact.prod_nhdsSet_eq_biSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 380;
+      code_preview = "theorem IsCompact.prod_nhdsSet_eq_biSup {K : Set Y} (hK : IsCompact K) {X} (l : Filter X) :     l ×ˢ (𝓝ˢ K) = ⨆ y ∈ K, l ×ˢ 𝓝 y";
+    }
+    {
+      full_name = "IsCompact.mem_prod_nhdsSet_of_forall";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 384;
+      code_preview = "theorem IsCompact.mem_prod_nhdsSet_of_forall {K : Set Y} {X} {l : Filter X} {s : Set (X × Y)}     (hK : IsCompact K) (hs : ∀ y ∈ K, s ∈ l ×ˢ 𝓝 y) : s ∈ l ×ˢ 𝓝ˢ K";
+    }
+    {
+      full_name = "IsCompact.nhdsSet_inf_eq_biSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 393;
+      code_preview = "theorem IsCompact.nhdsSet_inf_eq_biSup {K : Set X} (hK : IsCompact K) (l : Filter X) :     (𝓝ˢ K) ⊓ l = ⨆ x ∈ K, 𝓝 x ⊓ l";
+    }
+    {
+      full_name = "IsCompact.inf_nhdsSet_eq_biSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 399;
+      code_preview = "theorem IsCompact.inf_nhdsSet_eq_biSup {K : Set X} (hK : IsCompact K) (l : Filter X) :     l ⊓ (𝓝ˢ K) = ⨆ x ∈ K, l ⊓ 𝓝 x";
+    }
+    {
+      full_name = "IsCompact.mem_nhdsSet_inf_of_forall";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 403;
+      code_preview = "theorem IsCompact.mem_nhdsSet_inf_of_forall {K : Set X} {l : Filter X} {s : Set X}     (hK : IsCompact K) (hs : ∀ x ∈ K, s ∈ 𝓝 x ⊓ l) : s ∈ (𝓝ˢ K) ⊓ l";
+    }
+    {
+      full_name = "IsCompact.mem_inf_nhdsSet_of_forall";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 410;
+      code_preview = "theorem IsCompact.mem_inf_nhdsSet_of_forall {K : Set X} {l : Filter X} {s : Set X}     (hK : IsCompact K) (hs : ∀ y ∈ K, s ∈ l ⊓ 𝓝 y) : s ∈ l ⊓ 𝓝ˢ K";
+    }
+    {
+      full_name = "IsCompact.eventually_forall_of_forall_eventually";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 417;
+      code_preview = "theorem IsCompact.eventually_forall_of_forall_eventually {x₀ : X} {K : Set Y} (hK : IsCompact K)     {P : X → Y → Prop} (hP : ∀ y ∈ K, ∀ᶠ z : X × Y in 𝓝 (x₀, y), P z.1 z.2) :     ∀ᶠ x in 𝓝 x₀, ∀ y ∈ K, P x y";
+    }
+    {
+      full_name = "isCompact_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 430;
+      code_preview = "theorem isCompact_empty : IsCompact (∅ : Set X)";
+    }
+    {
+      full_name = "isCompact_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Compactness/Compact.lean";
+      start_line = 433;
+      code_preview = "theorem isCompact_singleton {x : X} : IsCompact ({x} : Set X)";
+    }
+    {
+      full_name = "T0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 68;
+      code_preview = "class T0Space (X : Type u) [TopologicalSpace X] : Prop where      t0 : ∀ ⦃x y : X⦄, Inseparable x y → x = y";
+    }
+    {
+      full_name = "t0Space_iff_inseparable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 75;
+      code_preview = "theorem t0Space_iff_inseparable (X : Type u) [TopologicalSpace X] :     T0Space X ↔ ∀ x y : X, Inseparable x y → x = y";
+    }
+    {
+      full_name = "t0Space_iff_not_inseparable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 79;
+      code_preview = "theorem t0Space_iff_not_inseparable (X : Type u) [TopologicalSpace X] :     T0Space X ↔ Pairwise fun x y : X => ¬Inseparable x y";
+    }
+    {
+      full_name = "Inseparable.eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 83;
+      code_preview = "theorem Inseparable.eq [T0Space X] {x y : X} (h : Inseparable x y) : x = y";
+    }
+    {
+      full_name = "Topology.IsInducing.injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 86;
+      code_preview = "protected theorem Topology.IsInducing.injective [TopologicalSpace Y] [T0Space X] {f : X → Y}     (hf : IsInducing f) : Injective f";
+    }
+    {
+      full_name = "Topology.IsInducing.isEmbedding";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 93;
+      code_preview = "protected theorem Topology.IsInducing.isEmbedding [TopologicalSpace Y] [T0Space X] {f : X → Y}     (hf : IsInducing f) : IsEmbedding f";
+    }
+    {
+      full_name = "isEmbedding_iff_isInducing";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 103;
+      code_preview = "lemma isEmbedding_iff_isInducing [TopologicalSpace Y] [T0Space X] {f : X → Y} :     IsEmbedding f ↔ IsInducing f :=   ⟨IsEmbedding.isInducing, IsInducing.isEmbedding⟩";
+    }
+    {
+      full_name = "t0Space_iff_nhds_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 112;
+      code_preview = "theorem t0Space_iff_nhds_injective (X : Type u) [TopologicalSpace X] :     T0Space X ↔ Injective (𝓝 : X → Filter X)";
+    }
+    {
+      full_name = "nhds_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 116;
+      code_preview = "theorem nhds_injective [T0Space X] : Injective (𝓝 : X → Filter X)";
+    }
+    {
+      full_name = "inseparable_iff_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 119;
+      code_preview = "theorem inseparable_iff_eq [T0Space X] {x y : X} : Inseparable x y ↔ x = y";
+    }
+    {
+      full_name = "nhds_eq_nhds_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 122;
+      code_preview = "@[simp] theorem nhds_eq_nhds_iff [T0Space X] {a b : X} : 𝓝 a = 𝓝 b ↔ a = b";
+    }
+    {
+      full_name = "inseparable_eq_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 126;
+      code_preview = "@[simp] theorem inseparable_eq_eq [T0Space X] : Inseparable = @Eq X";
+    }
+    {
+      full_name = "TopologicalSpace.IsTopologicalBasis.inseparable_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 130;
+      code_preview = "theorem TopologicalSpace.IsTopologicalBasis.inseparable_iff {b : Set (Set X)}     (hb : IsTopologicalBasis b) {x y : X} : Inseparable x y ↔ ∀ s ∈ b, (x ∈ s ↔ y ∈ s)";
+    }
+    {
+      full_name = "TopologicalSpace.IsTopologicalBasis.eq_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 137;
+      code_preview = "theorem TopologicalSpace.IsTopologicalBasis.eq_iff [T0Space X] {b : Set (Set X)}     (hb : IsTopologicalBasis b) {x y : X} : x = y ↔ ∀ s ∈ b, (x ∈ s ↔ y ∈ s)";
+    }
+    {
+      full_name = "t0Space_iff_exists_isOpen_xor'_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 141;
+      code_preview = "theorem t0Space_iff_exists_isOpen_xor'_mem (X : Type u) [TopologicalSpace X] :     T0Space X ↔ Pairwise fun x y => ∃ U : Set X, IsOpen U ∧ Xor' (x ∈ U) (y ∈ U)";
+    }
+    {
+      full_name = "exists_isOpen_xor'_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 146;
+      code_preview = "theorem exists_isOpen_xor'_mem [T0Space X] {x y : X} (h : x ≠ y) :     ∃ U : Set X, IsOpen U ∧ Xor' (x ∈ U) (y ∈ U)";
+    }
+    {
+      full_name = "specializationOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 150;
+      code_preview = "def specializationOrder (X) [TopologicalSpace X] [T0Space X] : PartialOrder X :=   { specializationPreorder X, PartialOrder.lift (OrderDual.toDual ∘ 𝓝) nhds_injective with }";
+    }
+    {
+      full_name = "SeparationQuotient.instT0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 154;
+      code_preview = "instance SeparationQuotient.instT0Space : T0Space (SeparationQuotient X) :=   ⟨fun x y => Quotient.inductionOn₂' x y fun _ _ h =>     SeparationQuotient.mk_eq_mk.2 <| SeparationQuotient.isInducing_mk.inseparable_iff.1 h⟩";
+    }
+    {
+      full_name = "minimal_nonempty_closed_subsingleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 158;
+      code_preview = "theorem minimal_nonempty_closed_subsingleton [T0Space X] {s : Set X} (hs : IsClosed s)     (hmin : ∀ t, t ⊆ s → t.Nonempty → IsClosed t → t = s) : s.Subsingleton";
+    }
+    {
+      full_name = "minimal_nonempty_closed_eq_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 168;
+      code_preview = "theorem minimal_nonempty_closed_eq_singleton [T0Space X] {s : Set X} (hs : IsClosed s)     (hne : s.Nonempty) (hmin : ∀ t, t ⊆ s → t.Nonempty → IsClosed t → t = s) : ∃ x, s = {x}";
+    }
+    {
+      full_name = "IsClosed.exists_closed_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 173;
+      code_preview = "theorem IsClosed.exists_closed_singleton [T0Space X] [CompactSpace X] {S : Set X}     (hS : IsClosed S) (hne : S.Nonempty) : ∃ x : X, x ∈ S ∧ IsClosed ({x} : Set X)";
+    }
+    {
+      full_name = "minimal_nonempty_open_subsingleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 181;
+      code_preview = "theorem minimal_nonempty_open_subsingleton [T0Space X] {s : Set X} (hs : IsOpen s)     (hmin : ∀ t, t ⊆ s → t.Nonempty → IsOpen t → t = s) : s.Subsingleton";
+    }
+    {
+      full_name = "minimal_nonempty_open_eq_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 191;
+      code_preview = "theorem minimal_nonempty_open_eq_singleton [T0Space X] {s : Set X} (hs : IsOpen s)     (hne : s.Nonempty) (hmin : ∀ t, t ⊆ s → t.Nonempty → IsOpen t → t = s) : ∃ x, s = {x}";
+    }
+    {
+      full_name = "exists_isOpen_singleton_of_isOpen_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 195;
+      code_preview = "theorem exists_isOpen_singleton_of_isOpen_finite [T0Space X] {s : Set X} (hfin : s.Finite)     (hne : s.Nonempty) (ho : IsOpen s) : ∃ x ∈ s, IsOpen ({x} : Set X)";
+    }
+    {
+      full_name = "exists_open_singleton_of_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 213;
+      code_preview = "theorem exists_open_singleton_of_finite [T0Space X] [Finite X] [Nonempty X] :     ∃ x : X, IsOpen ({x} : Set X)";
+    }
+    {
+      full_name = "t0Space_of_injective_of_continuous";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 219;
+      code_preview = "theorem t0Space_of_injective_of_continuous [TopologicalSpace Y] {f : X → Y}     (hf : Function.Injective f) (hf' : Continuous f) [T0Space Y] : T0Space X";
+    }
+    {
+      full_name = "Topology.IsEmbedding.t0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 223;
+      code_preview = "protected theorem Topology.IsEmbedding.t0Space [TopologicalSpace Y] [T0Space Y] {f : X → Y}     (hf : IsEmbedding f) : T0Space X";
+    }
+    {
+      full_name = "Homeomorph.t0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 230;
+      code_preview = "protected theorem Homeomorph.t0Space [TopologicalSpace Y] [T0Space X] (h : X ≃ₜ Y) : T0Space Y";
+    }
+    {
+      full_name = "Subtype.t0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 233;
+      code_preview = "instance Subtype.t0Space [T0Space X] {p : X → Prop} : T0Space (Subtype p) :=   IsEmbedding.subtypeVal.t0Space";
+    }
+    {
+      full_name = "t0Space_iff_or_not_mem_closure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 236;
+      code_preview = "theorem t0Space_iff_or_not_mem_closure (X : Type u) [TopologicalSpace X] :     T0Space X ↔ Pairwise fun a b : X => a ∉ closure ({b} : Set X) ∨ b ∉ closure ({a} : Set X)";
+    }
+    {
+      full_name = "Prod.instT0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 240;
+      code_preview = "instance Prod.instT0Space [TopologicalSpace Y] [T0Space X] [T0Space Y] : T0Space (X × Y) :=   ⟨fun _ _ h => Prod.ext (h.map continuous_fst).eq (h.map continuous_snd).eq⟩";
+    }
+    {
+      full_name = "Pi.instT0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 243;
+      code_preview = "instance Pi.instT0Space {ι : Type*} {X : ι → Type*} [∀ i, TopologicalSpace (X i)]     [∀ i, T0Space (X i)] :     T0Space (∀ i, X i) :=   ⟨fun _ _ h => funext fun i => (h.map (continuous_apply i)).eq⟩";
+    }
+    {
+      full_name = "ULift.instT0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 248;
+      code_preview = "instance ULift.instT0Space [T0Space X] : T0Space (ULift X) := IsEmbedding.uliftDown.t0Space";
+    }
+    {
+      full_name = "T0Space.of_cover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 250;
+      code_preview = "theorem T0Space.of_cover (h : ∀ x y, Inseparable x y → ∃ s : Set X, x ∈ s ∧ y ∈ s ∧ T0Space s) :     T0Space X";
+    }
+    {
+      full_name = "T0Space.of_open_cover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 258;
+      code_preview = "theorem T0Space.of_open_cover (h : ∀ x, ∃ s : Set X, x ∈ s ∧ IsOpen s ∧ T0Space s) : T0Space X";
+    }
+    {
+      full_name = "R0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 263;
+      code_preview = "@[mk_iff] class R0Space (X : Type u) [TopologicalSpace X] : Prop where      specializes_symmetric : Symmetric (Specializes : X → X → Prop)";
+    }
+    {
+      full_name = "Specializes.symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 278;
+      code_preview = "theorem Specializes.symm (h : x ⤳ y) : y ⤳ x";
+    }
+    {
+      full_name = "specializes_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 281;
+      code_preview = "theorem specializes_comm : x ⤳ y ↔ y ⤳ x";
+    }
+    {
+      full_name = "specializes_iff_inseparable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 284;
+      code_preview = "theorem specializes_iff_inseparable : x ⤳ y ↔ Inseparable x y";
+    }
+    {
+      full_name = "Topology.IsInducing.r0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 291;
+      code_preview = "theorem Topology.IsInducing.r0Space [TopologicalSpace Y] {f : Y → X} (hf : IsInducing f) :     R0Space Y where";
+    }
+    {
+      full_name = "isCompact_closure_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 307;
+      code_preview = "theorem isCompact_closure_singleton : IsCompact (closure {x})";
+    }
+    {
+      full_name = "Filter.coclosedCompact_le_cofinite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 315;
+      code_preview = "theorem Filter.coclosedCompact_le_cofinite : coclosedCompact X ≤ cofinite";
+    }
+    {
+      full_name = "Bornology.relativelyCompact";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 320;
+      code_preview = "def Bornology.relativelyCompact : Bornology X where   cobounded' := Filter.coclosedCompact X   le_cofinite' := Filter.coclosedCompact_le_cofinite";
+    }
+    {
+      full_name = "Bornology.relativelyCompact.isBounded_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 327;
+      code_preview = "theorem Bornology.relativelyCompact.isBounded_iff {s : Set X} :     @Bornology.IsBounded _ (Bornology.relativelyCompact X) s ↔ IsCompact (closure s)";
+    }
+    {
+      full_name = "Set.Finite.isCompact_closure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 331;
+      code_preview = "theorem Set.Finite.isCompact_closure {s : Set X} (hs : s.Finite) : IsCompact (closure s)";
+    }
+    {
+      full_name = "T1Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 338;
+      code_preview = "class T1Space (X : Type u) [TopologicalSpace X] : Prop where      t1 : ∀ x, IsClosed ({x} : Set X)";
+    }
+    {
+      full_name = "isClosed_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 345;
+      code_preview = "theorem isClosed_singleton [T1Space X] {x : X} : IsClosed ({x} : Set X)";
+    }
+    {
+      full_name = "isOpen_compl_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 348;
+      code_preview = "theorem isOpen_compl_singleton [T1Space X] {x : X} : IsOpen ({x}ᶜ : Set X)";
+    }
+    {
+      full_name = "isOpen_ne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 351;
+      code_preview = "theorem isOpen_ne [T1Space X] {x : X} : IsOpen { y | y ≠ x }";
+    }
+    {
+      full_name = "Continuous.isOpen_mulSupport";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Separation/Basic.lean";
+      start_line = 354;
+      code_preview = "@[to_additive] theorem Continuous.isOpen_mulSupport [T1Space X] [One X] [TopologicalSpace Y] {f : Y → X}     (hf : Continuous f) : IsOpen (mulSupport f)";
+    }
+    {
+      full_name = "IsPreconnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 46;
+      code_preview = "def IsPreconnected (s : Set α) : Prop :=   ∀ u v : Set α, IsOpen u → IsOpen v → s ⊆ u ∪ v → (s ∩ u).Nonempty → (s ∩ v).Nonempty →     (s ∩ (u ∩ v)).Nonempty";
+    }
+    {
+      full_name = "IsConnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 51;
+      code_preview = "def IsConnected (s : Set α) : Prop :=   s.Nonempty ∧ IsPreconnected s";
+    }
+    {
+      full_name = "IsConnected.nonempty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 55;
+      code_preview = "theorem IsConnected.nonempty {s : Set α} (h : IsConnected s) : s.Nonempty";
+    }
+    {
+      full_name = "IsConnected.isPreconnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 58;
+      code_preview = "theorem IsConnected.isPreconnected {s : Set α} (h : IsConnected s) : IsPreconnected s";
+    }
+    {
+      full_name = "IsPreirreducible.isPreconnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 61;
+      code_preview = "theorem IsPreirreducible.isPreconnected {s : Set α} (H : IsPreirreducible s) : IsPreconnected s";
+    }
+    {
+      full_name = "IsIrreducible.isConnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 64;
+      code_preview = "theorem IsIrreducible.isConnected {s : Set α} (H : IsIrreducible s) : IsConnected s";
+    }
+    {
+      full_name = "isPreconnected_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 67;
+      code_preview = "theorem isPreconnected_empty : IsPreconnected (∅ : Set α)";
+    }
+    {
+      full_name = "isConnected_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 70;
+      code_preview = "theorem isConnected_singleton {x} : IsConnected ({x} : Set α)";
+    }
+    {
+      full_name = "isPreconnected_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 73;
+      code_preview = "theorem isPreconnected_singleton {x} : IsPreconnected ({x} : Set α)";
+    }
+    {
+      full_name = "Set.Subsingleton.isPreconnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 76;
+      code_preview = "theorem Set.Subsingleton.isPreconnected {s : Set α} (hs : s.Subsingleton) : IsPreconnected s";
+    }
+    {
+      full_name = "isPreconnected_of_forall";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 79;
+      code_preview = "theorem isPreconnected_of_forall {s : Set α} (x : α)     (H : ∀ y ∈ s, ∃ t, t ⊆ s ∧ x ∈ t ∧ y ∈ t ∧ IsPreconnected t) : IsPreconnected s";
+    }
+    {
+      full_name = "isPreconnected_of_forall_pair";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 98;
+      code_preview = "theorem isPreconnected_of_forall_pair {s : Set α}     (H : ∀ x ∈ s, ∀ y ∈ s, ∃ t, t ⊆ s ∧ x ∈ t ∧ y ∈ t ∧ IsPreconnected t) :     IsPreconnected s";
+    }
+    {
+      full_name = "isPreconnected_sUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 106;
+      code_preview = "theorem isPreconnected_sUnion (x : α) (c : Set (Set α)) (H1 : ∀ s ∈ c, x ∈ s)     (H2 : ∀ s ∈ c, IsPreconnected s) : IsPreconnected (⋃₀ c)";
+    }
+    {
+      full_name = "isPreconnected_iUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 113;
+      code_preview = "theorem isPreconnected_iUnion {ι : Sort*} {s : ι → Set α} (h₁ : (⋂ i, s i).Nonempty)     (h₂ : ∀ i, IsPreconnected (s i)) : IsPreconnected (⋃ i, s i)";
+    }
+    {
+      full_name = "IsPreconnected.union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 117;
+      code_preview = "theorem IsPreconnected.union (x : α) {s t : Set α} (H1 : x ∈ s) (H2 : x ∈ t) (H3 : IsPreconnected s)     (H4 : IsPreconnected t) : IsPreconnected (s ∪ t)";
+    }
+    {
+      full_name = "IsPreconnected.union'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 122;
+      code_preview = "theorem IsPreconnected.union' {s t : Set α} (H : (s ∩ t).Nonempty) (hs : IsPreconnected s)     (ht : IsPreconnected t) : IsPreconnected (s ∪ t)";
+    }
+    {
+      full_name = "IsConnected.union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 127;
+      code_preview = "theorem IsConnected.union {s t : Set α} (H : (s ∩ t).Nonempty) (Hs : IsConnected s)     (Ht : IsConnected t) : IsConnected (s ∪ t)";
+    }
+    {
+      full_name = "IsPreconnected.sUnion_directed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 134;
+      code_preview = "theorem IsPreconnected.sUnion_directed {S : Set (Set α)} (K : DirectedOn (· ⊆ ·) S)     (H : ∀ s ∈ S, IsPreconnected s) : IsPreconnected (⋃₀ S)";
+    }
+    {
+      full_name = "IsPreconnected.biUnion_of_reflTransGen";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 144;
+      code_preview = "theorem IsPreconnected.biUnion_of_reflTransGen {ι : Type*} {t : Set ι} {s : ι → Set α}     (H : ∀ i ∈ t, IsPreconnected (s i))     (K : ∀ i, i ∈ t → ∀ j, j ∈ t → ReflTransGen (fun i j => (s i ∩ s j).Nonempty ∧ i ∈ t) i j) :     IsPreconnected (⋃ n ∈ t, s n)";
+    }
+    {
+      full_name = "IsConnected.biUnion_of_reflTransGen";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 174;
+      code_preview = "theorem IsConnected.biUnion_of_reflTransGen {ι : Type*} {t : Set ι} {s : ι → Set α}     (ht : t.Nonempty) (H : ∀ i ∈ t, IsConnected (s i))     (K : ∀ i, i ∈ t → ∀ j, j ∈ t → ReflTransGen (fun i j : ι => (s i ∩ s j).Nonempty ∧ i ∈ t) i j) :     IsConnected (⋃ n ∈ t, s n)";
+    }
+    {
+      full_name = "IsPreconnected.iUnion_of_reflTransGen";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 183;
+      code_preview = "theorem IsPreconnected.iUnion_of_reflTransGen {ι : Type*} {s : ι → Set α}     (H : ∀ i, IsPreconnected (s i))     (K : ∀ i j, ReflTransGen (fun i j : ι => (s i ∩ s j).Nonempty) i j) :     IsPreconnected (⋃ n, s n)";
+    }
+    {
+      full_name = "IsConnected.iUnion_of_reflTransGen";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 194;
+      code_preview = "theorem IsConnected.iUnion_of_reflTransGen {ι : Type*} [Nonempty ι] {s : ι → Set α}     (H : ∀ i, IsConnected (s i))     (K : ∀ i j, ReflTransGen (fun i j : ι => (s i ∩ s j).Nonempty) i j) : IsConnected (⋃ n, s n)";
+    }
+    {
+      full_name = "IsPreconnected.iUnion_of_chain";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 206;
+      code_preview = "theorem IsPreconnected.iUnion_of_chain {s : β → Set α} (H : ∀ n, IsPreconnected (s n))     (K : ∀ n, (s n ∩ s (succ n)).Nonempty) : IsPreconnected (⋃ n, s n)";
+    }
+    {
+      full_name = "IsConnected.iUnion_of_chain";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 215;
+      code_preview = "theorem IsConnected.iUnion_of_chain [Nonempty β] {s : β → Set α} (H : ∀ n, IsConnected (s n))     (K : ∀ n, (s n ∩ s (succ n)).Nonempty) : IsConnected (⋃ n, s n)";
+    }
+    {
+      full_name = "IsPreconnected.biUnion_of_chain";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 224;
+      code_preview = "theorem IsPreconnected.biUnion_of_chain {s : β → Set α} {t : Set β} (ht : OrdConnected t)     (H : ∀ n ∈ t, IsPreconnected (s n))     (K : ∀ n : β, n ∈ t → succ n ∈ t → (s n ∩ s (succ n)).Nonempty) :     IsPreconnected (⋃ n ∈ t, s n)";
+    }
+    {
+      full_name = "IsConnected.biUnion_of_chain";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 240;
+      code_preview = "theorem IsConnected.biUnion_of_chain {s : β → Set α} {t : Set β} (hnt : t.Nonempty)     (ht : OrdConnected t) (H : ∀ n ∈ t, IsConnected (s n))     (K : ∀ n : β, n ∈ t → succ n ∈ t → (s n ∩ s (succ n)).Nonempty) : IsConnected (⋃ n ∈ t, s n)";
+    }
+    {
+      full_name = "IsPreconnected.subset_closure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 250;
+      code_preview = "protected theorem IsPreconnected.subset_closure {s : Set α} {t : Set α} (H : IsPreconnected s)     (Kst : s ⊆ t) (Ktcs : t ⊆ closure s) : IsPreconnected t";
+    }
+    {
+      full_name = "IsConnected.subset_closure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 260;
+      code_preview = "protected theorem IsConnected.subset_closure {s : Set α} {t : Set α} (H : IsConnected s)     (Kst : s ⊆ t) (Ktcs : t ⊆ closure s) : IsConnected t";
+    }
+    {
+      full_name = "IsPreconnected.closure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 266;
+      code_preview = "protected theorem IsPreconnected.closure {s : Set α} (H : IsPreconnected s) :     IsPreconnected (closure s)";
+    }
+    {
+      full_name = "IsConnected.closure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 271;
+      code_preview = "protected theorem IsConnected.closure {s : Set α} (H : IsConnected s) : IsConnected (closure s)";
+    }
+    {
+      full_name = "IsPreconnected.image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 275;
+      code_preview = "protected theorem IsPreconnected.image [TopologicalSpace β] {s : Set α} (H : IsPreconnected s)     (f : α → β) (hf : ContinuousOn f s) : IsPreconnected (f '' s)";
+    }
+    {
+      full_name = "IsConnected.image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 296;
+      code_preview = "protected theorem IsConnected.image [TopologicalSpace β] {s : Set α} (H : IsConnected s) (f : α → β)     (hf : ContinuousOn f s) : IsConnected (f '' s)";
+    }
+    {
+      full_name = "isPreconnected_closed_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 301;
+      code_preview = "theorem isPreconnected_closed_iff {s : Set α} :     IsPreconnected s ↔ ∀ t t', IsClosed t → IsClosed t' →       s ⊆ t ∪ t' → (s ∩ t).Nonempty → (s ∩ t').Nonempty → (s ∩ (t ∩ t')).Nonempty";
+    }
+    {
+      full_name = "Topology.IsInducing.isPreconnected_image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 323;
+      code_preview = "theorem Topology.IsInducing.isPreconnected_image [TopologicalSpace β] {s : Set α} {f : α → β}     (hf : IsInducing f) : IsPreconnected (f '' s) ↔ IsPreconnected s";
+    }
+    {
+      full_name = "IsPreconnected.preimage_of_isOpenMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 340;
+      code_preview = "theorem IsPreconnected.preimage_of_isOpenMap [TopologicalSpace β] {f : α → β} {s : Set β}     (hs : IsPreconnected s) (hinj : Function.Injective f) (hf : IsOpenMap f) (hsf : s ⊆ range f) :     IsPreconnected (f ⁻¹' s)";
+    }
+    {
+      full_name = "IsPreconnected.preimage_of_isClosedMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 351;
+      code_preview = "theorem IsPreconnected.preimage_of_isClosedMap [TopologicalSpace β] {s : Set β}     (hs : IsPreconnected s) {f : α → β} (hinj : Function.Injective f) (hf : IsClosedMap f)     (hsf : s ⊆ range f) : IsPreconnected (f ⁻¹' s)";
+    }
+    {
+      full_name = "IsConnected.preimage_of_isOpenMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 363;
+      code_preview = "theorem IsConnected.preimage_of_isOpenMap [TopologicalSpace β] {s : Set β} (hs : IsConnected s)     {f : α → β} (hinj : Function.Injective f) (hf : IsOpenMap f) (hsf : s ⊆ range f) :     IsConnected (f ⁻¹' s)";
+    }
+    {
+      full_name = "IsConnected.preimage_of_isClosedMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 368;
+      code_preview = "theorem IsConnected.preimage_of_isClosedMap [TopologicalSpace β] {s : Set β} (hs : IsConnected s)     {f : α → β} (hinj : Function.Injective f) (hf : IsClosedMap f) (hsf : s ⊆ range f) :     IsConnected (f ⁻¹' s)";
+    }
+    {
+      full_name = "IsPreconnected.subset_or_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 373;
+      code_preview = "theorem IsPreconnected.subset_or_subset (hu : IsOpen u) (hv : IsOpen v) (huv : Disjoint u v)     (hsuv : s ⊆ u ∪ v) (hs : IsPreconnected s) : s ⊆ u ∨ s ⊆ v";
+    }
+    {
+      full_name = "IsPreconnected.subset_left_of_subset_union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 383;
+      code_preview = "theorem IsPreconnected.subset_left_of_subset_union (hu : IsOpen u) (hv : IsOpen v)     (huv : Disjoint u v) (hsuv : s ⊆ u ∪ v) (hsu : (s ∩ u).Nonempty) (hs : IsPreconnected s) :     s ⊆ u";
+    }
+    {
+      full_name = "IsPreconnected.subset_right_of_subset_union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 393;
+      code_preview = "theorem IsPreconnected.subset_right_of_subset_union (hu : IsOpen u) (hv : IsOpen v)     (huv : Disjoint u v) (hsuv : s ⊆ u ∪ v) (hsv : (s ∩ v).Nonempty) (hs : IsPreconnected s) :     s ⊆ v";
+    }
+    {
+      full_name = "IsPreconnected.subset_of_closure_inter_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 398;
+      code_preview = "theorem IsPreconnected.subset_of_closure_inter_subset (hs : IsPreconnected s) (hu : IsOpen u)     (h'u : (s ∩ u).Nonempty) (h : closure u ∩ s ⊆ u) : s ⊆ u";
+    }
+    {
+      full_name = "IsPreconnected.prod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 412;
+      code_preview = "theorem IsPreconnected.prod [TopologicalSpace β] {s : Set α} {t : Set β} (hs : IsPreconnected s)     (ht : IsPreconnected t) : IsPreconnected (s ×ˢ t)";
+    }
+    {
+      full_name = "IsConnected.prod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 422;
+      code_preview = "theorem IsConnected.prod [TopologicalSpace β] {s : Set α} {t : Set β} (hs : IsConnected s)     (ht : IsConnected t) : IsConnected (s ×ˢ t)";
+    }
+    {
+      full_name = "isPreconnected_univ_pi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 426;
+      code_preview = "theorem isPreconnected_univ_pi [∀ i, TopologicalSpace (π i)] {s : ∀ i, Set (π i)}     (hs : ∀ i, IsPreconnected (s i)) : IsPreconnected (pi univ s)";
+    }
+    {
+      full_name = "isConnected_univ_pi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 451;
+      code_preview = "@[simp] theorem isConnected_univ_pi [∀ i, TopologicalSpace (π i)] {s : ∀ i, Set (π i)} :     IsConnected (pi univ s) ↔ ∀ i, IsConnected (s i)";
+    }
+    {
+      full_name = "connectedComponent";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 459;
+      code_preview = "def connectedComponent (x : α) : Set α :=   ⋃₀ { s : Set α | IsPreconnected s ∧ x ∈ s }";
+    }
+    {
+      full_name = "connectedComponentIn";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 465;
+      code_preview = "def connectedComponentIn (F : Set α) (x : α) : Set α :=   if h : x ∈ F then (↑) '' connectedComponent (⟨x, h⟩ : F) else ∅";
+    }
+    {
+      full_name = "connectedComponentIn_eq_image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 472;
+      code_preview = "theorem connectedComponentIn_eq_image {F : Set α} {x : α} (h : x ∈ F) :     connectedComponentIn F x = (↑) '' connectedComponent (⟨x, h⟩ : F)";
+    }
+    {
+      full_name = "connectedComponentIn_eq_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Connected/Basic.lean";
+      start_line = 476;
+      code_preview = "theorem connectedComponentIn_eq_empty {F : Set α} {x : α} (h : x ∉ F) :     connectedComponentIn F x = ∅";
+    }
+    {
+      full_name = "OrderTopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 61;
+      code_preview = "class OrderTopology (α : Type*) [t : TopologicalSpace α] [Preorder α] : Prop where      topology_eq_generate_intervals : t = generateFrom { s | ∃ a, s = Ioi a ∨ s = Iio a }";
+    }
+    {
+      full_name = "Preorder.topology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 69;
+      code_preview = "def Preorder.topology (α : Type*) [Preorder α] : TopologicalSpace α :=   generateFrom { s : Set α | ∃ a : α, s = { b : α | a < b } ∨ s = { b : α | b < a } }";
+    }
+    {
+      full_name = "isOpen_iff_generate_intervals";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 87;
+      code_preview = "theorem isOpen_iff_generate_intervals [t : OrderTopology α] {s : Set α} :     IsOpen s ↔ GenerateOpen { s | ∃ a, s = Ioi a ∨ s = Iio a } s";
+    }
+    {
+      full_name = "isOpen_lt'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 91;
+      code_preview = "theorem isOpen_lt' [OrderTopology α] (a : α) : IsOpen { b : α | a < b }";
+    }
+    {
+      full_name = "isOpen_gt'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 94;
+      code_preview = "theorem isOpen_gt' [OrderTopology α] (a : α) : IsOpen { b : α | b < a }";
+    }
+    {
+      full_name = "lt_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 97;
+      code_preview = "theorem lt_mem_nhds [OrderTopology α] {a b : α} (h : a < b) : ∀ᶠ x in 𝓝 b, a < x";
+    }
+    {
+      full_name = "le_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 100;
+      code_preview = "theorem le_mem_nhds [OrderTopology α] {a b : α} (h : a < b) : ∀ᶠ x in 𝓝 b, a ≤ x";
+    }
+    {
+      full_name = "gt_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 103;
+      code_preview = "theorem gt_mem_nhds [OrderTopology α] {a b : α} (h : a < b) : ∀ᶠ x in 𝓝 a, x < b";
+    }
+    {
+      full_name = "ge_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 106;
+      code_preview = "theorem ge_mem_nhds [OrderTopology α] {a b : α} (h : a < b) : ∀ᶠ x in 𝓝 a, x ≤ b";
+    }
+    {
+      full_name = "nhds_eq_order";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 109;
+      code_preview = "theorem nhds_eq_order [OrderTopology α] (a : α) :     𝓝 a = (⨅ b ∈ Iio a, 𝓟 (Ioi b)) ⊓ ⨅ b ∈ Ioi a, 𝓟 (Iio b)";
+    }
+    {
+      full_name = "tendsto_order";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 115;
+      code_preview = "theorem tendsto_order [OrderTopology α] {f : β → α} {a : α} {x : Filter β} :     Tendsto f x (𝓝 a) ↔ (∀ a' < a, ∀ᶠ b in x, a' < f b) ∧ ∀ a' > a, ∀ᶠ b in x, f b < a'";
+    }
+    {
+      full_name = "tendstoIccClassNhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 118;
+      code_preview = "instance tendstoIccClassNhds [OrderTopology α] (a : α) : TendstoIxxClass Icc (𝓝 a) (𝓝 a) := by   simp only [nhds_eq_order, iInf_subtype']   refine     ((hasBasis_iInf_principal_finite _).inf (hasBasis_iInf_principal_finite _)).tendstoIxxClass       fun s _ => ?_   refine ((ordConnected_biInter ?_).i";
+    }
+    {
+      full_name = "tendstoIcoClassNhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 126;
+      code_preview = "instance tendstoIcoClassNhds [OrderTopology α] (a : α) : TendstoIxxClass Ico (𝓝 a) (𝓝 a) :=   tendstoIxxClass_of_subset fun _ _ => Ico_subset_Icc_self";
+    }
+    {
+      full_name = "tendstoIocClassNhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 129;
+      code_preview = "instance tendstoIocClassNhds [OrderTopology α] (a : α) : TendstoIxxClass Ioc (𝓝 a) (𝓝 a) :=   tendstoIxxClass_of_subset fun _ _ => Ioc_subset_Icc_self";
+    }
+    {
+      full_name = "tendstoIooClassNhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 132;
+      code_preview = "instance tendstoIooClassNhds [OrderTopology α] (a : α) : TendstoIxxClass Ioo (𝓝 a) (𝓝 a) :=   tendstoIxxClass_of_subset fun _ _ => Ioo_subset_Icc_self";
+    }
+    {
+      full_name = "tendsto_of_tendsto_of_tendsto_of_le_of_le'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 135;
+      code_preview = "theorem tendsto_of_tendsto_of_tendsto_of_le_of_le' [OrderTopology α] {f g h : β → α} {b : Filter β}     {a : α} (hg : Tendsto g b (𝓝 a)) (hh : Tendsto h b (𝓝 a)) (hgf : ∀ᶠ b in b, g b ≤ f b)     (hfh : ∀ᶠ b in b, f b ≤ h b) : Tendsto f b (𝓝 a)";
+    }
+    {
+      full_name = "tendsto_of_tendsto_of_tendsto_of_le_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 144;
+      code_preview = "theorem tendsto_of_tendsto_of_tendsto_of_le_of_le [OrderTopology α] {f g h : β → α} {b : Filter β}     {a : α} (hg : Tendsto g b (𝓝 a)) (hh : Tendsto h b (𝓝 a)) (hgf : g ≤ f) (hfh : f ≤ h) :     Tendsto f b (𝓝 a)";
+    }
+    {
+      full_name = "nhds_order_unbounded";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 154;
+      code_preview = "theorem nhds_order_unbounded [OrderTopology α] {a : α} (hu : ∃ u, a < u) (hl : ∃ l, l < a) :     𝓝 a = ⨅ (l) (_ : l < a) (u) (_ : a < u), 𝓟 (Ioo l u)";
+    }
+    {
+      full_name = "tendsto_order_unbounded";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 158;
+      code_preview = "theorem tendsto_order_unbounded [OrderTopology α] {f : β → α} {a : α} {x : Filter β}     (hu : ∃ u, a < u) (hl : ∃ l, l < a) (h : ∀ l u, l < a → a < u → ∀ᶠ b in x, l < f b ∧ f b < u) :     Tendsto f x (𝓝 a)";
+    }
+    {
+      full_name = "tendstoIxxNhdsWithin";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 166;
+      code_preview = "instance tendstoIxxNhdsWithin {α : Type*} [TopologicalSpace α] (a : α) {s t : Set α}     {Ixx} [TendstoIxxClass Ixx (𝓝 a) (𝓝 a)] [TendstoIxxClass Ixx (𝓟 s) (𝓟 t)] :     TendstoIxxClass Ixx (𝓝[s] a) (𝓝[t] a) :=   Filter.tendstoIxxClass_inf";
+    }
+    {
+      full_name = "tendstoIccClassNhdsPi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 171;
+      code_preview = "instance tendstoIccClassNhdsPi {ι : Type*} {α : ι → Type*} [∀ i, Preorder (α i)]     [∀ i, TopologicalSpace (α i)] [∀ i, OrderTopology (α i)] (f : ∀ i, α i) :     TendstoIxxClass Icc (𝓝 f) (𝓝 f) := by   constructor   conv in (𝓝 f).smallSets => rw [nhds_pi, Filter.pi]   simp only [smallSets_iInf, sma";
+    }
+    {
+      full_name = "induced_topology_le_preorder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 182;
+      code_preview = "theorem induced_topology_le_preorder [Preorder α] [Preorder β] [TopologicalSpace β]     [OrderTopology β] {f : α → β} (hf : ∀ {x y}, f x < f y ↔ x < y) :     induced f ‹TopologicalSpace β› ≤ Preorder.topology α";
+    }
+    {
+      full_name = "induced_topology_eq_preorder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 191;
+      code_preview = "theorem induced_topology_eq_preorder [Preorder α] [Preorder β] [TopologicalSpace β]     [OrderTopology β] {f : α → β} (hf : ∀ {x y}, f x < f y ↔ x < y)     (H₁ : ∀ {a b x}, b < f a → ¬(b < f x) → ∃ y, y < a ∧ b ≤ f y)     (H₂ : ∀ {a b x}, f a < b → ¬(f x < b) → ∃ y, a < y ∧ f y ≤ b) :     induced f ";
+    }
+    {
+      full_name = "induced_orderTopology'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 212;
+      code_preview = "theorem induced_orderTopology' {α : Type u} {β : Type v} [Preorder α] [ta : TopologicalSpace β]     [Preorder β] [OrderTopology β] (f : α → β) (hf : ∀ {x y}, f x < f y ↔ x < y)     (H₁ : ∀ {a x}, x < f a → ∃ b < a, x ≤ f b) (H₂ : ∀ {a x}, f a < x → ∃ b > a, f b ≤ x) :     @OrderTopology _ (induced f";
+    }
+    {
+      full_name = "induced_orderTopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 219;
+      code_preview = "theorem induced_orderTopology {α : Type u} {β : Type v} [Preorder α] [ta : TopologicalSpace β]     [Preorder β] [OrderTopology β] (f : α → β) (hf : ∀ {x y}, f x < f y ↔ x < y)     (H : ∀ {x y}, x < y → ∃ a, x < f a ∧ f a < y) : @OrderTopology _ (induced f ta) _";
+    }
+    {
+      full_name = "StrictMono.induced_topology_eq_preorder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 226;
+      code_preview = "nonrec theorem StrictMono.induced_topology_eq_preorder {α β : Type*} [LinearOrder α]     [LinearOrder β] [t : TopologicalSpace β] [OrderTopology β] {f : α → β}     (hf : StrictMono f) (hc : OrdConnected (range f)) : t.induced f = Preorder.topology α";
+    }
+    {
+      full_name = "StrictMono.isEmbedding_of_ordConnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 237;
+      code_preview = "theorem StrictMono.isEmbedding_of_ordConnected {α β : Type*} [LinearOrder α] [LinearOrder β]     [TopologicalSpace α] [h : OrderTopology α] [TopologicalSpace β] [OrderTopology β] {f : α → β}     (hf : StrictMono f) (hc : OrdConnected (range f)) : IsEmbedding f";
+    }
+    {
+      full_name = "orderTopology_of_ordConnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 247;
+      code_preview = "instance orderTopology_of_ordConnected {α : Type u} [TopologicalSpace α] [LinearOrder α]     [OrderTopology α] {t : Set α} [ht : OrdConnected t] : OrderTopology t :=   ⟨(Subtype.strictMono_coe t).induced_topology_eq_preorder <| by     rwa [← @Subtype.range_val _ t] at ht⟩";
+    }
+    {
+      full_name = "nhdsGE_eq_iInf_inf_principal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 254;
+      code_preview = "theorem nhdsGE_eq_iInf_inf_principal [TopologicalSpace α] [Preorder α] [OrderTopology α] (a : α) :     𝓝[≥] a = (⨅ (u) (_ : a < u), 𝓟 (Iio u)) ⊓ 𝓟 (Ici a)";
+    }
+    {
+      full_name = "nhdsLE_eq_iInf_inf_principal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 262;
+      code_preview = "theorem nhdsLE_eq_iInf_inf_principal [TopologicalSpace α] [Preorder α] [OrderTopology α] (a : α) :     𝓝[≤] a = (⨅ l < a, 𝓟 (Ioi l)) ⊓ 𝓟 (Iic a)";
+    }
+    {
+      full_name = "nhdsGE_eq_iInf_principal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 268;
+      code_preview = "theorem nhdsGE_eq_iInf_principal [TopologicalSpace α] [Preorder α] [OrderTopology α] {a : α}     (ha : ∃ u, a < u) : 𝓝[≥] a = ⨅ (u) (_ : a < u), 𝓟 (Ico a u)";
+    }
+    {
+      full_name = "nhdsLE_eq_iInf_principal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 274;
+      code_preview = "theorem nhdsLE_eq_iInf_principal [TopologicalSpace α] [Preorder α] [OrderTopology α] {a : α}     (ha : ∃ l, l < a) : 𝓝[≤] a = ⨅ l < a, 𝓟 (Ioc l a)";
+    }
+    {
+      full_name = "nhdsGE_basis_of_exists_gt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 280;
+      code_preview = "theorem nhdsGE_basis_of_exists_gt [TopologicalSpace α] [LinearOrder α] [OrderTopology α] {a : α}     (ha : ∃ u, a < u) : (𝓝[≥] a).HasBasis (fun u => a < u) fun u => Ico a u";
+    }
+    {
+      full_name = "nhdsLE_basis_of_exists_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 290;
+      code_preview = "theorem nhdsLE_basis_of_exists_lt [TopologicalSpace α] [LinearOrder α] [OrderTopology α] {a : α}     (ha : ∃ l, l < a) : (𝓝[≤] a).HasBasis (fun l => l < a) fun l => Ioc l a";
+    }
+    {
+      full_name = "nhdsGE_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 297;
+      code_preview = "theorem nhdsGE_basis [TopologicalSpace α] [LinearOrder α] [OrderTopology α] [NoMaxOrder α] (a : α) :     (𝓝[≥] a).HasBasis (fun u => a < u) fun u => Ico a u";
+    }
+    {
+      full_name = "nhdsLE_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 303;
+      code_preview = "theorem nhdsLE_basis [TopologicalSpace α] [LinearOrder α] [OrderTopology α] [NoMinOrder α] (a : α) :     (𝓝[≤] a).HasBasis (fun l => l < a) fun l => Ioc l a";
+    }
+    {
+      full_name = "nhds_top_order";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 309;
+      code_preview = "theorem nhds_top_order [TopologicalSpace α] [Preorder α] [OrderTop α] [OrderTopology α] :     𝓝 (⊤ : α) = ⨅ (l) (_ : l < ⊤), 𝓟 (Ioi l)";
+    }
+    {
+      full_name = "nhds_bot_order";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 312;
+      code_preview = "theorem nhds_bot_order [TopologicalSpace α] [Preorder α] [OrderBot α] [OrderTopology α] :     𝓝 (⊥ : α) = ⨅ (l) (_ : ⊥ < l), 𝓟 (Iio l)";
+    }
+    {
+      full_name = "nhds_top_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 315;
+      code_preview = "theorem nhds_top_basis [TopologicalSpace α] [LinearOrder α] [OrderTop α] [OrderTopology α]     [Nontrivial α] : (𝓝 ⊤).HasBasis (fun a : α => a < ⊤) fun a : α => Ioi a";
+    }
+    {
+      full_name = "nhds_bot_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 320;
+      code_preview = "theorem nhds_bot_basis [TopologicalSpace α] [LinearOrder α] [OrderBot α] [OrderTopology α]     [Nontrivial α] : (𝓝 ⊥).HasBasis (fun a : α => ⊥ < a) fun a : α => Iio a";
+    }
+    {
+      full_name = "nhds_top_basis_Ici";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 324;
+      code_preview = "theorem nhds_top_basis_Ici [TopologicalSpace α] [LinearOrder α] [OrderTop α] [OrderTopology α]     [Nontrivial α] [DenselyOrdered α] : (𝓝 ⊤).HasBasis (fun a : α => a < ⊤) Ici";
+    }
+    {
+      full_name = "nhds_bot_basis_Iic";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 330;
+      code_preview = "theorem nhds_bot_basis_Iic [TopologicalSpace α] [LinearOrder α] [OrderBot α] [OrderTopology α]     [Nontrivial α] [DenselyOrdered α] : (𝓝 ⊥).HasBasis (fun a : α => ⊥ < a) Iic";
+    }
+    {
+      full_name = "tendsto_nhds_top_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 334;
+      code_preview = "theorem tendsto_nhds_top_mono [TopologicalSpace β] [Preorder β] [OrderTop β] [OrderTopology β]     {l : Filter α} {f g : α → β} (hf : Tendsto f l (𝓝 ⊤)) (hg : f ≤ᶠ[l] g) : Tendsto g l (𝓝 ⊤)";
+    }
+    {
+      full_name = "tendsto_nhds_bot_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 340;
+      code_preview = "theorem tendsto_nhds_bot_mono [TopologicalSpace β] [Preorder β] [OrderBot β] [OrderTopology β]     {l : Filter α} {f g : α → β} (hf : Tendsto f l (𝓝 ⊥)) (hg : g ≤ᶠ[l] f) : Tendsto g l (𝓝 ⊥)";
+    }
+    {
+      full_name = "tendsto_nhds_top_mono'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 344;
+      code_preview = "theorem tendsto_nhds_top_mono' [TopologicalSpace β] [Preorder β] [OrderTop β] [OrderTopology β]     {l : Filter α} {f g : α → β} (hf : Tendsto f l (𝓝 ⊤)) (hg : f ≤ g) : Tendsto g l (𝓝 ⊤)";
+    }
+    {
+      full_name = "tendsto_nhds_bot_mono'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 348;
+      code_preview = "theorem tendsto_nhds_bot_mono' [TopologicalSpace β] [Preorder β] [OrderBot β] [OrderTopology β]     {l : Filter α} {f g : α → β} (hf : Tendsto f l (𝓝 ⊥)) (hg : g ≤ f) : Tendsto g l (𝓝 ⊥)";
+    }
+    {
+      full_name = "order_separated";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 358;
+      code_preview = "theorem order_separated [OrderTopology α] {a₁ a₂ : α} (h : a₁ < a₂) :     ∃ u v : Set α, IsOpen u ∧ IsOpen v ∧ a₁ ∈ u ∧ a₂ ∈ v ∧ ∀ b₁ ∈ u, ∀ b₂ ∈ v, b₁ < b₂";
+    }
+    {
+      full_name = "OrderTopology.to_orderClosedTopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 364;
+      code_preview = "instance (priority := 100) OrderTopology.to_orderClosedTopology [OrderTopology α] :     OrderClosedTopology α where   isClosed_le' := isOpen_compl_iff.1 <| isOpen_prod_iff.mpr fun a₁ a₂ (h : ¬a₁ ≤ a₂) =>     have h : a₂ < a₁ := lt_of_not_ge h     let ⟨u, v, hu, hv, ha₁, ha₂, h⟩ := order_separated h ";
+    }
+    {
+      full_name = "exists_Ioc_subset_of_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 371;
+      code_preview = "theorem exists_Ioc_subset_of_mem_nhds [OrderTopology α] {a : α} {s : Set α} (hs : s ∈ 𝓝 a)     (h : ∃ l, l < a) : ∃ l < a, Ioc l a ⊆ s";
+    }
+    {
+      full_name = "exists_Ioc_subset_of_mem_nhds'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 375;
+      code_preview = "theorem exists_Ioc_subset_of_mem_nhds' [OrderTopology α] {a : α} {s : Set α} (hs : s ∈ 𝓝 a) {l : α}     (hl : l < a) : ∃ l' ∈ Ico l a, Ioc l' a ⊆ s";
+    }
+    {
+      full_name = "MetricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 38;
+      code_preview = "class MetricSpace (α : Type u) : Type u extends PseudoMetricSpace α where   eq_of_dist_eq_zero : ∀ {x y : α}, dist x y = 0 → x = y";
+    }
+    {
+      full_name = "MetricSpace.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 56;
+      code_preview = "@[ext] theorem MetricSpace.ext {α : Type*} {m m' : MetricSpace α} (h : m.toDist = m'.toDist) :     m = m'";
+    }
+    {
+      full_name = "MetricSpace.ofDistTopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 62;
+      code_preview = "def MetricSpace.ofDistTopology {α : Type u} [TopologicalSpace α] (dist : α → α → ℝ)     (dist_self : ∀ x : α, dist x x = 0) (dist_comm : ∀ x y : α, dist x y = dist y x)     (dist_triangle : ∀ x y z : α, dist x z ≤ dist x y + dist y z)     (H : ∀ s : Set α, IsOpen s ↔ ∀ x ∈ s, ∃ ε > 0, ∀ y, dist x y ";
+    }
+    {
+      full_name = "eq_of_dist_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 75;
+      code_preview = "theorem eq_of_dist_eq_zero {x y : γ} : dist x y = 0 → x = y";
+    }
+    {
+      full_name = "dist_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 78;
+      code_preview = "@[simp] theorem dist_eq_zero {x y : γ} : dist x y = 0 ↔ x = y";
+    }
+    {
+      full_name = "zero_eq_dist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 82;
+      code_preview = "@[simp] theorem zero_eq_dist {x y : γ} : 0 = dist x y ↔ x = y";
+    }
+    {
+      full_name = "dist_ne_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 85;
+      code_preview = "theorem dist_ne_zero {x y : γ} : dist x y ≠ 0 ↔ x ≠ y";
+    }
+    {
+      full_name = "dist_le_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 88;
+      code_preview = "@[simp] theorem dist_le_zero {x y : γ} : dist x y ≤ 0 ↔ x = y";
+    }
+    {
+      full_name = "dist_pos";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 92;
+      code_preview = "@[simp] theorem dist_pos {x y : γ} : 0 < dist x y ↔ x ≠ y";
+    }
+    {
+      full_name = "eq_of_forall_dist_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 96;
+      code_preview = "theorem eq_of_forall_dist_le {x y : γ} (h : ∀ ε > 0, dist x y ≤ ε) : x = y";
+    }
+    {
+      full_name = "eq_of_nndist_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 99;
+      code_preview = "theorem eq_of_nndist_eq_zero {x y : γ} : nndist x y = 0 → x = y";
+    }
+    {
+      full_name = "nndist_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 103;
+      code_preview = "@[simp] theorem nndist_eq_zero {x y : γ} : nndist x y = 0 ↔ x = y";
+    }
+    {
+      full_name = "zero_eq_nndist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 108;
+      code_preview = "@[simp] theorem zero_eq_nndist {x y : γ} : 0 = nndist x y ↔ x = y";
+    }
+    {
+      full_name = "Metric.closedBall_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 116;
+      code_preview = "@[simp] theorem closedBall_zero : closedBall x 0 = {x}";
+    }
+    {
+      full_name = "Metric.sphere_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 118;
+      code_preview = "@[simp] theorem sphere_zero : sphere x 0 = {x}";
+    }
+    {
+      full_name = "Metric.subsingleton_closedBall";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 120;
+      code_preview = "theorem subsingleton_closedBall (x : γ) {r : ℝ} (hr : r ≤ 0) : (closedBall x r).Subsingleton";
+    }
+    {
+      full_name = "Metric.subsingleton_sphere";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 127;
+      code_preview = "theorem subsingleton_sphere (x : γ) {r : ℝ} (hr : r ≤ 0) : (sphere x r).Subsingleton";
+    }
+    {
+      full_name = "MetricSpace.replaceUniformity";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 132;
+      code_preview = "abbrev MetricSpace.replaceUniformity {γ} [U : UniformSpace γ] (m : MetricSpace γ)     (H : 𝓤[U] = 𝓤[PseudoEMetricSpace.toUniformSpace]) : MetricSpace γ where   toPseudoMetricSpace := PseudoMetricSpace.replaceUniformity m.toPseudoMetricSpace H   eq_of_dist_eq_zero := @eq_of_dist_eq_zero _ _";
+    }
+    {
+      full_name = "MetricSpace.replaceUniformity_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 142;
+      code_preview = "theorem MetricSpace.replaceUniformity_eq {γ} [U : UniformSpace γ] (m : MetricSpace γ)     (H : 𝓤[U] = 𝓤[PseudoEMetricSpace.toUniformSpace]) : m.replaceUniformity H = m";
+    }
+    {
+      full_name = "MetricSpace.replaceTopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 146;
+      code_preview = "abbrev MetricSpace.replaceTopology {γ} [U : TopologicalSpace γ] (m : MetricSpace γ)     (H : U = m.toPseudoMetricSpace.toUniformSpace.toTopologicalSpace) : MetricSpace γ :=   @MetricSpace.replaceUniformity γ (m.toUniformSpace.replaceTopology H) m rfl";
+    }
+    {
+      full_name = "MetricSpace.replaceTopology_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 155;
+      code_preview = "theorem MetricSpace.replaceTopology_eq {γ} [U : TopologicalSpace γ] (m : MetricSpace γ)     (H : U = m.toPseudoMetricSpace.toUniformSpace.toTopologicalSpace) :     m.replaceTopology H = m";
+    }
+    {
+      full_name = "MetricSpace.replaceBornology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 160;
+      code_preview = "abbrev MetricSpace.replaceBornology {α} [B : Bornology α] (m : MetricSpace α)     (H : ∀ s, @IsBounded _ B s ↔ @IsBounded _ PseudoMetricSpace.toBornology s) : MetricSpace α :=   { PseudoMetricSpace.replaceBornology _ H, m with toBornology := B }";
+    }
+    {
+      full_name = "MetricSpace.replaceBornology_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 169;
+      code_preview = "theorem MetricSpace.replaceBornology_eq {α} [m : MetricSpace α] [B : Bornology α]     (H : ∀ s, @IsBounded _ B s ↔ @IsBounded _ PseudoMetricSpace.toBornology s) :     MetricSpace.replaceBornology _ H = m";
+    }
+    {
+      full_name = "dist_ofMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 212;
+      code_preview = "@[simp] theorem dist_ofMul (a b : X) : dist (ofMul a) (ofMul b) = dist a b";
+    }
+    {
+      full_name = "dist_ofAdd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 214;
+      code_preview = "@[simp] theorem dist_ofAdd (a b : X) : dist (ofAdd a) (ofAdd b) = dist a b";
+    }
+    {
+      full_name = "dist_toMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 216;
+      code_preview = "@[simp] theorem dist_toMul (a b : Additive X) : dist a.toMul b.toMul = dist a b";
+    }
+    {
+      full_name = "dist_toAdd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 218;
+      code_preview = "@[simp] theorem dist_toAdd (a b : Multiplicative X) : dist a.toAdd b.toAdd = dist a b";
+    }
+    {
+      full_name = "dist_toDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 239;
+      code_preview = "@[simp] theorem dist_toDual (a b : X) : dist (toDual a) (toDual b) = dist a b";
+    }
+    {
+      full_name = "dist_ofDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Defs.lean";
+      start_line = 241;
+      code_preview = "@[simp] theorem dist_ofDual (a b : Xᵒᵈ) : dist (ofDual a) (ofDual b) = dist a b";
+    }
+    {
+      full_name = "MetricSpace.instT0Space";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 30;
+      code_preview = "instance (priority := 100) _root_.MetricSpace.instT0Space : T0Space γ where   t0 _ _ h := eq_of_dist_eq_zero <| Metric.inseparable_iff.1 h";
+    }
+    {
+      full_name = "Metric.isUniformEmbedding_iff'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 33;
+      code_preview = "theorem isUniformEmbedding_iff' [PseudoMetricSpace β] {f : γ → β} :     IsUniformEmbedding f ↔       (∀ ε > 0, ∃ δ > 0, ∀ {a b : γ}, dist a b < δ → dist (f a) (f b) < ε) ∧         ∀ δ > 0, ∃ ε > 0, ∀ {a b : γ}, dist (f a) (f b) < ε → dist a b < δ";
+    }
+    {
+      full_name = "MetricSpace.ofT0PseudoMetricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 41;
+      code_preview = "abbrev _root_.MetricSpace.ofT0PseudoMetricSpace (α : Type*) [PseudoMetricSpace α] [T0Space α] :     MetricSpace α where   toPseudoMetricSpace := ‹_›   eq_of_dist_eq_zero hdist := (Metric.inseparable_iff.2 hdist).eq";
+    }
+    {
+      full_name = "MetricSpace.toEMetricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 48;
+      code_preview = "instance (priority := 100) _root_.MetricSpace.toEMetricSpace : EMetricSpace γ :=   .ofT0PseudoEMetricSpace γ";
+    }
+    {
+      full_name = "Metric.isClosed_of_pairwise_le_dist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 52;
+      code_preview = "theorem isClosed_of_pairwise_le_dist {s : Set γ} {ε : ℝ} (hε : 0 < ε)     (hs : s.Pairwise fun x y => ε ≤ dist x y) : IsClosed s";
+    }
+    {
+      full_name = "Metric.isClosedEmbedding_of_pairwise_le_dist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 56;
+      code_preview = "theorem isClosedEmbedding_of_pairwise_le_dist {α : Type*} [TopologicalSpace α] [DiscreteTopology α]     {ε : ℝ} (hε : 0 < ε) {f : α → γ} (hf : Pairwise fun x y => ε ≤ dist (f x) (f y)) :     IsClosedEmbedding f";
+    }
+    {
+      full_name = "Metric.isUniformEmbedding_bot_of_pairwise_le_dist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 61;
+      code_preview = "theorem isUniformEmbedding_bot_of_pairwise_le_dist {β : Type*} {ε : ℝ} (hε : 0 < ε) {f : β → α}     (hf : Pairwise fun x y => ε ≤ dist (f x) (f y)) :     @IsUniformEmbedding _ _ ⊥ (by infer_instance) f";
+    }
+    {
+      full_name = "EMetricSpace.toMetricSpaceOfDist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 70;
+      code_preview = "abbrev EMetricSpace.toMetricSpaceOfDist {α : Type u} [EMetricSpace α] (dist : α → α → ℝ)     (edist_ne_top : ∀ x y : α, edist x y ≠ ⊤) (h : ∀ x y, dist x y = ENNReal.toReal (edist x y)) :     MetricSpace α :=   @MetricSpace.ofT0PseudoMetricSpace _     (PseudoEMetricSpace.toPseudoMetricSpaceOfDist di";
+    }
+    {
+      full_name = "EMetricSpace.toMetricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 81;
+      code_preview = "def EMetricSpace.toMetricSpace {α : Type u} [EMetricSpace α] (h : ∀ x y : α, edist x y ≠ ⊤) :     MetricSpace α :=   EMetricSpace.toMetricSpaceOfDist (fun x y => ENNReal.toReal (edist x y)) h fun _ _ => rfl";
+    }
+    {
+      full_name = "MetricSpace.induced";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 88;
+      code_preview = "abbrev MetricSpace.induced {γ β} (f : γ → β) (hf : Function.Injective f) (m : MetricSpace β) :     MetricSpace γ :=   { PseudoMetricSpace.induced f m.toPseudoMetricSpace with     eq_of_dist_eq_zero := fun h => hf (dist_eq_zero.1 h) }";
+    }
+    {
+      full_name = "IsUniformEmbedding.comapMetricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 95;
+      code_preview = "abbrev IsUniformEmbedding.comapMetricSpace {α β} [UniformSpace α] [m : MetricSpace β] (f : α → β)     (h : IsUniformEmbedding f) : MetricSpace α :=   .replaceUniformity (.induced f h.injective m) h.comap_uniformity.symm";
+    }
+    {
+      full_name = "Topology.IsEmbedding.comapMetricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 101;
+      code_preview = "abbrev Topology.IsEmbedding.comapMetricSpace {α β} [TopologicalSpace α] [m : MetricSpace β]     (f : α → β) (h : IsEmbedding f) : MetricSpace α :=   .replaceTopology (.induced f h.injective m) h.eq_induced";
+    }
+    {
+      full_name = "Subtype.metricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 110;
+      code_preview = "instance Subtype.metricSpace {α : Type*} {p : α → Prop} [MetricSpace α] :     MetricSpace (Subtype p) :=   .induced Subtype.val Subtype.coe_injective ‹_›";
+    }
+    {
+      full_name = "MulOpposite.instMetricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 114;
+      code_preview = "@[to_additive] instance MulOpposite.instMetricSpace {α : Type*} [MetricSpace α] : MetricSpace αᵐᵒᵖ :=   MetricSpace.induced MulOpposite.unop MulOpposite.unop_injective ‹_›";
+    }
+    {
+      full_name = "Real.metricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 120;
+      code_preview = "instance Real.metricSpace : MetricSpace ℝ := .ofT0PseudoMetricSpace ℝ";
+    }
+    {
+      full_name = "Prod.metricSpaceMax";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 137;
+      code_preview = "instance Prod.metricSpaceMax [MetricSpace β] : MetricSpace (γ × β) :=   .ofT0PseudoMetricSpace _";
+    }
+    {
+      full_name = "metricSpacePi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 148;
+      code_preview = "instance metricSpacePi : MetricSpace (∀ b, π b) := .ofT0PseudoMetricSpace _";
+    }
+    {
+      full_name = "Metric.secondCountable_of_countable_discretization";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 160;
+      code_preview = "theorem secondCountable_of_countable_discretization {α : Type u} [PseudoMetricSpace α]     (H : ∀ ε > (0 : ℝ), ∃ (β : Type*) (_ : Encodable β) (F : α → β),       ∀ x y, F x = F y → dist x y ≤ ε) :     SecondCountableTopology α";
+    }
+    {
+      full_name = "SeparationQuotient.instDist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 181;
+      code_preview = "instance SeparationQuotient.instDist {α : Type u} [PseudoMetricSpace α] :     Dist (SeparationQuotient α) where   dist := lift₂ dist fun x y x' y' hx hy ↦ by rw [dist_edist, dist_edist, ← edist_mk x,     ← edist_mk x', mk_eq_mk.2 hx, mk_eq_mk.2 hy]";
+    }
+    {
+      full_name = "SeparationQuotient.dist_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 186;
+      code_preview = "theorem SeparationQuotient.dist_mk {α : Type u} [PseudoMetricSpace α] (p q : α) :     dist (mk p) (mk q) = dist p q";
+    }
+    {
+      full_name = "SeparationQuotient.instMetricSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/MetricSpace/Basic.lean";
+      start_line = 190;
+      code_preview = "instance SeparationQuotient.instMetricSpace {α : Type u} [PseudoMetricSpace α] :     MetricSpace (SeparationQuotient α) :=   EMetricSpace.toMetricSpaceOfDist dist (surjective_mk.forall₂.2 edist_ne_top) <|     surjective_mk.forall₂.2 dist_edist";
+    }
+    {
+      full_name = "TopologicalSpace.Opens";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 58;
+      code_preview = "structure Opens where      carrier : Set α      is_open' : IsOpen carrier";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.instSecondCountableOpens";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 74;
+      code_preview = "instance instSecondCountableOpens [SecondCountableTopology α] (U : Opens α) :     SecondCountableTopology U := inferInstanceAs (SecondCountableTopology U.1)";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.forall";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 77;
+      code_preview = "theorem «forall» {p : Opens α → Prop} : (∀ U, p U) ↔ ∀ (U : Set α) (hU : IsOpen U), p ⟨U, hU⟩";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.carrier_eq_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 80;
+      code_preview = "@[simp] theorem carrier_eq_coe (U : Opens α) : U.1 = ↑U";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 82;
+      code_preview = "@[simp] theorem coe_mk {U : Set α} {hU : IsOpen U} : ↑(⟨U, hU⟩ : Opens α) = U";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mem_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 87;
+      code_preview = "@[simp] theorem mem_mk {x : α} {U : Set α} {h : IsOpen U} : x ∈ mk U h ↔ x ∈ U";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.nonempty_coeSort";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 90;
+      code_preview = "protected theorem nonempty_coeSort {U : Opens α} : Nonempty U ↔ (U : Set α).Nonempty";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.nonempty_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 94;
+      code_preview = "protected theorem nonempty_coe {U : Opens α} : (U : Set α).Nonempty ↔ ∃ x, x ∈ U";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 97;
+      code_preview = "@[ext] theorem ext {U V : Opens α} (h : (U : Set α) = V) : U = V";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_inj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 101;
+      code_preview = "theorem coe_inj {U V : Opens α} : (U : Set α) = V ↔ U = V";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.inclusion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 104;
+      code_preview = "abbrev inclusion {U V : Opens α} (h : U ≤ V) : U → V := Set.inclusion h";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.isOpen";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 107;
+      code_preview = "protected theorem isOpen (U : Opens α) : IsOpen (U : Set α)";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mk_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 110;
+      code_preview = "@[simp] theorem mk_coe (U : Opens α) : mk (↑U) U.isOpen = U";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.Simps.coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 112;
+      code_preview = "def Simps.coe (U : Opens α) : Set α := U";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.interior";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 117;
+      code_preview = "@[simps] protected def interior (s : Set α) : Opens α :=   ⟨interior s, isOpen_interior⟩";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mem_interior";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 122;
+      code_preview = "@[simp] theorem mem_interior {s : Set α} {x : α} : x ∈ Opens.interior s ↔ x ∈ _root_.interior s";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.gc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 125;
+      code_preview = "theorem gc : GaloisConnection ((↑) : Opens α → Set α) Opens.interior";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.gi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 128;
+      code_preview = "def gi : GaloisCoinsertion (↑) (@Opens.interior α _) where   choice s hs := ⟨s, interior_eq_iff_isOpen.mp <| le_antisymm interior_subset hs⟩   gc := gc   u_l_le _ := interior_subset   choice_eq _s hs := le_antisymm hs interior_subset";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mk_inf_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 154;
+      code_preview = "@[simp] theorem mk_inf_mk {U V : Set α} {hU : IsOpen U} {hV : IsOpen V} :     (⟨U, hU⟩ ⊓ ⟨V, hV⟩ : Opens α) = ⟨U ⊓ V, IsOpen.inter hU hV⟩";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_inf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 159;
+      code_preview = "@[simp, norm_cast] theorem coe_inf (s t : Opens α) : (↑(s ⊓ t) : Set α) = ↑s ∩ ↑t";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mem_inf";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 163;
+      code_preview = "@[simp] lemma mem_inf {s t : Opens α} {x : α} : x ∈ s ⊓ t ↔ x ∈ s ∧ x ∈ t := Iff.rfl";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 166;
+      code_preview = "@[simp, norm_cast] theorem coe_sup (s t : Opens α) : (↑(s ⊔ t) : Set α) = ↑s ∪ ↑t";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 170;
+      code_preview = "@[simp, norm_cast] theorem coe_bot : ((⊥ : Opens α) : Set α) = ∅";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mem_bot";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 174;
+      code_preview = "@[simp] lemma mem_bot {x : α} : x ∈ (⊥ : Opens α) ↔ False := Iff.rfl";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mk_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 177;
+      code_preview = "@[simp] theorem mk_empty : (⟨∅, isOpen_empty⟩ : Opens α) = ⊥";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_eq_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 179;
+      code_preview = "@[simp, norm_cast] theorem coe_eq_empty {U : Opens α} : (U : Set α) = ∅ ↔ U = ⊥";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mem_top";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 183;
+      code_preview = "@[simp] lemma mem_top (x : α) : x ∈ (⊤ : Opens α) := trivial";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 186;
+      code_preview = "@[simp, norm_cast] theorem coe_top : ((⊤ : Opens α) : Set α) = Set.univ";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mk_univ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 190;
+      code_preview = "@[simp] theorem mk_univ : (⟨univ, isOpen_univ⟩ : Opens α) = ⊤";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_eq_univ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 192;
+      code_preview = "@[simp, norm_cast] theorem coe_eq_univ {U : Opens α} : (U : Set α) = univ ↔ U = ⊤";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_sSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 196;
+      code_preview = "@[simp, norm_cast] theorem coe_sSup {S : Set (Opens α)} : (↑(sSup S) : Set α) = ⋃ i ∈ S, ↑i";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_finset_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 200;
+      code_preview = "@[simp, norm_cast] theorem coe_finset_sup (f : ι → Opens α) (s : Finset ι) : (↑(s.sup f) : Set α) = s.sup ((↑) ∘ f)";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_finset_inf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 204;
+      code_preview = "@[simp, norm_cast] theorem coe_finset_inf (f : ι → Opens α) (s : Finset ι) : (↑(s.inf f) : Set α) = s.inf ((↑) ∘ f)";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.coe_iSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 216;
+      code_preview = "@[simp, norm_cast] theorem coe_iSup {ι} (s : ι → Opens α) : ((⨆ i, s i : Opens α) : Set α) = ⋃ i, s i";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.iSup_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 220;
+      code_preview = "theorem iSup_def {ι} (s : ι → Opens α) : ⨆ i, s i = ⟨⋃ i, s i, isOpen_iUnion fun i => (s i).2⟩";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.iSup_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 223;
+      code_preview = "@[simp] theorem iSup_mk {ι} (s : ι → Set α) (h : ∀ i, IsOpen (s i)) :     (⨆ i, ⟨s i, h i⟩ : Opens α) = ⟨⋃ i, s i, isOpen_iUnion h⟩";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mem_iSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 228;
+      code_preview = "@[simp] theorem mem_iSup {ι} {x : α} {s : ι → Opens α} : x ∈ iSup s ↔ ∃ i, x ∈ s i";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.mem_sSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 233;
+      code_preview = "@[simp] theorem mem_sSup {Us : Set (Opens α)} {x : α} : x ∈ sSup Us ↔ ∃ u ∈ Us, x ∈ u";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.frameMinimalAxioms";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 237;
+      code_preview = "def frameMinimalAxioms : Frame.MinimalAxioms (Opens α) where   inf_sSup_le_iSup_inf a s :=     (ext <| by simp only [coe_inf, coe_iSup, coe_sSup, Set.inter_iUnion₂]).le";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.instFrame";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 242;
+      code_preview = "instance instFrame : Frame (Opens α) := .ofMinimalAxioms frameMinimalAxioms";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.isOpenEmbedding'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 244;
+      code_preview = "theorem isOpenEmbedding' (U : Opens α) : IsOpenEmbedding (Subtype.val : U → α)";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.isOpenEmbedding_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 247;
+      code_preview = "theorem isOpenEmbedding_of_le {U V : Opens α} (i : U ≤ V) :     IsOpenEmbedding (Set.inclusion <| SetLike.coe_subset_coe.2 i) where";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.not_nonempty_iff_eq_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 254;
+      code_preview = "theorem not_nonempty_iff_eq_bot (U : Opens α) : ¬Set.Nonempty (U : Set α) ↔ U = ⊥";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.ne_bot_iff_nonempty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 257;
+      code_preview = "theorem ne_bot_iff_nonempty (U : Opens α) : U ≠ ⊥ ↔ Set.Nonempty (U : Set α)";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.eq_bot_or_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 260;
+      code_preview = "theorem eq_bot_or_top {α} [t : TopologicalSpace α] (h : t = ⊤) (U : Opens α) : U = ⊥ ∨ U = ⊤";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.IsBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 269;
+      code_preview = "def IsBasis (B : Set (Opens α)) : Prop :=   IsTopologicalBasis (((↑) : _ → Set α) '' B)";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.isBasis_iff_nbhd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 273;
+      code_preview = "theorem isBasis_iff_nbhd {B : Set (Opens α)} :     IsBasis B ↔ ∀ {U : Opens α} {x}, x ∈ U → ∃ U' ∈ B, x ∈ U' ∧ U' ≤ U";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.isBasis_iff_cover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 290;
+      code_preview = "theorem isBasis_iff_cover {B : Set (Opens α)} :     IsBasis B ↔ ∀ U : Opens α, ∃ Us, Us ⊆ B ∧ U = sSup Us";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.IsBasis.isCompact_open_iff_eq_finite_iUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 305;
+      code_preview = "theorem IsBasis.isCompact_open_iff_eq_finite_iUnion {ι : Type*} (b : ι → Opens α)     (hb : IsBasis (Set.range b)) (hb' : ∀ i, IsCompact (b i : Set α)) (U : Set α) :     IsCompact U ∧ IsOpen U ↔ ∃ s : Set ι, s.Finite ∧ U = ⋃ i ∈ s, b i";
+    }
+    {
+      full_name = "TopologicalSpace.Opens.IsBasis.le_iff";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Sets/Opens.lean";
+      start_line = 316;
+      code_preview = "lemma IsBasis.le_iff {α} {t₁ t₂ : TopologicalSpace α}     {Us : Set (Opens α)} (hUs : @IsBasis α t₂ Us) :     t₁ ≤ t₂ ↔ ∀ U ∈ Us, IsOpen[t₁] U := by   conv_lhs => rw [hUs.eq_generateFrom]   simp [Set.subset_def, le_generateFrom_iff_subset_isOpen]";
+    }
+    {
+      full_name = "ContinuousOrderHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 33;
+      code_preview = "structure ContinuousOrderHom (α β : Type*) [Preorder α] [Preorder β] [TopologicalSpace α]   [TopologicalSpace β] extends OrderHom α β where   continuous_toFun : Continuous toFun";
+    }
+    {
+      full_name = "ContinuousOrderHomClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 42;
+      code_preview = "class ContinuousOrderHomClass (F : Type*) (α β : outParam Type*) [Preorder α] [Preorder β]     [TopologicalSpace α] [TopologicalSpace β] [FunLike F α β] : Prop     extends ContinuousMapClass F α β where   map_monotone (f : F) : Monotone f";
+    }
+    {
+      full_name = "ContinuousOrderHomClass.toOrderHomClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 56;
+      code_preview = "instance (priority := 100) toOrderHomClass :     OrderHomClass F α β :=   { ‹ContinuousOrderHomClass F α β› with     map_rel := ContinuousOrderHomClass.map_monotone }";
+    }
+    {
+      full_name = "ContinuousOrderHomClass.toContinuousOrderHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 61;
+      code_preview = "@[coe] def toContinuousOrderHom (f : F) : α →Co β :=     { toFun := f       monotone' := ContinuousOrderHomClass.map_monotone f       continuous_toFun := map_continuous f }";
+    }
+    {
+      full_name = "ContinuousOrderHom.toContinuousMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 84;
+      code_preview = "def toContinuousMap (f : α →Co β) : C(α, β) :=   { f with }";
+    }
+    {
+      full_name = "ContinuousOrderHom.instFunLike";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 88;
+      code_preview = "instance instFunLike : FunLike (α →Co β) α β where   coe f := f.toFun   coe_injective' f g h := by     obtain ⟨⟨_, _⟩, _⟩ := f     obtain ⟨⟨_, _⟩, _⟩ := g     congr";
+    }
+    {
+      full_name = "ContinuousOrderHom.coe_toOrderHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 99;
+      code_preview = "@[simp] theorem coe_toOrderHom (f : α →Co β) : ⇑f.toOrderHom = f";
+    }
+    {
+      full_name = "ContinuousOrderHom.toFun_eq_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 101;
+      code_preview = "theorem toFun_eq_coe {f : α →Co β} : f.toFun = (f : α → β)";
+    }
+    {
+      full_name = "ContinuousOrderHom.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 103;
+      code_preview = "@[ext] theorem ext {f g : α →Co β} (h : ∀ a, f a = g a) : f = g";
+    }
+    {
+      full_name = "ContinuousOrderHom.copy";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 107;
+      code_preview = "protected def copy (f : α →Co β) (f' : α → β) (h : f' = f) : α →Co β :=   ⟨f.toOrderHom.copy f' h, h.symm.subst f.continuous_toFun⟩";
+    }
+    {
+      full_name = "ContinuousOrderHom.coe_copy";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 112;
+      code_preview = "@[simp] theorem coe_copy (f : α →Co β) (f' : α → β) (h : f' = f) : ⇑(f.copy f' h) = f'";
+    }
+    {
+      full_name = "ContinuousOrderHom.copy_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 116;
+      code_preview = "theorem copy_eq (f : α →Co β) (f' : α → β) (h : f' = f) : f.copy f' h = f";
+    }
+    {
+      full_name = "ContinuousOrderHom.id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 121;
+      code_preview = "protected def id : α →Co α :=   ⟨OrderHom.id, continuous_id⟩";
+    }
+    {
+      full_name = "ContinuousOrderHom.coe_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 128;
+      code_preview = "@[simp, norm_cast] theorem coe_id : ⇑(ContinuousOrderHom.id α) = id";
+    }
+    {
+      full_name = "ContinuousOrderHom.id_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 134;
+      code_preview = "@[simp] theorem id_apply (a : α) : ContinuousOrderHom.id α a = a";
+    }
+    {
+      full_name = "ContinuousOrderHom.comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 138;
+      code_preview = "def comp (f : β →Co γ) (g : α →Co β) : ContinuousOrderHom α γ :=   ⟨f.toOrderHom.comp g.toOrderHom, f.continuous_toFun.comp g.continuous_toFun⟩";
+    }
+    {
+      full_name = "ContinuousOrderHom.coe_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 142;
+      code_preview = "@[simp] theorem coe_comp (f : β →Co γ) (g : α →Co β) : (f.comp g : α → γ) = f ∘ g";
+    }
+    {
+      full_name = "ContinuousOrderHom.comp_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 146;
+      code_preview = "@[simp] theorem comp_apply (f : β →Co γ) (g : α →Co β) (a : α) : (f.comp g) a = f (g a)";
+    }
+    {
+      full_name = "ContinuousOrderHom.comp_assoc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 150;
+      code_preview = "@[simp] theorem comp_assoc (f : γ →Co δ) (g : β →Co γ) (h : α →Co β) :     (f.comp g).comp h = f.comp (g.comp h)";
+    }
+    {
+      full_name = "ContinuousOrderHom.comp_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 155;
+      code_preview = "@[simp] theorem comp_id (f : α →Co β) : f.comp (ContinuousOrderHom.id α) = f";
+    }
+    {
+      full_name = "ContinuousOrderHom.id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 159;
+      code_preview = "@[simp] theorem id_comp (f : α →Co β) : (ContinuousOrderHom.id β).comp f = f";
+    }
+    {
+      full_name = "ContinuousOrderHom.cancel_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 163;
+      code_preview = "@[simp] theorem cancel_right {g₁ g₂ : β →Co γ} {f : α →Co β} (hf : Surjective f) :     g₁.comp f = g₂.comp f ↔ g₁ = g₂";
+    }
+    {
+      full_name = "ContinuousOrderHom.cancel_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 168;
+      code_preview = "@[simp] theorem cancel_left {g : β →Co γ} {f₁ f₂ : α →Co β} (hg : Injective g) :     g.comp f₁ = g.comp f₂ ↔ f₁ = f₂";
+    }
+    {
+      full_name = "TopologicalSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 62;
+      code_preview = "@[to_additive existing TopologicalSpace] class TopologicalSpace (X : Type u) where      protected IsOpen : Set X → Prop      protected isOpen_univ : IsOpen univ      protected isOpen_inter : ∀ s t, IsOpen s → IsOpen t → IsOpen (s ∩ t)      protected isOpen_sUnion : ∀ s, (∀ t ∈ s, IsOpen t) → IsOpen ";
+    }
+    {
+      full_name = "IsOpen";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 84;
+      code_preview = "def IsOpen : Set X → Prop := TopologicalSpace.IsOpen";
+    }
+    {
+      full_name = "isOpen_univ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 87;
+      code_preview = "@[simp] theorem isOpen_univ : IsOpen (univ : Set X)";
+    }
+    {
+      full_name = "IsOpen.inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 89;
+      code_preview = "theorem IsOpen.inter (hs : IsOpen s) (ht : IsOpen t) : IsOpen (s ∩ t)";
+    }
+    {
+      full_name = "isOpen_sUnion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 92;
+      code_preview = "theorem isOpen_sUnion {s : Set (Set X)} (h : ∀ t ∈ s, IsOpen t) : IsOpen (⋃₀ s)";
+    }
+    {
+      full_name = "IsClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 95;
+      code_preview = "class IsClosed (s : Set X) : Prop where      isOpen_compl : IsOpen sᶜ";
+    }
+    {
+      full_name = "IsClopen";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 100;
+      code_preview = "def IsClopen (s : Set X) : Prop :=   IsClosed s ∧ IsOpen s";
+    }
+    {
+      full_name = "IsLocallyClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 104;
+      code_preview = "def IsLocallyClosed (s : Set X) : Prop := ∃ (U Z : Set X), IsOpen U ∧ IsClosed Z ∧ s = U ∩ Z";
+    }
+    {
+      full_name = "interior";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 110;
+      code_preview = "def interior (s : Set X) : Set X :=   ⋃₀ { t | IsOpen t ∧ t ⊆ s }";
+    }
+    {
+      full_name = "closure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 114;
+      code_preview = "def closure (s : Set X) : Set X :=   ⋂₀ { t | IsClosed t ∧ s ⊆ t }";
+    }
+    {
+      full_name = "frontier";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 118;
+      code_preview = "def frontier (s : Set X) : Set X :=   closure s \\ interior s";
+    }
+    {
+      full_name = "coborder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 122;
+      code_preview = "def coborder (s : Set X) : Set X :=   (closure s \\ s)ᶜ";
+    }
+    {
+      full_name = "Dense";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 134;
+      code_preview = "def Dense (s : Set X) : Prop :=   ∀ x, x ∈ closure s";
+    }
+    {
+      full_name = "DenseRange";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 138;
+      code_preview = "def DenseRange {α : Type*} (f : α → X) := Dense (range f)";
+    }
+    {
+      full_name = "Continuous";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 141;
+      code_preview = "@[fun_prop] structure Continuous (f : X → Y) : Prop where      isOpen_preimage : ∀ s, IsOpen s → IsOpen (f ⁻¹' s)";
+    }
+    {
+      full_name = "IsOpenMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 149;
+      code_preview = "def IsOpenMap (f : X → Y) : Prop := ∀ U : Set X, IsOpen U → IsOpen (f '' U)";
+    }
+    {
+      full_name = "IsClosedMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 153;
+      code_preview = "def IsClosedMap (f : X → Y) : Prop := ∀ U : Set X, IsClosed U → IsClosed (f '' U)";
+    }
+    {
+      full_name = "IsOpenQuotientMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 157;
+      code_preview = "@[mk_iff] structure IsOpenQuotientMap (f : X → Y) : Prop where      surjective : Function.Surjective f      continuous : Continuous f      isOpenMap : IsOpenMap f";
+    }
+    {
+      full_name = "BaireSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Basic.lean";
+      start_line = 196;
+      code_preview = "class BaireSpace (X : Type*) [TopologicalSpace X] : Prop where   baire_property : ∀ f : ℕ → Set X, (∀ n, IsOpen (f n)) → (∀ n, Dense (f n)) → Dense (⋂ n, f n)";
+    }
+    {
+      full_name = "nhdsWithin";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 128;
+      code_preview = "def nhdsWithin (x : X) (s : Set X) : Filter X :=   𝓝 x ⊓ 𝓟 s";
+    }
+    {
+      full_name = "nhdsSet";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 152;
+      code_preview = "def nhdsSet (s : Set X) : Filter X :=   sSup (nhds '' s)";
+    }
+    {
+      full_name = "exterior";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 158;
+      code_preview = "def exterior (s : Set X) : Set X := (𝓝ˢ s).ker";
+    }
+    {
+      full_name = "ContinuousAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 165;
+      code_preview = "@[fun_prop] def ContinuousAt (f : X → Y) (x : X) :=   Tendsto f (𝓝 x) (𝓝 (f x))";
+    }
+    {
+      full_name = "ContinuousWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 171;
+      code_preview = "@[fun_prop] def ContinuousWithinAt (f : X → Y) (s : Set X) (x : X) : Prop :=   Tendsto f (𝓝[s] x) (𝓝 (f x))";
+    }
+    {
+      full_name = "ContinuousOn";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 177;
+      code_preview = "@[fun_prop] def ContinuousOn (f : X → Y) (s : Set X) : Prop :=   ∀ x ∈ s, ContinuousWithinAt f s x";
+    }
+    {
+      full_name = "Specializes";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 183;
+      code_preview = "def Specializes (x y : X) : Prop := 𝓝 x ≤ 𝓝 y";
+    }
+    {
+      full_name = "Inseparable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 201;
+      code_preview = "def Inseparable (x y : X) : Prop :=   𝓝 x = 𝓝 y";
+    }
+    {
+      full_name = "specializationPreorder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 215;
+      code_preview = "def specializationPreorder : Preorder X :=   { Preorder.lift (OrderDual.toDual ∘ 𝓝) with     le := fun x y => y ⤳ x     lt := fun x y => y ⤳ x ∧ ¬x ⤳ y }";
+    }
+    {
+      full_name = "inseparableSetoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 221;
+      code_preview = "def inseparableSetoid : Setoid X := { Setoid.comap 𝓝 ⊥ with r := Inseparable }";
+    }
+    {
+      full_name = "SeparationQuotient";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 224;
+      code_preview = "def SeparationQuotient := Quotient (inseparableSetoid X)";
+    }
+    {
+      full_name = "lim";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 233;
+      code_preview = "noncomputable def lim [Nonempty X] (f : Filter X) : X :=   Classical.epsilon fun x => f ≤ 𝓝 x";
+    }
+    {
+      full_name = "limUnder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 237;
+      code_preview = "noncomputable def limUnder {α : Type*} [Nonempty X] (f : Filter α) (g : α → X) : X :=   lim (f.map g)";
+    }
+    {
+      full_name = "ClusterPt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 244;
+      code_preview = "def ClusterPt (x : X) (F : Filter X) : Prop :=   NeBot (𝓝 x ⊓ F)";
+    }
+    {
+      full_name = "MapClusterPt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 251;
+      code_preview = "def MapClusterPt {ι : Type*} (x : X) (F : Filter ι) (u : ι → X) : Prop :=   ClusterPt x (map u F)";
+    }
+    {
+      full_name = "AccPt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 256;
+      code_preview = "def AccPt (x : X) (F : Filter X) : Prop :=   NeBot (𝓝[≠] x ⊓ F)";
+    }
+    {
+      full_name = "IsCompact";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 261;
+      code_preview = "def IsCompact (s : Set X) :=   ∀ ⦃f⦄ [NeBot f], f ≤ 𝓟 s → ∃ x ∈ s, ClusterPt x f";
+    }
+    {
+      full_name = "CompactSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 267;
+      code_preview = "class CompactSpace : Prop where      isCompact_univ : IsCompact (Set.univ : Set X)";
+    }
+    {
+      full_name = "NoncompactSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 274;
+      code_preview = "class NoncompactSpace : Prop where      noncompact_univ : ¬IsCompact (Set.univ : Set X)";
+    }
+    {
+      full_name = "WeaklyLocallyCompactSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 279;
+      code_preview = "class WeaklyLocallyCompactSpace (X : Type*) [TopologicalSpace X] : Prop where      exists_compact_mem_nhds (x : X) : ∃ s, IsCompact s ∧ s ∈ 𝓝 x";
+    }
+    {
+      full_name = "LocallyCompactSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 287;
+      code_preview = "class LocallyCompactSpace (X : Type*) [TopologicalSpace X] : Prop where      local_compact_nhds : ∀ (x : X), ∀ n ∈ 𝓝 x, ∃ s ∈ 𝓝 x, s ⊆ n ∧ IsCompact s";
+    }
+    {
+      full_name = "LocallyCompactPair";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 300;
+      code_preview = "class LocallyCompactPair (X Y : Type*) [TopologicalSpace X] [TopologicalSpace Y] : Prop where      exists_mem_nhds_isCompact_mapsTo : ∀ {f : X → Y} {x : X} {s : Set Y},     Continuous f → s ∈ 𝓝 (f x) → ∃ K ∈ 𝓝 x, IsCompact K ∧ Set.MapsTo f K s";
+    }
+    {
+      full_name = "Filter.cocompact";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 323;
+      code_preview = "def Filter.cocompact : Filter X :=   ⨅ (s : Set X) (_ : IsCompact s), 𝓟 sᶜ";
+    }
+    {
+      full_name = "Filter.coclosedCompact";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Defs/Filter.lean";
+      start_line = 328;
+      code_preview = "def Filter.coclosedCompact : Filter X :=   ⨅ (s : Set X) (_ : IsClosed s) (_ : IsCompact s), 𝓟 sᶜ";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

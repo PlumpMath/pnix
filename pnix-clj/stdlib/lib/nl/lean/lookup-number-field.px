@@ -1,0 +1,1451 @@
+# AUTO-GENERATED — number-field
+# Entries: 206
+let
+  ownerName = "stdlib.nl.lean.lookup-number-field";
+  category = "number-field";
+  entries = [
+    {
+      full_name = "NumberField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 35;
+      code_preview = "@[stacks 09GA] class NumberField (K : Type*) [Field K] : Prop where   [to_charZero : CharZero K]   [to_finiteDimensional : FiniteDimensional ℚ K]";
+    }
+    {
+      full_name = "Int.not_isField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 46;
+      code_preview = "theorem Int.not_isField : ¬IsField ℤ";
+    }
+    {
+      full_name = "NumberField.isAlgebraic";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 58;
+      code_preview = "protected theorem isAlgebraic [NumberField K] : Algebra.IsAlgebraic ℚ K";
+    }
+    {
+      full_name = "NumberField.of_module_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 64;
+      code_preview = "theorem of_module_finite [NumberField K] [Algebra K L] [Module.Finite K L] : NumberField L where";
+    }
+    {
+      full_name = "NumberField.of_intermediateField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 72;
+      code_preview = "instance of_intermediateField [NumberField K] [NumberField L] [Algebra K L]     (E : IntermediateField K L) : NumberField E :=   of_module_finite K E";
+    }
+    {
+      full_name = "NumberField.of_tower";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 76;
+      code_preview = "theorem of_tower [NumberField K] [NumberField L] [Algebra K L] (E : Type*) [Field E]     [Algebra K E] [Algebra E L] [IsScalarTower K E L] : NumberField E";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 81;
+      code_preview = "def RingOfIntegers : Type _ :=   integralClosure ℤ K";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.val";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 116;
+      code_preview = "@[coe] abbrev val (x : 𝓞 K) : K := algebraMap _ _ x";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.coe_eq_algebraMap";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 123;
+      code_preview = "lemma coe_eq_algebraMap (x : 𝓞 K) : (x : K) = algebraMap _ _ x := rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 125;
+      code_preview = "@[ext] theorem ext {x y : 𝓞 K} (h : (x : K) = (y : K)) : x = y";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.eq_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 128;
+      code_preview = "@[norm_cast] theorem eq_iff {x y : 𝓞 K} : (x : K) = (y : K) ↔ x = y";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.map_mk";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 132;
+      code_preview = "@[simp] lemma map_mk (x : K) (hx) : algebraMap (𝓞 K) K ⟨x, hx⟩ = x := rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.coe_mk";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 134;
+      code_preview = "lemma coe_mk {x : K} (hx) : ((⟨x, hx⟩ : 𝓞 K) : K) = x := rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mk_eq_mk";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 136;
+      code_preview = "lemma mk_eq_mk (x y : K) (hx hy) : (⟨x, hx⟩ : 𝓞 K) = ⟨y, hy⟩ ↔ x = y := by simp";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mk_one";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 138;
+      code_preview = "@[simp] lemma mk_one : (⟨1, one_mem _⟩ : 𝓞 K) = 1 :=   rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mk_zero";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 141;
+      code_preview = "@[simp] lemma mk_zero : (⟨0, zero_mem _⟩ : 𝓞 K) = 0 :=   rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mk_add_mk";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 144;
+      code_preview = "@[simp] lemma mk_add_mk (x y : K) (hx hy) : (⟨x, hx⟩ : 𝓞 K) + ⟨y, hy⟩ = ⟨x + y, add_mem hx hy⟩ :=   rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mk_mul_mk";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 147;
+      code_preview = "@[simp] lemma mk_mul_mk (x y : K) (hx hy) : (⟨x, hx⟩ : 𝓞 K) * ⟨y, hy⟩ = ⟨x * y, mul_mem hx hy⟩ :=   rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mk_sub_mk";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 150;
+      code_preview = "@[simp] lemma mk_sub_mk (x y : K) (hx hy) : (⟨x, hx⟩ : 𝓞 K) - ⟨y, hy⟩ = ⟨x - y, sub_mem hx hy⟩ :=   rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.neg_mk";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 153;
+      code_preview = "@[simp] lemma neg_mk (x : K) (hx) : (-⟨x, hx⟩ : 𝓞 K) = ⟨-x, neg_mem hx⟩ :=   rfl";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mapRingHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 156;
+      code_preview = "def mapRingHom {K L F : Type*} [Field K] [Field L] [FunLike F K L]     [RingHomClass F K L] (f : F) : (𝓞 K) →+* (𝓞 L) where   toFun k := ⟨f k.val, map_isIntegral_int f k.2⟩   map_zero' := by ext; simp only [map_mk, map_zero]   map_one' := by ext; simp only [map_mk, map_one]   map_add' x y:= by ext; ";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mapRingEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 166;
+      code_preview = "def mapRingEquiv {K L E : Type*} [Field K] [Field L] [EquivLike E K L]     [RingEquivClass E K L] (e : E) : (𝓞 K) ≃+* (𝓞 L) :=   RingEquiv.ofRingHom (mapRingHom e) (mapRingHom (e : K ≃+* L).symm)     (RingHom.ext fun x => ext (EquivLike.right_inv e x.1))       (RingHom.ext fun x => ext (EquivLike.le";
+    }
+    {
+      full_name = "NumberField.inst_ringOfIntegersAlgebra";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 176;
+      code_preview = "instance inst_ringOfIntegersAlgebra [Algebra K L] : Algebra (𝓞 K) (𝓞 L) :=   (RingOfIntegers.mapRingHom (algebraMap K L)).toAlgebra";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mapAlgHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 185;
+      code_preview = "def mapAlgHom {k K L F : Type*} [Field k] [Field K] [Field L] [Algebra k K]     [Algebra k L] [FunLike F K L] [AlgHomClass F k K L] (f : F) : (𝓞 K) →ₐ[𝓞 k] (𝓞 L) where   toRingHom := mapRingHom f   commutes' x := SetCoe.ext (AlgHomClass.commutes ((f : K →ₐ[k] L).restrictScalars (𝓞 k)) x)";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.mapAlgEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 192;
+      code_preview = "def mapAlgEquiv {k K L E : Type*} [Field k] [Field K] [Field L] [Algebra k K]     [Algebra k L] [EquivLike E K L] [AlgEquivClass E k K L] (e : E) : (𝓞 K) ≃ₐ[𝓞 k] (𝓞 L) :=   AlgEquiv.ofAlgHom (mapAlgHom e) (mapAlgHom (e : K ≃ₐ[k] L).symm)     (AlgHom.ext fun x => ext (EquivLike.right_inv e x.1))     ";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.inst_isScalarTower";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 200;
+      code_preview = "instance inst_isScalarTower (k K L : Type*) [Field k] [Field K] [Field L]     [Algebra k K] [Algebra k L] [Algebra K L] [IsScalarTower k K L] :     IsScalarTower (𝓞 k) (𝓞 K) (𝓞 L) :=   IsScalarTower.of_algHom (mapAlgHom (IsScalarTower.toAlgHom k K L))";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.coe_injective";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 207;
+      code_preview = "lemma coe_injective : Function.Injective (algebraMap (𝓞 K) K) :=   FaithfulSMul.algebraMap_injective _ _";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.coe_eq_zero_iff";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 214;
+      code_preview = "lemma coe_eq_zero_iff {x : 𝓞 K} : algebraMap _ K x = 0 ↔ x = 0 :=   map_eq_zero_iff _ coe_injective";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.coe_ne_zero_iff";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 222;
+      code_preview = "lemma coe_ne_zero_iff {x : 𝓞 K} : algebraMap _ K x ≠ 0 ↔ x ≠ 0 :=   map_ne_zero_iff _ coe_injective";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.isIntegral_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 230;
+      code_preview = "theorem isIntegral_coe (x : 𝓞 K) : IsIntegral ℤ (algebraMap _ K x)";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.isIntegral";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 233;
+      code_preview = "theorem isIntegral (x : 𝓞 K) : IsIntegral ℤ x";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.equiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 250;
+      code_preview = "protected noncomputable def equiv (R : Type*) [CommRing R] [Algebra R K]     [IsIntegralClosure R ℤ K] : 𝓞 K ≃+* R :=   (IsIntegralClosure.equiv ℤ R K _).symm.toRingEquiv";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.not_isField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 265;
+      code_preview = "theorem not_isField : ¬IsField (𝓞 K)";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 281;
+      code_preview = "noncomputable def basis : Basis (Free.ChooseBasisIndex ℤ (𝓞 K)) ℤ (𝓞 K) :=   Free.chooseBasis ℤ (𝓞 K)";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.restrict";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 287;
+      code_preview = "def restrict (f : M → K) (h : ∀ x, IsIntegral ℤ (f x)) (x : M) : 𝓞 K :=   ⟨f x, h x⟩";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.restrict_addMonoidHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 292;
+      code_preview = "def restrict_addMonoidHom [AddZeroClass M] (f : M →+ K) (h : ∀ x, IsIntegral ℤ (f x)) :     M →+ 𝓞 K where   toFun := restrict f h   map_zero' := by simp only [restrict, map_zero, mk_zero]   map_add' x y := by simp only [restrict, map_add, mk_add_mk _]";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.restrict_monoidHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 300;
+      code_preview = "@[to_additive existing] def restrict_monoidHom [MulOneClass M] (f : M →* K) (h : ∀ x, IsIntegral ℤ (f x)) : M →* 𝓞 K where   toFun := restrict f h   map_one' := by simp only [restrict, map_one, mk_one]   map_mul' x y := by simp only [restrict, map_mul, mk_mul_mk _]";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.algEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 318;
+      code_preview = "protected noncomputable def algEquiv (R : Type*) [CommRing R] [Algebra (𝓞 K) R] [Algebra R L]     [IsScalarTower (𝓞 K) R L] [IsIntegralClosure R (𝓞 K) L] : 𝓞 L ≃ₐ[𝓞 K] R :=   (IsIntegralClosure.equiv (𝓞 K) R L _).symm";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.extension_algebra_isIntegral";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 323;
+      code_preview = "instance extension_algebra_isIntegral : Algebra.IsIntegral (𝓞 K) (𝓞 L) :=   IsIntegralClosure.isIntegral_algebra (𝓞 K) L";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.extension_isNoetherian";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 327;
+      code_preview = "instance extension_isNoetherian [NumberField K] [NumberField L] : IsNoetherian (𝓞 K) (𝓞 L) :=   IsIntegralClosure.isNoetherian (𝓞 K) K L (𝓞 L)";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.ker_algebraMap_eq_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 331;
+      code_preview = "theorem ker_algebraMap_eq_bot : RingHom.ker (algebraMap (𝓞 K) (𝓞 L)) = ⊥";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.algebraMap.injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 338;
+      code_preview = "theorem algebraMap.injective : Function.Injective (algebraMap (𝓞 K) (𝓞 L))";
+    }
+    {
+      full_name = "NumberField.integralBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 354;
+      code_preview = "noncomputable def integralBasis : Basis (Free.ChooseBasisIndex ℤ (𝓞 K)) ℚ K :=   Basis.localizationLocalization ℚ (nonZeroDivisors ℤ) K (RingOfIntegers.basis K)";
+    }
+    {
+      full_name = "NumberField.integralBasis_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 358;
+      code_preview = "@[simp] theorem integralBasis_apply (i : Free.ChooseBasisIndex ℤ (𝓞 K)) :     integralBasis K i = algebraMap (𝓞 K) K (RingOfIntegers.basis K i)";
+    }
+    {
+      full_name = "NumberField.integralBasis_repr_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 363;
+      code_preview = "@[simp] theorem integralBasis_repr_apply (x : (𝓞 K)) (i : Free.ChooseBasisIndex ℤ (𝓞 K)) :     (integralBasis K).repr (algebraMap _ _ x) i =       (algebraMap ℤ ℚ) ((RingOfIntegers.basis K).repr x i)";
+    }
+    {
+      full_name = "NumberField.mem_span_integralBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 369;
+      code_preview = "theorem mem_span_integralBasis {x : K} :     x ∈ Submodule.span ℤ (Set.range (integralBasis K)) ↔ x ∈ (algebraMap (𝓞 K) K).range";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.rank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 374;
+      code_preview = "theorem RingOfIntegers.rank : Module.finrank ℤ (𝓞 K) = Module.finrank ℚ K";
+    }
+    {
+      full_name = "Rat.numberField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 383;
+      code_preview = "instance numberField : NumberField ℚ where   to_charZero := inferInstance   to_finiteDimensional := by   convert (inferInstance : FiniteDimensional ℚ ℚ)";
+    }
+    {
+      full_name = "Rat.ringOfIntegersEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 392;
+      code_preview = "noncomputable def ringOfIntegersEquiv : 𝓞 ℚ ≃+* ℤ :=   RingOfIntegers.equiv ℤ";
+    }
+    {
+      full_name = "Rat.coe_ringOfIntegersEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Basic.lean";
+      start_line = 396;
+      code_preview = "@[simp] theorem coe_ringOfIntegersEquiv (z : 𝓞 ℚ) :     (Rat.ringOfIntegersEquiv z : ℚ) = algebraMap (𝓞 ℚ) ℚ z";
+    }
+    {
+      full_name = "NumberField.Embeddings.card";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 50;
+      code_preview = "theorem card : Fintype.card (K →+* A) = finrank ℚ K";
+    }
+    {
+      full_name = "NumberField.Embeddings.range_eval_eq_rootSet_minpoly";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 66;
+      code_preview = "theorem range_eval_eq_rootSet_minpoly :     (range fun φ : K →+* A => φ x) = (minpoly ℚ x).rootSet A";
+    }
+    {
+      full_name = "NumberField.Embeddings.coeff_bdd_of_norm_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 84;
+      code_preview = "theorem coeff_bdd_of_norm_le {B : ℝ} {x : K} (h : ∀ φ : K →+* A, ‖φ x‖ ≤ B) (i : ℕ) :     ‖(minpoly ℚ x).coeff i‖ ≤ max B 1 ^ finrank ℚ K * (finrank ℚ K).choose (finrank ℚ K / 2)";
+    }
+    {
+      full_name = "NumberField.Embeddings.finite_of_norm_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 97;
+      code_preview = "theorem finite_of_norm_le (B : ℝ) : {x : K | IsIntegral ℤ x ∧ ∀ φ : K →+* A, ‖φ x‖ ≤ B}.Finite";
+    }
+    {
+      full_name = "NumberField.Embeddings.pow_eq_one_of_norm_eq_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 112;
+      code_preview = "theorem pow_eq_one_of_norm_eq_one {x : K} (hxi : IsIntegral ℤ x) (hx : ∀ φ : K →+* A, ‖φ x‖ = 1) :     ∃ (n : ℕ) (_ : 0 < n), x ^ n = 1";
+    }
+    {
+      full_name = "NumberField.place";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 134;
+      code_preview = "def NumberField.place : AbsoluteValue K ℝ :=   (IsAbsoluteValue.toAbsoluteValue (norm : A → ℝ)).comp φ.injective";
+    }
+    {
+      full_name = "NumberField.place_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 138;
+      code_preview = "@[simp] theorem NumberField.place_apply (x : K) : (NumberField.place φ) x = norm (φ x)";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.lift";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 152;
+      code_preview = "noncomputable def lift [Algebra k K] [Algebra.IsAlgebraic k K] (φ : k →+* ℂ) : K →+* ℂ := by   letI := φ.toAlgebra   exact (IsAlgClosed.lift (R := k)).toRingHom";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.lift_comp_algebraMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 159;
+      code_preview = "@[simp] theorem lift_comp_algebraMap [Algebra k K] [Algebra.IsAlgebraic k K] (φ : k →+* ℂ) :     (lift K φ).comp (algebraMap k K) = φ";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.lift_algebraMap_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 166;
+      code_preview = "@[simp] theorem lift_algebraMap_apply [Algebra k K] [Algebra.IsAlgebraic k K] (φ : k →+* ℂ) (x : k) :     lift K φ (algebraMap k K x) = φ x";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.conjugate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 171;
+      code_preview = "abbrev conjugate (φ : K →+* ℂ) : K →+* ℂ := star φ";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.conjugate_coe_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 174;
+      code_preview = "@[simp] theorem conjugate_coe_eq (φ : K →+* ℂ) (x : K) : (conjugate φ) x = conj (φ x)";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.place_conjugate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 177;
+      code_preview = "theorem place_conjugate (φ : K →+* ℂ) : place (conjugate φ) = place φ";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 180;
+      code_preview = "abbrev IsReal (φ : K →+* ℂ) : Prop := IsSelfAdjoint φ";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.isReal_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 183;
+      code_preview = "theorem isReal_iff {φ : K →+* ℂ} : IsReal φ ↔ conjugate φ = φ";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.isReal_conjugate_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 185;
+      code_preview = "theorem isReal_conjugate_iff {φ : K →+* ℂ} : IsReal (conjugate φ) ↔ IsReal φ";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsReal.embedding";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 188;
+      code_preview = "def IsReal.embedding {φ : K →+* ℂ} (hφ : IsReal φ) : K →+* ℝ where   toFun x := (φ x).re   map_one' := by simp only [map_one, one_re]   map_mul' := by     simp only [Complex.conj_eq_iff_im.mp (RingHom.congr_fun hφ _), map_mul, mul_re,       mul_zero, tsub_zero, eq_self_iff_true, forall_const]   map_";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsReal.coe_embedding_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 198;
+      code_preview = "@[simp] theorem IsReal.coe_embedding_apply {φ : K →+* ℂ} (hφ : IsReal φ) (x : K) :     (hφ.embedding x : ℂ) = φ x";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsReal.comp";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 206;
+      code_preview = "lemma IsReal.comp (f : k →+* K) {φ : K →+* ℂ} (hφ : IsReal φ) :     IsReal (φ.comp f) := by ext1 x; simpa using RingHom.congr_fun hφ (f x)";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.isReal_comp_iff";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 209;
+      code_preview = "lemma isReal_comp_iff {f : k ≃+* K} {φ : K →+* ℂ} :     IsReal (φ.comp (f : k →+* K)) ↔ IsReal φ :=   ⟨fun H ↦ by convert H.comp f.symm.toRingHom; ext1; simp, IsReal.comp _⟩";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.exists_comp_symm_eq_of_comp_eq";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 213;
+      code_preview = "lemma exists_comp_symm_eq_of_comp_eq [Algebra k K] [IsGalois k K] (φ ψ : K →+* ℂ)     (h : φ.comp (algebraMap k K) = ψ.comp (algebraMap k K)) :     ∃ σ : K ≃ₐ[k] K, φ.comp σ.symm = ψ := by   letI := (φ.comp (algebraMap k K)).toAlgebra   letI := φ.toAlgebra   have : IsScalarTower k K ℂ := IsScalarTow";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsConj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 226;
+      code_preview = "def IsConj : Prop := conjugate φ = φ.comp σ";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsConj.eq";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 233;
+      code_preview = "lemma IsConj.eq (h : IsConj φ σ) (x) : φ (σ x) = star (φ x) := RingHom.congr_fun h.symm x";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsConj.ext";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 235;
+      code_preview = "lemma IsConj.ext {σ₁ σ₂ : K ≃ₐ[k] K} (h₁ : IsConj φ σ₁) (h₂ : IsConj φ σ₂) : σ₁ = σ₂ :=   AlgEquiv.ext fun x ↦ φ.injective ((h₁.eq x).trans (h₂.eq x).symm)";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsConj.ext_iff";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 238;
+      code_preview = "lemma IsConj.ext_iff {σ₁ σ₂ : K ≃ₐ[k] K} (h₁ : IsConj φ σ₁) : σ₁ = σ₂ ↔ IsConj φ σ₂ :=   ⟨fun e ↦ e ▸ h₁, h₁.ext⟩";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsConj.isReal_comp";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 241;
+      code_preview = "lemma IsConj.isReal_comp (h : IsConj φ σ) : IsReal (φ.comp (algebraMap k K)) := by   ext1 x   simp only [conjugate_coe_eq, RingHom.coe_comp, Function.comp_apply, ← h.eq,     starRingEnd_apply, AlgEquiv.commutes]";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.isConj_one_iff";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 246;
+      code_preview = "lemma isConj_one_iff : IsConj φ (1 : K ≃ₐ[k] K) ↔ IsReal φ := Iff.rfl";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.IsConj.symm";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 250;
+      code_preview = "lemma IsConj.symm (hσ : IsConj φ σ) :     IsConj φ σ.symm := RingHom.ext fun x ↦ by simpa using congr_arg star (hσ.eq (σ.symm x))";
+    }
+    {
+      full_name = "NumberField.ComplexEmbedding.isConj_symm";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 253;
+      code_preview = "lemma isConj_symm : IsConj φ σ.symm ↔ IsConj φ σ :=   ⟨IsConj.symm, IsConj.symm⟩";
+    }
+    {
+      full_name = "NumberField.InfinitePlace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 264;
+      code_preview = "def NumberField.InfinitePlace := { w : AbsoluteValue K ℝ // ∃ φ : K →+* ℂ, place φ = w }";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 271;
+      code_preview = "noncomputable def NumberField.InfinitePlace.mk (φ : K →+* ℂ) : NumberField.InfinitePlace K :=   ⟨place φ, ⟨φ, rfl⟩⟩";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.coe_apply";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 283;
+      code_preview = "lemma coe_apply {K : Type*} [Field K] (v : InfinitePlace K) (x : K) :   v x = v.1 x := rfl";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.ext";
+      kind = "lemma";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 286;
+      code_preview = "@[ext] lemma ext {K : Type*} [Field K] (v₁ v₂ : InfinitePlace K) (h : ∀ k, v₁ k = v₂ k) : v₁ = v₂ :=   Subtype.ext <| AbsoluteValue.ext h";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 298;
+      code_preview = "@[simp] theorem apply (φ : K →+* ℂ) (x : K) : (mk φ) x = ‖φ x‖";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.embedding";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 301;
+      code_preview = "noncomputable def embedding (w : InfinitePlace K) : K →+* ℂ := w.2.choose";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.mk_embedding";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 304;
+      code_preview = "@[simp] theorem mk_embedding (w : InfinitePlace K) : mk (embedding w) = w";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.mk_conjugate_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 307;
+      code_preview = "@[simp] theorem mk_conjugate_eq (φ : K →+* ℂ) : mk (ComplexEmbedding.conjugate φ) = mk φ";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.norm_embedding_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 312;
+      code_preview = "theorem norm_embedding_eq (w : InfinitePlace K) (x : K) :     ‖(embedding w) x‖ = w x";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.eq_iff_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 317;
+      code_preview = "theorem eq_iff_eq (x : K) (r : ℝ) : (∀ w : InfinitePlace K, w x = r) ↔ ∀ φ : K →+* ℂ, ‖φ x‖ = r";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.le_iff_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 320;
+      code_preview = "theorem le_iff_le (x : K) (r : ℝ) : (∀ w : InfinitePlace K, w x ≤ r) ↔ ∀ φ : K →+* ℂ, ‖φ x‖ ≤ r";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.pos_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 323;
+      code_preview = "theorem pos_iff {w : InfinitePlace K} {x : K} : 0 < w x ↔ x ≠ 0";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.mk_eq_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 325;
+      code_preview = "@[simp] theorem mk_eq_iff {φ ψ : K →+* ℂ} : mk φ = mk ψ ↔ φ = ψ ∨ ComplexEmbedding.conjugate φ = ψ";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.IsReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 359;
+      code_preview = "def IsReal (w : InfinitePlace K) : Prop := ∃ φ : K →+* ℂ, ComplexEmbedding.IsReal φ ∧ mk φ = w";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.IsComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 362;
+      code_preview = "def IsComplex (w : InfinitePlace K) : Prop := ∃ φ : K →+* ℂ, ¬ComplexEmbedding.IsReal φ ∧ mk φ = w";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.embedding_mk_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 365;
+      code_preview = "theorem embedding_mk_eq (φ : K →+* ℂ) :     embedding (mk φ) = φ ∨ embedding (mk φ) = ComplexEmbedding.conjugate φ";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.embedding_mk_eq_of_isReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 369;
+      code_preview = "@[simp] theorem embedding_mk_eq_of_isReal {φ : K →+* ℂ} (h : ComplexEmbedding.IsReal φ) :     embedding (mk φ) = φ";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.isReal_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 375;
+      code_preview = "theorem isReal_iff {w : InfinitePlace K} :     IsReal w ↔ ComplexEmbedding.IsReal (embedding w)";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.isComplex_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 381;
+      code_preview = "theorem isComplex_iff {w : InfinitePlace K} :     IsComplex w ↔ ¬ComplexEmbedding.IsReal (embedding w)";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.conjugate_embedding_eq_of_isReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 390;
+      code_preview = "@[simp] theorem conjugate_embedding_eq_of_isReal {w : InfinitePlace K} (h : IsReal w) :     ComplexEmbedding.conjugate (embedding w) = embedding w";
+    }
+    {
+      full_name = "NumberField.InfinitePlace.not_isReal_iff_isComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Embeddings.lean";
+      start_line = 395;
+      code_preview = "@[simp] theorem not_isReal_iff_isComplex {w : InfinitePlace K} : ¬IsReal w ↔ IsComplex w";
+    }
+    {
+      full_name = "Rat.RingOfIntegers.isUnit_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 40;
+      code_preview = "theorem Rat.RingOfIntegers.isUnit_iff {x : 𝓞 ℚ} : IsUnit x ↔ (x : ℚ) = 1 ∨ (x : ℚ) = -1";
+    }
+    {
+      full_name = "NumberField.isUnit_iff_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 53;
+      code_preview = "theorem NumberField.isUnit_iff_norm [NumberField K] {x : 𝓞 K} :     IsUnit x ↔ |(RingOfIntegers.norm ℚ x : ℚ)| = 1";
+    }
+    {
+      full_name = "NumberField.Units.coe_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 67;
+      code_preview = "theorem coe_injective : Function.Injective ((↑) : (𝓞 K)ˣ → K)";
+    }
+    {
+      full_name = "NumberField.Units.coe_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 72;
+      code_preview = "theorem coe_coe (u : (𝓞 K)ˣ) : ((u : 𝓞 K) : K) = (u : K)";
+    }
+    {
+      full_name = "NumberField.Units.coe_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 74;
+      code_preview = "theorem coe_mul (x y : (𝓞 K)ˣ) : ((x * y : (𝓞 K)ˣ) : K) = (x : K) * (y : K)";
+    }
+    {
+      full_name = "NumberField.Units.coe_pow";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 76;
+      code_preview = "theorem coe_pow (x : (𝓞 K)ˣ) (n : ℕ) : ((x ^ n : (𝓞 K)ˣ) : K) = (x : K) ^ n";
+    }
+    {
+      full_name = "NumberField.Units.coe_zpow";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 79;
+      code_preview = "theorem coe_zpow (x : (𝓞 K)ˣ) (n : ℤ) : (↑(x ^ n) : K) = (x : K) ^ n";
+    }
+    {
+      full_name = "NumberField.Units.coe_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 83;
+      code_preview = "theorem coe_one : ((1 : (𝓞 K)ˣ) : K) = (1 : K)";
+    }
+    {
+      full_name = "NumberField.Units.coe_neg_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 85;
+      code_preview = "theorem coe_neg_one : ((-1 : (𝓞 K)ˣ) : K) = (-1 : K)";
+    }
+    {
+      full_name = "NumberField.Units.coe_ne_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 87;
+      code_preview = "theorem coe_ne_zero (x : (𝓞 K)ˣ) : (x : K) ≠ 0";
+    }
+    {
+      full_name = "NumberField.Units.norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 94;
+      code_preview = "@[simp] protected theorem norm [NumberField K] (x : (𝓞 K)ˣ) :     |Algebra.norm ℚ (x : K)| = 1";
+    }
+    {
+      full_name = "NumberField.Units.pos_at_place";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 99;
+      code_preview = "theorem pos_at_place (x : (𝓞 K)ˣ) (w : InfinitePlace K) :     0 < w x";
+    }
+    {
+      full_name = "NumberField.Units.sum_mult_mul_log";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 103;
+      code_preview = "theorem sum_mult_mul_log [NumberField K] (x : (𝓞 K)ˣ) :     ∑ w : InfinitePlace K, w.mult * Real.log (w x) = 0";
+    }
+    {
+      full_name = "NumberField.Units.torsion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 110;
+      code_preview = "def torsion : Subgroup (𝓞 K)ˣ := CommGroup.torsion (𝓞 K)ˣ";
+    }
+    {
+      full_name = "NumberField.Units.mem_torsion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 113;
+      code_preview = "theorem mem_torsion {x : (𝓞 K)ˣ} [NumberField K] :     x ∈ torsion K ↔ ∀ w : InfinitePlace K, w x = 1";
+    }
+    {
+      full_name = "NumberField.Units.torsionOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 138;
+      code_preview = "def torsionOrder [NumberField K] : ℕ+ := ⟨Fintype.card (torsion K), Fintype.card_pos⟩";
+    }
+    {
+      full_name = "NumberField.Units.rootsOfUnity_eq_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 141;
+      code_preview = "theorem rootsOfUnity_eq_one [NumberField K] {k : ℕ+} (hc : Nat.Coprime k (torsionOrder K))     {ζ : (𝓞 K)ˣ} : ζ ∈ rootsOfUnity k (𝓞 K) ↔ ζ = 1";
+    }
+    {
+      full_name = "NumberField.Units.rootsOfUnity_eq_torsion";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 155;
+      code_preview = "theorem rootsOfUnity_eq_torsion [NumberField K] :     rootsOfUnity (torsionOrder K) (𝓞 K) = torsion K";
+    }
+    {
+      full_name = "NumberField.Units.torsion_eq_one_or_neg_one_of_odd_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 170;
+      code_preview = "theorem torsion_eq_one_or_neg_one_of_odd_finrank [NumberField K]     (h : Odd (Module.finrank ℚ K)) (x : torsion K) : (x : (𝓞 K)ˣ) = 1 ∨ (x : (𝓞 K)ˣ) = -1";
+    }
+    {
+      full_name = "NumberField.Units.torsionOrder_eq_two_of_odd_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Units/Basic.lean";
+      start_line = 183;
+      code_preview = "theorem torsionOrder_eq_two_of_odd_finrank [NumberField K]     (h : Odd (Module.finrank ℚ K)) : torsionOrder K = 2";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 44;
+      code_preview = "def _root_.NumberField.canonicalEmbedding : K →+* ((K →+* ℂ) → ℂ) := Pi.ringHom fun φ => φ";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 47;
+      code_preview = "theorem _root_.NumberField.canonicalEmbedding_injective [NumberField K] :     Function.Injective (NumberField.canonicalEmbedding K)";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.apply_at";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 52;
+      code_preview = "@[simp] theorem apply_at (φ : K →+* ℂ) (x : K) : (NumberField.canonicalEmbedding K x) φ = φ x";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.conj_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 57;
+      code_preview = "theorem conj_apply {x : ((K →+* ℂ) → ℂ)} (φ : K →+* ℂ)     (hx : x ∈ Submodule.span ℝ (Set.range (canonicalEmbedding K))) :     conj (x φ) = x (ComplexEmbedding.conjugate φ)";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.nnnorm_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 70;
+      code_preview = "theorem nnnorm_eq [NumberField K] (x : K) :     ‖canonicalEmbedding K x‖₊ = Finset.univ.sup (fun φ : K →+* ℂ => ‖φ x‖₊)";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.norm_le_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 74;
+      code_preview = "theorem norm_le_iff [NumberField K] (x : K) (r : ℝ) :     ‖canonicalEmbedding K x‖ ≤ r ↔ ∀ φ : K →+* ℂ, ‖φ x‖ ≤ r";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.integerLattice";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 87;
+      code_preview = "def integerLattice : Subring ((K →+* ℂ) → ℂ) :=   (RingHom.range (algebraMap (𝓞 K) K)).map (canonicalEmbedding K)";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.integerLattice.inter_ball_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 91;
+      code_preview = "theorem integerLattice.inter_ball_finite [NumberField K] (r : ℝ) :     ((integerLattice K : Set ((K →+* ℂ) → ℂ)) ∩ Metric.closedBall 0 r).Finite";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.latticeBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 107;
+      code_preview = "noncomputable def latticeBasis [NumberField K] :     Basis (Free.ChooseBasisIndex ℤ (𝓞 K)) ℂ ((K →+* ℂ) → ℂ) := by   classical   let B := Pi.basisFun ℂ (K →+* ℂ)     let e : (K →+* ℂ) ≃ Free.ChooseBasisIndex ℤ (𝓞 K) :=       equivOfCardEq ((Embeddings.card K ℂ).trans (finrank_eq_card_basis (integral";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.latticeBasis_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 133;
+      code_preview = "@[simp] theorem latticeBasis_apply [NumberField K] (i : Free.ChooseBasisIndex ℤ (𝓞 K)) :     latticeBasis K i = (canonicalEmbedding K) (integralBasis K i)";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.mem_span_latticeBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 139;
+      code_preview = "theorem mem_span_latticeBasis [NumberField K] {x : (K →+* ℂ) → ℂ} :     x ∈ Submodule.span ℤ (Set.range (latticeBasis K)) ↔       x ∈ ((canonicalEmbedding K).comp (algebraMap (𝓞 K) K)).range";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.mem_rat_span_latticeBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 150;
+      code_preview = "theorem mem_rat_span_latticeBasis [NumberField K] (x : K) :     canonicalEmbedding K x ∈ Submodule.span ℚ (Set.range (latticeBasis K))";
+    }
+    {
+      full_name = "NumberField.canonicalEmbedding.integralBasis_repr_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 158;
+      code_preview = "theorem integralBasis_repr_apply [NumberField K] (x : K) (i : Free.ChooseBasisIndex ℤ (𝓞 K)) :     (latticeBasis K).repr (canonicalEmbedding K x) i = (integralBasis K).repr x i";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.mixedSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 180;
+      code_preview = "abbrev mixedSpace :=   ({w : InfinitePlace K // IsReal w} → ℝ) × ({w : InfinitePlace K // IsComplex w} → ℂ)";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 184;
+      code_preview = "noncomputable def _root_.NumberField.mixedEmbedding : K →+* (mixedSpace K) :=   RingHom.prod (Pi.ringHom fun w => embedding_of_isReal w.prop)     (Pi.ringHom fun w => w.val.embedding)";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.mixedEmbedding_apply_isReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 189;
+      code_preview = "@[simp] theorem mixedEmbedding_apply_isReal (x : K) (w : {w // IsReal w}) :     (mixedEmbedding K x).1 w = embedding_of_isReal w.prop x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.mixedEmbedding_apply_isComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 194;
+      code_preview = "@[simp] theorem mixedEmbedding_apply_isComplex (x : K) (w : {w // IsComplex w}) :     (mixedEmbedding K x).2 w = w.val.embedding x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 212;
+      code_preview = "protected theorem finrank [NumberField K] : finrank ℝ (mixedSpace K) = finrank ℚ K";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 219;
+      code_preview = "theorem _root_.NumberField.mixedEmbedding_injective [NumberField K] :     Function.Injective (NumberField.mixedEmbedding K)";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.volume_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 245;
+      code_preview = "theorem volume_eq_zero (w : {w // IsReal w}) :     volume ({x : mixedSpace K | x.1 w = 0}) = 0";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.commMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 258;
+      code_preview = "noncomputable def commMap : ((K →+* ℂ) → ℂ) →ₗ[ℝ] (mixedSpace K) where   toFun := fun x => ⟨fun w => (x w.val.embedding).re, fun w => x w.val.embedding⟩   map_add' := by     simp only [Pi.add_apply, Complex.add_re, Prod.mk_add_mk, Prod.mk.injEq]     exact fun _ _ => ⟨rfl, rfl⟩   map_smul' := by     ";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.commMap_apply_of_isReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 270;
+      code_preview = "theorem commMap_apply_of_isReal (x : (K →+* ℂ) → ℂ) {w : InfinitePlace K} (hw : IsReal w) :     (commMap K x).1 ⟨w, hw⟩ = (x w.embedding).re";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.commMap_apply_of_isComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 273;
+      code_preview = "theorem commMap_apply_of_isComplex (x : (K →+* ℂ) → ℂ) {w : InfinitePlace K} (hw : IsComplex w) :     (commMap K x).2 ⟨w, hw⟩ = x w.embedding";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.commMap_canonical_eq_mixed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 276;
+      code_preview = "@[simp] theorem commMap_canonical_eq_mixed (x : K) :     commMap K (canonicalEmbedding K x) = mixedEmbedding K x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.disjoint_span_commMap_ker";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 283;
+      code_preview = "theorem disjoint_span_commMap_ker [NumberField K] :     Disjoint (Submodule.span ℝ (Set.range (canonicalEmbedding.latticeBasis K)))       (LinearMap.ker (commMap K))";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 317;
+      code_preview = "def normAtPlace (w : InfinitePlace K) : (mixedSpace K) →*₀ ℝ where   toFun x := if hw : IsReal w then ‖x.1 ⟨w, hw⟩‖ else ‖x.2 ⟨w, not_isReal_iff_isComplex.mp hw⟩‖   map_zero' := by simp   map_one' := by simp   map_mul' x y := by split_ifs <;> simp";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace_nonneg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 324;
+      code_preview = "theorem normAtPlace_nonneg (w : InfinitePlace K) (x : mixedSpace K) :     0 ≤ normAtPlace w x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace_neg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 329;
+      code_preview = "theorem normAtPlace_neg (w : InfinitePlace K) (x : mixedSpace K) :     normAtPlace w (- x) = normAtPlace w x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace_add_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 334;
+      code_preview = "theorem normAtPlace_add_le (w : InfinitePlace K) (x y : mixedSpace K) :     normAtPlace w (x + y) ≤ normAtPlace w x + normAtPlace w y";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 339;
+      code_preview = "theorem normAtPlace_smul (w : InfinitePlace K) (x : mixedSpace K) (c : ℝ) :     normAtPlace w (c • x) = |c| * normAtPlace w x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace_real";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 344;
+      code_preview = "theorem normAtPlace_real (w : InfinitePlace K) (c : ℝ) :     normAtPlace w ((fun _ ↦ c, fun _ ↦ c) : (mixedSpace K)) = |c|";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace_apply_of_isReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 349;
+      code_preview = "theorem normAtPlace_apply_of_isReal {w : InfinitePlace K} (hw : IsReal w) (x : mixedSpace K) :     normAtPlace w x = ‖x.1 ⟨w, hw⟩‖";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace_apply_of_isComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 353;
+      code_preview = "theorem normAtPlace_apply_of_isComplex {w : InfinitePlace K} (hw : IsComplex w) (x : mixedSpace K) :     normAtPlace w x = ‖x.2 ⟨w, hw⟩‖";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.normAtPlace_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 362;
+      code_preview = "@[simp] theorem normAtPlace_apply (w : InfinitePlace K) (x : K) :     normAtPlace w (mixedEmbedding K x) = w x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.forall_normAtPlace_eq_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 369;
+      code_preview = "theorem forall_normAtPlace_eq_zero_iff {x : mixedSpace K} :     (∀ w, normAtPlace w x = 0) ↔ x = 0";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.exists_normAtPlace_ne_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 377;
+      code_preview = "@[simp] theorem exists_normAtPlace_ne_zero_iff {x : mixedSpace K} :     (∃ w, normAtPlace w x ≠ 0) ↔ x ≠ 0";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.continuous_normAtPlace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 382;
+      code_preview = "@[fun_prop] theorem continuous_normAtPlace (w : InfinitePlace K) :     Continuous (normAtPlace w)";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.nnnorm_eq_sup_normAtPlace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 391;
+      code_preview = "theorem nnnorm_eq_sup_normAtPlace (x : mixedSpace K) :     ‖x‖₊ = univ.sup fun w ↦ ⟨normAtPlace w x, normAtPlace_nonneg w x⟩";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_eq_sup'_normAtPlace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 407;
+      code_preview = "theorem norm_eq_sup'_normAtPlace (x : mixedSpace K) :     ‖x‖ = univ.sup' univ_nonempty fun w ↦ normAtPlace w x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 413;
+      code_preview = "protected def norm : (mixedSpace K) →*₀ ℝ where   toFun x := ∏ w, (normAtPlace w x) ^ (mult w)   map_one' := by simp only [map_one, one_pow, prod_const_one]   map_zero' := by simp [mult]   map_mul' _ _ := by simp only [map_mul, mul_pow, prod_mul_distrib]";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 422;
+      code_preview = "protected theorem norm_apply (x : mixedSpace K) :     mixedEmbedding.norm x = ∏ w, (normAtPlace w x) ^ (mult w)";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_nonneg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 425;
+      code_preview = "protected theorem norm_nonneg (x : mixedSpace K) :     0 ≤ mixedEmbedding.norm x";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_eq_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 428;
+      code_preview = "protected theorem norm_eq_zero_iff {x : mixedSpace K} :     mixedEmbedding.norm x = 0 ↔ ∃ w, normAtPlace w x = 0";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_ne_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 433;
+      code_preview = "protected theorem norm_ne_zero_iff {x : mixedSpace K} :     mixedEmbedding.norm x ≠ 0 ↔ ∀ w, normAtPlace w x ≠ 0";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_eq_of_normAtPlace_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 438;
+      code_preview = "theorem norm_eq_of_normAtPlace_eq {x y : mixedSpace K}     (h : ∀ w, normAtPlace w x = normAtPlace w y) :     mixedEmbedding.norm x = mixedEmbedding.norm y";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 443;
+      code_preview = "theorem norm_smul (c : ℝ) (x : mixedSpace K) :     mixedEmbedding.norm (c • x) = |c| ^ finrank ℚ K * (mixedEmbedding.norm x)";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_real";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 448;
+      code_preview = "theorem norm_real (c : ℝ) :     mixedEmbedding.norm ((fun _ ↦ c, fun _ ↦ c) : (mixedSpace K)) = |c| ^ finrank ℚ K";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_eq_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 453;
+      code_preview = "@[simp] theorem norm_eq_norm (x : K) :     mixedEmbedding.norm (mixedEmbedding K x) = |Algebra.norm ℚ x|";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_unit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 458;
+      code_preview = "theorem norm_unit (u : (𝓞 K)ˣ) :     mixedEmbedding.norm (mixedEmbedding K u) = 1";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.norm_eq_zero_iff'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/CanonicalEmbedding/Basic.lean";
+      start_line = 462;
+      code_preview = "theorem norm_eq_zero_iff' {x : mixedSpace K} (hx : x ∈ Set.range (mixedEmbedding K)) :     mixedEmbedding.norm x = 0 ↔ x = 0";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.volume_fundamentalDomain_latticeBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 43;
+      code_preview = "theorem _root_.NumberField.mixedEmbedding.volume_fundamentalDomain_latticeBasis :     volume (fundamentalDomain (latticeBasis K)) =       (2 : ℝ≥0∞)⁻¹ ^ nrComplexPlaces K * sqrt ‖discr K‖₊";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.covolume_integerLattice";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 78;
+      code_preview = "theorem _root_.NumberField.mixedEmbedding.covolume_integerLattice :     ZLattice.covolume (mixedEmbedding.integerLattice K) =       (2 ⁻¹) ^ nrComplexPlaces K * √|discr K|";
+    }
+    {
+      full_name = "NumberField.mixedEmbedding.covolume_idealLattice";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 88;
+      code_preview = "theorem _root_.NumberField.mixedEmbedding.covolume_idealLattice (I : (FractionalIdeal (𝓞 K)⁰ K)ˣ) :     ZLattice.covolume (mixedEmbedding.idealLattice K I) =       (FractionalIdeal.absNorm (I : FractionalIdeal (𝓞 K)⁰ K)) *         (2 ⁻¹) ^ nrComplexPlaces K * √|discr K|";
+    }
+    {
+      full_name = "NumberField.exists_ne_zero_mem_ideal_of_norm_le_mul_sqrt_discr";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 99;
+      code_preview = "theorem exists_ne_zero_mem_ideal_of_norm_le_mul_sqrt_discr (I : (FractionalIdeal (𝓞 K)⁰ K)ˣ) :     ∃ a ∈ (I : FractionalIdeal (𝓞 K)⁰ K), a ≠ 0 ∧       |Algebra.norm ℚ (a : K)| ≤ FractionalIdeal.absNorm I.1 * (4 / π) ^ nrComplexPlaces K *         (finrank ℚ K).factorial / (finrank ℚ K) ^ (finrank ℚ K";
+    }
+    {
+      full_name = "NumberField.exists_ne_zero_mem_ringOfIntegers_of_norm_le_mul_sqrt_discr";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 148;
+      code_preview = "theorem exists_ne_zero_mem_ringOfIntegers_of_norm_le_mul_sqrt_discr :     ∃ (a : 𝓞 K), a ≠ 0 ∧       |Algebra.norm ℚ (a : K)| ≤ (4 / π) ^ nrComplexPlaces K *         (finrank ℚ K).factorial / (finrank ℚ K) ^ (finrank ℚ K) * Real.sqrt |discr K|";
+    }
+    {
+      full_name = "NumberField.abs_discr_ge'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 158;
+      code_preview = "theorem abs_discr_ge' :     (finrank ℚ K) ^ (2 * finrank ℚ K) / ((4 / π) ^ (2 * nrComplexPlaces K) *       (finrank ℚ K).factorial ^ 2) ≤ |discr K|";
+    }
+    {
+      full_name = "NumberField.abs_discr_ge_of_isTotallyComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 177;
+      code_preview = "theorem abs_discr_ge_of_isTotallyComplex [IsTotallyComplex K] :     (finrank ℚ K) ^ (2 * finrank ℚ K) / ((4 / π) ^ (finrank ℚ K) *       (finrank ℚ K).factorial ^ 2) ≤ |discr K|";
+    }
+    {
+      full_name = "NumberField.abs_discr_rpow_ge_of_isTotallyComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 183;
+      code_preview = "theorem abs_discr_rpow_ge_of_isTotallyComplex [IsTotallyComplex K] :     (finrank ℚ K) ^ 2 / ((4 / π) * (finrank ℚ K).factorial ^ (2 * (finrank ℚ K : ℝ)⁻¹)) ≤         |discr K| ^ (finrank ℚ K : ℝ)⁻¹";
+    }
+    {
+      full_name = "NumberField.abs_discr_ge";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 196;
+      code_preview = "theorem abs_discr_ge (h : 1 < finrank ℚ K) :     (4 / 9 : ℝ) * (3 * π / 4) ^ finrank ℚ K ≤ |discr K|";
+    }
+    {
+      full_name = "NumberField.abs_discr_gt_two";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 224;
+      code_preview = "theorem abs_discr_gt_two (h : 1 < finrank ℚ K) : 2 < |discr K|";
+    }
+    {
+      full_name = "NumberField.hermiteTheorem.finite_of_finite_generating_set";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 269;
+      code_preview = "theorem finite_of_finite_generating_set {p : IntermediateField ℚ A → Prop}     (S : Set {F : IntermediateField ℚ A // p F}) {T : Set A}     (hT : T.Finite) (h : ∀ F ∈ S, ∃ x ∈ T, F = ℚ⟮x⟯) :     S.Finite";
+    }
+    {
+      full_name = "NumberField.hermiteTheorem.rankOfDiscrBdd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 282;
+      code_preview = "noncomputable abbrev rankOfDiscrBdd : ℕ :=   max 1 (Nat.floor ((Real.log ((9 / 4 : ℝ) * N) / Real.log (3 * π / 4))))";
+    }
+    {
+      full_name = "NumberField.hermiteTheorem.boundOfDiscBdd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 287;
+      code_preview = "noncomputable abbrev boundOfDiscBdd : ℝ≥0 := sqrt N * (2 : ℝ≥0) ^ rankOfDiscrBdd N + 1";
+    }
+    {
+      full_name = "NumberField.hermiteTheorem.rank_le_rankOfDiscrBdd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 294;
+      code_preview = "theorem rank_le_rankOfDiscrBdd :     finrank ℚ K ≤ rankOfDiscrBdd N";
+    }
+    {
+      full_name = "NumberField.hermiteTheorem.minkowskiBound_lt_boundOfDiscBdd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 321;
+      code_preview = "theorem minkowskiBound_lt_boundOfDiscBdd : minkowskiBound K ↑1 < boundOfDiscBdd N";
+    }
+    {
+      full_name = "NumberField.hermiteTheorem.natDegree_le_rankOfDiscrBdd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 338;
+      code_preview = "theorem natDegree_le_rankOfDiscrBdd (a : 𝓞 K) (h : ℚ⟮(a : K)⟯ = ⊤) :     natDegree (minpoly ℤ (a : K)) ≤ rankOfDiscrBdd N";
+    }
+    {
+      full_name = "NumberField.hermiteTheorem.finite_of_discr_bdd_of_isReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 347;
+      code_preview = "theorem finite_of_discr_bdd_of_isReal :     {K : { F : IntermediateField ℚ A // FiniteDimensional ℚ F} |       haveI :  NumberField K := @NumberField.mk _ _ inferInstance K.prop       {w : InfinitePlace K | IsReal w}.Nonempty ∧ |discr K| ≤ N }.Finite";
+    }
+    {
+      full_name = "NumberField.hermiteTheorem.finite_of_discr_bdd_of_isComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 395;
+      code_preview = "theorem finite_of_discr_bdd_of_isComplex :     {K : { F : IntermediateField ℚ A // FiniteDimensional ℚ F} |       haveI :  NumberField K := @NumberField.mk _ _ inferInstance K.prop       {w : InfinitePlace K | IsComplex w}.Nonempty ∧ |discr K| ≤ N }.Finite";
+    }
+    {
+      full_name = "NumberField.finite_of_discr_bdd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/Discriminant/Basic.lean";
+      start_line = 444;
+      code_preview = "theorem _root_.NumberField.finite_of_discr_bdd :     {K : { F : IntermediateField ℚ A // FiniteDimensional ℚ F} |       haveI :  NumberField K := @NumberField.mk _ _ inferInstance K.prop       |discr K| ≤ N }.Finite";
+    }
+    {
+      full_name = "NumberField.RingOfIntegers.instFintypeClassGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/ClassNumber.lean";
+      start_line = 28;
+      code_preview = "noncomputable instance instFintypeClassGroup : Fintype (ClassGroup (𝓞 K)) :=   ClassGroup.fintypeOfAdmissibleOfFinite ℚ K AbsoluteValue.absIsAdmissible";
+    }
+    {
+      full_name = "NumberField.classNumber";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/ClassNumber.lean";
+      start_line = 33;
+      code_preview = "noncomputable def classNumber : ℕ :=   Fintype.card (ClassGroup (𝓞 K))";
+    }
+    {
+      full_name = "NumberField.classNumber_eq_one_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/ClassNumber.lean";
+      start_line = 39;
+      code_preview = "theorem classNumber_eq_one_iff : classNumber K = 1 ↔ IsPrincipalIdealRing (𝓞 K)";
+    }
+    {
+      full_name = "NumberField.exists_ideal_in_class_of_norm_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/ClassNumber.lean";
+      start_line = 47;
+      code_preview = "theorem exists_ideal_in_class_of_norm_le (C : ClassGroup (𝓞 K)) :     ∃ I : (Ideal (𝓞 K))⁰, ClassGroup.mk0 I = C ∧       Ideal.absNorm (I : Ideal (𝓞 K)) ≤ (4 / π) ^ nrComplexPlaces K *         ((finrank ℚ K).factorial / (finrank ℚ K) ^ (finrank ℚ K) * Real.sqrt |discr K|)";
+    }
+    {
+      full_name = "RingOfIntegers.isPrincipalIdealRing_of_abs_discr_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/ClassNumber.lean";
+      start_line = 72;
+      code_preview = "theorem _root_.RingOfIntegers.isPrincipalIdealRing_of_abs_discr_lt     (h : |discr K| < (2 * (π / 4) ^ nrComplexPlaces K *       ((finrank ℚ K) ^ (finrank ℚ K) / (finrank ℚ K).factorial)) ^ 2) :     IsPrincipalIdealRing (𝓞 K)";
+    }
+    {
+      full_name = "Rat.classNumber_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/ClassNumber.lean";
+      start_line = 95;
+      code_preview = "theorem classNumber_eq : NumberField.classNumber ℚ = 1";
+    }
+    {
+      full_name = "NumberField.InfiniteAdeleRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 49;
+      code_preview = "def InfiniteAdeleRing (K : Type*) [Field K] := (v : InfinitePlace K) → v.Completion";
+    }
+    {
+      full_name = "NumberField.InfiniteAdeleRing.algebraMap_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 69;
+      code_preview = "@[simp] theorem algebraMap_apply (x : K) (v : InfinitePlace K) :     algebraMap K (InfiniteAdeleRing K) x v = x";
+    }
+    {
+      full_name = "NumberField.InfiniteAdeleRing.locallyCompactSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 73;
+      code_preview = "instance locallyCompactSpace [NumberField K] : LocallyCompactSpace (InfiniteAdeleRing K) :=   Pi.locallyCompactSpace_of_finite";
+    }
+    {
+      full_name = "NumberField.InfiniteAdeleRing.ringEquiv_mixedSpace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 78;
+      code_preview = "abbrev ringEquiv_mixedSpace :     InfiniteAdeleRing K ≃+* mixedEmbedding.mixedSpace K :=   RingEquiv.trans     (RingEquiv.piEquivPiSubtypeProd (fun (v : InfinitePlace K) => IsReal v)       (fun (v : InfinitePlace K) => v.Completion))     (RingEquiv.prodCongr       (RingEquiv.piCongrRight (fun ⟨_, hv";
+    }
+    {
+      full_name = "NumberField.InfiniteAdeleRing.ringEquiv_mixedSpace_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 93;
+      code_preview = "@[simp] theorem ringEquiv_mixedSpace_apply (x : InfiniteAdeleRing K) :     ringEquiv_mixedSpace K x =       (fun (v : {w : InfinitePlace K // IsReal w}) => extensionEmbeddingOfIsReal v.2 (x v),        fun (v : {w : InfinitePlace K // IsComplex w}) => extensionEmbedding v.1 (x v))";
+    }
+    {
+      full_name = "NumberField.InfiniteAdeleRing.mixedEmbedding_eq_algebraMap_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 99;
+      code_preview = "theorem mixedEmbedding_eq_algebraMap_comp {x : K} :     mixedEmbedding K x = ringEquiv_mixedSpace K (algebraMap K _ x)";
+    }
+    {
+      full_name = "NumberField.AdeleRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 119;
+      code_preview = "def AdeleRing (R K : Type*) [CommRing R] [IsDedekindDomain R] [Field K]   [Algebra R K] [IsFractionRing R K] := InfiniteAdeleRing K × FiniteAdeleRing R K";
+    }
+    {
+      full_name = "NumberField.AdeleRing.algebraMap_fst_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 145;
+      code_preview = "@[simp] theorem algebraMap_fst_apply (x : K) (v : InfinitePlace K) :     (algebraMap K (AdeleRing R K) x).1 v = x";
+    }
+    {
+      full_name = "NumberField.AdeleRing.algebraMap_snd_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 149;
+      code_preview = "@[simp] theorem algebraMap_snd_apply (x : K) (v : HeightOneSpectrum R) :     (algebraMap K (AdeleRing R K) x).2 v = x";
+    }
+    {
+      full_name = "NumberField.AdeleRing.algebraMap_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 153;
+      code_preview = "theorem algebraMap_injective [NumberField K] : Function.Injective (algebraMap K (AdeleRing R K))";
+    }
+    {
+      full_name = "NumberField.AdeleRing.principalSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/NumberTheory/NumberField/AdeleRing.lean";
+      start_line = 156;
+      code_preview = "abbrev principalSubgroup : AddSubgroup (AdeleRing R K) := (algebraMap K _).range.toAddSubgroup";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

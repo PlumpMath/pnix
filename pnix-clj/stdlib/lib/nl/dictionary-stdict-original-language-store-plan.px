@@ -1,0 +1,102 @@
+# stdlib/lib/nl/dictionary-stdict-original-language-store-plan.px
+#
+# stdict `original_language_info` lexical clues -> redb `dictionary_facts` as pnix attrset source.
+#
+# This is not a translation/meaning table. It is a cross-language lexical proposer:
+# Korean lemma + word_type + original surface + language_type. Downstream codec/retrieval
+# may use it as evidence, but gate owners must dispose before any durable semantic claim.
+let
+  B = builtins;
+  genPath = ./dictionary-stdict-original-language-facts.generated.px;
+  facts =
+    if B.pathExists genPath
+    then import genPath
+    else {
+      schema = "dictionary.stdict-original-language-facts.v1";
+      source = "국립국어원 표준국어대사전 original_language_info";
+      entries_seen = 0;
+      record_count = 0;
+      held_missing_origin = 0;
+      language_counts = [ ];
+      word_type_counts = [ ];
+      records = [ ];
+    };
+  ser = import ./pnix-value-literal.px;
+  shards = if facts ? shards then facts.shards else [ facts ];
+  shardCount = B.length shards;
+  shardInfos = B.genList
+    (i:
+      let shard = B.elemAt shards i;
+          valueSrc = ser.toPnixSource shard;
+          contentHash = B.hashString "sha256" valueSrc;
+          key = facts.schema + "/shard/" + (B.toString i) + "/" + contentHash;
+      in {
+        op = { op_kind = "append"; table = "dictionary_facts"; key = key; value_bytes = valueSrc; };
+        meta = {
+          shard_index = i;
+          record_count = shard.record_count or 0;
+          content_hash = contentHash;
+          key = key;
+          value_bytes_len = B.stringLength valueSrc;
+        };
+      })
+    shardCount;
+  shardOps = B.map (x: x.op) shardInfos;
+  manifestRecord = {
+    schema = facts.schema;
+    source = facts.source or "국립국어원 표준국어대사전 original_language_info";
+    record_count = facts.record_count or 0;
+    entries_seen = facts.entries_seen or 0;
+    held_missing_origin = facts.held_missing_origin or 0;
+    held_out_of_scope = facts.held_out_of_scope or 0;
+    scope = facts.scope or "unknown";
+    language_counts = facts.language_counts or [ ];
+    word_type_counts = facts.word_type_counts or [ ];
+    sharded = true;
+    shard_count = shardCount;
+    shards = B.map (x: x.meta) shardInfos;
+    proposer_only = true;
+    durable_truth = false;
+    ontology_assert_allowed = false;
+  };
+  manifestSrc = ser.toPnixSource manifestRecord;
+  manifestHash = B.hashString "sha256" manifestSrc;
+  manifestKey = facts.schema + "/manifest/" + manifestHash;
+  manifestOp = { op_kind = "append"; table = "dictionary_facts"; key = manifestKey; value_bytes = manifestSrc; };
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "dictionary-stdict-original-language-load-v0";
+      source_lens = "stdlib/lib/nl/dictionary-stdict-original-language-store-plan.px";
+      source_verdict = "materialize-stdict-original-language-facts";
+      operations = [ manifestOp ] ++ shardOps;
+      receipt_owner = "dictionary.stdict-original-language-facts.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = facts.schema;
+    record_count = facts.record_count or 0;
+    shard_count = shardCount;
+    operation_count = 1 + shardCount;
+    content_hash = manifestHash;
+    value_bytes_len = B.stringLength manifestSrc;
+    proposer_only = true;
+    durable_truth = false;
+    ontology_assert_allowed = false;
+  };
+
+  mkQuery = args: {
+    plan = {
+      plan_id = "dictionary-stdict-original-language-query-v0";
+      source_lens = "stdlib/lib/nl/dictionary-stdict-original-language-store-plan.px";
+      source_verdict = "query-stdict-original-language-facts";
+      operations = [
+        { op_kind = "scan-prefix"; table = "dictionary_facts"; key = ""; key_prefix = facts.schema + "/"; }
+      ];
+      receipt_owner = "dictionary.stdict-original-language-facts.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = manifestKey;
+    expected_hash = manifestHash;
+    expected_schema = facts.schema;
+  };
+}

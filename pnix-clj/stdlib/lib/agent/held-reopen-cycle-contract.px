@@ -1,0 +1,204 @@
+let
+  ownerName = "stdlib.agent.held-reopen-cycle-contract";
+
+  clarificationContract =
+    import agent/nl-ambiguity-clarification-contract.px;
+
+  # === Held → reopen cycle contract (Round 90) ========================
+  #
+  # CLAUDE.md 한 줄 인용:
+  # "held judgement + reopen 은 이 프로젝트의 가장 중요한 증거다. 빛은
+  # 뭐야? 를 물었을 때 LightAmbiguity 결과에서 requires-context-before-
+  # commit predicate 로 fact 가 Held 상태로 들어간다. 이중슬릿 실험에서
+  # 빛은 뭐야? 로 follow-up 하면 이전 held 를 reopen 하고, 좁혀진
+  # context 에서 새 해석을 생성."
+  #
+  # 이 owner = held envelope 가 *추가 정보 도착 시* 어떻게 reopen 되는
+  # 지의 substrate-side schema. follow-up 의 typed entry.
+  #
+  # # Lifecycle
+  #
+  #   step 1: original utterance → held verdict (Round 74 / 82 / 88
+  #           등의 envelope 발화)
+  #             ↓ held_envelope.held_reason captured
+  #   step 2: follow-up arrives with narrowed context
+  #             ↓ 이 contract: held + follow-up → reopen request
+  #   step 3: substrate 가 reopened request 를 다시 처리
+  #             - 같은 lens 재호출
+  #             - 새 input = previous held envelope + follow-up evidence
+  #             ↓
+  #   step 4: 새 verdict (resolved | held-with-different-reason)
+  #
+  # # Held lifecycle states (closed)
+  #
+  #   "held-fresh"            : 방금 발화된 held
+  #   "held-awaiting-followup": clarification question sent
+  #   "reopened"              : follow-up 도착, 재처리 진입
+  #   "resolved-after-reopen" : reopen 후 resolved
+  #   "held-after-reopen"     : reopen 후에도 held (다른 reason)
+  #
+  # # Output verdict family
+  #
+  #   "reopen-request-built"
+  #   "held-no-original-held-envelope"
+  #   "held-original-not-actually-held"  ← resolved 였음
+  #   "held-no-followup-evidence"
+  #   "held-stale-followup"  ← follow-up 이 다른 session/context
+  #   "held-already-reopened-cycle-limit" ← cycle 한계
+
+  stepKind = "held-reopen-cycle";
+  framework_step =
+    "original held envelope + follow-up evidence → reopened request shape";
+
+  # ===================================================================
+  # === Lifecycle state constants ====================================
+  # ===================================================================
+
+  knownHeldLifecycleStates = [
+    "held-fresh"
+    "held-awaiting-followup"
+    "reopened"
+    "resolved-after-reopen"
+    "held-after-reopen"
+  ];
+
+  maximumReopenCycles = 3;  # 한 held 가 N 번 이상 reopen 시도 = halt
+
+  # ===================================================================
+  # === Follow-up evidence kinds (closed) ============================
+  # ===================================================================
+
+  knownFollowUpKinds = [
+    "narrowed-context"          # "이중슬릿 실험에서 빛"
+    "candidate-picked"          # 후보 list 중 선택
+    "specified-language"        # code language 명시
+    "attached-code-source"      # source 첨부
+    "supplied-axiom-class"      # axiom 명시
+    "additional-utterance"      # 자유 형 추가 발화
+  ];
+
+  # ===================================================================
+  # === Helpers ======================================================
+  # ===================================================================
+
+  hasKey = attrs: key: builtins.elem key (builtins.attrNames attrs);
+  isInClosedList = list: v: builtins.elem v list;
+
+  # ===================================================================
+  # === Main contract function =======================================
+  # ===================================================================
+  #
+  # Input shape:
+  #   {
+  #     original_held_envelope = {
+  #       verdict = "held-multiple-strong-candidates-...";
+  #       is_held = true;
+  #       held_lifecycle_state = "held-awaiting-followup";
+  #       reopen_cycle_count = 0;
+  #       session_id = "sess-1";
+  #     };
+  #     followup_evidence = {
+  #       kind = "candidate-picked";
+  #       picked_index = 0;
+  #       session_id = "sess-1";
+  #     };
+  #   }
+
+  buildReopenRequest = req:
+    let
+      hasOrig = hasKey req "original_held_envelope";
+      orig = if hasOrig then req.original_held_envelope else {};
+
+      origIsHeld =
+        hasKey orig "is_held" && orig.is_held == true;
+
+      cycleCount =
+        if hasKey orig "reopen_cycle_count"
+           && builtins.isInt orig.reopen_cycle_count
+        then orig.reopen_cycle_count else 0;
+      cycleOk = cycleCount < maximumReopenCycles;
+
+      origSessionId =
+        if hasKey orig "session_id" then orig.session_id else "";
+
+      hasFollowUp = hasKey req "followup_evidence";
+      followup = if hasFollowUp then req.followup_evidence else {};
+
+      followupKindKnown =
+        hasKey followup "kind"
+        && isInClosedList knownFollowUpKinds followup.kind;
+
+      followupSessionId =
+        if hasKey followup "session_id" then followup.session_id else "";
+      sessionMatch =
+        origSessionId != ""
+        && followupSessionId != ""
+        && origSessionId == followupSessionId;
+
+      verdict =
+        if !hasOrig then "held-no-original-held-envelope"
+        else if !origIsHeld then "held-original-not-actually-held"
+        else if !hasFollowUp || !followupKindKnown
+          then "held-no-followup-evidence"
+        else if !sessionMatch then "held-stale-followup"
+        else if !cycleOk then "held-already-reopened-cycle-limit"
+        else "reopen-request-built";
+
+      isHeld = verdict != "reopen-request-built";
+
+      reopenRequest =
+        if !isHeld then {
+          original_held_envelope = orig;
+          followup_evidence = followup;
+          reopen_cycle_count = cycleCount + 1;
+          new_lifecycle_state = "reopened";
+          session_id = origSessionId;
+        }
+        else null;
+
+    in {
+      kind = "held-reopen-cycle-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      framework_step = framework_step;
+      verdict = verdict;
+      is_held = isHeld;
+      reopen_request = reopenRequest;
+      held_diagnostics =
+        if !isHeld then null
+        else {
+          original_present = hasOrig;
+          original_is_held = origIsHeld;
+          cycle_count_ok = cycleOk;
+          followup_present = hasFollowUp;
+          followup_kind_known = followupKindKnown;
+          session_match = sessionMatch;
+          cycle_count = cycleCount;
+        };
+      derived_from = [
+        "nl-ambiguity-clarification-contract (Round 82)"
+        "CLAUDE.md held + reopen 가장 중요한 증거 (1-3)"
+      ];
+    };
+
+  # ===================================================================
+  # === Inventory summary ============================================
+  # ===================================================================
+
+  inventorySummary = {
+    owner = ownerName;
+    step_kind = stepKind;
+    lifecycle_state_count = builtins.length knownHeldLifecycleStates;
+    lifecycle_states = knownHeldLifecycleStates;
+    max_reopen_cycles = maximumReopenCycles;
+    followup_kind_count = builtins.length knownFollowUpKinds;
+    role =
+      "held envelope + follow-up evidence → reopened request (CLAUDE.md 핵심 증거)";
+  };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit knownHeldLifecycleStates maximumReopenCycles;
+  inherit knownFollowUpKinds;
+  inherit buildReopenRequest inventorySummary;
+}

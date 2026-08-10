@@ -1,0 +1,7 @@
+# extension	status	command	marker	version_policy	migration_policy	conflict_policy	note
+manifest-index	DONE	manifest-check	manifest-check	versioned-tsv	append-only	fail-closed	stage manifest index must replay as a versioned append-only record
+timeout-cost	DONE	stage15-evidence-replay-check	stage15-evidence-replay-check	budget-record-required	append-only	fail-closed	timeout and cost budget evidence is anchored by the stage15 replay chain
+stageN-seed	DONE	stageN-extension-check	stageN-extension-check	versioned-extension	manifest-index-required	fail-closed	stageN seed policy must remain checked before further extension
+breaking-change	HELD	held	explicit-migration-required	semver-major	explicit-migration-required	fail-closed	breaking constitutional changes require an explicit migration receipt
+external-law	HELD	held	explicit-review-required	explicit-receipt-required	explicit-review-required	fail-closed	external laws cannot extend rs-meta without checked receipts
+future-stage	HELD	held	explicit-review-required	versioned-proposal	explicit-review-required	fail-closed	new stages beyond stage15 require versioned proposals and local verification

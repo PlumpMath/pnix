@@ -1,0 +1,39 @@
+# stdlib/lib/nl/chat-domain-evidence-probe.px
+#
+# S88-5: intent catalog_terms / math_query → chat-domain-evidence.mkDomainEvidence
+# Evaluated via pnixc-meta one-shot; Clojure keeps leak-safe projection fields only.
+let
+  de = import ./chat-domain-evidence.px;
+  B = builtins;
+
+  mkProbeResult = args:
+    let terms = if B.isAttrs args && (args ? catalog_terms) then args.catalog_terms else [ ];
+        mq = if B.isAttrs args && (args ? math_query) then args.math_query else null;
+        dom = de.mkDomainEvidence { catalog_terms = terms; math_query = mq; };
+        cat = dom.catalog_readback_evidence;
+        entries = if cat ? entries then cat.entries else [ ];
+        statuses = B.map (e: if e ? status then e.status else "") entries;
+        schemas = B.map (e: if e ? source_schema then e.source_schema else "") entries;
+        keyKinds = B.map (e: if e ? key_kind then e.key_kind else "") entries;
+        mathEv = dom.math_evidence;
+    in {
+      status = "ok";
+      catalog_entry_count = B.length entries;
+      catalog_evidence_kind = if cat ? evidence_kind then cat.evidence_kind else "";
+      catalog_statuses = statuses;
+      catalog_source_schemas = schemas;
+      catalog_key_kinds = keyKinds;
+      math_verdict = if mathEv == null then "" else (if mathEv ? verdict then mathEv.verdict else "");
+      math_evidence_kind = if mathEv == null then "" else (if mathEv ? evidence_kind then mathEv.evidence_kind else "");
+    };
+
+  runProbe = args: mkProbeResult args;
+
+  probeSelfTest = _:
+    let r = mkProbeResult {
+          catalog_terms = [ { source_schema = "physics.standard_quantities"; key = "속도"; key_kind = "quantity_ko"; } ];
+          math_query = null;
+        };
+    in (r.status == "ok") && (r.catalog_entry_count == 1) && (B.head r.catalog_statuses == "recognized");
+
+in { inherit mkProbeResult runProbe probeSelfTest; }

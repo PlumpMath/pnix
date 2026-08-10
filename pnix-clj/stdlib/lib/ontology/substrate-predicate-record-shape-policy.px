@@ -1,0 +1,115 @@
+# stdlib.lib.ontology.substrate-predicate-record-shape-policy
+#
+# OWNER-LAW (2026-05-31): substrate predicate inventory record shape.
+#
+# # What this is for
+#
+# substrate 의 predicate algebra 안 한 predicate row 의 envelope shape
+# 정본 — 8 field declaration + cross-link to qqq lens (category).
+#
+# # Design discipline — declarative field shape registry
+#
+# 이전 doghouse-core::substrate_inventory_store::SubstratePredicateRecord
+# 는 Rust struct 8 fields. 이 owner-law 는 declarative field registry.
+
+let
+  ownerName = "stdlib/lib/ontology/substrate-predicate-record-shape-policy.px";
+
+  mkField = name: kind: required: lensRef: comment:
+    { field_name = name; field_kind = kind;
+      required = required; cross_lens_ref = lensRef;
+      semantic = comment; };
+
+  predicateFields = [
+    (mkField "name"                    "string"                       true
+      null
+      "predicate name (e.g. 'Antonym', 'IsA', 'HasParticle')")
+    (mkField "category"                "enum:SubstratePredicateCategory" true
+      "stdlib/lib/ontology/substrate-predicate-category-policy.px (qqq)"
+      "predicate algebra category")
+    (mkField "type_signature"          "optional-string"              false
+      null
+      "(Concept → Concept) 또는 (Token → Particle) 류 type sig")
+    (mkField "chain_rule"              "optional-string"              false
+      null
+      "symmetric, partial order, transitive 류 chain composition rule")
+    (mkField "declared_in_substrates"  "list-of-strings"              false
+      null
+      "substrate file paths that declare this predicate")
+    (mkField "occurrence_count"        "usize"                        true
+      null
+      "total occurrence count across substrate files")
+    (mkField "notes"                   "list-of-strings"              false
+      null
+      "free-form notes (edge cases, usage)")
+    (mkField "last_updated_ms"         "u64"                          true
+      null
+      "Unix ms timestamp")
+  ];
+
+  validRequestKinds = [
+    "list-fields"
+    "validate-record"
+  ];
+
+  validVerdicts = [
+    "fields-listed"
+    "record-valid"
+    "record-invalid"
+    "held-unknown-request-kind"
+  ];
+
+  asAttrs = v: if builtins.isAttrs v then v else {};
+  asString = v: if builtins.isString v then v else "";
+
+  applySubstratePredicateRecordShapePolicy = request:
+    let
+      reqKind = asString (request.request_kind or "");
+    in
+      if reqKind == "list-fields" then {
+        verdict = "fields-listed";
+        fields = predicateFields;
+        total_field_count = builtins.length predicateFields;
+        required_field_count = builtins.length
+          (builtins.filter (f: f.required) predicateFields);
+        cross_lens_count = builtins.length
+          (builtins.filter (f: f.cross_lens_ref != null) predicateFields);
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "validate-record" then
+        let
+          record = asAttrs (request.record or {});
+          missing = builtins.foldl'
+            (acc: f:
+              if f.required && !(builtins.hasAttr f.field_name record)
+              then acc ++ [ f.field_name ]
+              else acc)
+            []
+            predicateFields;
+        in
+          if missing == [] then {
+            verdict = "record-valid";
+            valid = true;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+          else {
+            verdict = "record-invalid";
+            valid = false;
+            missing_required_fields = missing;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+      else {
+        verdict = "held-unknown-request-kind";
+        request_kind = reqKind;
+        valid_request_kinds = validRequestKinds;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName predicateFields validRequestKinds validVerdicts
+          applySubstratePredicateRecordShapePolicy;
+}

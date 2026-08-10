@@ -1,0 +1,148 @@
+# stdlib.lib.ontology.canonical-fact-key-policy
+#
+# OWNER-LAW (2026-05-31): ContextualFact 의 canonical identity key.
+#
+# # What this is for
+#
+# ontology.md 의 ContextualFact axiom — fact 의 identity 는 5-tuple
+# (context, layer, subj, pred, obj). 같은 5-tuple = 같은 fact. canonical
+# key 는 그 identity 의 store-side string projection.
+#
+# # Design discipline — declarative tuple-order registry
+#
+# 이전 doghouse-core::store::canonical_fact_key 는 Rust array+join.
+# 이 owner-law 는 *declarative tuple-order registry* (slot order 명시) +
+# 별 contract-version registry. tuple 의 새 slot 추가 = 한 row + 새 contract
+# version supersede chain entry.
+#
+# # Contract version chain
+#
+# v1 (current): "doghouse.canonical-fact-key.v1"
+#   prefix 는 legacy carrier (doghouse-core::store::canonical_fact_key)
+#   와 byte-identical 유지. doghouse 흡수 끝나면 v2 supersede 로 전환.
+#
+# v2 (future, deferred):  "pnix.canonical-fact-key.v2"
+#   doghouse prefix 제거 후 substrate-native naming. 별 slice.
+#
+# # Format
+#
+#   "{contract_id}|{ctx}{SEP}{layer}{SEP}{subj}{SEP}{pred}{SEP}{obj}"
+#
+#   SEP = U+001F (ASCII Unit Separator) — legacy carrier 가 사용한 정확한
+#   separator. byte-identical guarantee.
+#
+# # Inputs (mirror plate parameters slot)
+#
+#   fact = { context ; layer ; subj ; pred ; obj ; }
+#         — 5 string slots. 누락 = held-malformed-request.
+#
+# # Output
+#
+#   verdict       : "canonical-key-emitted" | "held-malformed-request"
+#   canonical_key : string | null
+#   contract_id   : "doghouse.canonical-fact-key.v1"
+#   tuple_order   : [ "context", "layer", "subj", "pred", "obj" ]
+#   separator     : ""
+
+let
+  ownerName = "stdlib/lib/ontology/canonical-fact-key-policy.px";
+
+  # ─── contract version registry (supersede chain owner) ─────────────────
+  #
+  # 현재 active = "v1" (legacy compatibility). 새 contract = 한 row + new
+  # active token. byte-identical compatibility window 는 별 supersede slice.
+
+  mkContractVersionRow = id: token: status:
+    { contract_version = id; contract_id = token; status = status; };
+
+  contractVersions = [
+    (mkContractVersionRow "v1" "doghouse.canonical-fact-key.v1" "active")
+    # (mkContractVersionRow "v2" "pnix.canonical-fact-key.v2"     "future")
+  ];
+
+  activeContractId = "doghouse.canonical-fact-key.v1";
+
+  # ─── 5-tuple slot order — declarative, lattice 그대로 ──────────────────
+  #
+  # 5 slot 이 ContextualFact axiom 의 fixed shape (ontology.md).
+  # 순서 변경 = breaking, 새 contract version 필요.
+
+  tupleSlotOrder = [ "context" "layer" "subj" "pred" "obj" ];
+
+  # SEP = U+001F (Unit Separator).
+  separator = "";
+
+  validVerdicts = [
+    "canonical-key-emitted"
+    "held-malformed-request"
+  ];
+
+  # ─── helpers ────────────────────────────────────────────────────────────
+
+  asAttrs  = v: if builtins.isAttrs v  then v else {};
+  asString = v: if builtins.isString v then v else "";
+
+  # Extract slot from fact attrset, default "" if missing. Returns
+  # { slot, value, missing } so envelope can audit which slot held.
+  extractSlot = fact: slot:
+    let
+      present = builtins.hasAttr slot fact;
+      raw     = if present then builtins.getAttr slot fact else null;
+      isStr   = builtins.isString raw;
+    in {
+      slot = slot;
+      value = if isStr then raw else "";
+      present_and_string = present && isStr;
+    };
+
+  extractAllSlots = fact:
+    builtins.map (extractSlot fact) tupleSlotOrder;
+
+  allSlotsPresent = extractedList:
+    builtins.foldl' (acc: e: acc && e.present_and_string) true extractedList;
+
+  missingSlots = extractedList:
+    builtins.map (e: e.slot)
+      (builtins.filter (e: !e.present_and_string) extractedList);
+
+  joinWithSep = strings: sep:
+    builtins.concatStringsSep sep strings;
+
+  # ─── lens entry function ────────────────────────────────────────────────
+
+  applyCanonicalFactKeyPolicy = request:
+    let
+      fact      = asAttrs (request.fact or {});
+      extracted = extractAllSlots fact;
+      complete  = allSlotsPresent extracted;
+    in
+      if complete then
+        let
+          values = builtins.map (e: e.value) extracted;
+          body   = joinWithSep values separator;
+          key    = activeContractId + "|" + body;
+        in {
+          verdict = "canonical-key-emitted";
+          canonical_key = key;
+          contract_id = activeContractId;
+          tuple_order = tupleSlotOrder;
+          separator = separator;
+          lens_owner = ownerName;
+          candidate_only = true;
+        }
+      else {
+        verdict = "held-malformed-request";
+        canonical_key = null;
+        held_reason = "fact missing required tuple slot(s)";
+        missing_slots = missingSlots extracted;
+        contract_id = activeContractId;
+        tuple_order = tupleSlotOrder;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName contractVersions activeContractId
+          tupleSlotOrder separator validVerdicts
+          applyCanonicalFactKeyPolicy;
+}

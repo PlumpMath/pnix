@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+temp="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clr-production-outcome.XXXXXX")"
+trap 'rm -rf "$temp"' EXIT
+
+"$root/bin/pnix-clr" --production-outcome-self-check \
+  >"$temp/self-check.json"
+
+expected_self_check='{"all_ok":true,"done":"done","failed_class":"not-callable","failed_phase":"eval","guest_shape_is_outcome":false,"requested":"requested","requested_effect":"open","schema":"pnix.machine.host-outcome.v1","suspended":"suspended","suspended_divergence_proven":false}'
+actual_self_check="$(tr -d '\n' <"$temp/self-check.json")"
+if [[ "$actual_self_check" != "$expected_self_check" ]]; then
+  echo "pnix-clr production outcome gate: nominal boundary drift" >&2
+  exit 1
+fi
+
+cat "$temp/self-check.json"
+echo "pnix-clr production outcome gate: PASS (host outcome boundary)"

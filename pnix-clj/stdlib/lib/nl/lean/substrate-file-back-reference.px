@@ -1,0 +1,155 @@
+let
+  ownerName = "stdlib.nl.lean.substrate-file-back-reference";
+
+  paired = import nl/lean/paired-claim-aggregate.px;
+  graph = import nl/lean/substrate-mathlib-graph.px;
+  chain = import nl/lean/substrate-axiom-dependency-chain.px;
+
+  # === Substrate file back-reference (agent-NL-203) ==================
+  #
+  # Round 22 사용자 vision 확장:
+  # > "각 paired claim 이 어떤 substrate file 과 박혀 있는지 mechanical
+  #    검증"
+  #
+  # 기존 paired claim 은 *substrate concept ↔ Lean theorem name* 1:1.
+  # 이 owner 는 *substrate file* 기준 으로 grouping:
+  #   substrate file → 그 file 의 paired claim 들 + graph references
+  #
+  # 각 substrate cohomology file 이 *어떤* external references 와
+  # paired 인지 한 envelope 으로 emit.
+
+  stepKind = "substrate-file-back-reference";
+  framework_step =
+    "substrate file → paired claims + graph refs reverse grouping";
+
+  # =================================================================
+  # === Substrate files (the 14 cohomology + foundation) =============
+  # =================================================================
+
+  knownSubstrateFiles = [
+    "category-sheaf-cohomology-substrate.px"
+    "category-galois-substrate.px"
+    "category-hochschild-serre-substrate.px"
+    "category-etale-cohomology-and-derived-substrate.px"
+    "category-derived-etale-and-l-adic-substrate.px"
+    "category-spectral-sequences-substrate.px"
+    "category-motivic-substrate.px"
+    "category-motivic-galois-substrate.px"
+    "category-substrate-k-theory.px"
+    "category-motivic-stable-homotopy.px"
+    "category-de-rham-hodge-substrate.px"
+    "category-crystalline-and-period-rings-substrate.px"
+    "category-higher-chow-bloch-substrate.px"
+    "category-mixed-tate-motives-and-mzv-substrate.px"
+  ];
+
+  # =================================================================
+  # === Per-substrate-file binding ====================================
+  # =================================================================
+
+  bindingForSubstrateFile = substrateFile:
+    let
+      # paired claims 에서 이 substrate file 매칭
+      pairedForFile = builtins.filter
+        (c: c.substrate_file == substrateFile)
+        paired.pairedClaims;
+      verifiedPairedForFile = builtins.filter
+        (c:
+          let v = paired.verifyPairedClaim c;
+          in v.lean_entry_exists_in_lookup)
+        pairedForFile;
+
+      # graph references 에서 이 substrate file 매칭
+      graphForFile = builtins.filter
+        (g: g.substrate_file == substrateFile)
+        graph.substrateReferenceGraph;
+      graphRefCount =
+        builtins.foldl'
+          (acc: g: acc + builtins.length g.mathlib_references)
+          0 graphForFile;
+    in {
+      substrate_file = substrateFile;
+      paired_claim_count = builtins.length pairedForFile;
+      verified_paired_count = builtins.length verifiedPairedForFile;
+      graph_concept_count = builtins.length graphForFile;
+      graph_total_ref_count = graphRefCount;
+      total_external_anchors =
+        (builtins.length pairedForFile) + graphRefCount;
+      lean_names_paired =
+        builtins.map (c: c.lean_full_name) pairedForFile;
+    };
+
+  allBindings = builtins.map bindingForSubstrateFile knownSubstrateFiles;
+
+  # =================================================================
+  # === Aggregate stats ===============================================
+  # =================================================================
+
+  totalSubstrateFiles = builtins.length knownSubstrateFiles;
+  totalPairedAcrossFiles =
+    builtins.foldl' (acc: b: acc + b.paired_claim_count) 0 allBindings;
+  totalGraphRefsAcrossFiles =
+    builtins.foldl' (acc: b: acc + b.graph_total_ref_count) 0 allBindings;
+  filesWithAnyAnchor =
+    builtins.length
+      (builtins.filter (b: b.total_external_anchors > 0) allBindings);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_bindingForSubstrateFile = true;
+    has_allBindings = true;
+    total_substrate_files = totalSubstrateFiles;
+    total_paired_across_files = totalPairedAcrossFiles;
+    total_graph_refs_across_files = totalGraphRefsAcrossFiles;
+    files_with_any_external_anchor = filesWithAnyAnchor;
+    coverage_percent =
+      if totalSubstrateFiles == 0 then 0
+      else (filesWithAnyAnchor * 100) / totalSubstrateFiles;
+    paired_owner_inherited = paired.ownerName;
+    graph_owner_inherited = graph.ownerName;
+    chain_owner_inherited = chain.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applySubstrateFileBackReferencePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "substrate-file-back-reference-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "files" request then {
+      outcome = "known-substrate-files-emitted"; receipt = knownSubstrateFiles;
+    }
+    else if builtins.hasAttr "bindings" request then {
+      outcome = "all-bindings-emitted"; receipt = allBindings;
+    }
+    else if builtins.hasAttr "binding" request then
+      let
+        target = request.binding;
+        match = builtins.elem target knownSubstrateFiles;
+      in
+        if !match
+        then { outcome = "held-no-such-substrate-file"; receipt = { queried = target; }; }
+        else {
+          outcome = "single-binding-emitted";
+          receipt = bindingForSubstrateFile target;
+        }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "files" "bindings" "binding"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit knownSubstrateFiles bindingForSubstrateFile allBindings;
+  inherit totalSubstrateFiles totalPairedAcrossFiles totalGraphRefsAcrossFiles;
+  inherit filesWithAnyAnchor;
+  inherit inventorySummary applySubstrateFileBackReferencePlate;
+}

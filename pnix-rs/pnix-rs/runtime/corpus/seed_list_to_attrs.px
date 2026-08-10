@@ -1,0 +1,6 @@
+# Dynamic attrset construction + dynamic selection (Nix semantics; matches the
+# pnix-hy runtime: listToAttrs first-occurrence wins, getAttr errors on missing).
+let
+  ps = [ { name = "b"; value = 2; } { name = "a"; value = 1; } { name = "b"; value = 9; } ];
+  s = builtins.listToAttrs ps;
+in { s = s; picked = builtins.getAttr "b" s; flag = builtins.isAttrs s; nonflag = builtins.isAttrs 3; }

@@ -1,0 +1,33 @@
+# stdlib/lib/nl/korean-locative-deixis-test.px — Slice6++: locative deixis (거기/여기 → location) + 처소 typing
+#
+# ② 연결을 닫힌 지시어 전체집합으로 확장 + 처소-deixis 강제 location typing:
+#  ① '철수가 학교에 간다. 그가 거기에 간다.' → 그(agent)→철수, 거기(location)→학교 (kind-aware generic).
+#  ② '철수가 학교에 간다. 거기가 좋다.' → 거기가(주격=agent 구문역할)라도 dc.referenceKind 가 location 강제
+#     → 학교(장소), 철수(사람) 아님. = 처소 지시어는 의미 kind(location)가 구문 역할을 override.
+let
+  knl = import ./korean-nl-mirror.px;
+  B = builtins;
+  nm = e: if e == null then "null" else e.name;
+  findBind = binds: ref: let m = B.filter (r: r.ref == ref) binds; in if m == [ ] then "null" else nm (B.head m).entity;
+  d1 = knl.liftDiscourse [ "철수가 학교에 간다" "그가 거기에 간다" ];
+  s2 = B.elemAt d1 1;
+  geu = findBind s2.resolved "그";          # 철수 (agent)
+  geogi = findBind s2.resolved "거기";       # 학교 (location, 에)
+  # ★처소 typing: 거기가(주격) → location override → 학교 (NOT 철수)
+  d2 = knl.liftDiscourse [ "철수가 학교에 간다" "거기가 좋다" ];
+  geogi_subj = findBind (B.elemAt d2 1).resolved "거기";
+  # ★완전집합 타입별 확인: 사람 지시어(그분)=구문 역할 사용(agent), 처소(그곳)=location override
+  d3 = knl.liftDiscourse [ "철수가 학교에 간다" "그분이 잔다" ];
+  geubun = findBind (B.elemAt d3 1).resolved "그분";       # 철수 (사람 지시어, 이=agent 역할)
+  d4 = knl.liftDiscourse [ "철수가 학교에 간다" "그곳이 좋다" ];
+  geugot = findBind (B.elemAt d4 1).resolved "그곳";       # 학교 (처소 지시어, location override)
+in {
+  n_binds = B.length s2.resolved;
+  geu_resolves = geu;                # "철수"
+  geogi_resolves = geogi;            # "학교"
+  geogi_subj_resolves = geogi_subj;  # "학교" (location 강제, agent 아님)
+  geubun_resolves = geubun;          # "철수" (사람=구문 역할 agent)
+  geugot_resolves = geugot;          # "학교" (처소=location override)
+  all_ok = (B.length s2.resolved == 2) && (geu == "철수") && (geogi == "학교") && (geogi_subj == "학교")
+           && (geubun == "철수") && (geugot == "학교");
+}

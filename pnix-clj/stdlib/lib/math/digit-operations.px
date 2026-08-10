@@ -1,0 +1,160 @@
+# stdlib.lib.math.digit-operations
+#
+# OWNER-LAW (v0.12-AAM, div-math, 2026-05-21): operations on the
+# decimal digits of an integer.
+#
+# number-theory.px asks structural questions about an integer (its
+# factors, its primality). This owner asks questions about its
+# decimal REPRESENTATION -- the digits themselves: their sum, the
+# digital root, whether the number reads the same backwards,
+# whether it is a Harshad (Niven) number.
+#
+# # Operations
+#
+#   digitsOf       the decimal digits, most significant first
+#   digitSum       the sum of the digits
+#   digitalRoot    repeatedly sum the digits to a single digit
+#   digitCount     how many digits
+#   reverseDigits  the integer with its digits reversed
+#   isPalindrome   reads the same forwards and backwards
+#   isHarshad      divisible by its own digit sum
+#
+# # Kernel layering
+#
+# digit-operations -> base-conversion. The decimal digit list is
+# exactly base-conversion's toBaseDigits at base 10 -- this owner
+# does not re-derive it.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT non-negative-only by accident: the operations are
+#     defined for n >= 0; negatives are Held by the plate.
+#   - NOT non-decimal digit operations (base-conversion.px covers
+#     other bases).
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/digit-operations.px";
+
+  baseConversion = import ./base-conversion.px;
+
+  intMod = a: b: a - b * (a / b);
+
+  # Reverse a list.
+  reverseList = xs:
+    builtins.foldl' (acc: x: [ x ] ++ acc) [] xs;
+
+  # The decimal digits of n (n >= 0), most significant first.
+  digitsOf = n: baseConversion.toBaseDigits n 10;
+
+  # The sum of the decimal digits.
+  digitSum = n:
+    builtins.foldl' (acc: d: acc + d) 0 (digitsOf n);
+
+  # The digital root: sum the digits, and if the result still has
+  # more than one digit, repeat. digitalRoot 0 = 0.
+  digitalRoot = n:
+    if n < 10 then n else digitalRoot (digitSum n);
+
+  # How many decimal digits n has.
+  digitCount = n: builtins.length (digitsOf n);
+
+  # The integer formed by reversing the decimal digits. Leading
+  # zeros of the reversed form simply vanish (1200 -> 21).
+  reverseDigits = n:
+    baseConversion.fromBaseDigits (reverseList (digitsOf n)) 10;
+
+  # A digit palindrome reads the same in both directions.
+  isPalindrome = n:
+    let ds = digitsOf n;
+    in ds == reverseList ds;
+
+  # A Harshad (Niven) number is divisible by its own digit sum.
+  isHarshad = n:
+    let s = digitSum n;
+    in n > 0 && s > 0 && intMod n s == 0;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "digits"
+    "digit-sum"
+    "digital-root"
+    "digit-count"
+    "reverse"
+    "is-palindrome"
+    "is-harshad"
+  ];
+
+  applyDigitOperations = request:
+    let
+      op = request.operation;
+      n  = request.n;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 0 then {
+        outcome = "held-negative-number";
+        operation = op;
+        n = n;
+      }
+      else if op == "digits" then {
+        outcome = "digit-operations-computed";
+        operation = op; n = n;
+        digits = digitsOf n;
+      }
+      else if op == "digit-sum" then {
+        outcome = "digit-operations-computed";
+        operation = op; n = n;
+        value = digitSum n;
+      }
+      else if op == "digital-root" then {
+        outcome = "digit-operations-computed";
+        operation = op; n = n;
+        value = digitalRoot n;
+      }
+      else if op == "digit-count" then {
+        outcome = "digit-operations-computed";
+        operation = op; n = n;
+        value = digitCount n;
+      }
+      else if op == "reverse" then {
+        outcome = "digit-operations-computed";
+        operation = op; n = n;
+        value = reverseDigits n;
+      }
+      else if op == "is-palindrome" then {
+        outcome = "digit-operations-computed";
+        operation = op; n = n;
+        holds = isPalindrome n;
+      }
+      else {
+        # op == "is-harshad"
+        outcome = "digit-operations-computed";
+        operation = op; n = n;
+        holds = isHarshad n;
+      };
+
+in {
+  inherit
+    ownerName
+    reverseList
+    digitsOf
+    digitSum
+    digitalRoot
+    digitCount
+    reverseDigits
+    isPalindrome
+    isHarshad
+    knownOperations
+    applyDigitOperations;
+  meta = {
+    source = "stdlib math digit operations";
+    owner = ownerName;
+    base = "parametric-math-digit-operations-v0";
+    rev_note = "v0.12-AAM (div-math): decimal-digit operations owner. digitsOf / digitSum / digitalRoot / digitCount / reverseDigits / isPalindrome / isHarshad -- questions about an integer's decimal representation rather than its factor structure. Kernel layering: digit-operations -> base-conversion (the decimal digit list is toBaseDigits at base 10). Standalone otherwise, non-negative integers. NOT non-decimal digits, NOT yet a registered lens.";
+  };
+}

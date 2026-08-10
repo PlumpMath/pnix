@@ -1,0 +1,147 @@
+# stdlib.lib.math.gray-code
+#
+# OWNER-LAW (v0.12-AAN, div-math, 2026-05-21): reflected binary
+# (Gray) code.
+#
+# base-conversion.px renders an integer in ordinary binary. The
+# Gray code is a DIFFERENT binary encoding with one defining
+# property: consecutive integers map to codes that differ in
+# exactly one bit. This owner adds that encoding.
+#
+# # Two exact inverses
+#
+#   toGray n    = n XOR (n >> 1)
+#   fromGray g  = the XOR-scan that undoes it
+#
+# They round-trip: `fromGray (toGray n)` is n for every n >= 0.
+#
+# # The single-bit-change property
+#
+# `graySequence bits` lists toGray 0 .. toGray (2^bits - 1).
+# Adjacent entries differ in exactly one bit -- that is the whole
+# point of Gray code, and `adjacentHammingDistances` lets a caller
+# see it directly (every distance is 1).
+#
+# # Kernel layering
+#
+# gray-code -> bitwise. toGray/fromGray are pure XOR and shift, so
+# they are built straight on bitwise.px.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT non-binary Gray codes (no ternary / n-ary reflected
+#     code).
+#   - NOT negative numbers.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/gray-code.px";
+
+  bitwise = import ./bitwise.px;
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # Binary -> Gray: n XOR (n >> 1).
+  toGray = n: bitwise.bitXor n (bitwise.shiftRight n 1);
+
+  # Gray -> binary: XOR the code with successively shifted copies
+  # of itself until nothing is left to fold in.
+  fromGray = g:
+    let
+      go = value: mask:
+        if mask == 0 then value
+        else go (bitwise.bitXor value mask) (bitwise.shiftRight mask 1);
+    in go g (bitwise.shiftRight g 1);
+
+  # The Gray-code sequence for `bits` bits: toGray 0 .. 2^bits - 1.
+  graySequence = bits:
+    let count = bitwise.pow2 bits;
+    in builtins.map toGray (rangeList 0 (count - 1));
+
+  # The Hamming distances between each adjacent pair of a list of
+  # integers. For a Gray-code sequence every distance is 1.
+  adjacentHammingDistances = codes:
+    let n = builtins.length codes;
+    in
+      if n < 2 then []
+      else builtins.map
+             (i:
+               bitwise.popcount
+                 (bitwise.bitXor
+                   (builtins.elemAt codes i)
+                   (builtins.elemAt codes (i + 1))))
+             (rangeList 0 (n - 2));
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "to-gray"
+    "from-gray"
+    "sequence"
+    "verify-single-bit"
+  ];
+
+  applyGrayCode = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      bits = if request ? bits then request.bits else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if (op == "to-gray" || op == "from-gray") && n < 0 then {
+        outcome = "held-negative-number";
+        operation = op;
+        n = n;
+      }
+      else if (op == "sequence" || op == "verify-single-bit")
+              && bits < 1 then {
+        outcome = "held-non-positive-bit-width";
+        operation = op;
+        bits = bits;
+      }
+      else if op == "to-gray" then {
+        outcome = "gray-code-computed";
+        operation = op; n = n;
+        value = toGray n;
+      }
+      else if op == "from-gray" then {
+        outcome = "gray-code-computed";
+        operation = op; n = n;
+        value = fromGray n;
+      }
+      else if op == "sequence" then {
+        outcome = "gray-code-computed";
+        operation = op; bits = bits;
+        sequence = graySequence bits;
+      }
+      else
+        # op == "verify-single-bit"
+        let
+          distances = adjacentHammingDistances (graySequence bits);
+        in {
+          outcome = "gray-code-computed";
+          operation = op; bits = bits;
+          all_single_bit = builtins.all (d: d == 1) distances;
+        };
+
+in {
+  inherit
+    ownerName
+    toGray
+    fromGray
+    graySequence
+    adjacentHammingDistances
+    knownOperations
+    applyGrayCode;
+  meta = {
+    source = "stdlib math gray code";
+    owner = ownerName;
+    base = "parametric-math-gray-code-v0";
+    rev_note = "v0.12-AAN (div-math): reflected binary (Gray) code owner. toGray (n XOR n>>1) and fromGray (XOR-scan) are exact inverses; graySequence lists the codes for a bit width; adjacentHammingDistances shows the defining property -- consecutive codes differ in exactly one bit. Kernel layering: gray-code -> bitwise (pure XOR and shift). NOT non-binary Gray codes, NOT negative numbers, NOT yet a registered lens.";
+  };
+}

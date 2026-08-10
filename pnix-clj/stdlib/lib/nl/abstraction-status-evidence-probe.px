@@ -1,0 +1,33 @@
+# stdlib/lib/nl/abstraction-status-evidence-probe.px
+#
+# S99-2: lightweight abstraction-status evidence probe for MSV held metadata.
+# Uses store-plan fixture entries when none supplied; public-safe flat JSON out.
+let
+  ev = import ../meta/abstraction-status-evidence.px;
+  abProbe = import ./chat-abstraction-entries-probe.px;
+  B = builtins;
+
+  runProbe = args:
+    let entries = if args ? abstraction_statuses then args.abstraction_statuses else [ ];
+        entries' = if B.length entries > 0 then entries else (abProbe.materializeFixtureEntries null);
+        recog = if args ? recognized_concepts then args.recognized_concepts else null;
+        e = ev.mkAbstractionStatusEvidence { abstraction_statuses = entries'; recognized_concepts = recog; };
+        pub = ev.publicProjection e;
+        statuses = B.map (i: i.status) pub.items;
+        relations = B.map (i: i.relation) pub.items;
+        abouts = B.map (i: i.about) pub.items;
+    in {
+      status = "ok";
+      evidence_kind = pub.evidence_kind;
+      abstraction_status_count = pub.abstraction_status_count;
+      held_count = pub.held_count;
+      item_statuses = statuses;
+      item_relations = relations;
+      item_abouts = abouts;
+    };
+
+  probeSelfTest = _:
+    let r = runProbe { recognized_concepts = [ "s:n:ingest" ]; };
+    in (r.status == "ok") && (r.abstraction_status_count == 1) && (r.held_count == 1);
+
+in { inherit runProbe probeSelfTest; }

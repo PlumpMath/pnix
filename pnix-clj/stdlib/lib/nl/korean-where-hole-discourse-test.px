@@ -1,0 +1,26 @@
+# stdlib/lib/nl/korean-where-hole-discourse-test.px — 운영자 비전 2단계 lock: 담화가 where=? hole 완성.
+#
+# "이어지는 다른 sentence 들로 인해 조각들이 완성되는 형태잖아." (운영자)
+# → where=? hole(처소 valency 동사인데 location 부재)을 후속/이전 문장 context 가 채운다. 메커니즘: where-hole=零형 처소
+#   → droppedSlots 에 location 추가 → 기존 pro-drop 복원(resolveByKind ctx "location") 재사용(새 거울 0, live).
+# ★건전성: 에서-source(role=source≠location)는 location context 에 안 들어가 자동 배제 — "학교에서 왔다" 후엔 학교에 없음.
+#   antecedent 없으면 null=미완(fail-closed, candidate≠truth). 복원은 담화층 binding(코덱 단방향, 단문 term 미주입).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  locRec = sents: let d = knm.liftDiscourse sents; s2 = B.elemAt d 1;
+                  locs = B.filter (r: r.slot == "location") s2.recovered;
+                  in if locs == [] then "none" else let e = (B.head locs).entity; in if e == null then "null" else e.name;
+  bareLoc = let d = knm.liftDiscourse [ "철수가 갔다" ]; s1 = B.elemAt d 0;
+            locs = B.filter (r: r.slot == "location") s1.recovered;
+            in if locs == [] then "none" else let e=(B.head locs).entity; in if e==null then "null" else e.name;
+in {
+  arrive_then_be    = locRec [ "철수가 학교에 갔다" "있다" ];     # 학교 (도착→현재 그곳)
+  came_from_then_be = locRec [ "철수가 학교에서 왔다" "있다" ];   # null (source 배제=건전)
+  bare_hole         = bareLoc;                                     # null (antecedent 없음)
+  all_ok =
+       (locRec [ "철수가 학교에 갔다" "있다" ] == "학교")
+    && (locRec [ "철수가 학교에서 왔다" "있다" ] == "null")
+    && (bareLoc == "null")
+    # 회귀: 처소 명시 문장은 where-hole 자체가 없음 → location 복원 대상 아님(none)
+    && (let d = knm.liftDiscourse [ "철수가 학교에 갔다" "철수가 집에 있다" ]; s2 = B.elemAt d 1;
+        in (B.filter (r: r.slot == "location") s2.recovered) == [ ]);
+}

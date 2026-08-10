@@ -1,0 +1,44 @@
+# stdlib/lib/corpus/ko-entity-category-lexicon.px — CURATED (tracked, project-owned).
+# Korean entity -> hypernym (category) IS-A edges. This is the curated-bridge form of a Korean
+# entity taxonomy: woorimalsaem (LMF) carries 유의어/반대말 but NO 상위어(hypernym), and the
+# wordnet IS-A holds for polysemous loanword equivalents (고양이->cat, 동물->animal are both
+# polysemous -> held). So Korean entity categories are supplied here as HUMAN-VERIFIED exact
+# edges (each pair a deliberate curation, NOT fuzzy matching) — a hit is a CORE exact-key IS-A;
+# a Korean entity NOT in these edges stays HELD (never auto-categorized). Edges compose
+# transitively (참새 -> 새 -> 동물 -> 생물; 사과 -> 과일 -> 음식). The curated analogue of the
+# wordnet hypernym graph, for the Korean side of typed coreference (그 과일 -> 사과).
+{ schema = "ko.entity-category-lexicon.v1";
+  note = "curated Korean entity -> hypernym (category) IS-A edges (human-verified exact)";
+  edges = [
+    # 과일 (fruit)
+    { ko = "사과"; hyper = "과일"; }
+    { ko = "바나나"; hyper = "과일"; }
+    { ko = "포도"; hyper = "과일"; }
+    { ko = "딸기"; hyper = "과일"; }
+    { ko = "수박"; hyper = "과일"; }
+    # 동물 (animal)
+    { ko = "고양이"; hyper = "동물"; }
+    { ko = "개"; hyper = "동물"; }
+    { ko = "사자"; hyper = "동물"; }
+    { ko = "호랑이"; hyper = "동물"; }
+    { ko = "코끼리"; hyper = "동물"; }
+    # 새 (bird) — itself an animal
+    { ko = "참새"; hyper = "새"; }
+    { ko = "독수리"; hyper = "새"; }
+    { ko = "비둘기"; hyper = "새"; }
+    # 탈것 (vehicle)
+    { ko = "자동차"; hyper = "탈것"; }
+    { ko = "기차"; hyper = "탈것"; }
+    { ko = "비행기"; hyper = "탈것"; }
+    { ko = "자전거"; hyper = "탈것"; }
+    # 채소 (vegetable)
+    { ko = "당근"; hyper = "채소"; }
+    { ko = "배추"; hyper = "채소"; }
+    # supercategory edges (transitive closure)
+    { ko = "과일"; hyper = "음식"; }
+    { ko = "채소"; hyper = "음식"; }
+    { ko = "새"; hyper = "동물"; }
+    { ko = "동물"; hyper = "생물"; }
+    { ko = "식물"; hyper = "생물"; }
+  ];
+}

@@ -1,0 +1,189 @@
+let
+  ownerName = "stdlib.nl.axiom-depth-6level-extension";
+
+  # === Axiom Depth 6-Level Extension (agent-NL-173) =================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "5-level → 6-level 추가 (특정 critical path)"
+  #
+  # 6-level 은 *config-parameter set / version-quantization /
+  # implementation-detail* 의 deepest substrate atom. critical path
+  # 만 push (모든 5-level 을 6-level 화하지 않음 — 의미 없음).
+  #
+  # Selected paths: 가장 자주 NL 발화에 나타나는 + ambiguity 가 큰 +
+  # subsequent code emission 이 detail-sensitive 한 path.
+
+  stepKind = "axiom-depth-6level";
+  framework_step =
+    "6-level depth — implementation-detail / quantization / param-set granularity";
+
+  # =================================================================
+  # === 6-level depth records (critical paths only) ================
+  # =================================================================
+
+  sixLevelRecords = [
+    # ── security/crypto/at-rest/aes-gcm/argon2/argon2id → param-set
+    { family = "security"; top = "crypto-and-secrets"; sub = "at-rest";
+      sub_sub = "aes-gcm"; sub_sub_sub = "argon2-derivation";
+      sub_sub_sub_sub = "argon2id-variant";
+      leaves = [
+        { name = "owasp-2023-recommended"; cues = [ "OWASP 2023 recommended" "m=46MiB t=1 p=1" ]; }
+        { name = "rfc-9106-second"; cues = [ "RFC 9106 second" "m=64MiB t=3 p=4" ]; }
+        { name = "high-security-paranoid"; cues = [ "m=2GiB t=4 p=8" "paranoid params" ]; }
+        { name = "mobile-constrained";   cues = [ "m=16MiB t=2 p=2" "mobile" ]; }
+      ];
+    }
+    # ── security/crypto/at-rest/aes-gcm/pbkdf2/iterations-600k-OWASP-2023 → cipher-suite
+    { family = "security"; top = "crypto-and-secrets"; sub = "at-rest";
+      sub_sub = "aes-gcm"; sub_sub_sub = "pbkdf2-derivation";
+      sub_sub_sub_sub = "iterations-600k-2023";
+      leaves = [
+        { name = "aes-128-gcm-suite";    cues = [ "AES-128-GCM suite" ]; }
+        { name = "aes-256-gcm-suite";    cues = [ "AES-256-GCM suite" ]; }
+        { name = "key-length-128-bit";   cues = [ "128-bit key" ]; }
+        { name = "key-length-256-bit";   cues = [ "256-bit key" ]; }
+      ];
+    }
+    # ── ml/architecture/transformer/decoder-gpt/llama/llama3-70b → quantization
+    { family = "ml"; top = "model-architecture"; sub = "transformer";
+      sub_sub = "decoder-only-gpt"; sub_sub_sub = "llama-variant";
+      sub_sub_sub_sub = "llama3-70b-version";
+      leaves = [
+        { name = "gptq-int4-quant";    cues = [ "GPTQ Int4" ]; }
+        { name = "awq-int4-quant";     cues = [ "AWQ Int4" ]; }
+        { name = "gguf-q4-quant";      cues = [ "GGUF Q4_K_M" ]; }
+        { name = "gguf-q5-quant";      cues = [ "GGUF Q5_K_M" ]; }
+        { name = "gguf-q8-quant";      cues = [ "GGUF Q8_0" ]; }
+        { name = "bf16-full-precision"; cues = [ "BF16 full precision" ]; }
+        { name = "fp8-h100-native";    cues = [ "FP8 H100 native" ]; }
+      ];
+    }
+    # ── ml/architecture/transformer/decoder-gpt/llama/llama3-8b → quantization
+    { family = "ml"; top = "model-architecture"; sub = "transformer";
+      sub_sub = "decoder-only-gpt"; sub_sub_sub = "llama-variant";
+      sub_sub_sub_sub = "llama3-8b-version";
+      leaves = [
+        { name = "gguf-q4-laptop";    cues = [ "GGUF Q4 laptop friendly" ]; }
+        { name = "gguf-q8-edge";      cues = [ "GGUF Q8 edge" ]; }
+        { name = "bf16-single-gpu";   cues = [ "BF16 single GPU" ]; }
+        { name = "fp32-cpu-only";     cues = [ "FP32 CPU only" ]; }
+      ];
+    }
+    # ── ml/training/optimizer/adamw/lr-hp/cosine-schedule → cycle-config
+    { family = "ml"; top = "training"; sub = "optimizer-choice";
+      sub_sub = "adamw-weight-decay"; sub_sub_sub = "learning-rate-hp";
+      sub_sub_sub_sub = "cosine-schedule";
+      leaves = [
+        { name = "single-cycle";          cues = [ "single cosine cycle" ]; }
+        { name = "warm-restarts-SGDR";    cues = [ "SGDR" "warm restarts" ]; }
+        { name = "linear-warmup-cosine";  cues = [ "linear warmup + cosine" ]; }
+        { name = "cosine-with-floor";     cues = [ "cosine with eta_min floor" ]; }
+      ];
+    }
+    # ── database/replication/raft/leader/pre-vote → protocol-step
+    { family = "database"; top = "replication-and-ha"; sub = "automatic-failover";
+      sub_sub = "raft-consensus"; sub_sub_sub = "leader-role";
+      sub_sub_sub_sub = "pre-vote-phase";
+      leaves = [
+        { name = "check-quorum-broadcast"; cues = [ "broadcast PreVote RPC" ]; }
+        { name = "leadership-transfer";    cues = [ "leadership transfer" ]; }
+        { name = "isolated-server-detect"; cues = [ "detect isolated server" ]; }
+        { name = "term-bump-on-success";   cues = [ "bump term on success" ]; }
+      ];
+    }
+    # ── devops/canary/percentage/percentage-based/5pct → criteria
+    { family = "devops"; top = "ci-cd"; sub = "deployment-strategy";
+      sub_sub = "canary-with-percentage"; sub_sub_sub = "percentage-traffic-split";
+      sub_sub_sub_sub = "5pct-canary-step";
+      leaves = [
+        { name = "metric-error-rate-threshold"; cues = [ "error rate < 0.1%" ]; }
+        { name = "metric-p99-latency-threshold"; cues = [ "p99 latency < 200ms" ]; }
+        { name = "duration-30min-hold";   cues = [ "30 minute hold" ]; }
+        { name = "rollback-on-anomaly";   cues = [ "auto rollback on anomaly" ]; }
+        { name = "manual-promote-gate";   cues = [ "manual promote gate" ]; }
+      ];
+    }
+    # ── api-design/REST/POST/idempotency-key/stripe-style → ttl
+    { family = "api-design"; top = "rest-conventions"; sub = "http-verbs";
+      sub_sub = "post-verb"; sub_sub_sub = "idempotency-key-header";
+      sub_sub_sub_sub = "stripe-style-header";
+      leaves = [
+        { name = "24h-default-ttl-stripe"; cues = [ "Stripe 24h TTL" ]; }
+        { name = "uuid-v4-format";         cues = [ "UUID v4 format" ]; }
+        { name = "request-fingerprint";    cues = [ "request fingerprint" ]; }
+        { name = "conflict-409-on-mismatch"; cues = [ "409 on fingerprint mismatch" ]; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === Lookup helpers =============================================
+  # =================================================================
+
+  recordKey = r:
+    r.family + "/" + r.top + "/" + r.sub + "/" + r.sub_sub + "/"
+    + r.sub_sub_sub + "/" + r.sub_sub_sub_sub;
+
+  findByKey = family: top: sub: sub_sub: sub_sub_sub: sub_sub_sub_sub:
+    let
+      matches = builtins.filter (r:
+        r.family == family && r.top == top && r.sub == sub
+        && r.sub_sub == sub_sub && r.sub_sub_sub == sub_sub_sub
+        && r.sub_sub_sub_sub == sub_sub_sub_sub
+      ) sixLevelRecords;
+    in
+      if matches == [] then null else builtins.head matches;
+
+  leavesAt6 = family: top: sub: sub_sub: sub_sub_sub: sub_sub_sub_sub:
+    let r = findByKey family top sub sub_sub sub_sub_sub sub_sub_sub_sub;
+    in if r == null then null else builtins.map (l: l.name) r.leaves;
+
+  # =================================================================
+  # === Inventory ==================================================
+  # =================================================================
+
+  countLeaves = lst:
+    builtins.foldl' (acc: r: acc + builtins.length r.leaves) 0 lst;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    six_level_record_count = builtins.length sixLevelRecords;
+    total_6level_leaves = countLeaves sixLevelRecords;
+    record_keys = builtins.map recordKey sixLevelRecords;
+    deepest_depth = 6;
+    critical_path_selection_criteria = [
+      "frequent NL utterance occurrence"
+      "high ambiguity between alternatives"
+      "detail-sensitive subsequent code emission"
+    ];
+  };
+
+  # =================================================================
+  # === Plate entry ================================================
+  # =================================================================
+
+  applyAxiomDepth6LevelPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "axiom-depth-6level-inventory";
+      receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "lookup_6" request then
+      let q = request.lookup_6;
+          r = findByKey q.family q.top q.sub q.sub_sub q.sub_sub_sub q.sub_sub_sub_sub;
+      in if r == null then { outcome = "held-no-6-level-record-for-key";
+                             receipt = { queried = q; }; }
+         else { outcome = "axiom-depth-6-level-leaves";
+                receipt = { key = recordKey r;
+                            leaves = builtins.map (l: l.name) r.leaves;
+                            leaf_count = builtins.length r.leaves; };
+              }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [ "inventory" "lookup_6" ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit sixLevelRecords recordKey findByKey leavesAt6;
+  inherit inventorySummary applyAxiomDepth6LevelPlate;
+}

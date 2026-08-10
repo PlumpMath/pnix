@@ -1,0 +1,76 @@
+# stdlib/lib/math/math-reasoning.px
+#
+# P7-c 통합 "문제 해결기": dimension gate(P7-c) + Held carve-out → math_evidence(P7-a)로 end-to-end 판정.
+#   = "redb 지식을 *읽고*(P7-b) *수학적으로 판단해서*(P7-c) *evidence로 설명한다*"의 합성.
+#
+# ★SOUND CORE: 차원-동등 gate 판정(consistent/mismatch)만 결정론.
+# ★Held carve-out(차원서 도출 불가, fail-closed): operand의 unit_flags(affine/log-scale/angle)·concept_query(같은 차원
+#   다른 개념 물음) → held_reason. gate가 *판정 안 함*, candidate/held로만(promotion 0, row≠truth).
+# ★갈라치기 0: dimension-gate(차원연산)·math-evidence(envelope) 재사용. 새 gate/거울 0.
+let
+  B = builtins;
+  dg = import ./dimension-gate.px;
+  me = import ./math-evidence.px;
+
+  # unit_flags → held_reason(carve-out 명시). 모르는 flag도 보존(정직).
+  flagToReason = f:
+    if f == "affine" then { kind = "affine-unit"; detail = "non-multiplicative 단위(°C/°F, 원점≠0) — abelian group 밖"; }
+    else if f == "log-scale" then { kind = "log-scale-unit"; detail = "dB 등 log scale — non-multiplicative"; }
+    else if f == "angle" then { kind = "angle-dimensionless"; detail = "rad/Hz — zero-vector collapse(2π 위험), 순수 차원으로 판정 불가"; }
+    else { kind = f; detail = ""; };
+
+  # solveDimensionProblem { op, a, b?, concept_query? }: 차원 문제 → math_evidence.
+  #   op = "add" | "mul" | "div" | "transcendental"
+  #   a, b = { dimension; symbol?; quantity_kind?; unit_flags? }
+  #   concept_query = true면 "같은 차원의 개념 구분" 요청(energy vs torque) → concept-ambiguous Held.
+  solveDimensionProblem = args:
+    let op = args.op or "add";
+        a = args.a or { dimension = { }; };
+        b = args.b or { dimension = { }; };
+        conceptQuery = args.concept_query or false;
+        gateR =
+          if op == "add" then dg.gateAdd { a = a.dimension; b = b.dimension; }
+          else if op == "mul" then dg.gateMul { a = a.dimension; b = b.dimension; }
+          else if op == "div" then dg.gateDiv { a = a.dimension; b = b.dimension; }
+          else if op == "transcendental" then dg.gateTranscendental { d = a.dimension; }
+          # ★equivalence(의미동등 질의): 차원 다르면 sound "not-equivalent"(mismatch); 차원 같으면 *결론 불가*(아래 F7 held).
+          else if op == "equivalence"
+               then (if dg.dimEqual a.dimension b.dimension
+                     then { status = "consistent"; }
+                     else { status = "mismatch"; reason = "different-dimension-not-equivalent"; })
+          else { status = "none"; };
+        operands = if op == "transcendental" then [ a ] else [ a b ];
+        flagReasons = B.concatMap (o: B.map flagToReason (o.unit_flags or [ ])) operands;
+        # concept-ambiguous: 차원은 consistent인데 같은-차원-다른-개념을 물음(N·m energy vs torque)
+        conceptReasons = if conceptQuery && (gateR.status == "consistent")
+                         then [ { kind = "concept-ambiguous"; detail = "같은 차원이나 개념(예 energy vs torque)은 차원에서 도출 불가 — 관습/문맥 의존"; } ]
+                         else [ ];
+        # ★malformed dimension code(parseDimCode valid=false) → held(fail-closed, 추측 0)
+        invalidReasons = B.concatMap (o:
+          if (o ? dimension) && (o.dimension ? valid) && (o.dimension.valid == false)
+          then [ { kind = "malformed-dimension-code"; detail = "허용되지 않은 차원 코드 — 판정 불가"; } ]
+          else [ ]) operands;
+        # ★F7(연구판정, fail-closed): 의미동등 질의에서 *차원이 같아도* "동등"이라 결론 못 냄(차원 매칭은 수학동등엔 sound,
+        #   개념동등엔 UNSOUND — hertz=becquerel 둘 다 1/s, m²·sr=m²). → held(절대 "equal" 아님). 차원 다르면 위 mismatch=sound 부정.
+        equivReasons = if (op == "equivalence") && (gateR.status == "consistent")
+                       then [ { kind = "dimension-equal-not-semantic-equivalent";
+                                detail = "차원이 같아도 의미 동등 아님(예: hertz=becquerel 둘 다 1/s, m²·sr=m²) — 개념 동등은 차원에서 도출 불가, 문맥 의존"; } ]
+                       else [ ];
+        heldReasons = flagReasons ++ conceptReasons ++ invalidReasons ++ equivReasons;
+        # dimension_status: mismatch(불일치) > held(carve-out) > consistent(차원OK) > none
+        dimStatus = if gateR.status == "mismatch" then "mismatch"
+                    else if heldReasons != [ ] then "held"
+                    else if gateR.status == "consistent" then "consistent"
+                    else "none";
+        # anchors: 피연산자 기호·차원(공개 표준사실, 있으면)
+        anchors = B.concatMap (o:
+          if o ? quantity_kind then [ { symbol = o.symbol or ""; quantity_kind = o.quantity_kind; dimension = o.dimension_code or ""; } ]
+          else [ ]) operands;
+    in me.mkMathEvidence {
+         dimension_check = { status = dimStatus; reason = gateR.reason or ""; };
+         anchors = anchors;
+         held_reasons = heldReasons;
+       };
+in {
+  inherit solveDimensionProblem flagToReason;
+}

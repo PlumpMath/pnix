@@ -1,0 +1,43 @@
+{
+  name = "pnixc";
+  schema = "pnixc-model-v1";
+  version = "0.1.0";
+  subset = "pnix-subset-v1";
+  entrypoint = "driver.px";
+  exec_plan = "exec/plan.px";
+  exec_runtime = "exec/runtime.px";
+
+  pipelines = {
+    expr = {
+      input = "pnix";
+      stages = [
+        { id = "parse"; spec = "lower/parse.px"; }
+        { id = "lower"; spec = "lower/lower.px"; }
+        { id = "emit_ir"; spec = "emit/ir.px"; }
+        { id = "emit_ssa"; spec = "emit/ssa.px"; }
+      ];
+    };
+    module = {
+      input = "pnix";
+      stages = [
+        { id = "parse_module"; spec = "lower/parse.px"; }
+        { id = "lower"; spec = "lower/lower.px"; }
+        { id = "emit_ir"; spec = "emit/ir.px"; }
+        { id = "emit_ssa"; spec = "emit/ssa.px"; }
+        { id = "emit_aot"; spec = "emit/aot.px"; }
+      ];
+    };
+  };
+
+  outputs = {
+    ir = { format = "fxcore-json"; };
+    ssa = { format = "fxcore-ssa-json"; };
+    aot = { format = "native"; };
+  };
+
+  contracts = {
+    deterministic = true;
+    reproducible = true;
+    no_io = true;
+  };
+}

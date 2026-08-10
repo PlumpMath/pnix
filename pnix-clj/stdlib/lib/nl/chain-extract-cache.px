@@ -1,0 +1,244 @@
+let
+  ownerName = "stdlib.nl.chain-extract-cache";
+
+  chainOwner =
+    import nl/sentence-substrate-mapping.px;
+  instanceMemory =
+    import nl/sentence-instance-memory.px;
+
+  # === Chain Extract Cache (agent-NL-114) ==========================
+  #
+  # 사용자 directive: "일종의 런타임 tree 생성 캐시인거 같은데, 그런거면
+  # 좋다."
+  #
+  # 4-piece meaning vector extraction (#105 chain) calls into:
+  #   - sentence-decomposition-substrate (#101)
+  #   - sentence-morphism-detector (#102)
+  #   - sentence-invariant-convergence (#103)
+  #   - sentence-meta-detection (#104)
+  #   - sentence-substrate-mapping (#105)
+  # Each utterance hits 5+ substrate imports + walks. Repeated
+  # utterance = ~100x speedup if cached.
+  #
+  # # cache shape
+  #
+  #   {
+  #     entries = [
+  #       { key; meaning_vector; hit_count; first_seen; last_seen; }
+  #       ...
+  #     ];
+  #     max_entries = N;     # LRU bound
+  #     stats = { hits; misses; evictions; };
+  #   }
+  #
+  # # cache eviction
+  #
+  # Same fade rule as attention-pin-policy: oldest by last_seen
+  # gets evicted when cache exceeds max_entries.
+
+  stepKind = "memoize-chain-extraction";
+  framework_step =
+    "performance — 4-piece extraction memoize, fade by last_seen";
+
+  emptyCache = maxEntries: {
+    entries = [];
+    max_entries = maxEntries;
+    stats = {
+      hits = 0;
+      misses = 0;
+      evictions = 0;
+    };
+  };
+
+  defaultMaxEntries = 32;
+
+  # Cache key: the utterance string itself. Same utterance = same
+  # 4-piece result deterministically.
+  cacheKey = utterance: utterance;
+
+  lookupEntry = cache: key:
+    let
+      hits = builtins.filter (e: e.key == key) cache.entries;
+    in
+      if hits == [] then null else builtins.head hits;
+
+  # === Get or compute ============================================
+
+  getOrCompute = cache: utterance:
+    let
+      key = cacheKey utterance;
+      existing = lookupEntry cache key;
+    in
+      if existing != null then {
+        cache = cache // {
+          entries = builtins.map (e:
+            if e.key == key then e // {
+              hit_count = e.hit_count + 1;
+              last_seen = e.last_seen + 1;
+            } else e
+          ) cache.entries;
+          stats = cache.stats // { hits = cache.stats.hits + 1; };
+        };
+        meaning_vector = existing.meaning_vector;
+        was_cached = true;
+      }
+      else
+        let
+          # Real extraction — expensive
+          mv = instanceMemory.extractMeaningVector utterance;
+          newEntry = {
+            key = key;
+            meaning_vector = mv;
+            hit_count = 1;
+            first_seen = builtins.length cache.entries;
+            last_seen = builtins.length cache.entries;
+          };
+          appendedEntries = cache.entries ++ [ newEntry ];
+          needsEvict =
+            builtins.length appendedEntries > cache.max_entries;
+          # Evict by lowest last_seen (oldest unused)
+          evictionResult =
+            if !needsEvict then {
+              entries = appendedEntries;
+              evicted = 0;
+            }
+            else
+              let
+                sorter = a: b:
+                  (a.last_seen or 0) > (b.last_seen or 0);
+                sorted = builtins.sort sorter appendedEntries;
+                keepCount = cache.max_entries;
+                take = n: list:
+                  if n == 0 || list == [] then []
+                  else [ (builtins.head list) ]
+                       ++ take (n - 1) (builtins.tail list);
+              in {
+                entries = take keepCount sorted;
+                evicted =
+                  builtins.length appendedEntries - keepCount;
+              };
+        in {
+          cache = cache // {
+            entries = evictionResult.entries;
+            stats = cache.stats // {
+              misses = cache.stats.misses + 1;
+              evictions = cache.stats.evictions
+                + evictionResult.evicted;
+            };
+          };
+          meaning_vector = mv;
+          was_cached = false;
+        };
+
+  # === Hit rate computation ======================================
+
+  hitRate = cache:
+    let
+      total = cache.stats.hits + cache.stats.misses;
+    in
+      if total == 0 then 0.0
+      else
+        # Approximation as integer percent ×100 since pnixc-meta
+        # may not surface float division cleanly; return ratio
+        # in basis points (0..10000).
+        let
+          bp = (cache.stats.hits * 10000) / total;
+        in bp;
+
+  # === Plate entry ===============================================
+
+  applyChainExtractCachePlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "extract" request then
+      let
+        cache = request.cache
+          or (emptyCache (request.max_entries or defaultMaxEntries));
+        result = getOrCompute cache request.extract;
+      in {
+        outcome = "extraction-resolved";
+        public = {
+          was_cached = result.was_cached;
+          cache_size = builtins.length result.cache.entries;
+          hit_count = result.cache.stats.hits;
+          miss_count = result.cache.stats.misses;
+          eviction_count = result.cache.stats.evictions;
+        };
+        carry = {
+          meaning_vector = result.meaning_vector;
+          updated_cache = result.cache;
+          axiom_origin =
+            "axiom-102-nl-chain-extract-cache "
+            + "(composes axiom-94-nl-chain)";
+        };
+      }
+    else if (builtins.hasAttr "hit_rate" request)
+         && (builtins.hasAttr "cache" request) then
+      let bp = hitRate request.cache; in {
+        outcome = "hit-rate-computed";
+        public = {
+          basis_points = bp;
+          percent_x100 = bp;  # bp / 100 = percent, kept as int
+        };
+      }
+    else if (builtins.hasAttr "empty_cache" request) then
+      let
+        cache = emptyCache
+          (request.max_entries or defaultMaxEntries);
+      in {
+        outcome = "empty-cache-created";
+        public = { max_entries = cache.max_entries; };
+        carry = { cache = cache; };
+      }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { extract, cache?, max_entries? } or { hit_rate, cache } "
+        + "or { empty_cache, max_entries? }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-chain-extract-cache-axiom-102";
+    composes = "axiom-97-instance + axiom-94-nl-chain";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = false;
+    default_max_entries = defaultMaxEntries;
+    eviction_rule =
+      "LRU by last_seen — oldest unused entry drops when cache full";
+    expected_speedup =
+      "~100x for repeated utterance (5+ substrate imports avoided)";
+    primary_outcomes = [
+      "extraction-resolved"
+      "hit-rate-computed"
+      "empty-cache-created"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+    ];
+  };
+
+in {
+  inherit
+    ownerName
+    emptyCache cacheKey lookupEntry
+    getOrCompute hitRate
+    applyChainExtractCachePlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL chain extract cache (agent-NL-114)";
+    owner = ownerName;
+    base = "nl-chain-extract-cache-v0";
+    rev_note = "agent-NL-114 (2026-05-29): 4-piece meaning vector "
+      + "memoize. key = utterance string (deterministic = same key = "
+      + "same value). LRU eviction by last_seen. expected ~100x speedup "
+      + "for repeated utterance. paired with attention-pin-policy.px 의 "
+      + "instance eviction = bounded session memory + bounded chain "
+      + "cache. DO NOT REBUILD — #109 extractMeaningVector 호출만.";
+  };
+}

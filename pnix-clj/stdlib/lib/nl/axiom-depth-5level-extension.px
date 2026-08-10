@@ -1,0 +1,408 @@
+let
+  ownerName = "stdlib.nl.axiom-depth-5level-extension";
+
+  # === Axiom Depth 5-Level Extension (agent-NL-167) =================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "4-level → 5-level 추가 (특정 path 만)"
+  #
+  # 4-level 까지는 cross-cutting, 5-level 은 *config-parameter /
+  # version / variant detail* 수준. registered paths 의 selected subset
+  # 만 5-level 깊이로 push.
+  #
+  # 5-level key shape: (family, top, sub, sub_sub, sub_sub_sub).
+  # leaves at level 5 are deepest config / variant / version atoms.
+
+  stepKind = "axiom-depth-5level";
+  framework_step =
+    "5-level depth — config-parameter / version-detail granularity";
+
+  # =================================================================
+  # === 5-level depth records ======================================
+  # =================================================================
+
+  fiveLevelRecords = [
+    # ── crypto/at-rest/aes-gcm/pbkdf2 → params ──────────────────
+    { family = "security"; top = "crypto-and-secrets"; sub = "at-rest";
+      sub_sub = "aes-gcm"; sub_sub_sub = "pbkdf2-derivation";
+      leaves = [
+        { name = "iterations-100k";     cues = [ "100000 iterations" ]; }
+        { name = "iterations-600k-2023"; cues = [ "600000 iterations" "OWASP 2023" ]; }
+        { name = "salt-length-16"; cues = [ "16-byte salt" ]; }
+        { name = "salt-length-32"; cues = [ "32-byte salt" ]; }
+        { name = "hash-sha256";    cues = [ "SHA-256 HMAC" ]; }
+        { name = "hash-sha512";    cues = [ "SHA-512 HMAC" ]; }
+      ];
+    }
+    # ── crypto/at-rest/aes-gcm/argon2 → variant + params ────────
+    { family = "security"; top = "crypto-and-secrets"; sub = "at-rest";
+      sub_sub = "aes-gcm"; sub_sub_sub = "argon2-derivation";
+      leaves = [
+        { name = "argon2i-variant";   cues = [ "argon2i" ]; }
+        { name = "argon2d-variant";   cues = [ "argon2d" ]; }
+        { name = "argon2id-variant";  cues = [ "argon2id" ]; }
+        { name = "memory-cost-64MiB"; cues = [ "m=65536" "64 MiB memory" ]; }
+        { name = "time-cost-3";       cues = [ "t=3" "3 iterations" ]; }
+        { name = "parallelism-4";     cues = [ "p=4" ]; }
+      ];
+    }
+    # ── injection/xss/html-context/dompurify → config ───────────
+    { family = "security"; top = "injection-prevention"; sub = "xss-output-escape";
+      sub_sub = "html-context-escape"; sub_sub_sub = "dompurify-lib";
+      leaves = [
+        { name = "ALLOWED_TAGS-config";  cues = [ "ALLOWED_TAGS" ]; }
+        { name = "FORBID_TAGS-config";   cues = [ "FORBID_TAGS" ]; }
+        { name = "SANITIZE_DOM-true";    cues = [ "SANITIZE_DOM" ]; }
+        { name = "USE_PROFILES-html";    cues = [ "USE_PROFILES html" ]; }
+        { name = "RETURN_TRUSTED_TYPE";  cues = [ "RETURN_TRUSTED_TYPE" ]; }
+      ];
+    }
+    # ── ml/training/optimizer/adamw/lr-hp → schedule ────────────
+    { family = "ml"; top = "training"; sub = "optimizer-choice";
+      sub_sub = "adamw-weight-decay"; sub_sub_sub = "learning-rate-hp";
+      leaves = [
+        { name = "constant-lr";       cues = [ "constant lr" ]; }
+        { name = "linear-warmup";     cues = [ "linear warmup" ]; }
+        { name = "cosine-schedule";   cues = [ "cosine schedule" ]; }
+        { name = "polynomial-decay";  cues = [ "polynomial decay" ]; }
+        { name = "inverse-sqrt-schedule"; cues = [ "inverse sqrt" "Noam" ]; }
+        { name = "one-cycle-superconvergence"; cues = [ "one-cycle" "super-convergence" ]; }
+      ];
+    }
+    # ── ml/architecture/transformer/decoder-gpt/llama → version ──
+    { family = "ml"; top = "model-architecture"; sub = "transformer";
+      sub_sub = "decoder-only-gpt"; sub_sub_sub = "llama-variant";
+      leaves = [
+        { name = "llama2-7b-version";   cues = [ "Llama 2 7B" "llama-2-7B" ]; }
+        { name = "llama2-13b-version";  cues = [ "Llama 2 13B" ]; }
+        { name = "llama2-70b-version";  cues = [ "Llama 2 70B" ]; }
+        { name = "llama3-8b-version";   cues = [ "Llama 3 8B" ]; }
+        { name = "llama3-70b-version";  cues = [ "Llama 3 70B" ]; }
+        { name = "code-llama-version";  cues = [ "Code Llama" ]; }
+      ];
+    }
+    # ── database/replication/failover/raft/leader → election ────
+    { family = "database"; top = "replication-and-ha"; sub = "automatic-failover";
+      sub_sub = "raft-consensus"; sub_sub_sub = "leader-role";
+      leaves = [
+        { name = "pre-vote-phase";         cues = [ "Raft pre-vote" "PreVote" ]; }
+        { name = "heartbeat-timeout-150ms"; cues = [ "150ms heartbeat" ]; }
+        { name = "election-timeout-300-600ms"; cues = [ "300-600ms election timeout" ]; }
+        { name = "split-vote-resolution";   cues = [ "split-vote" "randomized timeout" ]; }
+        { name = "leader-lease";           cues = [ "leader lease" ]; }
+      ];
+    }
+    # ── devops/canary/percentage/percentage-based → schedule ────
+    { family = "devops"; top = "ci-cd"; sub = "deployment-strategy";
+      sub_sub = "canary-with-percentage"; sub_sub_sub = "percentage-traffic-split";
+      leaves = [
+        { name = "1pct-canary-step";   cues = [ "1% canary" ]; }
+        { name = "5pct-canary-step";   cues = [ "5% canary" ]; }
+        { name = "10pct-canary-step";  cues = [ "10% canary" ]; }
+        { name = "25pct-canary-step";  cues = [ "25% canary" ]; }
+        { name = "50pct-canary-step";  cues = [ "50% canary" ]; }
+        { name = "100pct-canary-step"; cues = [ "100% canary" "full rollout" ]; }
+      ];
+    }
+    # ── api/REST/POST/idempotency → header pattern ──────────────
+    { family = "api-design"; top = "rest-conventions"; sub = "http-verbs";
+      sub_sub = "post-verb"; sub_sub_sub = "idempotency-key-header";
+      leaves = [
+        { name = "ttl-24h-header";      cues = [ "24-hour TTL" ]; }
+        { name = "ttl-1h-header";       cues = [ "1-hour TTL" ]; }
+        { name = "uuid-v4-key";         cues = [ "UUID v4 idempotency key" ]; }
+        { name = "client-generated-key"; cues = [ "client-generated key" ]; }
+        { name = "stripe-style-header"; cues = [ "Stripe-Idempotency-Key" ]; }
+      ];
+    }
+
+    # ══════════════════════════════════════════════════════════════
+    # ══ 추가 5-level (#170 — 22 new, 8 → 30 total) ════════════════
+    # ══════════════════════════════════════════════════════════════
+
+    # ── security/authn/oauth/google/openid → flow ──────────────
+    { family = "security"; top = "authn-authz"; sub = "oauth-flow";
+      sub_sub = "google-provider"; sub_sub_sub = "openid-scope";
+      leaves = [
+        { name = "auth-code-flow";    cues = [ "authorization code" ]; }
+        { name = "pkce-flow";         cues = [ "PKCE" "S256 challenge" ]; }
+        { name = "device-code-flow";  cues = [ "device code flow" ]; }
+        { name = "implicit-flow-deprecated"; cues = [ "implicit flow" ]; }
+      ];
+    }
+    # ── security/authn/jwt/RS256/2048 → algorithm-detail ────────
+    { family = "security"; top = "authn-authz"; sub = "jwt-tokens";
+      sub_sub = "rs256-alg"; sub_sub_sub = "rsa-2048-key";
+      leaves = [
+        { name = "pkcs8-private-key";   cues = [ "PKCS#8" ]; }
+        { name = "pkcs1-private-key";   cues = [ "PKCS#1" ]; }
+        { name = "openssl-genkey";      cues = [ "openssl genrsa" ]; }
+        { name = "node-jwks-rotation";  cues = [ "JWKS rotation" ]; }
+      ];
+    }
+    # ── security/compliance/GDPR/Art-17 → erasure-mechanism ────
+    { family = "security"; top = "audit-and-compliance"; sub = "privacy-policy";
+      sub_sub = "gdpr-regulation"; sub_sub_sub = "art-17-erasure";
+      leaves = [
+        { name = "soft-delete-with-anonymize"; cues = [ "soft-delete + anonymize" ]; }
+        { name = "crypto-shredding";    cues = [ "crypto-shredding" ]; }
+        { name = "hard-delete-with-audit"; cues = [ "hard-delete + audit log" ]; }
+        { name = "tombstone-record";    cues = [ "GDPR tombstone" ]; }
+      ];
+    }
+    # ── security/compliance/CCPA/right-to-delete → mechanism ───
+    { family = "security"; top = "audit-and-compliance"; sub = "privacy-policy";
+      sub_sub = "ccpa-regulation"; sub_sub_sub = "right-to-delete";
+      leaves = [
+        { name = "verifiable-request";  cues = [ "verifiable consumer request" ]; }
+        { name = "45-day-window";       cues = [ "45-day response window" ]; }
+        { name = "service-provider-cascade"; cues = [ "cascade to service providers" ]; }
+        { name = "audit-trail-retention"; cues = [ "deletion audit trail" ]; }
+      ];
+    }
+    # ── security/threat/spoofing/identity/dnssec → record-type ─
+    { family = "security"; top = "threat-modeling"; sub = "spoofing";
+      sub_sub = "identity-spoof"; sub_sub_sub = "dnssec-defense";
+      leaves = [
+        { name = "rrsig-record";   cues = [ "RRSIG" ]; }
+        { name = "dnskey-record";  cues = [ "DNSKEY" ]; }
+        { name = "ds-record";      cues = [ "DS record" ]; }
+        { name = "nsec3-record";   cues = [ "NSEC3" ]; }
+      ];
+    }
+    # ── security/crypto/in-transit/tls-1.3/aes-128-gcm → curve ─
+    { family = "security"; top = "crypto-and-secrets"; sub = "in-transit";
+      sub_sub = "tls-1-3"; sub_sub_sub = "aes-128-gcm-sha256";
+      leaves = [
+        { name = "x25519-key-exchange";   cues = [ "X25519" ]; }
+        { name = "x448-key-exchange";     cues = [ "X448" ]; }
+        { name = "secp256r1-key-exchange"; cues = [ "secp256r1 in TLS" ]; }
+      ];
+    }
+    # ── database/scalability/hash-shard/consistent → variant ────
+    { family = "database"; top = "scalability"; sub = "shard-strategy";
+      sub_sub = "hash-shard"; sub_sub_sub = "consistent-hashing";
+      leaves = [
+        { name = "virtual-nodes-100"; cues = [ "100 virtual nodes" ]; }
+        { name = "virtual-nodes-1000"; cues = [ "1000 virtual nodes" ]; }
+        { name = "ring-resize-protocol"; cues = [ "ring resize" ]; }
+        { name = "weighted-virtual-nodes"; cues = [ "weighted vnodes" ]; }
+      ];
+    }
+    # ── database/replication/raft/follower-role → state ──────────
+    { family = "database"; top = "replication-and-ha"; sub = "automatic-failover";
+      sub_sub = "raft-consensus"; sub_sub_sub = "follower-role";
+      leaves = [
+        { name = "follower-log-append"; cues = [ "log append RPC" ]; }
+        { name = "follower-snapshot-recv"; cues = [ "InstallSnapshot RPC" ]; }
+        { name = "follower-vote-deny";   cues = [ "vote denial" ]; }
+        { name = "follower-commit-index"; cues = [ "commitIndex update" ]; }
+      ];
+    }
+    # ── database/query-opt/join/hash/grace → step ─────────────────
+    { family = "database"; top = "query-optimization"; sub = "join-strategy";
+      sub_sub = "hash-join-strategy"; sub_sub_sub = "grace-hash-join";
+      leaves = [
+        { name = "partition-by-hash"; cues = [ "partition by hash" ]; }
+        { name = "spill-to-disk";     cues = [ "spill to disk" ]; }
+        { name = "in-memory-bucket";  cues = [ "in-memory bucket" ]; }
+        { name = "probe-phase";       cues = [ "probe phase" ]; }
+      ];
+    }
+    # ── database/backup/rto-tier-0/active-active → tech ─────────
+    { family = "database"; top = "backup-recovery"; sub = "rto-rpo-tier";
+      sub_sub = "tier-0-zero-rto"; sub_sub_sub = "active-active-cluster";
+      leaves = [
+        { name = "spanner-replication"; cues = [ "Google Spanner" ]; }
+        { name = "cockroachdb-replication"; cues = [ "CockroachDB" ]; }
+        { name = "yugabytedb-replication";  cues = [ "YugabyteDB" ]; }
+        { name = "dynamodb-global-tables"; cues = [ "DynamoDB Global Tables" ]; }
+      ];
+    }
+    # ── devops/monitoring/prometheus/exporter → category ────────
+    { family = "devops"; top = "monitoring-and-alerting"; sub = "metrics-pipeline";
+      sub_sub = "prometheus-backend"; sub_sub_sub = "exporter-component";
+      leaves = [
+        { name = "node-exporter";      cues = [ "node_exporter" ]; }
+        { name = "blackbox-exporter";  cues = [ "blackbox_exporter" ]; }
+        { name = "postgres-exporter";  cues = [ "postgres_exporter" ]; }
+        { name = "redis-exporter";     cues = [ "redis_exporter" ]; }
+        { name = "custom-exporter";    cues = [ "custom exporter" ]; }
+      ];
+    }
+    # ── devops/secrets/vault/k8s/SA-token → binding ─────────────
+    { family = "devops"; top = "secrets-management"; sub = "vault-auth-method";
+      sub_sub = "kubernetes-auth"; sub_sub_sub = "service-account-token";
+      leaves = [
+        { name = "default-sa-binding";   cues = [ "default ServiceAccount" ]; }
+        { name = "dedicated-sa-per-role"; cues = [ "per-role SA" ]; }
+        { name = "audience-bound-token";  cues = [ "audience-bound token" ]; }
+        { name = "expiring-token-ttl";    cues = [ "expiring token TTL" ]; }
+      ];
+    }
+    # ── devops/service-mesh/envoy/cluster → endpoint-strategy ──
+    { family = "devops"; top = "service-mesh"; sub = "data-plane";
+      sub_sub = "envoy-proxy"; sub_sub_sub = "envoy-cluster-config";
+      leaves = [
+        { name = "round-robin-lb";       cues = [ "round_robin" ]; }
+        { name = "least-request-lb";     cues = [ "least_request" ]; }
+        { name = "ring-hash-lb";         cues = [ "ring_hash" ]; }
+        { name = "maglev-lb-envoy";      cues = [ "maglev LB envoy" ]; }
+        { name = "random-lb";            cues = [ "random LB" ]; }
+      ];
+    }
+    # ── ml/training/dropout/MC-dropout → application ────────────
+    { family = "ml"; top = "training"; sub = "regularization-kind";
+      sub_sub = "dropout-regularization"; sub_sub_sub = "monte-carlo-dropout";
+      leaves = [
+        { name = "inference-time-mc-passes"; cues = [ "inference-time MC passes" ]; }
+        { name = "uncertainty-estimation"; cues = [ "uncertainty estimation" ]; }
+        { name = "approximate-bayesian-inference"; cues = [ "approximate Bayesian" ]; }
+      ];
+    }
+    # ── ml/architecture/cnn/resnet/resnet-50 → layer-config ────
+    { family = "ml"; top = "model-architecture"; sub = "cnn-variant";
+      sub_sub = "resnet-arch"; sub_sub_sub = "resnet-50";
+      leaves = [
+        { name = "bottleneck-block";   cues = [ "bottleneck block" ]; }
+        { name = "stage-1-7x7-conv";   cues = [ "7x7 stem conv" ]; }
+        { name = "global-avg-pool";    cues = [ "global average pool" ]; }
+        { name = "fc-1000-imagenet";   cues = [ "FC 1000 ImageNet" ]; }
+        { name = "skip-connection";    cues = [ "skip connection" "residual" ]; }
+      ];
+    }
+    # ── ml/mlops/mlflow/model-version → metadata ────────────────
+    { family = "ml"; top = "mlops"; sub = "model-registry";
+      sub_sub = "mlflow-registry"; sub_sub_sub = "mlflow-model-version";
+      leaves = [
+        { name = "git-commit-tag";      cues = [ "git commit tag" ]; }
+        { name = "training-config-snapshot"; cues = [ "training config snapshot" ]; }
+        { name = "metrics-snapshot";    cues = [ "metrics snapshot" ]; }
+        { name = "signature-schema";    cues = [ "model signature" "input schema" ]; }
+      ];
+    }
+    # ── ml/eval/classification/accuracy → variant ───────────────
+    { family = "ml"; top = "evaluation"; sub = "metric-kind";
+      sub_sub = "classification-metric"; sub_sub_sub = "accuracy-score";
+      leaves = [
+        { name = "top-1-accuracy";     cues = [ "top-1 accuracy" ]; }
+        { name = "top-5-accuracy";     cues = [ "top-5 accuracy" ]; }
+        { name = "balanced-accuracy";  cues = [ "balanced accuracy" ]; }
+        { name = "weighted-accuracy";  cues = [ "weighted accuracy" ]; }
+      ];
+    }
+    # ── ml/eval/ranking/ndcg-at-k → variant ─────────────────────
+    { family = "ml"; top = "evaluation"; sub = "metric-kind";
+      sub_sub = "ranking-metric"; sub_sub_sub = "ndcg-at-k";
+      leaves = [
+        { name = "ndcg-at-1";   cues = [ "NDCG@1" ]; }
+        { name = "ndcg-at-5";   cues = [ "NDCG@5" ]; }
+        { name = "ndcg-at-10";  cues = [ "NDCG@10" ]; }
+        { name = "ndcg-full";   cues = [ "NDCG full" ]; }
+      ];
+    }
+    # ── frontend/state-mgmt/redux/thunk → pattern ───────────────
+    { family = "frontend"; top = "state-management"; sub = "state-library-choice";
+      sub_sub = "redux-toolkit"; sub_sub_sub = "redux-thunk-middleware";
+      leaves = [
+        { name = "thunk-async-action";  cues = [ "async thunk" ]; }
+        { name = "thunk-error-handler"; cues = [ "thunk rejected" ]; }
+        { name = "thunk-loading-state"; cues = [ "thunk loading" "pending" ]; }
+      ];
+    }
+    # ── frontend/rendering/SSR/nextjs → strategy ────────────────
+    { family = "frontend"; top = "rendering-strategy"; sub = "render-mode-choice";
+      sub_sub = "ssr-mode"; sub_sub_sub = "nextjs-ssr";
+      leaves = [
+        { name = "getServerSideProps"; cues = [ "getServerSideProps" ]; }
+        { name = "app-router-rsc";     cues = [ "App Router RSC" ]; }
+        { name = "middleware-rewrite"; cues = [ "Next.js middleware" ]; }
+        { name = "incremental-static-regen"; cues = [ "ISR" ]; }
+      ];
+    }
+    # ── data-pipeline/streaming/kafka/consumer-group → semantics
+    { family = "data-pipeline"; top = "ingestion"; sub = "streaming-source";
+      sub_sub = "kafka-source"; sub_sub_sub = "consumer-group-strategy";
+      leaves = [
+        { name = "auto-offset-earliest"; cues = [ "auto.offset.reset=earliest" ]; }
+        { name = "auto-offset-latest";   cues = [ "auto.offset.reset=latest" ]; }
+        { name = "manual-commit";        cues = [ "manual offset commit" ]; }
+        { name = "exactly-once-isolation"; cues = [ "isolation.level=read_committed" ]; }
+      ];
+    }
+    # ── data-pipeline/orchestration/airflow/python-operator → ───
+    { family = "data-pipeline"; top = "orchestration"; sub = "batch-orchestrator";
+      sub_sub = "airflow-orch"; sub_sub_sub = "python-operator";
+      leaves = [
+        { name = "task-decorator-2x";   cues = [ "@task decorator" ]; }
+        { name = "xcom-push-pull";      cues = [ "xcom push" "xcom pull" ]; }
+        { name = "provide-context";     cues = [ "provide_context" ]; }
+        { name = "pool-resource-limit"; cues = [ "task pool" ]; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === Lookup helpers =============================================
+  # =================================================================
+
+  recordKey = r:
+    r.family + "/" + r.top + "/" + r.sub + "/" + r.sub_sub + "/" + r.sub_sub_sub;
+
+  findByKey = family: top: sub: sub_sub: sub_sub_sub:
+    let
+      matches = builtins.filter (r:
+        r.family == family && r.top == top && r.sub == sub
+        && r.sub_sub == sub_sub && r.sub_sub_sub == sub_sub_sub
+      ) fiveLevelRecords;
+    in
+      if matches == [] then null else builtins.head matches;
+
+  leavesAt5 = family: top: sub: sub_sub: sub_sub_sub:
+    let r = findByKey family top sub sub_sub sub_sub_sub;
+    in if r == null then null else builtins.map (l: l.name) r.leaves;
+
+  # =================================================================
+  # === Inventory ==================================================
+  # =================================================================
+
+  countLeaves = lst:
+    builtins.foldl' (acc: r: acc + builtins.length r.leaves) 0 lst;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    five_level_record_count = builtins.length fiveLevelRecords;
+    total_5level_leaves = countLeaves fiveLevelRecords;
+    record_keys = builtins.map recordKey fiveLevelRecords;
+    deepest_depth = 5;
+  };
+
+  # =================================================================
+  # === Plate entry ================================================
+  # =================================================================
+
+  applyAxiomDepth5LevelPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "axiom-depth-5level-inventory";
+      receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "lookup_5" request then
+      let q = request.lookup_5;
+          r = findByKey q.family q.top q.sub q.sub_sub q.sub_sub_sub;
+      in if r == null then { outcome = "held-no-5-level-record-for-key";
+                             receipt = { queried = q; }; }
+         else { outcome = "axiom-depth-5-level-leaves";
+                receipt = { key = recordKey r;
+                            leaves = builtins.map (l: l.name) r.leaves;
+                            leaf_count = builtins.length r.leaves; };
+              }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [ "inventory" "lookup_5" ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit fiveLevelRecords recordKey findByKey leavesAt5;
+  inherit inventorySummary applyAxiomDepth5LevelPlate;
+}

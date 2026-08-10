@@ -1,0 +1,26 @@
+# stdlib/lib/nl/korean-prodrop-test.px — Slice6+: pro-drop(주어 생략) 복원 (의미이해 ② 한 겹 더)
+#
+# 한국어 킬러앱: 연결 담화에서 생략된 주어를 context 에서 복원. '철수가 잔다. 사과를 먹었다.' → 둘째 문장의
+# 생략된 agent = 가장 최근 agent = 철수. 단문 term 엔 미주입(fail-closed); 복원은 담화 층 binding(live, 코덱 단방향).
+# 가리킬 게 없으면 null=Held. 주어 있는 문장은 drop 없음.
+let
+  knl = import ./korean-nl-mirror.px;
+  B = builtins;
+  disc = knl.liftDiscourse [ "철수가 잔다" "사과를 먹었다" ];
+  s2 = B.elemAt disc 1;
+  rec1 = B.head s2.recovered;
+  recName = if rec1.entity == null then "null" else rec1.entity.name;
+  recSlot = rec1.slot;
+  # dangling: 앞 context 없는 첫 문장 주어 생략 → null=Held
+  disc2 = knl.liftDiscourse [ "사과를 먹었다" ];
+  dang = let r = B.head (B.elemAt disc2 0).recovered; in r.entity == null;
+  # 주어 있는 문장 → drop 없음
+  disc3 = knl.liftDiscourse [ "철수가 잔다" ];
+  noDrop = (B.elemAt disc3 0).recovered == [ ];
+in {
+  rec_slot = recSlot;            # "agent"
+  rec_name = recName;            # "철수" (복원)
+  dangling = dang;               # true
+  no_drop_when_subj = noDrop;    # true
+  all_ok = (recSlot == "agent") && (recName == "철수") && dang && noDrop;
+}

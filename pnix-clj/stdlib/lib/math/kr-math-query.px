@@ -1,0 +1,59 @@
+# stdlib/lib/math/kr-math-query.px
+#
+# P7 한국어 수학 질의 entry: 한국어 물리량/연산어 → dimension reasoning → 한국어 판정. = bilingual 코퍼스를 *쓰는* 면.
+#   deep-research(reference_bilingual_corpus_reasoning_verdict) CORE만 합성: 한국어 anchor(kr-quantity-dimension exact)
+#   + dimension gate(math-reasoning) + F7 의미동등 held. cross-lingual 의미정렬은 Held(미등록어=held, 추측 0).
+#
+# ★새 거울/로직 0: kr-quantity-dimension(앵커)·math-reasoning(gate+carve-out+F7) 재사용. 한국어 연산어→op 매핑만 추가.
+# ★fail-closed: 미등록 한국어 물리량·미지 연산어 → held(unresolved). row≠truth.
+let
+  B = builtins;
+  kq = import ./kr-quantity-dimension.px;
+  mr = import ./math-reasoning.px;
+
+  # 한국어 연산어 → solver op (고정 enumerable; 모르면 none → held).
+  opOf = ko:
+    if (ko == "더하기") || (ko == "+") || (ko == "더하면") || (ko == "합") then "add"
+    else if (ko == "곱하기") || (ko == "×") || (ko == "곱하면") || (ko == "곱") then "mul"
+    else if (ko == "나누기") || (ko == "÷") || (ko == "나누면") || (ko == "/") then "div"
+    else if (ko == "같나") || (ko == "같은가") || (ko == "==") || (ko == "동등") then "equivalence"
+    else "none";
+
+  # 한국어 물리량명 → 차원(kr-quantity exact anchor). 미등록 = found=false.
+  resolveTerm = term:
+    let q = kq.lookupQuantity { term = term; };
+    in if q.status == "anchor"
+       then { found = true; dimension = q.dimension; label = q.quantity_ko; }
+       else { found = false; term = term; };
+
+  # solveKoreanQuery { a, op, b }: 한국어 두 물리량 + 연산어 → math_evidence 판정.
+  #   예: {a="속도"; op="더하기"; b="시간"} → 차원 불일치(invalid-candidate); {a="힘"; op="곱하기"; b="길이"} → energy 차원.
+  solveKoreanQuery = args:
+    let aT = args.a or "";
+        opKo = args.op or "";
+        bT = args.b or "";
+        op = opOf opKo;
+        ra = resolveTerm aT;
+        rb = resolveTerm bT;
+        aFound = ra.found;
+        bFound = rb.found;
+        unresolved = (op == "none") || (aFound == false) || (bFound == false);
+    in if unresolved
+       then {
+         evidence_kind = "math.analysis";
+         verdict = "held";
+         held_reasons = [ { kind = "unresolved-korean-query";
+                            detail = "한국어 물리량 또는 연산어를 정확히 못 찾음(미등록=추측 금지, fuzzy 의미정렬은 Held)"; } ];
+         resolved_op = op; a_found = aFound; b_found = bFound;
+         proposer_only = true; durable_truth = false; accepted_as_truth = false;
+       }
+       else (mr.solveDimensionProblem {
+               op = op;
+               a = { dimension = ra.dimension; };
+               b = { dimension = rb.dimension; };
+               # equivalence는 solveDimensionProblem의 equivReasons(F7)가 held 처리 — concept_query 중복 금지.
+               concept_query = false;
+             }) // { resolved_op = op; a_label = ra.label; b_label = rb.label; };
+in {
+  inherit solveKoreanQuery opOf resolveTerm;
+}

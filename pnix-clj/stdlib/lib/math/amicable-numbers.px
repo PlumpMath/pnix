@@ -1,0 +1,237 @@
+# stdlib.lib.math.amicable-numbers
+#
+# OWNER-LAW (v0.12-ABM, div-math, 2026-05-22): amicable numbers,
+# aliquot sums, and aliquot sequences.
+#
+# # The aliquot sum
+#
+# The aliquot sum s(n) is the sum of the PROPER divisors of n --
+# every divisor except n itself. s(6) = 1+2+3 = 6; s(12) =
+# 1+2+3+4+6 = 16; s(220) = 284.
+#
+# number-theory.px classifies a single number as perfect /
+# abundant / deficient by comparing s(n) to n. This owner works
+# one level up, on the RELATIONSHIPS between numbers that the
+# aliquot sum induces:
+#
+#   - An AMICABLE pair is two distinct numbers each equal to the
+#     other's aliquot sum: s(220) = 284 and s(284) = 220. The
+#     first few pairs: (220, 284), (1184, 1210), (2620, 2924).
+#   - The ALIQUOT SEQUENCE of n is n, s(n), s(s(n)), ... A perfect
+#     number is a fixed point; an amicable pair is a two-cycle;
+#     many sequences fall to 1 then 0; some grow without an
+#     apparent bound (the open Catalan-Dickson question).
+#
+# # Fast and exact
+#
+# The aliquot sum is found by enumerating divisors only up to
+# sqrt(n) -- each divisor d below the root pairs with n/d above it
+# -- so it is fast even near the cap. The range is summed by a
+# divide-and-conquer fold, so the recursion depth stays
+# logarithmic.
+#
+# # Standalone, exact
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT perfect/abundant/deficient single-number classification
+#     (number-theory.px owns that).
+#   - The aliquot sequence is capped in both length and value;
+#     when a term would leave the bound the owner reports
+#     `unbounded` rather than overflowing -- it does not resolve
+#     the open question of whether such sequences terminate.
+#   - NOT sociable-cycle search beyond what `aliquot-sequence`
+#     exposes directly.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/amicable-numbers.px";
+
+  # Divide-and-conquer range builder (logarithmic recursion depth).
+  rangeList = lo: hi:
+    if lo > hi then []
+    else if lo == hi then [ lo ]
+    else
+      let mid = (lo + hi) / 2;
+      in (rangeList lo mid) ++ (rangeList (mid + 1) hi);
+
+  # Divide-and-conquer sum of f over the integers lo..hi.
+  sumOverRange = lo: hi: f:
+    if lo > hi then 0
+    else if lo == hi then f lo
+    else
+      let mid = (lo + hi) / 2;
+      in (sumOverRange lo mid f) + (sumOverRange (mid + 1) hi f);
+
+  # floor(sqrt n) by binary search, with a high bound that keeps
+  # mid*mid inside 64-bit range.
+  isqrt = n:
+    if n <= 0 then 0
+    else
+      let
+        hi0 = if n < 3000000000 then n else 3000000000;
+        go = lo: hi:
+          if lo >= hi then lo
+          else
+            let mid = (lo + hi + 1) / 2;
+            in if mid * mid <= n then go mid hi else go lo (mid - 1);
+      in go 1 hi0;
+
+  # s(n) -- the sum of the proper divisors of n. Each divisor d up
+  # to sqrt(n) contributes d, and its cofactor n/d unless that is
+  # d itself (perfect square) or n itself (the improper divisor).
+  aliquotSum = n:
+    if n < 2 then 0
+    else
+      let
+        root = isqrt n;
+        contrib = d:
+          if n - (n / d) * d != 0 then 0
+          else
+            let o = n / d;
+            in d + (if o == d || o == n then 0 else o);
+      in sumOverRange 1 root contrib;
+
+  # { is_amicable; partner } -- n is amicable when s(s(n)) = n and
+  # s(n) is a different number (s(n) = n would be perfect).
+  amicableInfo = n:
+    let s1 = aliquotSum n;
+    in
+      if s1 == n || s1 < 2
+      then { is_amicable = false; partner = null; }
+      else if aliquotSum s1 == n
+      then { is_amicable = true; partner = s1; }
+      else { is_amicable = false; partner = null; };
+
+  # Cap on the aliquot-sequence length and on each term's value.
+  seqStepCap = 40;
+  valueCap = 1000000000;
+
+  # The aliquot sequence of n: n, s(n), s(s(n)), ... with an
+  # outcome label.
+  aliquotSequence = n:
+    let
+      go = m: seen: acc: steps:
+        if m == 0 then { sequence = acc ++ [ 0 ]; outcome = "terminated"; }
+        else if builtins.elem m seen
+          then { sequence = acc ++ [ m ]; outcome = "cyclic"; }
+        else if steps >= seqStepCap
+          then { sequence = acc; outcome = "truncated"; }
+        else if m > valueCap
+          then { sequence = acc; outcome = "unbounded"; }
+        else go (aliquotSum m) (seen ++ [ m ]) (acc ++ [ m ]) (steps + 1);
+    in go n [] [] 0;
+
+  # Every amicable pair [a, b] with a < b <= limit.
+  amicablePairsUpTo = limit:
+    let
+      consider = a:
+        let b = aliquotSum a;
+        in if b > a && b <= limit && aliquotSum b == a
+           then [ [ a b ] ]
+           else [];
+    in builtins.foldl'
+         (acc: a: acc ++ (consider a))
+         []
+         (rangeList 2 limit);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "aliquot-sum"
+    "is-amicable"
+    "aliquot-sequence"
+    "amicable-pairs-up-to"
+  ];
+
+  numberLimit = 1000000000;
+  # `amicable-pairs-up-to` runs an O(limit * sqrt(limit)) sweep;
+  # this cap keeps one plate call bounded.
+  pairsLimit = 10000;
+
+  applyAmicableNumbers = request:
+    let
+      op = request.operation;
+      n     = if request ? n then request.n else 0;
+      limit = if request ? limit then request.limit else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "amicable-pairs-up-to" then
+        if limit < 2 then {
+          outcome = "amicable-numbers-computed";
+          operation = op; limit = limit;
+          pairs = []; count = 0;
+        }
+        else if limit > pairsLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; limit = limit;
+          cap = pairsLimit;
+          reason = "the sweep is O(limit * sqrt(limit)); it is capped to stay bounded";
+        }
+        else
+          let pairs = amicablePairsUpTo limit;
+          in {
+            outcome = "amicable-numbers-computed";
+            operation = op; limit = limit;
+            pairs = pairs;
+            count = builtins.length pairs;
+          }
+      # The remaining operations all act on a single number n.
+      else if n < 1 then {
+        outcome = "held-nonpositive-number";
+        operation = op;
+        n = n;
+      }
+      else if n > numberLimit then {
+        outcome = "held-argument-too-large";
+        operation = op; n = n;
+        limit = numberLimit;
+        reason = "n is capped so the divisor sweep stays bounded";
+      }
+      else if op == "aliquot-sum" then {
+        outcome = "amicable-numbers-computed";
+        operation = op; n = n;
+        value = aliquotSum n;
+      }
+      else if op == "is-amicable" then
+        let info = amicableInfo n;
+        in {
+          outcome = "amicable-numbers-computed";
+          operation = op; n = n;
+          is_amicable = info.is_amicable;
+          partner = info.partner;
+        }
+      else
+        # op == "aliquot-sequence"
+        let r = aliquotSequence n;
+        in {
+          outcome = "amicable-numbers-computed";
+          operation = op; n = n;
+          sequence = r.sequence;
+          length = builtins.length r.sequence;
+          sequence_outcome = r.outcome;
+        };
+
+in {
+  inherit
+    ownerName
+    isqrt
+    aliquotSum
+    amicableInfo
+    aliquotSequence
+    amicablePairsUpTo
+    knownOperations
+    applyAmicableNumbers;
+  meta = {
+    source = "stdlib math amicable numbers";
+    owner = ownerName;
+    base = "parametric-math-amicable-numbers-v0";
+    rev_note = "v0.12-ABM (div-math): amicable numbers, aliquot sums, and aliquot sequences. aliquotSum s(n) is the sum of proper divisors, found by a sqrt-bounded divide-and-conquer divisor sweep; amicableInfo decides whether s(s(n))=n with s(n) distinct (the amicable pairs (220,284), (1184,1210), (2620,2924), ...); aliquotSequence walks n, s(n), s(s(n)), ... labelling the outcome terminated / cyclic / truncated / unbounded; amicablePairsUpTo enumerates every pair with both members in range. Plate applyAmicableNumbers (4 operations). One level up from number-theory.px's perfect/abundant/deficient single-number classification. Standalone, exact. The aliquot sequence is capped in length and value (the Catalan-Dickson termination question is open) -- the owner reports `unbounded` rather than overflowing. NOT yet a registered lens.";
+  };
+}

@@ -1,0 +1,6 @@
+# Deep structural equality (Nix semantics; needed by the polyvariant
+# specializer's spec-point key comparison, tower m6c). Attrset equality is
+# order-insensitive; mismatched types compare false, never error.
+{ l = [ 1 [ 2 ] ] == [ 1 [ 2 ] ]; ln = [ 1 ] == [ 2 ];
+  a = { x = 1; y = [ 2 ]; } == { y = [ 2 ]; x = 1; }; an = { x = 1; } == { x = 2; };
+  mixed = { x = 1; } != { x = "1"; }; }

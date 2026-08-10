@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+artifact="$root/pnix-clr/target/runtime-artifact"
+
+if [[ "${1:-}" == "--no-build" ]]; then
+  shift
+else
+  "$root/bin/build-pnix-clr-artifact" >/dev/null
+fi
+
+if [[ "$#" -ne 0 ]]; then
+  echo "usage: pnix-clr-artifact-gate [--no-build]" >&2
+  exit 2
+fi
+
+temp="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clr-artifact-gate.XXXXXX")"
+trap 'rm -rf "$temp"' EXIT
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+copy_artifact() {
+  local name="$1"
+  cp -R "$artifact" "$temp/$name"
+  printf '%s\n' "$temp/$name"
+}
+
+rewrite_manifest() {
+  local directory="$1"
+  local filter="$2"
+  jq "$filter" "$directory/manifest.json" >"$directory/manifest.json.next"
+  mv "$directory/manifest.json.next" "$directory/manifest.json"
+}
+
+refresh_source_closure() {
+  local directory="$1"
+  local digest
+  digest="$(jq -r '.sources[] | "\(.sha256)  \(.path)"' \
+    "$directory/manifest.json" | sha256_stdin)"
+  jq --arg digest "$digest" '.source_closure_sha256 = $digest' \
+    "$directory/manifest.json" >"$directory/manifest.json.next"
+  mv "$directory/manifest.json.next" "$directory/manifest.json"
+}
+
+expect_failure() {
+  local class="$1"
+  local candidate="$2"
+  local output status
+  set +e
+  output="$(PNIX_CLR_RUNTIME_ARTIFACT="$candidate" \
+    "$root/bin/pnix-clr" -e '1 + 2' 2>&1)"
+  status=$?
+  set -e
+  if [[ "$status" -ne 2 || "$output" != "pnix-clr artifact: $class" ]]; then
+    echo "pnix-clr artifact gate: expected $class/2, got $status: $output" >&2
+    exit 1
+  fi
+}
+
+valid="$(CLOJURE_LOAD_PATH="$temp/poison" \
+  PNIX_CLR_RUNTIME_ARTIFACT="$artifact" \
+  "$root/bin/pnix-clr" -e 'let x = 20; in x + 22')"
+jq -e '.outcome_kind == "done" and .value == 42' >/dev/null <<<"$valid"
+
+cwd_shadow="$temp/cwd-shadow"
+cwd_sentinel="$temp/cwd-shadow-ran"
+mkdir -p "$cwd_shadow/pnix_clr"
+printf '%s\n' \
+  "(ns pnix-clr.main) (defn -main [& _] (spit \"$cwd_sentinel\" \"RAN\"))" \
+  >"$cwd_shadow/pnix_clr/main.clj"
+cwd_result="$(
+  cd "$cwd_shadow"
+  CLOJURE_LOAD_PATH="$temp/poison" \
+    PNIX_CLR_RUNTIME_ARTIFACT="$artifact" \
+    "$root/bin/pnix-clr" -e 'let x = 20; in x + 22'
+)"
+jq -e '.outcome_kind == "done" and .value == 42' >/dev/null <<<"$cwd_result"
+[[ ! -e "$cwd_sentinel" ]]
+
+if rg -n 'bin/clojure-clr|build-pnix-clr-artifact' "$root/bin/pnix-clr"; then
+  echo "pnix-clr artifact gate: product runner contains bootstrap fallback" >&2
+  exit 1
+fi
+if ! rg -n 'CLOJURE_LOAD_PATH="\$artifact"' "$root/bin/pnix-clr" >/dev/null; then
+  echo "pnix-clr artifact gate: product runner does not replace the load path" >&2
+  exit 1
+fi
+if ! rg -n 'cd "\$artifact"' "$root/bin/pnix-clr" >/dev/null; then
+  echo "pnix-clr artifact gate: product runner does not neutralize cwd lookup" >&2
+  exit 1
+fi
+
+expect_failure runtime-directory-missing "$temp/missing"
+
+ln -s "$artifact" "$temp/runtime-directory-symlink"
+expect_failure runtime-directory-symlink "$temp/runtime-directory-symlink"
+
+candidate="$(copy_artifact missing-manifest)"
+rm "$candidate/manifest.json"
+expect_failure manifest-missing "$candidate"
+
+candidate="$(copy_artifact manifest-symlink)"
+mv "$candidate/manifest.json" "$candidate/manifest.real.json"
+ln -s manifest.real.json "$candidate/manifest.json"
+expect_failure manifest-not-regular "$candidate"
+
+candidate="$(copy_artifact wrong-contract)"
+rewrite_manifest "$candidate" '.schema = "wrong"'
+expect_failure manifest-contract-mismatch "$candidate"
+
+candidate="$(copy_artifact extra-manifest-key)"
+rewrite_manifest "$candidate" '.unexpected = true'
+expect_failure manifest-contract-mismatch "$candidate"
+
+candidate="$(copy_artifact extra-source-row-key)"
+rewrite_manifest "$candidate" '.sources[0].unexpected = true'
+expect_failure manifest-contract-mismatch "$candidate"
+
+candidate="$(copy_artifact extra-output-row-key)"
+rewrite_manifest "$candidate" '.outputs[0].unexpected = true'
+expect_failure manifest-contract-mismatch "$candidate"
+
+candidate="$(copy_artifact wrong-entry)"
+rewrite_manifest "$candidate" '.entry = "other.main"'
+expect_failure manifest-contract-mismatch "$candidate"
+
+candidate="$(copy_artifact stale-plan)"
+rewrite_manifest "$candidate" '.plan_sha256 = ("0" * 64)'
+expect_failure plan-stale "$candidate"
+
+candidate="$(copy_artifact source-closure)"
+rewrite_manifest "$candidate" '.source_closure_sha256 = ("0" * 64)'
+expect_failure source-closure-mismatch "$candidate"
+
+candidate="$(copy_artifact source-stale)"
+rewrite_manifest "$candidate" '.sources[0].sha256 = ("0" * 64)'
+refresh_source_closure "$candidate"
+expect_failure source-stale "$candidate"
+
+candidate="$(copy_artifact source-set)"
+rewrite_manifest "$candidate" '.sources[0].path = "pnix_clr/missing.clj"'
+refresh_source_closure "$candidate"
+expect_failure source-set-mismatch "$candidate"
+
+candidate="$(copy_artifact output-closure)"
+rewrite_manifest "$candidate" '.output_closure_sha256 = ("0" * 64)'
+expect_failure output-closure-mismatch "$candidate"
+
+candidate="$(copy_artifact missing-output)"
+rm "$candidate/$(jq -r '.outputs[0].path' "$candidate/manifest.json")"
+expect_failure output-set-mismatch "$candidate"
+
+candidate="$(copy_artifact stale-output)"
+printf 'tamper' >>"$candidate/$(jq -r '.outputs[0].path' "$candidate/manifest.json")"
+expect_failure output-stale "$candidate"
+
+candidate="$(copy_artifact extra-output)"
+cp "$candidate/$(jq -r '.outputs[0].path' "$candidate/manifest.json")" \
+  "$candidate/extra.clj.dll"
+expect_failure output-set-mismatch "$candidate"
+
+candidate="$(copy_artifact source-injection)"
+mkdir -p "$candidate/pnix_clr"
+printf '%s\n' '(ns pnix-clr.main) (defn -main [& _] (println "SOURCE-INJECTION-RAN"))' \
+  >"$candidate/pnix_clr/main.clj"
+expect_failure artifact-file-set-mismatch "$candidate"
+
+candidate="$(copy_artifact symlink-source-injection)"
+mkdir -p "$candidate/pnix_clr"
+ln -s /dev/null "$candidate/pnix_clr/main.clj"
+expect_failure artifact-file-set-mismatch "$candidate"
+
+candidate="$(copy_artifact symlink-output)"
+output="$(jq -r '.outputs[0].path' "$candidate/manifest.json")"
+rm "$candidate/$output"
+ln -s "$artifact/$output" "$candidate/$output"
+expect_failure output-not-regular "$candidate"
+
+echo "pnix-clr artifact gate: PASS (clr-meta AOT; source fallback absent; cwd shadow rejected; negative matrix 20/20)"

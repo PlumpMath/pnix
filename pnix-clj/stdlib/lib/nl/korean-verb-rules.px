@@ -1,0 +1,18 @@
+# stdlib/lib/nl/korean-verb-rules.px — 한글 용언(동사) 형태소 규칙 = *데이터 마디* (코드 아님)
+#
+# ★(b) 확장: josa 에 이어 용언 어미/head 형태소 규칙도 데이터로 redb materialize (코드→데이터).
+#   단일 source: 표를 새로 적지 않고 *기존* korean-taxonomy-lift 의 export 를 재사용(drift 0).
+#   - verbEndings      : 종결어미 → tense/mood (어미활용 converge 표)
+#   - headEndingMulti  : 다자 종결어미 paradigm (습니다/어요/는다/었다…) + class
+#   - headEndingSingle : 단자 종결어미 (다/요/자/까/니)
+#   - jongFused        : 융합 종성 어미 인덱스 (ㅂ니다=17, ㄴ다=4) — splitHead 가 종성 산술로 분해
+#   적용(apply)은 korean-taxonomy-lift 의 splitHead/analyzeVerb(거울 하나); 여기는 그 데이터의 마디.
+let
+  tl = import ./korean-taxonomy-lift.px;
+in {
+  schema = "morph.verb.rules.v0";
+  verbEndings      = tl.verbEndings;
+  headEndingMulti  = tl.headEndingMulti;
+  headEndingSingle = tl.headEndingSingle;
+  jongFused = { bieup = 17; nieun = 4; };   # ㅂ니다 / ㄴ다 융합 종성 (0xAC00 decompose .jong)
+}

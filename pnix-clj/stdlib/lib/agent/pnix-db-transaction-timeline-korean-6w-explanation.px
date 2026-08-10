@@ -1,0 +1,373 @@
+# stdlib.agent.pnix-db-transaction-timeline-korean-6w-explanation
+#
+# Build a Korean 6W explanation from a verified pnix-db transaction timeline
+# audit receipt. This is a query/explanation surface only: it does not write
+# redb, execute host effects, persist policy, ingest source, or accept search
+# evidence.
+let
+  ownerName = "stdlib.agent.pnix-db-transaction-timeline-korean-6w-explanation";
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  listAttrOr = attrs: key:
+    let v = getAttrOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  isEmptyAttrs = attrs:
+    builtins.isAttrs attrs && builtins.attrNames attrs == [ ];
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "transaction_timeline_write_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "search_evidence_accept_requested" false;
+
+  effectLocked = attrs:
+    builtins.isAttrs attrs
+    && getBool attrs "file_write_allowed" false == false
+    && getBool attrs "host_execution_allowed" false == false
+    && getBool attrs "host_apply_allowed" false == false
+    && getBool attrs "direct_apply_allowed" false == false
+    && getBool attrs "apply_allowed" false == false
+    && getBool attrs "raw_eval_allowed" false == false
+    && getBool attrs "test_execution_allowed" false == false
+    && getBool attrs "search_execution_allowed" false == false
+    && getBool attrs "memory_write_allowed" false == false
+    && getBool attrs "policy_persistence_allowed" false == false;
+
+  auditReceiptFrom = req:
+    if hasAttr req "timeline_audit_receipt" && builtins.isAttrs req.timeline_audit_receipt
+    then req.timeline_audit_receipt
+    else if hasAttr req "pnix_db_transaction_timeline_audit" && builtins.isAttrs req.pnix_db_transaction_timeline_audit
+    then req.pnix_db_transaction_timeline_audit
+    else if hasAttr req "transaction_timeline_audit" && builtins.isAttrs req.transaction_timeline_audit
+    then req.transaction_timeline_audit
+    else { };
+
+  timelineFromAudit = audit:
+    if hasAttr audit "transaction_timeline_snapshot" && builtins.isAttrs audit.transaction_timeline_snapshot
+    then audit.transaction_timeline_snapshot
+    else { };
+
+  eventOutcome = event:
+    stringAttrOr event "receipt_outcome" (stringAttrOr event "outcome" "");
+
+  eventSeq = event:
+    let v = getAttrOr event "seq" 0;
+    in if builtins.isInt v then v else 0;
+
+  allowedQueryKinds = [
+    "status"
+    "six-w"
+    "why-complete"
+    "why-rollback"
+    "what-failed"
+    "evidence-chain"
+    "gate-order"
+  ];
+
+  auditOk = audit:
+    builtins.isAttrs audit
+    && stringAttrOr audit "schema" "" == "puncheetah.pnix-db.transaction-timeline-close-or-audit.v0"
+    && stringAttrOr audit "outcome" "" == "pnix-db-transaction-timeline-audit-passed"
+    && getBool audit "verified" false == true
+    && getBool audit "is_held" false == false
+    && getBool audit "transaction_timeline_closed" false == true
+    && getBool audit "transaction_audited" false == true
+    && getBool audit "all_expected_gates_present" false == true
+    && getBool audit "terminal_event_present" false == true
+    && getBool audit "timeline_order_verified" false == true
+    && stringAttrOr audit "terminal_receipt_kind" "" != ""
+    && stringAttrOr audit "final_status" "" != ""
+    && stringAttrOr audit "transaction_id" "" != ""
+    && stringAttrOr audit "next_gate" "" == "end"
+    && effectLocked audit;
+
+  timelineOk = timeline:
+    builtins.isAttrs timeline
+    && stringAttrOr timeline "kind" "" == "pnix-db-transaction-timeline-snapshot-v0"
+    && stringAttrOr timeline "schema" "" == "puncheetah.pnix-db.transaction-timeline-snapshot.v0"
+    && getBool timeline "verified" false == true
+    && listAttrOr timeline "events" != [ ];
+
+  labelForOutcome = outcome:
+    if outcome == "coding-project-host-apply-execution-result-verified" then
+      "host bridge 파일 쓰기 결과가 검증됨"
+    else if outcome == "coding-project-post-write-verification-passed" then
+      "쓰기 이후 snapshot이 기대 상태와 일치함"
+    else if outcome == "coding-project-test-execution-receipt-verified" then
+      "승인된 테스트 실행 receipt가 검증됨"
+    else if outcome == "coding-project-rollback-ready-receipt-built" then
+      "rollback handle 준비 상태가 검증됨"
+    else if outcome == "coding-project-transaction-complete-policy-built" then
+      "테스트 통과에 따라 complete-ready policy가 만들어짐"
+    else if outcome == "coding-project-transaction-complete-receipt-built" then
+      "transaction complete receipt로 성공 branch가 봉인됨"
+    else if outcome == "coding-project-rollback-policy-built" then
+      "테스트 실패에 따라 rollback-available policy가 만들어짐"
+    else if outcome == "coding-project-rollback-approval-or-execution-gate-approved" then
+      "명시적 rollback approval이 검증되고 rollback permission이 만들어짐"
+    else if outcome == "coding-project-rollback-execution-result-verified" then
+      "host bridge rollback 실행 결과가 검증됨"
+    else if outcome == "coding-project-rollback-post-verification-passed" then
+      "rollback 이후 snapshot이 restored/pre-write 상태와 일치함"
+    else if outcome == "coding-project-rollback-complete-receipt-built" then
+      "rollback-complete receipt로 실패 branch가 봉인됨"
+    else
+      outcome;
+
+  stepSummary = event: {
+    seq = eventSeq event;
+    outcome = eventOutcome event;
+    label_ko = labelForOutcome (eventOutcome event);
+  };
+
+  timelineText = events:
+    builtins.concatStringsSep " -> " (
+      builtins.map
+        (event:
+          (builtins.toString (eventSeq event)) + ". " + labelForOutcome (eventOutcome event))
+        events
+    );
+
+  sixWFor = audit: timeline:
+    let
+      terminalKind = stringAttrOr audit "terminal_receipt_kind" "";
+      finalStatus = stringAttrOr audit "final_status" "";
+      tx = stringAttrOr audit "transaction_id" "";
+      preview = stringAttrOr audit "approved_preview_id" "";
+      events = listAttrOr timeline "events";
+      eventCount = builtins.length events;
+      firstEvent = if eventCount > 0 then builtins.elemAt events 0 else { };
+      lastEvent = if eventCount > 0 then builtins.elemAt events (eventCount - 1) else { };
+      branchText =
+        if terminalKind == "transaction-complete" then "성공 complete branch"
+        else if terminalKind == "rollback-complete" then "실패 후 rollback-complete branch"
+        else "unknown branch";
+      whatText =
+        if terminalKind == "transaction-complete" then
+          "코딩 patch transaction은 host write, post-write 검증, 테스트 통과, rollback-ready 확인 뒤 complete receipt로 닫혔다."
+        else
+          "코딩 patch transaction은 host write와 post-write 검증 뒤 테스트 실패 evidence를 받았고, rollback 실행과 rollback-post 검증 뒤 rollback-complete receipt로 닫혔다.";
+      whyText =
+        if terminalKind == "transaction-complete" then
+          "승인된 테스트가 통과했고 rollback-ready가 검증되어 transaction을 완료해도 된다는 complete-ready policy가 만들어졌기 때문이다."
+        else
+          "승인된 테스트 결과가 실패였고 rollback-ready가 검증되어, 변경을 유지하지 않고 승인된 rollback handle로 pre-write 상태를 복원해야 했기 때문이다.";
+      howText =
+        if terminalKind == "transaction-complete" then
+          "host bridge write result, post-write snapshot, test execution receipt, rollback-ready receipt, complete policy, terminal receipt가 pnix-db timeline seq 순서로 감사되었다."
+        else
+          "host bridge write result, post-write snapshot, test execution receipt, rollback-ready receipt, rollback approval, rollback execution result, rollback-post snapshot, terminal receipt가 pnix-db timeline seq 순서로 감사되었다.";
+      resultText =
+        if terminalKind == "transaction-complete" then
+          "최종 상태는 complete이고 transaction audit lane은 종료됐다."
+        else
+          "최종 상태는 rollback-complete이고 transaction audit lane은 종료됐다.";
+    in {
+      who = "pnix coding gate chain과 host bridge evidence가 같은 transaction을 처리했고, terminal receipt는 pnix-db timeline audit으로 확인됐다.";
+      what = whatText;
+      when = "timeline seq 1.." + builtins.toString eventCount + " 사이에서 " + labelForOutcome (eventOutcome firstEvent) + "부터 " + labelForOutcome (eventOutcome lastEvent) + "까지 진행됐다.";
+      where = "transaction=" + tx + ", preview=" + preview + ", branch=" + branchText + " 안에서 감사됐다.";
+      why = whyText;
+      how = howText;
+      result = resultText;
+      text =
+        "누가: pnix coding gate chain과 host bridge evidence. "
+        + "무엇을: " + whatText + " "
+        + "언제: timeline seq 1.." + builtins.toString eventCount + ". "
+        + "어디서: transaction=" + tx + ", preview=" + preview + ". "
+        + "왜: " + whyText + " "
+        + "어떻게: " + howText + " "
+        + "결과: " + resultText;
+      terminal_status = finalStatus;
+      terminal_receipt_kind = terminalKind;
+    };
+
+  answerFor = queryKind: audit: sixW: timeline:
+    let
+      terminalKind = stringAttrOr audit "terminal_receipt_kind" "";
+      finalStatus = stringAttrOr audit "final_status" "";
+      events = listAttrOr timeline "events";
+    in
+      if queryKind == "status" then
+        "이 transaction의 최종 상태는 " + finalStatus + "이다. " + sixW.result
+      else if queryKind == "six-w" then
+        sixW.text
+      else if queryKind == "why-complete" then
+        if terminalKind == "transaction-complete" then sixW.why
+        else "이 transaction은 complete가 아니라 rollback-complete다. 이유는 승인된 테스트 실패 evidence 이후 rollback-ready와 rollback-post 검증이 통과했기 때문이다."
+      else if queryKind == "why-rollback" then
+        if terminalKind == "rollback-complete" then sixW.why
+        else "이 transaction은 rollback되지 않았다. 승인된 테스트가 통과했고 rollback-ready가 검증되어 complete branch로 닫혔다."
+      else if queryKind == "what-failed" then
+        if terminalKind == "rollback-complete" then
+          "검증된 실패 evidence는 테스트 실패다. 그 뒤 rollback-ready, rollback execution result, rollback-post snapshot이 모두 검증되어 rollback-complete로 닫혔다."
+        else
+          "이 audited timeline에는 terminal rollback을 요구한 verified failure가 없다. 테스트가 통과해 complete branch로 닫혔다."
+      else if queryKind == "evidence-chain" then
+        "증거 chain은 다음 순서다: " + timelineText events
+      else if queryKind == "gate-order" then
+        "gate/event 순서는 event seq 기준으로 검증됐다: " + timelineText events
+      else
+        sixW.text;
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.pnix-db.transaction-timeline-korean-6w-explanation.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    reason = reason;
+    timeline_query_answered = false;
+    six_w_explanation_built = false;
+    surface_language = "korean";
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    memory_write_allowed = false;
+    policy_persistence_allowed = false;
+    receipt = {
+      kind = "pnix-db-transaction-timeline-korean-6w-explanation-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      timeline_query_answered = false;
+      memory_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+    negative_receipt = {
+      kind = "pnix-db-transaction-timeline-korean-6w-explanation-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "do not explain a transaction timeline unless a verified read-only timeline audit receipt is present";
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName auditOk timelineOk labelForOutcome sixWFor answerFor;
+
+  buildKorean6wTimelineExplanation = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-pnix-db-transaction-timeline-korean-6w-non-attr-request" "timeline Korean 6W explanation request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-pnix-db-transaction-timeline-korean-6w-effect-blocked" "timeline Korean 6W explanation is read-only; it never writes memory, persists policy, accepts search evidence, ingests source, or executes host effects." { }
+    else
+      let
+        audit = auditReceiptFrom req;
+        timeline = timelineFromAudit audit;
+        queryKind = stringAttrOr req "query_kind" "status";
+        events = listAttrOr timeline "events";
+        sixW = sixWFor audit timeline;
+        auditMissing = !(builtins.isAttrs audit) || isEmptyAttrs audit;
+        auditShape = auditOk audit;
+        timelineShape = timelineOk timeline;
+        querySupported = builtins.elem queryKind allowedQueryKinds;
+      in
+        if auditMissing then
+          mkHeld "held-pnix-db-transaction-timeline-korean-6w-audit-required" "Korean 6W timeline explanation requires a verified pnix-db transaction timeline audit receipt." { }
+        else if !auditShape then
+          mkHeld "held-pnix-db-transaction-timeline-korean-6w-invalid-audit" "timeline audit receipt must be verified, terminal, ordered, effect-locked, and complete/rollback-complete." {
+            timeline_audit_receipt = audit;
+          }
+        else if !timelineShape then
+          mkHeld "held-pnix-db-transaction-timeline-korean-6w-timeline-required" "timeline audit receipt must carry a verified transaction timeline snapshot with events." {
+            timeline_audit_receipt = audit;
+          }
+        else if !querySupported then
+          mkHeld "held-pnix-db-transaction-timeline-korean-6w-unsupported-query" "unsupported transaction timeline query kind for Korean 6W explanation." {
+            query_kind = queryKind;
+            allowed_query_kinds = allowedQueryKinds;
+          }
+        else {
+          schema = "puncheetah.pnix-db.transaction-timeline-korean-6w-explanation.v0";
+          owner = ownerName;
+          outcome = "pnix-db-transaction-timeline-korean-audit-built";
+          is_held = false;
+          verified = true;
+          timeline_query_answered = true;
+          surface_language = "korean";
+          six_w_explanation_built = true;
+          query_kind = queryKind;
+          terminal_status = stringAttrOr audit "final_status" "";
+          terminal_receipt_kind = stringAttrOr audit "terminal_receipt_kind" "";
+          transaction_id = stringAttrOr audit "transaction_id" "";
+          approved_preview_id = stringAttrOr audit "approved_preview_id" "";
+          evidence_chain_summarized = true;
+          ko_audit_summary = sixW;
+          focused_answer_ko = answerFor queryKind audit sixW timeline;
+          timeline_steps = builtins.map stepSummary events;
+          canonical_audit_atoms = [
+            { kind = "six-w"; slot = "who"; value = sixW.who; }
+            { kind = "six-w"; slot = "what"; value = sixW.what; }
+            { kind = "six-w"; slot = "when"; value = sixW.when; }
+            { kind = "six-w"; slot = "where"; value = sixW.where; }
+            { kind = "six-w"; slot = "why"; value = sixW.why; }
+            { kind = "six-w"; slot = "how"; value = sixW.how; }
+            { kind = "six-w"; slot = "result"; value = sixW.result; }
+          ];
+          timeline_audit_receipt = audit;
+          next_gate = "end";
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          memory_write_allowed = false;
+          policy_persistence_allowed = false;
+          receipt = {
+            kind = "pnix-db-transaction-timeline-korean-6w-explanation-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "pnix-db-transaction-timeline-korean-audit-built";
+            timeline_query_answered = true;
+            surface_language = "korean";
+            six_w_explanation_built = true;
+            query_kind = queryKind;
+            terminal_status = stringAttrOr audit "final_status" "";
+            next_gate = "end";
+            memory_write_allowed = false;
+            policy_persistence_allowed = false;
+            invariant = "Korean 6W explanation is derived from a verified pnix-db transaction timeline audit receipt";
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "pnix-db-transaction-timeline-korean-6w-explanation-v0";
+    role = "verified pnix-db transaction timeline audit -> Korean 6W audit explanation";
+    effect_policy = "read-only explanation; no redb write, host effect, policy persistence, source ingest, or search acceptance";
+    supported_query_kinds = allowedQueryKinds;
+  };
+}

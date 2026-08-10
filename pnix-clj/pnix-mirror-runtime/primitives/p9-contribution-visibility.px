@@ -1,0 +1,129 @@
+# P9 — contribution visibility axis (multi-user shared intelligence)
+#
+# OWNER-LAW (2026-05-13): a SpawnRequest declares a visibility
+# kind. `public` (default) participates in P1/P2 content-
+# addressed dedup — same input from any user reaches the same
+# mirror_id and ontology_id, so learning is *automatically*
+# shared. `private` includes `owner_user_id` in the P1
+# fingerprint, isolating the mirror per user so two users with
+# the same private input reach *different* mirrors.
+#
+# This is the substrate piece that lets 1 dev sustain N users:
+#   - shared learning is free (P1/P2 dedup is content-addressed)
+#   - per-user attention is free (P5 session_id)
+#   - per-user privacy is THIS row (P9 owner_user_id in fingerprint)
+#
+# # Non-goals
+#
+# - NOT an ACL system. P9 declares *whose* the contribution is;
+#   it does not enumerate who *else* can see it (that's the
+#   future `scoped` kind).
+# - NOT a read-path enforcement layer. P9 owns the *fingerprint
+#   scope* — the spawn lands in a per-user mirror. Read-path
+#   queries that try to access another user's mirror simply
+#   won't find a matching id; there is no shared-then-filter
+#   model. (Privacy via dedup-failure-by-construction.)
+# - NO LLM judgement of visibility. The host MUST declare it.
+#
+# # How P1 fingerprint absorbs P9
+#
+# P1.buildId currently produces:
+#   mirror|<parent>|<source_ankh_path>|<source_ankh_digest>|<spawn_index>
+#
+# P9 extends this conditionally:
+#   - public (owner_user_id absent) → unchanged (backward compat)
+#   - private (owner_user_id present) → one segment appended:
+#     mirror|<parent>|<path>|<digest>|<spawn_index>|<owner_user_id>
+#
+# This preserves every existing mirror_id (no data migration) and
+# adds isolation only for new private spawns.
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p9-contribution-visibility.px";
+
+  # ─── visibility universe ──────────────────────────────────────
+  validVisibilityKinds = [
+    "public"          # P1/P2 dedup applies — shared intelligence
+    "private"         # owner_user_id in P1 fingerprint — isolated
+    "scoped-future"   # declared name only; spawn MUST Hold until
+                      # multi-user share semantics close
+  ];
+
+  defaultVisibility = "public";
+
+  # ─── per-kind field requirements ──────────────────────────────
+  visibilityFieldsByKind = [
+    {
+      visibility = "public";
+      required = [ "visibility" ];
+      forbidden = [ "owner_user_id" "scope_user_ids" ];
+    }
+    {
+      visibility = "private";
+      required = [ "visibility" "owner_user_id" ];
+      forbidden = [ "scope_user_ids" ];
+    }
+    {
+      visibility = "scoped-future";
+      required = [ "visibility" "owner_user_id" "scope_user_ids" ];
+      forbidden = [];
+    }
+  ];
+
+  validHeldKinds = [
+    "missing-owner-for-private"
+    "public-cannot-have-owner-user-id"
+    "scoped-future-not-yet-implemented"
+    "unknown-visibility-kind"
+  ];
+
+  # ─── P1 fingerprint contribution (declarative) ───────────────
+  #
+  # The Rust adapter reads these field names when extending P1's
+  # `buildId`. visibility="public" appends nothing; "private"
+  # appends `owner_user_id` as one segment.
+  fingerprintContribution = {
+    public_appended_segments = [ ];
+    private_appended_segments = [ "owner_user_id" ];
+    scoped_future_held_kind = "scoped-future-not-yet-implemented";
+  };
+
+  # ─── invariants ──────────────────────────────────────────────
+  invariants = {
+    public_dedup_preserved =
+      "two users submitting the same SpawnRequest with visibility=public MUST reach the same mirror_id (content-addressed sharing)";
+    private_isolated =
+      "two users submitting the same SpawnRequest with visibility=private but different owner_user_id MUST reach different mirror_ids (per-user privacy)";
+    backward_compat =
+      "a SpawnRequest without a visibility field is treated as public; its fingerprint MUST equal the legacy P1 fingerprint (no migration)";
+    no_drift_public_owner =
+      "a public contribution carrying an owner_user_id MUST Held with `public-cannot-have-owner-user-id` (prevents silent semantic mixing)";
+    scoped_future_held =
+      "scoped-future MUST Held — its semantics (which other users can see this) are not yet defined";
+    same_user_same_input_idempotent =
+      "the same user submitting the same private SpawnRequest twice MUST reach the same mirror_id (P1 RT preserved per-owner)";
+  };
+in {
+  inherit
+    ownerName
+    validVisibilityKinds
+    defaultVisibility
+    visibilityFieldsByKind
+    validHeldKinds
+    fingerprintContribution
+    invariants;
+  meta = {
+    source = "pnix-mirror-runtime primitive P9";
+    owner = ownerName;
+    role = "contribution-level visibility axis — public dedup vs private per-user isolation, dedup-preserving privacy via P1 fingerprint scope extension";
+    consumes = [ "P1 mirror-identity-registry (fingerprint scope)" ];
+    consumed_by = [ "doghouse-core mirror_runtime spawn validation + receipt evidence" ];
+    constitutional_alignment = [
+      "格子 안 row 추가 — P1/P2 contract 변경 없이 입력 schema 확장만"
+      "public default → 헌법 dedup 의 자동 적용"
+      "private fingerprint scope 확장으로 격리; 데이터 마이그레이션 없음"
+      "scoped-future 는 명시적 Held — 미정의 의미를 silent 으로 통과시키지 않음"
+      "no ACL filter at read time — privacy is by-construction (fingerprint scope), not by filtering"
+    ];
+  };
+}

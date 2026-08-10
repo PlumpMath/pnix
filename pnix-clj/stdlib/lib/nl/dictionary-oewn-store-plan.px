@@ -1,0 +1,50 @@
+# stdlib/lib/nl/dictionary-oewn-store-plan.px — 영영 사전(Open English WordNet 2025) facts+구조를
+#   redb `dictionary_facts` 에 *pnix attrset 소스*(JSON 아님)로 materialize.
+#
+# ★dictionary-facts-store-plan.px(한글 seed)와 동형 — 이 .px 가 plan(의미) 정본, Rust(executor.rs)는
+#   plan→redb 바이트 *실행만*(ferry). 적재: `pnixc-meta --morph-rules-build stdlib/lib/nl/dictionary-oewn-store-plan.px`.
+# ★sync = content-hash 키: key="<schema>/<sha256(value)>". 내용 같으면 idempotent(append-only 충돌검사).
+# ★redb 적재까지가 끝 — 거울/그래프 연결(wiring) 없음. seed 는 gitignored generated.px (없으면 빈 facts 로 안전).
+let
+  B = builtins;
+  genPath = ./dictionary-oewn-facts.generated.px;   # gitignored (gen-dictionary-oewn-facts.sh 산출)
+  seed =
+    if B.pathExists genPath
+    then import genPath
+    else { schema = "dictionary.oewn-facts.v1"; attribution = "Open English WordNet 2025 (CC BY 4.0)."; facts = [ ]; synsets = [ ]; };
+  ser = import ./pnix-value-literal.px;             # 공유 pnix-소스 직렬화기 (단일 source, JSON 금지)
+  valueSrc = ser.toPnixSource seed;                 # pnix attrset 소스 (NOT JSON)
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "dictionary-oewn-facts-load-v0";
+      source_lens = "stdlib/lib/nl/dictionary-oewn-store-plan.px";
+      source_verdict = "materialize-dictionary-facts";
+      operations = [
+        { op_kind = "append"; table = "dictionary_facts"; key = key; value_bytes = valueSrc; }
+      ];
+      receipt_owner = "dictionary.oewn-facts.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+
+  mkQuery = args: {
+    plan = {
+      plan_id = "dictionary-oewn-facts-query-v0";
+      source_lens = "stdlib/lib/nl/dictionary-oewn-store-plan.px";
+      source_verdict = "query-dictionary-facts";
+      operations = [
+        { op_kind = "scan-prefix"; table = "dictionary_facts"; key = ""; key_prefix = seed.schema + "/"; }
+      ];
+      receipt_owner = "dictionary.oewn-facts.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

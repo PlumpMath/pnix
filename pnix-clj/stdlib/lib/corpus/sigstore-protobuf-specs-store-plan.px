@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/sigstore-protobuf-specs-store-plan.px — Sigstore protobuf specifications structural metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# actual signatures/keys/certificates/rekor entries/bundles/verification/live services/execution/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./sigstore-protobuf-specs.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "supply_chain.sigstore.protobuf_specs.v1";
+    source = { name = "Sigstore protobuf specifications"; license = "Apache-2.0"; scope = "empty seed fallback"; };
+    summary = { source_file_count = 0; proto_message_count = 0; proto_field_count = 0; };
+    source_files = [ ]; proto_messages = [ ]; proto_enums = [ ]; proto_fields = [ ]; section_headings = [ ]; tokens = [ ]; predicate_uris = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "sigstore-protobuf-specs-load-v0";
+      source_lens = "stdlib/lib/corpus/sigstore-protobuf-specs-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "supply_chain.sigstore.protobuf_specs.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "sigstore-protobuf-specs-query-v0";
+      source_lens = "stdlib/lib/corpus/sigstore-protobuf-specs-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "supply_chain.sigstore.protobuf_specs.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

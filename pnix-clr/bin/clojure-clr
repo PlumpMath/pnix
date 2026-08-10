@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Focused compatibility facade now owned by clr-meta. Broader upstream
+# bootstrap/compiler operations remain explicit under clojure-clr-bootstrap.
+if [[ "$#" -eq 2 && ( "$1" == "-e" || "$1" == "--eval" ) ]]; then
+  exec "$root/bin/clr-meta" "$@"
+fi
+
+if [[ "$#" -eq 1 && -f "$1" ]]; then
+  exec "$root/bin/clr-meta" "$@"
+fi
+
+echo "clojure-clr compatibility: admitted surface is -e FORM or one FORM file; use clojure-clr-bootstrap for the upstream trust root" >&2
+exit 2

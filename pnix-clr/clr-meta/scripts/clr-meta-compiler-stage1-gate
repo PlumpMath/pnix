@@ -1,0 +1,497 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$clr_meta_root/.." && pwd)"
+dotnet_bin="$(command -v dotnet)"
+runtime_root="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish"
+main_dll="$runtime_root/Clojure.Main.dll"
+profile="$clr_meta_root/compiler-stage1/profile.edn"
+plan="$clr_meta_root/compiler-stage1/plan.edn"
+example="$clr_meta_root/compiler-stage1/example.clj"
+overflow="$clr_meta_root/compiler-stage1/overflow.clj"
+sub_overflow="$clr_meta_root/compiler-stage1/sub-overflow.clj"
+mul_overflow="$clr_meta_root/compiler-stage1/mul-overflow.clj"
+unsupported="$clr_meta_root/compiler-stage1/unsupported.clj"
+out_of_range="$clr_meta_root/compiler-stage1/out-of-range.clj"
+
+fail() {
+  echo "clr-meta compiler Stage1 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/clr-meta-stage1.XXXXXX")"
+runtime_shadow_paths=()
+cleanup() {
+  local path
+  for path in "${runtime_shadow_paths[@]}"; do
+    rm -f "$path"
+  done
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
+bundle="$tmp/bundle"
+
+"$root/bin/clr-meta" --build-compiler-stage1 \
+  "$profile" "$plan" "$example" "$bundle" >"$tmp/build.stdout"
+
+expected_files="$tmp/expected-files"
+actual_files="$tmp/actual-files"
+printf '%s\n' \
+  compiler-seed/manifest.json \
+  compiler-seed/pnix.clr_meta.compiler_stage1.clj.dll \
+  compiler-seed/pnix.clr_meta.compiler_stage1_core.clj.dll \
+  manifest.json \
+  target/manifest.json \
+  target/program.dll \
+  target/program.runtimeconfig.json | LC_ALL=C sort >"$expected_files"
+(
+  cd "$bundle"
+  find . -mindepth 1 -type f -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$actual_files"
+cmp "$expected_files" "$actual_files" >/dev/null || fail artifact-file-set
+
+manifest="$bundle/manifest.json"
+jq -e '
+	  (keys == ["bootstrap",
+	            "boundaries",
+	            "bundle_closure_sha256",
+	            "bundle_files",
+	            "claim_scope",
+            "compiler_entry",
+            "compiler_output_closure_sha256",
+            "compiler_outputs",
+            "compiler_self_reproduction",
+            "compiler_source_closure_sha256",
+            "compiler_sources",
+            "compiler_stage15_n",
+            "compiler_stage2",
+            "emitter",
+            "il_fixed_point",
+            "input_kind",
+            "profile_id",
+            "profile_sha256",
+            "raw_artifact_reproducibility",
+	            "runtime_dependencies",
+	            "runtime_isolation",
+	            "runtime_snapshot",
+	            "schema",
+            "self_source_accounting",
+	            "stage",
+	            "target",
+	            "toolchain"]) and
+  .schema == "pnix.clr-meta.compiler-stage1-artifact.v1" and
+  .stage == 1 and
+  .claim_scope == "profile-qualified-clojure-form-to-managed-pe" and
+  .profile_id == "pnix.clr-meta.checked-i64-expression.v1" and
+  .input_kind == "strict-edn-one-form" and
+	  .bootstrap.use == "seed-only" and
+	  .bootstrap.compiler == "pinned-host-clojureclr" and
+	  .bootstrap.environment_policy == "clear-then-allowlist" and
+	  .bootstrap.host_executable == "current-process-absolute" and
+	  .boundaries == {
+	    "compiler_implementation_source_at_target":false,
+	    "host_compiler_use":"seed-and-pinned-runtime-startup",
+	    "pinned_runtime_startup_source_compilation":true,
+	    "standalone_source_free_distribution":false,
+	    "target_form_host_compiler_fallback":false,
+	    "target_form_host_eval_fallback":false,
+	    "target_source_evaluator":false
+	  } and
+  .compiler_stage2 == false and
+  .compiler_self_reproduction == false and
+  .il_fixed_point == false and
+  .raw_artifact_reproducibility == false and
+  .compiler_stage15_n == false and
+  .self_source_accounting.coverage_complete == true and
+	  .self_source_accounting.stage2_ready == false and
+	  .self_source_accounting.compiler_source_within_stage1_profile == false and
+	  .self_source_accounting.unit == "top-level-clojure-reader-form" and
+  .self_source_accounting.total == .self_source_accounting.classified and
+  .self_source_accounting.unsupported == .self_source_accounting.total and
+  .self_source_accounting.supported == 0 and
+	([.compiler_sources[].path] == [
+	  "pnix/clr_meta/compiler_stage1_core.clj",
+	  "pnix/clr_meta/compiler_stage1.clj"
+	]) and
+	(all(.compiler_sources[]; keys == ["path","sha256"])) and
+	([.compiler_outputs[].path] == [
+	  "compiler-seed/pnix.clr_meta.compiler_stage1_core.clj.dll",
+	  "compiler-seed/pnix.clr_meta.compiler_stage1.clj.dll"
+	]) and
+	(all(.compiler_outputs[]; keys == ["path","sha256"])) and
+	  .target.artifact.schema == "pnix.clr-meta.compiler-stage1-target.v1" and
+	  .target.artifact.backend == "direct-system-reflection-emit" and
+	  .target.artifact.target_form_fallback_calls == {
+    "compile":0,"eval":0,"load":0,"load_file":0,"load_string":0
+  } and
+  .target.artifact.source_text_compilation == true and
+  .target.artifact.target_assembly_references == [
+    "System.Console","System.Private.CoreLib"
+  ] and
+  .target.artifact.target_resources == [] and
+  .target.artifact.node_accounting.unknown_nodes == 0 and
+	  .target.artifact.node_accounting.nodes ==
+	    .target.artifact.node_accounting.directly_lowered and
+	  .runtime_isolation.environment_policy == "clear-then-allowlist" and
+	  (.runtime_snapshot | keys == [
+	    "closure_sha256","file_count","files","unchanged_after_target"
+	  ]) and
+	  .runtime_snapshot.unchanged_after_target == true and
+	  (.runtime_snapshot.file_count > 0) and
+  ((.runtime_snapshot.files | length) == .runtime_snapshot.file_count) and
+	  (all(.runtime_snapshot.files[];
+	    (keys == ["path","sha256"]) and
+	    (.path | type == "string" and length > 0 and
+	             (startswith("/") | not) and
+	             (split("/") | all(. != "" and . != "." and . != ".."))) and
+	    (.sha256 | test("^[0-9a-f]{64}$")))) and
+	  (([.runtime_snapshot.files[].path] | unique | length) ==
+	   .runtime_snapshot.file_count) and
+	  (.toolchain | keys == [
+	    "clojure_main_sha256","clojure_runtime_sha256","clojure_version",
+	    "coreclr_version","dotnet_host_sha256"
+	  ]) and
+	  (.toolchain.clojure_main_sha256 | test("^[0-9a-f]{64}$")) and
+	  (.toolchain.clojure_runtime_sha256 | test("^[0-9a-f]{64}$")) and
+	  (.toolchain.dotnet_host_sha256 | test("^[0-9a-f]{64}$")) and
+	  ([.bundle_files[].path] == [
+	    "compiler-seed/manifest.json",
+	    "compiler-seed/pnix.clr_meta.compiler_stage1_core.clj.dll",
+	    "compiler-seed/pnix.clr_meta.compiler_stage1.clj.dll",
+	    "target/manifest.json",
+	    "target/program.dll",
+	    "target/program.runtimeconfig.json"
+	  ]) and
+	  (all(.bundle_files[]; keys == ["path","sha256"])) and
+	  (.compiler_outputs == [
+	    .bundle_files[] |
+	    select(.path == "compiler-seed/pnix.clr_meta.compiler_stage1_core.clj.dll" or
+	           .path == "compiler-seed/pnix.clr_meta.compiler_stage1.clj.dll")
+	  ]) and
+	  ([.target.artifact.outputs[] |
+	      {path:("target/" + .path),sha256:.sha256}] ==
+	   [.bundle_files[] | select(.path == "target/program.dll" or
+	                            .path == "target/program.runtimeconfig.json")])
+' "$manifest" >/dev/null || fail manifest-contract
+
+[[ "$(sha256_file "$profile")" == "$(jq -r '.profile_sha256' "$manifest")" ]] || \
+  fail profile-hash
+[[ "$(sha256_file "$plan")" == "$(jq -r '.target.plan_sha256' "$manifest")" ]] || \
+  fail plan-hash
+[[ "$(sha256_file "$example")" == "$(jq -r '.target.source_sha256' "$manifest")" ]] || \
+  fail source-hash
+[[ "$(sha256_file "$bundle/compiler-seed/manifest.json")" == \
+   "$(jq -r '.bootstrap.manifest_sha256' "$manifest")" ]] || fail seed-manifest-hash
+
+jq -S '.compiler_sources' "$manifest" >"$tmp/outer-compiler-sources.json"
+jq -S '.sources' "$bundle/compiler-seed/manifest.json" >"$tmp/seed-compiler-sources.json"
+cmp "$tmp/outer-compiler-sources.json" "$tmp/seed-compiler-sources.json" >/dev/null || \
+  fail compiler-source-seed-cross-check
+[[ "$(jq -r '.compiler_source_closure_sha256' "$manifest")" == \
+   "$(jq -r '.source_closure_sha256' "$bundle/compiler-seed/manifest.json")" ]] || \
+  fail compiler-source-seed-closure-cross-check
+
+compiler_source_closure="$({
+  jq -r '.compiler_sources[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$compiler_source_closure" == \
+   "$(jq -r '.compiler_source_closure_sha256' "$manifest")" ]] || \
+  fail compiler-source-closure
+while IFS=$'\t' read -r relative expected_hash; do
+  [[ "$(sha256_file "$clr_meta_root/src/$relative")" == "$expected_hash" ]] || \
+    fail compiler-source-live-hash
+done < <(jq -r '.compiler_sources[] | [.path,.sha256] | @tsv' "$manifest")
+
+jq -r '.compiler_outputs[] | [.path,.sha256] | @tsv' "$manifest" \
+  >"$tmp/outer-compiler-outputs.tsv"
+jq -r '.outputs[] | [("compiler-seed/" + .path),.sha256] | @tsv' \
+  "$bundle/compiler-seed/manifest.json" >"$tmp/seed-compiler-outputs.tsv"
+cmp "$tmp/outer-compiler-outputs.tsv" "$tmp/seed-compiler-outputs.tsv" >/dev/null || \
+  fail compiler-output-seed-cross-check
+
+runtime_snapshot_closure="$({
+  jq -r '.runtime_snapshot.files[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$runtime_snapshot_closure" == \
+   "$(jq -r '.runtime_snapshot.closure_sha256' "$manifest")" ]] || \
+  fail runtime-snapshot-closure
+jq -r '.runtime_snapshot.files[].path' "$manifest" | LC_ALL=C sort \
+  >"$tmp/manifest-runtime-paths"
+(
+  cd "$runtime_root"
+  find . -type f -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$tmp/live-runtime-paths"
+cmp "$tmp/manifest-runtime-paths" "$tmp/live-runtime-paths" >/dev/null || \
+  fail runtime-snapshot-live-file-set
+while IFS=$'\t' read -r relative expected_hash; do
+  [[ "$(sha256_file "$runtime_root/$relative")" == "$expected_hash" ]] || \
+    fail runtime-snapshot-live-hash
+done < <(jq -r '.runtime_snapshot.files[] | [.path,.sha256] | @tsv' "$manifest")
+[[ "$(sha256_file "$main_dll")" == \
+   "$(jq -r '.toolchain.clojure_main_sha256' "$manifest")" ]] || \
+  fail toolchain-clojure-main-hash
+[[ "$(sha256_file "$runtime_root/Clojure.dll")" == \
+   "$(jq -r '.toolchain.clojure_runtime_sha256' "$manifest")" ]] || \
+  fail toolchain-clojure-runtime-hash
+[[ "$(sha256_file "$dotnet_bin")" == \
+   "$(jq -r '.toolchain.dotnet_host_sha256' "$manifest")" ]] || \
+  fail toolchain-dotnet-host-hash
+
+compiler_closure="$({
+  jq -r '.compiler_outputs[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$compiler_closure" == "$(jq -r '.compiler_output_closure_sha256' "$manifest")" ]] || \
+  fail compiler-output-closure
+target_closure="$({
+  jq -r '.target.artifact.outputs[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$target_closure" == "$(jq -r '.target.artifact.output_closure_sha256' "$manifest")" ]] || \
+  fail target-output-closure
+bundle_closure="$({
+  jq -r '.bundle_files[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$bundle_closure" == "$(jq -r '.bundle_closure_sha256' "$manifest")" ]] || \
+  fail bundle-closure
+while IFS=$'\t' read -r relative expected_hash; do
+  [[ "$(sha256_file "$bundle/$relative")" == "$expected_hash" ]] || \
+    fail bundle-file-hash
+done < <(jq -r '.bundle_files[] | [.path,.sha256] | @tsv' "$manifest")
+
+[[ "$("$dotnet_bin" "$bundle/target/program.dll" -2)" == 0 ]] || fail dynamic-negative
+[[ "$("$dotnet_bin" "$bundle/target/program.dll" 0)" == 6 ]] || fail dynamic-zero
+[[ "$("$dotnet_bin" "$bundle/target/program.dll" 7)" == 27 ]] || fail dynamic-positive
+if "$dotnet_bin" "$bundle/target/program.dll" \
+     >"$tmp/no-argument.stdout" 2>"$tmp/no-argument.stderr"; then
+  fail missing-cli-argument-accepted
+fi
+rg -q 'ArgumentException' "$tmp/no-argument.stderr" || \
+  fail missing-cli-argument-class
+if "$dotnet_bin" "$bundle/target/program.dll" 7 999 \
+     >"$tmp/extra-argument.stdout" 2>"$tmp/extra-argument.stderr"; then
+  fail extra-cli-argument-accepted
+fi
+rg -q 'ArgumentException' "$tmp/extra-argument.stderr" || \
+  fail extra-cli-argument-class
+
+# The public wrapper must ignore a caller-cwd shadow before it can construct its
+# privately snapshotted child. This second bundle is also a direct regression
+# for the wrapper's cwd pin.
+caller_poison="$tmp/caller-poison"
+mkdir -p "$caller_poison/pnix/clr_meta"
+printf '%s\n' '(throw (System.Exception. "caller main shadow executed"))' \
+  >"$caller_poison/pnix/clr_meta/main.clj"
+(
+  cd "$caller_poison"
+  "$root/bin/clr-meta" --build-compiler-stage1 \
+    "$profile" "$plan" "$example" "$tmp/poison-caller-bundle"
+) >"$tmp/poison-caller.stdout"
+[[ "$("$dotnet_bin" "$tmp/poison-caller-bundle/target/program.dll" 1)" == 9 ]] || \
+  fail caller-cwd-shadow
+
+# Broken symlinks are entries even though `-e` is false. Both namespace-tree
+# and dotted-AOT spellings must be rejected by the public wrapper itself.
+namespace_shadow="$runtime_root/pnix"
+[[ ! -e "$namespace_shadow" && ! -L "$namespace_shadow" ]] || \
+  fail preexisting-runtime-namespace-shadow
+runtime_shadow_paths+=("$namespace_shadow")
+ln -s "$tmp/missing-runtime-pnix" "$namespace_shadow"
+if "$root/bin/clr-meta" -e 42 \
+     >"$tmp/namespace-shadow.stdout" 2>"$tmp/namespace-shadow.stderr"; then
+  fail broken-runtime-namespace-shadow-accepted
+fi
+rg -q 'pinned runtime contains a pnix.clr-meta shadow' \
+  "$tmp/namespace-shadow.stderr" || fail runtime-namespace-shadow-path
+rm -f "$namespace_shadow"
+
+dotted_shadow="$runtime_root/pnix.clr_meta.poison.clj.dll"
+[[ ! -e "$dotted_shadow" && ! -L "$dotted_shadow" ]] || \
+  fail preexisting-runtime-dotted-shadow
+runtime_shadow_paths+=("$dotted_shadow")
+ln -s "$tmp/missing-runtime-aot" "$dotted_shadow"
+if "$root/bin/clr-meta" -e 42 \
+     >"$tmp/dotted-shadow.stdout" 2>"$tmp/dotted-shadow.stderr"; then
+  fail broken-runtime-dotted-shadow-accepted
+fi
+rg -q 'pinned runtime contains a pnix.clr-meta shadow' \
+  "$tmp/dotted-shadow.stderr" || fail runtime-dotted-shadow-path
+rm -f "$dotted_shadow"
+
+# Replay the persisted compiler from its two AOT assemblies. ClojureCLR's cwd
+# lookup precedes CLOJURE_LOAD_PATH, so the safe raw replay cwd is the verified
+# seed artifact itself. PATH still contains a poison dotnet; the absolute host
+# runtime is used and the compiler starts no subprocess.
+poison_bin="$tmp/poison-bin"
+mkdir -p "$poison_bin"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 97' >"$poison_bin/dotnet"
+chmod +x "$poison_bin/dotnet"
+
+run_seeded() {
+  local source="$1"
+  local output="$2"
+  (
+    cd "$bundle/compiler-seed"
+    PATH="$poison_bin" \
+    CLR_META_SOURCE_ROOT="$tmp/definitely-missing" \
+    CLOJURE_COMPILE_PATH= \
+    CLOJURE_LOAD_PATH="$bundle/compiler-seed" \
+      "$dotnet_bin" "$main_dll" -m pnix.clr-meta.compiler-stage1 \
+        "$profile" "$plan" "$source" "$output"
+  )
+}
+
+run_seeded "$overflow" "$tmp/replay-target" >"$tmp/replay.stdout"
+[[ "$("$dotnet_bin" "$tmp/replay-target/program.dll" 9223372036854775806)" == \
+   9223372036854775807 ]] || fail replay-dynamic-result
+if "$dotnet_bin" "$tmp/replay-target/program.dll" 9223372036854775807 \
+     >"$tmp/overflow.stdout" 2>"$tmp/overflow.stderr"; then
+  fail checked-overflow-accepted
+fi
+rg -q 'OverflowException' "$tmp/overflow.stderr" || fail checked-overflow-class
+
+run_seeded "$sub_overflow" "$tmp/sub-target" >"$tmp/sub.stdout"
+[[ "$("$dotnet_bin" "$tmp/sub-target/program.dll" -9223372036854775807)" == \
+   -9223372036854775808 ]] || fail checked-sub-boundary
+if "$dotnet_bin" "$tmp/sub-target/program.dll" -9223372036854775808 \
+     >"$tmp/sub-overflow.stdout" 2>"$tmp/sub-overflow.stderr"; then
+  fail checked-sub-overflow-accepted
+fi
+rg -q 'OverflowException' "$tmp/sub-overflow.stderr" || fail checked-sub-overflow-class
+
+run_seeded "$mul_overflow" "$tmp/mul-target" >"$tmp/mul.stdout"
+[[ "$("$dotnet_bin" "$tmp/mul-target/program.dll" -3)" == -6 ]] || \
+  fail checked-mul-negative
+if "$dotnet_bin" "$tmp/mul-target/program.dll" 9223372036854775807 \
+     >"$tmp/mul-overflow.stdout" 2>"$tmp/mul-overflow.stderr"; then
+  fail checked-mul-overflow-accepted
+fi
+rg -q 'OverflowException' "$tmp/mul-overflow.stderr" || fail checked-mul-overflow-class
+[[ "$(LANG=sv_SE.UTF-8 LC_ALL=sv_SE.UTF-8 \
+       "$dotnet_bin" "$tmp/mul-target/program.dll" -3)" == -6 ]] || \
+  fail invariant-stdout
+
+if run_seeded "$unsupported" "$tmp/unsupported-target" \
+     >"$tmp/unsupported-fresh.stdout" 2>"$tmp/unsupported-fresh.stderr"; then
+  fail unsupported-form-accepted
+fi
+[[ ! -e "$tmp/unsupported-target" ]] || fail unsupported-output-published
+
+original_manifest_hash="$(sha256_file "$tmp/replay-target/manifest.json")"
+if run_seeded "$unsupported" "$tmp/replay-target" \
+     >"$tmp/unsupported.stdout" 2>"$tmp/unsupported.stderr"; then
+  fail existing-output-accepted
+fi
+[[ "$original_manifest_hash" == "$(sha256_file "$tmp/replay-target/manifest.json")" ]] || \
+  fail existing-output-preservation
+
+if run_seeded "$out_of_range" "$tmp/out-of-range" \
+     >"$tmp/range.stdout" 2>"$tmp/range.stderr"; then
+  fail out-of-range-accepted
+fi
+[[ ! -e "$tmp/out-of-range" ]] || fail failed-output-published
+
+head -c 5000 /dev/zero | tr '\0' '1' >"$tmp/oversized.clj"
+if run_seeded "$tmp/oversized.clj" "$tmp/oversized-output" \
+     >"$tmp/oversized.stdout" 2>"$tmp/oversized.stderr"; then
+  fail source-byte-budget-accepted
+fi
+[[ ! -e "$tmp/oversized-output" ]] || fail oversized-output-published
+
+{
+  for _ in $(seq 1 81); do printf '('; done
+  printf 'arg'
+  for _ in $(seq 1 81); do printf ')'; done
+  printf '\n'
+} >"$tmp/too-deep.clj"
+if run_seeded "$tmp/too-deep.clj" "$tmp/deep-output" \
+     >"$tmp/deep.stdout" 2>"$tmp/deep.stderr"; then
+  fail source-reader-depth-accepted
+fi
+[[ ! -e "$tmp/deep-output" ]] || fail deep-output-published
+
+printf '%s\n' '^:foo (+ arg 1)' >"$tmp/metadata.clj"
+if run_seeded "$tmp/metadata.clj" "$tmp/metadata-output" \
+     >"$tmp/metadata.stdout" 2>"$tmp/metadata.stderr"; then
+  fail source-metadata-accepted
+fi
+[[ ! -e "$tmp/metadata-output" ]] || fail metadata-output-published
+
+cp "$profile" "$tmp/tampered-profile.edn"
+sed -i.bak '$s/}/ :extra true}/' "$tmp/tampered-profile.edn"
+rm -f "$tmp/tampered-profile.edn.bak"
+if (
+  cd "$bundle/compiler-seed"
+  CLOJURE_LOAD_PATH="$bundle/compiler-seed" \
+    "$dotnet_bin" "$main_dll" -m pnix.clr-meta.compiler-stage1 \
+      "$tmp/tampered-profile.edn" "$plan" "$example" "$tmp/tampered-output"
+) >"$tmp/tampered.stdout" 2>"$tmp/tampered.stderr"; then
+  fail tampered-profile-accepted
+fi
+[[ ! -e "$tmp/tampered-output" ]] || fail tampered-output-published
+
+ln -s "$example" "$tmp/source-link.clj"
+if (
+  cd "$bundle/compiler-seed"
+  CLOJURE_LOAD_PATH="$bundle/compiler-seed" \
+    "$dotnet_bin" "$main_dll" -m pnix.clr-meta.compiler-stage1 \
+      "$profile" "$plan" "$tmp/source-link.clj" "$tmp/link-output"
+) >"$tmp/link.stdout" 2>"$tmp/link.stderr"; then
+  fail source-symlink-accepted
+fi
+
+if rg -n '\((eval|compile|load|load-file|load-string)[[:space:]]|clojure\.lang\.Compiler|System\.Diagnostics\.Process' \
+     "$clr_meta_root/src/pnix/clr_meta/compiler_stage1_core.clj" \
+     "$clr_meta_root/src/pnix/clr_meta/compiler_stage1.clj" \
+     >"$tmp/forbidden-direct-calls"; then
+  fail forbidden-direct-host-callsite
+fi
+
+jq -n \
+  --arg manifest_sha256 "$(sha256_file "$manifest")" \
+  --arg bundle_closure_sha256 "$bundle_closure" \
+  --arg runtime_snapshot_closure_sha256 "$runtime_snapshot_closure" \
+  --arg compiler_source_closure_sha256 "$compiler_source_closure" \
+  --arg compiler_output_closure_sha256 "$compiler_closure" \
+  --arg target_output_closure_sha256 "$target_closure" \
+  '{
+    schema:"pnix.clr-meta.compiler-stage1-gate-receipt.v1",
+    stage:1,
+    profile:"pnix.clr-meta.checked-i64-expression.v1",
+    positive_dynamic_cases:8,
+    negative_cases:18,
+    compiler_source_hidden_seed_replay:true,
+    wrapper_cwd_pinned:true,
+    caller_cwd_shadow_did_not_execute:true,
+    poison_path_did_not_execute:true,
+    target_form_fallback_calls:0,
+    pinned_runtime_startup_source_compilation:true,
+    standalone_source_free_distribution:false,
+    compiler_stage2:false,
+    compiler_self_reproduction:false,
+    il_fixed_point:false,
+    raw_artifact_reproducibility:false,
+    compiler_stage15_n:false,
+    manifest_sha256:$manifest_sha256,
+    bundle_closure_sha256:$bundle_closure_sha256,
+    runtime_snapshot_closure_sha256:$runtime_snapshot_closure_sha256,
+    compiler_source_closure_sha256:$compiler_source_closure_sha256,
+    compiler_output_closure_sha256:$compiler_output_closure_sha256,
+    target_output_closure_sha256:$target_output_closure_sha256,
+    ready:true
+  }'

@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/loc-linked-data-vocab-store-plan.px — Library of Congress Linked Data vocabulary/root schemes.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# Individual authority records/personal names/bibliographic records/prose notes/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./loc-linked-data-vocab.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "metadata.loc.linked_data_vocab.v1";
+    source = { name = "LoC Linked Data vocab/root schemes"; license = "LoC public domain / public authority data"; scope = "empty seed fallback"; };
+    summary = { scheme_count = 0; authority_record_payloads_ingested = false; mirror_graph_wiring = false; };
+    source_files = [ ]; schemes = [ ]; members = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "loc-linked-data-vocab-load-v0";
+      source_lens = "stdlib/lib/corpus/loc-linked-data-vocab-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "metadata.loc.linked_data_vocab.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "loc-linked-data-vocab-query-v0";
+      source_lens = "stdlib/lib/corpus/loc-linked-data-vocab-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "metadata.loc.linked_data_vocab.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

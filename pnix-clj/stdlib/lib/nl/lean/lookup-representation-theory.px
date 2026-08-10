@@ -1,0 +1,1150 @@
+# AUTO-GENERATED — representation-theory
+# Entries: 163
+let
+  ownerName = "stdlib.nl.lean.lookup-representation-theory";
+  category = "representation-theory";
+  entries = [
+    {
+      full_name = "Representation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 42;
+      code_preview = "abbrev Representation :=   G →* V →ₗ[k] V";
+    }
+    {
+      full_name = "Representation.trivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 55;
+      code_preview = "def trivial : Representation k G V :=   1";
+    }
+    {
+      full_name = "Representation.trivial_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 62;
+      code_preview = "@[simp] theorem trivial_apply (g : G) (v : V) : trivial k G V g v = v";
+    }
+    {
+      full_name = "Representation.IsTrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 68;
+      code_preview = "class IsTrivial (ρ : Representation k G V) : Prop where   out : ∀ g, ρ g = LinearMap.id := by aesop";
+    }
+    {
+      full_name = "Representation.isTrivial_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 74;
+      code_preview = "@[simp] theorem isTrivial_def (ρ : Representation k G V) [IsTrivial ρ] (g : G) :     ρ g = LinearMap.id";
+    }
+    {
+      full_name = "Representation.isTrivial_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 78;
+      code_preview = "theorem isTrivial_apply (ρ : Representation k G V) [IsTrivial ρ] (g : G) (x : V) :     ρ g x = x";
+    }
+    {
+      full_name = "Representation.asAlgebraHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 88;
+      code_preview = "noncomputable def asAlgebraHom : MonoidAlgebra k G →ₐ[k] Module.End k V :=   (lift k G _) ρ";
+    }
+    {
+      full_name = "Representation.asAlgebraHom_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 94;
+      code_preview = "theorem asAlgebraHom_def : asAlgebraHom ρ = (lift k G _) ρ";
+    }
+    {
+      full_name = "Representation.asAlgebraHom_single";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 97;
+      code_preview = "@[simp] theorem asAlgebraHom_single (g : G) (r : k) :     asAlgebraHom ρ (MonoidAlgebra.single g r) = r • ρ g";
+    }
+    {
+      full_name = "Representation.asAlgebraHom_single_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 102;
+      code_preview = "theorem asAlgebraHom_single_one (g : G) : asAlgebraHom ρ (MonoidAlgebra.single g 1) = ρ g";
+    }
+    {
+      full_name = "Representation.asAlgebraHom_of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 104;
+      code_preview = "theorem asAlgebraHom_of (g : G) : asAlgebraHom ρ (of k G g) = ρ g";
+    }
+    {
+      full_name = "Representation.asModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 107;
+      code_preview = "@[nolint unusedArguments] def asModule (_ : Representation k G V) :=   V";
+    }
+    {
+      full_name = "Representation.instModuleAsModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 123;
+      code_preview = "noncomputable instance instModuleAsModule : Module (MonoidAlgebra k G) ρ.asModule :=   Module.compHom V (asAlgebraHom ρ).toRingHom";
+    }
+    {
+      full_name = "Representation.asModuleEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 131;
+      code_preview = "def asModuleEquiv : ρ.asModule ≃ₗ[k] V :=   LinearEquiv.refl _ _";
+    }
+    {
+      full_name = "Representation.asModuleEquiv_map_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 139;
+      code_preview = "@[simp] theorem asModuleEquiv_map_smul (r : MonoidAlgebra k G) (x : ρ.asModule) :     ρ.asModuleEquiv (r • x) = ρ.asAlgebraHom r (ρ.asModuleEquiv x)";
+    }
+    {
+      full_name = "Representation.asModuleEquiv_symm_map_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 144;
+      code_preview = "theorem asModuleEquiv_symm_map_smul (r : k) (x : V) :     ρ.asModuleEquiv.symm (r • x) = algebraMap k (MonoidAlgebra k G) r • ρ.asModuleEquiv.symm x";
+    }
+    {
+      full_name = "Representation.asModuleEquiv_symm_map_rho";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 149;
+      code_preview = "@[simp] theorem asModuleEquiv_symm_map_rho (g : G) (x : V) :     ρ.asModuleEquiv.symm (ρ g x) = MonoidAlgebra.of k G g • ρ.asModuleEquiv.symm x";
+    }
+    {
+      full_name = "Representation.ofModule'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 155;
+      code_preview = "noncomputable def ofModule' (M : Type*) [AddCommMonoid M] [Module k M]     [Module (MonoidAlgebra k G) M] [IsScalarTower k (MonoidAlgebra k G) M] : Representation k G M :=   (MonoidAlgebra.lift k G (M →ₗ[k] M)).symm (Algebra.lsmul k k M)";
+    }
+    {
+      full_name = "Representation.ofModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 172;
+      code_preview = "noncomputable def ofModule : Representation k G (RestrictScalars k (MonoidAlgebra k G) M) :=   (MonoidAlgebra.lift k G         (RestrictScalars k (MonoidAlgebra k G) M →ₗ[k]           RestrictScalars k (MonoidAlgebra k G) M)).symm     (RestrictScalars.lsmul k (MonoidAlgebra k G) M)";
+    }
+    {
+      full_name = "Representation.ofModule_asAlgebraHom_apply_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 201;
+      code_preview = "@[simp] theorem ofModule_asAlgebraHom_apply_apply (r : MonoidAlgebra k G)     (m : RestrictScalars k (MonoidAlgebra k G) M) :     ((ofModule M).asAlgebraHom r) m =       (RestrictScalars.addEquiv _ _ _).symm (r • RestrictScalars.addEquiv _ _ _ m)";
+    }
+    {
+      full_name = "Representation.ofModule_asModule_act";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 216;
+      code_preview = "@[simp] theorem ofModule_asModule_act (g : G) (x : RestrictScalars k (MonoidAlgebra k G) ρ.asModule) :     ofModule (k := k) (G := G) ρ.asModule g x = (RestrictScalars.addEquiv _ _ _).symm         (ρ.asModuleEquiv.symm (ρ g (ρ.asModuleEquiv (RestrictScalars.addEquiv _ _ _ x))))";
+    }
+    {
+      full_name = "Representation.smul_ofModule_asModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 226;
+      code_preview = "theorem smul_ofModule_asModule (r : MonoidAlgebra k G) (m : (ofModule M).asModule) :     (RestrictScalars.addEquiv k _ _) ((ofModule M).asModuleEquiv (r • m)) =       r • (RestrictScalars.addEquiv k _ _) ((ofModule M).asModuleEquiv (G := G) m)";
+    }
+    {
+      full_name = "Representation.single_smul";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 234;
+      code_preview = "@[simp] lemma single_smul (t : k) (g : G) (v : ρ.asModule) :     MonoidAlgebra.single (g : G) t • v = t • ρ g (ρ.asModuleEquiv v) := by   rw [← LinearMap.smul_apply, ← asAlgebraHom_single, ← asModuleEquiv_map_smul]   rfl";
+    }
+    {
+      full_name = "Representation.ofMulAction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 267;
+      code_preview = "noncomputable def ofMulAction : Representation k G (H →₀ k) where   toFun g := Finsupp.lmapDomain k k (g • ·)   map_one' := by     ext x y     dsimp     simp   map_mul' x y := by     ext z w     simp [mul_smul]";
+    }
+    {
+      full_name = "Representation.ofMulAction_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 280;
+      code_preview = "theorem ofMulAction_def (g : G) : ofMulAction k G H g = Finsupp.lmapDomain k k (g • ·)";
+    }
+    {
+      full_name = "Representation.ofMulAction_single";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 283;
+      code_preview = "@[simp] theorem ofMulAction_single (g : G) (x : H) (r : k) :     ofMulAction k G H g (Finsupp.single x r) = Finsupp.single (g • x) r";
+    }
+    {
+      full_name = "Representation.ofDistribMulAction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 294;
+      code_preview = "def ofDistribMulAction : Representation k G A where   toFun := fun m =>     { DistribMulAction.toAddMonoidEnd G A m with       map_smul' := smul_comm _ }   map_one' := by ext; exact one_smul _ _   map_mul' := by intros; ext; exact mul_smul _ _ _";
+    }
+    {
+      full_name = "Representation.ofDistribMulAction_apply_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 305;
+      code_preview = "@[simp] theorem ofDistribMulAction_apply_apply (g : G) (a : A) :     ofDistribMulAction k G A g a = g • a";
+    }
+    {
+      full_name = "Representation.ofMulDistribMulAction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 312;
+      code_preview = "def ofMulDistribMulAction : Representation ℤ M (Additive G) :=   (addMonoidEndRingEquivInt (Additive G) : AddMonoid.End (Additive G) →* _).comp     ((monoidEndToAdditive G : _ →* _).comp (MulDistribMulAction.toMonoidEnd M G))";
+    }
+    {
+      full_name = "Representation.ofMulDistribMulAction_apply_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 318;
+      code_preview = "@[simp] theorem ofMulDistribMulAction_apply_apply (g : M) (a : Additive G) :     ofMulDistribMulAction M G g a = Additive.ofMul (g • a.toMul)";
+    }
+    {
+      full_name = "Representation.ofMulAction_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 327;
+      code_preview = "@[simp] theorem ofMulAction_apply {H : Type*} [MulAction G H] (g : G) (f : H →₀ k) (h : H) :     ofMulAction k G H g f h = f (g⁻¹ • h)";
+    }
+    {
+      full_name = "Representation.ofMulAction_self_smul_eq_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 343;
+      code_preview = "theorem ofMulAction_self_smul_eq_mul (x : MonoidAlgebra k G) (y : (ofMulAction k G G).asModule) :     x • y = (x * y : MonoidAlgebra k G)";
+    }
+    {
+      full_name = "Representation.ofMulActionSelfAsModuleEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 360;
+      code_preview = "@[simps] noncomputable def ofMulActionSelfAsModuleEquiv :     (ofMulAction k G G).asModule ≃ₗ[MonoidAlgebra k G] MonoidAlgebra k G :=   { (asModuleEquiv _).toAddEquiv with map_smul' := ofMulAction_self_smul_eq_mul }";
+    }
+    {
+      full_name = "Representation.asGroupHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 368;
+      code_preview = "def asGroupHom : G →* Units (V →ₗ[k] V) :=   MonoidHom.toHomUnits ρ";
+    }
+    {
+      full_name = "Representation.asGroupHom_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 374;
+      code_preview = "theorem asGroupHom_apply (g : G) : ↑(asGroupHom ρ g) = ρ g";
+    }
+    {
+      full_name = "Representation.tprod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 387;
+      code_preview = "noncomputable def tprod : Representation k G (V ⊗[k] W) where   toFun g := TensorProduct.map (ρV g) (ρW g)   map_one' := by simp only [map_one, TensorProduct.map_one]   map_mul' g h := by simp only [map_mul, TensorProduct.map_mul]";
+    }
+    {
+      full_name = "Representation.tprod_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 397;
+      code_preview = "@[simp] theorem tprod_apply (g : G) : (ρV ⊗ ρW) g = TensorProduct.map (ρV g) (ρW g)";
+    }
+    {
+      full_name = "Representation.smul_tprod_one_asModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 401;
+      code_preview = "theorem smul_tprod_one_asModule (r : MonoidAlgebra k G) (x : V) (y : W) :     let x' : ρV.asModule := x     let z : (ρV.tprod 1).asModule := x ⊗ₜ y     r • z = (r • x') ⊗ₜ y";
+    }
+    {
+      full_name = "Representation.smul_one_tprod_asModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 412;
+      code_preview = "theorem smul_one_tprod_asModule (r : MonoidAlgebra k G) (x : V) (y : W) :     let y' : ρW.asModule := y     let z : (1 ⊗ ρW).asModule := x ⊗ₜ y     r • z = x ⊗ₜ (r • y')";
+    }
+    {
+      full_name = "Representation.linHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 430;
+      code_preview = "def linHom : Representation k G (V →ₗ[k] W) where   toFun g :=     { toFun := fun f => ρW g ∘ₗ f ∘ₗ ρV g⁻¹       map_add' := fun f₁ f₂ => by simp_rw [add_comp, comp_add]       map_smul' := fun r f => by simp_rw [RingHom.id_apply, smul_comp, comp_smul] }   map_one' := ext fun x => by simp [Module.End";
+    }
+    {
+      full_name = "Representation.linHom_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 441;
+      code_preview = "@[simp] theorem linHom_apply (g : G) (f : V →ₗ[k] W) : (linHom ρV ρW) g f = ρW g ∘ₗ f ∘ₗ ρV g⁻¹";
+    }
+    {
+      full_name = "Representation.dual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 445;
+      code_preview = "def dual : Representation k G (Module.Dual k V) where   toFun g :=     { toFun := fun f => f ∘ₗ ρV g⁻¹       map_add' := fun f₁ f₂ => by simp only [add_comp]       map_smul' := fun r f => by         ext         simp only [coe_comp, Function.comp_apply, smul_apply, RingHom.id_apply] }   map_one' := b";
+    }
+    {
+      full_name = "Representation.dual_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 458;
+      code_preview = "@[simp] theorem dual_apply (g : G) : (dual ρV) g = Module.Dual.transpose (R := k) (ρV g⁻¹)";
+    }
+    {
+      full_name = "Representation.dualTensorHom_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Basic.lean";
+      start_line = 462;
+      code_preview = "theorem dualTensorHom_comm (g : G) :     dualTensorHom k V W ∘ₗ TensorProduct.map (ρV.dual g) (ρW g) =       (linHom ρV ρW) g ∘ₗ dualTensorHom k V W";
+    }
+    {
+      full_name = "Rep";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 37;
+      code_preview = "abbrev Rep (k G : Type u) [Ring k] [Monoid G] :=   Action (ModuleCat.{u} k) G";
+    }
+    {
+      full_name = "Rep.ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 61;
+      code_preview = "def ρ (V : Rep k G) : Representation k G V := (ModuleCat.endRingEquiv V.V).toMonoidHom.comp (Action.ρ V)";
+    }
+    {
+      full_name = "Rep.of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 67;
+      code_preview = "abbrev of {V : Type u} [AddCommGroup V] [Module k V] (ρ : G →* V →ₗ[k] V) : Rep k G :=   ⟨ModuleCat.of k V, (ModuleCat.endRingEquiv _).symm.toMonoidHom.comp ρ⟩";
+    }
+    {
+      full_name = "Rep.coe_of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 71;
+      code_preview = "theorem coe_of {V : Type u} [AddCommGroup V] [Module k V] (ρ : G →* V →ₗ[k] V) :     (of ρ : Type u) = V";
+    }
+    {
+      full_name = "Rep.of_ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 75;
+      code_preview = "@[simp] theorem of_ρ {V : Type u} [AddCommGroup V] [Module k V] (ρ : G →* V →ₗ[k] V) : (of ρ).ρ = ρ";
+    }
+    {
+      full_name = "Rep.Action_ρ_eq_ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 79;
+      code_preview = "theorem Action_ρ_eq_ρ {A : Rep k G} :     Action.ρ A = (ModuleCat.endRingEquiv _).symm.toMonoidHom.comp A.ρ";
+    }
+    {
+      full_name = "Rep.ρ_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 83;
+      code_preview = "@[simp] lemma ρ_hom {X : Rep k G} (g : G) : (Action.ρ X g).hom = X.ρ g := rfl";
+    }
+    {
+      full_name = "Rep.ofHom_ρ";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 86;
+      code_preview = "@[simp] lemma ofHom_ρ {X : Rep k G} (g : G) : ModuleCat.ofHom (X.ρ g) = Action.ρ X g := rfl";
+    }
+    {
+      full_name = "Rep.ρ_inv_self_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 89;
+      code_preview = "@[simp] theorem ρ_inv_self_apply {G : Type u} [Group G] (A : Rep k G) (g : G) (x : A) :     A.ρ g⁻¹ (A.ρ g x) = x";
+    }
+    {
+      full_name = "Rep.ρ_self_inv_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 94;
+      code_preview = "@[simp] theorem ρ_self_inv_apply {G : Type u} [Group G] {A : Rep k G} (g : G) (x : A) :     A.ρ g (A.ρ g⁻¹ x) = x";
+    }
+    {
+      full_name = "Rep.hom_comm_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 99;
+      code_preview = "theorem hom_comm_apply {A B : Rep k G} (f : A ⟶ B) (g : G) (x : A) :     f.hom (A.ρ g x) = B.ρ g (f.hom x)";
+    }
+    {
+      full_name = "Rep.trivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 105;
+      code_preview = "abbrev trivial (V : Type u) [AddCommGroup V] [Module k V] : Rep k G :=   Rep.of (Representation.trivial k G V)";
+    }
+    {
+      full_name = "Rep.trivial_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 111;
+      code_preview = "theorem trivial_def {V : Type u} [AddCommGroup V] [Module k V] (g : G) :     (trivial k G V).ρ g = LinearMap.id";
+    }
+    {
+      full_name = "Rep.IsTrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 115;
+      code_preview = "abbrev IsTrivial (A : Rep k G) := A.ρ.IsTrivial";
+    }
+    {
+      full_name = "Rep.epi_iff_surjective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 131;
+      code_preview = "theorem epi_iff_surjective {A B : Rep k G} (f : A ⟶ B) : Epi f ↔ Function.Surjective f.hom";
+    }
+    {
+      full_name = "Rep.mono_iff_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 136;
+      code_preview = "theorem mono_iff_injective {A B : Rep k G} (f : A ⟶ B) : Mono f ↔ Function.Injective f.hom";
+    }
+    {
+      full_name = "Rep.tensor_ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 142;
+      code_preview = "@[simp] theorem tensor_ρ {A B : Rep k G} : (A ⊗ B).ρ = A.ρ.tprod B.ρ";
+    }
+    {
+      full_name = "Rep.res_obj_ρ";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 145;
+      code_preview = "@[simp] lemma res_obj_ρ {H : Type u} [Monoid H] (f : G →* H) (A : Rep k H) (g : G) :     DFunLike.coe (F := G →* (A →ₗ[k] A)) (ρ ((Action.res _ f).obj A)) g = A.ρ (f g) := rfl";
+    }
+    {
+      full_name = "Rep.linearization";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 153;
+      code_preview = "noncomputable def linearization : (Action (Type u) G) ⥤ (Rep k G) :=   (ModuleCat.free k).mapAction G";
+    }
+    {
+      full_name = "Rep.linearization_obj_ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 164;
+      code_preview = "@[simp] theorem linearization_obj_ρ (X : Action (Type u) G) (g : G) (x : X.V →₀ k) :     ((linearization k G).obj X).ρ g x = Finsupp.lmapDomain k k (X.ρ g) x";
+    }
+    {
+      full_name = "Rep.linearization_of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 169;
+      code_preview = "theorem linearization_of (X : Action (Type u) G) (g : G) (x : X.V) :     ((linearization k G).obj X).ρ g (Finsupp.single x (1 : k))       = Finsupp.single (X.ρ g x) (1 : k)";
+    }
+    {
+      full_name = "Rep.linearization_single";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 175;
+      code_preview = "theorem linearization_single (X : Action (Type u) G) (g : G) (x : X.V) (r : k) :     ((linearization k G).obj X).ρ g (Finsupp.single x r) = Finsupp.single (X.ρ g x) r";
+    }
+    {
+      full_name = "Rep.linearization_map_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 181;
+      code_preview = "@[simp] theorem linearization_map_hom : ((linearization k G).map f).hom =     ModuleCat.ofHom (Finsupp.lmapDomain k k f.hom)";
+    }
+    {
+      full_name = "Rep.linearization_map_hom_single";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 186;
+      code_preview = "theorem linearization_map_hom_single (x : X.V) (r : k) :     ((linearization k G).map f).hom (Finsupp.single x r) = Finsupp.single (f.hom x) r";
+    }
+    {
+      full_name = "Rep.linearization_μ_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 192;
+      code_preview = "@[simp] theorem linearization_μ_hom (X Y : Action (Type u) G) :     (μ (linearization k G) X Y).hom =       ModuleCat.ofHom (finsuppTensorFinsupp' k X.V Y.V).toLinearMap";
+    }
+    {
+      full_name = "Rep.linearization_δ_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 198;
+      code_preview = "@[simp] theorem linearization_δ_hom (X Y : Action (Type u) G) :     (δ (linearization k G) X Y).hom =       ModuleCat.ofHom (finsuppTensorFinsupp' k X.V Y.V).symm.toLinearMap";
+    }
+    {
+      full_name = "Rep.linearization_ε_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 204;
+      code_preview = "@[simp] theorem linearization_ε_hom : (ε (linearization k G)).hom =     ModuleCat.ofHom (Finsupp.lsingle PUnit.unit)";
+    }
+    {
+      full_name = "Rep.linearization_η_hom_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 209;
+      code_preview = "theorem linearization_η_hom_apply (r : k) :     (η (linearization k G)).hom (Finsupp.single PUnit.unit r) = r";
+    }
+    {
+      full_name = "Rep.linearizationTrivialIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 215;
+      code_preview = "@[simps!] noncomputable def linearizationTrivialIso (X : Type u) :     (linearization k G).obj (Action.mk X 1) ≅ trivial k G (X →₀ k) :=   Action.mkIso (Iso.refl _) fun _ => ModuleCat.hom_ext <| Finsupp.lhom_ext' fun _ => LinearMap.ext     fun _ => linearization_single ..";
+    }
+    {
+      full_name = "Rep.ofMulAction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 223;
+      code_preview = "noncomputable abbrev ofMulAction (H : Type u) [MulAction G H] : Rep k G :=   of <| Representation.ofMulAction k G H";
+    }
+    {
+      full_name = "Rep.leftRegular";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 228;
+      code_preview = "noncomputable abbrev leftRegular : Rep k G :=   ofMulAction k G G";
+    }
+    {
+      full_name = "Rep.diagonal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 232;
+      code_preview = "noncomputable def diagonal (n : ℕ) : Rep k G :=   ofMulAction k G (Fin n → G)";
+    }
+    {
+      full_name = "Rep.linearizationOfMulActionIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 236;
+      code_preview = "noncomputable def linearizationOfMulActionIso (H : Type u) [MulAction G H] :     (linearization k G).obj (Action.ofMulAction G H) ≅ ofMulAction k G H :=   Iso.refl _";
+    }
+    {
+      full_name = "Rep.ofDistribMulAction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 247;
+      code_preview = "def ofDistribMulAction : Rep k G := Rep.of (Representation.ofDistribMulAction k G A)";
+    }
+    {
+      full_name = "Rep.ofDistribMulAction_ρ_apply_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 251;
+      code_preview = "@[simp] theorem ofDistribMulAction_ρ_apply_apply (g : G) (a : A) :     (ofDistribMulAction k G A).ρ g a = g • a";
+    }
+    {
+      full_name = "Rep.ofAlgebraAut";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 254;
+      code_preview = "@[simp] def ofAlgebraAut (R S : Type) [CommRing R] [CommRing S] [Algebra R S] :     Rep ℤ (S ≃ₐ[R] S) := ofDistribMulAction ℤ (S ≃ₐ[R] S) S";
+    }
+    {
+      full_name = "Rep.ofMulDistribMulAction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 263;
+      code_preview = "def ofMulDistribMulAction : Rep ℤ M := Rep.of (Representation.ofMulDistribMulAction M G)";
+    }
+    {
+      full_name = "Rep.ofMulDistribMulAction_ρ_apply_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 267;
+      code_preview = "@[simp] theorem ofMulDistribMulAction_ρ_apply_apply (g : M) (a : Additive G) :     (ofMulDistribMulAction M G).ρ g a = Additive.ofMul (g • a.toMul)";
+    }
+    {
+      full_name = "Rep.ofAlgebraAutOnUnits";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 270;
+      code_preview = "@[simp] def ofAlgebraAutOnUnits (R S : Type) [CommRing R] [CommRing S] [Algebra R S] :     Rep ℤ (S ≃ₐ[R] S) := Rep.ofMulDistribMulAction (S ≃ₐ[R] S) Sˣ";
+    }
+    {
+      full_name = "Rep.leftRegularHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 279;
+      code_preview = "@[simps] def leftRegularHom (A : Rep k G) (x : A) : leftRegular k G ⟶ A where   hom := ModuleCat.ofHom <| Finsupp.lift A k G fun g => A.ρ g x   comm _ := by ext; simp [ModuleCat.endRingEquiv]";
+    }
+    {
+      full_name = "Rep.leftRegularHom_hom_single";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 286;
+      code_preview = "theorem leftRegularHom_hom_single {A : Rep k G} (g : G) (x : A) (r : k) :     (leftRegularHom A x).hom (Finsupp.single g r) = r • A.ρ g x";
+    }
+    {
+      full_name = "Rep.leftRegularHomEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 289;
+      code_preview = "@[simps] noncomputable def leftRegularHomEquiv (A : Rep k G) : (leftRegular k G ⟶ A) ≃ₗ[k] A where   toFun f := f.hom (Finsupp.single 1 1)   map_add' _ _ := rfl   map_smul' _ _ := rfl   invFun x := leftRegularHom A x   left_inv f := by ext; simp [← hom_comm_apply f]   right_inv x := by simp";
+    }
+    {
+      full_name = "Rep.leftRegularHomEquiv_symm_single";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 300;
+      code_preview = "theorem leftRegularHomEquiv_symm_single {A : Rep k G} (x : A) (g : G) :     ((leftRegularHomEquiv A).symm x).hom (Finsupp.single g 1) = A.ρ g x";
+    }
+    {
+      full_name = "Rep.ihom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 313;
+      code_preview = "@[simps] protected def ihom (A : Rep k G) : Rep k G ⥤ Rep k G where   obj B := Rep.of (Representation.linHom A.ρ B.ρ)   map := fun {X} {Y} f =>     { hom := ModuleCat.ofHom (LinearMap.llcomp k _ _ _ f.hom.hom)       comm g := by ext; simp [ModuleCat.endRingEquiv, hom_comm_apply] }   map_id := fun _ ";
+    }
+    {
+      full_name = "Rep.ihom_obj_ρ_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 325;
+      code_preview = "@[simp] theorem ihom_obj_ρ_apply {A B : Rep k G} (g : G) (x : A →ₗ[k] B) :     DFunLike.coe (F := (Representation k G (↑A.V →ₗ[k] ↑B.V)))     ((Rep.ihom A).obj B).ρ g x = B.ρ g ∘ₗ x ∘ₗ A.ρ g⁻¹";
+    }
+    {
+      full_name = "Rep.homEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 331;
+      code_preview = "def homEquiv (A B C : Rep k G) : (A ⊗ B ⟶ C) ≃ (B ⟶ (Rep.ihom A).obj C) where   toFun f :=     { hom := ModuleCat.ofHom <| (TensorProduct.curry f.hom.hom).flip       comm g := ModuleCat.hom_ext <| LinearMap.ext fun x => LinearMap.ext fun y => by         simpa [ModuleCat.MonoidalCategory.instMonoidal";
+    }
+    {
+      full_name = "Rep.homEquiv_apply_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 350;
+      code_preview = "theorem homEquiv_apply_hom (f : A ⊗ B ⟶ C) :     (homEquiv A B C f).hom = ModuleCat.ofHom (TensorProduct.curry f.hom.hom).flip";
+    }
+    {
+      full_name = "Rep.homEquiv_symm_apply_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 355;
+      code_preview = "theorem homEquiv_symm_apply_hom (f : B ⟶ (Rep.ihom A).obj C) :     ((homEquiv A B C).symm f).hom =       ModuleCat.ofHom (TensorProduct.uncurry k A B C f.hom.hom.flip)";
+    }
+    {
+      full_name = "Rep.ihom_obj_ρ_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 371;
+      code_preview = "@[simp] theorem ihom_obj_ρ_def (A B : Rep k G) : ((ihom A).obj B).ρ = ((Rep.ihom A).obj B).ρ";
+    }
+    {
+      full_name = "Rep.homEquiv_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 375;
+      code_preview = "@[simp] theorem homEquiv_def (A B C : Rep k G) : (ihom.adjunction A).homEquiv B C = Rep.homEquiv A B C";
+    }
+    {
+      full_name = "Rep.ihom_ev_app_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 379;
+      code_preview = "@[simp] theorem ihom_ev_app_hom (A B : Rep k G) :     Action.Hom.hom ((ihom.ev A).app B) = ModuleCat.ofHom       (TensorProduct.uncurry k A (A →ₗ[k] B) B LinearMap.id.flip)";
+    }
+    {
+      full_name = "Rep.ihom_coev_app_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 385;
+      code_preview = "@[simp] theorem ihom_coev_app_hom (A B : Rep k G) :     Action.Hom.hom ((ihom.coev A).app B) = ModuleCat.ofHom (TensorProduct.mk k _ _).flip";
+    }
+    {
+      full_name = "Rep.MonoidalClosed.linearHomEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 391;
+      code_preview = "def MonoidalClosed.linearHomEquiv : (A ⊗ B ⟶ C) ≃ₗ[k] B ⟶ A ⟶[Rep k G] C :=   { (ihom.adjunction A).homEquiv _ _ with     map_add' := fun _ _ => rfl     map_smul' := fun _ _ => rfl }";
+    }
+    {
+      full_name = "Rep.MonoidalClosed.linearHomEquivComm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 398;
+      code_preview = "def MonoidalClosed.linearHomEquivComm : (A ⊗ B ⟶ C) ≃ₗ[k] A ⟶ B ⟶[Rep k G] C :=   Linear.homCongr k (β_ A B) (Iso.refl _) ≪≫ₗ MonoidalClosed.linearHomEquiv _ _ _";
+    }
+    {
+      full_name = "Rep.MonoidalClosed.linearHomEquiv_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 405;
+      code_preview = "@[simp] theorem MonoidalClosed.linearHomEquiv_hom (f : A ⊗ B ⟶ C) :     (MonoidalClosed.linearHomEquiv A B C f).hom =       ModuleCat.ofHom (TensorProduct.curry f.hom.hom).flip";
+    }
+    {
+      full_name = "Rep.MonoidalClosed.linearHomEquivComm_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 411;
+      code_preview = "@[simp] theorem MonoidalClosed.linearHomEquivComm_hom (f : A ⊗ B ⟶ C) :     (MonoidalClosed.linearHomEquivComm A B C f).hom =       ModuleCat.ofHom (TensorProduct.curry f.hom.hom)";
+    }
+    {
+      full_name = "Rep.MonoidalClosed.linearHomEquiv_symm_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 417;
+      code_preview = "theorem MonoidalClosed.linearHomEquiv_symm_hom (f : B ⟶ A ⟶[Rep k G] C) :     ((MonoidalClosed.linearHomEquiv A B C).symm f).hom =       ModuleCat.ofHom (TensorProduct.uncurry k A B C f.hom.hom.flip)";
+    }
+    {
+      full_name = "Rep.MonoidalClosed.linearHomEquivComm_symm_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 423;
+      code_preview = "theorem MonoidalClosed.linearHomEquivComm_symm_hom (f : A ⟶ B ⟶[Rep k G] C) :     ((MonoidalClosed.linearHomEquivComm A B C).symm f).hom =       ModuleCat.ofHom (TensorProduct.uncurry k A B C f.hom.hom)";
+    }
+    {
+      full_name = "Representation.repOfTprodIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 437;
+      code_preview = "def repOfTprodIso : Rep.of (ρ.tprod τ) ≅ Rep.of ρ ⊗ Rep.of τ :=   Iso.refl _";
+    }
+    {
+      full_name = "Representation.repOfTprodIso_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 441;
+      code_preview = "theorem repOfTprodIso_apply (x : TensorProduct k V W) : (repOfTprodIso ρ τ).hom.hom x = x";
+    }
+    {
+      full_name = "Representation.repOfTprodIso_inv_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 444;
+      code_preview = "theorem repOfTprodIso_inv_apply (x : TensorProduct k V W) : (repOfTprodIso ρ τ).inv.hom x = x";
+    }
+    {
+      full_name = "Rep.to_Module_monoidAlgebra_map_aux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 467;
+      code_preview = "theorem to_Module_monoidAlgebra_map_aux {k G : Type*} [CommRing k] [Monoid G] (V W : Type*)     [AddCommGroup V] [AddCommGroup W] [Module k V] [Module k W] (ρ : G →* V →ₗ[k] V)     (σ : G →* W →ₗ[k] W) (f : V →ₗ[k] W) (w : ∀ g : G, f.comp (ρ g) = (σ g).comp f)     (r : MonoidAlgebra k G) (x : V) :  ";
+    }
+    {
+      full_name = "Rep.toModuleMonoidAlgebraMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 482;
+      code_preview = "def toModuleMonoidAlgebraMap {V W : Rep k G} (f : V ⟶ W) :     ModuleCat.of (MonoidAlgebra k G) V.ρ.asModule ⟶ ModuleCat.of (MonoidAlgebra k G) W.ρ.asModule :=   ModuleCat.ofHom     { f.hom.hom with       map_smul' := fun r x => to_Module_monoidAlgebra_map_aux V.V W.V V.ρ W.ρ f.hom.hom         (fun ";
+    }
+    {
+      full_name = "Rep.toModuleMonoidAlgebra";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 490;
+      code_preview = "def toModuleMonoidAlgebra : Rep k G ⥤ ModuleCat.{u} (MonoidAlgebra k G) where   obj V := ModuleCat.of _ V.ρ.asModule   map f := toModuleMonoidAlgebraMap f";
+    }
+    {
+      full_name = "Rep.ofModuleMonoidAlgebra";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 495;
+      code_preview = "def ofModuleMonoidAlgebra : ModuleCat.{u} (MonoidAlgebra k G) ⥤ Rep k G where   obj M := Rep.of (Representation.ofModule M)   map f :=     { hom := ModuleCat.ofHom         { f.hom with           map_smul' := fun r x => f.hom.map_smul (algebraMap k _ r) x }       comm := fun g => by ext; apply f.hom.";
+    }
+    {
+      full_name = "Rep.ofModuleMonoidAlgebra_obj_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 504;
+      code_preview = "theorem ofModuleMonoidAlgebra_obj_coe (M : ModuleCat.{u} (MonoidAlgebra k G)) :     (ofModuleMonoidAlgebra.obj M : Type u) = RestrictScalars k (MonoidAlgebra k G) M";
+    }
+    {
+      full_name = "Rep.ofModuleMonoidAlgebra_obj_ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 508;
+      code_preview = "theorem ofModuleMonoidAlgebra_obj_ρ (M : ModuleCat.{u} (MonoidAlgebra k G)) :     (ofModuleMonoidAlgebra.obj M).ρ = Representation.ofModule M";
+    }
+    {
+      full_name = "Rep.counitIsoAddEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 512;
+      code_preview = "def counitIsoAddEquiv {M : ModuleCat.{u} (MonoidAlgebra k G)} :     (ofModuleMonoidAlgebra ⋙ toModuleMonoidAlgebra).obj M ≃+ M := by   dsimp [ofModuleMonoidAlgebra, toModuleMonoidAlgebra]   exact (Representation.ofModule M).asModuleEquiv.toAddEquiv.trans     (RestrictScalars.addEquiv k (MonoidAlgebr";
+    }
+    {
+      full_name = "Rep.unitIsoAddEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 519;
+      code_preview = "def unitIsoAddEquiv {V : Rep k G} : V ≃+ (toModuleMonoidAlgebra ⋙ ofModuleMonoidAlgebra).obj V := by   dsimp [ofModuleMonoidAlgebra, toModuleMonoidAlgebra]   exact V.ρ.asModuleEquiv.symm.toAddEquiv.trans (RestrictScalars.addEquiv _ _ _).symm";
+    }
+    {
+      full_name = "Rep.counitIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 524;
+      code_preview = "def counitIso (M : ModuleCat.{u} (MonoidAlgebra k G)) :     (ofModuleMonoidAlgebra ⋙ toModuleMonoidAlgebra).obj M ≅ M :=   LinearEquiv.toModuleIso     { counitIsoAddEquiv with       map_smul' := fun r x => by         dsimp [counitIsoAddEquiv]         erw [@Representation.ofModule_asAlgebraHom_apply_";
+    }
+    {
+      full_name = "Rep.unit_iso_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 534;
+      code_preview = "theorem unit_iso_comm (V : Rep k G) (g : G) (x : V) :     unitIsoAddEquiv ((V.ρ g).toFun x) = ((ofModuleMonoidAlgebra.obj       (toModuleMonoidAlgebra.obj V)).ρ g).toFun (unitIsoAddEquiv x)";
+    }
+    {
+      full_name = "Rep.unitIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 539;
+      code_preview = "def unitIso (V : Rep k G) : V ≅ (toModuleMonoidAlgebra ⋙ ofModuleMonoidAlgebra).obj V :=   Action.mkIso     (LinearEquiv.toModuleIso       { unitIsoAddEquiv with         map_smul' := fun r x => by           change (RestrictScalars.addEquiv _ _ _).symm (V.ρ.asModuleEquiv.symm (r • x)) = _           s";
+    }
+    {
+      full_name = "Rep.equivalenceModuleMonoidAlgebra";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Rep.lean";
+      start_line = 550;
+      code_preview = "def equivalenceModuleMonoidAlgebra : Rep k G ≌ ModuleCat.{u} (MonoidAlgebra k G) where   functor := toModuleMonoidAlgebra   inverse := ofModuleMonoidAlgebra   unitIso := NatIso.ofComponents (fun V => unitIso V) (by aesop_cat)   counitIso := NatIso.ofComponents (fun M => counitIso M) (by aesop_cat)";
+    }
+    {
+      full_name = "FDRep";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 55;
+      code_preview = "abbrev FDRep (R G : Type u) [Ring R] [Monoid G] :=   Action (FGModuleCat R) G";
+    }
+    {
+      full_name = "FDRep.ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 96;
+      code_preview = "def ρ (V : FDRep R G) : G →* V →ₗ[R] V :=   (ModuleCat.endRingEquiv _).toMonoidHom.comp (Action.ρ V)";
+    }
+    {
+      full_name = "FDRep.endRingEquiv_symm_comp_ρ";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 100;
+      code_preview = "@[simp] lemma endRingEquiv_symm_comp_ρ (V : FDRep R G) :     (MonoidHomClass.toMonoidHom (ModuleCat.endRingEquiv V.V.obj).symm).comp (ρ V) =       (Action.ρ V) :=   rfl";
+    }
+    {
+      full_name = "FDRep.endRingEquiv_comp_ρ";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 106;
+      code_preview = "@[simp] lemma endRingEquiv_comp_ρ (V : FDRep R G) :     (MonoidHomClass.toMonoidHom (ModuleCat.endRingEquiv V.V.obj)).comp (Action.ρ V) = ρ V := rfl";
+    }
+    {
+      full_name = "FDRep.hom_action_ρ";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 110;
+      code_preview = "@[simp] lemma hom_action_ρ (V : FDRep R G) (g : G) : (Action.ρ V g).hom = ρ V g := rfl";
+    }
+    {
+      full_name = "FDRep.isoToLinearEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 113;
+      code_preview = "def isoToLinearEquiv {V W : FDRep R G} (i : V ≅ W) : V ≃ₗ[R] W :=   FGModuleCat.isoToLinearEquiv ((Action.forget (FGModuleCat R) G).mapIso i)";
+    }
+    {
+      full_name = "FDRep.Iso.conj_ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 117;
+      code_preview = "theorem Iso.conj_ρ {V W : FDRep R G} (i : V ≅ W) (g : G) :     W.ρ g = (FDRep.isoToLinearEquiv i).conj (V.ρ g)";
+    }
+    {
+      full_name = "FDRep.of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 124;
+      code_preview = "@[simps ρ] abbrev of {V : Type u} [AddCommGroup V] [Module R V] [Module.Finite R V]     (ρ : Representation R G V) : FDRep R G :=   ⟨FGModuleCat.of R V, (ModuleCat.endRingEquiv _).symm.toMonoidHom.comp ρ⟩";
+    }
+    {
+      full_name = "FDRep.of_ρ'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 130;
+      code_preview = "@[simp] theorem of_ρ' {V : Type u} [AddCommGroup V] [Module R V] [Module.Finite R V] (ρ : G →* V →ₗ[R] V) :     (of ρ).ρ = ρ";
+    }
+    {
+      full_name = "FDRep.ρ_inv_self_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 135;
+      code_preview = "@[simp] theorem ρ_inv_self_apply {G : Type u} [Group G] {A : FDRep R G} (g : G) (x : A) :     A.ρ g⁻¹ (A.ρ g x) = x";
+    }
+    {
+      full_name = "FDRep.ρ_self_inv_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 140;
+      code_preview = "@[simp] theorem ρ_self_inv_apply {G : Type u} [Group G] {A : FDRep R G} (g : G) (x : A) :     A.ρ g (A.ρ g⁻¹ x) = x";
+    }
+    {
+      full_name = "FDRep.forget₂_ρ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 148;
+      code_preview = "theorem forget₂_ρ (V : FDRep R G) : ((forget₂ (FDRep R G) (Rep R G)).obj V).ρ = V.ρ";
+    }
+    {
+      full_name = "FDRep.finrank_hom_simple_simple";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 165;
+      code_preview = "theorem finrank_hom_simple_simple [IsAlgClosed k] (V W : FDRep k G) [Simple V] [Simple W] :     finrank k (V ⟶ W) = if Nonempty (V ≅ W) then 1 else 0";
+    }
+    {
+      full_name = "FDRep.forget₂HomLinearEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 171;
+      code_preview = "def forget₂HomLinearEquiv (X Y : FDRep R G) :     ((forget₂ (FDRep R G) (Rep R G)).obj X ⟶       (forget₂ (FDRep R G) (Rep R G)).obj Y) ≃ₗ[R] X ⟶ Y where   toFun f := ⟨f.hom, f.comm⟩   map_add' _ _ := rfl   map_smul' _ _ := rfl   invFun f := ⟨(forget₂ (FGModuleCat R) (ModuleCat R)).map f.hom, f.comm";
+    }
+    {
+      full_name = "FDRep.dualTensorIsoLinHomAux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 212;
+      code_preview = "noncomputable def dualTensorIsoLinHomAux :     (FDRep.of ρV.dual ⊗ W).V ≅ (FDRep.of (linHom ρV W.ρ)).V :=   LinearEquiv.toFGModuleCatIso (V := (FDRep.of ρV.dual ⊗ W).V) (dualTensorHomEquiv k V W)";
+    }
+    {
+      full_name = "FDRep.dualTensorIsoLinHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 218;
+      code_preview = "noncomputable def dualTensorIsoLinHom : FDRep.of ρV.dual ⊗ W ≅ FDRep.of (linHom ρV W.ρ) := by   refine Action.mkIso (dualTensorIsoLinHomAux ρV W) (fun g => ?_)   ext : 1   exact dualTensorHom_comm ρV W.ρ g";
+    }
+    {
+      full_name = "FDRep.dualTensorIsoLinHom_hom_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/FDRep.lean";
+      start_line = 225;
+      code_preview = "@[simp] theorem dualTensorIsoLinHom_hom_hom :     (dualTensorIsoLinHom ρV W).hom.hom = ModuleCat.ofHom (dualTensorHom k V W)";
+    }
+    {
+      full_name = "GroupAlgebra.average";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 34;
+      code_preview = "noncomputable def average : MonoidAlgebra k G :=   ⅟ (Fintype.card G : k) • ∑ g : G, of k G g";
+    }
+    {
+      full_name = "GroupAlgebra.mul_average_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 39;
+      code_preview = "@[simp] theorem mul_average_left (g : G) : ↑(Finsupp.single g 1) * average k G = average k G";
+    }
+    {
+      full_name = "GroupAlgebra.mul_average_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 49;
+      code_preview = "@[simp] theorem mul_average_right (g : G) : average k G * ↑(Finsupp.single g 1) = average k G";
+    }
+    {
+      full_name = "Representation.invariants";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 70;
+      code_preview = "def invariants : Submodule k V where   carrier := setOf fun v => ∀ g : G, ρ g v = v   zero_mem' g := by simp only [map_zero]   add_mem' hv hw g := by simp only [hv g, hw g, map_add]   smul_mem' r v hv g := by simp only [hv g, LinearMap.map_smulₛₗ, RingHom.id_apply]";
+    }
+    {
+      full_name = "Representation.mem_invariants";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 78;
+      code_preview = "@[simp] theorem mem_invariants (v : V) : v ∈ invariants ρ ↔ ∀ g : G, ρ g v = v";
+    }
+    {
+      full_name = "Representation.invariants_eq_inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 81;
+      code_preview = "theorem invariants_eq_inter : (invariants ρ).carrier = ⋂ g : G, Function.fixedPoints (ρ g)";
+    }
+    {
+      full_name = "Representation.invariants_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 84;
+      code_preview = "theorem invariants_eq_top [ρ.IsTrivial] :     invariants ρ = ⊤";
+    }
+    {
+      full_name = "Representation.averageMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 90;
+      code_preview = "@[simp] noncomputable def averageMap : V →ₗ[k] V :=   asAlgebraHom ρ (average k G)";
+    }
+    {
+      full_name = "Representation.averageMap_invariant";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 96;
+      code_preview = "theorem averageMap_invariant (v : V) : averageMap ρ v ∈ invariants ρ";
+    }
+    {
+      full_name = "Representation.averageMap_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 102;
+      code_preview = "theorem averageMap_id (v : V) (hv : v ∈ invariants ρ) : averageMap ρ v = v";
+    }
+    {
+      full_name = "Representation.isProj_averageMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 108;
+      code_preview = "theorem isProj_averageMap : LinearMap.IsProj ρ.invariants ρ.averageMap";
+    }
+    {
+      full_name = "Representation.linHom.mem_invariants_iff_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 121;
+      code_preview = "theorem mem_invariants_iff_comm {X Y : Rep k G} (f : X.V →ₗ[k] Y.V) (g : G) :     (linHom X.ρ Y.ρ) g f = f ↔ f.comp (X.ρ g) = (Y.ρ g).comp f";
+    }
+    {
+      full_name = "Representation.linHom.invariantsEquivRepHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 131;
+      code_preview = "@[simps] def invariantsEquivRepHom (X Y : Rep k G) : (linHom X.ρ Y.ρ).invariants ≃ₗ[k] X ⟶ Y where   toFun f := ⟨ModuleCat.ofHom f.val, fun g =>     ModuleCat.hom_ext ((mem_invariants_iff_comm _ g).1 (f.property g))⟩   map_add' _ _ := rfl   map_smul' _ _ := rfl   invFun f := ⟨f.hom.hom, fun g =>    ";
+    }
+    {
+      full_name = "Representation.linHom.invariantsEquivFDRepHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 150;
+      code_preview = "def invariantsEquivFDRepHom (X Y : FDRep k G) : (linHom X.ρ Y.ρ).invariants ≃ₗ[k] X ⟶ Y := by   rw [← FDRep.forget₂_ρ, ← FDRep.forget₂_ρ]   exact linHom.invariantsEquivRepHom     ((forget₂ (FDRep k G) (Rep k G)).obj X) ((forget₂ (FDRep k G) (Rep k G)).obj Y) ≪≫ₗ     FDRep.forget₂HomLinearEquiv X Y";
+    }
+    {
+      full_name = "Rep.invariantsFunctor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Invariants.lean";
+      start_line = 171;
+      code_preview = "@[simps] noncomputable def invariantsFunctor : Rep k G ⥤ ModuleCat k where   obj A := ModuleCat.of k A.ρ.invariants   map {A B} f := ModuleCat.ofHom <| (f.hom.hom ∘ₗ A.ρ.invariants.subtype).codRestrict     B.ρ.invariants fun ⟨c, hc⟩ g => by       have := (hom_comm_apply f g c).symm       simp_all [h";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.forget";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 42;
+      code_preview = "def forget := LaxMonoidalFunctor.of (forget₂ (FDRep k G) (FGModuleCat k))";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.forget_obj";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 45;
+      code_preview = "@[simp] lemma forget_obj (X : FDRep k G) : (forget k G).obj X = X.V := rfl";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.forget_map";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 47;
+      code_preview = "@[simp] lemma forget_map (X Y : FDRep k G) (f : X ⟶ Y) : (forget k G).map f = f.hom := rfl";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.equivApp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 49;
+      code_preview = "@[simps] def equivApp (g : G) (X : FDRep k G) : X.V ≅ X.V where   hom := ofHom (X.ρ g)   inv := ofHom (X.ρ g⁻¹)   hom_inv_id := by     ext x     simp   inv_hom_id := by     ext x     simp";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.equivHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 62;
+      code_preview = "@[simps] def equivHom : G →* Aut (forget k G) where   toFun g :=     LaxMonoidalFunctor.isoOfComponents (equivApp g) (fun f ↦ (f.comm g).symm) rfl (by intros; rfl)   map_one' := by ext; simp; rfl   map_mul' _ _ := by ext; simp; rfl";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.rightRegular";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 70;
+      code_preview = "def rightRegular : Representation k G (G → k) where   toFun s :=   { toFun f t := f (t * s)     map_add' _ _ := rfl     map_smul' _ _ := rfl }   map_one' := by     ext     simp   map_mul' _ _ := by     ext     simp [mul_assoc]";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.rightRegular_apply";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 83;
+      code_preview = "@[simp] lemma rightRegular_apply (s t : G) (f : G → k) : rightRegular s f t = f (t * s) := rfl";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.leftRegular";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 86;
+      code_preview = "def leftRegular : Representation k G (G → k) where   toFun s :=   { toFun f t := f (s⁻¹ * t)     map_add' _ _ := rfl     map_smul' _ _ := rfl }   map_one' := by     ext     simp   map_mul' _ _ := by     ext     simp [mul_assoc]";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.leftRegular_apply";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 99;
+      code_preview = "@[simp] lemma leftRegular_apply (s t : G) (f : G → k) : leftRegular s f t = f (s⁻¹ * t) := rfl";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.rightFDRep";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 104;
+      code_preview = "@[simp] def rightFDRep : FDRep k G := FDRep.of rightRegular";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.equivHom_injective";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 112;
+      code_preview = "lemma equivHom_injective [Nontrivial k] : Function.Injective (equivHom k G) := by   intro s t h   classical   apply_fun (fun x ↦ (x.hom.hom.app rightFDRep).hom (single t 1) 1) at h   simp_all [single_apply]";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.mulRepHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 121;
+      code_preview = "def mulRepHom : rightFDRep (k := k) (G := G) ⊗ rightFDRep ⟶ rightFDRep where   hom := ofHom (LinearMap.mul' k (G → k))   comm := by     intro     ext u     refine TensorProduct.induction_on u rfl (fun _ _ ↦ rfl) (fun _ _ hx hy ↦ ?_)     simp only [map_add, hx, hy]";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.map_mul_toRightFDRepComp";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 130;
+      code_preview = "lemma map_mul_toRightFDRepComp (η : Aut (forget k G)) (f g : G → k) :     let α : (G → k) →ₗ[k] (G → k) := (η.hom.hom.app rightFDRep).hom     α (f * g) = (α f) * (α g) := by   have nat := η.hom.hom.naturality mulRepHom   have tensor (X Y) : η.hom.hom.app (X ⊗ Y) = (η.hom.hom.app X ⊗ η.hom.hom.app Y)";
+    }
+    {
+      full_name = "TannakaDuality.FiniteGroup.algHomOfRightFDRepComp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/Tannaka.lean";
+      start_line = 141;
+      code_preview = "def algHomOfRightFDRepComp (η : Aut (forget k G)) : (G → k) →ₐ[k] (G → k) := by   let α : (G → k) →ₗ[k] (G → k) := (η.hom.hom.app rightFDRep).hom   let α_inv : (G → k) →ₗ[k] (G → k) := (η.inv.hom.app rightFDRep).hom   refine AlgHom.ofLinearMap α ?_ (map_mul_toRightFDRepComp η)   suffices α (α_inv 1)";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

@@ -1,0 +1,346 @@
+let
+  ownerName = "stdlib.nl.category-etale-cohomology-and-derived-substrate";
+
+  sheafCohom = import nl/category-sheaf-cohomology-substrate.px;
+  topos = import nl/category-topos-internal-language.px;
+
+  # === Étale Cohomology + Derived Category (agent-NL-180) ===========
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Étale cohomology / derived category 확장"
+  #
+  # 1. Étale cohomology: 보다 정밀한 topology (étale site) 위 H^n.
+  #    pnix substrate 의 étale site = "각 mode 의 atomic transition
+  #    families with explicit coherence". Sheaf cohomology 보다 finer
+  #    grained obstruction theory.
+  #
+  # 2. Derived category D(F): F (sheaf abelian category) 의 chain
+  #    complexes 의 homotopy 동치류 + localization at quasi-isomorphisms.
+  #    Receipt chain 의 derived equivalence 식별.
+
+  stepKind = "etale-and-derived-substrate";
+  framework_step =
+    "étale site H^n + D(Sheaves(Site_coding)) — finer cohomology + derived equivalence";
+
+  # =================================================================
+  # === Étale site definition ======================================
+  # =================================================================
+
+  etaleSite = {
+    site_id = "EtaleSite_coding";
+    description_en = ''
+      Étale site EtaleSite_coding refines Site_coding by:
+        - Coverings are étale morphisms (formally étale: flat +
+          unramified) between mode transitions.
+        - Objects: open substages of modes (per-language emit step,
+          per-axiom-fiber selection, etc.).
+        - Coverings: families {U_i → U} that are jointly surjective
+          via étale morphisms.
+
+      In substrate terms: étale covers allow refinement of mode m_i
+      into per-feature sub-stages, with coherence among them.
+    '';
+    underlying_site = "Site_coding (from Sheaf condition #175)";
+    refinement_kind = "étale (flat + unramified)";
+    comparison_to_grothendieck_topology = ''
+      Étale topology is FINER than the Grothendieck topology of
+      Site_coding. Every étale sheaf is automatically a Grothendieck
+      sheaf, but étale cohomology can detect finer obstructions.
+    '';
+  };
+
+  # =================================================================
+  # === Étale cohomology degrees ===================================
+  # =================================================================
+
+  etaleCohomologyDegrees = {
+    H_et_0 = {
+      degree = 0;
+      name = "H^0_ét(EtaleSite, F)";
+      meaning_en = ''
+        Étale global sections. Coincides with Sheaf H^0 when F is
+        already an étale sheaf (which holds for substrate F).
+        Operationally: receipts that survive étale refinement —
+        cross-feature consistency, not just cross-language.
+      '';
+      coincides_with_sheaf_cohomology = "H^0 — same global sections";
+      additional_finer_detection = "none — H^0 invariant under topology refinement";
+    };
+
+    H_et_1 = {
+      degree = 1;
+      name = "H^1_ét(EtaleSite, F)";
+      meaning_en = ''
+        Étale H^1: classifies "étale torsors" over F. Substrate
+        meaning: held cases that pass per-language voting (sheaf
+        H^1 trivial) but fail when refined to per-feature voting
+        (specific argument types or specific verb step-actions).
+
+        Example: cross-language agreement on "rename" verb might
+        be sheaf-trivial, but disagreement on the *scope* argument
+        of rename (file vs. module vs. global) creates an étale
+        H^1 class.
+      '';
+      finer_than_sheaf_H1 = true;
+      example_substrate_class = "scope-disagreement within agreed-verb";
+    };
+
+    H_et_2 = {
+      degree = 2;
+      name = "H^2_ét(EtaleSite, F)";
+      meaning_en = ''
+        Étale H^2: classifies Brauer-style obstructions —
+        "twisted forms" that cannot be made consistent even with
+        local étale refinement.
+
+        Substrate: meta-level disagreement about WHICH refinement
+        to apply for resolving an H_et_1 class.
+      '';
+    };
+
+    H_et_higher = {
+      degree = "n >= 3";
+      name = "H^n_ét for n >= 3";
+      conjectured_vanishing = "depends on étale cohomological dimension of EtaleSite";
+      substrate_research_status = "open — current substrate has not exercised H_et_n for n >= 3";
+    };
+  };
+
+  # =================================================================
+  # === Étale H^1 computation (refinement-aware) ====================
+  # =================================================================
+  #
+  # Operational étale H^1: cross-language receipts agree on verb but
+  # disagree on argument feature.
+
+  computeEtaleH1Obstruction = perLangVerbAgreements: perLangArgumentVotes:
+    let
+      verbAgreed = builtins.all (a: a) perLangVerbAgreements;
+      argumentDisagree =
+        let
+          uniq = lst:
+            builtins.foldl' (acc: x:
+              if builtins.elem x acc then acc else acc ++ [ x ]
+            ) [] lst;
+          distinctArgs = uniq perLangArgumentVotes;
+        in builtins.length distinctArgs > 1;
+      h_et_1_class_exists = verbAgreed && argumentDisagree;
+    in {
+      degree = "H_et_1";
+      verb_agreement_holds = verbAgreed;
+      argument_disagreement = argumentDisagree;
+      etale_h1_class_exists = h_et_1_class_exists;
+      classification = if h_et_1_class_exists
+                       then "etale-h1-nontrivial-class-detected"
+                       else if verbAgreed
+                       then "no-etale-h1-obstruction"
+                       else "fails-already-at-sheaf-level";
+      substrate_witness = if h_et_1_class_exists
+                          then "cross-language-verb-agree-but-argument-disagree"
+                          else "n/a";
+    };
+
+  # =================================================================
+  # === Derived category D(Sh(Site)) ================================
+  # =================================================================
+  #
+  # D(Sh) = derived category of sheaves.
+  #   Objects: chain complexes ... → F^{n-1} → F^n → F^{n+1} → ...
+  #     of sheaves with differential d² = 0.
+  #   Morphisms: chain maps modulo chain homotopy, then localize at
+  #     quasi-isomorphisms.
+  #
+  # In substrate: receipt chains can be lifted to chain complexes
+  # by assembling per-mode receipts as the i-th term.
+
+  derivedCategoryDefinition = {
+    category_id = "D(Sh(Site_coding))";
+    underlying_abelian_category = "Sh(Site_coding)";
+    objects = "chain complexes of sheaves";
+    morphism_localization = "quasi-isomorphisms inverted";
+    triangulated_structure = "distinguished triangles A → B → C → A[1]";
+    suspension_shift = "[1]: F^* → F^{*+1}";
+    cohomology_functor = "H^n : D(Sh) → Sh (extracts n-th cohomology sheaf)";
+  };
+
+  # =================================================================
+  # === Receipt chain → chain complex ================================
+  # =================================================================
+  #
+  # Lift a 16-mode receipt chain to a chain complex in D(Sh).
+
+  liftReceiptChainToComplex = receiptChain:
+    let
+      n = builtins.length receiptChain;
+    in {
+      complex_kind = "receipt-chain-complex";
+      length = n;
+      degree_0_term = "external-string (start)";
+      degree_n_term = "user-facing-projection (end)";
+      differential_kind = "mode-transition (m_i acts as d^i)";
+      complex_terms = builtins.map (i:
+        let r = builtins.elemAt receiptChain i; in {
+          degree = i;
+          term = if builtins.hasAttr "mode" r then r.mode else "mode-" + builtins.toString i;
+          source_kind = "kind_" + builtins.toString i;
+          target_kind = "kind_" + builtins.toString (i + 1);
+        }
+      ) (builtins.genList (i: i) n);
+      d_squared_zero_check = "by composability: d^{i+1} ∘ d^i is well-typed via Composability Lemma";
+      cohomology_at_each_degree = "H^i(complex) = ker(d^i) / image(d^{i-1})";
+    };
+
+  # =================================================================
+  # === Quasi-isomorphism detection =================================
+  # =================================================================
+  #
+  # Two receipt-chain complexes are quasi-isomorphic iff they induce
+  # the same cohomology in every degree.
+
+  detectQuasiIsomorphism = complexA: complexB:
+    let
+      lengthsMatch = complexA.length == complexB.length;
+      # Operationally: in substrate, two complexes are quasi-iso iff
+      # their cohomology classes at H^0 and H^1 match.
+      sameAtH0 = complexA.degree_0_term == complexB.degree_0_term;
+      sameAtHn = complexA.degree_n_term == complexB.degree_n_term;
+    in {
+      lengths_match = lengthsMatch;
+      h0_terms_match = sameAtH0;
+      hn_terms_match = sameAtHn;
+      quasi_isomorphic = lengthsMatch && sameAtH0 && sameAtHn;
+      reason = if !lengthsMatch then "different-chain-lengths"
+               else if !sameAtH0 then "different-H0-terms"
+               else if !sameAtHn then "different-Hn-terms"
+               else "quasi-isomorphic-detected";
+    };
+
+  # =================================================================
+  # === Distinguished triangles in D(Sh) ============================
+  # =================================================================
+  #
+  # A distinguished triangle A → B → C → A[1] gives a long exact
+  # sequence in cohomology:
+  #   ... → H^n(A) → H^n(B) → H^n(C) → H^{n+1}(A) → ...
+  #
+  # In substrate: short exact sequence of sheaves yields long exact
+  # sequence of derived cohomology classes.
+
+  distinguishedTriangleSkeleton = sheafA: sheafB: sheafC: {
+    triangle_kind = "distinguished-triangle-in-D-Sh";
+    vertices = [ sheafA sheafB sheafC ];
+    shift = sheafA + "[1]";
+    long_exact_cohomology_sequence = [
+      "... -> H^{n-1}(" + sheafC + ")"
+      "H^n(" + sheafA + ")"
+      "H^n(" + sheafB + ")"
+      "H^n(" + sheafC + ")"
+      "H^{n+1}(" + sheafA + ") -> ..."
+    ];
+    relates_to_les_skeleton = "Generalizes the LES from sheaf cohomology to derived category.";
+  };
+
+  # =================================================================
+  # === Substrate-internal derived equivalence classes ==============
+  # =================================================================
+
+  substrateInternalDerivedClasses = [
+    {
+      class_id = "derived-quasi-iso-uniqueness";
+      description_en = "Any two factorizations of F yield quasi-isomorphic complexes (by Uniqueness Lemma).";
+      depends_on_lemma = "theorem-NL-mode-chain-uniqueness-of-factorization";
+    }
+    {
+      class_id = "derived-shift-by-coequalizer";
+      description_en = "Mode 11 (coequalizer-fold) corresponds to a shift in D(Sh) — quotient construction at the derived level.";
+      depends_on_lemma = "theorem-yoneda-instance-for-verb-representability (mode 11)";
+    }
+    {
+      class_id = "derived-triangle-from-AC3-kan";
+      description_en = "Mode 13 with its Kan extension reverse F' yields a distinguished triangle G' → id → F' → G'[1].";
+      depends_on_lemma = "theorem-mode-13-reverse-functor-via-kan-extension";
+    }
+  ];
+
+  # =================================================================
+  # === Inventory ====================================================
+  # =================================================================
+
+  inventorySummary = _: {
+    owner = ownerName;
+    etale_site_defined = true;
+    etale_cohomology_degrees_count = builtins.length (builtins.attrNames etaleCohomologyDegrees);
+    has_etale_h0 = true;
+    has_etale_h1 = true;
+    has_etale_h2 = true;
+    has_etale_h1_computation = true;
+    derived_category_defined = true;
+    has_chain_complex_lift = true;
+    has_quasi_isomorphism_detection = true;
+    has_distinguished_triangle = true;
+    substrate_derived_class_count = builtins.length substrateInternalDerivedClasses;
+    sheaf_cohomology_inventory_qed = (sheafCohom.inventorySummary {}).sheaf_lemma_qed;
+    topos_internal_language_owner = topos.ownerName;
+    refinement_relation_to_sheaf_cohomology = ''
+      étale cohomology is FINER than sheaf cohomology.
+      Every sheaf obstruction yields an étale obstruction,
+      but étale can detect additional refinement-level issues
+      (e.g., argument-disagreement-within-agreed-verb).
+    '';
+  };
+
+  # =================================================================
+  # === Plate entry ================================================
+  # =================================================================
+
+  applyEtaleAndDerivedPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "etale-and-derived-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "etale_site" request then {
+      outcome = "etale-site-emitted"; receipt = etaleSite;
+    }
+    else if builtins.hasAttr "etale_degrees" request then {
+      outcome = "etale-cohomology-degrees-emitted"; receipt = etaleCohomologyDegrees;
+    }
+    else if builtins.hasAttr "compute_etale_h1" request then
+      let r = request.compute_etale_h1;
+      in { outcome = "etale-h1-computed";
+           receipt = computeEtaleH1Obstruction r.verb_agreements r.argument_votes; }
+    else if builtins.hasAttr "derived_category" request then {
+      outcome = "derived-category-definition-emitted"; receipt = derivedCategoryDefinition;
+    }
+    else if builtins.hasAttr "lift_chain" request then
+      let r = request.lift_chain;
+      in { outcome = "receipt-chain-lifted-to-complex";
+           receipt = liftReceiptChainToComplex r; }
+    else if builtins.hasAttr "quasi_iso" request then
+      let r = request.quasi_iso;
+      in { outcome = "quasi-isomorphism-detected";
+           receipt = detectQuasiIsomorphism r.complex_a r.complex_b; }
+    else if builtins.hasAttr "distinguished_triangle" request then
+      let r = request.distinguished_triangle;
+      in { outcome = "distinguished-triangle-emitted";
+           receipt = distinguishedTriangleSkeleton r.a r.b r.c; }
+    else if builtins.hasAttr "substrate_derived_classes" request then {
+      outcome = "substrate-derived-classes-emitted";
+      receipt = substrateInternalDerivedClasses;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "etale_site" "etale_degrees"
+             "compute_etale_h1" "derived_category" "lift_chain"
+             "quasi_iso" "distinguished_triangle" "substrate_derived_classes"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit etaleSite etaleCohomologyDegrees;
+  inherit computeEtaleH1Obstruction;
+  inherit derivedCategoryDefinition liftReceiptChainToComplex;
+  inherit detectQuasiIsomorphism distinguishedTriangleSkeleton;
+  inherit substrateInternalDerivedClasses;
+  inherit inventorySummary applyEtaleAndDerivedPlate;
+}

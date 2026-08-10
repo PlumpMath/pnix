@@ -1,0 +1,347 @@
+let
+  ownerName = "stdlib.nl.math-congruence-nl-lifter";
+
+  # === Controlled NL → math congruence query (NL → math substrate) ====
+  #
+  # 사용자 directive (2026-05-28):
+  # "math substrate ↔ NL 쪽에도 연관되는걸 찾아 substrate 로 원래 하던
+  # 구현 계속" + "엄밀한 확실한 것만 박는다"
+  #
+  # 이 owner 는 *controlled NL* (엄밀하게 정의된 한정 surface forms)
+  # → math congruence-criteria query 로 lift. 일반 NL parser 아님 —
+  # 정확한 surface pattern 만 인식. NL paraphrase coverage 가 좁은
+  # trade-off 로 엄밀성 (deterministic, replayable, audit-able) 획득.
+  #
+  # # 학술 근거 (엄밀)
+  #
+  # Controlled Natural Language (CNL) — 학계 표준 (Naproche/ForTheL
+  # 1985~, ACE 2003~, OWL Manchester Syntax). 정해진 surface 만
+  # parse, 의미 1:1 매핑. paraphrase 의 ambiguity 없음.
+  #
+  # # 지원 surface (엄밀)
+  #
+  # English:
+  #   "triangle SSS sides A B C against D E F"
+  #   "triangle SAS sides A B angle X against D E Y"
+  #   "triangle ASA angles A B side S against C D T"
+  #   "triangle AAS angles A B side S against C D T"
+  #   "triangle RHS hypotenuse H leg L against I M"
+  #
+  # Korean (사용자 directive: 한국어 first-class):
+  #   "삼각형 SSS 변 A B C 와 변 D E F"
+  #   "삼각형 SAS 변 A B 각 X 와 변 D E 각 Y"
+  #   "삼각형 ASA 각 A B 변 S 와 각 C D 변 T"
+
+  congruenceOwner = import ../math/congruence-criteria.px;
+  bridgeOwner = import ../math/congruence-to-code-bridge.px;
+
+  # === Tokenization (substrate-honest) ==============================
+
+  # 공백으로 split, 빈 토큰 제거.
+  splitWhitespace = s:
+    let
+      pieces = builtins.filter
+        (p: builtins.isString p && p != "")
+        (builtins.split "[ \t\n]+" s);
+    in pieces;
+
+  # === Surface patterns (closed registry) ===========================
+  #
+  # Each row:
+  #   surface_pattern — token list with placeholders ("$N")
+  #   criterion_id    — SSS / SAS / ASA / AAS / RHS
+  #   slot_assignments — placeholder index → slot name 매핑
+  #   language        — en / ko
+
+  knownCongruenceNLPatterns = [
+    # English SSS — 9 tokens: "triangle SSS sides A B C against D E F"
+    {
+      surface_template = [
+        "triangle" "SSS" "sides" "$1" "$2" "$3" "against" "$4" "$5" "$6"
+      ];
+      criterion_id = "SSS";
+      slot_map = {
+        "$1" = "a1"; "$2" = "b1"; "$3" = "c1";
+        "$4" = "a2"; "$5" = "b2"; "$6" = "c2";
+      };
+      language = "en";
+    }
+    # English SAS — "triangle SAS sides A B angle X against D E angle Y"
+    {
+      surface_template = [
+        "triangle" "SAS" "sides" "$1" "$2" "angle" "$3"
+        "against" "$4" "$5" "angle" "$6"
+      ];
+      criterion_id = "SAS";
+      slot_map = {
+        "$1" = "a1"; "$2" = "b1"; "$3" = "angle1";
+        "$4" = "a2"; "$5" = "b2"; "$6" = "angle2";
+      };
+      language = "en";
+    }
+    # English ASA
+    {
+      surface_template = [
+        "triangle" "ASA" "angles" "$1" "$2" "side" "$3"
+        "against" "$4" "$5" "side" "$6"
+      ];
+      criterion_id = "ASA";
+      slot_map = {
+        "$1" = "angleA1"; "$2" = "angleB1"; "$3" = "side1";
+        "$4" = "angleA2"; "$5" = "angleB2"; "$6" = "side2";
+      };
+      language = "en";
+    }
+    # English AAS
+    {
+      surface_template = [
+        "triangle" "AAS" "angles" "$1" "$2" "side" "$3"
+        "against" "$4" "$5" "side" "$6"
+      ];
+      criterion_id = "AAS";
+      slot_map = {
+        "$1" = "angleA1"; "$2" = "angleB1"; "$3" = "side1";
+        "$4" = "angleA2"; "$5" = "angleB2"; "$6" = "side2";
+      };
+      language = "en";
+    }
+    # English RHS
+    {
+      surface_template = [
+        "triangle" "RHS" "hypotenuse" "$1" "leg" "$2"
+        "against" "hypotenuse" "$3" "leg" "$4"
+      ];
+      criterion_id = "RHS";
+      slot_map = {
+        "$1" = "hyp1"; "$2" = "leg1";
+        "$3" = "hyp2"; "$4" = "leg2";
+      };
+      language = "en";
+    }
+    # Korean SSS — "삼각형 SSS 변 A B C 와 변 D E F"
+    {
+      surface_template = [
+        "삼각형" "SSS" "변" "$1" "$2" "$3" "와" "변" "$4" "$5" "$6"
+      ];
+      criterion_id = "SSS";
+      slot_map = {
+        "$1" = "a1"; "$2" = "b1"; "$3" = "c1";
+        "$4" = "a2"; "$5" = "b2"; "$6" = "c2";
+      };
+      language = "ko";
+    }
+    # Korean SAS
+    {
+      surface_template = [
+        "삼각형" "SAS" "변" "$1" "$2" "각" "$3"
+        "와" "변" "$4" "$5" "각" "$6"
+      ];
+      criterion_id = "SAS";
+      slot_map = {
+        "$1" = "a1"; "$2" = "b1"; "$3" = "angle1";
+        "$4" = "a2"; "$5" = "b2"; "$6" = "angle2";
+      };
+      language = "ko";
+    }
+  ];
+
+  # === Match utterance against surface template =====================
+  #
+  # Substitute-and-compare. utterance 의 tokens 가 template 의
+  # placeholder 자리에 일대일 매핑되는지 검증.
+
+  matchTemplate = utteranceTokens: template:
+    let
+      tCount = builtins.length template;
+      uCount = builtins.length utteranceTokens;
+    in
+      if tCount != uCount then null
+      else
+        let
+          # Walk both lists in parallel.
+          go = idx: bindings:
+            if idx >= tCount then bindings
+            else
+              let
+                tTok = builtins.elemAt template idx;
+                uTok = builtins.elemAt utteranceTokens idx;
+                isPlaceholder =
+                  builtins.stringLength tTok >= 2
+                  && (builtins.substring 0 1 tTok) == "$";
+              in
+                if isPlaceholder then
+                  # bind placeholder to utterance token
+                  go (idx + 1) (bindings // { ${tTok} = uTok; })
+                else if tTok == uTok then
+                  go (idx + 1) bindings
+                else
+                  null;
+          result = go 0 {};
+        in
+          result;
+
+  # === Lift NL → math query ========================================
+
+  liftCongruenceUtterance = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else
+      let
+        tokens = splitWhitespace utterance;
+      in
+        if tokens == [] then {
+          outcome = "held-empty-utterance";
+        }
+        else
+          let
+            tryPattern = pattern:
+              let
+                bindings = matchTemplate tokens pattern.surface_template;
+              in
+                if bindings == null then null
+                else {
+                  pattern = pattern;
+                  bindings = bindings;
+                };
+            results = builtins.filter (r: r != null)
+              (builtins.map tryPattern knownCongruenceNLPatterns);
+          in
+            if results == [] then {
+              outcome = "held-no-pattern-match";
+              utterance = utterance;
+              token_count = builtins.length tokens;
+              known_surface_patterns =
+                builtins.map (p: builtins.concatStringsSep " "
+                  p.surface_template) knownCongruenceNLPatterns;
+            }
+            else
+              let
+                # 첫 매치 (multi-match 는 별 슬라이스, surface 가 충분히 다른
+                # 한 unambiguous)
+                matched = builtins.head results;
+                pattern = matched.pattern;
+                bindings = matched.bindings;
+                # placeholder → slot name 매핑 → 실제 slot_values attrset
+                slotKeys = builtins.attrNames pattern.slot_map;
+                slotValues = builtins.listToAttrs (builtins.map
+                  (ph: {
+                    name = builtins.getAttr ph pattern.slot_map;
+                    value = builtins.getAttr ph bindings;
+                  })
+                  slotKeys);
+              in {
+                outcome = "congruence-query-lifted";
+                criterion_id = pattern.criterion_id;
+                language = pattern.language;
+                slot_values = slotValues;
+                # ambient_space default: NL 발화에서 명시 안 했으면
+                # *Held* — 4-piece axiom 보존. NL form 에 ambient 추가
+                # 패턴 (별 슬라이스) 까지는 R-2 기본 검증으로 caller
+                # 가 명시.
+                ambient_space_required = true;
+              };
+
+  # === Full chain: NL → verdict + code emit =========================
+  #
+  # End-to-end: utterance 받아 lift → math verdict → host_lang 코드 emit.
+
+  fullChainLift = utterance: ambientSpace: hostLang:
+    let
+      lifted = liftCongruenceUtterance utterance;
+    in
+      if lifted.outcome != "congruence-query-lifted" then lifted
+      else
+        let
+          verdict = congruenceOwner.verdictForConstraintSet {
+            ambient_space = ambientSpace;
+            given_constraints =
+              let
+                # criterion → required constraint list 매핑
+                c = congruenceOwner.findCriterion lifted.criterion_id;
+              in
+                if c == null then []
+                else c.required_constraints;
+          };
+          codeEmit = bridgeOwner.emitCongruenceCode {
+            criterion_id = lifted.criterion_id;
+            ambient_space = ambientSpace;
+            host_lang = hostLang;
+            slot_values = lifted.slot_values;
+          };
+        in {
+          outcome = "full-chain-lifted";
+          lifted_query = lifted;
+          math_verdict = verdict;
+          code_emit = codeEmit;
+        };
+
+  # === Mirror plate lens entry ======================================
+
+  applyMathCongruenceNLLifterPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(request ? operation) then {
+      outcome = "held-operation-required";
+      known_operations = [ "lift" "full-chain" ];
+    }
+    else if request.operation == "lift" then
+      liftCongruenceUtterance request.utterance
+    else if request.operation == "full-chain" then
+      fullChainLift
+        request.utterance
+        (if request ? ambient_space then request.ambient_space else null)
+        (if request ? host_lang then request.host_lang else null)
+    else {
+      outcome = "held-unknown-operation";
+      operation = request.operation;
+    };
+
+  # === Introspection ================================================
+
+  patternCount = builtins.length knownCongruenceNLPatterns;
+  supportedLanguages =
+    let
+      raw = builtins.map (p: p.language) knownCongruenceNLPatterns;
+      dedup = list:
+        builtins.foldl'
+          (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+          [] list;
+    in
+      builtins.sort (a: b: a < b) (dedup raw);
+  supportedCriteriaIds =
+    let
+      raw = builtins.map (p: p.criterion_id) knownCongruenceNLPatterns;
+      dedup = list:
+        builtins.foldl'
+          (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+          [] list;
+    in
+      builtins.sort (a: b: a < b) (dedup raw);
+
+  inventorySummary = _: {
+    owner = ownerName;
+    pattern_count = patternCount;
+    supported_languages = supportedLanguages;
+    supported_criteria = supportedCriteriaIds;
+  };
+
+in {
+  inherit
+    ownerName
+    knownCongruenceNLPatterns
+    splitWhitespace
+    matchTemplate
+    liftCongruenceUtterance
+    fullChainLift
+    applyMathCongruenceNLLifterPlate
+    patternCount
+    inventorySummary;
+  meta = {
+    source = "stdlib nl math congruence NL lifter";
+    owner = ownerName;
+    base = "math-congruence-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-28): NL → math substrate 연결 (엄밀 구간만). Controlled NL 7 surface patterns (en 5 + ko 2) × 5 criteria (SSS/SAS/ASA/AAS/RHS). 학술 근거: Controlled Natural Language (Naproche/ForTheL/ACE). paraphrase coverage 좁은 trade-off 로 deterministic + audit-able. fullChainLift: NL → math verdict → host_lang code 한 호출로. ambient_space 4-piece axiom 보존 (caller 가 명시).";
+  };
+}

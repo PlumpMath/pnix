@@ -1,0 +1,39 @@
+# stdlib/lib/nl/dictionary-seed-facts-test.px — 사전 첫 슬라이스: 코덱이 *실 프로젝트 seed* facts 소비
+#
+# dictionary-facts.px(분류 로직)가 host-생성 dictionary-seed-facts.px(실 seed lemma/pos)를 소비 — 합성 facts 아닌
+# 진짜 사전 데이터로 품사 분류. 외부 덤프 슬라이스에서 facts 소스만 redb scan-prefix 로 바뀌어도 posOf 시그니처 불변.
+let
+  df = import ./dictionary-facts.px;
+  seed = import ./dictionary-seed-facts.px;
+  B = builtins;
+  facts = seed.facts;
+  valencyIdx = df.buildValencyIndex facts;
+  hadaIdx = df.buildHadaCompoundIndex facts;
+in {
+  n_facts = B.length facts;
+  pos_noun = df.posOf facts "소수";          # 명사
+  pos_verb = df.posOf facts "바꾸다";         # 동사
+  kind_noun = df.lemmaKind facts "소수";      # entity
+  kind_verb = df.lemmaKind facts "바꾸다";    # predicate
+  unknown = df.posOf facts "없는단어";        # null (미등록)
+  # ★사전→lift 배선 선결: lift 가 내는 stem(바꾸)을 citation(바꾸다)에 매칭
+  stem_verb = df.posOfStem facts "바꾸";       # 동사 (바꾸다 → 바꾸 정규화 매칭)
+  stem_kind = df.stemKind facts "바꾸";        # predicate
+  stem_noun = df.posOfStem facts "소수";       # 명사 (명사는 strip 안 함, 그대로 매칭)
+  stem_meok = df.posOfStem facts "먹";         # 동사 (먹다 seed 등록)
+  valency_meok = df.valencyAt valencyIdx "먹";
+  valency_o = df.valencyAt valencyIdx "오";
+  valency_boi = df.valencyAt valencyIdx "보이";
+  hada_gongbu = df.hadaCompoundAt hadaIdx "공부";
+  hada_bap = df.hadaCompoundAt hadaIdx "밥";
+  all_ok = (B.length facts == 92) && (df.posOf facts "소수" == "명사") && (df.posOf facts "바꾸다" == "동사")
+           && (df.lemmaKind facts "소수" == "entity") && (df.lemmaKind facts "바꾸다" == "predicate")
+           && (df.posOf facts "없는단어" == null)
+           && (df.posOfStem facts "바꾸" == "동사") && (df.stemKind facts "바꾸" == "predicate")
+           && (df.posOfStem facts "소수" == "명사") && (df.posOfStem facts "먹" == "동사")
+           && (df.valencyAt valencyIdx "먹" == "transitive")
+           && (df.valencyAt valencyIdx "오" == "intransitive")
+           && (df.valencyAt valencyIdx "보이" == "ambitransitive")
+           && (df.hadaCompoundAt hadaIdx "공부")
+           && ((df.hadaCompoundAt hadaIdx "밥") == false);
+}

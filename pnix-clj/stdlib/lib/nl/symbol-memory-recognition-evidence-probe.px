@@ -1,0 +1,45 @@
+# stdlib/lib/nl/symbol-memory-recognition-evidence-probe.px
+#
+# S99-1: lightweight catalog-term → symbol-memory recognition probe for MSV metadata.
+# propose + optional memory_keys readback; public-safe flat JSON for pnix-clj (no raw prose).
+let
+  ev = import ./symbol-memory-recognition-evidence.px;
+  B = builtins;
+
+  catalogToProp = args:
+    let terms = if args ? catalog_terms then args.catalog_terms else [ ];
+        pred = if args ? predicate_lemma then args.predicate_lemma else "";
+        roles = B.map (t:
+          { role = if t ? role then t.role else "entity";
+            entity = if t ? key then t.key else ""; })
+                  terms;
+    in { roles = roles; action = pred; };
+
+  runProbe = args:
+    let memKeys = if args ? memory_keys then args.memory_keys else [ ];
+        p = catalogToProp args;
+        e = ev.mkMemoryEvidence { prop = p; memory_keys = memKeys; memory_entries = [ ]; };
+        pub = ev.publicProjection e;
+        names = B.map (s: if s ? name then s.name else "") pub.symbols_status;
+        refKinds = B.map (s: if s ? ref_kind then s.ref_kind else "") pub.symbols_status;
+        statuses = B.map (s: if s ? status then s.status else "") pub.symbols_status;
+    in {
+      status = "ok";
+      evidence_kind = pub.evidence_kind;
+      recognized_count = pub.recognized_count;
+      missing_count = pub.missing_count;
+      total = pub.total;
+      symbol_names = names;
+      symbol_ref_kinds = refKinds;
+      symbol_statuses = statuses;
+    };
+
+  probeSelfTest = _:
+    let r = runProbe {
+          catalog_terms = [ { key = "grpc"; role = "agent"; } { key = "ssh"; role = "object"; } ];
+          predicate_lemma = "더하다";
+          memory_keys = [ ];
+        };
+    in (r.status == "ok") && (r.total == 3) && (r.missing_count == 3);
+
+in { inherit runProbe probeSelfTest; }

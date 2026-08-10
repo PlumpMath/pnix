@@ -1,0 +1,3 @@
+(setv CHILD_VALUE 41)
+
+CHILD_VALUE

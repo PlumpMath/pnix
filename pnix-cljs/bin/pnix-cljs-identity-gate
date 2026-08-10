@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+active=(
+  CLAUDE.md
+  README.md
+  flake.nix
+  package.json
+  bin
+  cljs-meta/README.md
+  cljs-meta/deps.edn
+  cljs-meta/src
+  pnix-cljs/README.md
+  pnix-cljs/SCOPE_LOCK.md
+  pnix-cljs/deps.edn
+  pnix-cljs/src
+  pnix-cljs/examples
+  pnix-cljs/test
+)
+
+pattern='\bpnix-clj(?!s)\b|\bpnix_clj(?!s)\b|\bclj-meta\b|\bclj_meta\b'
+if rg -n --pcre2 "$pattern" "${active[@]}"; then
+  echo "pnix-cljs identity gate: stale JVM host identity" >&2
+  exit 1
+fi
+
+if rg -n '\bHeld\b|:held\b|"held"' pnix-cljs/src; then
+  echo "pnix-cljs identity gate: basic runtime must not use Held" >&2
+  exit 1
+fi
+
+for forbidden in docs stdlib pnixc-pnix pnix-mirror-runtime; do
+  if [[ -e "$forbidden" ]]; then
+    echo "pnix-cljs identity gate: copied owner root must be absent: $forbidden" >&2
+    exit 1
+  fi
+done
+
+echo "pnix-cljs identity gate: PASS"

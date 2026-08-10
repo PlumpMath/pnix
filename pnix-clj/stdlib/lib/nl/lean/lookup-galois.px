@@ -1,0 +1,583 @@
+# AUTO-GENERATED — galois
+# Entries: 82
+let
+  ownerName = "stdlib.nl.lean.lookup-galois";
+  category = "galois";
+  entries = [
+    {
+      full_name = "AlgebraicClosure.Monics";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 40;
+      code_preview = "def Monics : Type u := {f : k[X] // f.Monic}";
+    }
+    {
+      full_name = "AlgebraicClosure.Vars";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 43;
+      code_preview = "def Vars : Type u := Σ f : Monics k, Fin f.1.natDegree";
+    }
+    {
+      full_name = "AlgebraicClosure.subProdXSubC";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 48;
+      code_preview = "def subProdXSubC (f : Monics k) : (MvPolynomial (Vars k) k)[X] :=   f.1.map (algebraMap _ _) - ∏ i : Fin f.1.natDegree, (X - C (MvPolynomial.X ⟨f, i⟩))";
+    }
+    {
+      full_name = "AlgebraicClosure.spanCoeffs";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 53;
+      code_preview = "def spanCoeffs : Ideal (MvPolynomial (Vars k) k) :=   Ideal.span <| Set.range fun fn : Monics k × ℕ ↦ (subProdXSubC fn.1).coeff fn.2";
+    }
+    {
+      full_name = "AlgebraicClosure.finEquivRoots";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 59;
+      code_preview = "def finEquivRoots {K} [Field K] [DecidableEq K] {i : k →+* K} {f : Monics k} (hf : f.1.Splits i) :     Fin f.1.natDegree ≃ (f.1.map i).roots.toEnumFinset :=   .symm <| Finset.equivFinOfCardEq <| by     rwa [← splits_id_iff_splits, splits_iff_card_roots,       ← Multiset.card_toEnumFinset, f.2.natDeg";
+    }
+    {
+      full_name = "AlgebraicClosure.Monics.splits_finsetProd";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 67;
+      code_preview = "lemma Monics.splits_finsetProd {s : Finset (Monics k)} {f : Monics k} (hf : f ∈ s) :     f.1.Splits (algebraMap k (SplittingField (∏ f ∈ s, f.1))) :=   (splits_prod_iff _ fun j _ ↦ j.2.ne_zero).1 (SplittingField.splits _) _ hf";
+    }
+    {
+      full_name = "AlgebraicClosure.toSplittingField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 72;
+      code_preview = "def toSplittingField (s : Finset (Monics k)) :     MvPolynomial (Vars k) k →ₐ[k] SplittingField (∏ f ∈ s, f.1) :=   MvPolynomial.aeval fun fi ↦     if hf : fi.1 ∈ s then (finEquivRoots (Monics.splits_finsetProd hf) fi.2).1.1 else 37";
+    }
+    {
+      full_name = "AlgebraicClosure.toSplittingField_coeff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 80;
+      code_preview = "theorem toSplittingField_coeff {s : Finset (Monics k)} {f} (h : f ∈ s) (n) :     toSplittingField s ((subProdXSubC f).coeff n) = 0";
+    }
+    {
+      full_name = "AlgebraicClosure.spanCoeffs_ne_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 95;
+      code_preview = "theorem spanCoeffs_ne_top : spanCoeffs k ≠ ⊤";
+    }
+    {
+      full_name = "AlgebraicClosure.maxIdeal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 106;
+      code_preview = "def maxIdeal : Ideal (MvPolynomial (Vars k) k) :=   Classical.choose <| Ideal.exists_le_maximal _ <| spanCoeffs_ne_top k";
+    }
+    {
+      full_name = "AlgebraicClosure.maxIdeal.isMaximal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 110;
+      code_preview = "instance maxIdeal.isMaximal : (maxIdeal k).IsMaximal :=   (Classical.choose_spec <| Ideal.exists_le_maximal _ <| spanCoeffs_ne_top k).1";
+    }
+    {
+      full_name = "AlgebraicClosure.le_maxIdeal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 113;
+      code_preview = "theorem le_maxIdeal : spanCoeffs k ≤ maxIdeal k";
+    }
+    {
+      full_name = "AlgebraicClosure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 119;
+      code_preview = "@[stacks 09GT] def AlgebraicClosure : Type u :=   MvPolynomial (Vars k) k ⧸ maxIdeal k";
+    }
+    {
+      full_name = "AlgebraicClosure.instCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 127;
+      code_preview = "instance instCommRing : CommRing (AlgebraicClosure k) := Ideal.Quotient.commRing _";
+    }
+    {
+      full_name = "AlgebraicClosure.instInhabited";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 128;
+      code_preview = "instance instInhabited : Inhabited (AlgebraicClosure k) := ⟨37⟩";
+    }
+    {
+      full_name = "AlgebraicClosure.instAlgebra";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 133;
+      code_preview = "instance instAlgebra {R : Type*} [CommSemiring R] [Algebra R k] : Algebra R (AlgebraicClosure k) :=   Ideal.Quotient.algebra _";
+    }
+    {
+      full_name = "AlgebraicClosure.instGroupWithZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 140;
+      code_preview = "instance instGroupWithZero : GroupWithZero (AlgebraicClosure k) where   __ := Ideal.Quotient.field _";
+    }
+    {
+      full_name = "AlgebraicClosure.instField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 143;
+      code_preview = "instance instField : Field (AlgebraicClosure k) where   __ := instCommRing _   __ := instGroupWithZero _   nnqsmul := (· • ·)   qsmul := (· • ·)   nnratCast q := algebraMap k _ q   ratCast q := algebraMap k _ q   nnratCast_def q := by change algebraMap k _ _ = _; simp_rw [NNRat.cast_def, map_div₀, m";
+    }
+    {
+      full_name = "AlgebraicClosure.Monics.map_eq_prod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 158;
+      code_preview = "theorem Monics.map_eq_prod {f : Monics k} :     f.1.map (algebraMap k (AlgebraicClosure k)) =       ∏ i, map (Ideal.Quotient.mk <| maxIdeal k) (X - C (MvPolynomial.X ⟨f, i⟩))";
+    }
+    {
+      full_name = "AlgebraicClosure.isAlgebraic";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 167;
+      code_preview = "instance isAlgebraic : Algebra.IsAlgebraic k (AlgebraicClosure k) :=   ⟨fun z =>     IsIntegral.isAlgebraic <| by       let ⟨p, hp⟩ := Ideal.Quotient.mk_surjective z       rw [← hp]       induction p using MvPolynomial.induction_on generalizing z with         | C => exact isIntegral_algebraMap      ";
+    }
+    {
+      full_name = "AlgebraicClosure.isAlgClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/IsAlgClosed/AlgebraicClosure.lean";
+      start_line = 190;
+      code_preview = "instance isAlgClosed : IsAlgClosed (AlgebraicClosure k) := IsAlgClosure.isAlgClosed k";
+    }
+    {
+      full_name = "IsGalois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 50;
+      code_preview = "@[stacks 09I0] class IsGalois : Prop where   [to_isSeparable : Algebra.IsSeparable F E]   [to_normal : Normal F E]";
+    }
+    {
+      full_name = "isGalois_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 59;
+      code_preview = "theorem isGalois_iff : IsGalois F E ↔ Algebra.IsSeparable F E ∧ Normal F E";
+    }
+    {
+      full_name = "IsGalois.self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 71;
+      code_preview = "instance self : IsGalois F F :=   ⟨⟩";
+    }
+    {
+      full_name = "IsGalois.integral";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 76;
+      code_preview = "theorem integral [IsGalois F E] (x : E) : IsIntegral F x";
+    }
+    {
+      full_name = "IsGalois.separable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 79;
+      code_preview = "theorem separable [IsGalois F E] (x : E) : IsSeparable F x";
+    }
+    {
+      full_name = "IsGalois.splits";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 82;
+      code_preview = "theorem splits [IsGalois F E] (x : E) : (minpoly F x).Splits (algebraMap F E)";
+    }
+    {
+      full_name = "IsGalois.of_fixed_field";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 87;
+      code_preview = "@[stacks 09I3 \"first part\"] instance of_fixed_field (G : Type*) [Group G] [Finite G] [MulSemiringAction G E] :     IsGalois (FixedPoints.subfield G E) E :=   ⟨⟩";
+    }
+    {
+      full_name = "IsGalois.IntermediateField.AdjoinSimple.card_aut_eq_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 94;
+      code_preview = "theorem IntermediateField.AdjoinSimple.card_aut_eq_finrank [FiniteDimensional F E] {α : E}     (hα : IsIntegral F α) (h_sep : IsSeparable F α)     (h_splits : (minpoly F α).Splits (algebraMap F F⟮α⟯)) :     Fintype.card (F⟮α⟯ ≃ₐ[F] F⟮α⟯) = finrank F F⟮α⟯";
+    }
+    {
+      full_name = "IsGalois.card_aut_eq_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 103;
+      code_preview = "@[stacks 09I1 \"'only if' part\"] theorem card_aut_eq_finrank [FiniteDimensional F E] [IsGalois F E] :     Fintype.card (E ≃ₐ[F] E) = finrank F E";
+    }
+    {
+      full_name = "IsGalois.tower_top_of_isGalois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 139;
+      code_preview = "@[stacks 09I2] theorem IsGalois.tower_top_of_isGalois [IsGalois F E] : IsGalois K E";
+    }
+    {
+      full_name = "IsGalois.tower_top_intermediateField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 149;
+      code_preview = "instance (priority := 100) IsGalois.tower_top_intermediateField (K : IntermediateField F E)     [IsGalois F E] : IsGalois K E :=   IsGalois.tower_top_of_isGalois F K E";
+    }
+    {
+      full_name = "isGalois_iff_isGalois_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 153;
+      code_preview = "theorem isGalois_iff_isGalois_bot : IsGalois (⊥ : IntermediateField F E) E ↔ IsGalois F E";
+    }
+    {
+      full_name = "IsGalois.of_algEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 159;
+      code_preview = "theorem IsGalois.of_algEquiv [IsGalois F E] (f : E ≃ₐ[F] E') : IsGalois F E'";
+    }
+    {
+      full_name = "AlgEquiv.transfer_galois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 163;
+      code_preview = "theorem AlgEquiv.transfer_galois (f : E ≃ₐ[F] E') : IsGalois F E ↔ IsGalois F E'";
+    }
+    {
+      full_name = "isGalois_iff_isGalois_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 166;
+      code_preview = "theorem isGalois_iff_isGalois_top : IsGalois F (⊤ : IntermediateField F E) ↔ IsGalois F E";
+    }
+    {
+      full_name = "isGalois_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 169;
+      code_preview = "instance isGalois_bot : IsGalois F (⊥ : IntermediateField F E) :=   (IntermediateField.botEquiv F E).transfer_galois.mpr (IsGalois.self F)";
+    }
+    {
+      full_name = "FixedPoints.intermediateField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 179;
+      code_preview = "def FixedPoints.intermediateField (M : Type*) [Monoid M] [MulSemiringAction M E]     [SMulCommClass M F E] : IntermediateField F E :=   { FixedPoints.subfield M E with     carrier := MulAction.fixedPoints M E     algebraMap_mem' := fun a g => smul_algebraMap g a }";
+    }
+    {
+      full_name = "IntermediateField.fixedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 189;
+      code_preview = "def fixedField : IntermediateField F E :=   FixedPoints.intermediateField H";
+    }
+    {
+      full_name = "IntermediateField.mem_fixedField_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 193;
+      code_preview = "theorem mem_fixedField_iff (x) :     x ∈ fixedField H ↔ ∀ f ∈ H, f x = x";
+    }
+    {
+      full_name = "IntermediateField.finrank_fixedField_eq_card";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 198;
+      code_preview = "theorem finrank_fixedField_eq_card [FiniteDimensional F E] [DecidablePred (· ∈ H)] :     finrank (fixedField H) E = Fintype.card H";
+    }
+    {
+      full_name = "IntermediateField.fixingSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 202;
+      code_preview = "nonrec def fixingSubgroup : Subgroup (E ≃ₐ[F] E) :=   fixingSubgroup (E ≃ₐ[F] E) (K : Set E)";
+    }
+    {
+      full_name = "IntermediateField.le_iff_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 206;
+      code_preview = "theorem le_iff_le : K ≤ fixedField H ↔ H ≤ fixingSubgroup K";
+    }
+    {
+      full_name = "IntermediateField.fixingSubgroup_anti";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 209;
+      code_preview = "lemma fixingSubgroup_anti : Antitone (IntermediateField.fixingSubgroup (F := F) (E := E)) := by   intro K K' h   rw [← le_iff_le]   exact le_trans h ((le_iff_le _ _).mpr (le_refl K'.fixingSubgroup))";
+    }
+    {
+      full_name = "IntermediateField.fixingSubgroupEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 214;
+      code_preview = "def fixingSubgroupEquiv : fixingSubgroup K ≃* E ≃ₐ[K] E where   toFun ϕ := { AlgEquiv.toRingEquiv (ϕ : E ≃ₐ[F] E) with commutes' := ϕ.mem }   invFun ϕ := ⟨ϕ.restrictScalars _, ϕ.commutes⟩   left_inv _ := by ext; rfl   right_inv _ := by ext; rfl   map_mul' _ _ := by ext; rfl";
+    }
+    {
+      full_name = "IntermediateField.fixingSubgroup_fixedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 222;
+      code_preview = "theorem fixingSubgroup_fixedField [FiniteDimensional F E] : fixingSubgroup (fixedField H) = H";
+    }
+    {
+      full_name = "IntermediateField.fixedField.smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 234;
+      code_preview = "instance fixedField.smul : SMul K (fixedField (fixingSubgroup K)) where   smul x y := ⟨x * y, fun ϕ => by     rw [smul_mul', show ϕ • (x : E) = ↑x from ϕ.2 x, show ϕ • (y : E) = ↑y from y.2 ϕ]⟩";
+    }
+    {
+      full_name = "IntermediateField.fixedField.algebra";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 238;
+      code_preview = "instance fixedField.algebra : Algebra K (fixedField (fixingSubgroup K)) where   algebraMap :=   { toFun x := ⟨x, fun ϕ => Subtype.mem ϕ x⟩     map_zero' := rfl     map_add' _ _ := rfl     map_one' := rfl     map_mul' _ _ := rfl }   commutes' _ _ := mul_comm _ _   smul_def' _ _ := rfl";
+    }
+    {
+      full_name = "IntermediateField.fixedField.isScalarTower";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 248;
+      code_preview = "instance fixedField.isScalarTower : IsScalarTower K (fixedField (fixingSubgroup K)) E :=   ⟨fun _ _ _ => mul_assoc _ _ _⟩";
+    }
+    {
+      full_name = "IsGalois.fixedField_fixingSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 255;
+      code_preview = "theorem fixedField_fixingSubgroup [FiniteDimensional F E] [h : IsGalois F E] :     IntermediateField.fixedField (IntermediateField.fixingSubgroup K) = K";
+    }
+    {
+      full_name = "IsGalois.card_fixingSubgroup_eq_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 267;
+      code_preview = "theorem card_fixingSubgroup_eq_finrank [DecidablePred (· ∈ IntermediateField.fixingSubgroup K)]     [FiniteDimensional F E] [IsGalois F E] :     Fintype.card (IntermediateField.fixingSubgroup K) = finrank K E";
+    }
+    {
+      full_name = "IsGalois.intermediateFieldEquivSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 272;
+      code_preview = "@[stacks 09DW] def intermediateFieldEquivSubgroup [FiniteDimensional F E] [IsGalois F E] :     IntermediateField F E ≃o (Subgroup (E ≃ₐ[F] E))ᵒᵈ where   toFun := IntermediateField.fixingSubgroup   invFun := IntermediateField.fixedField   left_inv K := fixedField_fixingSubgroup K   right_inv H := Int";
+    }
+    {
+      full_name = "IsGalois.galoisInsertionIntermediateFieldSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 284;
+      code_preview = "def galoisInsertionIntermediateFieldSubgroup [FiniteDimensional F E] :     GaloisInsertion (OrderDual.toDual ∘       (IntermediateField.fixingSubgroup : IntermediateField F E → Subgroup (E ≃ₐ[F] E)))       ((IntermediateField.fixedField : Subgroup (E ≃ₐ[F] E) → IntermediateField F E) ∘         Order";
+    }
+    {
+      full_name = "IsGalois.galoisCoinsertionIntermediateFieldSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 295;
+      code_preview = "def galoisCoinsertionIntermediateFieldSubgroup [FiniteDimensional F E] [IsGalois F E] :     GaloisCoinsertion (OrderDual.toDual ∘       (IntermediateField.fixingSubgroup : IntermediateField F E → Subgroup (E ≃ₐ[F] E)))       ((IntermediateField.fixedField : Subgroup (E ≃ₐ[F] E) → IntermediateField F";
+    }
+    {
+      full_name = "IntermediateField.restrictNormalHom_ker";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 316;
+      code_preview = "lemma IntermediateField.restrictNormalHom_ker (E : IntermediateField K L) [Normal K E] :     (restrictNormalHom E).ker = E.fixingSubgroup := by   simp [fixingSubgroup, Subgroup.ext_iff, AlgEquiv.ext_iff, Subtype.ext_iff,     restrictNormalHom_apply, mem_fixingSubgroup_iff]";
+    }
+    {
+      full_name = "IsGalois.of_fixedField_normal_subgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 325;
+      code_preview = "instance of_fixedField_normal_subgroup [IsGalois K L]     (H : Subgroup (L ≃ₐ[K] L)) [hn : Subgroup.Normal H] : IsGalois K (fixedField H) where   to_isSeparable := Algebra.isSeparable_tower_bot_of_isSeparable K (fixedField H) L   to_normal := by     apply normal_iff_forall_map_le'.mpr     rintro σ x";
+    }
+    {
+      full_name = "IsGalois.normalAutEquivQuotient";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 334;
+      code_preview = "noncomputable def normalAutEquivQuotient [FiniteDimensional K L] [IsGalois K L]     (H : Subgroup (L ≃ₐ[K] L)) [Subgroup.Normal H] :     (L ≃ₐ[K] L) ⧸ H ≃* ((fixedField H) ≃ₐ[K] (fixedField H)) :=   (QuotientGroup.quotientMulEquivOfEq ((fixingSubgroup_fixedField H).symm.trans   (fixedField H).restri";
+    }
+    {
+      full_name = "IsGalois.normalAutEquivQuotient_apply";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 344;
+      code_preview = "lemma normalAutEquivQuotient_apply [FiniteDimensional K L] [IsGalois K L]     (H : Subgroup (L ≃ₐ[K] L)) [Subgroup.Normal H] (σ : (L ≃ₐ[K] L)) :     normalAutEquivQuotient H σ = (restrictNormalHom (fixedField H)) σ := rfl";
+    }
+    {
+      full_name = "IsGalois.map_fixingSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 350;
+      code_preview = "@[simp] theorem map_fixingSubgroup (σ : L ≃ₐ[K] L) :     (E.map σ).fixingSubgroup = (MulAut.conj σ) • E.fixingSubgroup";
+    }
+    {
+      full_name = "IsGalois.fixingSubgroup_normal_of_isGalois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 360;
+      code_preview = "instance fixingSubgroup_normal_of_isGalois [IsGalois K L] [IsGalois K E] :     E.fixingSubgroup.Normal := by   apply Subgroup.Normal.of_conjugate_fixed (fun σ ↦ ?_)   rw [← map_fixingSubgroup, normal_iff_forall_map_eq'.mp inferInstance σ]";
+    }
+    {
+      full_name = "IsGalois.is_separable_splitting_field";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 379;
+      code_preview = "theorem is_separable_splitting_field [FiniteDimensional F E] [IsGalois F E] :     ∃ p : F[X], p.Separable ∧ p.IsSplittingField F E";
+    }
+    {
+      full_name = "IsGalois.of_fixedField_eq_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 389;
+      code_preview = "theorem of_fixedField_eq_bot [FiniteDimensional F E]     (h : IntermediateField.fixedField (⊤ : Subgroup (E ≃ₐ[F] E)) = ⊥) : IsGalois F E";
+    }
+    {
+      full_name = "IsGalois.of_card_aut_eq_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 394;
+      code_preview = "@[stacks 09I1 \"'if' part\"] theorem of_card_aut_eq_finrank [FiniteDimensional F E]     (h : Fintype.card (E ≃ₐ[F] E) = finrank F E) : IsGalois F E";
+    }
+    {
+      full_name = "IsGalois.of_separable_splitting_field_aux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 414;
+      code_preview = "theorem of_separable_splitting_field_aux [hFE : FiniteDimensional F E] [sp : p.IsSplittingField F E]     (hp : p.Separable) (K : Type*) [Field K] [Algebra F K] [Algebra K E] [IsScalarTower F K E]     {x : E} (hx : x ∈ p.aroots E)     [Fintype (K →ₐ[F] E)]     [Fintype (K⟮x⟯.restrictScalars F →ₐ[F] E";
+    }
+    {
+      full_name = "IsGalois.of_separable_splitting_field";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 448;
+      code_preview = "theorem of_separable_splitting_field [sp : p.IsSplittingField F E] (hp : p.Separable) :     IsGalois F E";
+    }
+    {
+      full_name = "IsGalois.tfae";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 481;
+      code_preview = "theorem tfae [FiniteDimensional F E] : List.TFAE [     IsGalois F E,     IntermediateField.fixedField (⊤ : Subgroup (E ≃ₐ[F] E)) = ⊥,     Fintype.card (E ≃ₐ[F] E) = finrank F E,     ∃ p : F[X], p.Separable ∧ p.IsSplittingField F E]";
+    }
+    {
+      full_name = "IsGalois.normalClosure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 504;
+      code_preview = "@[stacks 0EXM] instance IsGalois.normalClosure : IsGalois k (normalClosure k K F) where   to_isSeparable := Algebra.isSeparable_tower_bot_of_isSeparable k _ F";
+    }
+    {
+      full_name = "IsAlgClosure.isGalois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 514;
+      code_preview = "instance (priority := 100) IsAlgClosure.isGalois (k K : Type*) [Field k] [Field K] [Algebra k K]     [IsAlgClosure k K] [CharZero k] : IsGalois k K where";
+    }
+    {
+      full_name = "Algebra.IsQuadraticExtension.isGalois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 523;
+      code_preview = "instance IsQuadraticExtension.isGalois [Algebra.IsSeparable F K] : IsGalois F K where";
+    }
+    {
+      full_name = "Algebra.IsQuadraticExtension.isCyclic";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 528;
+      code_preview = "instance IsQuadraticExtension.isCyclic : IsCyclic (K ≃ₐ[F] K) := by   have := finrank_eq_two F K ▸ AlgEquiv.card_le   interval_cases h : Fintype.card (K ≃ₐ[F] K)   · simp_all   · exact @isCyclic_of_subsingleton _ _ (Fintype.card_le_one_iff_subsingleton.mp h.le)   · rw [← Nat.card_eq_fintype_card] at";
+    }
+    {
+      full_name = "Algebra.IsQuadraticExtension.isMulCommutative_galoisGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 539;
+      code_preview = "instance IsQuadraticExtension.isMulCommutative_galoisGroup :     IsMulCommutative (K ≃ₐ[F] K) := ⟨IsCyclic.commutative⟩";
+    }
+    {
+      full_name = "InfiniteGalois.fixingSubgroup_isClosed";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 58;
+      code_preview = "lemma fixingSubgroup_isClosed (L : IntermediateField k K) [IsGalois k K] :     IsClosed (L.fixingSubgroup : Set (K ≃ₐ[k] K)) where   isOpen_compl := isOpen_iff_mem_nhds.mpr fun σ h => by     apply mem_nhds_iff.mpr     rcases Set.not_subset.mp ((mem_fixingSubgroup_iff (K ≃ₐ[k] K)).not.mp h) with ⟨y, ";
+    }
+    {
+      full_name = "InfiniteGalois.fixedField_fixingSubgroup";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 79;
+      code_preview = "lemma fixedField_fixingSubgroup (L : IntermediateField k K) [IsGalois k K] :     IntermediateField.fixedField L.fixingSubgroup = L := by   apply le_antisymm   · intro x hx     rw [IntermediateField.mem_fixedField_iff] at hx     have mem : x ∈ (adjoin L {x}).1 := subset_adjoin _ _ rfl     have : Inte";
+    }
+    {
+      full_name = "InfiniteGalois.fixedField_bot";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 100;
+      code_preview = "lemma fixedField_bot [IsGalois k K] :     IntermediateField.fixedField (⊤ : Subgroup (K ≃ₐ[k] K)) = ⊥ := by   rw [← IntermediateField.fixingSubgroup_bot, fixedField_fixingSubgroup]";
+    }
+    {
+      full_name = "InfiniteGalois.restrict_fixedField";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 105;
+      code_preview = "lemma restrict_fixedField (H : Subgroup (K ≃ₐ[k] K)) (L : IntermediateField k K) [Normal k L] :     fixedField H ⊓ L = lift (fixedField (Subgroup.map (restrictNormalHom L) H)) := by   apply SetLike.ext'   ext x   refine ⟨fun h ↦ ?_, fun h ↦ ?_⟩   · have xL := h.out.2     apply (mem_lift (⟨x, xL⟩ : L";
+    }
+    {
+      full_name = "InfiniteGalois.fixingSubgroup_fixedField";
+      kind = "lemma";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 132;
+      code_preview = "lemma fixingSubgroup_fixedField (H : ClosedSubgroup (K ≃ₐ[k] K)) [IsGalois k K] :     (IntermediateField.fixedField H).fixingSubgroup = H.1 := by   apply le_antisymm _ ((IntermediateField.le_iff_le H.toSubgroup     (IntermediateField.fixedField H.toSubgroup)).mp le_rfl)   intro σ hσ   by_contra h   ";
+    }
+    {
+      full_name = "InfiniteGalois.IntermediateFieldEquivClosedSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 181;
+      code_preview = "def IntermediateFieldEquivClosedSubgroup [IsGalois k K] :     IntermediateField k K ≃o (ClosedSubgroup (K ≃ₐ[k] K))ᵒᵈ where   toFun L := ⟨L.fixingSubgroup, fixingSubgroup_isClosed L⟩   invFun H := IntermediateField.fixedField H.1   left_inv L := fixedField_fixingSubgroup L   right_inv H := by     si";
+    }
+    {
+      full_name = "InfiniteGalois.GaloisInsertionIntermediateFieldClosedSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 194;
+      code_preview = "def GaloisInsertionIntermediateFieldClosedSubgroup [IsGalois k K] :     GaloisInsertion (OrderDual.toDual ∘ fun (E : IntermediateField k K) ↦       (⟨E.fixingSubgroup, fixingSubgroup_isClosed E⟩ : ClosedSubgroup (K ≃ₐ[k] K)))       ((fun (H : ClosedSubgroup (K ≃ₐ[k] K)) ↦ IntermediateField.fixedFiel";
+    }
+    {
+      full_name = "InfiniteGalois.GaloisCoinsertionIntermediateFieldSubgroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 202;
+      code_preview = "def GaloisCoinsertionIntermediateFieldSubgroup [IsGalois k K] :     GaloisCoinsertion (OrderDual.toDual ∘ fun (E : IntermediateField k K) ↦ E.fixingSubgroup)       ((fun (H : Subgroup (K ≃ₐ[k] K)) ↦ IntermediateField.fixedField H) ∘ OrderDual.toDual) where   choice H _ := IntermediateField.fixedFiel";
+    }
+    {
+      full_name = "InfiniteGalois.isOpen_iff_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 212;
+      code_preview = "theorem isOpen_iff_finite (L : IntermediateField k K) [IsGalois k K] :     IsOpen L.fixingSubgroup.carrier ↔ FiniteDimensional k L";
+    }
+    {
+      full_name = "InfiniteGalois.normal_iff_isGalois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 232;
+      code_preview = "theorem normal_iff_isGalois (L : IntermediateField k K) [IsGalois k K] :     L.fixingSubgroup.Normal ↔ IsGalois k L";
+    }
+    {
+      full_name = "InfiniteGalois.isOpen_and_normal_iff_finite_and_isGalois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Infinite.lean";
+      start_line = 261;
+      code_preview = "theorem isOpen_and_normal_iff_finite_and_isGalois (L : IntermediateField k K) [IsGalois k K] :     IsOpen L.fixingSubgroup.carrier ∧ L.fixingSubgroup.Normal ↔     FiniteDimensional k L ∧ IsGalois k L";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

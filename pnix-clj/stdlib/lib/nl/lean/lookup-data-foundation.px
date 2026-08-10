@@ -1,0 +1,828 @@
+# AUTO-GENERATED — data-foundation
+# Entries: 117
+let
+  ownerName = "stdlib.nl.lean.lookup-data-foundation";
+  category = "data-foundation";
+  entries = [
+    {
+      full_name = "Set.instBooleanAlgebra";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 77;
+      code_preview = "instance instBooleanAlgebra : BooleanAlgebra (Set α) :=   { (inferInstance : BooleanAlgebra (α → Prop)) with     sup := (· ∪ ·),     le := (· ≤ ·),     lt := fun s t => s ⊆ t ∧ ¬t ⊆ s,     inf := (· ∩ ·),     bot := ∅,     compl := (·ᶜ),     top := univ,     sdiff := (· \\ ·) }";
+    }
+    {
+      full_name = "Set.top_eq_univ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 91;
+      code_preview = "@[simp] theorem top_eq_univ : (⊤ : Set α) = univ";
+    }
+    {
+      full_name = "Set.bot_eq_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 95;
+      code_preview = "@[simp] theorem bot_eq_empty : (⊥ : Set α) = ∅";
+    }
+    {
+      full_name = "Set.sup_eq_union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 99;
+      code_preview = "@[simp] theorem sup_eq_union : ((· ⊔ ·) : Set α → Set α → Set α) = (· ∪ ·)";
+    }
+    {
+      full_name = "Set.inf_eq_inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 103;
+      code_preview = "@[simp] theorem inf_eq_inter : ((· ⊓ ·) : Set α → Set α → Set α) = (· ∩ ·)";
+    }
+    {
+      full_name = "Set.le_eq_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 107;
+      code_preview = "@[simp] theorem le_eq_subset : ((· ≤ ·) : Set α → Set α → Prop) = (· ⊆ ·)";
+    }
+    {
+      full_name = "Set.lt_eq_ssubset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 111;
+      code_preview = "@[simp] theorem lt_eq_ssubset : ((· < ·) : Set α → Set α → Prop) = (· ⊂ ·)";
+    }
+    {
+      full_name = "Set.le_iff_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 115;
+      code_preview = "theorem le_iff_subset : s ≤ t ↔ s ⊆ t";
+    }
+    {
+      full_name = "Set.lt_iff_ssubset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 118;
+      code_preview = "theorem lt_iff_ssubset : s < t ↔ s ⊂ t";
+    }
+    {
+      full_name = "Set.PiSetCoe.canLift";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 125;
+      code_preview = "instance PiSetCoe.canLift (ι : Type u) (α : ι → Type v) [∀ i, Nonempty (α i)] (s : Set ι) :     CanLift (∀ i : s, α i) (∀ i, α i) (fun f i => f i) fun _ => True :=   PiSubtype.canLift ι α s";
+    }
+    {
+      full_name = "Set.PiSetCoe.canLift'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 129;
+      code_preview = "instance PiSetCoe.canLift' (ι : Type u) (α : Type v) [Nonempty α] (s : Set ι) :     CanLift (s → α) (ι → α) (fun f i => f i) fun _ => True :=   PiSetCoe.canLift ι (fun _ => α) s";
+    }
+    {
+      full_name = "Set.coe_eq_subtype";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 141;
+      code_preview = "theorem Set.coe_eq_subtype (s : Set α) : ↥s = { x // x ∈ s }";
+    }
+    {
+      full_name = "Set.coe_setOf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 144;
+      code_preview = "@[simp] theorem Set.coe_setOf (p : α → Prop) : ↥{ x | p x } = { x // p x }";
+    }
+    {
+      full_name = "SetCoe.forall";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 148;
+      code_preview = "theorem SetCoe.forall {s : Set α} {p : s → Prop} : (∀ x : s, p x) ↔ ∀ (x) (h : x ∈ s), p ⟨x, h⟩";
+    }
+    {
+      full_name = "SetCoe.exists";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 151;
+      code_preview = "theorem SetCoe.exists {s : Set α} {p : s → Prop} :     (∃ x : s, p x) ↔ ∃ (x : _) (h : x ∈ s), p ⟨x, h⟩";
+    }
+    {
+      full_name = "SetCoe.exists'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 155;
+      code_preview = "theorem SetCoe.exists' {s : Set α} {p : ∀ x, x ∈ s → Prop} :     (∃ (x : _) (h : x ∈ s), p x h) ↔ ∃ x : s, p x.1 x.2";
+    }
+    {
+      full_name = "SetCoe.forall'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 159;
+      code_preview = "theorem SetCoe.forall' {s : Set α} {p : ∀ x, x ∈ s → Prop} :     (∀ (x) (h : x ∈ s), p x h) ↔ ∀ x : s, p x.1 x.2";
+    }
+    {
+      full_name = "set_coe_cast";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 163;
+      code_preview = "@[simp] theorem set_coe_cast :     ∀ {s t : Set α} (H' : s = t) (H : ↥s = ↥t) (x : s), cast H x = ⟨x.1, H' ▸ x.2⟩";
+    }
+    {
+      full_name = "SetCoe.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 168;
+      code_preview = "theorem SetCoe.ext {s : Set α} {a b : s} : (a : α) = b → a = b";
+    }
+    {
+      full_name = "SetCoe.ext_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 171;
+      code_preview = "theorem SetCoe.ext_iff {s : Set α} {a b : s} : (↑a : α) = ↑b ↔ a = b";
+    }
+    {
+      full_name = "Subtype.mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 176;
+      code_preview = "theorem Subtype.mem {α : Type*} {s : Set α} (p : s) : (p : α) ∈ s";
+    }
+    {
+      full_name = "Eq.subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 180;
+      code_preview = "theorem Eq.subset {α} {s t : Set α} : s = t → s ⊆ t";
+    }
+    {
+      full_name = "Set.mem_of_mem_of_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 191;
+      code_preview = "@[trans] theorem mem_of_mem_of_subset {x : α} {s t : Set α} (hx : x ∈ s) (h : s ⊆ t) : x ∈ t";
+    }
+    {
+      full_name = "Set.forall_in_swap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 195;
+      code_preview = "theorem forall_in_swap {p : α → β → Prop} : (∀ a ∈ s, ∀ (b), p a b) ↔ ∀ (b), ∀ a ∈ s, p a b";
+    }
+    {
+      full_name = "Set.setOf_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 198;
+      code_preview = "theorem setOf_injective : Function.Injective (@setOf α)";
+    }
+    {
+      full_name = "Set.setOf_inj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 200;
+      code_preview = "theorem setOf_inj {p q : α → Prop} : { x | p x } = { x | q x } ↔ p = q";
+    }
+    {
+      full_name = "Set.mem_setOf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 204;
+      code_preview = "theorem mem_setOf {a : α} {p : α → Prop} : a ∈ { x | p x } ↔ p a";
+    }
+    {
+      full_name = "Set.eq_mem_setOf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 207;
+      code_preview = "theorem eq_mem_setOf (p : α → Prop) : p = (· ∈ {a | p a})";
+    }
+    {
+      full_name = "Membership.mem.out";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 212;
+      code_preview = "theorem _root_.Membership.mem.out {p : α → Prop} {a : α} (h : a ∈ { x | p x }) : p a";
+    }
+    {
+      full_name = "Set.nmem_setOf_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 218;
+      code_preview = "theorem nmem_setOf_iff {a : α} {p : α → Prop} : a ∉ { x | p x } ↔ ¬p a";
+    }
+    {
+      full_name = "Set.setOf_mem_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 221;
+      code_preview = "@[simp] theorem setOf_mem_eq {s : Set α} : { x | x ∈ s } = s";
+    }
+    {
+      full_name = "Set.setOf_set";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 225;
+      code_preview = "theorem setOf_set {s : Set α} : setOf s = s";
+    }
+    {
+      full_name = "Set.setOf_app_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 228;
+      code_preview = "theorem setOf_app_iff {p : α → Prop} {x : α} : { x | p x } x ↔ p x";
+    }
+    {
+      full_name = "Set.mem_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 231;
+      code_preview = "theorem mem_def {a : α} {s : Set α} : a ∈ s ↔ s a";
+    }
+    {
+      full_name = "Set.setOf_bijective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 234;
+      code_preview = "theorem setOf_bijective : Bijective (setOf : (α → Prop) → Set α)";
+    }
+    {
+      full_name = "Set.subset_setOf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 237;
+      code_preview = "theorem subset_setOf {p : α → Prop} {s : Set α} : s ⊆ setOf p ↔ ∀ x, x ∈ s → p x";
+    }
+    {
+      full_name = "Set.setOf_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 240;
+      code_preview = "theorem setOf_subset {p : α → Prop} {s : Set α} : setOf p ⊆ s ↔ ∀ x, p x → x ∈ s";
+    }
+    {
+      full_name = "Set.setOf_subset_setOf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 243;
+      code_preview = "@[simp] theorem setOf_subset_setOf {p q : α → Prop} : { a | p a } ⊆ { a | q a } ↔ ∀ a, p a → q a";
+    }
+    {
+      full_name = "Set.setOf_and";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 247;
+      code_preview = "theorem setOf_and {p q : α → Prop} : { a | p a ∧ q a } = { a | p a } ∩ { a | q a }";
+    }
+    {
+      full_name = "Set.setOf_or";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 250;
+      code_preview = "theorem setOf_or {p q : α → Prop} : { a | p a ∨ q a } = { a | p a } ∪ { a | q a }";
+    }
+    {
+      full_name = "Set.subset_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 290;
+      code_preview = "theorem subset_def : (s ⊆ t) = ∀ x, x ∈ s → x ∈ t";
+    }
+    {
+      full_name = "Set.ssubset_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 293;
+      code_preview = "theorem ssubset_def : (s ⊂ t) = (s ⊆ t ∧ ¬t ⊆ s)";
+    }
+    {
+      full_name = "Set.Subset.refl";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 296;
+      code_preview = "@[refl] theorem Subset.refl (a : Set α) : a ⊆ a";
+    }
+    {
+      full_name = "Set.Subset.rfl";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 299;
+      code_preview = "theorem Subset.rfl {s : Set α} : s ⊆ s";
+    }
+    {
+      full_name = "Set.Subset.trans";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 302;
+      code_preview = "@[trans] theorem Subset.trans {a b c : Set α} (ab : a ⊆ b) (bc : b ⊆ c) : a ⊆ c";
+    }
+    {
+      full_name = "Set.mem_of_eq_of_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 305;
+      code_preview = "@[trans] theorem mem_of_eq_of_mem {x y : α} {s : Set α} (hx : x = y) (h : y ∈ s) : x ∈ s";
+    }
+    {
+      full_name = "Set.Subset.antisymm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 309;
+      code_preview = "theorem Subset.antisymm {a b : Set α} (h₁ : a ⊆ b) (h₂ : b ⊆ a) : a = b";
+    }
+    {
+      full_name = "Set.Subset.antisymm_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 312;
+      code_preview = "theorem Subset.antisymm_iff {a b : Set α} : a = b ↔ a ⊆ b ∧ b ⊆ a";
+    }
+    {
+      full_name = "Set.eq_of_subset_of_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 316;
+      code_preview = "theorem eq_of_subset_of_subset {a b : Set α} : a ⊆ b → b ⊆ a → a = b";
+    }
+    {
+      full_name = "Set.mem_of_subset_of_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Basic.lean";
+      start_line = 319;
+      code_preview = "theorem mem_of_subset_of_mem {s₁ s₂ : Set α} {a : α} (h : s₁ ⊆ s₂) : a ∈ s₁ → a ∈ s₂";
+    }
+    {
+      full_name = "Finset.sizeOf_lt_sizeOf_of_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 61;
+      code_preview = "@[deprecated \"Deprecated without replacement.\" (since := \"2025-02-07\")] theorem sizeOf_lt_sizeOf_of_mem [SizeOf α] {x : α} {s : Finset α} (hx : x ∈ s) :     SizeOf.sizeOf x < SizeOf.sizeOf s";
+    }
+    {
+      full_name = "Finset.disjUnion_eq_union";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 78;
+      code_preview = "@[simp] theorem disjUnion_eq_union (s t h) : @disjUnion α s t h = s ∪ t";
+    }
+    {
+      full_name = "Finset.disjoint_union_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 82;
+      code_preview = "@[simp] theorem disjoint_union_left : Disjoint (s ∪ t) u ↔ Disjoint s u ∧ Disjoint t u";
+    }
+    {
+      full_name = "Finset.disjoint_union_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 86;
+      code_preview = "@[simp] theorem disjoint_union_right : Disjoint s (t ∪ u) ↔ Disjoint s t ∧ Disjoint s u";
+    }
+    {
+      full_name = "Finset.not_disjoint_iff_nonempty_inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 92;
+      code_preview = "theorem not_disjoint_iff_nonempty_inter : ¬Disjoint s t ↔ (s ∩ t).Nonempty";
+    }
+    {
+      full_name = "Finset.disjoint_or_nonempty_inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 97;
+      code_preview = "theorem disjoint_or_nonempty_inter (s t : Finset α) : Disjoint s t ∨ (s ∩ t).Nonempty";
+    }
+    {
+      full_name = "Finset.disjoint_of_subset_iff_left_eq_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 102;
+      code_preview = "theorem disjoint_of_subset_iff_left_eq_empty (h : s ⊆ t) :     Disjoint s t ↔ s = ∅";
+    }
+    {
+      full_name = "Finset.pairwiseDisjoint_iff";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 106;
+      code_preview = "lemma pairwiseDisjoint_iff {ι : Type*} {s : Set ι} {f : ι → Finset α} :     s.PairwiseDisjoint f ↔ ∀ ⦃i⦄, i ∈ s → ∀ ⦃j⦄, j ∈ s → (f i ∩ f j).Nonempty → i = j := by   simp [Set.PairwiseDisjoint, Set.Pairwise, Function.onFun, not_imp_comm (a := _ = _),     not_disjoint_iff_nonempty_inter]";
+    }
+    {
+      full_name = "Finset.isDirected_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 113;
+      code_preview = "instance isDirected_le : IsDirected (Finset α) (· ≤ ·) := by classical infer_instance";
+    }
+    {
+      full_name = "Finset.isDirected_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 114;
+      code_preview = "instance isDirected_subset : IsDirected (Finset α) (· ⊆ ·) := isDirected_le";
+    }
+    {
+      full_name = "Finset.erase_empty";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 122;
+      code_preview = "@[simp] theorem erase_empty (a : α) : erase ∅ a = ∅";
+    }
+    {
+      full_name = "Finset.Nontrivial.erase_nonempty";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 126;
+      code_preview = "protected lemma Nontrivial.erase_nonempty (hs : s.Nontrivial) : (s.erase a).Nonempty :=   (hs.exists_ne a).imp <| by aesop";
+    }
+    {
+      full_name = "Finset.erase_nonempty";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 129;
+      code_preview = "@[simp] lemma erase_nonempty (ha : a ∈ s) : (s.erase a).Nonempty ↔ s.Nontrivial := by   simp only [Finset.Nonempty, mem_erase, and_comm (b := _ ∈ _)]   refine ⟨?_, fun hs ↦ hs.exists_ne a⟩   rintro ⟨b, hb, hba⟩   exact ⟨_, hb, _, ha, hba⟩";
+    }
+    {
+      full_name = "Finset.erase_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 135;
+      code_preview = "@[simp] theorem erase_singleton (a : α) : ({a} : Finset α).erase a = ∅";
+    }
+    {
+      full_name = "Finset.erase_insert_eq_erase";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 140;
+      code_preview = "@[simp] theorem erase_insert_eq_erase (s : Finset α) (a : α) : (insert a s).erase a = s.erase a";
+    }
+    {
+      full_name = "Finset.erase_insert";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 146;
+      code_preview = "theorem erase_insert {a : α} {s : Finset α} (h : a ∉ s) : erase (insert a s) a = s";
+    }
+    {
+      full_name = "Finset.erase_insert_of_ne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 149;
+      code_preview = "theorem erase_insert_of_ne {a b : α} {s : Finset α} (h : a ≠ b) :     erase (insert a s) b = insert a (erase s b)";
+    }
+    {
+      full_name = "Finset.erase_cons_of_ne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 155;
+      code_preview = "theorem erase_cons_of_ne {a b : α} {s : Finset α} (ha : a ∉ s) (hb : a ≠ b) :     erase (cons a s ha) b = cons a (erase s b) fun h => ha <| erase_subset _ _ h";
+    }
+    {
+      full_name = "Finset.insert_erase";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 159;
+      code_preview = "@[simp] theorem insert_erase (h : a ∈ s) : insert a (erase s a) = s";
+    }
+    {
+      full_name = "Finset.erase_eq_iff_eq_insert";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 166;
+      code_preview = "lemma erase_eq_iff_eq_insert (hs : a ∈ s) (ht : a ∉ t) : erase s a = t ↔ s = insert a t := by   aesop";
+    }
+    {
+      full_name = "Finset.insert_erase_invOn";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 169;
+      code_preview = "lemma insert_erase_invOn :     Set.InvOn (insert a) (fun s ↦ erase s a) {s : Finset α | a ∈ s} {s : Finset α | a ∉ s} :=   ⟨fun _s ↦ insert_erase, fun _s ↦ erase_insert⟩";
+    }
+    {
+      full_name = "Finset.erase_ssubset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 173;
+      code_preview = "theorem erase_ssubset {a : α} {s : Finset α} (h : a ∈ s) : s.erase a ⊂ s";
+    }
+    {
+      full_name = "Finset.ssubset_iff_exists_subset_erase";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 178;
+      code_preview = "theorem ssubset_iff_exists_subset_erase {s t : Finset α} : s ⊂ t ↔ ∃ a ∈ t, s ⊆ t.erase a";
+    }
+    {
+      full_name = "Finset.erase_ssubset_insert";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 183;
+      code_preview = "theorem erase_ssubset_insert (s : Finset α) (a : α) : s.erase a ⊂ insert a s";
+    }
+    {
+      full_name = "Finset.erase_cons";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 187;
+      code_preview = "theorem erase_cons {s : Finset α} {a : α} (h : a ∉ s) : (s.cons a h).erase a = s";
+    }
+    {
+      full_name = "Finset.subset_insert_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 190;
+      code_preview = "theorem subset_insert_iff {a : α} {s t : Finset α} : s ⊆ insert a t ↔ erase s a ⊆ t";
+    }
+    {
+      full_name = "Finset.erase_insert_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 194;
+      code_preview = "theorem erase_insert_subset (a : α) (s : Finset α) : erase (insert a s) a ⊆ s";
+    }
+    {
+      full_name = "Finset.insert_erase_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 197;
+      code_preview = "theorem insert_erase_subset (a : α) (s : Finset α) : s ⊆ insert a (erase s a)";
+    }
+    {
+      full_name = "Finset.subset_insert_iff_of_not_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 200;
+      code_preview = "theorem subset_insert_iff_of_not_mem (h : a ∉ s) : s ⊆ insert a t ↔ s ⊆ t";
+    }
+    {
+      full_name = "Finset.erase_subset_iff_of_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 203;
+      code_preview = "theorem erase_subset_iff_of_mem (h : a ∈ t) : s.erase a ⊆ t ↔ s ⊆ t";
+    }
+    {
+      full_name = "Finset.erase_injOn'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 206;
+      code_preview = "theorem erase_injOn' (a : α) : { s : Finset α | a ∈ s }.InjOn fun s => erase s a";
+    }
+    {
+      full_name = "Finset.Nontrivial.exists_cons_eq";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 211;
+      code_preview = "lemma Nontrivial.exists_cons_eq {s : Finset α} (hs : s.Nontrivial) :     ∃ t a ha b hb hab, (cons b t hb).cons a (mem_cons.not.2 <| not_or_intro hab ha) = s := by   classical   obtain ⟨a, ha, b, hb, hab⟩ := hs   have : b ∈ s.erase a := mem_erase.2 ⟨hab.symm, hb⟩   refine ⟨(s.erase a).erase b, a, ?_,";
+    }
+    {
+      full_name = "Finset.erase_sdiff_erase";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 226;
+      code_preview = "lemma erase_sdiff_erase (hab : a ≠ b) (hb : b ∈ s) : s.erase a \\ s.erase b = {b} := by   ext; aesop";
+    }
+    {
+      full_name = "Finset.sdiff_singleton_eq_erase";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 231;
+      code_preview = "theorem sdiff_singleton_eq_erase (a : α) (s : Finset α) : s \\ {a} = erase s a";
+    }
+    {
+      full_name = "Finset.erase_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 236;
+      code_preview = "theorem erase_eq (s : Finset α) (a : α) : s.erase a = s \\ {a}";
+    }
+    {
+      full_name = "Finset.disjoint_erase_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 239;
+      code_preview = "theorem disjoint_erase_comm : Disjoint (s.erase a) t ↔ Disjoint s (t.erase a)";
+    }
+    {
+      full_name = "Finset.disjoint_insert_erase";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 242;
+      code_preview = "lemma disjoint_insert_erase (ha : a ∉ t) : Disjoint (s.erase a) (insert a t) ↔ Disjoint s t := by   rw [disjoint_erase_comm, erase_insert ha]";
+    }
+    {
+      full_name = "Finset.disjoint_erase_insert";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 245;
+      code_preview = "lemma disjoint_erase_insert (ha : a ∉ s) : Disjoint (insert a s) (t.erase a) ↔ Disjoint s t := by   rw [← disjoint_erase_comm, erase_insert ha]";
+    }
+    {
+      full_name = "Finset.disjoint_of_erase_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 248;
+      code_preview = "theorem disjoint_of_erase_left (ha : a ∉ t) (hst : Disjoint (s.erase a) t) : Disjoint s t";
+    }
+    {
+      full_name = "Finset.disjoint_of_erase_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 252;
+      code_preview = "theorem disjoint_of_erase_right (ha : a ∉ s) (hst : Disjoint s (t.erase a)) : Disjoint s t";
+    }
+    {
+      full_name = "Finset.inter_erase";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 256;
+      code_preview = "theorem inter_erase (a : α) (s t : Finset α) : s ∩ t.erase a = (s ∩ t).erase a";
+    }
+    {
+      full_name = "Finset.erase_inter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 259;
+      code_preview = "@[simp] theorem erase_inter (a : α) (s t : Finset α) : s.erase a ∩ t = (s ∩ t).erase a";
+    }
+    {
+      full_name = "Finset.erase_sdiff_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 263;
+      code_preview = "theorem erase_sdiff_comm (s t : Finset α) (a : α) : s.erase a \\ t = (s \\ t).erase a";
+    }
+    {
+      full_name = "Finset.erase_inter_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 266;
+      code_preview = "theorem erase_inter_comm (s t : Finset α) (a : α) : s.erase a ∩ t = s ∩ t.erase a";
+    }
+    {
+      full_name = "Finset.erase_union_distrib";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 269;
+      code_preview = "theorem erase_union_distrib (s t : Finset α) (a : α) : (s ∪ t).erase a = s.erase a ∪ t.erase a";
+    }
+    {
+      full_name = "Finset.insert_inter_distrib";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 272;
+      code_preview = "theorem insert_inter_distrib (s t : Finset α) (a : α) :     insert a (s ∩ t) = insert a s ∩ insert a t";
+    }
+    {
+      full_name = "Finset.erase_sdiff_distrib";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 275;
+      code_preview = "theorem erase_sdiff_distrib (s t : Finset α) (a : α) : (s \\ t).erase a = s.erase a \\ t.erase a";
+    }
+    {
+      full_name = "Finset.erase_union_of_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 278;
+      code_preview = "theorem erase_union_of_mem (ha : a ∈ t) (s : Finset α) : s.erase a ∪ t = s ∪ t";
+    }
+    {
+      full_name = "Finset.union_erase_of_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 281;
+      code_preview = "theorem union_erase_of_mem (ha : a ∈ s) (t : Finset α) : s ∪ t.erase a = s ∪ t";
+    }
+    {
+      full_name = "Finset.sdiff_union_erase_cancel";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Basic.lean";
+      start_line = 284;
+      code_preview = "theorem sdiff_union_erase_cancel (hts : t ⊆ s) (ha : a ∈ t) : s \\ t ∪ t.erase a = s.erase a";
+    }
+    {
+      full_name = "Set";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Set/Defs.lean";
+      start_line = 38;
+      code_preview = "def Set (α : Type u) := α → Prop";
+    }
+    {
+      full_name = "Finset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Finset/Defs.lean";
+      start_line = 70;
+      code_preview = "structure Finset (α : Type*) where      val : Multiset α      nodup : Nodup val";
+    }
+    {
+      full_name = "Nat.instLinearOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 30;
+      code_preview = "instance instLinearOrder : LinearOrder ℕ where   le := Nat.le   le_refl := @Nat.le_refl   le_trans := @Nat.le_trans   le_antisymm := @Nat.le_antisymm   le_total := @Nat.le_total   lt := Nat.lt   lt_iff_le_not_le := @Nat.lt_iff_le_not_le   toDecidableLT := inferInstance   toDecidableLE := inferInstan";
+    }
+    {
+      full_name = "Nat.instNontrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 49;
+      code_preview = "instance instNontrivial : Nontrivial ℕ := ⟨⟨0, 1, Nat.zero_ne_one⟩⟩";
+    }
+    {
+      full_name = "Nat.succ_injective";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 55;
+      code_preview = "lemma succ_injective : Injective Nat.succ := @succ.inj";
+    }
+    {
+      full_name = "Nat.div_mul_div_le";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 59;
+      code_preview = "protected lemma div_mul_div_le (a b c d : ℕ) :     (a / b) * (c / d) ≤ (a * c) / (b * d) := by   if hb : b = 0 then simp [hb] else   if hd : d = 0 then simp [hd] else   have hbd : b * d ≠ 0 := Nat.mul_ne_zero hb hd   rw [le_div_iff_mul_le (Nat.pos_of_ne_zero hbd)]   transitivity ((a / b) * b) * ((c ";
+    }
+    {
+      full_name = "Nat.pow_left_injective";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 78;
+      code_preview = "lemma pow_left_injective (hn : n ≠ 0) : Injective (fun a : ℕ ↦ a ^ n) := by   simp [Injective, le_antisymm_iff, Nat.pow_le_pow_iff_left hn]";
+    }
+    {
+      full_name = "Nat.pow_right_injective";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 81;
+      code_preview = "protected lemma pow_right_injective (ha : 2 ≤ a) : Injective (a ^ ·) := by   simp [Injective, le_antisymm_iff, Nat.pow_le_pow_iff_right ha]";
+    }
+    {
+      full_name = "Nat.pow_right_inj";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 84;
+      code_preview = "protected lemma pow_right_inj (ha : 2 ≤ a) : a ^ m = a ^ n ↔ m = n :=   (Nat.pow_right_injective ha).eq_iff";
+    }
+    {
+      full_name = "Nat.pow_eq_one";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 87;
+      code_preview = "@[simp] protected lemma pow_eq_one : a ^ n = 1 ↔ a = 1 ∨ n = 0 := by   obtain rfl | hn := eq_or_ne n 0   · simp   · simpa [hn] using Nat.pow_left_inj hn (b := 1)";
+    }
+    {
+      full_name = "Nat.pow_eq_self_iff";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 92;
+      code_preview = "lemma pow_eq_self_iff {a b : ℕ} (ha : 1 < a) : a ^ b = a ↔ b = 1 :=   (Nat.pow_right_injective ha).eq_iff' a.pow_one";
+    }
+    {
+      full_name = "Nat.pow_le_one_iff";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 96;
+      code_preview = "@[simp] protected lemma pow_le_one_iff (hn : n ≠ 0) : a ^ n ≤ 1 ↔ a ≤ 1 := by   rw [← not_lt, one_lt_pow_iff hn, not_lt]";
+    }
+    {
+      full_name = "Nat.leRecOn_injective";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 106;
+      code_preview = "lemma leRecOn_injective {C : ℕ → Sort*} {n m} (hnm : n ≤ m) (next : ∀ {k}, C k → C (k + 1))     (Hnext : ∀ n, Injective (@next n)) : Injective (@leRecOn C n m hnm next) := by   induction hnm with   | refl =>     intro x y H     rwa [leRecOn_self, leRecOn_self] at H   | step hnm ih =>     intro x y H";
+    }
+    {
+      full_name = "Nat.leRecOn_surjective";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 117;
+      code_preview = "lemma leRecOn_surjective {C : ℕ → Sort*} {n m} (hnm : n ≤ m) (next : ∀ {k}, C k → C (k + 1))     (Hnext : ∀ n, Surjective (@next n)) : Surjective (@leRecOn C n m hnm next) := by   induction hnm with   | refl =>     intro x     refine ⟨x, ?_⟩     rw [leRecOn_self]   | step hnm ih =>     intro x     o";
+    }
+    {
+      full_name = "Nat.set_induction_bounded";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 132;
+      code_preview = "lemma set_induction_bounded {S : Set ℕ} (hk : k ∈ S) (h_ind : ∀ k : ℕ, k ∈ S → k + 1 ∈ S)     (hnk : k ≤ n) : n ∈ S :=   @leRecOn (fun n => n ∈ S) k n hnk @h_ind hk";
+    }
+    {
+      full_name = "Nat.set_induction";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 137;
+      code_preview = "lemma set_induction {S : Set ℕ} (hb : 0 ∈ S) (h_ind : ∀ k : ℕ, k ∈ S → k + 1 ∈ S) (n : ℕ) :     n ∈ S :=   set_induction_bounded hb h_ind (zero_le n)";
+    }
+    {
+      full_name = "Nat.dvd_left_injective";
+      kind = "lemma";
+      file_path = "Mathlib/Data/Nat/Basic.lean";
+      start_line = 146;
+      code_preview = "lemma dvd_left_injective : Function.Injective ((· ∣ ·) : ℕ → ℕ → Prop) := fun _ _ h =>   dvd_right_iff_eq.mp fun a => iff_of_eq (congr_fun h a)";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

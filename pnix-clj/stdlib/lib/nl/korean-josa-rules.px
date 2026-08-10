@@ -1,0 +1,33 @@
+# stdlib/lib/nl/korean-josa-rules.px — 한글 조사 음운 규칙 = *데이터 마디* (코드 아님)
+#
+# ★(b) gate-graph 마디: 함수가 아니라 *데이터*로 적은 한글 받침→조사 규칙. 그래서 redb 에 통째로
+#   materialize 된다(코드=데이터). 적용(apply)은 korean-nl-mirror 의 generic 엔진(finalSound/selectJosa)이
+#   이 데이터를 *읽어* 한다 — 단일 source(여기), 단일 거울(거기). 새 거울 0.
+#
+# 설계: 관계(relation)로 적어 *양방향*(이해↔생성). 데이터만(클로저 0) → 직렬화 가능.
+#   - 받침 분류(수 산술의 데이터화): 종성 인덱스 · 숫자 Sino-Korean 받침 · 자릿수 단위 받침.
+#   - 조사 이형태 관계: 기존 case-marker-lens.knownCaseMarkerRules 재사용(role×받침→surface, 갈라치기 0).
+let
+  cm = import coding/korean-case-marker-lens.px;
+in {
+  schema = "morph.josa.rules.v0";
+
+  # ── 받침(종성) 분류 데이터 ── (0xAC00 decompose .jong 인덱스 기준)
+  #   open=무받침, rieul=ㄹ받침((으)- 예외 키), 그 외=regular(일반 받침).
+  jong = { openIdx = 0; rieulIdx = 8; };
+
+  # ── 숫자 Sino-Korean 읽기 받침 (영일이삼사오육칠팔구; 인덱스 0~9) ──
+  #   batchim: 받침 있나, rieul: ㄹ받침인가. (양방향 수론 데이터)
+  digitBatchim = [ true true false true false false true true true false ];
+  digitRieul   = [ false true false false false false false true true false ];
+
+  # ── 자릿수 단위(십백천만억조…) 받침 — trailing-zero 개수(tz) → 받침 ──
+  #   tz=1 십, 2 백, 3 천, 4 만, …, 12 조(무받침). 1-indexed 닫힌 표(실용 범위 16; 초과는 apply 기본값).
+  #   [십T 백T 천T 만T 십만T 백만T 천만T 억T 십억T 백억T 천억T 조F 십조T 백조T 천조T 경T]
+  magnitudeBatchim = [ true true true true true true true true true true true false true true true true ];
+
+  # ── 조사 이형태 관계표 = 양방향 (생성: role×받침→surface / 이해: surface→{role,받침}) ──
+  #   ★재사용: case-marker-lens.knownCaseMarkerRules (role + {none=무받침형, regular=받침형, rieul=ㄹ형}).
+  #   ㄹ 예외((으)로→로)도 이 표의 rieul 칸에 *데이터*로 박혀 있음(if/else 함수 아님).
+  alternation = cm.knownCaseMarkerRules;
+}

@@ -1,0 +1,74 @@
+# stdlib.lib.gate.pnixc-meta-store-config-shape-policy
+#
+# OWNER-LAW (2026-05-31): pnixc-meta store config + lane-tag audit entry
+# envelope shapes.
+#
+# # What this is for
+#
+# 가장 작은 두 envelope:
+#   PnixcMetaStoreConfig (1 field: path)
+#   LaneTagAuditEntry (2 field: record_id + resolution)
+
+let
+  ownerName = "stdlib/lib/gate/pnixc-meta-store-config-shape-policy.px";
+
+  mkField = name: kind: required: comment:
+    { field_name = name; field_kind = kind; required = required;
+      semantic = comment; };
+
+  storeConfigFields = [
+    (mkField "path" "PathBuf" true "redb file path")
+  ];
+
+  laneTagAuditFields = [
+    (mkField "record_id" "string" true
+      "SemanticRecord id")
+    (mkField "resolution" "LaneTagResolution" true
+      "stdlib/lib/ontology/lane-tag-policy.px (jj) - resolution outcome")
+  ];
+
+  validRequestKinds = [
+    "list-store-config-fields"
+    "list-lane-tag-audit-fields"
+  ];
+
+  validVerdicts = [
+    "store-config-fields-listed"
+    "lane-tag-audit-fields-listed"
+    "held-unknown-request-kind"
+  ];
+
+  asString = v: if builtins.isString v then v else "";
+
+  applyPnixcMetaStoreConfigShapePolicy = request:
+    let
+      reqKind = asString (request.request_kind or "");
+    in
+      if reqKind == "list-store-config-fields" then {
+        verdict = "store-config-fields-listed";
+        fields = storeConfigFields;
+        total_field_count = builtins.length storeConfigFields;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "list-lane-tag-audit-fields" then {
+        verdict = "lane-tag-audit-fields-listed";
+        fields = laneTagAuditFields;
+        total_field_count = builtins.length laneTagAuditFields;
+        composed_lens_ref = "jj (lane tag policy)";
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else {
+        verdict = "held-unknown-request-kind";
+        request_kind = reqKind;
+        valid_request_kinds = validRequestKinds;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName storeConfigFields laneTagAuditFields
+          validRequestKinds validVerdicts
+          applyPnixcMetaStoreConfigShapePolicy;
+}

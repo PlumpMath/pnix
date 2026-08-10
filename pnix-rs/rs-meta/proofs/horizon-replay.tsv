@@ -1,0 +1,7 @@
+# signal	status	command	marker	freshness_policy	boundary_policy	degradation_policy	note
+stage-manifest	DONE	manifest-check	manifest-check	canonical-index	local-proof-boundary	fail-closed	stage status must replay from the machine-readable manifest not ambient memory
+session-replay	DONE	stage12-quarantine-replay-check	stage12-quarantine-replay-check	replay-receipt	no-boundary-leak	fail-closed	long-running session state is accepted only through replay receipts
+stale-evidence	HELD	held	explicit-refresh-required	explicit-refresh-required	no-boundary-leak	degrade-to-held	stale evidence degrades to HELD until refreshed
+external-memory	HELD	held	explicit-import-required	explicit-import-required	no-boundary-leak	degrade-to-held	external memory cannot promote local proof status
+organism-state	HELD	held	manifest-versioned	manifest-versioned	no-boundary-leak	degrade-to-held	long-horizon organism state requires versioned manifests
+ambient-network	HELD	held	offline-first	offline-first	no-boundary-leak	degrade-to-held	network observations are not proof artifacts unless captured locally

@@ -1,0 +1,46 @@
+# stdlib/lib/meta/abstraction-status-fixture-store-plan.px
+#
+# P57: P3 ingest fixture → corpus_abstraction_status redb append + read-back verify.
+# Same closed loop as chat-abstraction-entries-probe; morph-rules-build/verify CLI 재사용.
+let
+  sp = import ./abstraction-status-store-plan.px;
+  agc = import ./abstraction-genesis-core.px;
+  gb = import ./abstraction-gate-bridge.px;
+  B = builtins;
+  schema = "meta.abstraction-status.v0";
+  table = "corpus_abstraction_status";
+
+  fixturePair =
+    let t1 = [ { sym = "eat"; } { sym = "철수"; } { sym = "사과"; } ];
+        t2 = [ { sym = "eat"; } { sym = "영희"; } { sym = "책"; } ];
+        cand = agc.genesisCandidate {
+          terms = [ t1 t2 ]; owner_candidate = "predicate-concepts";
+          relation = "predicate-synonym-collapse"; source_symbols = [ "먹" "잡수시" ];
+        };
+        gateRes = gb.submitToGate { candidate = cand; };
+    in { candidate = cand; gate_result = gateRes; };
+
+  fixtureEntry = sp.mkEntry fixturePair;
+  expectedKey = sp.storeKeyOfEntry fixtureEntry;
+in {
+  mkPlan = args:
+    sp.mkPlan { pairs = [ fixturePair ]; built_at_ms = args.built_at_ms or 0; };
+
+  mkQuery = args:
+    {
+      plan = {
+        plan_id = "abstraction-status-fixture-query-v0";
+        source_lens = "stdlib/lib/meta/abstraction-status-fixture-store-plan.px";
+        source_verdict = "query-abstraction-status-fixture";
+        operations = [
+          { op_kind = "scan-prefix"; table = table; key = ""; key_prefix = schema + "/status/"; }
+        ];
+        receipt_owner = schema;
+        plan_built_at_ms = args.built_at_ms or 0;
+      };
+      schema = schema;
+      expected_key = expectedKey;
+      fixture_gate_status = fixturePair.gate_result.gate_status;
+      fixture_abstraction_key = fixtureEntry.abstraction_key;
+    };
+}

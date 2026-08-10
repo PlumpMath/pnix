@@ -1,0 +1,162 @@
+# stdlib.lib.math.roman-numerals
+#
+# OWNER-LAW (v0.12-AAL, div-math, 2026-05-21): Roman numeral
+# conversion.
+#
+# base-conversion.px renders an integer in any positional base.
+# Roman numerals are NOT positional -- they are an additive /
+# subtractive system. This owner handles that separate numeral
+# system: the integers 1 .. 3999 to and from their Roman form.
+#
+# # Two exact inverses
+#
+#   toRoman n     -> the Roman numeral of n (1 <= n <= 3999)
+#   fromRoman s   -> the integer a Roman numeral denotes
+#
+# They round-trip: `fromRoman (toRoman n)` is n for every n in
+# range. toRoman is greedy over the value/symbol table (which
+# includes the six subtractive pairs CM CD XC XL IX IV); fromRoman
+# matches the longest table prefix at each step.
+#
+# # The classic range
+#
+# Standard Roman numerals cover 1 .. 3999 (there is no zero and no
+# standard symbol beyond M-groups for 4000+). The owner Held-guards
+# that range.
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT numbers outside 1 .. 3999, NOT zero, NOT negatives.
+#   - NOT the vinculum / apostrophus large-number notations.
+#   - NOT a lenient parser -- fromRoman expects well-formed input.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/roman-numerals.px";
+
+  minValue = 1;
+  maxValue = 3999;
+
+  # Value/symbol table, descending. The six subtractive pairs sit
+  # immediately before the base symbol they would otherwise repeat
+  # four of, so a greedy scan never produces "IIII".
+  romanTable = [
+    { v = 1000; s = "M";  }
+    { v = 900;  s = "CM"; }
+    { v = 500;  s = "D";  }
+    { v = 400;  s = "CD"; }
+    { v = 100;  s = "C";  }
+    { v = 90;   s = "XC"; }
+    { v = 50;   s = "L";  }
+    { v = 40;   s = "XL"; }
+    { v = 10;   s = "X";  }
+    { v = 9;    s = "IX"; }
+    { v = 5;    s = "V";  }
+    { v = 4;    s = "IV"; }
+    { v = 1;    s = "I";  }
+  ];
+
+  # Integer -> Roman numeral. Greedy: subtract the largest table
+  # value that still fits, append its symbol, repeat.
+  toRoman = n:
+    let
+      go = remaining: table: acc:
+        if table == [] then acc
+        else
+          let entry = builtins.head table;
+          in
+            if remaining >= entry.v
+            then go (remaining - entry.v) table (acc + entry.s)
+            else go remaining (builtins.tail table) acc;
+    in go n romanTable "";
+
+  # Roman numeral -> integer. At each step match the longest table
+  # symbol that prefixes the remaining string; on a match restart
+  # the table scan from the top.
+  fromRoman = s:
+    let
+      go = rest: table:
+        if rest == "" then 0
+        else if table == [] then 0
+        else
+          let
+            entry = builtins.head table;
+            slen = builtins.stringLength entry.s;
+            rlen = builtins.stringLength rest;
+          in
+            if rlen >= slen
+               && builtins.substring 0 slen rest == entry.s
+            then
+              entry.v
+              + go (builtins.substring slen rlen rest) romanTable
+            else go rest (builtins.tail table);
+    in go s romanTable;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [ "to-roman" "from-roman" ];
+
+  applyRoman = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      roman = if request ? roman then request.roman else "";
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "to-roman" then
+        if n < minValue || n > maxValue then {
+          outcome = "held-out-of-range";
+          operation = op;
+          n = n;
+          min_value = minValue;
+          max_value = maxValue;
+        }
+        else {
+          outcome = "roman-computed";
+          operation = op;
+          n = n;
+          roman = toRoman n;
+        }
+      else
+        # op == "from-roman"
+        let v = fromRoman roman;
+        in
+          # round-trip self-check: a well-formed numeral re-encodes
+          # to itself. A mismatch means the input was malformed.
+          if v < minValue || v > maxValue || toRoman v != roman then {
+            outcome = "held-malformed-roman";
+            operation = op;
+            roman = roman;
+          }
+          else {
+            outcome = "roman-computed";
+            operation = op;
+            roman = roman;
+            value = v;
+          };
+
+in {
+  inherit
+    ownerName
+    minValue
+    maxValue
+    romanTable
+    toRoman
+    fromRoman
+    knownOperations
+    applyRoman;
+  meta = {
+    source = "stdlib math roman numerals";
+    owner = ownerName;
+    base = "parametric-math-roman-numerals-v0";
+    rev_note = "v0.12-AAL (div-math): Roman numeral conversion owner. toRoman (greedy over the value/symbol table with the six subtractive pairs) and fromRoman (longest-prefix match) are exact inverses across 1..3999. from-roman runs a round-trip self-check so a malformed numeral is Held, not silently mis-parsed. Standalone. NOT numbers outside 1..3999, NOT the vinculum notation, NOT a lenient parser, NOT yet a registered lens.";
+  };
+}

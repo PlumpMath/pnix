@@ -1,0 +1,12 @@
+let
+  B = builtins;
+  genPath = ./workflow-open-standards-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else { schema = "workflow.open_standards_catalog.v1"; source = { name = "WDL and RO-Crate workflow schema catalog"; license = "BSD-3-Clause / Apache-2.0"; }; summary = { wdl_heading_count = 0; ro_crate_term_count = 0; }; wdl = { headings = [ ]; code_blocks = [ ]; tokens = [ ]; }; ro_crate = { terms = [ ]; }; };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: { plan = { plan_id = "workflow-open-standards-catalog-load-v0"; source_lens = "stdlib/lib/corpus/workflow-open-standards-catalog-store-plan.px"; source_verdict = "materialize-corpus-source"; operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ]; receipt_owner = "workflow.open_standards_catalog.v0"; plan_built_at_ms = args.built_at_ms or 0; }; schema = seed.schema; content_hash = contentHash; value_bytes_len = B.stringLength valueSrc; };
+  mkQuery = args: { plan = { plan_id = "workflow-open-standards-catalog-query-v0"; source_lens = "stdlib/lib/corpus/workflow-open-standards-catalog-store-plan.px"; source_verdict = "query-corpus-source"; operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ]; receipt_owner = "workflow.open_standards_catalog.v0"; plan_built_at_ms = args.built_at_ms or 0; }; expected_key = key; expected_hash = contentHash; };
+}

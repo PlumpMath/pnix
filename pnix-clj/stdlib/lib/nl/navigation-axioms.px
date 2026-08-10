@@ -1,0 +1,459 @@
+let
+  ownerName = "stdlib.nl.navigation-axioms";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Navigation Axioms (agent-NL-124) ============================
+  #
+  # 코드 위 *위치 이동* 의 손/도구. "한 칸 한 칸 이동" 의 *방향* 결정.
+  #
+  # 5 family:
+  #   1. lexical (go-to-def / find-refs / hover / peek)
+  #   2. AST (parent / child / sibling / token-walk)
+  #   3. scope (function / block / module / class)
+  #   4. cross-file (call hierarchy / type hierarchy / import graph)
+  #   5. search (symbol / text / semantic / file)
+
+  stepKind = "navigation-tool-axiom";
+  framework_step =
+    "axiom content — 코드 위 위치 이동 방향 + 반환 정보";
+
+  # === 1. Lexical Navigation ====================================
+
+  lexicalAxiomTree = bt.composeBranchTree "lexical navigation axiom" [
+    {
+      name = "go-to-definition";
+      cues = [ "go to definition" "goto def" "jump to def" "정의로" "정의 보기" ];
+      sub_specs = [
+        { name = "declaration"; cues = [ "declaration" "선언" ]; terminal = true; }
+        { name = "definition-body"; cues = [ "implementation" "body" "구현" ]; terminal = true; }
+        { name = "type-definition"; cues = [ "type def" "타입 정의" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "find-references";
+      cues = [ "find references" "find usages" "find refs" "참조 찾기" "사용처" ];
+      sub_specs = [
+        { name = "all-references"; cues = [ "all" "모두" ]; terminal = true; }
+        { name = "write-only-refs"; cues = [ "write" "write-only" "쓰기" ]; terminal = true; }
+        { name = "read-only-refs"; cues = [ "read" "read-only" "읽기" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "hover-info";
+      cues = [ "hover" "tooltip" "info" "마우스 오버" ];
+      sub_specs = [
+        { name = "type-info"; cues = [ "type" "타입" ]; terminal = true; }
+        { name = "documentation"; cues = [ "doc" "documentation" "문서" ]; terminal = true; }
+        { name = "signature"; cues = [ "signature" "서명" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "peek";
+      cues = [ "peek" "preview" "엿보기" "미리보기" ];
+      sub_specs = [
+        { name = "inline-peek"; cues = [ "inline" "인라인" ]; terminal = true; }
+        { name = "side-by-side"; cues = [ "side by side" "나란히" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. AST Navigation ========================================
+
+  astAxiomTree = bt.composeBranchTree "AST navigation axiom" [
+    {
+      name = "parent-walk";
+      cues = [ "parent node" "ancestor" "go up" "부모 노드" "상위로" ];
+      sub_specs = [
+        { name = "immediate-parent"; cues = []; terminal = true; }
+        { name = "containing-function"; cues = [ "containing function" "둘러싼 함수" ]; terminal = true; }
+        { name = "containing-class"; cues = [ "containing class" "둘러싼 클래스" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "child-walk";
+      cues = [ "child node" "descendant" "go down" "자식 노드" "하위로" ];
+      sub_specs = [
+        { name = "first-child"; cues = []; terminal = true; }
+        { name = "last-child"; cues = []; terminal = true; }
+        { name = "all-children"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "sibling-walk";
+      cues = [ "sibling" "next sibling" "prev sibling" "형제 노드" ];
+      sub_specs = [
+        { name = "next-sibling"; cues = [ "next" "다음" ]; terminal = true; }
+        { name = "previous-sibling"; cues = [ "previous" "prev" "이전" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "token-walk";
+      cues = [ "next token" "previous token" "token level" "토큰" ];
+      sub_specs = [
+        { name = "next-token"; cues = []; terminal = true; }
+        { name = "prev-token"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "expression-walk";
+      cues = [ "expression tree" "subexpression" "표현식 트리" ];
+      sub_specs = [
+        { name = "lhs-of-assignment"; cues = [ "lhs" "left side" "좌변" ]; terminal = true; }
+        { name = "rhs-of-assignment"; cues = [ "rhs" "right side" "우변" ]; terminal = true; }
+        { name = "function-call-arg"; cues = [ "argument" "인자" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Scope Navigation ======================================
+
+  scopeAxiomTree = bt.composeBranchTree "scope navigation axiom" [
+    {
+      name = "function-scope";
+      cues = [ "function scope" "local scope" "함수 범위" ];
+      sub_specs = [
+        { name = "local-variables"; cues = [ "local" "지역" ]; terminal = true; }
+        { name = "parameters"; cues = [ "parameter" "argument" "매개변수" ]; terminal = true; }
+        { name = "captured-vars"; cues = [ "captured" "closure" "캡처" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "block-scope";
+      cues = [ "block scope" "if block" "loop block" "블록 범위" ];
+      sub_specs = [
+        { name = "if-block"; cues = []; terminal = true; }
+        { name = "loop-block"; cues = []; terminal = true; }
+        { name = "match-arm"; cues = [ "match" "case" "분기" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "module-scope";
+      cues = [ "module scope" "file scope" "모듈 범위" ];
+      sub_specs = [
+        { name = "module-exports"; cues = [ "export" "public" "공개" ]; terminal = true; }
+        { name = "module-privates"; cues = [ "private" "internal" "비공개" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "class-scope";
+      cues = [ "class scope" "method scope" "클래스 범위" ];
+      sub_specs = [
+        { name = "instance-members"; cues = [ "instance" "인스턴스" ]; terminal = true; }
+        { name = "static-members"; cues = [ "static" "정적" ]; terminal = true; }
+        { name = "inherited-members"; cues = [ "inherited" "상속" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Cross-File Navigation =================================
+
+  crossFileAxiomTree = bt.composeBranchTree "cross-file navigation axiom" [
+    {
+      name = "call-hierarchy";
+      cues = [ "call hierarchy" "callers" "callees" "호출 계층" ];
+      sub_specs = [
+        { name = "callers-of"; cues = [ "who calls" "callers" "호출자" ]; terminal = true; }
+        { name = "callees-of"; cues = [ "who is called" "callees" "피호출자" ]; terminal = true; }
+        { name = "transitive-callers"; cues = [ "transitive" "전이" "indirect" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "type-hierarchy";
+      cues = [ "type hierarchy" "supertypes" "subtypes" "타입 계층" ];
+      sub_specs = [
+        { name = "supertypes"; cues = [ "parent type" "base class" "상위 타입" ]; terminal = true; }
+        { name = "subtypes"; cues = [ "child type" "derived" "하위 타입" ]; terminal = true; }
+        { name = "implementations"; cues = [ "implementation" "implements" "구현체" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "import-graph";
+      cues = [ "import graph" "dependency graph" "import" "의존성 그래프" ];
+      sub_specs = [
+        { name = "direct-imports"; cues = [ "direct" "직접" ]; terminal = true; }
+        { name = "transitive-imports"; cues = [ "transitive" "전이" "indirect" ]; terminal = true; }
+        { name = "circular-deps"; cues = [ "circular" "cycle" "순환" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "file-tree";
+      cues = [ "file tree" "directory" "folder" "파일 트리" "디렉토리" ];
+      sub_specs = [
+        { name = "parent-dir"; cues = [ "parent" "상위" ]; terminal = true; }
+        { name = "sibling-files"; cues = [ "sibling" "형제" ]; terminal = true; }
+        { name = "all-files-in-dir"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Search Navigation =====================================
+
+  searchAxiomTree = bt.composeBranchTree "search navigation axiom" [
+    {
+      name = "symbol-search";
+      cues = [ "symbol search" "find symbol" "심볼 검색" ];
+      sub_specs = [
+        { name = "workspace-symbols"; cues = [ "workspace" "프로젝트" ]; terminal = true; }
+        { name = "document-symbols"; cues = [ "document" "file" "문서" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "text-search";
+      cues = [ "text search" "find text" "grep" "텍스트 검색" ];
+      sub_specs = [
+        { name = "exact-match"; cues = [ "exact" "정확" ]; terminal = true; }
+        { name = "regex-search"; cues = [ "regex" "regular expression" "정규식" ]; terminal = true; }
+        { name = "case-sensitive"; cues = [ "case sensitive" "대소문자" ]; terminal = true; }
+        { name = "whole-word"; cues = [ "whole word" "단어 전체" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "semantic-search";
+      cues = [ "semantic search" "by usage" "by signature" "의미 검색" ];
+      sub_specs = [
+        { name = "by-signature"; cues = [ "signature" "서명" ]; terminal = true; }
+        { name = "by-usage-pattern"; cues = [ "usage" "사용 패턴" ]; terminal = true; }
+        { name = "by-type"; cues = [ "by type" "타입으로" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "file-search";
+      cues = [ "find file" "file finder" "파일 찾기" ];
+      sub_specs = [
+        { name = "by-name"; cues = [ "file name" "filename" "파일명" "파일 이름" ]; terminal = true; }
+        { name = "by-content"; cues = [ "content" "내용" ]; terminal = true; }
+        { name = "by-glob"; cues = [ "glob" "pattern" "패턴" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "incoming-outgoing-references";
+      cues = [ "incoming references" "outgoing references" "transitive closure" "inbound" "outbound" ];
+      sub_specs = [
+        { name = "incoming-edges"; cues = [ "incoming" "들어오는" ]; terminal = true; }
+        { name = "outgoing-edges"; cues = [ "outgoing" "나가는" ]; terminal = true; }
+        { name = "cycle-in-deps"; cues = [ "cycle in deps" "순환 의존" ]; terminal = true; }
+        { name = "transitive-closure-refs"; cues = [ "transitive closure" "전이 폐쇄" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry of all 5 families ==================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-nav-001";
+      name = "lexical";
+      domain = "navigation";
+      activation_cues = [
+        "go to definition" "find references" "find usages" "hover" "peek"
+        "정의로" "참조 찾기" "사용처" "마우스 오버" "엿보기"
+      ];
+      tree = lexicalAxiomTree;
+      sub_count = builtins.length lexicalAxiomTree.branches;
+      tool_role = "이동 — 식별자 lexical 단위";
+    }
+    {
+      axiom_id = "axiom-nav-002";
+      name = "ast";
+      domain = "navigation";
+      activation_cues = [
+        "ast" "parent node" "child node" "sibling" "token"
+        "AST" "부모 노드" "자식 노드" "형제 노드"
+      ];
+      tree = astAxiomTree;
+      sub_count = builtins.length astAxiomTree.branches;
+      tool_role = "이동 — AST 구조 단위";
+    }
+    {
+      axiom_id = "axiom-nav-003";
+      name = "scope";
+      domain = "navigation";
+      activation_cues = [
+        "scope" "function scope" "block scope" "module scope" "class scope"
+        "범위" "함수 범위" "블록 범위" "모듈 범위" "클래스 범위"
+      ];
+      tree = scopeAxiomTree;
+      sub_count = builtins.length scopeAxiomTree.branches;
+      tool_role = "이동 — scope 단위";
+    }
+    {
+      axiom_id = "axiom-nav-004";
+      name = "cross-file";
+      domain = "navigation";
+      activation_cues = [
+        "call hierarchy" "type hierarchy" "import graph" "file tree"
+        "callers" "callees" "supertypes" "subtypes"
+        "호출 계층" "타입 계층" "의존성" "파일 트리"
+      ];
+      tree = crossFileAxiomTree;
+      sub_count = builtins.length crossFileAxiomTree.branches;
+      tool_role = "이동 — 파일 간 단위";
+    }
+    {
+      axiom_id = "axiom-nav-005";
+      name = "search";
+      domain = "navigation";
+      activation_cues = [
+        "search" "find" "grep" "regex" "symbol"
+        "incoming references" "outgoing references" "transitive closure" "inbound" "outbound"
+        "검색" "찾기" "정규식" "심볼" "들어오는" "나가는"
+      ];
+      tree = searchAxiomTree;
+      sub_count = builtins.length searchAxiomTree.branches;
+      tool_role = "이동 — 검색 단위";
+    }
+  ];
+
+  # === Activation logic ===========================================
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple navigation axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "navigate via " + ax.name;
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  # === Plate entry =================================================
+
+  applyNavigationAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-110-nl-navigation "
+            + "(composes axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+              tool_role = ax.tool_role;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms } | { activate_for } | { describe }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-navigation-axiom-110";
+    composes = "axiom-98-tree (data on generic substrate)";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "lexical (go-to-def / find-refs / hover / peek)"
+      "ast (parent / child / sibling / token / expression)"
+      "scope (function / block / module / class)"
+      "cross-file (call hierarchy / type hierarchy / imports / file tree)"
+      "search (symbol / text / semantic / file)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    tool_metaphor =
+      "코드 위 *위치 이동* 의 손/도구. 한 칸 한 칸 이동 시 *방향* + "
+      + "*반환할 정보* 결정. diagnostic 과 edit 의 보완 — 어디로 가서 "
+      + "무엇을 보고 어떻게 진단할지.";
+  };
+
+in {
+  inherit
+    ownerName
+    lexicalAxiomTree astAxiomTree scopeAxiomTree
+    crossFileAxiomTree searchAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    applyNavigationAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL navigation axioms (agent-NL-124)";
+    owner = ownerName;
+    base = "nl-navigation-axioms-v0";
+    rev_note = "agent-NL-124 (2026-05-29): 코드 위 위치 이동의 손/도구. "
+      + "5 family (lexical/ast/scope/cross-file/search). 사용자 vision "
+      + "의 '한 칸 한 칸 이동' 의 방향 결정. DO NOT REBUILD - branch-"
+      + "tree-substrate generic constructor 위 데이터.";
+  };
+}

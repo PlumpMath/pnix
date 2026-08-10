@@ -1,0 +1,44 @@
+# DocLayNet schema/catalog metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No dataset payload/prose/graph wiring.
+let
+  B = builtins;
+  genPath = ./doclaynet-schema-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "doc.doclaynet.layout_schema.v1";
+    source = "DocLayNet layout dataset schema/catalog metadata";
+    license = "CDLA-Permissive-1.0";
+    policy = "schema/catalog metadata only";
+    summary = { labels = 0; document_categories = 0; splits = 0; fields = 0; };
+    manifest = { }; layout_labels = [ ]; document_categories = [ ]; splits = [ ]; dataset_fields = [ ]; asset_types = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "doclaynet-schema-catalog-load-v0";
+      source_lens = "stdlib/lib/corpus/doclaynet-schema-catalog-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "doc.doclaynet.layout_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "doclaynet-schema-catalog-query-v0";
+      source_lens = "stdlib/lib/corpus/doclaynet-schema-catalog-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "doc.doclaynet.layout_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

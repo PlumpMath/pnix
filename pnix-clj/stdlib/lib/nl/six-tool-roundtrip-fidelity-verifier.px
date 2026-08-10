@@ -1,0 +1,170 @@
+let
+  ownerName = "stdlib.nl.six-tool-roundtrip-fidelity-verifier";
+
+  # === 6-Tool Roundtrip Fidelity Verifier (Axiom #103) ===============
+  #
+  # Axiom #100 forward + Axiom #102 reverse 의 pair fidelity check.
+  # Axiom #71 (nl-roundtrip-verifier) 의 6-tool-specific specialization.
+  #
+  # NL utterance → #100 forward → query envelope → #102 reverse → NL'
+  # 두 NL 의 의미 일치를 entity-level 에서 검증.
+  #
+  # # 5 fidelity tier (entity-aware, #71 의 4 tier 보다 한 단 더)
+  #
+  # - entity-exact: forward 추출 entity = reverse 가 emit 한 NL 의 entity (정확 fixed-point)
+  # - tool-exact: tool_id 는 일치, entity 는 약간 다름 (synonym)
+  # - lossy-with-held-only: forward OK, reverse Held
+  # - lossy-with-contradiction: forward tool_id ≠ reverse 가 추출한 tool_id
+  # - divergent-shape: forward 도 reverse 도 Held
+
+  forward = import nl/six-tool-api-nl-lifter.px;
+  reverse = import nl/six-tool-api-reverse-composer.px;
+
+  # forward outcome → entity field name lookup
+  entityFieldFor = outcome:
+    if outcome == "hanim-query-lifted" then "entity"
+    else if outcome == "blender-query-lifted" then "operator"
+    else if outcome == "freecad-query-lifted" then "api"
+    else if outcome == "gltf-query-lifted" then "type_name"
+    else if outcome == "rhino-query-lifted" then "entity"
+    else if outcome == "coverage-query-lifted" then "scope"
+    else null;
+
+  verifyRoundtripFor6Tool = utterance: language:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else if language != "ko" && language != "en" then {
+      outcome = "held-unsupported-language";
+      requested_language = language;
+    }
+    else
+      let
+        fwd = forward.liftToSixToolQuery utterance;
+        fwdSucceeded =
+          (fwd.outcome == "hanim-query-lifted")
+          || (fwd.outcome == "blender-query-lifted")
+          || (fwd.outcome == "freecad-query-lifted")
+          || (fwd.outcome == "gltf-query-lifted")
+          || (fwd.outcome == "rhino-query-lifted")
+          || (fwd.outcome == "coverage-query-lifted");
+      in
+        if !fwdSucceeded then {
+          outcome = "divergent-shape";
+          fidelity_tier = "divergent-shape";
+          reason = "Forward Held: " + fwd.outcome
+            + ". 6-tool substrate 어디에도 매치 불가. roundtrip 불가.";
+          forward_outcome = fwd.outcome;
+        }
+        else
+          let
+            rev = reverse.composeReverseForSixToolReceipt fwd language;
+          in
+            if rev.outcome != "six-tool-reverse-composed" then {
+              outcome = "lossy-with-held-only";
+              fidelity_tier = "lossy-with-held-only";
+              reason = "Forward OK but reverse Held: " + rev.outcome;
+              forward = fwd;
+              reverse_outcome = rev.outcome;
+            }
+            else
+              let
+                # Verify by re-lifting the reverse-composed NL utterance
+                # 양방향 합의 검사
+                rfwd = forward.liftToSixToolQuery rev.nl_utterance;
+                fldName = entityFieldFor fwd.outcome;
+                fwdEntity =
+                  if fldName == null then null
+                  else if builtins.hasAttr fldName fwd then
+                    (let v = builtins.getAttr fldName fwd;
+                     in if v == null then null else v)
+                  else null;
+                rfwdEntity =
+                  if rfwd.outcome != fwd.outcome then null
+                  else if fldName == null then null
+                  else if builtins.hasAttr fldName rfwd then
+                    (let v = builtins.getAttr fldName rfwd;
+                     in if v == null then null else v)
+                  else null;
+              in
+                if rfwd.outcome != fwd.outcome then {
+                  outcome = "lossy-with-contradiction";
+                  fidelity_tier = "lossy-with-contradiction";
+                  forward_outcome = fwd.outcome;
+                  reverse_then_forward_outcome = rfwd.outcome;
+                  reason = "Reverse 가 만든 NL 을 다시 forward 하면 다른 tool 으로 라우팅됨.";
+                }
+                else if fwdEntity == rfwdEntity then {
+                  outcome = "entity-exact";
+                  fidelity_tier = "entity-exact";
+                  preserved_entity = fwdEntity;
+                  preserved_tool_id =
+                    if builtins.hasAttr "tool_id" fwd then fwd.tool_id else "unknown";
+                  original_utterance = utterance;
+                  reverse_nl = rev.nl_utterance;
+                  language = language;
+                  verification_method = "forward → reverse → forward (entity fixed-point)";
+                }
+                else {
+                  outcome = "tool-exact";
+                  fidelity_tier = "tool-exact";
+                  preserved_tool_id =
+                    if builtins.hasAttr "tool_id" fwd then fwd.tool_id else "unknown";
+                  forward_entity = fwdEntity;
+                  reverse_then_forward_entity = rfwdEntity;
+                  reason = "Same tool, entity differs (synonym path).";
+                };
+
+  applySixToolRoundtripFidelityVerifierPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else
+      let lang = if builtins.hasAttr "language" request then request.language else "en";
+      in verifyRoundtripFor6Tool request.utterance lang;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-roundtrip-fidelity-axiom-103 (6-tool entity-aware)";
+    fidelity_tiers = [
+      "entity-exact"
+      "tool-exact"
+      "lossy-with-held-only"
+      "lossy-with-contradiction"
+      "divergent-shape"
+    ];
+    tier_count = 5;
+    routed_forward = "Axiom #100 6-tool API NL lifter";
+    routed_reverse = "Axiom #102 6-tool API reverse composer";
+    specializes = "Axiom #71 (nl-roundtrip-verifier) for 6-tool entity-level fixed-point";
+    cross_referenced_axiom = 12;  # roundtrip-invariant-substrate
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-unsupported-language"
+    ];
+  };
+
+in {
+  inherit
+    ownerName entityFieldFor
+    verifyRoundtripFor6Tool
+    applySixToolRoundtripFidelityVerifierPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL 6-tool roundtrip fidelity verifier (Axiom #103)";
+    owner = ownerName;
+    base = "six-tool-roundtrip-fidelity-verifier-v0";
+    rev_note = "Axiom #100/#102 pair fidelity. entity-level fixed-point check."
+      + " forward→reverse→forward chain 으로 entity 보존 검증."
+      + " Axiom #71 의 6-tool-specific specialization. DO NOT REBUILD.";
+  };
+}

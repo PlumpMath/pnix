@@ -1,0 +1,91 @@
+# stdlib.nl.nl-meaning-pipeline
+#
+# **NL 의미 파이프라인 capstone (.px, one-mirror 정본): 발화 → 의미 → 평가.**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): NL 이해의 전체 흐름(발화→의미→
+# 답)이 거울(.px) 하나에. 이 owner 가 dispatch-쪽 .px 스택의 통합 진입점(Phase 2 재배선
+# 표적; ingest-쪽 통합은 dictionary-sense-batch).
+#
+# 흐름(K0/K1·K5 정본 합성, 재구현 0):
+#   발화 ─토큰화→ lexeme-surface-index.lookup (token→cue) ─→ meaning-rule-engine.
+#   deriveCandidates (cue×rule→후보, ambiguity 보존) ─→ effect-free-evaluator.
+#   evaluateCandidate (evaluator_id→결과).
+#   ambiguity(>1 후보)=held-ambiguous 정직(런타임이 collapse 안 함).
+#
+# 경계(host): 토큰화는 mechanical(host nl_prepare 가능)지만 v0 은 공백 split 로 자족.
+#   digest/hash/IO=host.
+let
+  lexeme    = import nl/lexeme-surface-index.px;
+  engine    = import nl/meaning-rule-engine.px;
+  evaluator = import nl/effect-free-evaluator.px;
+
+  filter = builtins.filter;
+  map = builtins.map;
+  foldl' = builtins.foldl';
+  elemAt = builtins.elemAt;
+  len = builtins.length;
+  isString = builtins.isString;
+  attrNames = builtins.attrNames;
+
+  splitSp = s: filter (w: isString w && w != "") (builtins.split " " s);
+  fieldOr = a: k: d: if a ? ${k} then a.${k} else d;
+
+  # 발화 → cue stream (token → lexeme lookup → cue; 미인식 token=drop 정직)
+  utteranceToCues = lexemeRows: utterance:
+    filter (c: c != null) (map (tok:
+      let hit = lexeme.lookup lexemeRows tok;
+      in
+        if hit.match_kind == "held-no-lexeme" then null
+        else
+          let row = elemAt hit.hits 0;
+          in { cue_class = row.token_class; value = fieldOr row "literal_value" tok; ref = row.lexeme_id; }
+    ) (splitSp utterance));
+
+  # captures(list) → slots(map) (effect-free-evaluator 가 slots 소비)
+  slotsFromCaptures = caps: foldl' (acc: c: acc // { ${c.name} = c.value; }) { } caps;
+
+  # ★ 전체 파이프라인: 발화 → 의미 → 평가 ★
+  process = lexemeRows: rules: utterance:
+    let
+      cues = utteranceToCues lexemeRows utterance;
+      candidates = engine.deriveCandidates rules cues;
+      n = len candidates;
+    in
+      if n == 0 then { outcome = "held-no-meaning"; cues = cues; }
+      else if n > 1 then { outcome = "held-ambiguous"; candidate_count = n; cues = cues; }
+      else
+        let
+          cand = elemAt candidates 0;
+          # candidate.slots(=emit.slots resolved) 우선. 단 legacy/evaluator-only rules 는 emit.slots 가 없어
+          # slots={} 로 오므로 captures 를 evaluator slots 로 보강한다(2 더하기 3 → lhs/operation/rhs).
+          rawSlots = fieldOr cand "slots" { };
+          slots = if (attrNames rawSlots) == [ ] then slotsFromCaptures (fieldOr cand "captures" [ ]) else rawSlots;
+          forEval = cand // { slots = slots; };
+          ev = evaluator.evaluateCandidate forEval;
+        in {
+          outcome = "processed";
+          cues = cues;
+          rule_id = fieldOr cand "rule_id" null;
+          relation_kind = fieldOr cand "relation_kind" "";
+          slots = slots;
+          eval = ev;
+        };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.nl-meaning-pipeline";
+    consumes = "lexeme-surface-index + meaning-rule-engine + effect-free-evaluator (재구현 0)";
+    role = "NL 의미 파이프라인: 발화→lexeme cue→meaning 후보→eval. dispatch-쪽 .px 통합 진입점(Phase 2 재배선 표적). ambiguity 보존(>1=held).";
+    boundary = "토큰화=mechanical(v0 공백 split); digest/hash/IO=host.";
+    note = "ingest-쪽 통합은 dictionary-sense-batch. Rust nl_dispatch_serve hot/projection = Phase 2/3 삭제 대상.";
+  };
+
+in {
+  inherit utteranceToCues slotsFromCaptures process inventorySummary;
+  ownerName = "stdlib.nl.nl-meaning-pipeline";
+  meta = {
+    source = "stdlib nl nl-meaning-pipeline (.px capstone: 발화→의미→평가; one-mirror 정본)";
+    owner = "stdlib.nl.nl-meaning-pipeline";
+    base = "nl-meaning-pipeline-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1 capstone: dispatch-쪽 NL 의미 흐름의 .px 통합. lexeme-surface-index(token→cue) + meaning-rule-engine(cue×rule→후보) + effect-free-evaluator(eval) 합성(재구현0). 검증: '2 더하기 3' → cues[num2,op-add,num3] → add 후보(captures lhs/operation/rhs) → eval 5. ambiguity>1=held 정직. 토큰화=v0 공백 split. Rust nl_dispatch_serve hot/projection = Phase 2/3 삭제. Phase 2 가 serve→이 owner via_px 호출.";
+  };
+}

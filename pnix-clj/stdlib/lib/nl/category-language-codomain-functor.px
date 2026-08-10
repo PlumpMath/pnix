@@ -1,0 +1,625 @@
+let
+  ownerName = "stdlib.nl.category-language-codomain-functor";
+
+  # === Language Codomain Functor (agent-NL-138) ====================
+  #
+  # Functor F_lang : NLFlowCat → CodeCat(lang)
+  # 각 morphism action → language-specific code fragment.
+  #
+  # 13 languages: python / rust / typescript / go / c / cpp /
+  #   java / csharp / ruby / bash / sql / kotlin / swift
+
+  stepKind = "codomain-functor-per-language";
+  framework_step =
+    "categorical body — per-language F_lang : NLFlowCat → CodeCat(lang)";
+
+  # Helper: get parameter value or fallback placeholder
+  pv = params: key: fallback:
+    if builtins.isAttrs params && builtins.hasAttr key params
+    then params.${key} else fallback;
+
+  # =================================================================
+  # === emit per (language, step action, params) ===================
+  # =================================================================
+
+  emitStep = language: action: params:
+    let
+      tgt = pv params "target_name" "<TARGET>";
+      newName = pv params "new_name" "<NEW>";
+      scope = pv params "scope" "./";
+    in
+      if language == "python" then
+        if action == "locate-definition" then
+          "# locate def of " + tgt + ": grep -rn 'def " + tgt + "' " + scope
+        else if action == "locate-references" then
+          "# locate refs: grep -rn '" + tgt + "' " + scope
+        else if action == "replace-identifier-text" then
+          "# sed -i 's/" + tgt + "/" + newName + "/g' " + scope + "/**/*.py"
+        else if action == "verify-references-resolve" then
+          "# python -m py_compile " + scope + "; pytest"
+        else if action == "update-test-references" then
+          "# sed -i 's/" + tgt + "/" + newName + "/g' tests/**/*.py"
+        else if action == "select-region" then
+          "# select code block (vscode: Ctrl+Shift+P → Extract Method)"
+        else if action == "infer-parameters" then
+          "# inspect free variables; emit `def helper(params): ...`"
+        else if action == "create-new-definition" then
+          "# def <new_name>(<params>):\n#     <body>"
+        else if action == "replace-with-call" then
+          "# replace original block with: <new_name>(<args>)"
+        else if action == "verify-equivalent-behavior" then
+          "# pytest tests/test_" + tgt + ".py"
+        else if action == "reproduce-bug" then
+          "# write a failing test that triggers the null deref"
+        else if action == "locate-root-cause" then
+          "# pdb.set_trace() or pytest --pdb"
+        else if action == "design-patch" then
+          "# add `if x is None: return default` guard"
+        else if action == "verify-fix" then
+          "# pytest -x -v"
+        else if action == "regression-test" then
+          "# pytest --runxfail tests/regression/"
+        else if action == "identify-test-target" then
+          "# locate function under test (e.g. auth/login.py)"
+        else if action == "design-input-output" then
+          "# table: [(input, expected_output), ...]"
+        else if action == "write-assertion" then
+          "# def test_<thing>():\n#     assert actual == expected"
+        else if action == "run-and-verify" then
+          "# pytest tests/test_<thing>.py -v"
+        else if action == "locate-callers" then
+          "# grep -rn '" + tgt + "(' " + scope
+        else if action == "substitute-body" then
+          "# at each call site, replace " + tgt + "(...) with its body"
+        else if action == "remove-definition" then
+          "# delete def " + tgt + " from " + scope
+        else if action == "locate-target" then
+          "# locate " + tgt + " in " + scope
+        else if action == "check-dependencies" then
+          "# grep -rn '" + tgt + "' " + scope + " | wc -l"
+        else if action == "remove-target" then
+          "# git rm " + scope + "/" + tgt + ".py"
+        else if action == "verify-no-dangling-refs" then
+          "# python -c 'import " + tgt + "' && echo FAIL || echo OK"
+        else "# " + action
+
+      else if language == "rust" then
+        if action == "locate-definition" then
+          "// rust-analyzer goto-def, or rg 'fn " + tgt + "' src/"
+        else if action == "locate-references" then
+          "// rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "// cargo rustc --crate-name=... -- --rename-symbol " + tgt + "→" + newName
+          + "\n// (or: cargo fmt; rg --files-with-matches '" + tgt
+          + "' | xargs sed -i 's/" + tgt + "/" + newName + "/g')"
+        else if action == "verify-references-resolve" then
+          "// cargo check; cargo test"
+        else if action == "update-test-references" then
+          "// rg --files-with-matches '" + tgt + "' tests/ | xargs sed -i 's/"
+          + tgt + "/" + newName + "/g'"
+        else if action == "select-region" then
+          "// select function body in IDE; extract to new fn"
+        else if action == "infer-parameters" then
+          "// borrow-checker: identify lifetimes + ownership of free vars"
+        else if action == "create-new-definition" then
+          "// fn <new_name>(<params>) -> <ret> { <body> }"
+        else if action == "replace-with-call" then
+          "// replace block with: <new_name>(<args>)"
+        else if action == "verify-equivalent-behavior" then
+          "// cargo test --bin " + tgt
+        else if action == "reproduce-bug" then
+          "// #[test]\n// fn repro_null_panic() { /* panic-triggering input */ }"
+        else if action == "locate-root-cause" then
+          "// cargo run; observe panic backtrace (RUST_BACKTRACE=1)"
+        else if action == "design-patch" then
+          "// convert Option::unwrap to .ok_or(...)? or match"
+        else if action == "verify-fix" then
+          "// cargo test"
+        else if action == "regression-test" then
+          "// cargo test --test regression"
+        else if action == "identify-test-target" then
+          "// crate::auth::login under tests/"
+        else if action == "write-assertion" then
+          "// assert_eq!(actual, expected);"
+        else if action == "run-and-verify" then
+          "// cargo test --test " + tgt
+        else "// " + action
+
+      else if language == "typescript" then
+        if action == "locate-definition" then
+          "// vscode F12, or rg 'function " + tgt + "' src/"
+        else if action == "locate-references" then
+          "// vscode Shift+F12, or rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "// vscode F2 rename (TS-aware), or ts-morph programmatic rename"
+        else if action == "verify-references-resolve" then
+          "// tsc --noEmit; npm test"
+        else if action == "update-test-references" then
+          "// rg --files-with-matches '" + tgt + "' tests/ | xargs sed -i 's/"
+          + tgt + "/" + newName + "/g'"
+        else if action == "design-patch" then
+          "// use `value?.field` optional chaining or `value ?? default`"
+        else if action == "write-assertion" then
+          "// expect(actual).toBe(expected);"
+        else if action == "run-and-verify" then
+          "// npx jest --testPathPattern=" + tgt
+        else "// " + action
+
+      else if language == "go" then
+        if action == "locate-definition" then
+          "// gopls goto-def, or rg 'func " + tgt + "' ."
+        else if action == "locate-references" then
+          "// gopls find-refs, or rg '" + tgt + "' ."
+        else if action == "replace-identifier-text" then
+          "// gorename -from \"\\\"pkg\\\".Type." + tgt
+          + "\" -to \"" + newName + "\""
+        else if action == "verify-references-resolve" then
+          "// go vet ./...; go test ./..."
+        else if action == "update-test-references" then
+          "// rg --files-with-matches '" + tgt + "' *_test.go "
+          + "| xargs sed -i 's/" + tgt + "/" + newName + "/g'"
+        else if action == "design-patch" then
+          "// add `if x == nil { return errors.New(\"nil " + tgt
+          + "\") }` guard"
+        else if action == "write-assertion" then
+          "// if got != want { t.Errorf(\"got %v, want %v\", got, want) }"
+        else if action == "run-and-verify" then
+          "// go test -run Test" + tgt + " ./..."
+        else "// " + action
+
+      else if language == "c" then
+        if action == "locate-definition" then
+          "// ctags -R; vim :tag " + tgt
+          + ", or grep -rn '" + tgt + "(' " + scope
+        else if action == "locate-references" then
+          "// cscope -R, or grep -rn '" + tgt + "' " + scope
+        else if action == "replace-identifier-text" then
+          "// clang-rename -old-name=" + tgt + " -new-name=" + newName
+          + " -i src/*.c"
+        else if action == "verify-references-resolve" then
+          "// make clean && make && make check"
+        else if action == "design-patch" then
+          "/* add: if (" + tgt + " == NULL) return -1; */"
+        else if action == "write-assertion" then
+          "// assert(actual == expected);"
+        else if action == "run-and-verify" then
+          "// ./run_tests"
+        else "// " + action
+
+      else if language == "cpp" then
+        if action == "locate-definition" then
+          "// clangd goto-def, or rg '\\b" + tgt + "\\b' src/"
+        else if action == "locate-references" then
+          "// clangd find-refs, or rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "// clang-rename -old-name=" + tgt + " -new-name=" + newName
+          + " -i src/*.cpp"
+        else if action == "verify-references-resolve" then
+          "// cmake --build build; ctest --test-dir build"
+        else if action == "design-patch" then
+          "// use std::optional<T> or null-check before deref"
+        else if action == "write-assertion" then
+          "// EXPECT_EQ(actual, expected);  // GoogleTest"
+        else "// " + action
+
+      else if language == "java" then
+        if action == "locate-definition" then
+          "// IntelliJ Ctrl+B, or rg 'class " + tgt + "|" + tgt + "\\(' src/"
+        else if action == "locate-references" then
+          "// IntelliJ Alt+F7, or rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "// IntelliJ Shift+F6 (rename refactor, AST-aware)"
+        else if action == "verify-references-resolve" then
+          "// mvn compile; mvn test"
+        else if action == "design-patch" then
+          "// add Objects.requireNonNull(" + tgt + ", \"" + tgt + " is null\");"
+        else if action == "write-assertion" then
+          "// assertEquals(expected, actual);  // JUnit 5"
+        else if action == "run-and-verify" then
+          "// mvn test -Dtest=" + tgt + "Test"
+        else "// " + action
+
+      else if language == "csharp" then
+        if action == "locate-definition" then
+          "// Visual Studio F12, or rg 'class " + tgt + "' ."
+        else if action == "replace-identifier-text" then
+          "// Visual Studio Ctrl+R,R rename refactor (Roslyn-aware)"
+        else if action == "verify-references-resolve" then
+          "// dotnet build; dotnet test"
+        else if action == "design-patch" then
+          "// use nullable reference types: " + tgt + "?, ?? operator"
+        else if action == "write-assertion" then
+          "// Assert.Equal(expected, actual);  // xUnit"
+        else "// " + action
+
+      else if language == "ruby" then
+        if action == "locate-definition" then
+          "# solargraph goto-def, or rg 'def " + tgt + "' ."
+        else if action == "replace-identifier-text" then
+          "# rubocop --safe-auto-correct; or sed -i 's/" + tgt + "/"
+          + newName + "/g' **/*.rb"
+        else if action == "verify-references-resolve" then
+          "# rubocop; rspec"
+        else if action == "design-patch" then
+          "# use safe navigation: " + tgt + "&.method"
+        else if action == "write-assertion" then
+          "# expect(actual).to eq(expected)  # rspec"
+        else "# " + action
+
+      else if language == "bash" then
+        if action == "locate-definition" then
+          "# grep -rn '" + tgt + "()' " + scope
+        else if action == "replace-identifier-text" then
+          "# sed -i 's/\\b" + tgt + "\\b/" + newName + "/g' *.sh"
+        else if action == "verify-references-resolve" then
+          "# shellcheck *.sh; bats tests/"
+        else if action == "design-patch" then
+          "# add: [[ -z \"$" + tgt + "\" ]] && exit 1"
+        else "# " + action
+
+      else if language == "sql" then
+        if action == "locate-definition" then
+          "-- pg_dump --schema-only | grep '" + tgt + "'"
+        else if action == "replace-identifier-text" then
+          "-- ALTER TABLE old RENAME TO " + newName + ";\n"
+          + "-- ALTER TABLE x RENAME COLUMN " + tgt + " TO " + newName + ";"
+        else if action == "verify-references-resolve" then
+          "-- run EXPLAIN on dependent queries; check pg_depend"
+        else if action == "design-patch" then
+          "-- add: WHERE " + tgt + " IS NOT NULL"
+        else "-- " + action
+
+      else if language == "kotlin" then
+        if action == "locate-definition" then
+          "// IntelliJ Ctrl+B, or rg 'fun " + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "// IntelliJ Shift+F6 rename refactor"
+        else if action == "verify-references-resolve" then
+          "// gradle build; gradle test"
+        else if action == "design-patch" then
+          "// use ?. safe call or ?: elvis: " + tgt + " ?: default"
+        else "// " + action
+
+      else if language == "swift" then
+        if action == "locate-definition" then
+          "// Xcode Cmd+Click, or rg 'func " + tgt + "' Sources/"
+        else if action == "replace-identifier-text" then
+          "// Xcode Cmd+Ctrl+E rename (semantic refactor)"
+        else if action == "verify-references-resolve" then
+          "// swift build; swift test"
+        else if action == "design-patch" then
+          "// use optional binding: if let " + tgt + " = " + tgt + " { ... }"
+        else "// " + action
+
+      # === New languages (agent-NL-151) ────────────────────────
+      else if language == "erlang" then
+        if action == "locate-definition" then
+          "%% erlang_ls, or grep -rn '" + tgt + "(' src/"
+        else if action == "locate-references" then
+          "%% rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "%% wrangler refactoring tool: rename " + tgt + " → " + newName
+        else if action == "verify-references-resolve" then
+          "%% rebar3 compile; rebar3 eunit; rebar3 dialyzer"
+        else if action == "design-patch" then
+          "%% pattern match on undefined: case " + tgt + " of undefined -> ...; X -> ... end"
+        else if action == "write-assertion" then
+          "%% ?assertEqual(Expected, Actual).  %% eunit"
+        else if action == "run-and-verify" then
+          "%% rebar3 ct"
+        else "%% " + action
+
+      else if language == "elixir" then
+        if action == "locate-definition" then
+          "# ElixirLS goto-def, or rg 'def " + tgt + "' lib/"
+        else if action == "locate-references" then
+          "# rg '" + tgt + "' lib/"
+        else if action == "replace-identifier-text" then
+          "# mix format; or use credo + manual rename across files"
+        else if action == "verify-references-resolve" then
+          "# mix compile --warnings-as-errors; mix test"
+        else if action == "design-patch" then
+          "# use `with` for happy path: with {:ok, v} <- get(), do: handle(v)"
+        else if action == "write-assertion" then
+          "# assert actual == expected  # ExUnit"
+        else if action == "run-and-verify" then
+          "# mix test --only describe:\"" + tgt + "\""
+        else "# " + action
+
+      else if language == "clojure" then
+        if action == "locate-definition" then
+          ";; clj-kondo + LSP goto-def, or rg '(defn " + tgt + "' src/"
+        else if action == "locate-references" then
+          ";; rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          ";; clj-rewrite or clj-refactor refactoring (AST-aware)"
+        else if action == "verify-references-resolve" then
+          ";; clj -M:test  ; clojure.test"
+        else if action == "design-patch" then
+          ";; use some-> for nil short-circuit: (some-> " + tgt + " :field)"
+        else if action == "write-assertion" then
+          ";; (is (= expected actual))  ; clojure.test"
+        else if action == "run-and-verify" then
+          ";; clj -M:test :only " + tgt
+        else ";; " + action
+
+      else if language == "haskell" then
+        if action == "locate-definition" then
+          "-- HLS goto-def, or rg '^" + tgt + " ::' src/"
+        else if action == "locate-references" then
+          "-- HLS find-references, or rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "-- HLS rename refactor (AST-aware), or cabal exec ghc-prof-aux"
+        else if action == "verify-references-resolve" then
+          "-- cabal build; cabal test"
+        else if action == "design-patch" then
+          "-- use Maybe + fromMaybe: fromMaybe defaultVal (lookup k m)"
+        else if action == "write-assertion" then
+          "-- actual `shouldBe` expected  -- hspec"
+        else if action == "run-and-verify" then
+          "-- cabal test --test-options=\"-m " + tgt + "\""
+        else "-- " + action
+
+      else if language == "ocaml" then
+        if action == "locate-definition" then
+          "(* merlin goto-def, or rg 'let " + tgt + " ' lib/ *)"
+        else if action == "locate-references" then
+          "(* merlin occurrences, or rg '" + tgt + "' lib/ *)"
+        else if action == "replace-identifier-text" then
+          "(* merlin rename, or ocp-indent + manual sed *)"
+        else if action == "verify-references-resolve" then
+          "(* dune build; dune runtest *)"
+        else if action == "design-patch" then
+          "(* match " + tgt + " with | None -> default | Some v -> handle v *)"
+        else if action == "write-assertion" then
+          "(* Alcotest.(check int) \"msg\" expected actual *)"
+        else if action == "run-and-verify" then
+          "(* dune runtest *)"
+        else "(* " + action + " *)"
+
+      else if language == "zig" then
+        if action == "locate-definition" then
+          "// ZLS goto-def, or rg 'fn " + tgt + "' src/"
+        else if action == "locate-references" then
+          "// rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "// ZLS rename, or zig fmt + manual sed"
+        else if action == "verify-references-resolve" then
+          "// zig build; zig build test"
+        else if action == "design-patch" then
+          "// use optional type or error union: ?T or !T with try/catch"
+        else if action == "write-assertion" then
+          "// try std.testing.expectEqual(expected, actual);"
+        else if action == "run-and-verify" then
+          "// zig test src/" + tgt + ".zig"
+        else "// " + action
+
+      else if language == "nim" then
+        if action == "locate-definition" then
+          "# nimsuggest goto-def, or rg 'proc " + tgt + "' src/"
+        else if action == "locate-references" then
+          "# rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "# nimsuggest rename, or manual sed + nim check"
+        else if action == "verify-references-resolve" then
+          "# nim check; nimble test"
+        else if action == "design-patch" then
+          "# use Option[T] + isSome: if " + tgt + ".isSome: ..."
+        else if action == "write-assertion" then
+          "# check actual == expected  # unittest"
+        else if action == "run-and-verify" then
+          "# nimble test"
+        else "# " + action
+
+      # === Additional 8 languages (agent-NL-152) ────────────────
+      else if language == "r" then
+        if action == "locate-definition" then
+          "# RStudio F2, or grep -rn '^" + tgt + " <-' R/"
+        else if action == "locate-references" then
+          "# rg '" + tgt + "' R/"
+        else if action == "replace-identifier-text" then
+          "# styler::style_pkg(); or sed -i 's/\\b" + tgt + "\\b/" + newName + "/g' R/*.R"
+        else if action == "verify-references-resolve" then
+          "# devtools::check(); devtools::test()"
+        else if action == "design-patch" then
+          "# use rlang::is_null check: if (rlang::is_null(" + tgt + ")) default else " + tgt
+        else if action == "write-assertion" then
+          "# testthat::expect_equal(actual, expected)"
+        else if action == "run-and-verify" then
+          "# devtools::test_file('tests/testthat/test-" + tgt + ".R')"
+        else "# " + action
+
+      else if language == "julia" then
+        if action == "locate-definition" then
+          "# Revise.jl + LSP goto-def, or rg 'function " + tgt + "' src/"
+        else if action == "locate-references" then
+          "# rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "# JuliaFormatter.format_text; or manual rename + Pkg.test"
+        else if action == "verify-references-resolve" then
+          "# Pkg.test(); using Aqua; Aqua.test_all()"
+        else if action == "design-patch" then
+          "# use ismissing/isnothing: " + tgt + " === nothing ? default : " + tgt
+        else if action == "write-assertion" then
+          "# @test actual == expected  # Test"
+        else if action == "run-and-verify" then
+          "# Pkg.test(test_args=[\"" + tgt + "\"])"
+        else "# " + action
+
+      else if language == "scala" then
+        if action == "locate-definition" then
+          "// Metals goto-def, or rg 'def " + tgt + "' src/main/scala/"
+        else if action == "locate-references" then
+          "// Metals find-references"
+        else if action == "replace-identifier-text" then
+          "// Metals rename (Tree-aware refactor)"
+        else if action == "verify-references-resolve" then
+          "// sbt compile; sbt test"
+        else if action == "design-patch" then
+          "// use Option + getOrElse: " + tgt + ".getOrElse(default)"
+        else if action == "write-assertion" then
+          "// actual shouldBe expected  // ScalaTest"
+        else if action == "run-and-verify" then
+          "// sbt \"testOnly *" + tgt + "Test\""
+        else "// " + action
+
+      else if language == "fsharp" then
+        if action == "locate-definition" then
+          "// Ionide F12, or rg 'let " + tgt + "' src/"
+        else if action == "locate-references" then
+          "// Ionide find-references"
+        else if action == "replace-identifier-text" then
+          "// Ionide rename (semantic, AST-aware)"
+        else if action == "verify-references-resolve" then
+          "// dotnet build; dotnet test"
+        else if action == "design-patch" then
+          "// pattern match Option: match " + tgt + " with | Some v -> v | None -> default"
+        else if action == "write-assertion" then
+          "// Assert.equal expected actual  // Expecto or FsUnit"
+        else if action == "run-and-verify" then
+          "// dotnet test --filter Name~" + tgt
+        else "// " + action
+
+      else if language == "crystal" then
+        if action == "locate-definition" then
+          "# crystal tool format; rg 'def " + tgt + "' src/"
+        else if action == "locate-references" then
+          "# rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "# crystal tool format; sed -i 's/\\b" + tgt + "\\b/" + newName + "/g' src/*.cr"
+        else if action == "verify-references-resolve" then
+          "# crystal build; crystal spec"
+        else if action == "design-patch" then
+          "# use try? or nilable check: " + tgt + ".try &.method || default"
+        else if action == "write-assertion" then
+          "# actual.should eq(expected)  # spec"
+        else if action == "run-and-verify" then
+          "# crystal spec spec/" + tgt + "_spec.cr"
+        else "# " + action
+
+      else if language == "lua" then
+        if action == "locate-definition" then
+          "-- lua-language-server goto-def, or rg 'function " + tgt + "' src/"
+        else if action == "locate-references" then
+          "-- rg '" + tgt + "' src/"
+        else if action == "replace-identifier-text" then
+          "-- stylua + sed -i 's/\\b" + tgt + "\\b/" + newName + "/g' src/*.lua"
+        else if action == "verify-references-resolve" then
+          "-- luacheck src/; busted spec/"
+        else if action == "design-patch" then
+          "-- nil-check: " + tgt + " = " + tgt + " or default"
+        else if action == "write-assertion" then
+          "-- assert.are.equal(expected, actual)  -- busted"
+        else if action == "run-and-verify" then
+          "-- busted spec/" + tgt + "_spec.lua"
+        else "-- " + action
+
+      else if language == "perl" then
+        if action == "locate-definition" then
+          "# perltidy; grep -rn 'sub " + tgt + "' lib/"
+        else if action == "locate-references" then
+          "# rg '" + tgt + "' lib/"
+        else if action == "replace-identifier-text" then
+          "# Devel::Refactor, or perltidy + sed -i 's/\\b" + tgt + "\\b/" + newName + "/g' lib/*.pm"
+        else if action == "verify-references-resolve" then
+          "# perl -c lib/" + tgt + ".pm; prove -lv t/"
+        else if action == "design-patch" then
+          "# defined-or: " + tgt + " // default"
+        else if action == "write-assertion" then
+          "# is($actual, $expected, 'desc');  # Test::More"
+        else if action == "run-and-verify" then
+          "# prove -l t/" + tgt + ".t"
+        else "# " + action
+
+      else if language == "php" then
+        if action == "locate-definition" then
+          "// PHPStorm Ctrl+B, or rg 'function " + tgt + "' src/"
+        else if action == "locate-references" then
+          "// PHPStorm Alt+F7"
+        else if action == "replace-identifier-text" then
+          "// PHPStorm Shift+F6 rename, or php-cs-fixer + manual rename"
+        else if action == "verify-references-resolve" then
+          "// composer dump-autoload; vendor/bin/phpunit"
+        else if action == "design-patch" then
+          "// null coalescing: $" + tgt + " ?? $default"
+        else if action == "write-assertion" then
+          "// $this->assertEquals($expected, $actual);  // PHPUnit"
+        else if action == "run-and-verify" then
+          "// vendor/bin/phpunit --filter " + tgt
+        else "// " + action
+
+      else "(language not supported: " + language + ")";
+
+  # === All supported languages ====================================
+
+  supportedLanguages = [
+    "python" "rust" "typescript" "go" "c" "cpp"
+    "java" "csharp" "ruby" "bash" "sql" "kotlin" "swift"
+    "erlang" "elixir" "clojure" "haskell" "ocaml" "zig" "nim"
+    "r" "julia" "scala" "fsharp" "crystal" "lua" "perl" "php"
+  ];
+
+  # === Emit chain for a language ==================================
+
+  emitChain = morphisms: language:
+    builtins.map (m: emitStep language m.action m.params) morphisms;
+
+  # === Multi-language fan-out (parallel codomain functor) =========
+
+  emitChainAllLanguages = morphisms:
+    let
+      mkPair = lang: {
+        language = lang;
+        emitted = emitChain morphisms lang;
+      };
+    in
+      builtins.map mkPair supportedLanguages;
+
+  # === Plate entry =================================================
+
+  applyLanguageCodomainPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if (builtins.hasAttr "emit_step" request)
+         && (builtins.hasAttr "language" request) then {
+      outcome = "step-emitted";
+      result = emitStep request.language
+        request.emit_step.action
+        (request.emit_step.params or {});
+    }
+    else if (builtins.hasAttr "emit_chain" request)
+         && (builtins.hasAttr "language" request) then {
+      outcome = "chain-emitted";
+      result = emitChain request.emit_chain request.language;
+    }
+    else if builtins.hasAttr "emit_chain_all_languages" request then {
+      outcome = "all-language-emitted";
+      result = emitChainAllLanguages request.emit_chain_all_languages;
+    }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-category-language-codomain-functor-axiom-124";
+    composes = "axiom-119-nl-flow-category";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = false;
+    language_count = builtins.length supportedLanguages;
+    languages = supportedLanguages;
+    primary_outcomes = [
+      "step-emitted"
+      "chain-emitted"
+      "all-language-emitted"
+    ];
+  };
+
+in {
+  inherit ownerName pv emitStep
+    supportedLanguages emitChain emitChainAllLanguages
+    applyLanguageCodomainPlate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL category language codomain functor (agent-NL-138)";
+    owner = ownerName;
+  };
+}

@@ -1,0 +1,212 @@
+# stdlib/lib/lisp/term-dag.px — term layer (slice 1): first-order term + matcher
+# ════════════════════════════════════════════════════════════════════════════
+# 적대검증 woordyb9m(2026-06-16)이 깬 치명함정의 선결 substrate:
+#   - rewrite 가 string 매칭(hasInfix/isContigSub)이라 generic 법칙(distributivity)
+#     등록 불가 · left-linearity 미구현 · metavar/substitution 0 → 0=1 재개통.
+# 이 leaf 가 그 term 층을 연다(structure-audit rework #2 의 첫 조각).
+#
+# ★ one-mirror: 새 거울 아님 — *기존 reader*(pnix-lisp `read`)로 S-식을 datum 으로
+#   읽어 그 위에 first-order 매칭/치환을 얹는다. term = datum, metavar = "?"-접두 sym.
+# ★ 범위(slice 1, 정직): 1차(first-order) 매칭/치환 + 구조적 content-key + left-linear
+#   검사 + leftmost subterm rewrite. *미포함*(다음 슬라이스): unification(양방향)·
+#   e-graph/confluence·SMT discharge·alpha-정규화. 따라서 아직 *sound rewrite 의 전제*지
+#   sound rewrite 자체는 아님.
+let
+  lisp = import ./pnix-lisp.px;   # 재사용: homoiconic reader (surface, not a new mirror)
+  B = builtins;
+
+  # term = datum: int | {sym} | {str} | {vec=[…]} | [ term … ]
+  # metavariable = {sym} whose name starts with "?"  (예: ?a ?x)
+  isMetaVar = t: (t ? sym) && (B.stringLength t.sym >= 1) && (B.substring 0 1 t.sym == "?");
+  parse = s: lisp.read s;                                # string → term (ONE form)
+
+  # ── helpers (no genList/concatMap/rec) ──
+  flatMap   = f: xs: B.foldl' (acc: x: acc ++ (f x)) [ ] xs;
+  dedup     = xs: B.foldl' (acc: x: if B.elem x acc then acc else acc ++ [ x ]) [ ] xs;
+  join      = sep: xs: B.foldl' (a: x: if a == "" then x else a + sep + x) "" xs;
+  replaceAt = xs: i: v: let go = j: if j >= (B.length xs) then [ ]
+                                    else [ (if j == i then v else B.elemAt xs j) ] ++ go (j + 1);
+                        in go 0;
+  isNode = t: (t ? vec) || (B.isList t);                 # composite (has children)
+  kids   = t: if (t ? vec) then t.vec else if (B.isList t) then t else [ ];
+  rewrap = t: ks: if (t ? vec) then { vec = ks; } else ks;
+
+  # ── readable display form (NOT a content key — atom/composite 미구분; 사람용/rewriteStr 결과) ──
+  serialize = t:
+    if (t ? sym) then t.sym
+    else if (t ? str) then "\"" + t.str + "\""
+    else if (B.isInt t) then B.toString t
+    else if (t ? vec) then "[" + (join " " (B.map serialize t.vec)) + "]"
+    else if (B.isList t) then "(" + (join " " (B.map serialize t)) + ")"
+    else "?";
+
+  # ── content-addressed canonical KEY (injective: 구조 다르면 키 다름) = 號 hash / edge id ──
+  # 적대검증 w1hfhs203: serialize 는 atom↔composite 충돌(hand-built {sym="(f x)"} ≡ list) → content-
+  # address 엔 type-tag 한 key 사용. atom 은 "s:/S:/i:" 접두라 "(...)"/"[...]" 복합과 절대 안 겹침.
+  # 구조 같으면 같은 키(run 간 안정 주소, positional #idx 대체, A/B functor 전제).
+  key = t:
+    if (t ? sym) then "s:" + t.sym                     # metavar(?x) 포함
+    else if (t ? str) then "S:" + t.str
+    else if (B.isInt t) then "i:" + B.toString t
+    else if (t ? vec) then "[" + (join " " (B.map key t.vec)) + "]"
+    else if (B.isList t) then "(" + (join " " (B.map key t)) + ")"
+    else "?";
+
+  # ── metavariables + LEFT-LINEARITY (audit fatal #2: 주석만 있고 미구현이던 검사) ──
+  varOccurs = t: if isMetaVar t then [ t.sym ]
+                 else if (isNode t) then flatMap varOccurs (kids t) else [ ];
+  vars     = t: dedup (varOccurs t);
+  isLinear = t: let vs = varOccurs t; in (B.length vs) == (B.length (dedup vs));  # 변수 중복 없음
+  # 규칙 well-formed: rhs 의 모든 metavar 가 lhs 에 bound (적대검증 w1hfhs203: dangling rhs metavar 차단).
+  subsetVars = a: b: B.foldl' (acc: v: acc && (B.elem v b)) true a;   # a ⊆ b
+  wellFormed = rule: subsetVars (vars rule.rhs) (vars rule.lhs);
+
+  # ── first-order matching: pattern × term → subst(attrs) | null ──
+  # metavar 재등장은 *일관 binding* 으로(첫 binding 과 구조동일이어야 매칭) — non-linear
+  # 패턴도 건전하게 처리(eq(?x,?x)는 두 인자 같을 때만 매칭, audit 의 오매칭 차단).
+  bindV   = s: v: term: s // (B.listToAttrs [ { name = v; value = term; } ]);
+  matchIn = pat: term: s:
+    if s == null then null
+    else if isMetaVar pat then
+      (let v = pat.sym; in
+       if B.hasAttr v s then (if (B.getAttr v s) == term then s else null)   # 일관성
+       else bindV s v term)
+    else if (pat ? sym) then (if (term ? sym) && (term.sym == pat.sym) then s else null)
+    else if (pat ? str) then (if (term ? str) && (term.str == pat.str) then s else null)
+    else if (B.isInt pat) then (if (B.isInt term) && (term == pat) then s else null)
+    else if (pat ? vec) then (if (term ? vec) then matchList pat.vec term.vec s else null)
+    else if (B.isList pat) then (if (B.isList term) then matchList pat term s else null)
+    else null;
+  matchList = ps: ts: s:
+    if (B.length ps) != (B.length ts) then null
+    else let go = i: acc: if acc == null then null
+                          else if i >= (B.length ps) then acc
+                          else go (i + 1) (matchIn (B.elemAt ps i) (B.elemAt ts i) acc);
+         in go 0 s;
+  match = pat: term: matchIn pat term { };
+
+  # ── unification (two-way, Robinson + occurs-check) — confluence/critical-pair 의 전제 ──
+  # match 와 달리 *양쪽 모두* metavar 가능. walk = binding 사슬 해소. occurs-check = 무한항 차단.
+  walk    = t: s: if (isMetaVar t) && (B.hasAttr t.sym s) then walk (B.getAttr t.sym s) s else t;
+  occurs  = name: t: s:
+    let t' = walk t s; in
+    if isMetaVar t' then t'.sym == name
+    else if (isNode t') then (B.foldl' (acc: k: acc || (occurs name k s)) false (kids t'))
+    else false;
+  bindU   = v: term: s:
+    if (isMetaVar term) && (term.sym == v.sym) then s          # v = v (no-op)
+    else if (occurs v.sym term s) then null                    # occurs-check 실패 → 무한항
+    else bindV s v.sym term;
+  unifyIn = a: b: s:
+    if s == null then null
+    else let a' = walk a s; b' = walk b s; in
+      if isMetaVar a' then bindU a' b' s
+      else if isMetaVar b' then bindU b' a' s
+      else if (a' ? sym) then (if (b' ? sym) && (a'.sym == b'.sym) then s else null)
+      else if (a' ? str) then (if (b' ? str) && (a'.str == b'.str) then s else null)
+      else if (B.isInt a') then (if (B.isInt b') && (a' == b') then s else null)
+      else if (a' ? vec) then (if (b' ? vec) then unifyListU a'.vec b'.vec s else null)
+      else if (B.isList a') then (if (B.isList b') then unifyListU a' b' s else null)
+      else null;
+  unifyListU = as: bs: s:
+    if (B.length as) != (B.length bs) then null
+    else let go = i: acc: if acc == null then null
+                          else if i >= (B.length as) then acc
+                          else go (i + 1) (unifyIn (B.elemAt as i) (B.elemAt bs i) acc);
+         in go 0 s;
+  unify = a: b: unifyIn a b { };
+  # mgu(또는 임의 subst) 를 항에 *완전* 적용(walk 으로 binding 사슬 해소·재귀) — critical-pair 용.
+  substFull = s: t:
+    let t' = walk t s; in
+    if isMetaVar t' then t'
+    else if (t' ? vec) then { vec = B.map (substFull s) t'.vec; }
+    else if (B.isList t') then B.map (substFull s) t'
+    else t';
+
+  # ── 위치(path)·subterm·치환·변수rename — critical-pair(subterm overlap, slice 3c) 용 ──
+  positions = t:                                         # 모든 노드 path([]=root, [i,…]=자식)
+    let ks = kids t;
+        childPos = let go = i: if i >= (B.length ks) then [ ]
+                               else (B.map (p: [ i ] ++ p) (positions (B.elemAt ks i))) ++ (go (i + 1));
+                   in go 0;
+    in [ [ ] ] ++ childPos;
+  at = t: path: if path == [ ] then t else at (B.elemAt (kids t) (B.head path)) (B.tail path);
+  replaceAtPath = t: path: v:
+    if path == [ ] then v
+    else let i = B.head path; ks = kids t;
+         in rewrap t (replaceAt ks i (replaceAtPath (B.elemAt ks i) (B.tail path) v));
+  renameTerm = suf: t:                                   # metavar 충돌 방지: ?x → ?x<suf>
+    if isMetaVar t then { sym = t.sym + suf; }
+    else if (t ? vec) then { vec = B.map (renameTerm suf) t.vec; }
+    else if (B.isList t) then B.map (renameTerm suf) t
+    else t;
+  # alpha-canonical: metavar 를 첫등장 순서로 ?v0,?v1,… 재명명 → 구조 동치(rename 무관) 비교용.
+  alphaCanon = t:
+    let order = let collect = acc: x:
+                      if (isMetaVar x) then (if B.elem x.sym acc then acc else acc ++ [ x.sym ])
+                      else if (isNode x) then B.foldl' collect acc (kids x)
+                      else acc;
+                in collect [ ] t;
+        idxOf = name: let go = i: if i >= (B.length order) then i
+                                  else if (B.elemAt order i) == name then i else go (i + 1);
+                      in go 0;
+        go = x: if (isMetaVar x) then { sym = "?v" + (B.toString (idxOf x.sym)); }
+                else if (x ? vec) then { vec = B.map go x.vec; }
+                else if (B.isList x) then B.map go x
+                else x;
+    in go t;
+
+  # ── anti-unification (least general generalization, LGG) — unification 의 *쌍대* ──
+  # 두 항의 *가장 구체적인 공통 일반화*: 같은 위치는 보존, 다른 위치 → metavar(같은 (t1,t2) 불일치
+  # 쌍은 같은 var = consistency). = "예시들에서 일반 규칙 학습"(일반화가 궤적/예시에서 자라난다).
+  antiU = t1: t2: s:                                   # s = { store = [{a;b;var}]; n }
+    if t1 == t2 then { term = t1; store = s.store; n = s.n; }
+    else if (isNode t1) && (isNode t2) && ((t1 ? vec) == (t2 ? vec))
+            && (B.length (kids t1) == B.length (kids t2))
+    then let nk = B.length (kids t1);
+             go = i: acc: if i >= nk then acc
+                          else let sub = antiU (B.elemAt (kids t1) i) (B.elemAt (kids t2) i)
+                                                { store = acc.store; n = acc.n; };
+                               in go (i + 1) { kids = acc.kids ++ [ sub.term ]; store = sub.store; n = sub.n; };
+             r = go 0 { kids = [ ]; store = s.store; n = s.n; };
+         in { term = rewrap t1 r.kids; store = r.store; n = r.n; }
+    else let found = B.filter (e: (e.a == t1) && (e.b == t2)) s.store; in
+         if found != [ ] then { term = (B.head found).var; store = s.store; n = s.n; }   # 같은 불일치쌍 → 같은 var
+         else let v = { sym = "?g" + (B.toString s.n); };
+              in { term = v; store = s.store ++ [ { a = t1; b = t2; var = v; } ]; n = s.n + 1; };
+  antiUnify = t1: t2: (antiU t1 t2 { store = [ ]; n = 0; }).term;
+
+  # ── substitution: subst × term → term (metavar 치환; capture 없음=1차라 binder 무) ──
+  subst = s: t:
+    if isMetaVar t then (if B.hasAttr t.sym s then B.getAttr t.sym s else t)
+    else if (t ? vec) then { vec = B.map (subst s) t.vec; }
+    else if (B.isList t) then B.map (subst s) t
+    else t;
+
+  # ── single rewrite: leftmost subterm that matches lhs (generic — buried 도 적용) ──
+  # rwGo = 무가드 재귀; rewriteOnce = wellFormed 가드 1회(unbound rhs metavar → 미발화·Held).
+  rwGo = rule: t:
+    let m = match rule.lhs t; in
+    if m != null then { term = subst m rule.rhs; fired = true; }
+    else if (isNode t) then
+      (let ks = kids t;
+           go = i: if i >= (B.length ks) then { term = t; fired = false; }
+                   else let r = rwGo rule (B.elemAt ks i); in
+                        if r.fired then { term = rewrap t (replaceAt ks i r.term); fired = true; }
+                        else go (i + 1);
+       in go 0)
+    else { term = t; fired = false; };
+  rewriteOnce = rule: t:
+    if wellFormed rule then rwGo rule t
+    else { term = t; fired = false; held = "unbound-rhs-metavar"; };
+
+  # string 편의 wrapper: "lhs => rhs" 규칙을 term 문자열에 적용 → {result(직렬화); fired}
+  rewriteStr = ruleStr: termStr:
+    let parts = B.filter B.isString (B.split "=>" ruleStr);
+        r = rewriteOnce { lhs = parse (B.elemAt parts 0); rhs = parse (B.elemAt parts 1); } (parse termStr);
+    in { result = serialize r.term; fired = r.fired; };
+
+in {
+  inherit isMetaVar parse serialize key vars isLinear wellFormed match unify antiUnify subst substFull
+          positions at replaceAtPath renameTerm alphaCanon rewriteOnce rewriteStr;
+}

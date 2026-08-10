@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$clr_meta_root/.." && pwd)"
+dll="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
+
+if [[ "${1:-}" == "--no-build" ]]; then
+  shift
+else
+  "$root/bin/build-clr"
+fi
+
+if [[ "$#" -ne 0 ]]; then
+  echo "usage: scripts/clr-meta-gate [--no-build]" >&2
+  exit 2
+fi
+
+test -f "$dll"
+export CLOJURE_LOAD_PATH="$clr_meta_root/src:$clr_meta_root/test"
+dotnet "$dll" -m pnix.clr-meta.bootstrap-test
+"$clr_meta_root/scripts/clr-meta-tool-gate"
+"$clr_meta_root/scripts/clr-meta-compiler-stage1-gate"
+"$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage1-gate"
+"$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage2-gate"
+"$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage3-gate"
+"$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage4-gate"
+"$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage5-gate"
+"$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage6-gate"
+"$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage7-gate"

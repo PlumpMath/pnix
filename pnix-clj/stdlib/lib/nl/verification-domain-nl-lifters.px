@@ -1,0 +1,180 @@
+let
+  ownerName = "stdlib.nl.verification-domain-nl-lifters";
+
+  # === Verification domain NL lifters (Axioms #53-#57) =============
+  #
+  # 사용자 directive: "NL super-set... 모든 곳에 스며들어, 사람의 의도가
+  # 기계적으로 제대로 extract 되어 알고리즘 수학식 code 그게 양방향으로".
+  #
+  # #53 temporal-fact NL (Axiom #2 timeless-vs-ordered)
+  # #54 tool-safety NL (Axiom #14 capability-based safety)
+  # #55 capability-discovery NL (Axiom #19)
+  # #56 quantitative-invariant NL (Axiom #20)
+  # #57 evolution-lane NL (Axiom #23 algorithm-synthesis)
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  # === Axiom #53 temporal-fact NL ===================================
+  knownTemporalCategoryNLPatterns = [
+    { category = "timeless"; en_keywords = [ "timeless fact" "set-theoretic" "Tarski model" "no order" "no time" "time-independent" ]; ko_keywords = [ "시간 없는 사실" "집합론적" "Tarski 모델" "순서 없음" "시간 없음" "시간 무관" ]; }
+    { category = "ordered"; en_keywords = [ "ordered procedure" "step by step" "sequence of steps" "Church reduction" "Gentzen proof step" "procedure" "time-ordered" ]; ko_keywords = [ "순서가 있는 절차" "단계 별" "단계별" "Church reduction" "Gentzen 증명 단계" "절차" "시간 순서" "차례대로" ]; }
+  ];
+
+  liftToTemporalCategory = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownTemporalCategoryNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-temporal-category-matched"; known_categories = builtins.map (p: p.category) knownTemporalCategoryNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-temporal-category"; candidates = builtins.map (x: x.category) m; }
+      else { outcome = "temporal-category-lifted"; category = (builtins.head m).category; axiom_origin = "axiom-2-timeless-vs-ordered"; };
+
+  # === Axiom #54 tool-safety NL =====================================
+  knownToolSafetyTierNLPatterns = [
+    { tier = "read-only"; en_keywords = [ "read only" "read-only" "non-destructive" "list files" "git status" "ls" ]; ko_keywords = [ "읽기 전용" "비파괴" "list 명령" ]; }
+    { tier = "capability-limited"; en_keywords = [ "capability limited" "limited write" "controlled scope" "sandbox" ]; ko_keywords = [ "권한 제한" "제한 쓰기" "샌드박스" "통제된 범위" ]; }
+    { tier = "destructive-local"; en_keywords = [ "destructive local" "rm file" "delete locally" "git push --force" "force push" "rm -rf" ]; ko_keywords = [ "로컬 파괴적" "파일 삭제" "강제 푸시" "로컬 삭제" "rm -rf" "강제 푸시해" "파일 지워" ]; }
+    { tier = "destructive-external"; en_keywords = [ "destructive external" "deploy to prod" "production deploy" "delete cloud" "kubectl delete" "drop database" "drop table" "truncate" ]; ko_keywords = [ "외부 파괴적" "프로덕션 배포" "클라우드 삭제" "데이터베이스 drop" "테이블 drop" "DB 삭제" "프로덕션 deploy" ]; }
+  ];
+
+  liftToToolSafetyTier = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownToolSafetyTierNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-safety-tier-matched"; known_tiers = builtins.map (p: p.tier) knownToolSafetyTierNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-safety-tier"; candidates = builtins.map (x: x.tier) m; }
+      else
+        let tier = (builtins.head m).tier;
+        in {
+          outcome = "tool-safety-tier-lifted";
+          inherit tier;
+          requires_explicit_approval =
+            (tier == "destructive-local") || (tier == "destructive-external");
+          axiom_origin = "axiom-14-api-tool-safety-substrate (POLA, Saltzer-Schroeder 1975)";
+        };
+
+  # === Axiom #55 capability-discovery NL ============================
+  knownCapabilityDiscoverySourceNLPatterns = [
+    { source = "docset"; en_keywords = [ "docset" "API docs" "documentation" "dash docs" ]; ko_keywords = [ "docset" "API 문서" "문서" "API 레퍼런스" ]; }
+    { source = "lsp"; en_keywords = [ "LSP" "language server" "code completion" "intellisense" ]; ko_keywords = [ "LSP" "언어 서버" "코드 완성" "자동 완성" ]; }
+    { source = "tree-sitter"; en_keywords = [ "tree-sitter" "AST grammar" "syntax tree" "parser grammar" ]; ko_keywords = [ "tree-sitter" "AST 문법" "구문 트리" "파서 문법" ]; }
+    { source = "openapi-spec"; en_keywords = [ "OpenAPI" "OAS" "Swagger" "REST API spec" "API schema" ]; ko_keywords = [ "OpenAPI" "스웨거" "REST API 명세" "API 스키마" ]; }
+    { source = "ffi-header"; en_keywords = [ "FFI header" "C header" "extern declarations" "binding header" "header file" ]; ko_keywords = [ "FFI 헤더" "C 헤더" "extern 선언" "바인딩 헤더" "헤더 파일" ]; }
+  ];
+
+  liftToCapabilityDiscoverySource = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownCapabilityDiscoverySourceNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-capability-source-matched"; known_sources = builtins.map (p: p.source) knownCapabilityDiscoverySourceNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-capability-source"; candidates = builtins.map (x: x.source) m; }
+      else { outcome = "capability-source-lifted"; source = (builtins.head m).source; axiom_origin = "axiom-19-capability-discovery-substrate"; };
+
+  # === Axiom #56 quantitative-invariant NL ==========================
+  knownQuantInvariantKindNLPatterns = [
+    { kind = "bound-lower"; en_keywords = [ "lower bound" "minimum value" "at least" "greater than equal" "no less than" ]; ko_keywords = [ "하한" "최솟값" "이상" "최소" "보다 크거나 같다" ]; }
+    { kind = "bound-upper"; en_keywords = [ "upper bound" "maximum value" "at most" "less than equal" "no more than" ]; ko_keywords = [ "상한" "최댓값" "이하" "최대" "보다 작거나 같다" ]; }
+    { kind = "bound-range"; en_keywords = [ "range bound" "between A and B" "interval" "value range" "from X to Y" ]; ko_keywords = [ "범위" "A 와 B 사이" "구간" "값 범위" "X 부터 Y 까지" ]; }
+    { kind = "monotonicity-increasing"; en_keywords = [ "monotonically increasing" "monotonic increasing" "always increases" "non-decreasing" "increasing function" ]; ko_keywords = [ "단조 증가" "단조증가" "증가만 함" "비감소" "증가 함수" ]; }
+    { kind = "monotonicity-decreasing"; en_keywords = [ "monotonically decreasing" "monotonic decreasing" "always decreases" "non-increasing" "decreasing function" ]; ko_keywords = [ "단조 감소" "단조감소" "감소만 함" "비증가" "감소 함수" ]; }
+    { kind = "asymptotic-complexity"; en_keywords = [ "big-O" "asymptotic" "complexity bound" "O(n)" "O(log n)" "time complexity" ]; ko_keywords = [ "빅오" "점근" "복잡도 한계" "시간 복잡도" "공간 복잡도" ]; }
+  ];
+
+  liftToQuantInvariantKind = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownQuantInvariantKindNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-quant-invariant-matched"; known_kinds = builtins.map (p: p.kind) knownQuantInvariantKindNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-quant-invariant"; candidates = builtins.map (x: x.kind) m; }
+      else { outcome = "quant-invariant-lifted"; kind = (builtins.head m).kind; axiom_origin = "axiom-20-quantitative-invariant-substrate (Bachmann-Landau + Floyd)"; };
+
+  # === Axiom #57 evolution-lane NL ===================================
+  knownEvolutionStageNLPatterns = [
+    { stage = "A-held-retrieval-query"; en_keywords = [ "held retrieval query" "search for cue" "find context" "retrieve cue" ]; ko_keywords = [ "Held 검색" "큐 검색" "맥락 찾기" "큐 검색해" ]; }
+    { stage = "B-retrieval-result"; en_keywords = [ "retrieval result" "search result" "cue match" "search hit" ]; ko_keywords = [ "검색 결과" "큐 매치" "검색 히트" ]; }
+    { stage = "C-ankh-entry-receipt"; en_keywords = [ "ankh entry" "ankh receipt" "discourse log" "ankh record" ]; ko_keywords = [ "ankh 엔트리" "ankh receipt" "담화 로그" "ankh 기록" ]; }
+    { stage = "D-1-candidate-row"; en_keywords = [ "candidate row" "candidate proposal" "candidate record" ]; ko_keywords = [ "candidate row" "candidate 제안" "후보 row" "후보 제안" ]; }
+    { stage = "D-2-macro-folded"; en_keywords = [ "macro fold" "macro-folded" "macro processed" ]; ko_keywords = [ "매크로 폴드" "매크로 정리" "매크로 접기" ]; }
+    { stage = "D-3-axis-separated"; en_keywords = [ "axis separation" "axis separated" "axis check" ]; ko_keywords = [ "축 분리" "축 정렬" "축 검사" ]; }
+    { stage = "D-4-regression-proven"; en_keywords = [ "regression proof" "regression proven" "regression check" ]; ko_keywords = [ "회귀 증명" "회귀 검증" "회귀 체크" ]; }
+    { stage = "D-5-owner-law-processed"; en_keywords = [ "owner law" "owner-law processed" "law applied" "owner-law gate" ]; ko_keywords = [ "owner law" "법칙 적용" "owner-law 처리" "오너 법칙" ]; }
+    { stage = "E-hot-reload-plan"; en_keywords = [ "hot reload" "hot-reload plan" "live reload" ]; ko_keywords = [ "핫 리로드" "핫리로드 계획" "라이브 리로드" ]; }
+  ];
+
+  liftToEvolutionStage = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownEvolutionStageNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-evolution-stage-matched"; known_stages = builtins.map (p: p.stage) knownEvolutionStageNLPatterns; }
+      else
+        let
+          # 여러 stage matching → 가장 일찍 (알파벳 순) entry
+          sorted = builtins.sort (a: b: a.stage < b.stage) m;
+          entry = builtins.head sorted;
+        in { outcome = "evolution-stage-lifted"; entry_stage = entry.stage; axiom_origin = "axiom-23-algorithm-synthesis-evolution-lane-registry"; };
+
+  # === Dispatcher entry ============================================
+
+  applyVerificationDomainNlLifterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then { outcome = "held-missing-utterance-field"; }
+    else if !(builtins.hasAttr "lifter_kind" request) then { outcome = "held-missing-lifter-kind"; known_kinds = [ "temporal" "tool-safety" "capability-discovery" "quant-invariant" "evolution-stage" ]; }
+    else
+      let k = request.lifter_kind; u = request.utterance;
+      in
+        if k == "temporal" then liftToTemporalCategory u
+        else if k == "tool-safety" then liftToToolSafetyTier u
+        else if k == "capability-discovery" then liftToCapabilityDiscoverySource u
+        else if k == "quant-invariant" then liftToQuantInvariantKind u
+        else if k == "evolution-stage" then liftToEvolutionStage u
+        else { outcome = "held-unknown-lifter-kind"; kind = k; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axioms-53-to-57";
+    lifter_count = 5;
+    lifters = [
+      { id = "temporal"; axiom = 2; patterns = builtins.length knownTemporalCategoryNLPatterns; }
+      { id = "tool-safety"; axiom = 14; patterns = builtins.length knownToolSafetyTierNLPatterns; }
+      { id = "capability-discovery"; axiom = 19; patterns = builtins.length knownCapabilityDiscoverySourceNLPatterns; }
+      { id = "quant-invariant"; axiom = 20; patterns = builtins.length knownQuantInvariantKindNLPatterns; }
+      { id = "evolution-stage"; axiom = 23; patterns = builtins.length knownEvolutionStageNLPatterns; }
+    ];
+    new_decision_count = 0;
+    bilingual = true;
+  };
+
+in {
+  inherit
+    ownerName containsAny
+    knownTemporalCategoryNLPatterns knownToolSafetyTierNLPatterns
+    knownCapabilityDiscoverySourceNLPatterns knownQuantInvariantKindNLPatterns
+    knownEvolutionStageNLPatterns
+    liftToTemporalCategory liftToToolSafetyTier
+    liftToCapabilityDiscoverySource liftToQuantInvariantKind
+    liftToEvolutionStage
+    applyVerificationDomainNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL verification domain lifters (Axioms #53-57)";
+    owner = ownerName;
+    base = "verification-domain-nl-lifters-v0";
+    rev_note = "사용자 directive (2026-05-28). 5 verification/safety lifters "
+      + "(temporal / tool-safety / capability-discovery / quant-invariant / "
+      + "evolution-stage). en + ko bilingual. requires_explicit_approval "
+      + "flag for destructive tier (Saltzer-Schroeder POLA). DO NOT REBUILD.";
+  };
+}

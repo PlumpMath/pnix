@@ -1,0 +1,891 @@
+# AUTO-GENERATED — homological
+# Entries: 126
+let
+  ownerName = "stdlib.nl.lean.lookup-homological";
+  category = "homological";
+  entries = [
+    {
+      full_name = "HomologicalComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 45;
+      code_preview = "structure HomologicalComplex (c : ComplexShape ι) where   X : ι → V   d : ∀ i j, X i ⟶ X j   shape : ∀ i j, ¬c.Rel i j → d i j = 0 := by aesop_cat   d_comp_d' : ∀ i j k, c.Rel i j → c.Rel j k → d i j ≫ d j k = 0 := by aesop_cat";
+    }
+    {
+      full_name = "HomologicalComplex.d_comp_d";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 67;
+      code_preview = "@[reassoc (attr := simp)] theorem d_comp_d (C : HomologicalComplex V c) (i j k : ι) : C.d i j ≫ C.d j k = 0";
+    }
+    {
+      full_name = "HomologicalComplex.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 75;
+      code_preview = "theorem ext {C₁ C₂ : HomologicalComplex V c} (h_X : C₁.X = C₂.X)     (h_d :       ∀ i j : ι,         c.Rel i j → C₁.d i j ≫ eqToHom (congr_fun h_X j) = eqToHom (congr_fun h_X i) ≫ C₂.d i j) :     C₁ = C₂";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 90;
+      code_preview = "def XIsoOfEq (K : HomologicalComplex V c) {p q : ι} (h : p = q) : K.X p ≅ K.X q :=   eqToIso (by rw [h])";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_rfl";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 94;
+      code_preview = "@[simp] lemma XIsoOfEq_rfl (K : HomologicalComplex V c) (p : ι) :     K.XIsoOfEq (rfl : p = p) = Iso.refl _ := rfl";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_hom_comp_XIsoOfEq_hom";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 98;
+      code_preview = "@[reassoc (attr := simp)] lemma XIsoOfEq_hom_comp_XIsoOfEq_hom (K : HomologicalComplex V c) {p₁ p₂ p₃ : ι}     (h₁₂ : p₁ = p₂) (h₂₃ : p₂ = p₃) :     (K.XIsoOfEq h₁₂).hom ≫ (K.XIsoOfEq h₂₃).hom = (K.XIsoOfEq (h₁₂.trans h₂₃)).hom := by   dsimp [XIsoOfEq]   simp only [eqToHom_trans]";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_hom_comp_XIsoOfEq_inv";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 105;
+      code_preview = "@[reassoc (attr := simp)] lemma XIsoOfEq_hom_comp_XIsoOfEq_inv (K : HomologicalComplex V c) {p₁ p₂ p₃ : ι}     (h₁₂ : p₁ = p₂) (h₃₂ : p₃ = p₂) :     (K.XIsoOfEq h₁₂).hom ≫ (K.XIsoOfEq h₃₂).inv = (K.XIsoOfEq (h₁₂.trans h₃₂.symm)).hom := by   dsimp [XIsoOfEq]   simp only [eqToHom_trans]";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_inv_comp_XIsoOfEq_hom";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 112;
+      code_preview = "@[reassoc (attr := simp)] lemma XIsoOfEq_inv_comp_XIsoOfEq_hom (K : HomologicalComplex V c) {p₁ p₂ p₃ : ι}     (h₂₁ : p₂ = p₁) (h₂₃ : p₂ = p₃) :     (K.XIsoOfEq h₂₁).inv ≫ (K.XIsoOfEq h₂₃).hom = (K.XIsoOfEq (h₂₁.symm.trans h₂₃)).hom := by   dsimp [XIsoOfEq]   simp only [eqToHom_trans]";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_inv_comp_XIsoOfEq_inv";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 119;
+      code_preview = "@[reassoc (attr := simp)] lemma XIsoOfEq_inv_comp_XIsoOfEq_inv (K : HomologicalComplex V c) {p₁ p₂ p₃ : ι}     (h₂₁ : p₂ = p₁) (h₃₂ : p₃ = p₂) :     (K.XIsoOfEq h₂₁).inv ≫ (K.XIsoOfEq h₃₂).inv = (K.XIsoOfEq (h₃₂.trans h₂₁).symm).hom := by   dsimp [XIsoOfEq]   simp only [eqToHom_trans]";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_hom_comp_d";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 126;
+      code_preview = "@[reassoc (attr := simp)] lemma XIsoOfEq_hom_comp_d (K : HomologicalComplex V c) {p₁ p₂ : ι} (h : p₁ = p₂) (p₃ : ι) :     (K.XIsoOfEq h).hom ≫ K.d p₂ p₃ = K.d p₁ p₃ := by subst h; simp";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_inv_comp_d";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 130;
+      code_preview = "@[reassoc (attr := simp)] lemma XIsoOfEq_inv_comp_d (K : HomologicalComplex V c) {p₂ p₁ : ι} (h : p₂ = p₁) (p₃ : ι) :     (K.XIsoOfEq h).inv ≫ K.d p₂ p₃ = K.d p₁ p₃ := by subst h; simp";
+    }
+    {
+      full_name = "HomologicalComplex.d_comp_XIsoOfEq_hom";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 134;
+      code_preview = "@[reassoc (attr := simp)] lemma d_comp_XIsoOfEq_hom (K : HomologicalComplex V c) {p₂ p₃ : ι} (h : p₂ = p₃) (p₁ : ι) :     K.d p₁ p₂ ≫ (K.XIsoOfEq h).hom = K.d p₁ p₃ := by subst h; simp";
+    }
+    {
+      full_name = "HomologicalComplex.d_comp_XIsoOfEq_inv";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 138;
+      code_preview = "@[reassoc (attr := simp)] lemma d_comp_XIsoOfEq_inv (K : HomologicalComplex V c) {p₂ p₃ : ι} (h : p₃ = p₂) (p₁ : ι) :     K.d p₁ p₂ ≫ (K.XIsoOfEq h).inv = K.d p₁ p₃ := by subst h; simp";
+    }
+    {
+      full_name = "ChainComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 144;
+      code_preview = "abbrev ChainComplex (α : Type*) [AddRightCancelSemigroup α] [One α] : Type _ :=   HomologicalComplex V (ComplexShape.down α)";
+    }
+    {
+      full_name = "CochainComplex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 150;
+      code_preview = "abbrev CochainComplex (α : Type*) [AddRightCancelSemigroup α] [One α] : Type _ :=   HomologicalComplex V (ComplexShape.up α)";
+    }
+    {
+      full_name = "ChainComplex.prev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 158;
+      code_preview = "@[simp] theorem prev (α : Type*) [AddRightCancelSemigroup α] [One α] (i : α) :     (ComplexShape.down α).prev i = i + 1";
+    }
+    {
+      full_name = "ChainComplex.next";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 163;
+      code_preview = "@[simp] theorem next (α : Type*) [AddGroup α] [One α] (i : α) : (ComplexShape.down α).next i = i - 1";
+    }
+    {
+      full_name = "ChainComplex.next_nat_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 167;
+      code_preview = "@[simp] theorem next_nat_zero : (ComplexShape.down ℕ).next 0 = 0";
+    }
+    {
+      full_name = "ChainComplex.next_nat_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 175;
+      code_preview = "@[simp] theorem next_nat_succ (i : ℕ) : (ComplexShape.down ℕ).next (i + 1) = i";
+    }
+    {
+      full_name = "CochainComplex.prev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 183;
+      code_preview = "@[simp] theorem prev (α : Type*) [AddGroup α] [One α] (i : α) : (ComplexShape.up α).prev i = i - 1";
+    }
+    {
+      full_name = "CochainComplex.next";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 187;
+      code_preview = "@[simp] theorem next (α : Type*) [AddRightCancelSemigroup α] [One α] (i : α) :     (ComplexShape.up α).next i = i + 1";
+    }
+    {
+      full_name = "CochainComplex.prev_nat_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 192;
+      code_preview = "@[simp] theorem prev_nat_zero : (ComplexShape.up ℕ).prev 0 = 0";
+    }
+    {
+      full_name = "CochainComplex.prev_nat_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 200;
+      code_preview = "@[simp] theorem prev_nat_succ (i : ℕ) : (ComplexShape.up ℕ).prev (i + 1) = i";
+    }
+    {
+      full_name = "HomologicalComplex.Hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 211;
+      code_preview = "@[ext] structure Hom (A B : HomologicalComplex V c) where   f : ∀ i, A.X i ⟶ B.X i   comm' : ∀ i j, c.Rel i j → f i ≫ B.d i j = A.d i j ≫ f j := by aesop_cat";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 219;
+      code_preview = "@[reassoc (attr := simp)] theorem Hom.comm {A B : HomologicalComplex V c} (f : A.Hom B) (i j : ι) :     f.f i ≫ B.d i j = A.d i j ≫ f.f j";
+    }
+    {
+      full_name = "HomologicalComplex.id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 229;
+      code_preview = "def id (A : HomologicalComplex V c) : Hom A A where f _ := 𝟙 _";
+    }
+    {
+      full_name = "HomologicalComplex.comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 232;
+      code_preview = "def comp (A B C : HomologicalComplex V c) (φ : Hom A B) (ψ : Hom B C) : Hom A C where   f i := φ.f i ≫ ψ.f i";
+    }
+    {
+      full_name = "HomologicalComplex.hom_ext";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 247;
+      code_preview = "@[ext] lemma hom_ext {C D : HomologicalComplex V c} (f g : C ⟶ D)     (h : ∀ i, f.f i = g.f i) : f = g := by   apply Hom.ext   funext   apply h";
+    }
+    {
+      full_name = "HomologicalComplex.id_f";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 254;
+      code_preview = "@[simp] theorem id_f (C : HomologicalComplex V c) (i : ι) : Hom.f (𝟙 C) i = 𝟙 (C.X i)";
+    }
+    {
+      full_name = "HomologicalComplex.comp_f";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 258;
+      code_preview = "@[simp, reassoc] theorem comp_f {C₁ C₂ C₃ : HomologicalComplex V c} (f : C₁ ⟶ C₂) (g : C₂ ⟶ C₃) (i : ι) :     (f ≫ g).f i = f.f i ≫ g.f i";
+    }
+    {
+      full_name = "HomologicalComplex.eqToHom_f";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 263;
+      code_preview = "@[simp] theorem eqToHom_f {C₁ C₂ : HomologicalComplex V c} (h : C₁ = C₂) (n : ι) :     HomologicalComplex.Hom.f (eqToHom h) n =       eqToHom (congr_fun (congr_arg HomologicalComplex.X h) n)";
+    }
+    {
+      full_name = "HomologicalComplex.hom_f_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 271;
+      code_preview = "theorem hom_f_injective {C₁ C₂ : HomologicalComplex V c} :     Function.Injective fun f : Hom C₁ C₂ => f.f";
+    }
+    {
+      full_name = "HomologicalComplex.zero_f";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 277;
+      code_preview = "@[simp] theorem zero_f (C D : HomologicalComplex V c) (i : ι) : (0 : C ⟶ D).f i = 0";
+    }
+    {
+      full_name = "HomologicalComplex.zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 285;
+      code_preview = "noncomputable def zero [HasZeroObject V] : HomologicalComplex V c where   X _ := 0   d _ _ := 0";
+    }
+    {
+      full_name = "HomologicalComplex.isZero_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 290;
+      code_preview = "theorem isZero_zero [HasZeroObject V] : IsZero (zero : HomologicalComplex V c)";
+    }
+    {
+      full_name = "HomologicalComplex.congr_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 303;
+      code_preview = "theorem congr_hom {C D : HomologicalComplex V c} {f g : C ⟶ D} (w : f = g) (i : ι) :     f.f i = g.f i";
+    }
+    {
+      full_name = "HomologicalComplex.mono_of_mono_f";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 307;
+      code_preview = "lemma mono_of_mono_f {K L : HomologicalComplex V c} (φ : K ⟶ L)     (hφ : ∀ i, Mono (φ.f i)) : Mono φ where   right_cancellation g h eq := by     ext i     rw [← cancel_mono (φ.f i)]     exact congr_hom eq i";
+    }
+    {
+      full_name = "HomologicalComplex.epi_of_epi_f";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 314;
+      code_preview = "lemma epi_of_epi_f {K L : HomologicalComplex V c} (φ : K ⟶ L)     (hφ : ∀ i, Epi (φ.f i)) : Epi φ where   left_cancellation g h eq := by     ext i     rw [← cancel_epi (φ.f i)]     exact congr_hom eq i";
+    }
+    {
+      full_name = "HomologicalComplex.eval";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 325;
+      code_preview = "@[simps] def eval (i : ι) : HomologicalComplex V c ⥤ V where   obj C := C.X i   map f := f.f i";
+    }
+    {
+      full_name = "HomologicalComplex.forget";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 333;
+      code_preview = "@[simps] def forget : HomologicalComplex V c ⥤ GradedObject ι V where   obj C := C.X   map f := f.f";
+    }
+    {
+      full_name = "HomologicalComplex.forgetEval";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 344;
+      code_preview = "@[simps!] def forgetEval (i : ι) : forget V c ⋙ GradedObject.eval i ≅ eval V c i :=   NatIso.ofComponents fun _ => Iso.refl _";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_hom_naturality";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 354;
+      code_preview = "@[reassoc] lemma XIsoOfEq_hom_naturality {K L : HomologicalComplex V c} (φ : K ⟶ L) {n n' : ι} (h : n = n') :     φ.f n ≫ (L.XIsoOfEq h).hom = (K.XIsoOfEq h).hom ≫ φ.f n' := by subst h; simp";
+    }
+    {
+      full_name = "HomologicalComplex.XIsoOfEq_inv_naturality";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 358;
+      code_preview = "@[reassoc] lemma XIsoOfEq_inv_naturality {K L : HomologicalComplex V c} (φ : K ⟶ L) {n n' : ι} (h : n = n') :     φ.f n' ≫ (L.XIsoOfEq h).inv = (K.XIsoOfEq h).inv ≫ φ.f n := by subst h; simp";
+    }
+    {
+      full_name = "HomologicalComplex.d_comp_eqToHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 363;
+      code_preview = "theorem d_comp_eqToHom {i j j' : ι} (rij : c.Rel i j) (rij' : c.Rel i j') :     C.d i j' ≫ eqToHom (congr_arg C.X (c.next_eq rij' rij)) = C.d i j";
+    }
+    {
+      full_name = "HomologicalComplex.eqToHom_comp_d";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 372;
+      code_preview = "theorem eqToHom_comp_d {i i' j : ι} (rij : c.Rel i j) (rij' : c.Rel i' j) :     eqToHom (congr_arg C.X (c.prev_eq rij rij')) ≫ C.d i' j = C.d i j";
+    }
+    {
+      full_name = "HomologicalComplex.kernel_eq_kernel";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 380;
+      code_preview = "theorem kernel_eq_kernel [HasKernels V] {i j j' : ι} (r : c.Rel i j) (r' : c.Rel i j') :     kernelSubobject (C.d i j) = kernelSubobject (C.d i j')";
+    }
+    {
+      full_name = "HomologicalComplex.image_eq_image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 385;
+      code_preview = "theorem image_eq_image [HasImages V] [HasEqualizers V] {i i' j : ι} (r : c.Rel i j)     (r' : c.Rel i' j) : imageSubobject (C.d i j) = imageSubobject (C.d i' j)";
+    }
+    {
+      full_name = "HomologicalComplex.xPrev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 392;
+      code_preview = "abbrev xPrev (j : ι) : V :=   C.X (c.prev j)";
+    }
+    {
+      full_name = "HomologicalComplex.xPrevIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 396;
+      code_preview = "def xPrevIso {i j : ι} (r : c.Rel i j) : C.xPrev j ≅ C.X i :=   eqToIso <| by rw [← c.prev_eq' r]";
+    }
+    {
+      full_name = "HomologicalComplex.xPrevIsoSelf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 400;
+      code_preview = "def xPrevIsoSelf {j : ι} (h : ¬c.Rel (c.prev j) j) : C.xPrev j ≅ C.X j :=   eqToIso <|     congr_arg C.X       (by         dsimp [ComplexShape.prev]         rw [dif_neg]         push_neg; intro i hi         have : c.prev j = i := c.prev_eq' hi         rw [this] at h; contradiction)";
+    }
+    {
+      full_name = "HomologicalComplex.xNext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 411;
+      code_preview = "abbrev xNext (i : ι) : V :=   C.X (c.next i)";
+    }
+    {
+      full_name = "HomologicalComplex.xNextIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 415;
+      code_preview = "def xNextIso {i j : ι} (r : c.Rel i j) : C.xNext i ≅ C.X j :=   eqToIso <| by rw [← c.next_eq' r]";
+    }
+    {
+      full_name = "HomologicalComplex.xNextIsoSelf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 419;
+      code_preview = "def xNextIsoSelf {i : ι} (h : ¬c.Rel i (c.next i)) : C.xNext i ≅ C.X i :=   eqToIso <|     congr_arg C.X       (by         dsimp [ComplexShape.next]         rw [dif_neg]; rintro ⟨j, hj⟩         have : c.next i = j := c.next_eq' hj         rw [this] at h; contradiction)";
+    }
+    {
+      full_name = "HomologicalComplex.dTo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 429;
+      code_preview = "abbrev dTo (j : ι) : C.xPrev j ⟶ C.X j :=   C.d (c.prev j) j";
+    }
+    {
+      full_name = "HomologicalComplex.dFrom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 434;
+      code_preview = "abbrev dFrom (i : ι) : C.X i ⟶ C.xNext i :=   C.d i (c.next i)";
+    }
+    {
+      full_name = "HomologicalComplex.dTo_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 439;
+      code_preview = "theorem dTo_eq {i j : ι} (r : c.Rel i j) : C.dTo j = (C.xPrevIso r).hom ≫ C.d i j";
+    }
+    {
+      full_name = "HomologicalComplex.dTo_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 443;
+      code_preview = "@[simp] theorem dTo_eq_zero {j : ι} (h : ¬c.Rel (c.prev j) j) : C.dTo j = 0";
+    }
+    {
+      full_name = "HomologicalComplex.dFrom_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 447;
+      code_preview = "theorem dFrom_eq {i j : ι} (r : c.Rel i j) : C.dFrom i = C.d i j ≫ (C.xNextIso r).inv";
+    }
+    {
+      full_name = "HomologicalComplex.dFrom_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 451;
+      code_preview = "@[simp] theorem dFrom_eq_zero {i : ι} (h : ¬c.Rel i (c.next i)) : C.dFrom i = 0";
+    }
+    {
+      full_name = "HomologicalComplex.xPrevIso_comp_dTo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 455;
+      code_preview = "@[reassoc (attr := simp)] theorem xPrevIso_comp_dTo {i j : ι} (r : c.Rel i j) : (C.xPrevIso r).inv ≫ C.dTo j = C.d i j";
+    }
+    {
+      full_name = "HomologicalComplex.xPrevIsoSelf_comp_dTo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 459;
+      code_preview = "@[reassoc (attr := simp)] theorem xPrevIsoSelf_comp_dTo {j : ι} (h : ¬c.Rel (c.prev j) j) :     (C.xPrevIsoSelf h).inv ≫ C.dTo j = 0";
+    }
+    {
+      full_name = "HomologicalComplex.dFrom_comp_xNextIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 463;
+      code_preview = "@[reassoc (attr := simp)] theorem dFrom_comp_xNextIso {i j : ι} (r : c.Rel i j) :     C.dFrom i ≫ (C.xNextIso r).hom = C.d i j";
+    }
+    {
+      full_name = "HomologicalComplex.dFrom_comp_xNextIsoSelf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 468;
+      code_preview = "@[reassoc (attr := simp)] theorem dFrom_comp_xNextIsoSelf {i : ι} (h : ¬c.Rel i (c.next i)) :     C.dFrom i ≫ (C.xNextIsoSelf h).hom = 0";
+    }
+    {
+      full_name = "HomologicalComplex.dTo_comp_dFrom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 473;
+      code_preview = "theorem dTo_comp_dFrom (j : ι) : C.dTo j ≫ C.dFrom j = 0";
+    }
+    {
+      full_name = "HomologicalComplex.kernel_from_eq_kernel";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 476;
+      code_preview = "theorem kernel_from_eq_kernel [HasKernels V] {i j : ι} (r : c.Rel i j) :     kernelSubobject (C.dFrom i) = kernelSubobject (C.d i j)";
+    }
+    {
+      full_name = "HomologicalComplex.image_to_eq_image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 481;
+      code_preview = "theorem image_to_eq_image [HasImages V] [HasEqualizers V] {i j : ι} (r : c.Rel i j) :     imageSubobject (C.dTo j) = imageSubobject (C.d i j)";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.isoApp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 492;
+      code_preview = "@[simps!] def isoApp (f : C₁ ≅ C₂) (i : ι) : C₁.X i ≅ C₂.X i :=   (eval V c i).mapIso f";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.isoOfComponents";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 497;
+      code_preview = "@[simps] def isoOfComponents (f : ∀ i, C₁.X i ≅ C₂.X i)     (hf : ∀ i j, c.Rel i j → (f i).hom ≫ C₂.d i j = C₁.d i j ≫ (f j).hom := by aesop_cat) :     C₁ ≅ C₂ where   hom :=     { f := fun i => (f i).hom       comm' := hf }   inv :=     { f := fun i => (f i).inv       comm' := fun i j hij =>       ";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.isoOfComponents_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 520;
+      code_preview = "@[simp] theorem isoOfComponents_app (f : ∀ i, C₁.X i ≅ C₂.X i)     (hf : ∀ i j, c.Rel i j → (f i).hom ≫ C₂.d i j = C₁.d i j ≫ (f j).hom) (i : ι) :     isoApp (isoOfComponents f hf) i = f i";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.isIso_of_components";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 527;
+      code_preview = "theorem isIso_of_components (f : C₁ ⟶ C₂) [∀ n : ι, IsIso (f.f n)] : IsIso f";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.prev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 533;
+      code_preview = "abbrev prev (f : Hom C₁ C₂) (j : ι) : C₁.xPrev j ⟶ C₂.xPrev j :=   f.f _";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.prev_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 537;
+      code_preview = "theorem prev_eq (f : Hom C₁ C₂) {i j : ι} (w : c.Rel i j) :     f.prev j = (C₁.xPrevIso w).hom ≫ f.f i ≫ (C₂.xPrevIso w).inv";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.next";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 542;
+      code_preview = "abbrev next (f : Hom C₁ C₂) (i : ι) : C₁.xNext i ⟶ C₂.xNext i :=   f.f _";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.next_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 546;
+      code_preview = "theorem next_eq (f : Hom C₁ C₂) {i j : ι} (w : c.Rel i j) :     f.next i = (C₁.xNextIso w).hom ≫ f.f j ≫ (C₂.xNextIso w).inv";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.comm_from";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 551;
+      code_preview = "@[reassoc, elementwise] theorem comm_from (f : Hom C₁ C₂) (i : ι) : f.f i ≫ C₂.dFrom i = C₁.dFrom i ≫ f.next i";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.comm_to";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 557;
+      code_preview = "@[reassoc, elementwise] theorem comm_to (f : Hom C₁ C₂) (j : ι) : f.prev j ≫ C₂.dTo j = C₁.dTo j ≫ f.f j";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.sqFrom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 563;
+      code_preview = "def sqFrom (f : Hom C₁ C₂) (i : ι) : Arrow.mk (C₁.dFrom i) ⟶ Arrow.mk (C₂.dFrom i) :=   Arrow.homMk _ _ (f.comm_from i)";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.sqFrom_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 569;
+      code_preview = "@[simp] theorem sqFrom_left (f : Hom C₁ C₂) (i : ι) : (f.sqFrom i).left = f.f i";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.sqFrom_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 573;
+      code_preview = "@[simp] theorem sqFrom_right (f : Hom C₁ C₂) (i : ι) : (f.sqFrom i).right = f.next i";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.sqFrom_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 577;
+      code_preview = "@[simp] theorem sqFrom_id (C₁ : HomologicalComplex V c) (i : ι) : sqFrom (𝟙 C₁) i = 𝟙 _";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.sqFrom_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 581;
+      code_preview = "@[simp] theorem sqFrom_comp (f : C₁ ⟶ C₂) (g : C₂ ⟶ C₃) (i : ι) :     sqFrom (f ≫ g) i = sqFrom f i ≫ sqFrom g i";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.sqTo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 586;
+      code_preview = "def sqTo (f : Hom C₁ C₂) (j : ι) : Arrow.mk (C₁.dTo j) ⟶ Arrow.mk (C₂.dTo j) :=   Arrow.homMk _ _ (f.comm_to j)";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.sqTo_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 592;
+      code_preview = "@[simp] theorem sqTo_left (f : Hom C₁ C₂) (j : ι) : (f.sqTo j).left = f.prev j";
+    }
+    {
+      full_name = "HomologicalComplex.Hom.sqTo_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 596;
+      code_preview = "@[simp] theorem sqTo_right (f : Hom C₁ C₂) (j : ι) : (f.sqTo j).right = f.f j";
+    }
+    {
+      full_name = "ChainComplex.of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 612;
+      code_preview = "def of (X : α → V) (d : ∀ n, X (n + 1) ⟶ X n) (sq : ∀ n, d (n + 1) ≫ d n = 0) : ChainComplex V α :=   { X := X     d := fun i j => if h : i = j + 1 then eqToHom (by rw [h]) ≫ d j else 0     shape := fun i j w => by       dsimp       rw [dif_neg (Ne.symm w)]     d_comp_d' := fun i j k hij hjk => by  ";
+    }
+    {
+      full_name = "ChainComplex.of_x";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 627;
+      code_preview = "@[simp] theorem of_x (n : α) : (of X d sq).X n = X n";
+    }
+    {
+      full_name = "ChainComplex.of_d";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 631;
+      code_preview = "@[simp] theorem of_d (j : α) : (of X d sq).d (j + 1) j = d j";
+    }
+    {
+      full_name = "ChainComplex.of_d_ne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 636;
+      code_preview = "theorem of_d_ne {i j : α} (h : i ≠ j + 1) : (of X d sq).d i j = 0";
+    }
+    {
+      full_name = "ChainComplex.ofHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 648;
+      code_preview = "@[simps] def ofHom (f : ∀ i : α, X i ⟶ Y i) (comm : ∀ i : α, f (i + 1) ≫ d_Y i = d_X i ≫ f i) :     of X d_X sq_X ⟶ of Y d_Y sq_Y :=   { f     comm' := fun n m => by       by_cases h : n = m + 1       · subst h         simpa using comm m       · rw [of_d_ne X _ _ h, of_d_ne Y _ _ h]         simp }";
+    }
+    {
+      full_name = "ChainComplex.mkAux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 672;
+      code_preview = "def mkAux : ℕ → ShortComplex V   | 0 => ShortComplex.mk _ _ s   | n + 1 => ShortComplex.mk _ _ (succ (mkAux n)).2.2";
+    }
+    {
+      full_name = "ChainComplex.mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 677;
+      code_preview = "def mk : ChainComplex V ℕ :=   of (fun n => (mkAux X₀ X₁ X₂ d₀ d₁ s succ n).X₃) (fun n => (mkAux X₀ X₁ X₂ d₀ d₁ s succ n).g)     fun n => (mkAux X₀ X₁ X₂ d₀ d₁ s succ n).zero";
+    }
+    {
+      full_name = "ChainComplex.mk_X_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 689;
+      code_preview = "@[simp] theorem mk_X_0 : (mk X₀ X₁ X₂ d₀ d₁ s succ).X 0 = X₀";
+    }
+    {
+      full_name = "ChainComplex.mk_X_1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 693;
+      code_preview = "@[simp] theorem mk_X_1 : (mk X₀ X₁ X₂ d₀ d₁ s succ).X 1 = X₁";
+    }
+    {
+      full_name = "ChainComplex.mk_X_2";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 697;
+      code_preview = "@[simp] theorem mk_X_2 : (mk X₀ X₁ X₂ d₀ d₁ s succ).X 2 = X₂";
+    }
+    {
+      full_name = "ChainComplex.mk_d_1_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 701;
+      code_preview = "@[simp] theorem mk_d_1_0 : (mk X₀ X₁ X₂ d₀ d₁ s succ).d 1 0 = d₀";
+    }
+    {
+      full_name = "ChainComplex.mk_d_2_1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 706;
+      code_preview = "@[simp] theorem mk_d_2_1 : (mk X₀ X₁ X₂ d₀ d₁ s succ).d 2 1 = d₁";
+    }
+    {
+      full_name = "ChainComplex.mk'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 712;
+      code_preview = "def mk' (X₀ X₁ : V) (d : X₁ ⟶ X₀)     (succ' : ∀ {X₀ X₁ : V} (f : X₁ ⟶ X₀), Σ' (X₂ : V) (d : X₂ ⟶ X₁), d ≫ f = 0) :     ChainComplex V ℕ :=   mk _ _ _ _ _ (succ' d).2.2 (fun S => succ' S.f)";
+    }
+    {
+      full_name = "ChainComplex.mk'_X_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 725;
+      code_preview = "@[simp] theorem mk'_X_0 : (mk' X₀ X₁ d₀ succ').X 0 = X₀";
+    }
+    {
+      full_name = "ChainComplex.mk'_X_1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 729;
+      code_preview = "@[simp] theorem mk'_X_1 : (mk' X₀ X₁ d₀ succ').X 1 = X₁";
+    }
+    {
+      full_name = "ChainComplex.mk'_d_1_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 734;
+      code_preview = "@[simp] theorem mk'_d_1_0 : (mk' X₀ X₁ d₀ succ').d 1 0 = d₀";
+    }
+    {
+      full_name = "ChainComplex.mkHomAux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 773;
+      code_preview = "def mkHomAux :     ∀ n,       Σ' (f : P.X n ⟶ Q.X n) (f' : P.X (n + 1) ⟶ Q.X (n + 1)),         f' ≫ Q.d (n + 1) n = P.d (n + 1) n ≫ f   | 0 => ⟨zero, one, one_zero_comm⟩   | n + 1 => ⟨(mkHomAux n).2.1, (succ n (mkHomAux n)).1, (succ n (mkHomAux n)).2⟩";
+    }
+    {
+      full_name = "ChainComplex.mkHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 787;
+      code_preview = "def mkHom : P ⟶ Q where   f n := (mkHomAux P Q zero one one_zero_comm succ n).1   comm' n m := by     rintro (rfl : m + 1 = n)     exact (mkHomAux P Q zero one one_zero_comm succ m).2.2";
+    }
+    {
+      full_name = "ChainComplex.mkHom_f_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 802;
+      code_preview = "@[simp] theorem mkHom_f_0 : (mkHom P Q zero one one_zero_comm succ).f 0 = zero";
+    }
+    {
+      full_name = "ChainComplex.mkHom_f_1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 806;
+      code_preview = "@[simp] theorem mkHom_f_1 : (mkHom P Q zero one one_zero_comm succ).f 1 = one";
+    }
+    {
+      full_name = "ChainComplex.mkHom_f_succ_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 810;
+      code_preview = "@[simp] theorem mkHom_f_succ_succ (n : ℕ) :     (mkHom P Q zero one one_zero_comm succ).f (n + 2) =       (succ n           ⟨(mkHom P Q zero one one_zero_comm succ).f n,             (mkHom P Q zero one one_zero_comm succ).f (n + 1),             (mkHom P Q zero one one_zero_comm succ).comm (n + 1) n⟩";
+    }
+    {
+      full_name = "CochainComplex.of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 829;
+      code_preview = "def of (X : α → V) (d : ∀ n, X n ⟶ X (n + 1)) (sq : ∀ n, d n ≫ d (n + 1) = 0) :     CochainComplex V α :=   { X := X     d := fun i j => if h : i + 1 = j then d _ ≫ eqToHom (by rw [h]) else 0     shape := fun i j w => by       dsimp       rw [dif_neg]       exact w     d_comp_d' := fun i j k => by  ";
+    }
+    {
+      full_name = "CochainComplex.of_x";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 848;
+      code_preview = "@[simp] theorem of_x (n : α) : (of X d sq).X n = X n";
+    }
+    {
+      full_name = "CochainComplex.of_d";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 852;
+      code_preview = "@[simp] theorem of_d (j : α) : (of X d sq).d j (j + 1) = d j";
+    }
+    {
+      full_name = "CochainComplex.of_d_ne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 857;
+      code_preview = "theorem of_d_ne {i j : α} (h : i + 1 ≠ j) : (of X d sq).d i j = 0";
+    }
+    {
+      full_name = "CochainComplex.ofHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 869;
+      code_preview = "@[simps] def ofHom (f : ∀ i : α, X i ⟶ Y i) (comm : ∀ i : α, f i ≫ d_Y i = d_X i ≫ f (i + 1)) :     of X d_X sq_X ⟶ of Y d_Y sq_Y :=   { f     comm' := fun n m => by       by_cases h : n + 1 = m       · subst h         simpa using comm n       · rw [of_d_ne X _ _ h, of_d_ne Y _ _ h]         simp }";
+    }
+    {
+      full_name = "CochainComplex.mkAux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 892;
+      code_preview = "def mkAux : ℕ → ShortComplex V   | 0 => ShortComplex.mk _ _ s   | n + 1 => ShortComplex.mk _ _ (succ (mkAux n)).2.2";
+    }
+    {
+      full_name = "CochainComplex.mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 897;
+      code_preview = "def mk : CochainComplex V ℕ :=   of (fun n => (mkAux X₀ X₁ X₂ d₀ d₁ s succ n).X₁) (fun n => (mkAux X₀ X₁ X₂ d₀ d₁ s succ n).f)     fun n => (mkAux X₀ X₁ X₂ d₀ d₁ s succ n).zero";
+    }
+    {
+      full_name = "CochainComplex.mk_X_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 909;
+      code_preview = "@[simp] theorem mk_X_0 : (mk X₀ X₁ X₂ d₀ d₁ s succ).X 0 = X₀";
+    }
+    {
+      full_name = "CochainComplex.mk_X_1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 913;
+      code_preview = "@[simp] theorem mk_X_1 : (mk X₀ X₁ X₂ d₀ d₁ s succ).X 1 = X₁";
+    }
+    {
+      full_name = "CochainComplex.mk_X_2";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 917;
+      code_preview = "@[simp] theorem mk_X_2 : (mk X₀ X₁ X₂ d₀ d₁ s succ).X 2 = X₂";
+    }
+    {
+      full_name = "CochainComplex.mk_d_1_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 921;
+      code_preview = "@[simp] theorem mk_d_1_0 : (mk X₀ X₁ X₂ d₀ d₁ s succ).d 0 1 = d₀";
+    }
+    {
+      full_name = "CochainComplex.mk_d_2_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 926;
+      code_preview = "@[simp] theorem mk_d_2_0 : (mk X₀ X₁ X₂ d₀ d₁ s succ).d 1 2 = d₁";
+    }
+    {
+      full_name = "CochainComplex.mk'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 932;
+      code_preview = "def mk' (X₀ X₁ : V) (d : X₀ ⟶ X₁)     (succ' : ∀ {X₀ X₁ : V} (f : X₀ ⟶ X₁), Σ' (X₂ : V) (d : X₁ ⟶ X₂), f ≫ d = 0) :     CochainComplex V ℕ :=   mk _ _ _ _ _ (succ' d).2.2 (fun S => succ' S.g)";
+    }
+    {
+      full_name = "CochainComplex.mk'_X_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 946;
+      code_preview = "@[simp] theorem mk'_X_0 : (mk' X₀ X₁ d₀ succ').X 0 = X₀";
+    }
+    {
+      full_name = "CochainComplex.mk'_X_1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 950;
+      code_preview = "@[simp] theorem mk'_X_1 : (mk' X₀ X₁ d₀ succ').X 1 = X₁";
+    }
+    {
+      full_name = "CochainComplex.mk'_d_1_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 954;
+      code_preview = "@[simp] theorem mk'_d_1_0 : (mk' X₀ X₁ d₀ succ').d 0 1 = d₀";
+    }
+    {
+      full_name = "CochainComplex.mkHomAux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 971;
+      code_preview = "def mkHomAux :     ∀ n,       Σ' (f : P.X n ⟶ Q.X n) (f' : P.X (n + 1) ⟶ Q.X (n + 1)),         f ≫ Q.d n (n + 1) = P.d n (n + 1) ≫ f'   | 0 => ⟨zero, one, one_zero_comm⟩   | n + 1 => ⟨(mkHomAux n).2.1, (succ n (mkHomAux n)).1, (succ n (mkHomAux n)).2⟩";
+    }
+    {
+      full_name = "CochainComplex.mkHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 985;
+      code_preview = "def mkHom : P ⟶ Q where   f n := (mkHomAux P Q zero one one_zero_comm succ n).1   comm' n m := by     rintro (rfl : n + 1 = m)     exact (mkHomAux P Q zero one one_zero_comm succ n).2.2";
+    }
+    {
+      full_name = "CochainComplex.mkHom_f_0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 1000;
+      code_preview = "@[simp] theorem mkHom_f_0 : (mkHom P Q zero one one_zero_comm succ).f 0 = zero";
+    }
+    {
+      full_name = "CochainComplex.mkHom_f_1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 1004;
+      code_preview = "@[simp] theorem mkHom_f_1 : (mkHom P Q zero one one_zero_comm succ).f 1 = one";
+    }
+    {
+      full_name = "CochainComplex.mkHom_f_succ_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Homology/HomologicalComplex.lean";
+      start_line = 1008;
+      code_preview = "@[simp] theorem mkHom_f_succ_succ (n : ℕ) :     (mkHom P Q zero one one_zero_comm succ).f (n + 2) =       (succ n           ⟨(mkHom P Q zero one one_zero_comm succ).f n,             (mkHom P Q zero one one_zero_comm succ).f (n + 1),             (mkHom P Q zero one one_zero_comm succ).comm n (n + 1)⟩";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

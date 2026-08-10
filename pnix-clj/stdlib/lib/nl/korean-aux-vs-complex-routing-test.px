@@ -1,0 +1,26 @@
+# stdlib/lib/nl/korean-aux-vs-complex-routing-test.px — chatRespond 복합 라우팅 ⟂ 보조용언 단문 구분 lock.
+#
+# ★회귀 봉인: splitClauseRelations가 고/려고 connective를 쪼개므로 보조용언 단문(먹고 있다·가고 싶다·가려고 한다)도
+# splitN>1이 되어, "splitN>1 → 복합" 라우팅이 aux 단문을 *과분리*했다(먹고 있다→act=있, 가려고 한다→act=하).
+# 수정: chatRespond is-complex 게이트가 마지막 절이 bare 보조용언(있/싶/하/되…)이면 복합 아님(단문 aux 경로).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  isComplex = s: let r = knm.chatRespond s; in (r ? complex) && (r.complex == true);
+  liftAct = s: (knm.liftToProposition s).action;
+  liftAsp = s: let p = knm.liftToProposition s; in if p ? aspect then p.aspect else "plain";
+  liftMod = s: let p = knm.liftToProposition s; in if p ? modality then p.modality else "plain";
+in {
+  all_ok =
+    # ★보조용언 단문 = 복합 아님(단문 경로) + 단문 의미 보존(과분리 회귀 방지)
+       (isComplex "철수가 밥을 먹고 있다" == false)
+    && (liftAct "철수가 밥을 먹고 있다" == "먹") && (liftAsp "철수가 밥을 먹고 있다" == "progressive")
+    && (isComplex "철수가 가고 싶다" == false)
+    && (liftAct "철수가 가고 싶다" == "가") && (liftMod "철수가 가고 싶다" == "desiderative")
+    && (isComplex "철수가 학교에 가려고 한다" == false)
+    && (liftAct "철수가 학교에 가려고 한다" == "가") && (liftMod "철수가 학교에 가려고 한다" == "intention")
+    && (isComplex "철수가 영희를 도와 줬다" == false)
+    && (liftAct "철수가 영희를 도와 줬다" == "돕")
+    # ★진성복합 = 복합 경로(본동사 종결절)
+    && (isComplex "비가 오면 집에 간다" == true)
+    && (isComplex "철수가 밥을 먹고 학교에 갔다" == true)
+    && (isComplex "비가 오면 철수가 가게 된다" == true);
+}

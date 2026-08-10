@@ -1,0 +1,28 @@
+# stdlib/lib/nl/korean-realize-verb-test.px — Slice1: 동사 형태론 합성(realizeVerb) 회귀
+#
+# 평서현재 어간 활용을 종성 산술로: 모음어간→ㄴ다 융합(가→간다·쓰→쓴다·바꾸→바꾼다), ㄹ어간→ㄴ다(살→산다·열→연다),
+# 자음어간→는다(먹→먹는다). lift 가 이미 간다→가(ㄴ다) 인식하므로 realize 가 그에 맞춰 왕복이 닫힌다.
+# (식별자는 ASCII — 이 pnix 는 한글 식별자 불가; 한글은 값 문자열에만.)
+let
+  knl = import ./korean-nl-mirror.px;
+  rv = knl.realizeVerb;
+  gen_cons = rv "먹" "present" "declarative";       # 자음 → 먹는다
+  gen_vowel = rv "가" "present" "declarative";       # 모음 → 간다
+  gen_vowel2 = rv "쓰" "present" "declarative";      # 모음 → 쓴다
+  gen_multi = rv "바꾸" "present" "declarative";     # 다음절 모음 → 바꾼다
+  gen_rieul = rv "살" "present" "declarative";       # ㄹ → 산다
+  gen_rieul2 = rv "열" "present" "declarative";      # ㄹ → 연다
+  gen_past = rv "먹" "past" "declarative";           # 불변 → 먹었다
+  gen_imp = rv "열" "present" "imperative";          # 불변 → 열어라 (명령형, S1 미변경 확인)
+  propV = knl.mkProposition [ { entity = "철수"; role = "agent"; } { entity = "글"; role = "object"; } ] "쓰" "present" "declarative";
+  vowelSentence = knl.realizeSentence propV;                 # "철수가 글을 쓴다"
+  cgV = (knl.convergeGate vowelSentence).verdict;            # math-keep
+  rtV = (knl.termRoundTrip propV).structure_preserved;       # term 왕복 propEq
+in {
+  gen_cons = gen_cons; gen_vowel = gen_vowel; gen_vowel2 = gen_vowel2; gen_multi = gen_multi;
+  gen_rieul = gen_rieul; gen_rieul2 = gen_rieul2; gen_past = gen_past; gen_imp = gen_imp;
+  vowel_sentence = vowelSentence; vowel_verdict = cgV; verb_roundtrip = rtV;
+  all_ok = (gen_cons == "먹는다") && (gen_vowel == "간다") && (gen_vowel2 == "쓴다") && (gen_multi == "바꾼다")
+           && (gen_rieul == "산다") && (gen_rieul2 == "연다") && (gen_past == "먹었다") && (gen_imp == "열어라")
+           && rtV && (cgV == "math-keep");
+}

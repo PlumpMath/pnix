@@ -1,0 +1,28 @@
+# stdlib/lib/nl/korean-fused-adjective-relative-test.px — fused 형용사 관형형(큰/예쁜) 관형절 lock.
+#
+# 이전: parseRelativeNP가 literal 은/는/을 suffix만 매칭 → fused ㄴ 형용사(큰=크+ㄴ, 예쁜=예쁘+ㄴ)는 "은" 미매칭(쁜≠은)으로 누락 → 관형절 미인식.
+# 수정: parseRelativeNP 끝에 fused-ㄴ 분기 — parseNAdnominalBase(이미 ㄴ-unfuse: 큰→크·예쁜→예쁘)로 역복원 후 *형용사일 때만* 관형형 인정.
+#   ⚠형용사 게이트: 동사과거 fused(간=가·산=사[사다])는 명사(산=mountain) 모호성 → 제외(literal 먹은만). 형용사 defused(크/예쁘)는 명사 충돌 없어 안전.
+# realizeAdnominal(형용사)=fuseN(크→큰·예쁘→예쁜)이라 round-trip 닫힘.
+let L = import ./korean-taxonomy-lift.px; knm = import ./korean-nl-mirror.px; B = builtins;
+  pk = w: let r = L.parseRelativeNP [ w "꽃" ]; in if r == null then "NULL" else (r.action + "/" + r.predicate_kind);
+  relV = s: (knm.convergeRelativeGate s).verdict;
+  relRec = s: let cg = knm.convergeRelativeGate s; in if cg ? recovered then cg.recovered else "-";
+in {
+  # 진단 출력(실패 시 원인 파악용)
+  keun = pk "큰"; yeppeun = pk "예쁜"; jakeun = pk "작은"; san = pk "산"; meogeun = pk "먹은";
+  rec_keun = relRec "큰 꽃이 피었다";
+  all_ok =
+    # ★fused 형용사 관형형 인식(크/예쁘 = 형용사)
+       (pk "큰" == "크/adjective")
+    && (pk "예쁜" == "예쁘/adjective")
+    # ★literal 형용사 회귀(작은=작+은)
+    && (pk "작은" == "작/adjective")
+    # ★동사과거 fused 제외(산→사[사다]는 형용사 아님 → NULL, 명사 모호성 회피)
+    && (pk "산" == "NULL")
+    # ★동사과거 literal 무영향(먹은)
+    && (pk "먹은" == "먹/verb")
+    # ★문장 통합 round-trip(형용사 관형절)
+    && (relV "큰 꽃이 피었다" == "math-keep-rel")
+    && (relV "예쁜 꽃을 샀다" == "math-keep-rel");
+}

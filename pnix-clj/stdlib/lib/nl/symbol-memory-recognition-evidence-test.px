@@ -1,0 +1,38 @@
+# stdlib/lib/nl/symbol-memory-recognition-evidence-test.px
+#
+# P4 evidence-projector lock: recognition≠truth · public projection leak-safe(recovered/store_key 비노출).
+let
+  ev = import ./symbol-memory-recognition-evidence.px;
+  prop = import ./symbol-memory-propose.px;
+  sp = import ./symbol-memory-store-plan.px;
+  B = builtins;
+  sampleProp = { roles = [ { role = "agent"; entity = "철수"; } { role = "object"; entity = "사과"; } ]; action = "먹"; };
+  syms = (prop.proposeSymbols sampleProp).symbols;
+  keyOf = name: sp.storeKeyOfSymbol (B.head (B.filter (s: s.name == name) syms));
+  memKeys = [ (keyOf "철수") (keyOf "먹") ];               # memory에 철수·먹만
+  e = ev.mkMemoryEvidence { prop = sampleProp; memory_keys = memKeys; };
+  pub = ev.publicProjection e;
+  firstStatus = B.head e.symbols_status;
+in {
+  recognized_count = e.recognized_count;
+  missing_count = e.missing_count;
+  outcome = e.outcome;
+  durable_truth = e.durable_truth;
+  pub_keys = B.attrNames pub;
+  all_ok =
+       (e.recognized_count == 2) && (e.missing_count == 1) && (e.total == 3)
+    && (e.outcome == "evidence-ready")
+    && (e.evidence_kind == "symbol-memory.recognition")
+    # ★recognition ≠ truth
+    && (e.proposer_only == true) && (e.durable_truth == false)
+    && (e.accepted_as_truth == false) && (e.ontology_assert_allowed == false)
+    # ★public-safe: symbols_status는 name·ref_kind·status만 (recovered/store_key/memory_backed 비노출)
+    && (firstStatus ? name) && (firstStatus ? status) && (firstStatus ? ref_kind)
+    && ((firstStatus ? recovered) == false) && ((firstStatus ? store_key) == false)
+    && ((firstStatus ? memory_backed) == false)
+    # ★★leak 차단: publicProjection은 internal_results 절대 비노출
+    && ((pub ? internal_results) == false)
+    && ((pub ? evidence_kind) == true) && ((pub ? recognized_count) == true)
+    # internal evidence(e)는 internal_results 보유(서버 내부만)
+    && (e ? internal_results == true);
+}

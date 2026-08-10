@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pnix-hy"
+version = "0.1.0"
+description = "PNIX Python/Hy host executor with explicitly optional projection and proof lanes."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+keywords = ["meta-circular", "pnix", "hy", "partial-evaluation", "futamura", "sandbox", "projection"]
+
+# BASIC (pnix_runtime + interop) is pure stdlib and policy-free. Importing pnix_hy
+# loads only the host executor. Projection and self-hosting PROOF tiers are explicit/lazy,
+# additionally need a Hy 1.3.0 "proof Python" (PNIX_HY_PYTHON), and use
+# the hy-meta tree; an INSTALLED (off-tree) pnix_hy locates that tree via `PNIX_HY_HOME=/path/to
+# /pnix-hy checkout`. Projection facilities degrade gracefully (raise at call time / report
+# available:False) when Hy/tree is absent — the core is never affected. See `pnix-hy-project
+# --deployment` to check which tiers work in a given install.
+dependencies = []
+
+[project.optional-dependencies]
+projection = ["hy==1.3.0"]                 # Hy<->pnix projection / mirror-over-Hy tier
+full = ["hy==1.3.0"]                        # projection + proof ladder (also set PNIX_HY_HOME=<checkout>)
+
+[project.scripts]
+pnix-hy-project = "pnix_hy.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/PlumpMath/pnix-hy"
+
+[tool.setuptools]
+packages = ["pnix_hy"]

@@ -1,0 +1,189 @@
+# stdlib.lib.math.harmonic-numbers
+#
+# OWNER-LAW (v0.12-ABH, div-math, 2026-05-22): the harmonic
+# numbers -- partial sums of the harmonic series, as exact
+# rationals.
+#
+# # H(n), exactly
+#
+# The nth harmonic number is H(n) = 1 + 1/2 + 1/3 + ... + 1/n.
+# These are NOT integers (the empty sum H(0) = 0 and H(1) = 1 are
+# the only integer values -- a classical result, here simply
+# computed): H(2) = 3/2, H(3) = 11/6, H(4) = 25/12,
+# H(5) = 137/60.
+#
+# Every term and every partial sum is kept as a gcd-reduced
+# rational. There is no floating point and no rounding -- H(n) is
+# the exact fraction, not a decimal approximation.
+#
+# # The alternating harmonic series
+#
+# A(n) = 1 - 1/2 + 1/3 - 1/4 + ... alternates sign. Its partial
+# sums are also exact rationals (A(2) = 1/2, A(3) = 5/6,
+# A(4) = 7/12); the series converges to ln 2, but this owner only
+# ever reports the exact partial sum, never the irrational limit.
+#
+# # A tail sum
+#
+# `harmonic-between` returns H(b) - H(a) = 1/(a+1) + ... + 1/b,
+# the sum of a contiguous run of reciprocals.
+#
+# # Kernel layering
+#
+#   harmonic-numbers -> rational   (every partial sum is a
+#                                   gcd-reduced rational; addition
+#                                   and subtraction reuse
+#                                   rational.px)
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT the generalized harmonic numbers H(n,m) = sum 1/k^m --
+#     their denominators grow as lcm(1..n)^m and overflow 64-bit
+#     arithmetic almost immediately, so they are deliberately
+#     excluded rather than computed wrongly.
+#   - NOT the digamma / Euler-Mascheroni asymptotic -- no
+#     irrational limit is ever returned.
+#   - NOT arbitrary precision; n is capped so the exact rational
+#     stays in 64-bit range.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/harmonic-numbers.px";
+
+  rational = import ./rational.px;
+  mkR          = rational.mkRational;
+  ratAdd       = rational.ratAdd;
+  ratSub       = rational.ratSub;
+  ratZero      = rational.ratZero;
+  ratToString  = rational.ratToString;
+  ratIsInteger = rational.ratIsInteger;
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # H(n) = sum_{k=1}^{n} 1/k, as an exact reduced rational.
+  harmonic = n:
+    if n < 1 then ratZero
+    else builtins.foldl'
+      (acc: k: ratAdd acc (mkR 1 k))
+      ratZero
+      (rangeList 1 n);
+
+  # A(n) = sum_{k=1}^{n} (-1)^(k+1) / k -- the alternating series.
+  alternatingHarmonic = n:
+    if n < 1 then ratZero
+    else builtins.foldl'
+      (acc: k: ratAdd acc (mkR (if k % 2 == 1 then 1 else (0 - 1)) k))
+      ratZero
+      (rangeList 1 n);
+
+  # [ H(1), H(2), ..., H(n) ].
+  harmonicList = n:
+    if n < 1 then []
+    else builtins.map harmonic (rangeList 1 n);
+
+  # The reduced rational as { num; den; text }.
+  ratView = r: { num = r.num; den = r.den; text = ratToString r; };
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "harmonic"
+    "harmonic-list"
+    "alternating-harmonic"
+    "harmonic-between"
+    "is-integer"
+  ];
+
+  # H(n)'s denominator divides lcm(1..n), which grows like e^n;
+  # this cap keeps the exact rational inside 64-bit range.
+  harmonicLimit = 30;
+
+  applyHarmonicNumbers = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      a  = if request ? a then request.a else 0;
+      b  = if request ? b then request.b else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "harmonic-between" then
+        if a < 0 then {
+          outcome = "held-negative-number";
+          operation = op; a = a;
+        }
+        else if b < a then {
+          outcome = "held-invalid-range";
+          operation = op; a = a; b = b;
+          reason = "the upper index must not be below the lower index";
+        }
+        else if b > harmonicLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; b = b;
+          limit = harmonicLimit;
+          reason = "the exact rational is capped to stay in 64-bit range";
+        }
+        else
+          let r = ratSub (harmonic b) (harmonic a);
+          in {
+            outcome = "harmonic-numbers-computed";
+            operation = op; a = a; b = b;
+            num = r.num; den = r.den; text = ratToString r;
+          }
+      else if n < 0 then {
+        outcome = "held-negative-number";
+        operation = op;
+        n = n;
+      }
+      else if n > harmonicLimit then {
+        outcome = "held-argument-too-large";
+        operation = op; n = n;
+        limit = harmonicLimit;
+        reason = "the exact rational is capped to stay in 64-bit range";
+      }
+      else if op == "harmonic" then
+        let v = ratView (harmonic n);
+        in {
+          outcome = "harmonic-numbers-computed";
+          operation = op; n = n;
+          num = v.num; den = v.den; text = v.text;
+        }
+      else if op == "alternating-harmonic" then
+        let v = ratView (alternatingHarmonic n);
+        in {
+          outcome = "harmonic-numbers-computed";
+          operation = op; n = n;
+          num = v.num; den = v.den; text = v.text;
+        }
+      else if op == "harmonic-list" then {
+        outcome = "harmonic-numbers-computed";
+        operation = op; n = n;
+        list = builtins.map ratToString (harmonicList n);
+      }
+      else {
+        # op == "is-integer"
+        outcome = "harmonic-numbers-computed";
+        operation = op; n = n;
+        is_integer = ratIsInteger (harmonic n);
+      };
+
+in {
+  inherit
+    ownerName
+    harmonic
+    alternatingHarmonic
+    harmonicList
+    ratView
+    knownOperations
+    applyHarmonicNumbers;
+  meta = {
+    source = "stdlib math harmonic numbers";
+    owner = ownerName;
+    base = "parametric-math-harmonic-numbers-v0";
+    rev_note = "v0.12-ABH (div-math): the harmonic numbers as exact rationals. harmonic H(n)=1+1/2+...+1/n (3/2, 11/6, 25/12, 137/60); alternatingHarmonic A(n)=1-1/2+1/3-... (the partial sums of the series converging to ln 2); harmonicList; harmonic-between H(b)-H(a) (a contiguous run of reciprocals); is-integer (computed, not asserted -- H(n) is an integer only for n<=1). Every partial sum is a gcd-reduced rational, no floating point, no rounding. Kernel layering: harmonic-numbers -> rational (ratAdd / ratSub / mkRational). NOT the generalized H(n,m) (its denominators overflow 64-bit fast -- deliberately excluded, not computed wrongly), NOT the digamma asymptotic, NOT arbitrary precision (n capped at 30), NOT yet a registered lens.";
+  };
+}

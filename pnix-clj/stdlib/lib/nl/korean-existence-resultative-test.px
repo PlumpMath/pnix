@@ -1,0 +1,32 @@
+# stdlib/lib/nl/korean-existence-resultative-test.px — audit #9 lock: 존재동사(있다) 무-location 파싱 + resultative-aux predicate 게이트.
+#
+# ★버그: resultativeHeadIdx 가 predicate-kind 게이트 없이 parseResultativeBase!=null 만으로 발화 →
+#   '철수가 있다'(주격주어+있다, 무-location)에서 '철수가'(=철수+가)가 resultative base 로 오통과 →
+#   action='철수가', roles=[] (이해 완파). progressive(#6)와 동형으로 rb=predicate 게이트 추가해 봉인.
+# 운영자 where=? 비전 연결: 있다=존재/처소 valency 동사 — location 부재여도 명제는 살아야(where=hole 은 담화가 채움).
+# fail-closed tradeoff: dict-미인식 피동(열리) resultative 는 사전coverage 대기(soundness > OOV, #6과 동일).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  shape = s: let p = knm.liftToProposition s; in {
+    action = p.action;
+    roles = B.map (r: r.role+":"+(if (r ? entity)&&(r.entity!=null) then r.entity else "null")+(if r ? subtype then "/"+r.subtype else "")) p.roles;
+  };
+  a = shape "철수가 있다";
+  g = shape "사과가 있다";
+  e = shape "철수가 없다";
+  l = shape "철수가 학교에 있다";
+  s = shape "철수가 앉아 있다";
+in {
+  iss = a;            # action=있, [agent:철수]
+  apple = g;          # action=있, [agent:사과]
+  eopda = e;          # action=없, [agent:철수]
+  iss_loc = l;        # action=있, [agent:철수, location:학교/at]
+  sit = s;            # action=앉 (resultative 정상 — 앉=predicate)
+  all_ok =
+       (a.action == "있") && (a.roles == [ "agent:철수" ])
+    && (g.action == "있") && (g.roles == [ "agent:사과" ])
+    && (e.action == "없") && (e.roles == [ "agent:철수" ])
+    && (l.action == "있") && (l.roles == [ "agent:철수" "location:학교/at" ])
+    && (s.action == "앉") && (s.roles == [ "agent:철수" ])
+    # ★verdict: 무-location 존재문도 math-keep(term_key 안정)
+    && ((knm.convergeGate "철수가 있다").verdict == "math-keep");
+}

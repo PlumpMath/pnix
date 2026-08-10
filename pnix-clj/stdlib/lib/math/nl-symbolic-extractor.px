@@ -1,0 +1,132 @@
+# stdlib.math.nl-symbolic-extractor
+#
+# **NL → symbolic 추출 (문장해석하면서 symbolic 식 뽑기) — first.md 사용자 directive.**
+#
+# 수학이 *말*로 표현된 경우 symbolic 식을 추출한다:
+#   "이 더하기 삼"              → "2 + 3"
+#   "엑스 제곱 빼기 일 은 영"      → "x^2 - 1 = 0"
+#   "엑스는 삼"                 → "x = 3"
+#   "방정식 엑스 더하기 일 은 영 풀어" → "x + 1 = 0"  (명령어 방정식/풀어 드롭)
+#
+# 닫힌 word→symbol map (데이터; 숫자·연산은 다의어 아님 → 매핑이지 날조 아님,
+# 헌법 word-guess 금지와 정합). 공백 토큰 단위로 매핑 후 join → ASCII 식.
+# downstream (numeric-evaluator / equation-solving-procedure)이 그 ASCII 를 푼다.
+# over-fire 차단: caller 가 `expression` 을 *실제로 풀어보고* 성공할 때만 채택
+# (`has_math_words` 는 한국어 수학 어휘가 있었는지의 신호일 뿐).
+let
+  # token → ASCII symbol. (개 같은 무의미 suffix·명령어는 map 에 없음 → 드롭.)
+  wordMap = [
+    # Sino-Korean 숫자
+    { w = "영"; s = "0"; } { w = "공"; s = "0"; }
+    { w = "일"; s = "1"; } { w = "이"; s = "2"; } { w = "삼"; s = "3"; }
+    { w = "사"; s = "4"; } { w = "오"; s = "5"; } { w = "육"; s = "6"; }
+    { w = "칠"; s = "7"; } { w = "팔"; s = "8"; } { w = "구"; s = "9"; }
+    { w = "십"; s = "10"; }
+    # native Korean 세는말 (개 붙은 형 포함)
+    { w = "하나"; s = "1"; } { w = "한개"; s = "1"; } { w = "한"; s = "1"; }
+    { w = "둘"; s = "2"; } { w = "두개"; s = "2"; } { w = "두"; s = "2"; }
+    { w = "셋"; s = "3"; } { w = "세개"; s = "3"; } { w = "세"; s = "3"; }
+    { w = "넷"; s = "4"; } { w = "네개"; s = "4"; } { w = "네"; s = "4"; }
+    { w = "다섯"; s = "5"; } { w = "여섯"; s = "6"; } { w = "일곱"; s = "7"; }
+    { w = "여덟"; s = "8"; } { w = "아홉"; s = "9"; } { w = "열"; s = "10"; }
+    # 연산
+    { w = "더하기"; s = "+"; } { w = "플러스"; s = "+"; } { w = "더한"; s = "+"; } { w = "더해"; s = "+"; }
+    { w = "빼기"; s = "-"; } { w = "마이너스"; s = "-"; } { w = "뺀"; s = "-"; } { w = "빼"; s = "-"; }
+    { w = "곱하기"; s = "*"; } { w = "곱"; s = "*"; } { w = "곱한"; s = "*"; } { w = "곱해"; s = "*"; }
+    { w = "나누기"; s = "/"; } { w = "나눈"; s = "/"; } { w = "나눠"; s = "/"; }
+    # 거듭제곱 (앞 항에 붙음)
+    { w = "제곱"; s = "^2"; } { w = "세제곱"; s = "^3"; }
+    # 변수말
+    { w = "엑스"; s = "x"; } { w = "와이"; s = "y"; } { w = "제트"; s = "z"; }
+    { w = "엔"; s = "n"; } { w = "엠"; s = "m"; }
+    # 등호 (수학 맥락; solve-gate 가 over-fire 차단)
+    { w = "은"; s = "="; } { w = "는"; s = "="; } { w = "이다"; s = "="; }
+    { w = "이야"; s = "="; } { w = "같다"; s = "="; } { w = "equals"; s = "="; }
+  ];
+
+  lookupWord = tok:
+    let hits = builtins.filter (m: m.w == tok) wordMap;
+    in if hits == [ ] then null else (builtins.head hits).s;
+
+  digitSet = [ "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" ];
+  asciiLetters = [
+    "a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
+    "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
+    "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M"
+    "N" "O" "P" "Q" "R" "S" "T" "U" "V" "W" "X" "Y" "Z"
+  ];
+  operatorSet = [ "+" "-" "*" "/" "%" "^" "(" ")" "." "=" ];
+  mathCharSet = digitSet ++ asciiLetters ++ operatorSet;
+
+  # token 이 전부 ASCII math 문자인가 (이미 "x", "2x", "x^2", "+" 등 식 조각).
+  isAsciiMathToken = tok:
+    let
+      n = builtins.stringLength tok;
+      go = i:
+        if i >= n then true
+        else if builtins.elem (builtins.substring i 1 tok) mathCharSet then go (i + 1)
+        else false;
+    in (n > 0) && (go 0);
+
+  # ASCII passthrough is deliberately narrow. A single-letter token is a
+  # variable (`x`, `n`); otherwise the token must contain a digit/operator.
+  # This prevents English request words ("python", "code", "for") from being
+  # mistaken for symbolic variables when extracting from mixed NL.
+  hasDigitOrOperator = tok:
+    let
+      n = builtins.stringLength tok;
+      go = i:
+        if i >= n then false
+        else
+          let c = builtins.substring i 1 tok;
+          in if (builtins.elem c digitSet) || (builtins.elem c operatorSet)
+             then true else go (i + 1);
+    in go 0;
+
+  isAsciiSymbolicToken = tok:
+    isAsciiMathToken tok
+    && (((builtins.stringLength tok) == 1) || (hasDigitOrOperator tok));
+
+  # 공백으로 토큰 분리. builtins.split 은 char-aware; substring byte-walk 은
+  # pnixc-meta 의 char-boundary snap (CLAUDE.md v0.16-AC) 때문에 multibyte 에서
+  # 깨진다 (substring i 1 이 char 중간에서 "" 반환).
+  splitWords = s:
+    builtins.filter (x: (builtins.isString x) && (x != "")) (builtins.split " " s);
+
+  normalizeSurface = s:
+    builtins.replaceStrings
+      [ "²" "³" "⁴" "." "?" "!" "," ]
+      [ "^2" "^3" "^4" "" "" "" "" ]
+      s;
+in
+rec {
+  name = "stdlib.math.nl-symbolic-extractor";
+
+  inherit wordMap lookupWord isAsciiMathToken splitWords normalizeSurface;
+
+  # token → ASCII symbol | passthrough(이미 식 조각) | null(드롭: 명령어/무의미).
+  mapToken = tok:
+    let m = lookupWord tok;
+    in if m != null then m
+       else if isAsciiSymbolicToken tok then tok
+       else null;
+
+  # NL → symbolic 식 추출.
+  # 반환: { has_math_words; expression; mapped_count; }
+  #   has_math_words: 한국어 수학 어휘(number/op/var/=)가 ≥1 매핑됨 (caller 신호).
+  #   expression: 매핑/passthrough 토큰을 join 한 ASCII 식 (드롭된 토큰 제외).
+  extractExpression = utterance:
+    if !(builtins.isString utterance) then { has_math_words = false; expression = ""; mapped_count = 0; }
+    else
+      let
+        toks = splitWords (normalizeSurface utterance);
+        # 한국어 수학 어휘로 매핑된 토큰 수 (passthrough/드롭 제외).
+        wordHits = builtins.filter (t: (lookupWord t) != null) toks;
+        kept = builtins.filter (x: x != null) (builtins.map mapToken toks);
+        expr = builtins.concatStringsSep " " kept;
+      in {
+        has_math_words = (builtins.length wordHits) > 0;
+        expression = expr;
+        mapped_count = builtins.length wordHits;
+      };
+}

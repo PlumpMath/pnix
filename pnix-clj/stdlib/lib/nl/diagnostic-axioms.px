@@ -1,0 +1,522 @@
+let
+  ownerName = "stdlib.nl.diagnostic-axioms";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Diagnostic Axioms (agent-NL-123) ============================
+  #
+  # 사용자 vision (2026-05-29):
+  # > "에러를 찾아내 어떻게 패치하고 코드를 바꾸는데 필요한 손발/도구"
+  #
+  # 박힌 #122 = 코드 *변경* 의 손/도구 (rename / extract / replace / ...).
+  # 이 #123 = 코드 *진단* 의 손/도구 (인식 → 분류 → 패치 방향).
+  #
+  # 두 차원이 결합:
+  #   diagnostic 이 "off-by-one error" 인식 → edit 이 "replace loop
+  #   condition" 또는 "introduce guard clause" 로 패치
+  #
+  # 5 family:
+  #   1. compile-error (type / syntax / resolution)
+  #   2. runtime-error (null / OOB / divzero / OOM / panic)
+  #   3. test-failure (assertion / wrong output / flaky)
+  #   4. logic-bug (off-by-one / wrong condition / data race)
+  #   5. perf-issue (slow / leak / unbounded growth)
+
+  stepKind = "diagnostic-tool-axiom";
+  framework_step =
+    "axiom content — 에러 인식 + 패치 방향 mapping (진단 손/도구)";
+
+  defer_edit_refactor =
+    "stdlib/lib/nl/code-edit-refactor-axioms.px";
+  defer_patch_ir = "stdlib/lib/nl/patch-ir-nl-lifter.px";
+
+  # === 1. Compile Error =========================================
+
+  compileErrorAxiomTree = bt.composeBranchTree "compile-error axiom" [
+    {
+      name = "type-error";
+      cues = [ "type error" "type mismatch" "wrong type" "expected type" "타입 오류" "타입 불일치" ];
+      sub_specs = [
+        {
+          name = "primitive-mismatch";
+          cues = [ "int" "float" "string" "bool" "primitive" "원시 타입" ];
+          sub_specs = [
+            { name = "patch-cast"; cues = [ "cast" "변환" "convert" ]; terminal = true; }
+            { name = "patch-change-variable-type"; cues = [ "change type" "타입 변경" ]; terminal = true; }
+          ];
+        }
+        {
+          name = "generic-constraint";
+          cues = [ "generic" "trait bound" "type constraint" "제네릭" "트레잇" ];
+          sub_specs = [
+            { name = "patch-add-bound"; cues = []; terminal = true; }
+            { name = "patch-add-impl"; cues = []; terminal = true; }
+          ];
+        }
+        {
+          name = "variance-error";
+          cues = [ "variance" "covariant" "contravariant" "변성" ];
+          sub_specs = [
+            { name = "patch-add-variance-annotation"; cues = []; terminal = true; }
+          ];
+        }
+      ];
+    }
+    {
+      name = "syntax-error";
+      cues = [ "syntax error" "parse error" "unexpected token" "구문 오류" "파싱 오류" ];
+      sub_specs = [
+        { name = "missing-delimiter"; cues = [ "missing" "expected" "괄호" "세미콜론" ]; terminal = true; }
+        { name = "wrong-keyword"; cues = [ "keyword" "키워드" ]; terminal = true; }
+        { name = "indentation-error"; cues = [ "indent" "들여쓰기" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "resolution-error";
+      cues = [ "not found" "undefined" "unresolved" "import error" "정의되지 않은" "찾을 수 없음" ];
+      sub_specs = [
+        { name = "missing-import"; cues = [ "import" "use" "include" "임포트" ]; terminal = true; }
+        { name = "name-typo"; cues = [ "typo" "spelling" "오타" ]; terminal = true; }
+        { name = "missing-declaration"; cues = [ "not declared" "선언 없음" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "lifetime-or-borrow";
+      cues = [ "lifetime" "borrow" "ownership" "수명" "소유권" "차용" ];
+      sub_specs = [
+        { name = "patch-clone"; cues = [ "clone" "복제" ]; terminal = true; }
+        { name = "patch-extend-lifetime"; cues = [ "lifetime annotation" "수명 어노테이션" ]; terminal = true; }
+        { name = "patch-restructure"; cues = [ "restructure" "재구조화" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Runtime Error =========================================
+
+  runtimeErrorAxiomTree = bt.composeBranchTree "runtime-error axiom" [
+    {
+      name = "null-or-undefined";
+      cues = [ "null" "nil" "undefined" "None" "null pointer" "null 참조" "nullable" ];
+      sub_specs = [
+        { name = "null-check-missing"; cues = [ "no null check" "체크 없음" ]; terminal = true; }
+        { name = "patch-add-guard"; cues = [ "guard" "if not null" "가드" ]; terminal = true; }
+        { name = "patch-use-option-type"; cues = [ "Option" "Maybe" "옵션" ]; terminal = true; }
+        { name = "patch-default-value"; cues = [ "default" "기본값" "fallback" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "bounds-error";
+      cues = [ "out of bounds" "OOB" "array index" "인덱스 범위" "범위 초과" ];
+      sub_specs = [
+        { name = "patch-bounds-check"; cues = [ "bounds check" "범위 검사" ]; terminal = true; }
+        { name = "patch-iterator-instead"; cues = [ "iterator" "iter" "이터레이터" ]; terminal = true; }
+        { name = "patch-clamp-index"; cues = [ "clamp" "min max" "제한" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "arithmetic-error";
+      cues = [ "division by zero" "overflow" "underflow" "0으로 나누기" "오버플로우" ];
+      sub_specs = [
+        { name = "patch-zero-check"; cues = [ "check zero" "0 체크" ]; terminal = true; }
+        { name = "patch-checked-arithmetic"; cues = [ "checked" "saturating" "wrapping" ]; terminal = true; }
+        { name = "patch-use-bigint"; cues = [ "big int" "bignum" "큰 정수" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "panic-or-crash";
+      cues = [ "panic" "crash" "abort" "segfault" "패닉" "충돌" ];
+      sub_specs = [
+        { name = "patch-result-type"; cues = [ "Result" "결과 타입" ]; terminal = true; }
+        { name = "patch-graceful-degradation"; cues = [ "graceful" "회복" ]; terminal = true; }
+        { name = "patch-try-catch"; cues = [ "try catch" "예외 처리" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "resource-leak";
+      cues = [ "leak" "file handle" "memory leak" "누수" "리소스 누수" ];
+      sub_specs = [
+        { name = "patch-defer-close"; cues = [ "defer" "finally" "with" "using" ]; terminal = true; }
+        { name = "patch-raii"; cues = [ "RAII" "destructor" "소멸자" ]; terminal = true; }
+        { name = "patch-explicit-drop"; cues = [ "drop" "release" "해제" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Test Failure ==========================================
+
+  testFailureAxiomTree = bt.composeBranchTree "test-failure axiom" [
+    {
+      name = "assertion-failure";
+      cues = [ "assertion failed" "assert" "expected" "actual" "단언 실패" ];
+      sub_specs = [
+        { name = "wrong-expected-value"; cues = [ "wrong expected" "오답" ]; terminal = true; }
+        { name = "wrong-implementation"; cues = [ "wrong impl" "구현 오류" ]; terminal = true; }
+        { name = "edge-case-missed"; cues = [ "edge case" "코너 케이스" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "flaky-test";
+      cues = [ "flaky" "intermittent" "non-deterministic" "랜덤 실패" ];
+      sub_specs = [
+        { name = "time-dependent"; cues = [ "time" "timestamp" "시간 의존" ]; terminal = true; }
+        { name = "random-seed-leak"; cues = [ "random" "seed" ]; terminal = true; }
+        { name = "concurrency-dep"; cues = [ "race" "concurrent" "동시성" ]; terminal = true; }
+        { name = "external-resource"; cues = [ "network" "filesystem" "외부 자원" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "coverage-gap";
+      cues = [ "coverage" "uncovered" "missing test" "커버리지" "테스트 없음" ];
+      sub_specs = [
+        { name = "patch-add-unit-test"; cues = [ "unit test" "단위" ]; terminal = true; }
+        { name = "patch-add-property-test"; cues = [ "property" "property-based" ]; terminal = true; }
+        { name = "patch-add-integration-test"; cues = [ "integration" "통합" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "test-timeout";
+      cues = [ "timeout" "slow test" "test hangs" "테스트 시간 초과" ];
+      sub_specs = [
+        { name = "patch-increase-timeout"; cues = []; terminal = true; }
+        { name = "patch-mock-slow-deps"; cues = [ "mock" "stub" ]; terminal = true; }
+        { name = "patch-async-await"; cues = [ "async" "await" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Logic Bug =============================================
+
+  logicBugAxiomTree = bt.composeBranchTree "logic-bug axiom" [
+    {
+      name = "off-by-one";
+      cues = [ "off by one" "off-by-one" "OBO" "fence post" "인덱스 오프셋" ];
+      sub_specs = [
+        { name = "loop-boundary"; cues = [ "loop boundary" "<=" "<" "범위 경계" ]; terminal = true; }
+        { name = "array-length-vs-index"; cues = [ "length" "size" "길이" ]; terminal = true; }
+        { name = "inclusive-vs-exclusive"; cues = [ "inclusive" "exclusive" "포함" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "wrong-condition";
+      cues = [ "wrong condition" "inverted logic" "condition reversed" "조건 반대" ];
+      sub_specs = [
+        { name = "swap-and-or"; cues = [ "AND OR swap" "&& vs ||" ]; terminal = true; }
+        { name = "missing-negation"; cues = [ "negation" "부정" "not" ]; terminal = true; }
+        { name = "wrong-comparison-op"; cues = [ "comparison" "비교 연산자" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "race-condition";
+      cues = [ "race condition" "race" "data race" "경쟁 조건" "동시성 버그" ];
+      sub_specs = [
+        { name = "patch-add-mutex"; cues = [ "mutex" "lock" "락" ]; terminal = true; }
+        { name = "patch-atomic"; cues = [ "atomic" "원자적" ]; terminal = true; }
+        { name = "patch-message-passing"; cues = [ "channel" "actor" "메시지" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "unreachable-code";
+      cues = [ "unreachable" "dead code" "never executed" "도달 불가" ];
+      sub_specs = [
+        { name = "patch-remove"; cues = []; terminal = true; }
+        { name = "patch-fix-control-flow"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "infinite-loop";
+      cues = [ "infinite loop" "hang" "non-terminating" "무한 루프" ];
+      sub_specs = [
+        { name = "patch-fix-termination"; cues = [ "termination" "종료 조건" ]; terminal = true; }
+        { name = "patch-bound-iteration"; cues = [ "bound" "max iter" "최대 반복" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Performance Issue =====================================
+
+  perfIssueAxiomTree = bt.composeBranchTree "perf-issue axiom" [
+    {
+      name = "slow-execution";
+      cues = [ "slow" "performance" "latency" "느림" "지연" ];
+      sub_specs = [
+        { name = "wrong-data-structure"; cues = [ "array vs hash" "wrong DS" ]; terminal = true; }
+        { name = "redundant-computation"; cues = [ "redundant" "duplicate" "중복" ]; terminal = true; }
+        { name = "patch-memoize"; cues = [ "memoize" "cache" "캐시" ]; terminal = true; }
+        { name = "patch-better-algorithm"; cues = [ "better algorithm" "더 좋은" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "memory-bloat";
+      cues = [ "memory bloat" "high memory" "메모리 과다" "OOM" ];
+      sub_specs = [
+        { name = "patch-streaming"; cues = [ "stream" "lazy" "지연 평가" ]; terminal = true; }
+        { name = "patch-pagination"; cues = [ "page" "batch" "배치" ]; terminal = true; }
+        { name = "patch-reduce-clones"; cues = [ "clone" "borrow" "차용" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "unbounded-growth";
+      cues = [ "unbounded" "grows forever" "무한 증가" ];
+      sub_specs = [
+        { name = "patch-cap-size"; cues = [ "cap" "max size" "최대 크기" ]; terminal = true; }
+        { name = "patch-evict-old"; cues = [ "evict" "LRU" "제거" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "io-bottleneck";
+      cues = [ "io bound" "disk slow" "network slow" "IO 병목" ];
+      sub_specs = [
+        { name = "patch-batch-io"; cues = [ "batch" "묶음" ]; terminal = true; }
+        { name = "patch-async-io"; cues = [ "async" "비동기" ]; terminal = true; }
+        { name = "patch-buffer"; cues = [ "buffer" "버퍼" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "lock-contention";
+      cues = [ "lock contention" "lock wait" "락 경합" ];
+      sub_specs = [
+        { name = "patch-fine-grained-lock"; cues = [ "fine grained" "세분화" ]; terminal = true; }
+        { name = "patch-lock-free"; cues = [ "lock-free" "락 프리" ]; terminal = true; }
+        { name = "patch-read-write-lock"; cues = [ "rwlock" "read-write" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#153) ─────────────────────────────────
+    {
+      name = "cascade-and-partial-failures";
+      cues = [ "cascade" "partial failure" "cascading failure" "연쇄 장애" ];
+      sub_specs = [
+        { name = "fault-injection"; cues = [ "fault injection" "장애 주입" ]; terminal = true; }
+        { name = "blast-radius"; cues = [ "blast radius" "장애 영향 범위" ]; terminal = true; }
+        { name = "partial-degradation"; cues = [ "graceful degradation" "부분 저하" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry of all 5 families ==================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-diag-001";
+      name = "compile-error";
+      domain = "diagnostic";
+      activation_cues = [
+        "compile error" "type error" "syntax error" "borrow checker"
+        "컴파일 오류" "타입 오류" "구문 오류"
+        "won't compile" "compile fails"
+      ];
+      tree = compileErrorAxiomTree;
+      sub_count = builtins.length compileErrorAxiomTree.branches;
+      defer_to = defer_edit_refactor;
+      tool_role = "진단 — compile-time 오류";
+    }
+    {
+      axiom_id = "axiom-diag-002";
+      name = "runtime-error";
+      domain = "diagnostic";
+      activation_cues = [
+        "runtime error" "crash" "panic" "exception"
+        "null pointer" "out of bounds" "divide by zero" "leak"
+        "런타임 오류" "크래시" "예외" "누수"
+      ];
+      tree = runtimeErrorAxiomTree;
+      sub_count = builtins.length runtimeErrorAxiomTree.branches;
+      defer_to = defer_edit_refactor;
+      tool_role = "진단 — runtime 오류";
+    }
+    {
+      axiom_id = "axiom-diag-003";
+      name = "test-failure";
+      domain = "diagnostic";
+      activation_cues = [
+        "test failed" "test failure" "assertion failed"
+        "flaky" "coverage" "test timeout"
+        "테스트 실패" "단언 실패" "커버리지"
+      ];
+      tree = testFailureAxiomTree;
+      sub_count = builtins.length testFailureAxiomTree.branches;
+      defer_to = defer_edit_refactor;
+      tool_role = "진단 — test 실패";
+    }
+    {
+      axiom_id = "axiom-diag-004";
+      name = "logic-bug";
+      domain = "diagnostic";
+      activation_cues = [
+        "logic bug" "off by one" "wrong condition" "race condition"
+        "infinite loop" "unreachable" "dead code"
+        "버그" "논리 오류" "조건 오류" "무한 루프"
+      ];
+      tree = logicBugAxiomTree;
+      sub_count = builtins.length logicBugAxiomTree.branches;
+      defer_to = defer_edit_refactor;
+      tool_role = "진단 — logic 버그";
+    }
+    {
+      axiom_id = "axiom-diag-005";
+      name = "perf-issue";
+      domain = "diagnostic";
+      activation_cues = [
+        "slow" "performance issue" "memory" "bottleneck"
+        "latency" "OOM" "lock contention"
+        "성능" "느림" "메모리" "병목"
+      ];
+      tree = perfIssueAxiomTree;
+      sub_count = builtins.length perfIssueAxiomTree.branches;
+      defer_to = defer_edit_refactor;
+      tool_role = "진단 — 성능 문제";
+    }
+  ];
+
+  # === Activation logic ===========================================
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple diagnostic axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "diagnose " + ax.name;
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  # === Plate entry =================================================
+
+  applyDiagnosticAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-109-nl-diagnostic "
+            + "(composes axiom-98-tree + axiom-108-edit)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+              defer_to = ax.defer_to;
+              tool_role = ax.tool_role;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms } | { activate_for } | { describe }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-diagnostic-axiom-109";
+    composes = "axiom-98-tree + axiom-108-edit + axiom-89-patch-ir";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "compile-error (type / syntax / resolution / lifetime)"
+      "runtime-error (null / OOB / arithmetic / panic / leak)"
+      "test-failure (assertion / flaky / coverage / timeout)"
+      "logic-bug (off-by-one / wrong-condition / race / unreachable / infinite-loop)"
+      "perf-issue (slow / memory-bloat / unbounded / IO / lock-contention)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    defer_to = defer_edit_refactor;
+    tool_metaphor =
+      "사용자 vision 의 '에러를 찾아내 어떻게 패치' 직접 매핑. 진단 axiom "
+      + "이 edit/refactor axiom 으로 defer — 진단 → 패치 방향 chain.";
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+  };
+
+in {
+  inherit
+    ownerName
+    compileErrorAxiomTree runtimeErrorAxiomTree testFailureAxiomTree
+    logicBugAxiomTree perfIssueAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    applyDiagnosticAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL diagnostic axioms (agent-NL-123)";
+    owner = ownerName;
+    base = "nl-diagnostic-axioms-v0";
+    rev_note = "agent-NL-123 (2026-05-29): 진단 손/도구 차원의 첫 family. "
+      + "5 family (compile-error / runtime-error / test-failure / logic-bug "
+      + "/ perf-issue). 각 sub-tree 가 *진단 방법* + *패치 방향*. defer_to "
+      + "= edit/refactor axioms (#122) — 진단 → 패치 chain. DO NOT REBUILD "
+      + "— branch-tree-substrate generic constructor.";
+  };
+}

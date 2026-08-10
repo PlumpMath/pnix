@@ -1,0 +1,291 @@
+# stdlib.lib.math.graph-theory
+#
+# OWNER-LAW (v0.12-AAE, div-math, 2026-05-21): finite undirected
+# graph theory.
+#
+# The div-math kernel reaches discrete math through set theory and
+# combinatorics but had no *graph* owner. This one adds finite
+# undirected graphs: degree, connectivity, reachability, connected
+# components, and the topological invariants of the graph as a
+# 1-complex (Euler characteristic, Betti numbers b_0/b_1, cycle rank,
+# McCabe cyclomatic complexity) — the prior-art-backed core of the
+# idea.md §35 topology lens (cyclomatic = first Betti number).
+#
+# # Representation
+#
+# A graph is `{ vertex_count = n; edges = [ [a b] ... ]; }`. The
+# vertices are the integers 0 .. n-1. Each edge is a two-element
+# list `[a b]`; the graph is undirected, so `[a b]` and `[b a]`
+# mean the same edge.
+#
+# # Reachability is a real algorithm
+#
+# `reachableFrom` is depth-first search with an explicit visited
+# set -- it terminates because the visited set only grows and is
+# bounded by the vertex count. `isConnected`, `hasPath`, and
+# `componentCount` are all read off it. No floating point, no
+# randomness: same graph -> same receipt.
+#
+# # Standalone
+#
+# Imports nothing. Integer-labelled vertices only.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT directed graphs, NOT weighted graphs.
+#   - NOT shortest-path / spanning-tree / flow algorithms.
+#   - NOT a graph-isomorphism or planarity engine.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/graph-theory.px";
+
+  edgeEndpoints = e: {
+    a = builtins.elemAt e 0;
+    b = builtins.elemAt e 1;
+  };
+
+  edgeCount = graph: builtins.length graph.edges;
+
+  # The neighbours of vertex `v`: for every edge touching `v`, the
+  # other endpoint. Self-loops and parallel edges are reflected as
+  # repeated entries (standard degree convention).
+  neighborsOf = graph: v:
+    builtins.foldl'
+      (acc: e:
+        let ep = edgeEndpoints e;
+        in
+          if ep.a == v then acc ++ [ ep.b ]
+          else if ep.b == v then acc ++ [ ep.a ]
+          else acc)
+      []
+      graph.edges;
+
+  # Degree = number of edge-incidences at `v`.
+  degreeOf = graph: v: builtins.length (neighborsOf graph v);
+
+  # Depth-first reachable set from `start`. Explicit visited set;
+  # the search terminates because `visited` only grows.
+  reachableFrom = graph: start:
+    let
+      dfs = visited: stack:
+        if stack == [] then visited
+        else
+          let
+            v = builtins.head stack;
+            rest = builtins.tail stack;
+          in
+            if builtins.elem v visited then dfs visited rest
+            else dfs (visited ++ [ v ]) (rest ++ (neighborsOf graph v));
+    in dfs [] [ start ];
+
+  # Whether `b` is reachable from `a`.
+  hasPath = graph: a: b:
+    builtins.elem b (reachableFrom graph a);
+
+  # A graph is connected iff every vertex is reachable from vertex
+  # 0. The empty graph (0 vertices) is connected by convention.
+  isConnected = graph:
+    let n = graph.vertex_count;
+    in
+      if n == 0 then true
+      else builtins.length (reachableFrom graph 0) == n;
+
+  # The number of connected components: sweep the vertices, and
+  # each time one is found outside every component seen so far,
+  # open a new component as its reachable set.
+  componentCount = graph:
+    let
+      n = graph.vertex_count;
+      vertexRange =
+        let go = i: if i >= n then [] else [ i ] ++ go (i + 1);
+        in go 0;
+      step = state: v:
+        if builtins.elem v state.seen then state
+        else {
+          count = state.count + 1;
+          seen = state.seen ++ (reachableFrom graph v);
+        };
+      final =
+        builtins.foldl' step { count = 0; seen = []; } vertexRange;
+    in final.count;
+
+  # A complete graph on n vertices has n*(n-1)/2 edges (counting
+  # distinct unordered pairs) -- here checked against the actual
+  # edge count, so it presumes a simple graph.
+  isComplete = graph:
+    let n = graph.vertex_count;
+    in edgeCount graph == (n * (n - 1)) / 2;
+
+  # The handshake lemma: the sum of all degrees equals twice the
+  # edge count. `degreeSum` lets a caller verify it.
+  degreeSum = graph:
+    let
+      n = graph.vertex_count;
+      vertexRange =
+        let go = i: if i >= n then [] else [ i ] ++ go (i + 1);
+        in go 0;
+    in
+      builtins.foldl'
+        (acc: v: acc + degreeOf graph v) 0 vertexRange;
+
+  # --- topological invariants of the graph as a 1-complex -------
+  # A finite graph is a 1-dimensional CW/simplicial complex: its only
+  # homology is H_0 (components) and H_1 (independent cycles). These
+  # are exact, decidable, deterministic integer invariants -- the
+  # honest, prior-art-backed core of the "topology lens" (idea.md
+  # §35-1: cyclomatic complexity = first Betti number = decision-point
+  # count). No flow, no curvature here -- just the counted invariants.
+  #
+  # ★HONEST SCOPE (adversarial verdict idea.md §37): this is the
+  # classical, monotone cyclomatic number M = E - N + P -- a structural
+  # COUNT only. It is NOT a quality/defect/robustness PREDICTOR:
+  # cyclomatic complexity is ~90% explained by LOC and has near-zero
+  # independent defect-prediction power (Shepperd 1988 .. 2025). Use it
+  # as a deterministic structure measure / propose-heuristic, never as
+  # a validated predictor of code quality.
+
+  # First Betti number b_1 = cycle rank = circuit rank = number of
+  # independent cycles = E - V + (number of components). For a tree
+  # b_1 = 0; one extra edge beyond a spanning forest = one cycle.
+  # (An if-else diamond has b_1 = 1: the +1 the operator called
+  # "정의가 맺힌다가 두 개".)
+  cycleRank = graph:
+    (edgeCount graph) - graph.vertex_count + (componentCount graph);
+
+  # Euler characteristic of the 1-complex: chi = V - E = b_0 - b_1.
+  eulerCharacteristic = graph:
+    graph.vertex_count - (edgeCount graph);
+
+  # Betti numbers: b_0 = connected components, b_1 = cycle rank.
+  # (Higher b_i are 0 for a 1-complex; a 2-complex/mesh would need
+  # faces, which this owner does not model -- honest scope.)
+  bettiNumbers = graph: {
+    b0 = componentCount graph;
+    b1 = cycleRank graph;
+  };
+
+  # McCabe cyclomatic complexity V(G) = E - N + 2P (P = components)
+  # = b_1 + P. The standard software-engineering control-flow metric;
+  # for one connected component it is b_1 + 1.
+  cyclomaticComplexity = graph:
+    (edgeCount graph) - graph.vertex_count + (2 * (componentCount graph));
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "degree"
+    "neighbors"
+    "edge-count"
+    "connected"
+    "has-path"
+    "component-count"
+    "is-complete"
+    "degree-sum"
+    "cycle-rank"
+    "euler-characteristic"
+    "betti-numbers"
+    "cyclomatic-complexity"
+  ];
+
+  applyGraph = request:
+    let
+      op = request.operation;
+      graph = request.graph;
+      v = if request ? v then request.v else 0;
+      a = if request ? a then request.a else 0;
+      b = if request ? b then request.b else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "degree" then {
+        outcome = "graph-computed";
+        operation = op; v = v;
+        value = degreeOf graph v;
+      }
+      else if op == "neighbors" then {
+        outcome = "graph-computed";
+        operation = op; v = v;
+        neighbors = neighborsOf graph v;
+      }
+      else if op == "edge-count" then {
+        outcome = "graph-computed";
+        operation = op;
+        value = edgeCount graph;
+      }
+      else if op == "connected" then {
+        outcome = "graph-computed";
+        operation = op;
+        holds = isConnected graph;
+      }
+      else if op == "has-path" then {
+        outcome = "graph-computed";
+        operation = op; a = a; b = b;
+        holds = hasPath graph a b;
+      }
+      else if op == "component-count" then {
+        outcome = "graph-computed";
+        operation = op;
+        value = componentCount graph;
+      }
+      else if op == "is-complete" then {
+        outcome = "graph-computed";
+        operation = op;
+        holds = isComplete graph;
+      }
+      else if op == "degree-sum" then {
+        outcome = "graph-computed";
+        operation = op;
+        value = degreeSum graph;
+        twice_edge_count = 2 * edgeCount graph;
+      }
+      else if op == "cycle-rank" then {
+        outcome = "graph-computed";
+        operation = op;
+        value = cycleRank graph;
+      }
+      else if op == "euler-characteristic" then {
+        outcome = "graph-computed";
+        operation = op;
+        value = eulerCharacteristic graph;
+      }
+      else if op == "betti-numbers" then {
+        outcome = "graph-computed";
+        operation = op;
+        betti = bettiNumbers graph;
+      }
+      else {
+        # op == "cyclomatic-complexity"
+        outcome = "graph-computed";
+        operation = op;
+        value = cyclomaticComplexity graph;
+      };
+
+in {
+  inherit
+    ownerName
+    edgeCount
+    neighborsOf
+    degreeOf
+    reachableFrom
+    hasPath
+    isConnected
+    componentCount
+    isComplete
+    degreeSum
+    cycleRank
+    eulerCharacteristic
+    bettiNumbers
+    cyclomaticComplexity
+    knownOperations
+    applyGraph;
+  meta = {
+    source = "stdlib math graph theory";
+    owner = ownerName;
+    base = "parametric-math-graph-theory-v0";
+    rev_note = "v0.13-AAF (div-math): finite undirected graph theory owner. Graph = { vertex_count; edges }. Degree, neighbours, edge count, depth-first reachability (explicit visited set, provably terminating), connectivity, path existence, connected-component count, completeness test, degree sum (handshake-lemma check), and topological invariants of the graph as a 1-complex: cycle rank (= first Betti number b_1 = E - V + components), Euler characteristic (chi = V - E = b_0 - b_1), Betti numbers {b_0, b_1}, McCabe cyclomatic complexity (E - V + 2P) — idea.md §35-1 (cyclomatic = b_1 = decision-point count). Standalone, integer-labelled vertices, exact integer arithmetic. NOT directed / weighted graphs, NOT shortest-path / spanning-tree, NOT 2-complex/mesh homology (no faces), NOT isomorphism, NOT yet a registered lens.";
+  };
+}

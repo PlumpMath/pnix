@@ -1,0 +1,45 @@
+# JSON/RFC8259 + JSON Schema structural metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No prose/test-suite/catalog/real document or graph wiring.
+let
+  B = builtins;
+  genPath = ./json-schema-specification.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "config.json_schema.specification.v1";
+    source = "RFC 8259 JSON + JSON Schema meta-schema";
+    license = "IETF-RFC + BSD-3-Clause/AFL-3.0";
+    summary = { files = 0; json_tokens = 0; properties = 0; defs = 0; refs = 0; required = 0; enums = 0; types = 0; };
+    policy = "schema metadata only";
+    manifest = { }; schema_id = ""; schema_schema = "";
+    files = [ ]; json_tokens = [ ]; properties = [ ]; defs = [ ]; refs = [ ]; required_fields = [ ]; enum_tokens = [ ]; type_tokens = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "json-schema-specification-load-v0";
+      source_lens = "stdlib/lib/corpus/json-schema-specification-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "config.json_schema.specification.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "json-schema-specification-query-v0";
+      source_lens = "stdlib/lib/corpus/json-schema-specification-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "config.json_schema.specification.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

@@ -1,0 +1,342 @@
+let
+  ownerName = "stdlib.agent.x3d-coding-process-replay-contract";
+
+  defer_world_surface_contract =
+    "stdlib/lib/agent/freecat-world-model-surface-contract.px";
+
+  # === X3D coding-process replay contract (Round 72) ==================
+  #
+  # 사용자 directive (Round 71 후):
+  # > '진짜 놀라는 부분은 MCP 뿐만 아니라, pnixc-meta 에서 만들어지는
+  #   코드로 인해서, 자동화 코딩 과정을 전부 눈으로 볼 수 있다는 것.
+  #   x3d 상에 만들어지는 과정을 ai 코딩이 전부 순서대로 보여주는
+  #   엄청난 시스템이 될 것이다.'
+  #
+  # 이 owner = AI coding agent (Round 51-67) 의 *generation 과정* 이
+  # X3D scene 위의 *visual replay chain* 으로 manifest 되는 substrate
+  # 계약. 단순 text receipt → *눈으로 보는 시각 chain*.
+  #
+  # # 의미적 매핑
+  #
+  #   각 coding step (Round 51-67 의 stage)
+  #     ↓ visual representation 매핑
+  #   X3D scene 의 visual event (node 등장 / 색깔 / 위치 / wire)
+  #     ↓ timeline 정렬 (X3D TimeSensor + animation track)
+  #   사용자 controls (replay / step / rewind / scrub)
+  #     ↓
+  #   "왜 이렇게 했어?" 질문에 *시간 축 위의 정확한 decision chain*
+  #   으로 답
+  #
+  # # CLAUDE.md self-audit criterion 의 visual surface
+  #
+  # 헌법 "self-audit criterion of intelligence" — substrate 가 *어떻게*
+  # 결정에 도달했는지 receipt 로 trace 가능. 이 owner = 그 receipt
+  # chain 의 *X3D scene 위 manifestation*. JSON receipt 였던 게 시각
+  # 객체.
+  #
+  # # 시장 위치
+  #
+  # GitHub Copilot / Cursor : LLM code suggestion — visualization 0
+  # Unity / Godot           : game engine          — AI generation
+  #                                                  visibility 0
+  # LangSmith / LangChain   : LLM trace             — text only,
+  #                                                   no spatial
+  # → 우리: AI generation *과정* 의 spatial 3D replay (없는 카테고리)
+  #
+  # # Output verdict family
+  #
+  #   "coding-process-replayable-on-x3d"   — 정상 replay envelope
+  #   "held-unknown-step-kind"             — Round 51-67 외 step
+  #   "held-no-receipt-chain"              — step 시퀀스 empty
+  #   "held-timeline-conflict"             — 같은 t 에 두 visual event
+  #   "held-visual-cue-conflict"           — 같은 step kind 가 두 cue
+
+  stepKind = "x3d-coding-process-replay";
+  framework_step =
+    "coding receipt chain → X3D scene visual events on timeline";
+
+  # ===================================================================
+  # === Known coding step kinds (Round 51-67 mapping) ================
+  # ===================================================================
+  #
+  # 각 Round = 한 stage = 한 visual event kind. 새 Round 추가 = 한
+  # row + visual cue 정의.
+
+  knownCodingStepKinds = [
+    "intent-recognition"                  # Round 53/56
+    "fact-model-lift"                     # Round 53
+    "math-invariant-check"                # Round 54
+    "algorithm-choice"                    # Round 54
+    "patch-obligation"                    # Round 54
+    "failure-cue-lift"                    # Round 55
+    "repair-candidate-generation"         # Round 55
+    "repair-ranking"                      # Round 55
+    "repo-question-routing"               # Round 56
+    "repo-evidence-receipt"               # Round 56
+    "repo-answer-composition"             # Round 56
+    "host-wiring-qa"                      # Round 57
+    "patch-preview"                       # Round 58
+    "patch-apply"                         # Round 59
+    "patch-verify"                        # Round 60
+    "repair-loop"                         # Round 61
+    "session-orchestration"               # Round 62
+    "persistence"                         # Round 64
+    "cli-command"                         # Round 65
+    "test-runner-selection"               # Round 66
+    "diff-risk-segmentation"              # Round 67
+    "formula-slot-registry"               # Round 68
+    "axiom-attestation"                   # Round 51 functor-lift
+    "review-stage"                        # Round 53 review-stage-plate
+    "apply-stage"                         # apply-stage-plate
+    "materialization-stage"               # materialization-stage-plate
+    "verify-stage"                        # verify-stage-plate
+    "rollback-handle"                     # rollback-handle-plate
+    "rollback-receipt"                    # rollback-receipt-plate
+  ];
+
+  # ===================================================================
+  # === Visual cue per step kind (closed) ============================
+  # ===================================================================
+  #
+  # 각 step 의 X3D visual representation. 같은 kind = 같은 cue.
+  # 사용자 / LLM / replay viewer 모두에게 *일관* 한 시각 vocab.
+
+  visualCueForStep = {
+    "intent-recognition"           = { shape = "Sphere"; color = "0.4 0.6 1.0"; size = 0.2; emit_glow = true; };
+    "fact-model-lift"              = { shape = "Box"; color = "0.5 0.7 0.9"; size = 0.15; };
+    "math-invariant-check"         = { shape = "Cylinder"; color = "0.2 0.8 0.4"; size = 0.18; emit_glow = true; };
+    "algorithm-choice"             = { shape = "Cone"; color = "0.7 0.5 0.9"; size = 0.2; };
+    "patch-obligation"             = { shape = "Box"; color = "0.9 0.6 0.2"; size = 0.16; };
+    "failure-cue-lift"             = { shape = "Sphere"; color = "0.9 0.3 0.3"; size = 0.18; emit_glow = true; };
+    "repair-candidate-generation"  = { shape = "Cylinder"; color = "0.9 0.6 0.4"; size = 0.16; };
+    "repair-ranking"               = { shape = "Cone"; color = "0.6 0.4 0.9"; size = 0.17; };
+    "repo-question-routing"        = { shape = "Sphere"; color = "0.5 0.5 0.9"; size = 0.15; };
+    "repo-evidence-receipt"        = { shape = "Box"; color = "0.4 0.6 0.7"; size = 0.13; };
+    "repo-answer-composition"      = { shape = "Sphere"; color = "0.5 0.8 0.7"; size = 0.18; };
+    "host-wiring-qa"               = { shape = "Cylinder"; color = "0.6 0.7 0.8"; size = 0.14; };
+    "patch-preview"                = { shape = "Plane"; color = "0.8 0.8 0.5"; size = 0.25; };
+    "patch-apply"                  = { shape = "Box"; color = "0.3 0.7 0.5"; size = 0.2; emit_glow = true; };
+    "patch-verify"                 = { shape = "Cylinder"; color = "0.2 0.8 0.4"; size = 0.18; emit_glow = true; };
+    "repair-loop"                  = { shape = "Sphere"; color = "0.9 0.5 0.2"; size = 0.16; };
+    "session-orchestration"        = { shape = "Cone"; color = "0.5 0.5 0.5"; size = 0.3; };
+    "persistence"                  = { shape = "Box"; color = "0.4 0.4 0.6"; size = 0.14; };
+    "cli-command"                  = { shape = "Cone"; color = "0.7 0.7 0.4"; size = 0.16; };
+    "test-runner-selection"        = { shape = "Cylinder"; color = "0.5 0.7 0.5"; size = 0.15; };
+    "diff-risk-segmentation"       = { shape = "Plane"; color = "0.9 0.4 0.3"; size = 0.22; emit_glow = true; };
+    "formula-slot-registry"        = { shape = "Sphere"; color = "0.6 0.5 0.8"; size = 0.18; };
+    "axiom-attestation"            = { shape = "Cylinder"; color = "0.3 0.9 0.6"; size = 0.2; emit_glow = true; };
+    "review-stage"                 = { shape = "Box"; color = "0.7 0.7 0.7"; size = 0.18; };
+    "apply-stage"                  = { shape = "Cone"; color = "0.5 0.8 0.5"; size = 0.17; };
+    "materialization-stage"        = { shape = "Sphere"; color = "0.4 0.6 0.4"; size = 0.16; };
+    "verify-stage"                 = { shape = "Cylinder"; color = "0.2 0.7 0.3"; size = 0.18; };
+    "rollback-handle"              = { shape = "Box"; color = "0.8 0.3 0.3"; size = 0.16; };
+    "rollback-receipt"             = { shape = "Cone"; color = "0.7 0.2 0.2"; size = 0.15; };
+  };
+
+  # ===================================================================
+  # === User-facing label per step kind (PUBLIC GAME-ENGINE VOCAB) ===
+  # ===================================================================
+  #
+  # 화면에 표시되는 label / tooltip / annotation 은 *보편적인 게임 엔진
+  # / CG tool API 개발자가 매일 쓰는 vocab* 으로만. Unity / Unreal /
+  # Maya / Houdini docs 에 그대로 등장하는 standard 단어들. 사용자가
+  # 그 단어 보고 즉시 *기존 mental model 로 bind 가능*. substrate 의
+  # 다른 의미 부여 0.
+  #
+  # 이게 Round 69 forbidden vocab + Round 70 wire shape opacity 의
+  # *UI 차원 확장*. 같은 헌법.
+
+  userFacingLabelForStep = {
+    "intent-recognition"           = "script-eval-start";
+    "fact-model-lift"              = "scene-read";
+    "math-invariant-check"         = "validate";
+    "algorithm-choice"             = "method-pick";
+    "patch-obligation"             = "diff-plan";
+    "failure-cue-lift"             = "error-detect";
+    "repair-candidate-generation"  = "fix-propose";
+    "repair-ranking"               = "fix-rank";
+    "repo-question-routing"        = "query";
+    "repo-evidence-receipt"        = "query-result";
+    "repo-answer-composition"      = "response-build";
+    "host-wiring-qa"               = "context-check";
+    "patch-preview"                = "diff-preview";
+    "patch-apply"                  = "diff-apply";
+    "patch-verify"                 = "test-run";
+    "repair-loop"                  = "retry";
+    "session-orchestration"        = "task-run";
+    "persistence"                  = "save";
+    "cli-command"                  = "command-exec";
+    "test-runner-selection"        = "test-config";
+    "diff-risk-segmentation"       = "review-mark";
+    "formula-slot-registry"        = "channel-bind";
+    "axiom-attestation"            = "contract-check";
+    "review-stage"                 = "review";
+    "apply-stage"                  = "apply";
+    "materialization-stage"        = "write-files";
+    "verify-stage"                 = "test";
+    "rollback-handle"              = "rollback-prep";
+    "rollback-receipt"             = "rollback-done";
+  };
+
+  # 시각 상태 label — 게임 엔진 / CG tool 표준 vocab
+  publicVisualStateLabels = {
+    "running"        = "running";
+    "complete"       = "done";
+    "verified"       = "verified";
+    "stuck"          = "waiting-input";
+    "waiting"        = "waiting";
+    "retry"          = "retry";
+    "rollback"       = "rolled-back";
+  };
+
+  # ===================================================================
+  # === Connection wire kinds (between step events) ==================
+  # ===================================================================
+
+  knownConnectionKinds = [
+    "passes-receipt-to"          # step A → step B : receipt chain
+    "references-formula"         # step → formula slot
+    "attests-axiom"              # code step → axiom node
+    "rejects-as-held"            # gate → caller : Held propagation
+    "loops-back-to"              # repair-loop → earlier step
+  ];
+
+  # ===================================================================
+  # === Replay modes (X3D TimeSensor 활용) ===========================
+  # ===================================================================
+
+  knownReplayModes = [
+    "real-time"              # AI 가 코딩하는 동안 실시간 scene 자라남
+    "step-by-step"           # 사용자 click 시 다음 step 등장
+    "auto-replay"            # 완료된 chain 자동 재생
+    "scrub-timeline"         # 사용자 timeline 위 임의 시점 jump
+  ];
+
+  # ===================================================================
+  # === Helpers ======================================================
+  # ===================================================================
+
+  hasKey = attrs: key: builtins.elem key (builtins.attrNames attrs);
+  isInClosedList = list: v: builtins.elem v list;
+
+  # ===================================================================
+  # === Main contract function =======================================
+  # ===================================================================
+  #
+  # Input shape:
+  #   {
+  #     coding_receipt_chain = [
+  #       { step_kind = "intent-recognition"; t_ms = 0;
+  #         receipt_id = "r-001"; references = []; }
+  #       { step_kind = "axiom-attestation"; t_ms = 500;
+  #         receipt_id = "r-002"; references = [ "r-001" ]; }
+  #       ...
+  #     ];
+  #     replay_mode = "auto-replay";
+  #   }
+
+  buildReplayEnvelope = req:
+    let
+      hasChain = hasKey req "coding_receipt_chain"
+                 && (builtins.length req.coding_receipt_chain) > 0;
+      hasMode  = hasKey req "replay_mode"
+                 && isInClosedList knownReplayModes req.replay_mode;
+
+      chain = if hasChain then req.coding_receipt_chain else [];
+
+      unknownSteps = builtins.filter (s:
+        !isInClosedList knownCodingStepKinds s.step_kind
+      ) chain;
+      stepsOk = (builtins.length unknownSteps) == 0;
+
+      # timeline conflict — 같은 t_ms 에 두 receipt
+      ts = builtins.map (s: s.t_ms) chain;
+      timelineConflict =
+        (builtins.length ts)
+        != (builtins.length (
+          builtins.foldl' (acc: t:
+            if builtins.elem t acc then acc else acc ++ [ t ]
+          ) [] ts
+        ));
+
+      verdict =
+        if !hasChain then "held-no-receipt-chain"
+        else if !hasMode then "held-unknown-replay-mode"
+        else if !stepsOk then "held-unknown-step-kind"
+        else if timelineConflict then "held-timeline-conflict"
+        else "coding-process-replayable-on-x3d";
+
+      isHeld = verdict != "coding-process-replayable-on-x3d";
+
+      # visual_events 는 *wire 로 나간다*. 그러므로 substrate-internal
+      # step_kind 노출 X — *user_facing_label* (게임엔진/CG vocab) 만.
+      # step_kind 는 *내부 mapping key* 로만 사용; wire 안 나감.
+      visualEvents = builtins.map (s:
+        let
+          cue = visualCueForStep."${s.step_kind}" or {};
+          label = userFacingLabelForStep."${s.step_kind}" or "step";
+        in {
+          inherit (s) t_ms receipt_id;
+          # NOTE: step_kind 의도적으로 제외 (Round 70 wire opacity)
+          user_facing_label = label;
+          visual_cue = cue;
+        }
+      ) chain;
+
+    in {
+      kind = "x3d-coding-process-replay-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      framework_step = framework_step;
+      verdict = verdict;
+      is_held = isHeld;
+      replay_mode = if hasMode then req.replay_mode else null;
+      step_event_count = builtins.length chain;
+      visual_events = if isHeld then [] else visualEvents;
+      held_diagnostics =
+        if !isHeld then null
+        else {
+          chain_present = hasChain;
+          mode_known = hasMode;
+          steps_known = stepsOk;
+          unknown_step_kinds =
+            builtins.map (s: s.step_kind) unknownSteps;
+          timeline_conflict = timelineConflict;
+        };
+      derived_from = [
+        "freecat-world-model-surface-contract (Round 71)"
+        "wire-shape-opacity-contract (Round 70)"
+        "Round 51-67 coding agent stages (visual cue mapping)"
+        "CLAUDE.md self-audit criterion of intelligence"
+      ];
+    };
+
+  # ===================================================================
+  # === Inventory summary ============================================
+  # ===================================================================
+
+  inventorySummary = {
+    owner = ownerName;
+    step_kind = stepKind;
+    step_kind_count = builtins.length knownCodingStepKinds;
+    visual_cue_count = builtins.length (builtins.attrNames visualCueForStep);
+    user_facing_label_count =
+      builtins.length (builtins.attrNames userFacingLabelForStep);
+    public_visual_state_count =
+      builtins.length (builtins.attrNames publicVisualStateLabels);
+    connection_kind_count = builtins.length knownConnectionKinds;
+    replay_mode_count = builtins.length knownReplayModes;
+    positioning =
+      "AI generation 과정의 spatial 3D replay" +
+      " (시장에 비교 가능한 카테고리 없음)";
+    self_audit_visualization =
+      "decision chain 이 X3D scene 으로 manifest, label 은 게임엔진/CG vocab";
+  };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit knownCodingStepKinds visualCueForStep;
+  inherit userFacingLabelForStep publicVisualStateLabels;
+  inherit knownConnectionKinds knownReplayModes;
+  inherit buildReplayEnvelope inventorySummary;
+}

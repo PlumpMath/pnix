@@ -1,0 +1,290 @@
+let
+  ownerName = "stdlib.coding.korean-postposition-detector";
+
+  # v0.16-BQ: Korean postposition (조사) detector — BN's inverse.
+  # Owner thesis (BL/BM/BN/BO/BP/BQ dialogue):
+  #
+  # BN takes (role, finalKind) → 조사 (forward emit).
+  # BP composes atom → POS-aware Korean NL.
+  # BQ closes the matching FORWARD inverse: a Korean utterance
+  # token like "값을" gets decomposed back to ("값", postposition
+  # "을", possible BM role "object").
+  #
+  # When BQ closes, the substrate has BIDIRECTIONAL Korean axis
+  # at the noun-with-postposition layer:
+  #   BP/BN/BO: atom slot + noun → noun + 조사 (forward emit)
+  #   BQ:       noun + 조사 → (stripped noun, role candidate set)
+  #               (forward parse)
+  #
+  # Future slice (BR+) will compose BQ + verb detection +
+  # role-tagged slot fill to produce atoms from full Korean
+  # utterances.
+  #
+  # 100% substrate-native — relies on substrate's own byte-level
+  # UTF-8 substring (pnix-eval primitive) + closed lookup table.
+  # No external NLP (mecab-ko / lindera / rustkorean).
+
+  # Closed registry of Korean postpositions the detector
+  # recognizes. ORDER MATTERS — longest-match takes priority
+  # in `detectPostpositionAtEnd`, so multi-syllable postpositions
+  # ("으로", "에서", "에게", "보다", "까지", "부터") MUST come
+  # before their single-syllable substrings ("로", "에") to avoid
+  # premature matches.
+  #
+  # Each row carries:
+  #   form               — the raw postposition string
+  #   byte_length        — UTF-8 byte count (3 per Korean syllable)
+  #   possible_roles     — BM semantic roles this postposition
+  #                        signals. Some postpositions are 1:n
+  #                        (e.g. 이/가 → subject OR
+  #                        predicate-condition; substrate is
+  #                        honest about ambiguity until verb /
+  #                        clause context disambiguates).
+  #   required_final_kind — finalKind values that the preceding
+  #                         noun MUST have for this postposition
+  #                         to be the canonical allomorph. null
+  #                         = no constraint (works with any
+  #                         finalKind). Callers can use this to
+  #                         flag receivership mismatches (e.g.
+  #                         "수을" — wrong allomorph; should be
+  #                         "수를").
+  #   ko_note            — short Korean linguistic note for
+  #                        documentation / inventory display.
+  knownPostpositions = [
+    # === Multi-syllable (longest-match first) ===
+    {
+      form = "으로";
+      byte_length = 6;
+      possible_roles = [ "manner" ];
+      required_final_kind = [ "regular" ];
+      ko_note = "수단/방법 (manner/instrumental); ㄹ-받침이거나 받침 없으면 '로'";
+    }
+    {
+      form = "에서";
+      byte_length = 6;
+      possible_roles = [ "source" ];
+      required_final_kind = null;
+      ko_note = "출발/위치 (source/from)";
+    }
+    {
+      form = "에게";
+      byte_length = 6;
+      possible_roles = [ "recipient" ];
+      required_final_kind = null;
+      ko_note = "받는 대상 (recipient)";
+    }
+    {
+      form = "보다";
+      byte_length = 6;
+      possible_roles = [ "comparative" ];
+      required_final_kind = null;
+      ko_note = "비교 (comparative)";
+    }
+    {
+      form = "까지";
+      byte_length = 6;
+      possible_roles = [ "terminative" ];
+      required_final_kind = null;
+      ko_note = "범위 끝점 (up-to/until)";
+    }
+    {
+      form = "부터";
+      byte_length = 6;
+      possible_roles = [ "inceptive" ];
+      required_final_kind = null;
+      ko_note = "범위 시작점 (from/since)";
+    }
+    # === Single-syllable ===
+    {
+      form = "을";
+      byte_length = 3;
+      possible_roles = [ "object" ];
+      required_final_kind = [ "regular" "rieul" ];
+      ko_note = "동작 대상 (object) — 받침 있음";
+    }
+    {
+      form = "를";
+      byte_length = 3;
+      possible_roles = [ "object" ];
+      required_final_kind = [ "none" "non-korean" ];
+      ko_note = "동작 대상 (object) — 받침 없음";
+    }
+    {
+      form = "이";
+      byte_length = 3;
+      possible_roles = [ "subject" "predicate-condition" ];
+      required_final_kind = [ "regular" "rieul" ];
+      ko_note = "주체/조건 (subject/predicate) — 받침 있음";
+    }
+    {
+      form = "가";
+      byte_length = 3;
+      possible_roles = [ "subject" "predicate-condition" ];
+      required_final_kind = [ "none" "non-korean" ];
+      ko_note = "주체/조건 (subject/predicate) — 받침 없음";
+    }
+    {
+      form = "은";
+      byte_length = 3;
+      possible_roles = [ "topic" ];
+      required_final_kind = [ "regular" "rieul" ];
+      ko_note = "담론 주제 (topic) — 받침 있음";
+    }
+    {
+      form = "는";
+      byte_length = 3;
+      possible_roles = [ "topic" ];
+      required_final_kind = [ "none" "non-korean" ];
+      ko_note = "담론 주제 (topic) — 받침 없음";
+    }
+    {
+      form = "에";
+      byte_length = 3;
+      possible_roles = [ "target" ];
+      required_final_kind = null;
+      ko_note = "위치/목표 (target/locative); 시간 표현에서도";
+    }
+    {
+      form = "로";
+      byte_length = 3;
+      possible_roles = [ "manner" ];
+      required_final_kind = [ "none" "rieul" "non-korean" ];
+      ko_note = "수단/방법 (manner) — 받침 없음 or ㄹ-받침 (collapsed from 으로)";
+    }
+    {
+      form = "와";
+      byte_length = 3;
+      possible_roles = [ "comitative" ];
+      required_final_kind = [ "none" "non-korean" ];
+      ko_note = "함께 (comitative) — 받침 없음";
+    }
+    {
+      form = "과";
+      byte_length = 3;
+      possible_roles = [ "comitative" ];
+      required_final_kind = [ "regular" "rieul" ];
+      ko_note = "함께 (comitative) — 받침 있음";
+    }
+    {
+      form = "의";
+      byte_length = 3;
+      possible_roles = [ "genitive" ];
+      required_final_kind = null;
+      ko_note = "소유 / 속성 (possessive)";
+    }
+  ];
+
+  # Helper: check if a token's tail bytes match a specific
+  # postposition form. Returns true iff token has ≥ byte_length
+  # bytes AND the last byte_length bytes equal `form`.
+  tokenEndsWithPostposition = token: cand:
+    let
+      tokenLen = builtins.stringLength token;
+    in
+      if tokenLen < cand.byte_length then false
+      else
+        (builtins.substring (tokenLen - cand.byte_length)
+          cand.byte_length token) == cand.form;
+
+  # Core detector: scan `knownPostpositions` in declared order
+  # (longest-match first) and return the first matching
+  # postposition's analysis. Returns null if no postposition
+  # found at the token's end.
+  #
+  # Return shape (when match):
+  #   { stripped_noun, postposition_form, byte_length,
+  #     possible_roles, required_final_kind, ko_note }
+  #
+  # The stripped_noun may be empty string if the entire token
+  # is just a postposition (e.g. "을" by itself); substrate is
+  # honest about that case.
+  detectPostpositionAtEnd = token:
+    let
+      findFirstMatch = candidates:
+        if candidates == [] then null
+        else
+          let head_cand = builtins.head candidates; in
+            if tokenEndsWithPostposition token head_cand then
+              let
+                tokenLen = builtins.stringLength token;
+                strippedLen = tokenLen - head_cand.byte_length;
+              in {
+                stripped_noun = builtins.substring 0 strippedLen token;
+                postposition_form = head_cand.form;
+                byte_length = head_cand.byte_length;
+                possible_roles = head_cand.possible_roles;
+                required_final_kind = head_cand.required_final_kind;
+                ko_note = head_cand.ko_note;
+              }
+            else findFirstMatch (builtins.tail candidates);
+    in
+      findFirstMatch knownPostpositions;
+
+  # Combined detector + finalKind audit. Calls BO's
+  # koreanFinalConsonantKind builtin on the stripped noun to
+  # check whether the postposition's `required_final_kind`
+  # is satisfied. Substrate honest: report mismatch via
+  # `allomorph_match` field rather than reject. A "wrong
+  # allomorph" surface like "수을" (should be "수를") still
+  # matches "을" but flags allomorph_match=false. This lets
+  # downstream slot-fill be permissive (accept the noun + role)
+  # while audit/diagnostic surfaces see the mismatch.
+  detectPostpositionWithAllomorphAudit = token:
+    let
+      detected = detectPostpositionAtEnd token;
+    in
+      if detected == null then null
+      else
+        let
+          nounFinalKind =
+            builtins.koreanFinalConsonantKind detected.stripped_noun;
+          allomorph_ok =
+            if detected.required_final_kind == null then true
+            else
+              builtins.elem nounFinalKind detected.required_final_kind;
+        in
+          detected // {
+            noun_final_kind = nounFinalKind;
+            allomorph_match = allomorph_ok;
+          };
+
+  # ── inventory ──
+
+  inventorySummary = _: {
+    owner = ownerName;
+    postposition_count = builtins.length knownPostpositions;
+    multi_syllable_count =
+      builtins.length
+        (builtins.filter (p: p.byte_length >= 6) knownPostpositions);
+    single_syllable_count =
+      builtins.length
+        (builtins.filter (p: p.byte_length == 3) knownPostpositions);
+    postposition_forms =
+      builtins.map (p: p.form) knownPostpositions;
+    role_coverage_set =
+      let
+        allRoles = builtins.concatMap (p: p.possible_roles) knownPostpositions;
+        dedup = list:
+          builtins.foldl'
+            (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+            []
+            list;
+      in
+        builtins.sort (a: b: a < b) (dedup allRoles);
+  };
+
+in {
+  inherit
+    ownerName
+    knownPostpositions
+    tokenEndsWithPostposition
+    detectPostpositionAtEnd
+    detectPostpositionWithAllomorphAudit
+    inventorySummary;
+  meta = {
+    source = "stdlib coding korean postposition detector";
+    owner = ownerName;
+    base = "korean-postposition-detector-v0";
+    rev_note = "v0.16-BQ: forward Korean POS scanner first instance — BN's inverse at the noun-with-postposition layer. Takes a Korean utterance token (e.g. '값을', '개수에', '정수로') and returns (stripped_noun, postposition, possible_roles, allomorph_match). Substrate-native byte-level substring scan + closed postposition table; longest-match priority handles multi-syllable 조사 (으로/에서/에게/보다/까지/부터) before single-syllable substrings (로/에). BO integration via detectPostpositionWithAllomorphAudit — uses builtins.koreanFinalConsonantKind to verify the stripped noun's final consonant matches the postposition's declared required_final_kind. Substrate honest about allomorph mismatch ('수을' surfaces as object marker but allomorph_match=false). 17 postpositions × ~10 roles. No external NLP. Atom slot fill / verb detection / full forward parser = BR+ slices.";
+  };
+}

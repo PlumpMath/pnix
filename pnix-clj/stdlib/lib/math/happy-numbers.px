@@ -1,0 +1,202 @@
+# stdlib.lib.math.happy-numbers
+#
+# OWNER-LAW (v0.12-ABK, div-math, 2026-05-22): happy numbers --
+# the digit-square-sum process.
+#
+# # The process
+#
+# Replace a number by the sum of the squares of its digits, and
+# repeat. A number is HAPPY when this eventually reaches 1:
+#
+#     19 -> 82 -> 68 -> 100 -> 1
+#      7 -> 49 -> 97 -> 130 -> 10 -> 1
+#
+# Every other number is UNHAPPY: its trajectory falls into the
+# single eight-step cycle
+#
+#     4 -> 16 -> 37 -> 58 -> 89 -> 145 -> 42 -> 20 -> 4
+#
+# These are the only two outcomes -- a classical result. So the
+# owner can decide happiness by iterating until it sees 1 (happy)
+# or 4, the smallest member of the cycle (unhappy); no general
+# cycle detection is needed.
+#
+# The first happy numbers: 1, 7, 10, 13, 19, 23, 28, 31, 32, 44,
+# 49, ...
+#
+# # Standalone, exact
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT happy numbers in other bases -- base 10 only.
+#   - NOT "higher-power" happy numbers (cubes of digits, etc.).
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/happy-numbers.px";
+
+  # Divide-and-conquer range builder: the recursion depth is
+  # logarithmic in (hi - lo), so the linear scans below stay well
+  # inside the evaluator's recursion budget even at the cap.
+  rangeList = lo: hi:
+    if lo > hi then []
+    else if lo == hi then [ lo ]
+    else
+      let mid = (lo + hi) / 2;
+      in (rangeList lo mid) ++ (rangeList (mid + 1) hi);
+
+  # Sum of the squares of the base-10 digits of n.
+  digitSquareSum = n:
+    let
+      go = m: acc:
+        if m == 0 then acc
+        else
+          let d = m - (m / 10) * 10;
+          in go (m / 10) (acc + d * d);
+    in if n == 0 then 0 else go n 0;
+
+  # Is n a happy number? Iterate the process; 1 means happy, 4
+  # (the smallest cycle member) means unhappy.
+  isHappy = n:
+    let
+      go = m:
+        if m == 1 then true
+        else if m == 4 then false
+        else go (digitSquareSum m);
+    in if n < 1 then false else go n;
+
+  # The trajectory from n: up to and including 1 (happy), or up to
+  # and including the first value that repeats (unhappy).
+  happySequence = n:
+    let
+      go = m: seen: acc:
+        if m == 1 then acc ++ [ 1 ]
+        else if builtins.elem m seen then acc ++ [ m ]
+        else go (digitSquareSum m) (seen ++ [ m ]) (acc ++ [ m ]);
+    in go n [] [];
+
+  # The kth happy number (k >= 1). Happy numbers have density well
+  # above 0.1, so the kth one is comfortably below 15*k+100;
+  # filtering that bounded range and indexing avoids a deep linear
+  # search that would exceed the evaluator's recursion budget.
+  nthHappy = k:
+    builtins.elemAt
+      (builtins.filter isHappy (rangeList 1 (15 * k + 100)))
+      (k - 1);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "is-happy"
+    "happy-sequence"
+    "digit-square-sum"
+    "happy-numbers-up-to"
+    "nth-happy"
+  ];
+
+  numberLimit = 1000000000;
+  # `happy-numbers-up-to` scans 1..limit.
+  listLimit = 100000;
+  # `nth-happy` searches upward; happy numbers have density ~0.14,
+  # so this cap keeps the search bounded.
+  nthLimit = 5000;
+
+  applyHappyNumbers = request:
+    let
+      op = request.operation;
+      n     = if request ? n then request.n else 0;
+      limit = if request ? limit then request.limit else 0;
+      k     = if request ? k then request.k else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "happy-numbers-up-to" then
+        if limit < 1 then {
+          outcome = "happy-numbers-computed";
+          operation = op; limit = limit;
+          numbers = []; count = 0;
+        }
+        else if limit > listLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; limit = limit;
+          cap = listLimit;
+          reason = "the scan is linear in the limit; it is capped to stay bounded";
+        }
+        else
+          let nums = builtins.filter isHappy (rangeList 1 limit);
+          in {
+            outcome = "happy-numbers-computed";
+            operation = op; limit = limit;
+            numbers = nums;
+            count = builtins.length nums;
+          }
+      else if op == "nth-happy" then
+        if k < 1 then {
+          outcome = "held-nonpositive-number";
+          operation = op; k = k;
+        }
+        else if k > nthLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; k = k;
+          limit = nthLimit;
+          reason = "the upward search is capped to stay bounded";
+        }
+        else {
+          outcome = "happy-numbers-computed";
+          operation = op; k = k;
+          value = nthHappy k;
+        }
+      # The remaining operations all act on a single number n.
+      else if n < 1 then {
+        outcome = "held-nonpositive-number";
+        operation = op;
+        n = n;
+      }
+      else if n > numberLimit then {
+        outcome = "held-argument-too-large";
+        operation = op; n = n;
+        limit = numberLimit;
+        reason = "n is capped to stay in a comfortable 64-bit range";
+      }
+      else if op == "digit-square-sum" then {
+        outcome = "happy-numbers-computed";
+        operation = op; n = n;
+        value = digitSquareSum n;
+      }
+      else if op == "is-happy" then {
+        outcome = "happy-numbers-computed";
+        operation = op; n = n;
+        is_happy = isHappy n;
+      }
+      else
+        # op == "happy-sequence"
+        let seq = happySequence n;
+        in {
+          outcome = "happy-numbers-computed";
+          operation = op; n = n;
+          sequence = seq;
+          is_happy = (builtins.elemAt seq (builtins.length seq - 1)) == 1;
+          steps = builtins.length seq - 1;
+        };
+
+in {
+  inherit
+    ownerName
+    digitSquareSum
+    isHappy
+    happySequence
+    nthHappy
+    knownOperations
+    applyHappyNumbers;
+  meta = {
+    source = "stdlib math happy numbers";
+    owner = ownerName;
+    base = "parametric-math-happy-numbers-v0";
+    rev_note = "v0.12-ABK (div-math): happy numbers -- the digit-square-sum process. digitSquareSum is one step; isHappy iterates it (1 = happy, 4 = the smallest member of the unhappy cycle 4->16->37->58->89->145->42->20->4); happySequence returns the full trajectory; nthHappy finds the kth happy number; happy-numbers-up-to lists them. The process has exactly two outcomes (reach 1, or enter the one eight-cycle), a classical result the owner relies on. First happy numbers 1,7,10,13,19,23,28,31,32,44,49. Plate applyHappyNumbers (5 operations). Standalone, base 10. NOT other bases, NOT higher-power variants, NOT yet a registered lens.";
+  };
+}

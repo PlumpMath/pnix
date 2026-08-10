@@ -1,0 +1,7 @@
+# gate	status	promotion_policy	fail_policy	required_receipt	note
+local-verification	DONE	local-bootstrap-check	fail-closed	bootstrap-check	every accepted rs-meta slice must pass local cargo build and bootstrap check
+github-actions	DISABLED	no-remote-promotion	fail-closed	actions-disabled	GitHub Actions remains disabled so remote CI cannot promote changes
+candidate-intake	DONE	no-auto-promotion	fail-closed	manifest-entry	new self-improvement candidates enter as manifest rows before any promotion
+manual-promotion	HELD	explicit-human-approval	fail-closed	review-receipt	promotion beyond checked seed status requires an explicit human-reviewed receipt
+self-modification	HELD	quarantine-required	fail-closed	stage-receipt	self-modifying changes cannot bypass quarantine or local proof gates
+external-evidence	HELD	offline-approval-required	fail-closed	evidence-receipt	external evidence can inform held notes but cannot auto-promote stage claims

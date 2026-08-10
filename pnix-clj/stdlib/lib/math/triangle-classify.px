@@ -1,0 +1,215 @@
+# stdlib.lib.math.triangle-classify
+#
+# OWNER-LAW (v0.12-ABG, div-math, 2026-05-22): classifying a
+# triangle from its three side lengths.
+#
+# geometry.px works with point COORDINATES -- cross products,
+# shoelace areas. This owner works one level up: it is given three
+# side LENGTHS and asks what kind of triangle they form.
+#
+# # Validity, by the triangle inequality
+#
+# Three positive lengths form a triangle exactly when each side is
+# strictly shorter than the sum of the other two. A triple that
+# fails this (e.g. 1, 2, 3) is degenerate -- collinear, zero area.
+#
+# # Classification by sides and by angles
+#
+# By sides: equilateral (all three equal), isosceles (exactly two
+# equal), scalene (all different).
+#
+# By angles, with no trigonometry: sort the sides so c is longest
+# and compare c^2 with a^2 + b^2. Equal -> right; c^2 smaller ->
+# acute; c^2 larger -> obtuse. This is the law of cosines reduced
+# to the SIGN of cos C, which is an exact integer comparison.
+#
+# # Heronian triangles, without taking a square root prematurely
+#
+# A Heronian triangle has integer sides AND integer area. The area
+# itself is generally irrational, so -- like geometry.px -- this
+# owner never rounds. It works with the exact integer
+#
+#     16 * area^2 = (a+b+c)(-a+b+c)(a-b+c)(a+b-c)
+#
+# and a triangle is Heronian exactly when that value is a perfect
+# square whose root is divisible by 4 (then area = root / 4).
+#
+# # Kernel layering
+#
+# Standalone. Integer square roots are computed by an internal
+# binary search; imports nothing.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT coordinate geometry (geometry.px) -- the input is three
+#     lengths, not three points.
+#   - NOT a trigonometry engine -- no angle in degrees or radians,
+#     only the right / acute / obtuse sign.
+#   - NOT a floating-point area -- only the exact 16*area^2.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/triangle-classify.px";
+
+  # floor(sqrt n) by binary search. The high bound is capped below
+  # 3e9 so that mid*mid never leaves 64-bit range.
+  isqrt = n:
+    if n <= 0 then 0
+    else
+      let
+        hi0 = if n < 3000000000 then n else 3000000000;
+        go = lo: hi:
+          if lo >= hi then lo
+          else
+            let mid = (lo + hi + 1) / 2;
+            in if mid * mid <= n then go mid hi else go lo (mid - 1);
+      in go 1 hi0;
+
+  isPerfectSquare = n:
+    n >= 0 && (let r = isqrt n; in r * r == n);
+
+  # Three positive lengths form a genuine triangle iff every side
+  # is strictly shorter than the sum of the other two.
+  isValid = a: b: c:
+    a > 0 && b > 0 && c > 0
+    && a + b > c && a + c > b && b + c > a;
+
+  # equilateral / isosceles / scalene.
+  classifySides = a: b: c:
+    if a == b && b == c then "equilateral"
+    else if a == b || b == c || a == c then "isosceles"
+    else "scalene";
+
+  # right / acute / obtuse, by the sign of c^2 - (a^2 + b^2) with
+  # c the longest side -- exact, no trigonometry.
+  classifyAngles = a: b: c:
+    let
+      s = builtins.sort (x: y: x < y) [ a b c ];
+      x = builtins.elemAt s 0;
+      y = builtins.elemAt s 1;
+      z = builtins.elemAt s 2;
+      lhs = z * z;
+      rhs = x * x + y * y;
+    in if lhs == rhs then "right"
+       else if lhs < rhs then "acute"
+       else "obtuse";
+
+  # 16 * area^2 -- an exact integer for any integer-sided triangle.
+  areaSixteenSquared = a: b: c:
+    (a + b + c) * (b + c - a) * (a + c - b) * (a + b - c);
+
+  # { is_heronian; area } -- area is null unless it is an integer.
+  heronianInfo = a: b: c:
+    let
+      h = areaSixteenSquared a b c;
+      r = isqrt h;
+    in
+      if isPerfectSquare h && r % 4 == 0
+      then { is_heronian = true; area = r / 4; }
+      else { is_heronian = false; area = null; };
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "is-valid"
+    "classify-sides"
+    "classify-angles"
+    "classify"
+    "area-16-squared"
+    "is-heronian"
+  ];
+
+  # The squared-area product is a degree-4 form in the sides; this
+  # cap keeps it inside 64-bit range.
+  sideLimit = 10000;
+
+  applyTriangleClassify = request:
+    let
+      op = request.operation;
+      a  = if request ? a then request.a else 0;
+      b  = if request ? b then request.b else 0;
+      c  = if request ? c then request.c else 0;
+      valid = isValid a b c;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if a <= 0 || b <= 0 || c <= 0 then {
+        outcome = "held-nonpositive-side";
+        operation = op; a = a; b = b; c = c;
+        reason = "every side length must be a positive integer";
+      }
+      else if a > sideLimit || b > sideLimit || c > sideLimit then {
+        outcome = "held-argument-too-large";
+        operation = op; a = a; b = b; c = c;
+        limit = sideLimit;
+        reason = "sides are capped so 16*area^2 stays in 64-bit range";
+      }
+      else if op == "is-valid" then {
+        outcome = "triangle-classify-computed";
+        operation = op; a = a; b = b; c = c;
+        is_valid = valid;
+      }
+      else if op == "classify" then {
+        # The graceful all-in-one: it reports degeneracy rather
+        # than Holding, so side / angle class are null when the
+        # triple is not a triangle.
+        outcome = "triangle-classify-computed";
+        operation = op; a = a; b = b; c = c;
+        is_valid = valid;
+        side_class = if valid then classifySides a b c else null;
+        angle_class = if valid then classifyAngles a b c else null;
+      }
+      # The granular operations below only make sense for a genuine
+      # triangle, so they Hold on a degenerate triple.
+      else if !valid then {
+        outcome = "held-degenerate-triangle";
+        operation = op; a = a; b = b; c = c;
+        reason = "the triangle inequality fails; the triple is collinear";
+      }
+      else if op == "classify-sides" then {
+        outcome = "triangle-classify-computed";
+        operation = op; a = a; b = b; c = c;
+        side_class = classifySides a b c;
+      }
+      else if op == "classify-angles" then {
+        outcome = "triangle-classify-computed";
+        operation = op; a = a; b = b; c = c;
+        angle_class = classifyAngles a b c;
+      }
+      else if op == "area-16-squared" then {
+        outcome = "triangle-classify-computed";
+        operation = op; a = a; b = b; c = c;
+        area_16_squared = areaSixteenSquared a b c;
+      }
+      else
+        # op == "is-heronian"
+        let info = heronianInfo a b c;
+        in {
+          outcome = "triangle-classify-computed";
+          operation = op; a = a; b = b; c = c;
+          is_heronian = info.is_heronian;
+          area = info.area;
+        };
+
+in {
+  inherit
+    ownerName
+    isqrt
+    isPerfectSquare
+    isValid
+    classifySides
+    classifyAngles
+    areaSixteenSquared
+    heronianInfo
+    knownOperations
+    applyTriangleClassify;
+  meta = {
+    source = "stdlib math triangle classify";
+    owner = ownerName;
+    base = "parametric-math-triangle-classify-v0";
+    rev_note = "v0.12-ABG (div-math): classifying a triangle from its three side lengths (one level up from geometry.px, which works in point coordinates). isValid tests the triangle inequality; classifySides labels equilateral / isosceles / scalene; classifyAngles labels right / acute / obtuse by the exact sign of c^2-(a^2+b^2) with no trigonometry; classify is the graceful all-in-one reporting degeneracy as null rather than Holding; areaSixteenSquared returns the exact integer 16*area^2 = (a+b+c)(-a+b+c)(a-b+c)(a+b-c); heronianInfo decides whether the triangle is Heronian (integer sides AND integer area) via an internal binary-search integer square root. Exact -- the irrational area is never rounded. Standalone, imports nothing. NOT coordinate geometry, NOT a trigonometry engine, NOT a floating-point area, NOT yet a registered lens.";
+  };
+}

@@ -1,0 +1,71 @@
+# stdlib.lib.corpus.substrate-store-value-literal
+#
+# PNIX 저장소 레이어에서 redb value_bytes 로 저장할 때 사용할
+# PNIX 소스 리터럴 시리얼라이저.
+#
+# 제약:
+# - 실행기 값은 UTF-8 바이트만 취급하므로 텍스트 리터럴을 만들어야 함.
+# - 외부 포맷(JSON) 파싱/생성은 금지.
+# - 재귀 attrset/list가 아닌 한도 내에서 기본 타입만 직렬화.
+# - 지원 불가 타입은 사람이 확인 가능한 문자열을 남김.
+let
+  B = builtins;
+
+  escapeString = s:
+    let
+      escapeBackslash = B.replaceStrings [ "\\" ] [ "\\\\" ] s;
+      escapeQuote = B.replaceStrings [ "\"" ] [ "\\\"" ] escapeBackslash;
+      escapeNewline = B.replaceStrings [ "\n" ] [ "\\n" ] escapeQuote;
+      escapeReturn = B.replaceStrings [ "\r" ] [ "\\r" ] escapeNewline;
+      escapeTab = B.replaceStrings [ "\t" ] [ "\\t" ] escapeReturn;
+    in B.replaceStrings [ "$" ] [ "\\$" ] escapeTab;
+
+  toStringLiteral = s: "\"" + (escapeString s) + "\"";
+
+  isSupportedPrimitive = v:
+    B.isNull v
+    || B.isBool v
+    || B.isInt v
+    || B.isFloat v
+    || B.isString v;
+
+  isSupportedValue = v:
+    if isSupportedPrimitive v then true
+    else if B.isList v then
+      builtins.foldl' (acc: item: acc && isSupportedValue item) true v
+    else if B.isAttrs v then
+      builtins.foldl'
+        (acc: name: acc && isSupportedValue (v.${name}))
+        true
+        (B.attrNames v)
+    else false;
+
+  emitValue = v:
+    if B.isNull v then
+      "null"
+    else if B.isBool v then
+      (if v then "true" else "false")
+    else if B.isInt v then
+      B.toString v
+    else if B.isFloat v then
+      B.toString v
+    else if B.isString v then
+      toStringLiteral v
+    else if B.isList v then
+      "[ " + (B.concatStringsSep " " (B.map emitValue v)) + " ]"
+    else if B.isAttrs v then
+      let
+        # ★각 바인딩 끝에 ';' (trailing 포함) — pnix attrset 문법상 필수(거울이 redb를 pnix로 되읽음). 옛 "; " join 은
+        #   마지막 ';' 누락 → `{ a=1; b=2 }` 재파싱 불가였음(저장값이 pnix로 재파싱된 적 없어 잠복).
+        fields = B.map
+          (name:
+            "\"" + (escapeString name) + "\" = " + emitValue (v.${name}) + ";")
+          (B.attrNames v);
+      in "{ " + (B.concatStringsSep " " fields) + " }"
+    else
+      toStringLiteral ("<unsupported pnix storage value: " + (B.typeOf v) + ">");
+
+in {
+  toPnixStorageValue = v: emitValue v;
+  isSupportedPnixStorageValue = isSupportedValue;
+}

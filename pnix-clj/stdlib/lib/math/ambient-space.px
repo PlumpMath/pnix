@@ -1,0 +1,202 @@
+let
+  ownerName = "stdlib.math.ambient-space";
+
+  # === Ambient space substrate (Piece 1 of 4 — Cyc 원석) ===========
+  #
+  # 사용자 directive (2026-05-28):
+  # "수학 substrate 에 공간-context 슬롯 의무화 + morphism fact +
+  # invariant fact + predicate-as-subject 네 가지를 박으면 — 그게
+  # 원석. 자연어 다의어는 그 메커니즘의 약식 application 이라 공짜."
+  #
+  # 이 owner 는 4 piece 의 첫 번째 — **ambient space registry**.
+  # 모든 기하 statement 가 어느 공간 안에서 말하는지 명시 의무화.
+  # 미명시 → Hold (헌법 §"모르면 멈춘다", default Euclidean 절대 금지).
+  #
+  # 같은 surface "삼각형 내각합" 이 R² 에서는 180°, S² 에서는 >180°,
+  # H² 에서는 <180°. surface 가 단의를 갖지 않고, (context, surface)
+  # → meaning binding 으로만 의미 발생. 이게 자연어 다의어 처리의
+  # axiom 형 형태.
+  #
+  # # 헌법: 공간 의무화
+  #
+  # 새 axiom (mirror primitive convergence axiom 2026-05-17 의 자연
+  # 연장):
+  #
+  #   모든 ambient-space-dependent 명제는 ambient_space slot 을 명시
+  #   해야 한다. 미명시 → 자동 Hold + reason="ambient-space-required".
+  #   자동 default (예: 암묵적 R²) 절대 금지.
+  #
+  # 이게 Cyc 의 함정 ("triangle has angle sum 180" 의 암묵적 R² 가정)
+  # 을 substrate 차원에서 회피하는 첫 piece.
+
+  # === Known ambient spaces ==========================================
+  #
+  # Each row carries:
+  #   id          — canonical name (R²/R³/S²/H²/manifold-2d/...)
+  #   family      — euclidean / spherical / hyperbolic / general
+  #   dimension   — integer
+  #   curvature   — 0 / +1 / -1 / "variable"
+  #   parallel_lines_meet — false (R²/H²) / true (S²) / "variable"
+  #   sum_of_angles_in_triangle — "=180" / ">180" / "<180" / "variable"
+
+  knownAmbientSpaces = [
+    {
+      id = "R-1";  # 1D real line
+      family = "euclidean";
+      dimension = 1;
+      curvature = 0;
+      parallel_lines_meet = "n-a-1d";
+      sum_of_angles_in_triangle = "n-a-1d";
+    }
+    {
+      id = "R-2";  # 2D Euclidean plane (Cyc 의 암묵적 default — 이제 명시)
+      family = "euclidean";
+      dimension = 2;
+      curvature = 0;
+      parallel_lines_meet = false;
+      sum_of_angles_in_triangle = "=180";
+    }
+    {
+      id = "R-3";  # 3D Euclidean space
+      family = "euclidean";
+      dimension = 3;
+      curvature = 0;
+      parallel_lines_meet = false;
+      sum_of_angles_in_triangle = "=180";  # 평면 위 삼각형
+    }
+    {
+      id = "S-2";  # 2-sphere (지구 표면 같은)
+      family = "spherical";
+      dimension = 2;
+      curvature = 1;
+      parallel_lines_meet = true;  # 모든 대원이 마주봄
+      sum_of_angles_in_triangle = ">180";
+    }
+    {
+      id = "S-3";  # 3-sphere
+      family = "spherical";
+      dimension = 3;
+      curvature = 1;
+      parallel_lines_meet = true;
+      sum_of_angles_in_triangle = ">180";
+    }
+    {
+      id = "H-2";  # 2D hyperbolic plane
+      family = "hyperbolic";
+      dimension = 2;
+      curvature = -1;
+      parallel_lines_meet = false;  # 평행선 무한히 많음
+      sum_of_angles_in_triangle = "<180";
+    }
+    {
+      id = "manifold-2d";  # general 2-manifold
+      family = "general";
+      dimension = 2;
+      curvature = "variable";
+      parallel_lines_meet = "variable";
+      sum_of_angles_in_triangle = "variable";
+    }
+    {
+      id = "manifold-3d";
+      family = "general";
+      dimension = 3;
+      curvature = "variable";
+      parallel_lines_meet = "variable";
+      sum_of_angles_in_triangle = "variable";
+    }
+  ];
+
+  # === Lookup ========================================================
+
+  findAmbientSpace = id:
+    let
+      matches = builtins.filter (s: s.id == id) knownAmbientSpaces;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # === Mandatory check ===============================================
+  #
+  # ambient_space slot 검사. 미명시 → held envelope.
+  # 사용자 statement 의 ambient_space slot 받아서 valid 한 공간인지,
+  # 그리고 슬롯이 명시되었는지 검증.
+
+  checkAmbientSpaceMandate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+      reason = "request must be an attribute set";
+    }
+    else if !(builtins.hasAttr "ambient_space" request) then {
+      outcome = "held-ambient-space-required";
+      reason =
+        "all geometry-dependent statements must declare an explicit "
+        + "ambient_space (Cyc trap: implicit R-2 default is forbidden). "
+        + "Known spaces: "
+        + builtins.concatStringsSep ", "
+            (builtins.map (s: s.id) knownAmbientSpaces);
+      known_ambient_spaces = builtins.map (s: s.id) knownAmbientSpaces;
+    }
+    else
+      let
+        space_id = request.ambient_space;
+        space = findAmbientSpace space_id;
+      in
+        if space == null then {
+          outcome = "held-unknown-ambient-space";
+          ambient_space = space_id;
+          reason =
+            "ambient_space '" + space_id + "' not in registry. "
+            + "Add a row to knownAmbientSpaces.";
+          known_ambient_spaces = builtins.map (s: s.id) knownAmbientSpaces;
+        }
+        else {
+          outcome = "ambient-space-verified";
+          ambient_space = space_id;
+          space_record = space;
+        };
+
+  # === Mirror plate lens entry =======================================
+
+  applyAmbientSpacePlate = request:
+    checkAmbientSpaceMandate request;
+
+  # === Introspection =================================================
+
+  ambientSpaceCount = builtins.length knownAmbientSpaces;
+  ambientSpaceIds = builtins.map (s: s.id) knownAmbientSpaces;
+  ambientSpaceFamilies =
+    let
+      raw = builtins.map (s: s.family) knownAmbientSpaces;
+      dedup = list:
+        builtins.foldl'
+          (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+          [] list;
+    in
+      builtins.sort (a: b: a < b) (dedup raw);
+
+  inventorySummary = _: {
+    owner = ownerName;
+    ambient_space_count = ambientSpaceCount;
+    ambient_space_ids = ambientSpaceIds;
+    ambient_space_families = ambientSpaceFamilies;
+    family_count = builtins.length ambientSpaceFamilies;
+  };
+
+in {
+  inherit
+    ownerName
+    knownAmbientSpaces
+    findAmbientSpace
+    checkAmbientSpaceMandate
+    applyAmbientSpacePlate
+    ambientSpaceCount
+    ambientSpaceIds
+    ambientSpaceFamilies
+    inventorySummary;
+  meta = {
+    source = "stdlib math ambient space substrate";
+    owner = ownerName;
+    base = "ambient-space-v0";
+    rev_note = "Piece 1 of 4 (Cyc 원석, 2026-05-28). 8 ambient spaces (R-1/R-2/R-3/S-2/S-3/H-2/manifold-2d/manifold-3d) across 4 families (euclidean/spherical/hyperbolic/general). Mandatory check: geometry-dependent statements must declare explicit ambient_space — missing slot → Hold. Cyc trap (implicit R-2 default) substrate-honest 회피. 사용자 directive: 4-piece 박으면 (사과/배) 다의어 도 같은 mechanism 으로 풀림.";
+  };
+}

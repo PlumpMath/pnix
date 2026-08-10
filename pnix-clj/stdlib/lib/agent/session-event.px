@@ -1,0 +1,291 @@
+# stdlib.agent.session-event
+#
+# **SessionEvent v0 — gate-graph owner 흐름을 보존하는 session 척추 (idea.md §21).**
+#
+# 운영자(2026-06-16): 모든 입력(NL/코드/논문/이벤트)이 *하나의 안 끊기는 루프*로 묶여야 사용자가 어떤 환경
+# (CLI/IDE/web chat)에서 작업해도 user↔pnix 관계+내부지능 루프가 안 깨진다. = 지능의 *연속성 장치*.
+#
+# ★ 새 AI/interpreter/intent engine/synthesize 가 *아니다*. 기존 owner(ct.recognizeConcept·
+#   ct.learnFromSyntheses·genesis registry)를 event 로 *연결*하는 spine 일 뿐. 갈라치기 금지(헌법).
+# ★ event = 단순 상태변경 X = math gate-graph 에 들어가는 관측/명제/행동(event sourcing 의 pnix 판:
+#   log=기억, context projection=현재 정신상태). Held/quarantine 은 session 전체에서 유지.
+#
+# v0 = UserUtterance / SynthesisSucceeded / RegistryUpdated / CodeProjectAnalyzed / Search* /
+#   ServiceRouteProposed. produced_at 등 시각은 host 가 찍음(.px 에 Date 없음 — idea.md). data-only 조립.
+let
+  ct = import ../lisp/pnix-lisp-ct.px;
+  B = builtins;
+
+  # ── 이벤트 생성자 + 초기 session context ──
+  mkEvent = kind: payload: { kind = kind; payload = payload; };
+  # registry = 세션이 아는 규칙/entry; gate_graph = 코드분석서 lift된 순수 morphism; segregated = mutable/io 격리; held = 세션 전체 Held
+  emptyContext = { log = [ ]; registry = [ ]; gate_graph = [ ]; segregated = [ ]; held = [ ]; selected = null; };
+
+  trusted = e: (e ? tier) && (B.elem e.tier [ "axiom" "canonical" "conditioned" ]);  # 재사용 가능 tier
+
+  # ── ServiceRouteProposed v0: universal AI service API 의 "어느 face/owner 로 보낼까" 후보 ──
+  # ★중요: route 는 *propose-only*. route tag / modality tag / 외부 app/tool 단서가 ontology truth 로 승격되면
+  #   Cyc/Hyperon 류 실패(type/register 오염)가 재발한다. 따라서 이 receipt 는 실행·쓰기·승격 권한을 항상 false 로
+  #   carry 하고, downstream owner 가 dispose 하기 전까지 durable truth 가 아니다.
+  serviceRouteSchema = "pnix.service-route-event.v0";
+  serviceRouteTargets = [
+    "nl-codec"       # 자연 NL codec/dialogue face
+    "analysis"       # repo/code/math analysis owner
+    "math"           # math/proof/solver owner
+    "code"           # coding/project owner
+    "retrieval"      # redb/search proposer owner
+    "tool-adapter"   # future client-app/tool bridge, propose-only
+    "held"           # explicit no-route/clarification
+  ];
+  serviceRouteSourceKinds = [
+    "utterance"
+    "repo-artifact"
+    "redb-record"
+    "tool-evidence"
+    "session-event"
+    "host-receipt"
+  ];
+  serviceRouteFaces = [
+    "chatgpt-face"
+    "coding-agent-face"
+    "app-tool-face"
+    "puck-cli"
+    "puncheetah-code-chat"
+    "internal"
+    "unknown"
+  ];
+
+  isServiceRouteTarget = r: B.elem r serviceRouteTargets;
+  isServiceRouteSourceKind = k: B.elem k serviceRouteSourceKinds;
+  isServiceRouteFace = f: B.elem f serviceRouteFaces;
+
+  mkServiceRouteReceipt =
+    { source_kind
+    , source_ref ? null
+    , proposed_route
+    , proposed_by
+    , reason ? ""
+    , face ? "unknown"
+    , evidence_refs ? []
+    , obligations ? []
+    , payload_ref ? null
+    }:
+    {
+      schema = serviceRouteSchema;
+      kind = "service-route-proposal";
+      inherit source_kind source_ref proposed_route proposed_by reason face evidence_refs obligations payload_ref;
+      # effect/ontology locks — this receipt cannot execute or promote anything by itself.
+      route_proposal_only = true;
+      durable_truth = false;
+      dispose_required = true;
+      route_execute_allowed = false;
+      core_write_allowed = false;
+      ontology_assert_allowed = false;
+      promotion_allowed = false;
+      accepted_as_truth = false;
+      source_kind_is_known = isServiceRouteSourceKind source_kind;
+      route_is_known = isServiceRouteTarget proposed_route;
+      face_is_known = isServiceRouteFace face;
+      has_required_fields =
+        source_kind != null && proposed_route != null && proposed_by != null
+        && source_kind != "" && proposed_route != "" && proposed_by != "";
+    };
+
+  validateServiceRouteReceipt = r:
+    if !(B.isAttrs r) then {
+      outcome = "held-service-route-non-attrs";
+      reason = "service route receipt must be an attrset";
+    }
+    else if (r.schema or "") != serviceRouteSchema then {
+      outcome = "held-service-route-schema";
+      reason = "service route receipt schema mismatch";
+      expected_schema = serviceRouteSchema;
+    }
+    else if !(r.has_required_fields or false) then {
+      outcome = "held-service-route-missing-required";
+      reason = "source_kind/proposed_route/proposed_by are required";
+    }
+    else if !(r.source_kind_is_known or false) then {
+      outcome = "held-service-route-source-kind";
+      reason = "unknown service route source_kind: " + r.source_kind;
+      allowed = serviceRouteSourceKinds;
+    }
+    else if !(r.route_is_known or false) then {
+      outcome = "held-service-route-target";
+      reason = "unknown service route target: " + r.proposed_route;
+      allowed = serviceRouteTargets;
+    }
+    else if !(r.face_is_known or false) then {
+      outcome = "held-service-route-face";
+      reason = "unknown service route face: " + r.face;
+      allowed = serviceRouteFaces;
+    }
+    else if (r.durable_truth or true) != false
+         || (r.route_execute_allowed or true) != false
+         || (r.core_write_allowed or true) != false
+         || (r.ontology_assert_allowed or true) != false
+         || (r.promotion_allowed or true) != false then {
+      outcome = "held-service-route-effect-lock";
+      reason = "service route proposal must be effect-locked and non-durable";
+    }
+    else {
+      outcome = "service-route-proposal-issued";
+      receipt = r;
+      accepted_as_truth = false;
+      dispose_required = true;
+    };
+
+  mkServiceRouteEvent = args:
+    mkEvent "ServiceRouteProposed" { receipt = mkServiceRouteReceipt args; };
+
+  # ── SearchEvent v0 의미확인(dispose) = "진짜 이해"(meta-mirror-primitive) ──
+  # redb-truth-first: fuzzy/BM25 는 후보를 *좁히기*만(proposer). 의미/진실 확인(disposer)은 **생성의 역**으로:
+  #   "진짜 이해" = converge(수렴/perceive: surface→canonical = diverge/emit 의 역, reflectionLaw converge∘diverge=id,
+  #   meta-mirror-primitive + idea.md §16). query 와 후보를 *canonical rule 로 converge* 후 **동형(canonRuleKey 동등)**
+  #   이면 같은 의미(언어 무관: "덧셈의 항등원" ≡ "additive identity" — 둘 다 같은 canonical 로 수렴). = name 매칭 아님.
+  #   converge 안 되거나 동형 아니면 후보뿐(Held) — fail-closed.
+  searchConfirm = ctx: query: cand:
+    let key = if cand ? key then cand.key else "";
+        qRule = ct.conceptToRule query;   # converge: query surface → canonical rule (이해)
+        cRule = ct.conceptToRule key;     # converge: candidate surface → canonical rule
+        meaningEquiv = (qRule != null) && (cRule != null)
+                       && (ct.canonRuleKey qRule == ct.canonRuleKey cRule);   # 동형 = 같은 의미(진짜 이해)
+        inRegistry = B.elem key (B.map (e: if e ? name then e.name else "") ctx.registry);
+    in cand // {
+         confirmed = meaningEquiv || inRegistry;
+         confirm_reason = if meaningEquiv then "meaning-equivalent (converge→canonical 동형 = 진짜이해)"
+                          else if inRegistry then "registry-known"
+                          else "candidate-only (no converged meaning match)";
+       };
+
+  # ── routeEvent: 이벤트를 *기존 owner* 로 dispatch (연결만, 새 엔진 X) ──
+  routeEvent = ctx: event:
+    if event.kind == "UserUtterance"
+    # NL 질문 → recognizeConcept (현재 session registry 대비 gate-graph 재인) → 구조보존 NL 답
+    then let recog = ct.recognizeConcept event.payload.text ctx.registry;
+         in { action = "recognize"; decision = recog.decision;
+              answer = if recog.decision == "known"
+                       then event.payload.text + " 은(는) " + recog.equation + " 입니다. [" + recog.status_ko + "]"
+                       else if recog.decision == "concept-known"
+                       then event.payload.text + " 은(는) " + recog.equation + " 입니다. (아직 미학습)"
+                       else "모르는 개념(Held): " + event.payload.text;
+              held = if recog.decision == "unknown-concept" then ("unknown-concept: " + event.payload.text) else null; }
+    else if event.kind == "SynthesisSucceeded"
+    # 성공 풀이 궤적 → learnFromSyntheses (gate-graph 학습) → trusted 면 registry 합류
+    then let learned = ct.learnFromSyntheses event.payload.results;
+         in { action = "learn";
+              entry = if learned ? entry then learned.entry else null;
+              decision = if learned ? entry then "learned" else (if learned ? decision then learned.decision else "skip"); }
+    else if event.kind == "RegistryUpdated"
+    then { action = "context-update"; entries = event.payload.entries; }
+    else if event.kind == "CodeProjectAnalyzed"
+    # 코드/논문 입력 → analysis bundle(call_edges + effect_summary) → ★ §21 mutable 격리:
+    # 순수 함수 사이 edge 만 math gate-graph 로 lift, effectful(mutation/io) 닿는 edge 는 *격리*(core 미진입).
+    then let bundle = event.payload.bundle;
+             edges = if bundle ? call_edges then bundle.call_edges else [ ];
+             effectfulNames = if (bundle ? effect_summary) && (bundle.effect_summary ? effectful)
+                              then B.map (e: e.name) bundle.effect_summary.effectful else [ ];
+             isPure = e: !(B.elem e.from effectfulNames) && !(B.elem e.to effectfulNames);
+             pureEdges = B.filter isPure edges;
+             segregatedEdges = B.filter (e: !(isPure e)) edges;
+         in { action = "analyze-lift";
+              pure_morphisms = B.map (e: { lhs = e.from; rhs = e.to; }) pureEdges;   # 순수 math gate-graph 합류
+              segregated_edges = B.map (e: e.from + "->" + e.to) segregatedEdges;     # mutable/io 격리(core 밖)
+              decision = "lifted"; }
+    else if event.kind == "ServiceRouteProposed"
+    # universal AI service face routing: route proposal is typed evidence only.
+    # No route execution, no ontology assertion, no durable truth promotion here.
+    then let r = if (event.payload ? receipt) then event.payload.receipt else event.payload;
+             v = validateServiceRouteReceipt r;
+         in if v.outcome == "service-route-proposal-issued"
+            then { action = "service-route-proposed";
+                   decision = "propose-only";
+                   proposed_route = r.proposed_route;
+                   source_kind = r.source_kind;
+                   face = r.face;
+                   durable_truth = false;
+                   dispose_required = true;
+                   route_execute_allowed = false;
+                   accepted_as_truth = false; }
+            else { action = "held";
+                   held = v.outcome + ": " + v.reason;
+                   decision = v.outcome;
+                   durable_truth = false;
+                   dispose_required = true; }
+    # ── SearchEvent v0 (SearchRequested → SearchCandidates → MeaningChecked) ──
+    # 검색=session event(단순 query 아님): 사용자가 어떤 의도로 어떤 마디를 찾는가. 새 엔진 X — 기존 ct + host 조립.
+    else if event.kind == "SearchRequested"
+    # request → Mirror 가 이해(recognizeConcept) → host 가 이 understanding 으로 fuzzy/BM25 후보 retrieval(SearchCandidates 로 환류)
+    then let recog = ct.recognizeConcept (if event.payload ? query then event.payload.query else "") ctx.registry;
+         in { action = "search-understood";
+              scope = if event.payload ? scope then event.payload.scope else "all";
+              query = if event.payload ? query then event.payload.query else "";
+              recognized = recog.decision;
+              needs_candidates = true; }   # proposer(host fuzzy/BM25) 트리거
+    else if event.kind == "SearchCandidates"
+    # host-proposed 후보(key/kind/source/score/provenance) → dispose: 검증된 의미만 select (redb-truth-first)
+    then let cands = if event.payload ? candidates then event.payload.candidates else [ ];
+             q = if event.payload ? query then event.payload.query else "";
+             disposed = B.map (searchConfirm ctx q) cands;
+             confirmed = B.filter (c: c.confirmed) disposed;
+             selected = if confirmed != [ ] then B.head confirmed else null;
+         in { action = "candidates-disposed";
+              selected = selected;
+              confirmed_count = B.length confirmed;
+              candidate_count = B.length cands;
+              held = if selected == null
+                     then "no confirmed meaning among " + (B.toString (B.length cands)) + " candidates"
+                     else null; }
+    else if event.kind == "MeaningChecked"
+    # 확정된 selection 을 session 의미로 commit (없으면 Held — 후보뿐, 답 아님)
+    then let sel = if event.payload ? selected then event.payload.selected else null;
+         in if sel != null
+            then { action = "meaning-checked"; selected = sel; gate_node = sel; }
+            else { action = "held";
+                   held = "no confirmed meaning for: " + (if event.payload ? query then event.payload.query else ""); }
+    else { action = "held"; held = "unknown event kind: " + event.kind; };
+
+  # ── updateSessionContext: 이벤트+route 결과를 context 에 fold (log + registry projection + held 유지) ──
+  updateSessionContext = ctx: event: routed:
+    ctx // {
+      log = ctx.log ++ [ { kind = event.kind; action = routed.action; } ];
+      # registry projection: SynthesisSucceeded 의 trusted entry 합류 · RegistryUpdated 는 교체.
+      registry = if (event.kind == "SynthesisSucceeded") && (routed ? entry) && (routed.entry != null) && (trusted routed.entry)
+                 then ctx.registry ++ [ routed.entry ]
+                 else if event.kind == "RegistryUpdated" then routed.entries
+                 else ctx.registry;
+      # ★ §21: 코드분석 순수 morphism 은 math gate-graph 합류, effectful 은 segregated(core 밖) — 끊김 없이 분리.
+      gate_graph = if (event.kind == "CodeProjectAnalyzed") && (routed ? pure_morphisms)
+                   then ctx.gate_graph ++ routed.pure_morphisms else ctx.gate_graph;
+      segregated = if (event.kind == "CodeProjectAnalyzed") && (routed ? segregated_edges)
+                   then ctx.segregated ++ routed.segregated_edges else ctx.segregated;
+      # ★ Held 세션 전체 유지(모든 표면 강제 — 채팅서 Held 가 다음 이벤트서 사라지면 붕괴).
+      held = ctx.held ++ (if (routed ? held) && (routed.held != null) then [ routed.held ] else [ ]);
+      # ★ SearchEvent: MeaningChecked 가 확정한 의미(gate_node)를 session 의 현재 selected 로 — 다음 action 이 이걸 씀.
+      selected = if (event.kind == "MeaningChecked") && (routed ? selected) && (routed.selected != null)
+                 then routed.selected else ctx.selected;
+    };
+
+  # ── handleEvent: ingest → route → context 갱신 (한 step) ──
+  handleEvent = ctx: event:
+    let routed = routeEvent ctx event;
+    in { context = updateSessionContext ctx event routed; routed = routed; };
+
+  # ── runSession: 이벤트열 fold = 전체 안 끊기는 루프 (context 가 이벤트 사이 유지) ──
+  runSession = events:
+    B.foldl' (acc: e: let h = handleEvent acc.context e;
+                      in { context = h.context; trace = acc.trace ++ [ h.routed ]; })
+             { context = emptyContext; trace = [ ]; } events;
+
+in {
+  inherit mkEvent emptyContext trusted
+          serviceRouteSchema serviceRouteTargets serviceRouteSourceKinds serviceRouteFaces
+          mkServiceRouteReceipt validateServiceRouteReceipt mkServiceRouteEvent
+          routeEvent updateSessionContext handleEvent runSession;
+  ownerName = "stdlib.agent.session-event";
+  meta = {
+    owner = "stdlib.agent.session-event";
+    role = "SessionEvent v0 척추: 이벤트(UserUtterance/SynthesisSucceeded/RegistryUpdated/CodeProjectAnalyzed/Search*/ServiceRouteProposed)를 기존 gate-graph owner(ct.recognizeConcept/learnFromSyntheses/registry)에 연결, session context(log+registry+held) 유지. 새 엔진 아닌 연결 spine. idea.md §21.";
+    note = "운영자 2026-06-16: 사용자가 어떤 환경서 작업해도 user↔pnix 루프 안 깨지게. Held 세션 전체 유지. event=gate-graph 관측/명제(event sourcing pnix 판). 갈라치기 금지 — 기존 owner 확장만.";
+  };
+}

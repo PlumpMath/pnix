@@ -1,0 +1,366 @@
+# stdlib.lib.ontology.materialized-context-view
+#
+# Candidate materialized context view contract. It consumes semantic-chain
+# traversal candidates and shapes state-graph / inverted-index view rows. It
+# does not write indexes, append pnix-db, execute queries, promote facts, or
+# persist discourse state.
+let
+  ownerName = "stdlib.lib.ontology.materialized-context-view";
+
+  semanticChainOwner = import ./semantic-chain-traversal.px;
+  factStoreIndexPolicy = import ../gate/fact-store-index-policy.px;
+  contextualFactsQueryPolicy = import ../gate/contextual-facts-query-policy.px;
+  discourseState = import ../gate/algorithm-synthesis/discourse-state.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  listAttrOr = attrs: key:
+    let v = getAttrOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  semanticTraversalFrom = req:
+    if hasAttr req "semantic_chain_traversal" && builtins.isAttrs req.semantic_chain_traversal then
+      req.semantic_chain_traversal
+    else if hasAttr req "semantic_chain_traversal_contract" && builtins.isAttrs req.semantic_chain_traversal_contract then
+      req.semantic_chain_traversal_contract
+    else if hasAttr req "plan" && builtins.isAttrs req.plan then
+      req.plan
+    else { };
+
+  sourceTraversalOk = plan:
+    builtins.isAttrs plan
+    && stringAttrOr plan "schema" "" == "puncheetah.ontology-semantic-chain-traversal.v0"
+    && stringAttrOr plan "outcome" "" == "ontology-semantic-chain-traversal-built"
+    && getBool plan "verified" false == true
+    && getBool plan "semantic_chain_traversal_contract_built" false == true
+    && getBool plan "source_context_transition_verified" false == true
+    && getBool plan "candidate_only" false == true
+    && getBool plan "relation_composition_execution_allowed" true == false
+    && getBool plan "semantic_chain_execution_allowed" true == false
+    && getBool plan "ontology_evaluate_allowed" true == false
+    && getBool plan "ontology_select_allowed" true == false
+    && getBool plan "ontology_query_allowed" true == false
+    && getBool plan "ontology_emit_allowed" true == false
+    && getBool plan "ontology_promote_allowed" true == false
+    && getBool plan "materialized_context_graph_write_allowed" true == false
+    && getBool plan "discourse_state_write_allowed" true == false
+    && getBool plan "accepted_fact_promotion_allowed" true == false
+    && getBool plan "learning_promotion_allowed" true == false
+    && getBool plan "memory_write_allowed" true == false
+    && getBool plan "db_write_allowed" true == false
+    && getBool plan "policy_persistence_allowed" true == false;
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "materialized_context_graph_write_requested" false
+    || getBool req "materialized_view_write_requested" false
+    || getBool req "fact_index_write_requested" false
+    || getBool req "state_graph_write_requested" false
+    || getBool req "inverted_index_write_requested" false
+    || getBool req "discourse_state_write_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  candidateRowsFrom = traversal:
+    let inner = getAttrOr traversal "semantic_chain_traversal" { };
+    in listAttrOr inner "relation_chain_candidates";
+
+  indexedMap = f: xs:
+    let
+      len = builtins.length xs;
+      go = i:
+        if i >= len then [ ]
+        else [ (f i (builtins.elemAt xs i)) ] ++ go (i + 1);
+    in go 0;
+
+  viewRowFor = traversal: idx: candidate: {
+    seq = idx;
+    view_row_id = stringAttrOr traversal "from_context" "context" + "::semantic-row::" + builtins.toString idx;
+    from_context = stringAttrOr traversal "from_context" "";
+    to_context = stringAttrOr traversal "to_context" "";
+    trigger_fact_key = stringAttrOr traversal "trigger_fact_key" "";
+    subj = stringAttrOr candidate "subj" "";
+    pred1 = stringAttrOr candidate "pred1" "";
+    mid = stringAttrOr candidate "mid" "";
+    pred2 = stringAttrOr candidate "pred2" "";
+    obj2 = stringAttrOr candidate "obj2" "";
+    candidate_status = stringAttrOr candidate "candidate_status" "Candidate";
+    state_graph_axis = [
+      "from_context"
+      "to_context"
+      "candidate_status"
+    ];
+    inverted_index_axis = [
+      "subj"
+      "pred1"
+      "mid"
+      "pred2"
+      "obj2"
+    ];
+    materialized = false;
+    candidate_only = true;
+    accepted_fact_promotion_allowed = false;
+  };
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.ontology-materialized-context-view.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    materialized_context_view_contract_built = false;
+    source_semantic_chain_traversal_verified = false;
+    candidate_only = true;
+    materialized_context_graph_write_allowed = false;
+    materialized_view_write_allowed = false;
+    fact_index_write_allowed = false;
+    state_graph_write_allowed = false;
+    inverted_index_write_allowed = false;
+    discourse_state_write_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    reason = reason;
+    negative_receipt = {
+      kind = "ontology-materialized-context-view-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "materialized context view contracts cannot write view/index rows, query/emit/promote ontology facts, persist discourse state, write memory/DB, or accept facts";
+    };
+    receipt = {
+      kind = "ontology-materialized-context-view-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      materialized_context_graph_write_allowed = false;
+      materialized_view_write_allowed = false;
+      fact_index_write_allowed = false;
+      discourse_state_write_allowed = false;
+      accepted_fact_promotion_allowed = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName;
+
+  buildOntologyMaterializedContextView = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-ontology-materialized-context-view-non-attr-request" "Materialized context view request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-ontology-materialized-context-view-effect-blocked" "Materialized context view is contract-only; it cannot write view/index rows, query/emit/promote ontology facts, persist discourse state, write memory/DB, route, or write code." { }
+    else
+      let
+        source = semanticTraversalFrom req;
+        rows = candidateRowsFrom source;
+        viewRows = indexedMap (viewRowFor source) rows;
+        factIndexInventory =
+          factStoreIndexPolicy.applyFactStoreIndexPolicy {
+            request_kind = "list-all-indices";
+          };
+        statusQueryPlan =
+          contextualFactsQueryPolicy.applyContextualFactsQueryPolicy {
+            request_kind = "build-plan";
+            query_kind = "contextual-facts-by-subject-filtered";
+            subject = stringAttrOr source "from_context" "context";
+            allowed_predicates = [ ];
+            include_candidate = true;
+          };
+      in
+        if source == { } then
+          mkHeld "held-ontology-materialized-context-view-source-required" "Materialized context view requires a verified semantic-chain traversal contract." { }
+        else if !sourceTraversalOk source then
+          mkHeld "held-ontology-materialized-context-view-source-unverified" "Materialized context view requires a verified effect-locked semantic-chain traversal contract." {
+            semantic_chain_traversal = source;
+          }
+        else if getAttrOr source "composed_candidate_count" 0 <= 0 then
+          mkHeld "held-ontology-materialized-context-view-composed-candidate-required" "Materialized context view requires at least one composed semantic-chain candidate." {
+            semantic_chain_traversal = source;
+          }
+        else if rows == [ ] then
+          mkHeld "held-ontology-materialized-context-view-rows-required" "Materialized context view requires relation chain candidate rows from semantic traversal." {
+            semantic_chain_traversal = source;
+          }
+        else {
+          schema = "puncheetah.ontology-materialized-context-view.v0";
+          owner = ownerName;
+          outcome = "ontology-materialized-context-view-built";
+          is_held = false;
+          verified = true;
+          materialized_context_view_contract_built = true;
+          source_semantic_chain_traversal_verified = true;
+          candidate_only = true;
+          from_context = source.from_context;
+          to_context = source.to_context;
+          trigger_fact_key = source.trigger_fact_key;
+          view_row_count = builtins.length viewRows;
+          fact_index_count = factIndexInventory.total_index_count;
+          materialized_context_view = {
+            kind = "ontology-materialized-context-view-v0";
+            status = "Candidate";
+            from_context = source.from_context;
+            to_context = source.to_context;
+            trigger_fact_key = source.trigger_fact_key;
+            state_graph_view = {
+              kind = "state-graph-view-candidate";
+              axes = [
+                "context"
+                "episode"
+                "lifecycle-status"
+                "transition"
+              ];
+              rows = viewRows;
+              materialized = false;
+              write_allowed = false;
+            };
+            inverted_index_view = {
+              kind = "inverted-index-view-candidate";
+              axes = [
+                "subject"
+                "predicate"
+                "object"
+                "token"
+                "context"
+              ];
+              rows = viewRows;
+              materialized = false;
+              write_allowed = false;
+            };
+            fact_index_inventory = factIndexInventory;
+            contextual_fact_status_query_plan = statusQueryPlan;
+            discourse_state_projection_required_later = true;
+            receipt_required = true;
+            candidate_only = true;
+            materialized_context_graph_write_allowed = false;
+            materialized_view_write_allowed = false;
+            accepted_fact_promotion_allowed = false;
+          };
+          source_owner_reuse = {
+            semantic_chain_traversal_owner = semanticChainOwner.ownerName;
+            fact_store_index_policy = factStoreIndexPolicy.ownerName;
+            contextual_facts_query_policy = contextualFactsQueryPolicy.ownerName;
+            discourse_state_owner = discourseState.ownerName;
+            fact_store_index_policy_replaced = false;
+            contextual_facts_query_execution_replaced = false;
+            discourse_state_projection_replaced = false;
+            pnix_db_append_gate_replaced = false;
+          };
+          next_gate = "ontology-discourse-state-projection";
+          materialized_context_graph_write_allowed = false;
+          materialized_view_write_allowed = false;
+          fact_index_write_allowed = false;
+          state_graph_write_allowed = false;
+          inverted_index_write_allowed = false;
+          discourse_state_write_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "ontology-materialized-context-view-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "ontology-materialized-context-view-built";
+            from_context = source.from_context;
+            to_context = source.to_context;
+            trigger_fact_key = source.trigger_fact_key;
+            view_row_count = builtins.length viewRows;
+            fact_index_count = factIndexInventory.total_index_count;
+            next_gate = "ontology-discourse-state-projection";
+            invariant = "materialized context view may shape state/inverted index rows, but cannot write, query/emit/promote, persist discourse state, or accept facts";
+            materialized_context_graph_write_allowed = false;
+            materialized_view_write_allowed = false;
+            fact_index_write_allowed = false;
+            discourse_state_write_allowed = false;
+            accepted_fact_promotion_allowed = false;
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "ontology-materialized-context-view-v0";
+    role = "candidate state-graph and inverted-index materialized context view contract over semantic-chain traversal";
+    source_gate = "ontology-semantic-chain-traversal + fact-store-index-policy";
+    next_gate = "ontology-discourse-state-projection";
+    non_replacement_boundary = "does not replace fact-store-index-policy, contextual facts query execution, discourse-state owner, materialized graph host adapter, ontology router, or pnix-db append gates";
+    effect_policy = "contract only; no view/index writes, no ontology query/emit/promote, no accepted fact promotion, no discourse-state persistence, no memory/DB write, no policy persistence, no route execution, and no code write";
+  };
+}

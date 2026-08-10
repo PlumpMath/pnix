@@ -1,0 +1,2266 @@
+rec {
+  name = "pnixc.exec.runtime";
+  schema = "pnixc-exec-runtime-v1";
+
+  mk_error_as = phase: errorClass: msg: {
+    status = "error";
+    error = msg;
+    failure = {
+      __pnix_model_schema = "pnix.machine.eval-error-model.v1";
+      __pnix_model_domain = "pnix.machine.eval-error-model.v1";
+      inherit phase;
+      class = errorClass;
+      evidence = { };
+    };
+  };
+  mk_error = mk_error_as "eval" "unsupported-expression";
+  unwrap_fxcore = input: if input ? fxcore then input.fxcore else input;
+
+  # minimal helpers (Phase3: parser)
+  str_len = s: builtins.stringLength s;
+  substr = s: start: len: builtins.substring start len s;
+  char_at = s: i: substr s i 1;
+  list_len = xs: builtins.length xs;
+  list_at = xs: i: builtins.elemAt xs i;
+  list_cons = x: xs: builtins.cons x xs;
+  join = xs: builtins.concatStringsSep "" xs;
+  str_cat = a: b: builtins.concatStringsSep "" [ a b ];
+  is_attrs = v: builtins.isAttrs v;
+  is_list = v: builtins.isList v;
+  list_foldl = f: init: xs: builtins.foldl' f init xs;
+  list_map = f: xs: list_reverse (builtins.foldl' (acc: x: list_cons (f x) acc) [] xs);
+  list_tail = xs: if list_len xs <= 1 then [] else builtins.tail xs;
+  list_reverse = xs: builtins.foldl' (acc: x: list_cons x acc) [] xs;
+
+  is_space = c: c == " " || c == "\n" || c == "\t" || c == "\r";
+  is_digit = c: builtins.match "^[0-9]$" c != null;
+  is_ident_start = c: builtins.match "^[A-Za-z_]$" c != null;
+  is_ident_char = c: builtins.match "^[A-Za-z0-9_'-]$" c != null;
+
+  mk_token = kind: value: { kind = kind; value = value; };
+  mk_parse_ok = node: pos: { ok = true; node = node; pos = pos; };
+  mk_parse_err = msg: pos: { ok = false; error = msg; pos = pos; };
+
+  mk_int = v: { tag = "Int"; value = v; };
+  mk_float = v: { tag = "Float"; value = v; };
+  mk_bool = v: { tag = "Bool"; value = v; };
+  mk_null = { tag = "Null"; };
+  mk_string = v: { tag = "String"; value = v; };
+  mk_var = name: { tag = "Var"; name = name; };
+  mk_lambda = name: body: { tag = "Lambda"; param = { tag = "Ident"; name = name; }; body = body; };
+  mk_let_binding = name: value: { tag = "Binding"; pattern = { tag = "Ident"; name = name; }; value = value; };
+  mk_let = bindings: body: { tag = "Let"; bindings = bindings; body = body; };
+  mk_if = cond: then_: else_: { tag = "If"; cond = cond; "then" = then_; "else" = else_; };
+  mk_apply = func: arg: { tag = "Apply"; func = func; arg = arg; };
+  mk_binary = op: lhs: rhs: { tag = "Binary"; op = op; lhs = lhs; rhs = rhs; };
+  mk_unary = op: arg: { tag = "Unary"; op = op; arg = arg; };
+  mk_select = base: attr: { tag = "Select"; base = base; attr = attr; };
+  mk_index = base: index: { tag = "Index"; base = base; index = index; };
+  mk_hasattr = base: attr: { tag = "HasAttr"; base = base; attr = attr; };
+  mk_dyn_hasattr = base: attr_expr: { tag = "DynamicHasAttr"; base = base; attr_expr = attr_expr; };
+  mk_attrset = items: recFlag: { tag = "AttrSet"; items = items; recursive = recFlag; };
+  mk_attr_assign = key: value: { tag = "Assign"; key_path = [ key ]; value = value; };
+  mk_list = items: { tag = "List"; items = items; };
+
+  lex = source:
+    let
+      n = str_len source;
+      build_idxs = self: i:
+        if i >= n then []
+        else [ i ] ++ ((self self) (i + 1));
+      idxs = build_idxs build_idxs 0;
+      kw_token = ident:
+        let kind =
+          if ident == "let" || ident == "in" || ident == "if" || ident == "then" || ident == "else"
+          || ident == "true" || ident == "false" || ident == "null" || ident == "rec"
+          || ident == "inherit"
+          then "kw" else "ident";
+        in mk_token kind ident;
+      decode_escape = esc:
+        if esc == "n" then "\n"
+        else if esc == "t" then "\t"
+        else if esc == "r" then "\r"
+        else esc;
+      finish_number = state:
+        state // {
+          mode = "default";
+          acc = [];
+          escape = false;
+          skip = 0;
+          tokens = list_cons (mk_token "number" (join (list_reverse state.acc))) state.tokens;
+        };
+      finish_ident = state:
+        let ident = join (list_reverse state.acc);
+        in state // {
+          mode = "default";
+          acc = [];
+          escape = false;
+          skip = 0;
+          tokens = list_cons (kw_token ident) state.tokens;
+        };
+      step_default = state: idx: c:
+        if is_space c then state
+        else if c == "#" then state // { mode = "comment"; }
+        else if c == "\"" then state // { mode = "string"; acc = []; escape = false; string_start = idx; }
+        else if is_digit c then state // { mode = "number"; acc = [ c ]; }
+        else if is_ident_start c then state // { mode = "ident"; acc = [ c ]; }
+        # v0.1 path literals: `./foo/bar` and `../foo/bar`. Detect
+        # only at expression position (state.mode == "default") via
+        # the leading `.` followed by `/` or `..`. Absolute paths
+        # (`/foo`) are NOT yet supported — `/` is ambiguous with
+        # division and resolving requires knowing previous token
+        # context, which this state machine doesn't currently track.
+        else if c == "." && idx + 1 < n && char_at source (idx + 1) == "/" then
+          # acc is reversed at finish; build it so list_reverse gives "./".
+          state // { mode = "path"; acc = [ "/" "." ]; skip = 1; }
+        else if c == "." && idx + 2 < n
+             && char_at source (idx + 1) == "."
+             && char_at source (idx + 2) == "/" then
+          state // { mode = "path"; acc = [ "/" "." "." ]; skip = 2; }
+        # D12 (host-D4 parity): a dot-leading float (`.5`, `.5e1`) — after the
+        # `...`/`./`/`../` branches so paths keep priority, like flex maximal
+        # munch (`{ }.1` lexes `.1` as a float on the host too).
+        else if c == "." && idx + 1 < n && is_digit (char_at source (idx + 1)) then
+          state // { mode = "number"; acc = [ c ]; }
+        # v0.4 (2026-05-14): absolute path `/foo/bar`. Disambiguate
+        # from division: `/` followed immediately by an ident char,
+        # at a position where the prior token is an operator,
+        # symbol, or expression-opening keyword. Otherwise `/` is
+        # division.
+        else if c == "/" && idx + 1 < n
+             && is_ident_start (char_at source (idx + 1))
+             && abs_path_position state then
+          state // { mode = "path"; acc = [ "/" ]; }
+        else
+          let two = if idx + 1 < n then str_cat c (char_at source (idx + 1)) else "";
+              op2 = if two == "==" || two == "!=" || two == "<=" || two == ">=" || two == "&&" || two == "||" || two == "//" || two == "++" then two else null;
+              single_op = c == "+" || c == "-" || c == "*" || c == "/" || c == "%" || c == "<" || c == ">";
+              token =
+                if op2 != null then mk_token "op" op2
+                else if single_op then mk_token "op" c
+                else mk_token "sym" c;
+              next_skip = if op2 != null then 1 else 0;
+          in state // { tokens = list_cons token state.tokens; skip = next_skip; };
+      finish_path = state:
+        state // {
+          mode = "default";
+          acc = [];
+          escape = false;
+          skip = 0;
+          tokens = list_cons (mk_token "path" (join (list_reverse state.acc))) state.tokens;
+        };
+      is_path_char = c:
+        is_ident_char c || c == "/" || c == "." || c == "-";
+      # `abs_path_position state` returns true when `/` at the
+      # current position should be lexed as an absolute path start
+      # rather than as the division operator. Heuristic: the
+      # previous emitted token must be an operator, opening
+      # delimiter, `=`, `;`, `,`, or an expression-opening keyword.
+      # If there are no prior tokens yet, we're at file start so
+      # path is also OK. Conservative: if last token is ident,
+      # number, string, path, or `)` / `]` / `}`, treat `/` as
+      # division.
+      abs_path_position = state:
+        if builtins.length state.tokens == 0 then true
+        else
+          let t = list_at state.tokens 0; in
+          if t.kind == "op" then true
+          else if t.kind == "sym"
+               && (t.value == "(" || t.value == "[" || t.value == "{"
+                   || t.value == "=" || t.value == ";" || t.value == ","
+                   || t.value == "?") then true
+          else if t.kind == "kw"
+               && (t.value == "if" || t.value == "then" || t.value == "else"
+                   || t.value == "let" || t.value == "in"
+                   || t.value == "inherit") then true
+          else if t.kind == "ident" && t.value == "import" then true
+          else false;
+      step = state: idx:
+        if state.error != null then state
+        else if state.skip > 0 then state // { skip = state.skip - 1; }
+        else
+          let c = char_at source idx;
+          in if state.mode == "comment" then
+              if c == "\n" then state // { mode = "default"; } else state
+            else if state.mode == "string" then
+              if state.escape then
+                let decoded = decode_escape c;
+                in state // { acc = list_cons decoded state.acc; escape = false; }
+              else if c == "\\" then state // { escape = true; escape_pos = idx; }
+              else if c == "\"" then
+                state // { mode = "default"; acc = []; escape = false;
+                          tokens = list_cons (mk_token "string" (join (list_reverse state.acc))) state.tokens;
+                        }
+              else
+                # 2026-05-27 (llm-plan.md §24.1 priority M): UTF-8 aware
+                # char append. pnix-eval's substring snaps to char
+                # boundaries — at a multi-byte start position, substr
+                # returns "" (1-byte window is inside char). Probe
+                # widths 2/3/4 to recover the full code point and set
+                # skip = width - 1 so foldl's next iteration lands on
+                # the next char boundary.
+                let
+                  width =
+                    if c != "" then 1
+                    else if substr source idx 2 != "" then 2
+                    else if substr source idx 3 != "" then 3
+                    else if substr source idx 4 != "" then 4
+                    else 1;
+                  actualChar =
+                    if c != "" then c
+                    else if width == 2 then substr source idx 2
+                    else if width == 3 then substr source idx 3
+                    else if width == 4 then substr source idx 4
+                    else "";
+                in state // {
+                  acc = list_cons actualChar state.acc;
+                  skip = width - 1;
+                }
+            else if state.mode == "number" then
+              # D12 (host-D4 parity): Nix float grammar
+              # (([1-9][0-9]*\.[0-9]*)|(0?\.[0-9]+))([Ee][+-]?[0-9]+)? —
+              # a single dot (empty fraction legal: `1.`), an exponent only
+              # after a dot, and a sign only immediately after e/E.
+              let acc_has = ch: builtins.elem ch state.acc;
+                  prev = if state.acc == [] then "" else builtins.head state.acc;
+              in
+              if is_digit c then state // { acc = list_cons c state.acc; }
+              else if c == "." && !(acc_has ".") && !(acc_has "e") && !(acc_has "E") then
+                state // { acc = list_cons c state.acc; }
+              else if (c == "e" || c == "E")
+                   && (acc_has ".") && !(acc_has "e") && !(acc_has "E")
+                   && (idx + 1 < n
+                       && (is_digit (char_at source (idx + 1))
+                           || ((char_at source (idx + 1) == "+"
+                                || char_at source (idx + 1) == "-")
+                               && idx + 2 < n
+                               && is_digit (char_at source (idx + 2))))) then
+                state // { acc = list_cons c state.acc; }
+              else if (c == "+" || c == "-") && (prev == "e" || prev == "E") then
+                state // { acc = list_cons c state.acc; }
+              else step_default (finish_number state) idx c
+            else if state.mode == "ident" then
+              if is_ident_char c then state // { acc = list_cons c state.acc; }
+              else step_default (finish_ident state) idx c
+            else if state.mode == "path" then
+              if is_path_char c then state // { acc = list_cons c state.acc; }
+              else step_default (finish_path state) idx c
+            else step_default state idx c;
+      init = {
+        mode = "default";
+        acc = [];
+        tokens = [];
+        escape = false;
+        skip = 0;
+        error = null;
+        string_start = 0;
+        escape_pos = 0;
+      };
+      state = builtins.foldl' step init idxs;
+      state2 =
+        if state.error != null then state
+        else if state.mode == "number" then finish_number state
+        else if state.mode == "ident" then finish_ident state
+        else if state.mode == "path" then finish_path state
+        else state;
+      state3 =
+        if state2.error != null then state2
+        else if state2.mode == "string" then
+          state2 // { error = if state2.escape then "unterminated escape" else "unterminated string"; }
+        else state2;
+    in if state3.error != null then mk_error_as "parse" "syntax-error" (str_cat "lex error: " state3.error) else list_reverse state3.tokens;
+
+  tok_len = tokens: list_len tokens;
+  tok_at = tokens: pos:
+    if pos < tok_len tokens then list_at tokens pos else { kind = "eof"; value = ""; };
+  tok_is = token: kind: value: token.kind == kind && token.value == value;
+  is_kw = token: value: tok_is token "kw" value;
+
+  parse_number = lexeme: pos:
+    # D12: fromJSON needs a digit on BOTH sides of the dot, but the Nix float
+    # grammar allows `.5` and `1.` (and `1.e3`) — normalize before parsing.
+    let is_float = builtins.match ".*\\..*" lexeme != null;
+        m = builtins.match "([0-9]*)[.]([0-9]*)([eE][+-]?[0-9]+)?" lexeme;
+        ip = if m == null then "" else builtins.elemAt m 0;
+        fp = if m == null then "" else builtins.elemAt m 1;
+        ex = if m == null then null else builtins.elemAt m 2;
+        nonzero_mantissa =
+          builtins.match ".*[1-9].*" ip != null
+          || builtins.match ".*[1-9].*" fp != null;
+        v =
+          if m == null then builtins.fromJSON lexeme
+          else
+            let ip2 = if ip == "" then "0" else ip;
+                fp2 = if fp == "" then "0" else fp;
+                ex2 = if ex == null then "" else ex;
+            in builtins.fromJSON (str_cat (str_cat (str_cat ip2 ".") fp2) ex2);
+        invalid_float =
+          is_float && nonzero_mantissa
+          && (v < 2.2250738585072014e-308
+              || v > 1.7976931348623157e308);
+    in
+      if invalid_float then
+        mk_parse_err (str_cat "invalid float '" (str_cat lexeme "'")) pos
+      else if is_float then mk_parse_ok (mk_float v) (pos + 1)
+      else mk_parse_ok (mk_int v) (pos + 1);
+
+  # ── v0.1 string interpolation helpers ───────────────────────────
+  # `find_matching_brace src start depth` scans `src` from index
+  # `start`, tracking `{ } ` brace depth (initialised to `depth`).
+  # Returns the index of the closing `}` that brings depth back to
+  # 0, or null if unbalanced.
+  find_matching_brace = src: start: initial_depth:
+    let
+      n = str_len src;
+      go = i: depth:
+        if i >= n then null
+        else
+          let c = char_at src i;
+          in if c == "{" then go (i + 1) (depth + 1)
+             else if c == "}" then
+               if depth == 1 then i
+               else go (i + 1) (depth - 1)
+             else go (i + 1) depth;
+    in go start initial_depth;
+
+  # `split_interp src` → list of segments. Each segment is either
+  #   { kind = "lit"; value = "..."; }
+  # or
+  #   { kind = "expr"; src = "..."; }
+  # The full `src` is fully covered by the segments concatenated in
+  # order.
+  split_interp = src:
+    let
+      n = str_len src;
+      go = i: cur: acc:
+        if i >= n then
+          if cur == "" then acc
+          else acc ++ [ { kind = "lit"; value = cur; } ]
+        else
+          let
+            c = char_at src i;
+            two = if i + 1 < n then str_cat c (char_at src (i + 1)) else "";
+          in
+            if two == "\${" then
+              let
+                close = find_matching_brace src (i + 2) 1;
+              in
+                if close == null then
+                  # Unbalanced `${`: treat as literal `${` and
+                  # continue. Parser will likely error later but
+                  # we don't want to crash here.
+                  go (i + 1) (str_cat cur c) acc
+                else
+                  let
+                    expr_src = substr src (i + 2) (close - i - 2);
+                    acc2 = if cur == "" then acc
+                           else acc ++ [ { kind = "lit"; value = cur; } ];
+                  in go (close + 1) "" (acc2 ++ [ { kind = "expr"; src = expr_src; } ])
+            else go (i + 1) (str_cat cur c) acc;
+    in go 0 "" [];
+
+  # Lower a list of segments to an AST. Empty list → empty string.
+  # Single literal → mk_string. Otherwise build a left-folded `+`
+  # chain (Nix's string concat).
+  lower_segments_to_ast = segments:
+    if builtins.length segments == 0 then mk_string ""
+    else if builtins.length segments == 1 then
+      let s = list_at segments 0; in
+      if s.kind == "lit" then mk_string s.value
+      else
+        # Single expr segment, e.g. `"${name}"`. Wrap in toString
+        # so non-string values (paths, ints) become strings —
+        # matches Nix semantics for `"${x}"`.
+        mk_apply (mk_select (mk_var "builtins") "toString") (parse_interp_expr s.src)
+    else
+      let
+        seg_to_node = s:
+          if s.kind == "lit" then mk_string s.value
+          else mk_apply (mk_select (mk_var "builtins") "toString") (parse_interp_expr s.src);
+        nodes = list_map seg_to_node segments;
+      in
+        builtins.foldl' (l: r: mk_binary "+" l r) (list_at nodes 0) (list_tail nodes);
+
+  parse_interp_expr = src:
+    let tokens = lex src;
+    in if is_attrs tokens && tokens ? status then
+      # Lex error → emit error AST that the evaluator will surface.
+      mk_error_as "parse" "syntax-error" (str_cat "string-interp lex error: " (tokens.error or "?"))
+    else
+      let res = parse_expr_tokens tokens;
+      in if is_attrs res && res ? status then res
+         else res;
+
+  lower_string_with_interp = raw_value:
+    # Fast path: no `${` in the literal → keep as plain string.
+    if !(has_substring raw_value "\${") then mk_string raw_value
+    else lower_segments_to_ast (split_interp raw_value);
+
+  has_substring = s: needle:
+    let
+      sn = str_len s;
+      nn = str_len needle;
+      go = i:
+        if i + nn > sn then false
+        else if substr s i nn == needle then true
+        else go (i + 1);
+    in if nn == 0 then true else go 0;
+
+  parse_primary = tokens: pos:
+    let t = tok_at tokens pos;
+    in if t.kind == "number" then parse_number t.value pos
+    else if t.kind == "string" then
+      # v0.1: support `${...}` interpolation by parser-side split +
+      # lower to a `+` (string concat) chain. The lexer treats `$`
+      # and `{` as regular string chars, so the token's value
+      # carries literal `${...}`. We detect and rewrite here.
+      mk_parse_ok (lower_string_with_interp t.value) (pos + 1)
+    else if t.kind == "path" then
+      # v0.1 path literal: emits a Path AST node carrying the raw
+      # source path. Evaluator coerces to host path when handed to
+      # `import`.
+      mk_parse_ok { tag = "Path"; value = t.value; } (pos + 1)
+    else if is_kw t "true" then mk_parse_ok (mk_bool true) (pos + 1)
+    else if is_kw t "false" then mk_parse_ok (mk_bool false) (pos + 1)
+    else if is_kw t "null" then mk_parse_ok mk_null (pos + 1)
+    else if is_kw t "rec" then
+      let t2 = tok_at tokens (pos + 1);
+      in if tok_is t2 "sym" "{" then
+        parse_attrset tokens (pos + 2) [] true
+      else mk_parse_err "expected '{' after rec" (pos + 1)
+    else if t.kind == "ident" then mk_parse_ok (mk_var t.value) (pos + 1)
+    else if tok_is t "sym" "(" then
+      let inner = parse_expr_at tokens (pos + 1);
+      in if !inner.ok then inner
+         else
+           let t2 = tok_at tokens inner.pos;
+           in if tok_is t2 "sym" ")" then mk_parse_ok inner.node (inner.pos + 1)
+              else mk_parse_err "expected ')'" inner.pos
+    else if tok_is t "sym" "[" then
+      parse_list tokens (pos + 1) []
+    else if tok_is t "sym" "{" then
+      parse_attrset tokens (pos + 1) [] false
+    else mk_parse_err "unexpected token" pos;
+
+  parse_list_item = tokens: pos: parse_expr_no_apply tokens pos;
+
+  parse_list = tokens: pos: acc:
+    let t = tok_at tokens pos;
+    in if tok_is t "sym" "]" then mk_parse_ok (mk_list acc) (pos + 1)
+    else
+      let item = parse_list_item tokens pos;
+      in if !item.ok then item
+         else parse_list tokens item.pos (acc ++ [ item.node ]);
+
+  parse_attrset = tokens: pos: acc: recFlag:
+    let t = tok_at tokens pos;
+    in if tok_is t "sym" "}" then mk_parse_ok (mk_attrset acc recFlag) (pos + 1)
+    else if is_kw t "inherit" then
+      # `inherit a b c;` or `inherit (expr) a b c;` — both
+      # forms lower to ordinary Assign nodes so the evaluator
+      # never sees an Inherit tag. `inherit a` lowers to
+      # `a = a;` (referencing the outer scope's `a`).
+      # `inherit (expr) a` lowers to `a = (expr).a;`.
+      parse_inherit_in_attrset tokens (pos + 1) acc recFlag
+    else
+      let key_tok = tok_at tokens pos;
+      in if key_tok.kind != "ident" && key_tok.kind != "string" then mk_parse_err "expected attr name" pos
+      else
+        let key = key_tok.value;
+            eq_tok = tok_at tokens (pos + 1);
+        in if !(tok_is eq_tok "sym" "=") then mk_parse_err "expected '='" (pos + 1)
+        else
+          let val_res = parse_expr_at tokens (pos + 2);
+          in if !val_res.ok then val_res
+          else
+            let semi = tok_at tokens val_res.pos;
+            in if !(tok_is semi "sym" ";") then mk_parse_err "expected ';'" val_res.pos
+               else parse_attrset tokens (val_res.pos + 1) (acc ++ [ (mk_attr_assign key val_res.node) ]) recFlag;
+
+  # Helper: parse `(source_expr)` if present, then a list of
+  # identifiers terminated by `;`. Lowers each ident to an
+  # `Assign` node referencing either the outer scope (`x = x`)
+  # or the source expression (`x = source.x`).
+  parse_inherit_in_attrset = tokens: pos: acc: recFlag:
+    let open = tok_at tokens pos;
+    in if tok_is open "sym" "(" then
+      let src = parse_expr_at tokens (pos + 1);
+      in if !src.ok then src
+      else
+        let close = tok_at tokens src.pos;
+        in if !(tok_is close "sym" ")") then mk_parse_err "expected ')' after inherit source" src.pos
+        else parse_inherit_idents tokens (src.pos + 1) acc recFlag src.node
+    else parse_inherit_idents tokens pos acc recFlag null;
+
+  parse_inherit_idents = tokens: pos: acc: recFlag: source:
+    let t = tok_at tokens pos;
+    in if tok_is t "sym" ";" then
+      parse_attrset tokens (pos + 1) acc recFlag
+    else if t.kind == "ident" || t.kind == "string" then
+      let name = t.value;
+          value_node =
+            if source == null then mk_var name
+            else mk_select source name;
+      in parse_inherit_idents tokens (pos + 1) (acc ++ [ (mk_attr_assign name value_node) ]) recFlag source
+    else mk_parse_err "expected identifier or ';' in inherit list" pos;
+
+  parse_unary = tokens: pos:
+    let t = tok_at tokens pos;
+    in if tok_is t "op" "-" || tok_is t "op" "!" then
+      let inner = parse_unary tokens (pos + 1);
+      in if !inner.ok then inner else mk_parse_ok (mk_unary t.value inner.node) inner.pos
+    else parse_primary tokens pos;
+
+  parse_postfix = tokens: pos:
+    let base = parse_unary tokens pos;
+    in if !base.ok then base
+    else
+      let loop = node: p:
+        let t = tok_at tokens p;
+        in if tok_is t "sym" "." then
+          let t2 = tok_at tokens (p + 1);
+          in if t2.kind == "ident" then loop (mk_select node t2.value) (p + 2)
+             else if t2.kind == "string" then
+               # v0.7-D (2026-05-15): `.` followed by a quoted-string
+               # attribute name. Two cases:
+               #   - static literal (no `${...}`)  →  same shape as an
+               #     ident-named select: `mk_select base name`.
+               #   - template (contains `${...}`)  →  desugar to
+               #     `builtins.getAttr <attr_expr> base` so the
+               #     evaluator's existing Apply/Select/Var handling
+               #     covers it without a new evaluator tag.
+               if !(has_substring t2.value "\${") then
+                 loop (mk_select node t2.value) (p + 2)
+               else
+                 let attr_expr = lower_string_with_interp t2.value;
+                     getattr_fn = mk_select (mk_var "builtins") "getAttr";
+                     dynamic_select = mk_apply (mk_apply getattr_fn attr_expr) node;
+                 in loop dynamic_select (p + 2)
+             else mk_parse_err "expected attribute name" (p + 1)
+        # D8 (2026-07-07, host-D6 parity): `?` no longer lives at the postfix
+        # level — it is an OPERATOR looser than application in real Nix
+        # (`f { } ? a` is `(f { }) ? a`), so it moved to parse_has_attr
+        # between parse_mul and parse_apply, with an ATTRPATH RHS.
+        # v0.7-E (2026-05-15): the `[` postfix used to greedily build
+        # an `Index` AST (`obj[idx]`), which is NOT valid Nix syntax —
+        # Nix has only attribute access (`obj.attr`) and explicit
+        # `builtins.elemAt list idx`. Worse, the greedy branch
+        # mis-parsed `fn [x y z]` (a curried application of a list
+        # literal) as `Index(fn, Apply(Apply(x,y),z))`, which then
+        # blew up the evaluator with "Apply target is not a function"
+        # whenever a host builtin (`map`, `filter`, `foldl'`, `elem`,
+        # ...) was applied to an inline list. Removing the branch
+        # lets `[` be parsed as a list-literal expression-start in
+        # the surrounding `parse_apply` loop, so `fn [x y z]` lowers
+        # to `Apply(fn, List[x y z])` as expected. `evalIndex` stays
+        # in the evaluator for historic AST compatibility but is
+        # now unreachable from the parser.
+        else mk_parse_ok node p;
+      in loop base.node base.pos;
+
+  is_expr_start = t:
+    t.kind == "ident" || t.kind == "number" || t.kind == "string"
+    || t.kind == "path"
+    || (t.kind == "kw" && (t.value == "if" || t.value == "let" || t.value == "true" || t.value == "false" || t.value == "null" || t.value == "rec"))
+    || (t.kind == "sym" && (t.value == "(" || t.value == "[" || t.value == "{"));
+
+  parse_apply = tokens: pos:
+    let head = parse_postfix tokens pos;
+    in if !head.ok then head
+    else
+      let loop = node: p:
+        let t = tok_at tokens p;
+        in if is_expr_start t then
+          let arg = parse_postfix tokens p;
+          in if !arg.ok then arg else loop (mk_apply node arg.node) arg.pos
+        else mk_parse_ok node p;
+      in loop head.node head.pos;
+
+  parse_bin_left = parse_next: ops: tokens: pos:
+    let first = parse_next tokens pos;
+    in if !first.ok then first
+    else
+      let loop = node: p:
+        let t = tok_at tokens p;
+        in if t.kind == "op" && builtins.elem t.value ops then
+          let rhs = parse_next tokens (p + 1);
+          in if !rhs.ok then rhs else loop (mk_binary t.value node rhs.node) rhs.pos
+        else mk_parse_ok node p;
+      in loop first.node first.pos;
+
+  # D8 (2026-07-07, host-D6 parity): `?` (has-attr) as its own precedence
+  # level -- looser than application/select, tighter than `*`, matching real
+  # Nix. RHS is an ATTRPATH desugared like the host parser:
+  #   e ? a.b  ==  if e ? a then e.a ? b else false
+  parse_has_attr = tokens: pos:
+    let base = parse_apply tokens pos;
+    in if !base.ok then base
+    else
+      let
+        hasattr_fn = mk_select (mk_var "builtins") "hasAttr";
+        getattr_fn = mk_select (mk_var "builtins") "getAttr";
+        seg_at = p:
+          let t = tok_at tokens p;
+          in if t.kind == "ident" then { ok = true; static = true; name = t.value; pos = p + 1; }
+             else if t.kind == "string" then
+               if !(has_substring t.value "\${")
+               then { ok = true; static = true; name = t.value; pos = p + 1; }
+               else { ok = true; static = false; expr = lower_string_with_interp t.value; pos = p + 1; }
+             else { ok = false; err = mk_parse_err "expected attribute name" p; };
+        segs_at = p: acc:
+          let s = seg_at p;
+          in if !s.ok then s
+             else
+               let t = tok_at tokens s.pos;
+               in if tok_is t "sym" "." then segs_at (s.pos + 1) (acc ++ [ s ])
+                  else { ok = true; segs = acc ++ [ s ]; pos = s.pos; };
+        hasattr_of = node: s:
+          if s.static then mk_hasattr node s.name
+          else mk_apply (mk_apply hasattr_fn s.expr) node;
+        select_of = node: s:
+          if s.static then mk_select node s.name
+          else mk_apply (mk_apply getattr_fn s.expr) node;
+        desugar = node: segs:
+          if builtins.length segs == 1 then hasattr_of node (builtins.head segs)
+          else
+            let s = builtins.head segs;
+            in mk_if (hasattr_of node s)
+                     (desugar (select_of node s) (builtins.tail segs))
+                     (mk_bool false);
+        loop = node: p:
+          let t = tok_at tokens p;
+          in if tok_is t "sym" "?" then
+            let path = segs_at (p + 1) [ ];
+            in if !path.ok then path.err
+               else loop (desugar node path.segs) path.pos
+          else mk_parse_ok node p;
+      in loop base.node base.pos;
+
+  parse_mul = tokens: pos: parse_bin_left parse_has_attr [ "*" "/" "%" ] tokens pos;
+  parse_add = tokens: pos: parse_bin_left parse_mul [ "+" "-" "++" "//" ] tokens pos;
+
+  # D11 (host-D6 parity): == != and < > <= >= are TWO separate NONASSOC
+  # levels in real Nix (`1 == 1 == true` / `1 < 2 < 3` are syntax errors;
+  # == binds LOOSER than <, so `true == 1 < 2` is `true == (1 < 2)`).
+  parse_bin_nonassoc = parse_next: ops: tokens: pos:
+    let first = parse_next tokens pos;
+    in if !first.ok then first
+    else
+      let t = tok_at tokens first.pos;
+      in if t.kind == "op" && builtins.elem t.value ops then
+        let rhs = parse_next tokens (first.pos + 1);
+        in if !rhs.ok then rhs
+           else
+             let t2 = tok_at tokens rhs.pos;
+             in if t2.kind == "op" && builtins.elem t2.value ops then
+               mk_parse_err "non-associative operator chain" rhs.pos
+             else mk_parse_ok (mk_binary t.value first.node rhs.node) rhs.pos
+      else first;
+
+  parse_rel = tokens: pos: parse_bin_nonassoc parse_add [ "<" ">" "<=" ">=" ] tokens pos;
+  parse_eq = tokens: pos: parse_bin_nonassoc parse_rel [ "==" "!=" ] tokens pos;
+  parse_and = tokens: pos: parse_bin_left parse_eq [ "&&" ] tokens pos;
+  parse_or = tokens: pos: parse_bin_left parse_and [ "||" ] tokens pos;
+
+  parse_bin_left_no_apply = parse_next: ops: tokens: pos:
+    let first = parse_next tokens pos;
+    in if !first.ok then first
+    else
+      let loop = node: p:
+        let t = tok_at tokens p;
+        in if t.kind == "op" && builtins.elem t.value ops then
+          let rhs = parse_next tokens (p + 1);
+          in if !rhs.ok then rhs else loop (mk_binary t.value node rhs.node) rhs.pos
+        else mk_parse_ok node p;
+      in loop first.node first.pos;
+
+  parse_mul_no_apply = tokens: pos: parse_bin_left_no_apply parse_postfix [ "*" "/" "%" ] tokens pos;
+  parse_add_no_apply = tokens: pos: parse_bin_left_no_apply parse_mul_no_apply [ "+" "-" "++" "//" ] tokens pos;
+  parse_cmp_no_apply = tokens: pos: parse_bin_left_no_apply parse_add_no_apply [ "==" "!=" "<" ">" "<=" ">=" ] tokens pos;
+  parse_and_no_apply = tokens: pos: parse_bin_left_no_apply parse_cmp_no_apply [ "&&" ] tokens pos;
+  parse_or_no_apply = tokens: pos: parse_bin_left_no_apply parse_and_no_apply [ "||" ] tokens pos;
+
+  parse_lambda = tokens: pos:
+    let t = tok_at tokens pos;
+    in if t.kind == "ident" && tok_is (tok_at tokens (pos + 1)) "sym" ":" then
+      let body = parse_expr_at tokens (pos + 2);
+      in if !body.ok then body else mk_parse_ok (mk_lambda t.value body.node) body.pos
+    else parse_or tokens pos;
+
+  parse_if = tokens: pos:
+    let t = tok_at tokens pos;
+    in if is_kw t "if" then
+      let cond = parse_expr_at tokens (pos + 1);
+      in if !cond.ok then cond
+      else
+        let then_tok = tok_at tokens cond.pos;
+        in if !is_kw then_tok "then" then mk_parse_err "expected 'then'" cond.pos
+        else
+          let then_res = parse_expr_at tokens (cond.pos + 1);
+          in if !then_res.ok then then_res
+          else
+            let else_tok = tok_at tokens then_res.pos;
+            in if !is_kw else_tok "else" then mk_parse_err "expected 'else'" then_res.pos
+            else
+              let else_res = parse_expr_at tokens (then_res.pos + 1);
+              in if !else_res.ok then else_res
+              else mk_parse_ok (mk_if cond.node then_res.node else_res.node) else_res.pos
+    else parse_lambda tokens pos;
+
+  parse_let_bindings = tokens: pos: acc:
+    let t = tok_at tokens pos;
+    in if is_kw t "in" then { ok = true; bindings = acc; pos = pos; }
+    else if t.kind != "ident" then mk_parse_err "expected identifier in let binding" pos
+    else
+      let eq = tok_at tokens (pos + 1);
+      in if !tok_is eq "sym" "=" then mk_parse_err "expected '='" (pos + 1)
+      else
+        let val_res = parse_expr_at tokens (pos + 2);
+        in if !val_res.ok then val_res
+        else
+          let semi = tok_at tokens val_res.pos;
+          in if !tok_is semi "sym" ";" then mk_parse_err "expected ';'" val_res.pos
+          else
+            let binding = mk_let_binding t.value val_res.node;
+            in parse_let_bindings tokens (val_res.pos + 1) (acc ++ [ binding ]);
+
+  parse_let_expr = tokens: pos:
+    let t = tok_at tokens pos;
+    in if is_kw t "let" then
+      let b = parse_let_bindings tokens (pos + 1) [];
+      in if !b.ok then b
+      else
+        let in_tok = tok_at tokens b.pos;
+        in if !is_kw in_tok "in" then mk_parse_err "expected 'in'" b.pos
+        else
+          let body = parse_expr_at tokens (b.pos + 1);
+          in if !body.ok then body else mk_parse_ok (mk_let b.bindings body.node) body.pos
+    else parse_if tokens pos;
+
+  parse_let_bindings_no_apply = tokens: pos: acc:
+    let t = tok_at tokens pos;
+    in if is_kw t "in" then { ok = true; bindings = acc; pos = pos; }
+    else if t.kind != "ident" then mk_parse_err "expected identifier in let binding" pos
+    else
+      let eq = tok_at tokens (pos + 1);
+      in if !tok_is eq "sym" "=" then mk_parse_err "expected '='" (pos + 1)
+      else
+        let val_res = parse_expr_no_apply tokens (pos + 2);
+        in if !val_res.ok then val_res
+        else
+          let semi = tok_at tokens val_res.pos;
+          in if !tok_is semi "sym" ";" then mk_parse_err "expected ';'" val_res.pos
+          else
+            let binding = mk_let_binding t.value val_res.node;
+            in parse_let_bindings_no_apply tokens (val_res.pos + 1) (acc ++ [ binding ]);
+
+  parse_lambda_no_apply = tokens: pos:
+    let t = tok_at tokens pos;
+    in if t.kind == "ident" && tok_is (tok_at tokens (pos + 1)) "sym" ":" then
+      let body = parse_expr_no_apply tokens (pos + 2);
+      in if !body.ok then body else mk_parse_ok (mk_lambda t.value body.node) body.pos
+    else parse_or_no_apply tokens pos;
+
+  parse_if_no_apply = tokens: pos:
+    let t = tok_at tokens pos;
+    in if is_kw t "if" then
+      let cond = parse_expr_no_apply tokens (pos + 1);
+      in if !cond.ok then cond
+      else
+        let then_tok = tok_at tokens cond.pos;
+        in if !is_kw then_tok "then" then mk_parse_err "expected 'then'" cond.pos
+        else
+          let then_res = parse_expr_no_apply tokens (cond.pos + 1);
+          in if !then_res.ok then then_res
+          else
+            let else_tok = tok_at tokens then_res.pos;
+            in if !is_kw else_tok "else" then mk_parse_err "expected 'else'" then_res.pos
+            else
+              let else_res = parse_expr_no_apply tokens (then_res.pos + 1);
+              in if !else_res.ok then else_res
+              else mk_parse_ok (mk_if cond.node then_res.node else_res.node) else_res.pos
+    else parse_lambda_no_apply tokens pos;
+
+  parse_let_expr_no_apply = tokens: pos:
+    let t = tok_at tokens pos;
+    in if is_kw t "let" then
+      let b = parse_let_bindings_no_apply tokens (pos + 1) [];
+      in if !b.ok then b
+      else
+        let in_tok = tok_at tokens b.pos;
+        in if !is_kw in_tok "in" then mk_parse_err "expected 'in'" b.pos
+        else
+          let body = parse_expr_no_apply tokens (b.pos + 1);
+          in if !body.ok then body else mk_parse_ok (mk_let b.bindings body.node) body.pos
+    else parse_if_no_apply tokens pos;
+
+  parse_expr_no_apply = tokens: pos: parse_let_expr_no_apply tokens pos;
+
+  parse_expr_at = tokens: pos: parse_let_expr tokens pos;
+
+  parse_expr_tokens = tokens:
+    let res = parse_expr_at tokens 0;
+    in if !res.ok then mk_error_as "parse" "syntax-error" (str_cat "parse error: " res.error)
+    else if res.pos < tok_len tokens then mk_error_as "parse" "syntax-error" "parse error: trailing tokens"
+    else res.node;
+
+  read_input = input: { kind = "input"; value = input; };
+
+  parse_expr = input:
+    if is_attrs input && input ? ast then input.ast
+    else if is_attrs input && input ? source then
+      let tokens = lex input.source;
+      in if is_attrs tokens && tokens ? status then tokens else parse_expr_tokens tokens
+    else if builtins.isString input then
+      let tokens = lex input;
+      in if is_attrs tokens && tokens ? status then tokens else parse_expr_tokens tokens
+    else if is_attrs input && input ? value then input.value
+    else mk_error "parse_expr not implemented (provide {ast=...} or {source=...})";
+
+  parse_module = input:
+    if is_attrs input && input ? module then input.module
+    else if is_attrs input && input ? source then parse_expr { source = input.source; }
+    else if builtins.isString input then parse_expr input
+    else if is_attrs input && input ? value then input.value
+    else mk_error "parse_module not implemented (provide {module=...} or {source=...})";
+
+  is_error = v: is_attrs v && v ? status;
+
+  map_collect = f: xs:
+    let n = list_len xs;
+        loop = i: acc:
+          if i >= n then acc
+          else
+            let v = f (list_at xs i);
+            in if is_error v then v else loop (i + 1) (acc ++ [ v ]);
+    in loop 0 [];
+
+  bind = v: f: if is_error v then v else f v;
+  list_any = pred: xs: list_foldl (acc: x: acc || pred x) false xs;
+  list_contains = name: xs: list_any (x: x == name) xs;
+  list_filter = pred: xs:
+    list_reverse (list_foldl (acc: x: if pred x then list_cons x acc else acc) [] xs);
+
+  pnix_kind = v:
+    if !(v ? tag) then "unknown"
+    else if v.tag == "Int" then "int"
+    else if v.tag == "Float" then "float"
+    else if v.tag == "Bool" then "bool"
+    else if v.tag == "Null" then "null"
+    else if v.tag == "String" then "string"
+    else if v.tag == "Path" then "path"
+    else if v.tag == "List" then "list"
+    else if v.tag == "AttrSet" then "attrset"
+    else if v.tag == "Var" then "var"
+    else if v.tag == "Let" then "let"
+    else if v.tag == "If" then "if"
+    else if v.tag == "Lambda" then "lambda"
+    else if v.tag == "Apply" then "apply"
+    else if v.tag == "Select" then "select"
+    else if v.tag == "Binary" then "binary"
+    else if v.tag == "Unary" then "unary"
+    else if v.tag == "Construct" then "construct"
+    else if v.tag == "Match" then "match"
+    else if v.tag == "Import" then "import"
+    else if v.tag == "With" then "with"
+    else if v.tag == "Assert" then "assert"
+    else if v.tag == "Index" then "index"
+    else if v.tag == "HasAttr" then "hasAttr"
+    else if v.tag == "DynamicHasAttr" then "dynamicHasAttr"
+    else if v.tag == "DynamicSelect" then "dynamicSelect"
+    else if v.tag == "DynamicSelectOrDefault" then "dynamicSelectOrDefault"
+    else v.tag;
+
+  expect_attrset_items = v: ctx:
+    if !(v ? tag) then mk_error (str_cat ctx ": expected attrset, got unknown")
+    else if v.tag != "AttrSet" then mk_error (str_cat ctx ": expected attrset, got " (pnix_kind v))
+    else v.items;
+
+  expect_list_items = v: ctx:
+    if !(v ? tag) then mk_error (str_cat ctx ": expected list, got unknown")
+    else if v.tag != "List" then mk_error (str_cat ctx ": expected list, got " (pnix_kind v))
+    else v.items;
+
+  expect_string = v: ctx:
+    if !(v ? tag) then mk_error (str_cat ctx ": expected string, got unknown")
+    else if v.tag != "String" then mk_error (str_cat ctx ": expected string, got " (pnix_kind v))
+    else v.value;
+
+  expect_int = v: ctx:
+    if !(v ? tag) then mk_error (str_cat ctx ": expected int, got unknown")
+    else if v.tag != "Int" then mk_error (str_cat ctx ": expected int, got " (pnix_kind v))
+    else v.value;
+
+  expect_bool = v: ctx:
+    if !(v ? tag) then mk_error (str_cat ctx ": expected bool, got unknown")
+    else if v.tag != "Bool" then mk_error (str_cat ctx ": expected bool, got " (pnix_kind v))
+    else v.value;
+
+  expect_string_list = v: ctx:
+    let items = expect_list_items v ctx;
+    in if is_error items then items
+       else
+         let n = list_len items;
+             loop = i: acc:
+               if i >= n then acc
+               else
+                 let s = expect_string (list_at items i) (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                 in if is_error s then s else loop (i + 1) (acc ++ [ s ]);
+         in loop 0 [];
+
+  ensure_data_only = v: ctx:
+    if !(v ? tag) then mk_error (str_cat ctx ": expected pnix AST value")
+    else if v.tag == "Int" || v.tag == "Float" || v.tag == "Bool" || v.tag == "Null"
+      || v.tag == "String" || v.tag == "Path" then true
+    else if v.tag == "List" then
+      let items = v.items;
+          n = list_len items;
+          loop = i:
+            if i >= n then true
+            else
+              let ok = ensure_data_only (list_at items i) (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+              in if is_error ok then ok else loop (i + 1);
+      in loop 0
+    else if v.tag == "AttrSet" then
+      let items = v.items;
+          n = list_len items;
+          loop = i:
+            if i >= n then true
+            else
+              let it = list_at items i;
+              in if !(it ? tag) then mk_error (str_cat ctx ": invalid attr item")
+                 else if it.tag != "Assign" then mk_error (str_cat ctx ": non-assign attr item is not allowed in module attrsets")
+                 else
+                   let key = builtins.concatStringsSep "." it.key_path;
+                       ok = ensure_data_only it.value (str_cat ctx (str_cat "." key));
+                   in if is_error ok then ok else loop (i + 1);
+      in loop 0
+    else mk_error (str_cat ctx ": non-data pnix expression is not allowed in modules (got " (pnix_kind v) ")");
+
+  attrset_pairs = items: ctx:
+    let n = list_len items;
+        loop = i: acc:
+          if i >= n then acc
+          else
+            let it = list_at items i;
+            in if !(it ? tag) then mk_error (str_cat ctx ": invalid attr item")
+               else if it.tag != "Assign" then mk_error (str_cat ctx ": non-assign attr item is not allowed in module attrsets")
+               else
+                 let key = builtins.concatStringsSep "." it.key_path;
+                     dup = list_any (p: p.key == key) acc;
+                 in if dup then mk_error (str_cat ctx (str_cat ": duplicate key `" (str_cat key "`")))
+                    else
+                      let ok = ensure_data_only it.value (str_cat ctx (str_cat "." key));
+                      in if is_error ok then ok else loop (i + 1) (acc ++ [ { key = key; value = it.value; } ]);
+    in loop 0 [];
+
+  pairs_get = pairs: key:
+    let n = list_len pairs;
+        loop = i:
+          if i >= n then null
+          else
+            let p = list_at pairs i;
+            in if p.key == key then p.value else loop (i + 1);
+    in loop 0;
+
+  pairs_has = pairs: key: pairs_get pairs key != null;
+
+  ensure_only_keys = pairs: allowed: ctx:
+    let n = list_len pairs;
+        loop = i:
+          if i >= n then true
+          else
+            let k = (list_at pairs i).key;
+            in if builtins.match "^_" k != null || k == "meta" then loop (i + 1)
+               else if builtins.elem k allowed then loop (i + 1)
+               else mk_error (str_cat ctx (str_cat ": unknown key `" (str_cat k (str_cat "` (allowed: " (str_cat (builtins.concatStringsSep ", " allowed) ")")))));
+    in loop 0;
+
+  check_unknown_keys = pairs: allowed: ctx:
+    let n = list_len pairs;
+        loop = i:
+          if i >= n then true
+          else
+            let k = (list_at pairs i).key;
+            in if builtins.match "^_" k != null || k == "meta" then loop (i + 1)
+               else if builtins.elem k allowed then loop (i + 1)
+               else mk_error (str_cat ctx (str_cat ": unknown top-level key `" (str_cat k (str_cat "` (allowed: " (str_cat (builtins.concatStringsSep ", " allowed) ")")))));
+    in loop 0;
+
+  parse_inputs = v: ctx:
+    if !(v ? tag) then mk_error (str_cat ctx ": expected attrset or list, got unknown")
+    else if v.tag == "AttrSet" then
+      let pairs = attrset_pairs v.items ctx;
+      in if is_error pairs then pairs
+         else
+           let n = list_len pairs;
+               loop = i: acc:
+                 if i >= n then acc
+                 else
+                   let p = list_at pairs i;
+                   in if builtins.match "^_" p.key != null then loop (i + 1) acc
+                      else
+                        let ty = expect_string p.value (str_cat ctx (str_cat "." p.key));
+                        in if is_error ty then ty else loop (i + 1) (acc ++ [ { name = p.key; ty = ty; } ]);
+           in loop 0 []
+    else if v.tag == "List" then
+      let items = v.items;
+          n = list_len items;
+          loop = i: acc:
+            if i >= n then acc
+            else
+              let el = list_at items i;
+                  items2 = expect_attrset_items el (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+              in if is_error items2 then items2
+                 else
+                   let pairs = attrset_pairs items2 (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                       ok = if is_error pairs then pairs else ensure_only_keys pairs [ "name" "ty" ] (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                   in if is_error ok then ok
+                      else
+                        let name = expect_string (pairs_get pairs "name") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].name")));
+                            ty = expect_string (pairs_get pairs "ty") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].ty")));
+                        in if is_error name then name else if is_error ty then ty
+                           else loop (i + 1) (acc ++ [ { name = name; ty = ty; } ]);
+          in loop 0 []
+    else mk_error (str_cat ctx (str_cat ": expected attrset or list, got " (pnix_kind v)));
+
+  parse_ports = v: ctx:
+    let items = expect_list_items v ctx;
+    in if is_error items then items
+       else
+         let n = list_len items;
+             loop = i: acc:
+               if i >= n then acc
+               else
+                 let el = list_at items i;
+                     items2 = expect_attrset_items el (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                 in if is_error items2 then items2
+                    else
+                      let pairs = attrset_pairs items2 (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          ok = if is_error pairs then pairs else ensure_only_keys pairs [ "name" "ty" ] (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                      in if is_error ok then ok
+                         else
+                           let name = expect_string (pairs_get pairs "name") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].name")));
+                               ty = expect_string (pairs_get pairs "ty") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].ty")));
+                           in if is_error name then name else if is_error ty then ty
+                              else loop (i + 1) (acc ++ [ { name = name; ty = ty; } ]);
+         in loop 0 [];
+
+  parse_sig = v: ctx:
+    let items = expect_attrset_items v ctx;
+    in if is_error items then items
+       else
+         let pairs = attrset_pairs items ctx;
+             ok = if is_error pairs then pairs else ensure_only_keys pairs [ "input" "output" "inputs" "outputs" ] ctx;
+         in if is_error ok then ok
+            else
+              if pairs_has pairs "inputs" || pairs_has pairs "outputs" then
+                let inputs = parse_ports (pairs_get pairs "inputs") (str_cat ctx ".inputs");
+                    outputs = parse_ports (pairs_get pairs "outputs") (str_cat ctx ".outputs");
+                in if is_error inputs then inputs else if is_error outputs then outputs
+                   else { input = if list_len inputs > 0 then (list_at inputs 0).ty else ""; output = if list_len outputs > 0 then (list_at outputs 0).ty else ""; inputs = inputs; outputs = outputs; }
+              else
+                let input = expect_string (pairs_get pairs "input") (str_cat ctx ".input");
+                    output = expect_string (pairs_get pairs "output") (str_cat ctx ".output");
+                in if is_error input then input else if is_error output then output
+                   else { input = input; output = output; inputs = [ { name = "in"; ty = input; } ]; outputs = [ { name = "out"; ty = output; } ]; };
+
+  parse_externs = v: ctx:
+    let items = expect_list_items v ctx;
+    in if is_error items then items
+       else
+         let n = list_len items;
+             loop = i: acc:
+               if i >= n then acc
+               else
+                 let el = list_at items i;
+                     items2 = expect_attrset_items el (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                 in if is_error items2 then items2
+                    else
+                      let pairs = attrset_pairs items2 (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          ok = if is_error pairs then pairs else ensure_only_keys pairs [ "name" "sig" "input" "output" "inputs" "outputs" "meta" ] (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                      in if is_error ok then ok
+                         else
+                           let name = expect_string (pairs_get pairs "name") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].name")));
+                               sig =
+                                 if pairs_has pairs "sig" then parse_sig (pairs_get pairs "sig") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].sig")))
+                                 else if pairs_has pairs "inputs" || pairs_has pairs "outputs" then
+                                   parse_sig ({ tag = "AttrSet"; items = [
+                                     { tag = "Assign"; key_path = [ "inputs" ]; value = pairs_get pairs "inputs"; }
+                                     { tag = "Assign"; key_path = [ "outputs" ]; value = pairs_get pairs "outputs"; }
+                                   ]; }) (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")))
+                                 else parse_sig ({ tag = "AttrSet"; items = [
+                                     { tag = "Assign"; key_path = [ "input" ]; value = pairs_get pairs "input"; }
+                                     { tag = "Assign"; key_path = [ "output" ]; value = pairs_get pairs "output"; }
+                                   ]; }) (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                           in if is_error name then name else if is_error sig then sig
+                              else
+                                let effect = if builtins.match "^(io|world)\\." name != null then "world" else "pure";
+                                in loop (i + 1) (acc ++ [ (sig // { name = name; effect = effect; }) ]);
+         in loop 0 [];
+
+  parse_nodes = v: ctx:
+    let items = expect_list_items v ctx;
+    in if is_error items then items
+       else
+         let n = list_len items;
+             loop = i: acc:
+               if i >= n then acc
+               else
+                 let el = list_at items i;
+                     items2 = expect_attrset_items el (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                 in if is_error items2 then items2
+                    else
+                      let pairs = attrset_pairs items2 (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          ok = if is_error pairs then pairs else ensure_only_keys pairs [ "name" "uses" "kind" "gate" "optional" "scope" "cost" "priority" "meta" ] (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                      in if is_error ok then ok
+                         else
+                           let name = expect_string (pairs_get pairs "name") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].name")));
+                               uses = expect_string (pairs_get pairs "uses") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].uses")));
+                               gate =
+                                 if pairs_has pairs "gate" then expect_bool (pairs_get pairs "gate") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].gate"))) else null;
+                               kind =
+                                 if pairs_has pairs "kind" then expect_string (pairs_get pairs "kind") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].kind")))
+                                 else if gate == true then "gate"
+                                 else "normal";
+                               optional =
+                                 if pairs_has pairs "optional" then expect_bool (pairs_get pairs "optional") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].optional"))) else false;
+                               scope =
+                                 if pairs_has pairs "scope" then expect_string (pairs_get pairs "scope") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].scope"))) else null;
+                               cost =
+                                 if pairs_has pairs "cost" then expect_string (pairs_get pairs "cost") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].cost"))) else "medium";
+                               priority =
+                                 if pairs_has pairs "priority" then expect_int (pairs_get pairs "priority") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].priority"))) else 0;
+                           in if is_error name then name
+                              else if is_error uses then uses
+                              else if is_error gate then gate
+                              else if is_error kind then kind
+                              else if is_error optional then optional
+                              else if is_error scope then scope
+                              else if is_error cost then cost
+                              else if is_error priority then priority
+                              else loop (i + 1) (acc ++ [ { name = name; uses = uses; kind = kind; optional = optional; scope = scope; cost = cost; priority = priority; } ]);
+         in loop 0 [];
+
+  split_last_dot = s:
+    let m = builtins.match "^(.*)\\.([^.]*)$" s;
+    in if m == null then null else { left = list_at m 0; right = list_at m 1; };
+
+  parse_edge_source_shorthand = s: ctx:
+    if builtins.match "^input\\." s != null then
+      let rest = substr s 6 ((str_len s) - 6);
+      in if rest == "" then mk_error (str_cat ctx ": invalid input reference, expected 'input.<name>'")
+         else { kind = "input"; name = rest; }
+    else
+      let split = split_last_dot s;
+      in if split != null then { kind = "node"; node = split.left; port = split.right; }
+         else { kind = "node"; node = s; port = null; };
+
+  parse_edge_target_shorthand = s:
+    let split = split_last_dot s;
+    in if split != null then { node = split.left; port = split.right; }
+       else { node = s; port = null; };
+
+  parse_edge_source = v: ctx:
+    if v ? tag && v.tag == "String" then parse_edge_source_shorthand v.value ctx
+    else
+      let items = expect_attrset_items v ctx;
+      in if is_error items then items
+         else
+           let pairs = attrset_pairs items ctx;
+               ok = if is_error pairs then pairs else ensure_only_keys pairs [ "input" "node" "port" ] ctx;
+               input = if pairs_has pairs "input" then expect_string (pairs_get pairs "input") (str_cat ctx ".input") else null;
+               node = if pairs_has pairs "node" then expect_string (pairs_get pairs "node") (str_cat ctx ".node") else null;
+               port = if pairs_has pairs "port" then expect_string (pairs_get pairs "port") (str_cat ctx ".port") else null;
+           in if is_error ok then ok
+              else if is_error input then input
+              else if is_error node then node
+              else if is_error port then port
+              else if input != null && node != null then mk_error (str_cat ctx ": expected exactly one of `input` or `node`")
+              else if input == null && node == null then mk_error (str_cat ctx ": expected `input` or `node`")
+              else if input != null && port != null then mk_error (str_cat ctx ": input source must not specify port")
+              else if input != null then { kind = "input"; name = input; }
+              else { kind = "node"; node = node; port = port; };
+
+  parse_edge_target = v: ctx:
+    if v ? tag && v.tag == "String" then parse_edge_target_shorthand v.value
+    else
+      let items = expect_attrset_items v ctx;
+      in if is_error items then items
+         else
+           let pairs = attrset_pairs items ctx;
+               ok = if is_error pairs then pairs else ensure_only_keys pairs [ "node" "port" ] ctx;
+               node = if pairs_has pairs "node" then expect_string (pairs_get pairs "node") (str_cat ctx ".node") else mk_error (str_cat ctx ": missing node");
+               port = if pairs_has pairs "port" then expect_string (pairs_get pairs "port") (str_cat ctx ".port") else null;
+           in if is_error ok then ok
+              else if is_error node then node
+              else if is_error port then port
+              else { node = node; port = port; };
+
+  parse_edge_cond = v: ctx:
+    let items = expect_attrset_items v ctx;
+    in if is_error items then items
+       else
+         let pairs = attrset_pairs items ctx;
+             ok = if is_error pairs then pairs else ensure_only_keys pairs [ "when" "unless" "onfail" "all_when" "all_unless" ] ctx;
+             when_v = if pairs_has pairs "when" then expect_string (pairs_get pairs "when") (str_cat ctx ".when") else null;
+             unless_v = if pairs_has pairs "unless" then expect_string (pairs_get pairs "unless") (str_cat ctx ".unless") else null;
+             onfail_v = if pairs_has pairs "onfail" then expect_string (pairs_get pairs "onfail") (str_cat ctx ".onfail") else null;
+             all_when_v = if pairs_has pairs "all_when" then expect_string_list (pairs_get pairs "all_when") (str_cat ctx ".all_when") else null;
+             all_unless_v = if pairs_has pairs "all_unless" then expect_string_list (pairs_get pairs "all_unless") (str_cat ctx ".all_unless") else null;
+         in if is_error ok then ok
+            else if is_error when_v then when_v
+            else if is_error unless_v then unless_v
+            else if is_error onfail_v then onfail_v
+            else if is_error all_when_v then all_when_v
+            else if is_error all_unless_v then all_unless_v
+            else if all_when_v != null then
+              if when_v != null || unless_v != null || onfail_v != null || all_unless_v != null
+              then mk_error (str_cat ctx ": all_when cannot be combined with other conditions")
+              else { all_when = all_when_v; }
+            else if all_unless_v != null then
+              if when_v != null || unless_v != null || onfail_v != null
+              then mk_error (str_cat ctx ": all_unless cannot be combined with other conditions")
+              else { all_unless = all_unless_v; }
+            else if when_v != null && unless_v != null then
+              if onfail_v != null then mk_error (str_cat ctx ": when+unless cannot be combined with onfail")
+              else { when_unless = { when = when_v; unless = unless_v; }; }
+            else if when_v != null then { when = when_v; }
+            else if unless_v != null then { unless = unless_v; }
+            else if onfail_v != null then { onfail = onfail_v; }
+            else mk_error (str_cat ctx ": expected at least one of when/unless/onfail");
+
+  parse_edges = v: ctx:
+    let items = expect_list_items v ctx;
+    in if is_error items then items
+       else
+         let n = list_len items;
+             loop = i: acc:
+               if i >= n then acc
+               else
+                 let el = list_at items i;
+                     items2 = expect_attrset_items el (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                 in if is_error items2 then items2
+                    else
+                      let pairs = attrset_pairs items2 (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          ok = if is_error pairs then pairs else ensure_only_keys pairs [ "from" "to" "cond" "meta" ] (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          from_v = if pairs_has pairs "from" then pairs_get pairs "from" else mk_error (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].from missing")));
+                          to_v = if pairs_has pairs "to" then pairs_get pairs "to" else mk_error (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].to missing")));
+                          from = parse_edge_source from_v (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].from")));
+                          to = parse_edge_target to_v (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].to")));
+                          cond = if pairs_has pairs "cond" then parse_edge_cond (pairs_get pairs "cond") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].cond"))) else null;
+                      in if is_error ok then ok
+                         else if is_error from then from
+                         else if is_error to then to
+                         else if is_error cond then cond
+                         else
+                           let edge =
+                             if from.kind == "input" then {
+                               from = "input";
+                               from_input = from.name;
+                               from_port = null;
+                               to = to.node;
+                               to_port = to.port;
+                               cond = cond;
+                             } else {
+                               from = from.node;
+                               from_port = from.port;
+                               from_input = null;
+                               to = to.node;
+                               to_port = to.port;
+                               cond = cond;
+                             };
+                           in loop (i + 1) (acc ++ [ edge ]);
+         in loop 0 [];
+
+  parse_scopes = v: ctx:
+    let items = expect_list_items v ctx;
+    in if is_error items then items
+       else
+         let n = list_len items;
+             loop = i: acc:
+               if i >= n then acc
+               else
+                 let el = list_at items i;
+                     items2 = expect_attrset_items el (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                 in if is_error items2 then items2
+                    else
+                      let pairs = attrset_pairs items2 (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          ok = if is_error pairs then pairs else ensure_only_keys pairs [ "name" "policy" "meta" ] (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          name = expect_string (pairs_get pairs "name") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].name")));
+                          policy = expect_string (pairs_get pairs "policy") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].policy")));
+                      in if is_error ok then ok
+                         else if is_error name then name
+                         else if is_error policy then policy
+                         else loop (i + 1) (acc ++ [ { name = name; policy = policy; } ]);
+         in loop 0 [];
+
+  parse_adt_variants = v: ctx:
+    let items = expect_list_items v ctx;
+    in if is_error items then items
+       else
+         let n = list_len items;
+             loop = i: acc:
+               if i >= n then acc
+               else
+                 let el = list_at items i;
+                     items2 = expect_attrset_items el (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                 in if is_error items2 then items2
+                    else
+                      let pairs = attrset_pairs items2 (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          ok = if is_error pairs then pairs else ensure_only_keys pairs [ "name" "fields" "meta" ] (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          name = expect_string (pairs_get pairs "name") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].name")));
+                          fields = if pairs_has pairs "fields" then expect_string_list (pairs_get pairs "fields") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].fields"))) else [];
+                      in if is_error ok then ok
+                         else if is_error name then name
+                         else if is_error fields then fields
+                         else loop (i + 1) (acc ++ [ { name = name; fields = fields; } ]);
+         in loop 0 [];
+
+  parse_adt_types = v: ctx:
+    let items = expect_list_items v ctx;
+    in if is_error items then items
+       else
+         let n = list_len items;
+             loop = i: acc:
+               if i >= n then acc
+               else
+                 let el = list_at items i;
+                     items2 = expect_attrset_items el (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                 in if is_error items2 then items2
+                    else
+                      let pairs = attrset_pairs items2 (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          ok = if is_error pairs then pairs else ensure_only_keys pairs [ "name" "params" "variants" "meta" ] (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "]")));
+                          name = expect_string (pairs_get pairs "name") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].name")));
+                          params = if pairs_has pairs "params" then expect_string_list (pairs_get pairs "params") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].params"))) else [];
+                          variants = if pairs_has pairs "variants" then parse_adt_variants (pairs_get pairs "variants") (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].variants"))) else mk_error (str_cat ctx (str_cat "[" (str_cat (builtins.toString i) "].variants missing")));
+                      in if is_error ok then ok
+                         else if is_error name then name
+                         else if is_error params then params
+                         else if is_error variants then variants
+                         else loop (i + 1) (acc ++ [ { name = name; params = params; variants = variants; } ]);
+         in loop 0 [];
+
+  u_int = v: { tag = "Int"; value = v; };
+  u_float = v: { tag = "Float"; value = v; };
+  u_bool = v: { tag = "Bool"; value = v; };
+  u_null = { tag = "Null"; };
+  u_string = v: { tag = "String"; value = v; };
+  u_var = name: { tag = "Var"; name = name; };
+  u_list = items: { tag = "List"; items = items; };
+  u_attrset = pairs: { tag = "AttrSet"; pairs = pairs; };
+  u_pair = key: value: { key = key; value = value; };
+  u_apply = func: args: { tag = "Apply"; func = func; args = args; };
+  u_if = cond: then_: else_: { tag = "If"; cond = cond; "then" = then_; "else" = else_; };
+  u_let = name: value: body: { tag = "Let"; name = name; value = value; body = body; };
+  u_lambda = param: body: { tag = "Lambda"; param = param; body = body; };
+  u_unary = op: arg:
+    if op == "-" then { tag = "Neg"; arg = arg; }
+    else if op == "!" then { tag = "Not"; arg = arg; }
+    else mk_error (str_cat "unsupported unary op: " op);
+  u_binary = op: lhs: rhs:
+    if op == "+" then { tag = "Add"; lhs = lhs; rhs = rhs; }
+    else if op == "-" then { tag = "Sub"; lhs = lhs; rhs = rhs; }
+    else if op == "*" then { tag = "Mul"; lhs = lhs; rhs = rhs; }
+    else if op == "/" then { tag = "Div"; lhs = lhs; rhs = rhs; }
+    else if op == "%" then { tag = "Mod"; lhs = lhs; rhs = rhs; }
+    else if op == "==" then { tag = "Eq"; lhs = lhs; rhs = rhs; }
+    else if op == "!=" then { tag = "Ne"; lhs = lhs; rhs = rhs; }
+    else if op == "<" then { tag = "Lt"; lhs = lhs; rhs = rhs; }
+    else if op == "<=" then { tag = "Le"; lhs = lhs; rhs = rhs; }
+    else if op == ">" then { tag = "Gt"; lhs = lhs; rhs = rhs; }
+    else if op == ">=" then { tag = "Ge"; lhs = lhs; rhs = rhs; }
+    else if op == "&&" then { tag = "And"; lhs = lhs; rhs = rhs; }
+    else if op == "||" then { tag = "Or"; lhs = lhs; rhs = rhs; }
+    else if op == "++" then { tag = "Concat"; lhs = lhs; rhs = rhs; }
+    else if op == "//" then { tag = "Merge"; lhs = lhs; rhs = rhs; }
+    else mk_error (str_cat "unsupported binary op: " op);
+
+  fx_meta_pure = op: { op = op; zone = "pure"; time = "static"; };
+  fx_int = v: { ConstInt = v; };
+  fx_float = v: { ConstFloat = v; };
+  fx_bool = v: { ConstBool = v; };
+  fx_string = v: { ConstString = v; };
+  fx_var = name: { Var = name; };
+  fx_list = items: { List = items; };
+  fx_attrset = pairs: { AttrSet = pairs; };
+  fx_unary = op: arg: { Unary = { meta = fx_meta_pure op; arg = arg; }; };
+  fx_binary = op: lhs: rhs: { Binary = { meta = fx_meta_pure op; lhs = lhs; rhs = rhs; }; };
+  fx_if = cond: then_: else_: { If = { cond = cond; then_ = then_; else_ = else_; }; };
+  fx_let = name: value: body: { Let = { name = name; value = value; body = body; }; };
+  fx_lambda = param: body: { Lambda = { param = param; body = body; }; };
+  fx_select = expr: attr: { Select = { expr = expr; attr = attr; }; };
+  fx_construct = variant: args: { Construct = { variant = variant; args = args; }; };
+  fx_throw = msg: { Throw = { message = msg; }; };
+  fx_derived = op: args: { Derived = { meta = fx_meta_pure op; args = args; }; };
+
+  collect_apply = expr: args:
+    if expr ? tag && expr.tag == "Apply" then
+      collect_apply expr.func ([ expr.arg ] ++ args)
+    else { func = expr; args = args; };
+
+  build_nested_attrset = path: value:
+    let n = list_len path;
+    in if n == 0 then mk_error "empty attr key path"
+    else if n == 1 then u_attrset [ (u_pair (list_at path 0) value) ]
+    else
+      let head = list_at path 0;
+          tail = build_nested_attrset (list_tail path) value;
+      in if is_error tail then tail else u_attrset [ (u_pair head tail) ];
+
+  attr_item_expr = item:
+    if !(item ? tag) then mk_error "attr item missing tag"
+    else if item.tag == "Assign" then
+      let v = pnix_expr_to_unified item.value;
+      in if is_error v then v else build_nested_attrset item.key_path v
+    else mk_error (str_cat "unsupported attr item: " item.tag);
+
+  merge_attr_exprs = exprs:
+    let n = list_len exprs;
+        loop = i: acc:
+          if i >= n then acc else loop (i + 1) (u_binary "//" acc (list_at exprs i));
+    in if n == 0 then u_attrset [] else loop 1 (list_at exprs 0);
+
+  collect_attr_names = items:
+    let n = list_len items;
+        loop = i: acc:
+          if i >= n then acc
+          else
+            let item = list_at items i;
+            in if !(item ? tag) then loop (i + 1) acc
+               else if item.tag == "Assign" then
+                 let key = list_at item.key_path 0;
+                 in if list_contains key acc then loop (i + 1) acc else loop (i + 1) (acc ++ [ key ])
+               else loop (i + 1) acc;
+    in loop 0 [];
+
+  fresh_rec_name = names:
+    let base = "_rec_attrset";
+        loop = i:
+          let suffix = if i == 0 then "" else str_cat "_" (builtins.toString i);
+              candidate = str_cat base suffix;
+          in if list_contains candidate names then loop (i + 1) else candidate;
+    in loop 0;
+
+  rewrite_rec_refs = self_name: attr_names: bound: expr:
+    if is_error expr then expr
+    else if !(expr ? tag) then expr
+    else
+      let t = expr.tag;
+          rewrite_list = xs: map_collect (x: rewrite_rec_refs self_name attr_names bound x) xs;
+          rewrite_pair = p:
+            let v = rewrite_rec_refs self_name attr_names bound p.value;
+            in if is_error v then v else { key = p.key; value = v; };
+          entries = [
+            { tag = "Var"; fn = e:
+                if list_contains e.name bound then e
+                else if list_contains e.name attr_names then u_apply "builtins.getAttr" [ (u_string e.name) (u_var self_name) ]
+                else e; }
+            { tag = "List"; fn = e:
+                let items = rewrite_list e.items;
+                in if is_error items then items else u_list items; }
+            { tag = "AttrSet"; fn = e:
+                let pairs = map_collect rewrite_pair e.pairs;
+                in if is_error pairs then pairs else u_attrset pairs; }
+            { tag = "Merge"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Merge"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Apply"; fn = e:
+                let args = rewrite_list e.args;
+                in if is_error args then args else u_apply e.func args; }
+            { tag = "If"; fn = e:
+                let cond = rewrite_rec_refs self_name attr_names bound e.cond;
+                    then_ = rewrite_rec_refs self_name attr_names bound e."then";
+                    else_ = rewrite_rec_refs self_name attr_names bound e."else";
+                in if is_error cond then cond else if is_error then_ then then_ else if is_error else_ then else_ else u_if cond then_ else_; }
+            { tag = "Let"; fn = e:
+                let value = rewrite_rec_refs self_name attr_names bound e.value;
+                    body = rewrite_rec_refs self_name attr_names (bound ++ [ e.name ]) e.body;
+                in if is_error value then value else if is_error body then body else u_let e.name value body; }
+            { tag = "Lambda"; fn = e:
+                let body = rewrite_rec_refs self_name attr_names (bound ++ [ e.param ]) e.body;
+                in if is_error body then body else u_lambda e.param body; }
+            { tag = "Neg"; fn = e:
+                let inner = rewrite_rec_refs self_name attr_names bound e.arg;
+                in if is_error inner then inner else { tag = "Neg"; arg = inner; }; }
+            { tag = "Not"; fn = e:
+                let inner = rewrite_rec_refs self_name attr_names bound e.arg;
+                in if is_error inner then inner else { tag = "Not"; arg = inner; }; }
+            { tag = "Add"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Add"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Concat"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Concat"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Sub"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Sub"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Mul"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Mul"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Div"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Div"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Mod"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Mod"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Eq"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Eq"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Ne"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Ne"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Lt"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Lt"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Le"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Le"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Gt"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Gt"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Ge"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Ge"; lhs = lhs; rhs = rhs; }; }
+            { tag = "And"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "And"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Or"; fn = e:
+                let lhs = rewrite_rec_refs self_name attr_names bound e.lhs;
+                    rhs = rewrite_rec_refs self_name attr_names bound e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else { tag = "Or"; lhs = lhs; rhs = rhs; }; }
+            { tag = "Construct"; fn = e:
+                let args = rewrite_list e.args;
+                in if is_error args then args else { tag = "Construct"; variant = e.variant; args = args; }; }
+            { tag = "Derived"; fn = e:
+                let args = rewrite_list e.args;
+                in if is_error args then args else { tag = "Derived"; op = e.op; args = args; }; }
+          ];
+          fn = lookup_fn t entries;
+      in if fn == null then expr else fn expr;
+
+  lower_attr_expr = items: recFlag:
+    let attr_names = if recFlag then collect_attr_names items else [];
+        self_name = if recFlag then fresh_rec_name attr_names else null;
+        n = list_len items;
+        loop = i: acc:
+          if i >= n then acc
+          else
+            let item = list_at items i;
+                expr = attr_item_expr item;
+            in if is_error expr then expr else loop (i + 1) (acc ++ [ expr ]);
+        exprs = loop 0 [];
+    in if is_error exprs then exprs
+       else
+         let merged = merge_attr_exprs exprs;
+         in if !recFlag then merged
+            else
+              let rewritten = rewrite_rec_refs self_name attr_names [] merged;
+              in if is_error rewritten then rewritten else u_let self_name rewritten (u_var self_name);
+
+  lower_let_bindings = bindings:
+    let n = list_len bindings;
+        loop = i: acc:
+          if i >= n then acc
+          else
+            let b = list_at bindings i;
+            in if !(b ? tag) then mk_error "let binding missing tag"
+            else if b.tag == "Binding" then
+              if !(b.pattern ? tag) || b.pattern.tag != "Ident" then
+                mk_error "only ident patterns are supported in let"
+              else
+                let v = pnix_expr_to_unified b.value;
+                in if is_error v then v
+                   else loop (i + 1) (acc ++ [ { name = b.pattern.name; value = v; } ])
+            else mk_error (str_cat "unsupported let binding: " b.tag);
+    in loop 0 [];
+
+  lookup_fn = t: entries:
+    let n = list_len entries;
+        loop = i:
+          if i >= n then null
+          else
+            let e = list_at entries i;
+            in if e.tag == t then e.fn else loop (i + 1);
+    in loop 0;
+
+  pnix_expr_to_unified = expr:
+    if expr ? unified then expr.unified
+    else if !(expr ? tag) then mk_error "lowering expects tagged pnix AST"
+    else
+      let t = expr.tag;
+          entries = [
+            { tag = "Int"; fn = e: u_int e.value; }
+            { tag = "Float"; fn = e: u_float e.value; }
+            { tag = "Bool"; fn = e: u_bool e.value; }
+            { tag = "Null"; fn = e: u_null; }
+            { tag = "String"; fn = e: u_string e.value; }
+            { tag = "Var"; fn = e: u_var e.name; }
+            { tag = "List"; fn = e:
+                let items = map_collect pnix_expr_to_unified e.items;
+                in if is_error items then items else u_list items; }
+            { tag = "AttrSet"; fn = e:
+                lower_attr_expr e.items e.recursive; }
+            { tag = "HasAttr"; fn = e:
+                let base = pnix_expr_to_unified e.base;
+                in if is_error base then base else u_apply "builtins.hasAttr" [ (u_string e.attr) base ]; }
+            { tag = "DynamicHasAttr"; fn = e:
+                let base = pnix_expr_to_unified e.base;
+                    attr = pnix_expr_to_unified e.attr_expr;
+                in if is_error base then base
+                   else if is_error attr then attr
+                   else u_apply "builtins.hasAttr" [ attr base ]; }
+            { tag = "Select"; fn = e:
+                let base = pnix_expr_to_unified e.base;
+                in if is_error base then base else u_apply "builtins.getAttr" [ (u_string e.attr) base ]; }
+            { tag = "SelectOrDefault"; fn = e:
+                let base = pnix_expr_to_unified e.base;
+                    defv = pnix_expr_to_unified e.default;
+                in if is_error base then base
+                   else if is_error defv then defv
+                   else
+                     let has_attr = u_apply "builtins.hasAttr" [ (u_string e.attr) base ];
+                         get_attr = u_apply "builtins.getAttr" [ (u_string e.attr) base ];
+                     in u_if has_attr get_attr defv; }
+            { tag = "Index"; fn = e:
+                let base = pnix_expr_to_unified e.base;
+                    idx = pnix_expr_to_unified e.index;
+                in if is_error base then base
+                   else if is_error idx then idx
+                   else u_apply "builtins.elemAt" [ base idx ]; }
+            { tag = "Unary"; fn = e:
+                let inner = pnix_expr_to_unified e.arg;
+                in if is_error inner then inner else u_unary e.op inner; }
+            { tag = "Binary"; fn = e:
+                let lhs = pnix_expr_to_unified e.lhs;
+                    rhs = pnix_expr_to_unified e.rhs;
+                in if is_error lhs then lhs
+                   else if is_error rhs then rhs
+                   else u_binary e.op lhs rhs; }
+            { tag = "If"; fn = e:
+                let cond = pnix_expr_to_unified e.cond;
+                    then_ = pnix_expr_to_unified e."then";
+                    else_ = pnix_expr_to_unified e."else";
+                in if is_error cond then cond
+                   else if is_error then_ then then_
+                   else if is_error else_ then else_
+                   else u_if cond then_ else_; }
+            { tag = "Let"; fn = e:
+                let bindings = lower_let_bindings e.bindings;
+                in if is_error bindings then bindings
+                   else
+                     let body = pnix_expr_to_unified e.body;
+                     in if is_error body then body
+                        else list_foldl (acc: b: u_let b.name b.value acc) body bindings; }
+            { tag = "Lambda"; fn = e:
+                if !(e.param ? tag) || e.param.tag != "Ident" then
+                  mk_error "only ident lambda params are supported"
+                else
+                  let body = pnix_expr_to_unified e.body;
+                  in if is_error body then body else u_lambda e.param.name body; }
+            { tag = "Apply"; fn = e:
+                let collected = collect_apply e [];
+                    func_expr = collected.func;
+                    select_path = expr:
+                      if !(expr ? tag) then null
+                      else if expr.tag == "Select" then
+                        let base = select_path expr.base;
+                        in if base == null then null else base ++ [ expr.attr ]
+                      else if expr.tag == "Var" then [ expr.name ]
+                      else null;
+                    func_name =
+                      if func_expr ? tag && func_expr.tag == "Var" then func_expr.name
+                      else if func_expr ? tag && func_expr.tag == "Select" then
+                        let path = select_path func_expr;
+                        in if path != null && list_len path > 0 && list_at path 0 == "builtins"
+                           then builtins.concatStringsSep "." path
+                           else null
+                      else null;
+                in if func_name == null then mk_error "only simple or builtins.* function names are supported in apply"
+                   else
+                     let args = map_collect pnix_expr_to_unified collected.args;
+                     in if is_error args then args else u_apply func_name args; }
+          ];
+          fn = lookup_fn t entries;
+      in if fn == null then mk_error (str_cat "unsupported pnix node: " t) else fn expr;
+
+  lower_unary_fx = op: args:
+    if list_len args != 1 then mk_error (str_cat "unary function expects 1 argument, got " (builtins.toString (list_len args)))
+    else fx_unary op (list_at args 0);
+
+  lower_binary_fx = op: args:
+    if list_len args != 2 then mk_error (str_cat "binary function expects 2 arguments, got " (builtins.toString (list_len args)))
+    else fx_binary op (list_at args 0) (list_at args 1);
+
+  lower_apply_fx = func: args:
+    let lowered_args = map_collect unified_to_fxcore args;
+    in if is_error lowered_args then lowered_args
+    else
+      if func == "floor" || func == "builtins.floor" then lower_unary_fx "floor" lowered_args
+      else if func == "ceil" || func == "builtins.ceil" then lower_unary_fx "ceil" lowered_args
+      else if func == "abs" || func == "builtins.abs" then lower_unary_fx "abs" lowered_args
+      else if func == "sqrt" || func == "builtins.sqrt" then lower_unary_fx "sqrt" lowered_args
+      else if func == "sin" || func == "builtins.sin" then lower_unary_fx "sin" lowered_args
+      else if func == "cos" || func == "builtins.cos" then lower_unary_fx "cos" lowered_args
+      else if func == "tan" || func == "builtins.tan" then lower_unary_fx "tan" lowered_args
+      else if func == "exp" || func == "builtins.exp" then lower_unary_fx "exp" lowered_args
+      else if func == "ln" || func == "builtins.ln" || func == "log" || func == "builtins.log" then lower_unary_fx "ln" lowered_args
+      else if func == "mod" || func == "builtins.mod" then lower_binary_fx "mod" lowered_args
+      else if func == "pow" || func == "builtins.pow" then lower_binary_fx "pow" lowered_args
+      else if func == "getAttr" || func == "builtins.getAttr" then
+        if list_len lowered_args != 2 then mk_error (str_cat "getAttr expects 2 arguments, got " (builtins.toString (list_len lowered_args)))
+        else fx_derived "get_attr" [ (list_at lowered_args 0) (list_at lowered_args 1) ]
+      else if func == "hasAttr" || func == "builtins.hasAttr" then
+        if list_len lowered_args != 2 then mk_error (str_cat "hasAttr expects 2 arguments, got " (builtins.toString (list_len lowered_args)))
+        else fx_derived "has_attr" [ (list_at lowered_args 0) (list_at lowered_args 1) ]
+      else if func == "min" || func == "builtins.min" then
+        if list_len lowered_args != 2 then mk_error (str_cat "min expects 2 arguments, got " (builtins.toString (list_len lowered_args)))
+        else
+          let a = list_at lowered_args 0;
+              b = list_at lowered_args 1;
+          in fx_let "_min_a" a (fx_let "_min_b" b (fx_if (fx_binary "lt" (fx_var "_min_a") (fx_var "_min_b")) (fx_var "_min_a") (fx_var "_min_b")))
+      else if func == "max" || func == "builtins.max" then
+        if list_len lowered_args != 2 then mk_error (str_cat "max expects 2 arguments, got " (builtins.toString (list_len lowered_args)))
+        else
+          let a = list_at lowered_args 0;
+              b = list_at lowered_args 1;
+          in fx_let "_max_a" a (fx_let "_max_b" b (fx_if (fx_binary "gt" (fx_var "_max_a") (fx_var "_max_b")) (fx_var "_max_a") (fx_var "_max_b")))
+      else
+        if list_len lowered_args == 0 then fx_var func
+        else list_foldl (acc: arg: fx_derived "apply" [ acc arg ]) (fx_var func) lowered_args;
+
+  lower_attr_pairs = pairs:
+    let n = list_len pairs;
+        loop = i: acc:
+          if i >= n then acc
+          else
+            let p = list_at pairs i;
+                v = unified_to_fxcore p.value;
+            in if is_error v then v
+               else loop (i + 1) (acc ++ [ [ p.key v ] ]);
+    in loop 0 [];
+
+  unified_to_fxcore = expr:
+    if expr ? fxcore then expr.fxcore
+    else if !(expr ? tag) then mk_error "fxcore lowering expects tagged unified AST"
+    else
+      let t = expr.tag;
+          entries = [
+            { tag = "Int"; fn = e: fx_int e.value; }
+            { tag = "Float"; fn = e: fx_float e.value; }
+            { tag = "Bool"; fn = e: fx_bool e.value; }
+            { tag = "String"; fn = e: fx_string e.value; }
+            { tag = "Var"; fn = e: fx_var e.name; }
+            { tag = "Null"; fn = e: fx_construct "Null" []; }
+            { tag = "List"; fn = e:
+                let items = map_collect unified_to_fxcore e.items;
+                in if is_error items then items else fx_list items; }
+            { tag = "AttrSet"; fn = e:
+                let pairs = lower_attr_pairs e.pairs;
+                in if is_error pairs then pairs else fx_attrset pairs; }
+            { tag = "Neg"; fn = e:
+                let inner = unified_to_fxcore e.arg;
+                in if is_error inner then inner else fx_unary "neg" inner; }
+            { tag = "Not"; fn = e:
+                let inner = unified_to_fxcore e.arg;
+                in if is_error inner then inner else fx_unary "not" inner; }
+            { tag = "Add"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "add" lhs rhs; }
+            { tag = "Concat"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "concat" lhs rhs; }
+            { tag = "Sub"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "sub" lhs rhs; }
+            { tag = "Mul"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "mul" lhs rhs; }
+            { tag = "Div"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "div" lhs rhs; }
+            { tag = "Mod"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "mod" lhs rhs; }
+            { tag = "Eq"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "eq" lhs rhs; }
+            { tag = "Ne"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "ne" lhs rhs; }
+            { tag = "Lt"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "lt" lhs rhs; }
+            { tag = "Le"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "le" lhs rhs; }
+            { tag = "Gt"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "gt" lhs rhs; }
+            { tag = "Ge"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "ge" lhs rhs; }
+            { tag = "And"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "and" lhs rhs; }
+            { tag = "Or"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "or" lhs rhs; }
+            { tag = "Merge"; fn = e:
+                let lhs = unified_to_fxcore e.lhs;
+                    rhs = unified_to_fxcore e.rhs;
+                in if is_error lhs then lhs else if is_error rhs then rhs else fx_binary "attr_set_update" lhs rhs; }
+            { tag = "If"; fn = e:
+                let cond = unified_to_fxcore e.cond;
+                    then_ = unified_to_fxcore e."then";
+                    else_ = unified_to_fxcore e."else";
+                in if is_error cond then cond else if is_error then_ then then_ else if is_error else_ then else_ else fx_if cond then_ else_; }
+            { tag = "Let"; fn = e:
+                let value = unified_to_fxcore e.value;
+                    body = unified_to_fxcore e.body;
+                in if is_error value then value else if is_error body then body else fx_let e.name value body; }
+            { tag = "Lambda"; fn = e:
+                let body = unified_to_fxcore e.body;
+                in if is_error body then body else fx_lambda e.param body; }
+            { tag = "Throw"; fn = e: fx_throw e.message; }
+            { tag = "Construct"; fn = e:
+                let args = map_collect unified_to_fxcore e.args;
+                in if is_error args then args else fx_construct e.variant args; }
+            { tag = "Apply"; fn = e: lower_apply_fx e.func e.args; }
+          ];
+          fn = lookup_fn t entries;
+      in if fn == null then mk_error (str_cat "unsupported unified node: " t) else fn expr;
+
+  lower_to_fx_core = input:
+    if input ? fxcore then input.fxcore
+    else
+      let unified = pnix_expr_to_unified input;
+      in if is_error unified then unified else unified_to_fxcore unified;
+
+  stdlib_aliases = {
+    "String.concat" = "concat";
+    "String.slice" = "slice";
+    "String.length" = "stringLength";
+    "String.split" = "split";
+    "String.join" = "join";
+    "List.map" = "map";
+    "List.filter" = "filter";
+    "List.fold" = "fold";
+    "List.find" = "find";
+    "List.sort" = "sort";
+    "List.reverse" = "reverse";
+    "List.take" = "take";
+    "List.drop" = "drop";
+    "List.zip" = "zip";
+    "List.flatten" = "flatten";
+    "AttrSet.get" = "mapGet";
+    "AttrSet.set" = "mapSet";
+    "AttrSet.keys" = "mapKeys";
+    "AttrSet.values" = "mapValues";
+    "AttrSet.merge" = "mapMerge";
+    "Html.parse" = "htmlParse";
+    "Html.emit" = "htmlEmit";
+    "Xml.parse" = "xmlParse";
+    "Xml.emit" = "xmlEmit";
+    "schema.validate" = "schemaValidate";
+    "schema.normalize" = "schemaNormalize";
+    "schema.explain" = "schemaExplain";
+    "py.abs" = "abs";
+    "py.add" = "add";
+    "py.and" = "and";
+    "py.cos" = "cos";
+    "py.div" = "div";
+    "py.eq" = "eq";
+    "py.exp" = "exp";
+    "py.gt" = "gt";
+    "py.log2" = "log2";
+    "py.lt" = "lt";
+    "py.mod" = "mod";
+    "py.mul" = "mul";
+    "py.neg" = "neg";
+    "py.sin" = "sin";
+    "py.sqrt" = "sqrt";
+    "py.sub" = "sub";
+  };
+
+  builtin_catalog = {
+    add = { input = "Num"; output = "Num"; effect = "pure"; };
+    sub = { input = "Num"; output = "Num"; effect = "pure"; };
+    mul = { input = "Num"; output = "Num"; effect = "pure"; };
+    div = { input = "Num"; output = "Num"; effect = "pure"; };
+    mod = { input = "Int"; output = "Int"; effect = "pure"; };
+    neg = { input = "Num"; output = "Num"; effect = "pure"; };
+    abs = { input = "Num"; output = "Num"; effect = "pure"; };
+    sin = { input = "Float"; output = "Float"; effect = "pure"; };
+    cos = { input = "Float"; output = "Float"; effect = "pure"; };
+    tan = { input = "Float"; output = "Float"; effect = "pure"; };
+    sqrt = { input = "Float"; output = "Float"; effect = "pure"; };
+    exp = { input = "Float"; output = "Float"; effect = "pure"; };
+    ln = { input = "Float"; output = "Float"; effect = "pure"; };
+    log = { input = "Float"; output = "Float"; effect = "pure"; };
+    log2 = { input = "Float"; output = "Float"; effect = "pure"; };
+    floor = { input = "Float"; output = "Int"; effect = "pure"; };
+    ceil = { input = "Float"; output = "Int"; effect = "pure"; };
+    eq = { input = "Num"; output = "Bool"; effect = "pure"; };
+    ne = { input = "Num"; output = "Bool"; effect = "pure"; };
+    lt = { input = "Num"; output = "Bool"; effect = "pure"; };
+    le = { input = "Num"; output = "Bool"; effect = "pure"; };
+    gt = { input = "Num"; output = "Bool"; effect = "pure"; };
+    ge = { input = "Num"; output = "Bool"; effect = "pure"; };
+    and = { input = "Bool"; output = "Bool"; effect = "pure"; };
+    or = { input = "Bool"; output = "Bool"; effect = "pure"; };
+    schemaValidate = { input = "Any"; output = "AttrSet"; effect = "pure"; };
+    schemaNormalize = { input = "Any"; output = "Any"; effect = "pure"; };
+    schemaExplain = { input = "Any"; output = "String"; effect = "pure"; };
+  };
+
+  builtin_has = name: builtins.hasAttr name builtin_catalog;
+
+  normalize_builtin_uses = name:
+    if builtins.match "^builtins\\." name != null then
+      let stripped = substr name 9 ((str_len name) - 9);
+      in if builtin_has stripped then stripped else null
+    else if builtins.hasAttr name stdlib_aliases && builtin_has (builtins.getAttr name stdlib_aliases) then
+      builtins.getAttr name stdlib_aliases
+    else if builtin_has name then name else null;
+
+  morphism_simple = name: input: output: effect: {
+    name = name;
+    input = input;
+    output = output;
+    inputs = [ { name = "in"; ty = input; } ];
+    outputs = [ { name = "out"; ty = output; } ];
+    effect = effect;
+  };
+
+  normalize_cost = c:
+    if c == "tiny" then "tiny"
+    else if c == "light" then "light"
+    else if c == "heavy" then "heavy"
+    else if c == "xheavy" then "xheavy"
+    else "medium";
+
+  normalize_policy = p:
+    if p == "failfast" then "failfast"
+    else if p == "isolate" then "isolate"
+    else "best_effort";
+
+  cond_refs = cond:
+    if cond == null then []
+    else if cond ? when then [ cond.when ]
+    else if cond ? unless then [ cond.unless ]
+    else if cond ? onfail then [ cond.onfail ]
+    else if cond ? when_unless then [ cond.when_unless.when cond.when_unless.unless ]
+    else if cond ? all_when then cond.all_when
+    else if cond ? all_unless then cond.all_unless
+    else [];
+
+  cond_is_onfail = cond: cond != null && (cond ? onfail);
+
+  compute_stage = fx:
+    if list_len fx.scopes > 0 then 4
+    else if list_any (e: cond_is_onfail e.cond) fx.edges then 4
+    else if list_any (e: e.cond != null) fx.edges then 3
+    else if list_any (n: n.optional) fx.nodes then 3
+    else if list_any (n: n.kind == "gate") fx.nodes then 3
+    else if list_len fx.inputs > 0 then 2
+    else if list_any (e: e.from_port != null || e.to_port != null) fx.edges then 2
+    else 1;
+
+  compile_module_ast = input:
+    if input ? fxcore then input.fxcore
+    else
+      let items = expect_attrset_items input "module";
+      in if is_error items then items
+      else
+        let pairs = attrset_pairs items "module";
+            allowed = [ "imports" "name" "types" "adt_types" "inputs" "externs" "nodes" "edges" "scopes" ];
+            ok = if is_error pairs then pairs else check_unknown_keys pairs allowed "module";
+            imports = if pairs_has pairs "imports" then expect_string_list (pairs_get pairs "imports") "module.imports" else [];
+        in if is_error ok then ok
+           else if is_error imports then imports
+           else if list_len imports > 0 then mk_error "module.imports are not supported in pnixc-pnix runtime (no IO)"
+           else
+             let name = if pairs_has pairs "name" then expect_string (pairs_get pairs "name") "module.name" else "module";
+                 types0 = if pairs_has pairs "types" then expect_string_list (pairs_get pairs "types") "module.types" else [];
+                 adt_types = if pairs_has pairs "adt_types" then parse_adt_types (pairs_get pairs "adt_types") "module.adt_types" else [];
+                 inputs = if pairs_has pairs "inputs" then parse_inputs (pairs_get pairs "inputs") "module.inputs" else [];
+                 externs = if pairs_has pairs "externs" then parse_externs (pairs_get pairs "externs") "module.externs" else [];
+                 nodes = if pairs_has pairs "nodes" then parse_nodes (pairs_get pairs "nodes") "module.nodes" else [];
+                 edges = if pairs_has pairs "edges" then parse_edges (pairs_get pairs "edges") "module.edges" else [];
+                 scopes = if pairs_has pairs "scopes" then parse_scopes (pairs_get pairs "scopes") "module.scopes" else [];
+             in if is_error name then name
+                else if is_error types0 then types0
+                else if is_error adt_types then adt_types
+                else if is_error inputs then inputs
+                else if is_error externs then externs
+                else if is_error nodes then nodes
+                else if is_error edges then edges
+                else if is_error scopes then scopes
+                else
+                  let types = types0 ++ (list_map (t: t.name) adt_types);
+                      extern_names = list_map (e: e.name) externs;
+                      normalize_nodes = let ncount = list_len nodes;
+                                            loop = i: acc_nodes: acc_builtins:
+                                              if i >= ncount then { nodes = acc_nodes; used_builtins = acc_builtins; }
+                                              else
+                                                let n = list_at nodes i;
+                                                    uses = n.uses;
+                                                    is_extern = list_any (x: x == uses) extern_names;
+                                                in if is_extern then loop (i + 1) (acc_nodes ++ [ n ]) acc_builtins
+                                                   else
+                                                     let normalized = normalize_builtin_uses uses;
+                                                     in if normalized == null then mk_error (str_cat "unresolved symbol: unknown morphism/builtin: " (str_cat uses " (not in spec catalog)"))
+                                                        else
+                                                          let acc_builtins2 = if list_any (x: x == normalized) acc_builtins then acc_builtins else acc_builtins ++ [ normalized ];
+                                                          in loop (i + 1) (acc_nodes ++ [ (n // { uses = normalized; }) ]) acc_builtins2;
+                                            in loop 0 [] [];
+                  in if is_error normalize_nodes then normalize_nodes
+                     else
+                       let norm_nodes = normalize_nodes.nodes;
+                           used_builtins = normalize_nodes.used_builtins;
+                           builtin_morphisms = list_map (b:
+                             let decl = builtins.getAttr b builtin_catalog;
+                             in morphism_simple b decl.input decl.output decl.effect
+                           ) used_builtins;
+                           morphisms = externs ++ builtin_morphisms;
+                           morphism_map = builtins.listToAttrs (list_map (m: { name = m.name; value = m; }) morphisms);
+                           scope_policies = builtins.listToAttrs (list_map (s: { name = s.name; value = normalize_policy s.policy; }) scopes);
+                           scope_policy = name: if builtins.hasAttr name scope_policies then builtins.getAttr name scope_policies else "best_effort";
+                           node_scopes = builtins.listToAttrs (list_map (n: { name = n.name; value = if n.scope == null then "global" else n.scope; }) norm_nodes);
+                           node_names = list_map (n: n.name) norm_nodes;
+                           validate_edges =
+                             let nedge = list_len edges;
+                                 loop = i:
+                                   if i >= nedge then true
+                                   else
+                                     let e = list_at edges i;
+                                         to_scope = if builtins.hasAttr e.to node_scopes then builtins.getAttr e.to node_scopes else null;
+                                     in if e.from_input == null then
+                                          let from_scope = if builtins.hasAttr e.from node_scopes then builtins.getAttr e.from node_scopes else null;
+                                          in if from_scope != null && to_scope != null && from_scope != to_scope && scope_policy from_scope == "isolate"
+                                             then mk_error (str_cat "edge `" (str_cat e.from (str_cat "` -> `" (str_cat e.to "` crosses isolate scope boundary"))))
+                                             else
+                                               let conds = cond_refs e.cond;
+                                                   ncond = list_len conds;
+                                                   loopc = j:
+                                                     if j >= ncond then loop (i + 1)
+                                                     else
+                                                       let gate = list_at conds j;
+                                                       in if builtins.hasAttr gate node_scopes then
+                                                            let gate_scope = builtins.getAttr gate node_scopes;
+                                                            in if to_scope != null && gate_scope != to_scope && scope_policy gate_scope == "isolate"
+                                                               then mk_error (str_cat "edge `" (str_cat e.from (str_cat "` -> `" (str_cat e.to (str_cat "` uses gate `" (str_cat gate "` crossing isolate scope boundary"))))))
+                                                               else loopc (j + 1)
+                                                          else loopc (j + 1);
+                                               in loopc 0
+                                        else loop (i + 1);
+                             in loop 0;
+                       in if is_error validate_edges then validate_edges
+                          else
+                            let edge_key = e: str_cat e.from (str_cat "->" e.to);
+                                dep_set = list_foldl (acc: e:
+                                  if e.from_input == null && e.to_port == null then
+                                    let key = edge_key e;
+                                    in if list_any (x: x == key) acc then acc else acc ++ [ key ]
+                                  else acc
+                                ) [] edges;
+                                edges_ext =
+                                  let nedge = list_len edges;
+                                      loop = i: acc_edges: acc_dep:
+                                        if i >= nedge then acc_edges
+                                        else
+                                          let e = list_at edges i;
+                                              refs = cond_refs e.cond;
+                                              nref = list_len refs;
+                                              loopr = j: acc_edges2: acc_dep2:
+                                                if j >= nref then { edges = acc_edges2; deps = acc_dep2; }
+                                                else
+                                                  let gate = list_at refs j;
+                                                      key = str_cat gate (str_cat "->" e.to);
+                                                  in if list_any (x: x == gate) node_names && !(list_any (x: x == key) acc_dep2) then
+                                                       let edge = { from = gate; to = e.to; from_port = null; to_port = null; from_input = null; cond = null; };
+                                                       in loopr (j + 1) (acc_edges2 ++ [ edge ]) (acc_dep2 ++ [ key ])
+                                                     else loopr (j + 1) acc_edges2 acc_dep2;
+                                              res = if e.cond != null then loopr 0 acc_edges acc_dep else { edges = acc_edges; deps = acc_dep; };
+                                          in loop (i + 1) res.edges res.deps;
+                                  in loop 0 edges dep_set;
+                                fx_inputs = list_map (i: { name = i.name; ty = i.ty; }) inputs;
+                                fx_nodes_raw =
+                                  let nn = list_len norm_nodes;
+                                      loop = i: acc:
+                                        if i >= nn then acc
+                                        else
+                                          let n = list_at norm_nodes i;
+                                              uses = n.uses;
+                                          in if !(builtins.hasAttr uses morphism_map) then mk_error (str_cat "unknown morphism: " uses)
+                                             else
+                                               let morph = builtins.getAttr uses morphism_map;
+                                                   req_inputs = list_map (p: p.name) morph.inputs;
+                                                   scope = if n.scope == null then "global" else n.scope;
+                                                   policy = scope_policy scope;
+                                                   may_skip = n.optional || policy == "isolate" || policy == "best_effort";
+                                                   skip_policy = if n.optional then "skip" else "error";
+                                                   kind = if n.kind == "gate" then "gate" else "normal";
+                                               in loop (i + 1) (acc ++ [ {
+                                                    name = n.name;
+                                                    uses = uses;
+                                                    kind = kind;
+                                                    optional = n.optional;
+                                                    scope = scope;
+                                                    cost = normalize_cost n.cost;
+                                                    priority = n.priority;
+                                                    contract = { required_inputs = req_inputs; may_skip = may_skip; skip_policy = skip_policy; };
+                                                  } ]);
+                                  in loop 0 [];
+                            in if is_error fx_nodes_raw then fx_nodes_raw
+                            else
+                              let fx_nodes = fx_nodes_raw;
+                                  edge_finalize = e:
+                                    { from = e.from; to = e.to; }
+                                    // (if e.from_port != null then { from_port = e.from_port; } else {})
+                                    // (if e.to_port != null then { to_port = e.to_port; } else {})
+                                    // (if e.from_input != null then { from_input = e.from_input; } else {})
+                                    // (if e.cond != null then { cond = e.cond; } else {});
+                                  edges_final = list_map edge_finalize edges_ext;
+                                  fx_scopes =
+                                    let ns = list_len scopes;
+                                        loop = i: acc:
+                                          if i >= ns then acc
+                                          else
+                                            let s = list_at scopes i;
+                                                nodes_in_scope = list_map (n: n.name) (list_filter (n: (if n.scope == null then "global" else n.scope) == s.name) norm_nodes);
+                                            in loop (i + 1) (acc ++ [ { name = s.name; nodes = nodes_in_scope; policy = normalize_policy s.policy; } ]);
+                                    in loop 0 [];
+                                  fxcore_base = {
+                                    meta = { version = "fxcore@0.1"; stage = 1; };
+                                    name = name;
+                                    types = types;
+                                    adt_types = adt_types;
+                                    inputs = fx_inputs;
+                                    morphisms = morphisms;
+                                    nodes = fx_nodes;
+                                    edges = edges_final;
+                                    scopes = fx_scopes;
+                                  };
+                                  fxcore = fxcore_base // (if list_len adt_types > 0 then { adttypes = adt_types; } else {});
+                                  stage = compute_stage fxcore;
+                              in fxcore // { meta = { version = "fxcore@0.1"; stage = stage; }; };
+
+  compile_expr = input:
+    let ast = parse_expr input;
+    in if ast ? status then ast else lower_to_fx_core ast;
+
+  compile_module = input:
+    let module = parse_module input;
+    in if module ? status then module else compile_module_ast module;
+
+  sort_by_key = key: xs:
+    if !is_list xs then xs
+    else builtins.sort (a: b:
+      let av = if is_attrs a && builtins.hasAttr key a then builtins.getAttr key a else "";
+          bv = if is_attrs b && builtins.hasAttr key b then builtins.getAttr key b else "";
+      in av < bv
+    ) xs;
+
+  canonicalize_json = v:
+    if is_attrs v then
+      builtins.listToAttrs (list_map (k: { name = k; value = canonicalize_json (builtins.getAttr k v); }) (builtins.attrNames v))
+    else if is_list v then list_map canonicalize_json v
+    else v;
+
+  normalize_fxcore = v:
+    if is_attrs v && v ? morphisms && is_list v.morphisms then
+      canonicalize_json (v // { morphisms = sort_by_key "name" v.morphisms; })
+    else canonicalize_json v;
+
+  normalize_ssa = v:
+    if is_attrs v && v ? blocks && is_list v.blocks then
+      canonicalize_json (v // { blocks = sort_by_key "label" v.blocks; })
+    else canonicalize_json v;
+
+  indent_str = n:
+    let loop = i: acc:
+      if i >= n then acc else loop (i + 1) (str_cat acc "  ");
+    in loop 0 "";
+
+  json_pretty_indent = indent: v:
+    if is_attrs v then
+      let keys = builtins.attrNames v;
+          lines = list_map (k: str_cat (indent_str (indent + 1)) (str_cat (builtins.toJSON k) (str_cat ": " (json_pretty_indent (indent + 1) (builtins.getAttr k v))))) keys;
+      in if list_len keys == 0 then "{}"
+         else str_cat "{\n" (str_cat (builtins.concatStringsSep ",\n" lines) (str_cat "\n" (str_cat (indent_str indent) "}")))
+    else if is_list v then
+      let n = list_len v;
+          lines = list_map (item: str_cat (indent_str (indent + 1)) (json_pretty_indent (indent + 1) item)) v;
+      in if n == 0 then "[]"
+         else str_cat "[\n" (str_cat (builtins.concatStringsSep ",\n" lines) (str_cat "\n" (str_cat (indent_str indent) "]")))
+    else builtins.toJSON v;
+
+  json_pretty = v: json_pretty_indent 0 v;
+
+  emit_ir = fxcore:
+    let fx = unwrap_fxcore fxcore;
+        norm = normalize_fxcore fx;
+        out = json_pretty norm;
+    in
+    {
+      format = "fxcore-json";
+      status = "ok";
+      value = out;
+    };
+
+  emit_ssa = fxcore:
+    let fx = unwrap_fxcore fxcore;
+        norm = normalize_ssa fx;
+        out = json_pretty norm;
+    in
+    {
+      format = "fxcore-ssa-json";
+      status = "ok";
+      value = out;
+    };
+
+  emit_aot = fxcore:
+    let fx = unwrap_fxcore fxcore; in
+    {
+      format = "native";
+      status = "ok";
+      value = fx;
+    };
+
+  notes = [
+    "phase3 parser: pnix-subset-v1 (pure, deterministic)"
+    "phase4 lowering: pnix AST -> unified -> fxcore expr (subset)"
+    "phase5 emit: deterministic JSON for fxcore/ssa"
+    "list items accept full expr without implicit apply (apply requires parentheses)"
+  ];
+}

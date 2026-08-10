@@ -1,0 +1,190 @@
+# stdlib.lib.math.probability
+#
+# OWNER-LAW (v0.12-AAG, div-math, 2026-05-21): exact discrete
+# probability.
+#
+# statistics.px summarises data that has already happened. This
+# owner reasons about data that MIGHT happen -- discrete
+# probability. Every probability here is an exact rational in
+# [0, 1]; there is no floating point and no rounding. The
+# probability of rolling a six is exactly 1/6, not 0.1666...
+#
+# # The probability laws, as exact rational arithmetic
+#
+#   complement p          = 1 - p
+#   andIndependent p q    = p * q
+#   orDisjoint p q        = p + q          (mutually exclusive)
+#   orInclusive p q       = p + q - p*q    (general union)
+#   conditional pAB pB    = P(A and B) / P(B)
+#   binomialProbability   = C(n,k) * p^k * (1-p)^(n-k)
+#
+# The binomial case is the payoff: the probability of exactly k
+# successes in n independent trials, computed as ONE exact
+# rational, reusing combinatorics.px for the binomial coefficient.
+#
+# # Kernel layering
+#
+# probability -> { rational, combinatorics } -> number-theory.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT continuous probability -- no densities, no integrals.
+#   - NOT a random-number generator -- it computes probabilities,
+#     it does not sample. Sampling is non-deterministic and has no
+#     place in this substrate.
+#   - NOT Bayesian inference machinery beyond one conditional step.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/probability.px";
+
+  rational = import ./rational.px;
+  combinatorics = import ./combinatorics.px;
+
+  # Integer power base^exp (exp >= 0).
+  intPow = base: exp:
+    if exp == 0 then 1 else base * (intPow base (exp - 1));
+
+  # A probability as an exact rational favorable / total.
+  probability = favorable: total:
+    rational.mkRational favorable total;
+
+  # The complement: 1 - p.
+  complementProbability = p:
+    rational.ratSub rational.ratOne p;
+
+  # Independent conjunction: P(A and B) = P(A) * P(B).
+  andIndependent = p: q: rational.ratMul p q;
+
+  # Disjoint disjunction: P(A or B) = P(A) + P(B) when A and B are
+  # mutually exclusive.
+  orDisjoint = p: q: rational.ratAdd p q;
+
+  # General disjunction (inclusion-exclusion): P(A or B) =
+  # P(A) + P(B) - P(A)*P(B), for independent A and B.
+  orInclusive = p: q:
+    rational.ratSub (rational.ratAdd p q) (rational.ratMul p q);
+
+  # Conditional probability P(A | B) = P(A and B) / P(B).
+  conditional = pAB: pB: rational.ratDiv pAB pB;
+
+  # The exact probability of exactly `k` successes in `n`
+  # independent trials each with success probability pn/pd:
+  #   C(n,k) * (pn/pd)^k * ((pd-pn)/pd)^(n-k)
+  # = C(n,k) * pn^k * (pd-pn)^(n-k) / pd^n
+  binomialProbability = n: k: pn: pd:
+    let
+      coeff = combinatorics.binomial n k;
+      successPow = intPow pn k;
+      failPow = intPow (pd - pn) (n - k);
+      denom = intPow pd n;
+    in rational.mkRational (coeff * successPow * failPow) denom;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "probability"
+    "complement"
+    "and-independent"
+    "or-disjoint"
+    "or-inclusive"
+    "conditional"
+    "binomial"
+  ];
+
+  # A probability is valid iff it lies in [0, 1]: 0 <= num <= den
+  # for the reduced rational (den is always > 0).
+  inUnitInterval = r: r.num >= 0 && r.num <= r.den;
+
+  probEnvelope = op: r: {
+    outcome = "probability-computed";
+    operation = op;
+    num = r.num;
+    den = r.den;
+    text = rational.ratToString r;
+  };
+
+  applyProbability = request:
+    let
+      op = request.operation;
+      pn = if request ? pn then request.pn else 0;
+      pd = if request ? pd then request.pd else 1;
+      qn = if request ? qn then request.qn else 0;
+      qd = if request ? qd then request.qd else 1;
+      n  = if request ? n then request.n else 0;
+      k  = if request ? k then request.k else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if pd <= 0 || qd <= 0 then {
+        outcome = "held-non-positive-denominator";
+        operation = op;
+      }
+      else if op == "probability" then
+        if pn < 0 || pn > pd then {
+          outcome = "held-not-a-probability";
+          operation = op;
+          reason = "favorable must satisfy 0 <= favorable <= total";
+        }
+        else probEnvelope op (probability pn pd)
+      else if op == "binomial" then
+        if k < 0 || k > n || pn < 0 || pn > pd then {
+          outcome = "held-not-a-probability";
+          operation = op;
+          reason = "need 0 <= k <= n and 0 <= pn <= pd";
+        }
+        else probEnvelope op (binomialProbability n k pn pd)
+      else
+        let
+          p = rational.mkRational pn pd;
+          q = rational.mkRational qn qd;
+        in
+          if !(inUnitInterval p)
+             || (builtins.elem op [ "and-independent" "or-disjoint"
+                                    "or-inclusive" "conditional" ]
+                 && !(inUnitInterval q)) then {
+            outcome = "held-not-a-probability";
+            operation = op;
+            reason = "every probability must lie in [0, 1]";
+          }
+          else if op == "complement" then
+            probEnvelope op (complementProbability p)
+          else if op == "and-independent" then
+            probEnvelope op (andIndependent p q)
+          else if op == "or-disjoint" then
+            probEnvelope op (orDisjoint p q)
+          else if op == "or-inclusive" then
+            probEnvelope op (orInclusive p q)
+          else
+            # op == "conditional" -- P(A|B) needs P(B) > 0
+            if rational.ratIsZero q then {
+              outcome = "held-conditioning-on-zero";
+              operation = op;
+              reason = "P(A | B) is undefined when P(B) = 0";
+            }
+            else probEnvelope op (conditional p q);
+
+in {
+  inherit
+    ownerName
+    intPow
+    probability
+    complementProbability
+    andIndependent
+    orDisjoint
+    orInclusive
+    conditional
+    binomialProbability
+    inUnitInterval
+    knownOperations
+    applyProbability;
+  meta = {
+    source = "stdlib math probability";
+    owner = ownerName;
+    base = "parametric-math-probability-v0";
+    rev_note = "v0.12-AAG (div-math): exact discrete probability owner. Every probability is an exact rational in [0,1] -- no floating point. complement / independent-and / disjoint-or / inclusive-or / conditional, and the binomial distribution P(X=k) = C(n,k) p^k (1-p)^(n-k) as one exact rational. Kernel layering: probability -> {rational, combinatorics}. NOT continuous probability, NOT a random-number generator (it computes probabilities, never samples), NOT yet a registered lens.";
+  };
+}

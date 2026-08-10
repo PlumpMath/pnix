@@ -1,0 +1,44 @@
+# UniProtKB result field catalog -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No protein records/sequences/annotations/graph wiring.
+let
+  B = builtins;
+  genPath = ./uniprot-field-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "bio.uniprot.field_catalog.v1";
+    source = "UniProtKB result field catalog";
+    license = "CC-BY-4.0 / UniProt attribution required";
+    policy = "field/group metadata only";
+    summary = { groups = 0; fields = 0; };
+    manifest = { }; groups = [ ]; fields = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "uniprot-field-catalog-load-v0";
+      source_lens = "stdlib/lib/corpus/uniprot-field-catalog-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "bio.uniprot.field_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "uniprot-field-catalog-query-v0";
+      source_lens = "stdlib/lib/corpus/uniprot-field-catalog-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "bio.uniprot.field_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

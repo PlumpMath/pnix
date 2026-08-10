@@ -1,0 +1,87 @@
+# stdlib.agent.conversation-base-korean-dialogue-facts-contract — base dialogue facts law.
+#
+# Phase 145++++++++++(g) (vpl-gate.md 10.7 헌법):
+#   "한국어 dialogue envelope 의 base fact set (어느 fact id /
+#    context / subj / pred 5-tuple 이 정본인지) = substrate."
+#
+# Rust `base_korean_dialogue_facts` 의 hardcoded 5-fact template 을
+# substrate `.px` registry table 로 evacuate. obj 값 (route / utterance /
+# normalized_key / semantic_key) 는 host 계산.
+#
+# request shape (POST):
+#   { utterance = string;
+#     route = string;
+#     normalized_key = string;
+#     semantic_key = string; }
+#
+# response shape:
+#   { kind = "conversation-base-korean-dialogue-facts-envelope";
+#     verdict = "facts-emitted";
+#     facts = [ { id; context; subj; pred; obj; } ... ];
+#     count = 5;
+#     candidate_only = true; }
+let
+  ownerName = "stdlib.agent.conversation-base-korean-dialogue-facts-contract";
+
+  asAttrs = v: if builtins.isAttrs v then v else {};
+  nonBlank = v: if builtins.isString v && v != "" then v else null;
+  getOr = name: attrs: fb:
+    if builtins.isAttrs attrs && builtins.hasAttr name attrs
+    then builtins.getAttr name attrs else fb;
+
+in {
+  inherit ownerName;
+
+  dispatch = req:
+    let
+      body = asAttrs (req.body or {});
+      utterance = orElse (nonBlank (getOr "utterance" body "")) "";
+      route = orElse (nonBlank (getOr "route" body "")) "";
+      normalizedKey = orElse (nonBlank (getOr "normalized_key" body "")) "";
+      semanticKey = orElse (nonBlank (getOr "semantic_key" body "")) "";
+      orElse = v: fb: if v == null then fb else v;
+    in {
+      kind = "conversation-base-korean-dialogue-facts-envelope";
+      owner = ownerName;
+      verdict = "facts-emitted";
+      facts = [
+        {
+          id = "fact.doghouse.language";
+          context = "Dialogue.Korean";
+          subj = "utterance";
+          pred = "language";
+          obj = "ko";
+        }
+        {
+          id = "fact.doghouse.route";
+          context = "Doghouse.Service";
+          subj = "doghouse";
+          pred = "service-route";
+          obj = route;
+        }
+        {
+          id = "fact.doghouse.utterance";
+          context = "Dialogue.Korean";
+          subj = "user";
+          pred = "utterance-text";
+          obj = utterance;
+        }
+        {
+          id = "fact.doghouse.utterance.normalized";
+          context = "Dialogue.Korean";
+          subj = "user";
+          pred = "utterance-normalized";
+          obj = normalizedKey;
+        }
+        {
+          id = "fact.doghouse.utterance.semantic";
+          context = "Dialogue.Korean";
+          subj = "user";
+          pred = "utterance-semantic-key";
+          obj = semanticKey;
+        }
+      ];
+      count = 5;
+      candidate_only = true;
+    };
+}

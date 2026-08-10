@@ -1,0 +1,292 @@
+# stdlib.lib.ontology.discourse-state-projection
+#
+# Candidate bridge from materialized context view to the existing discourse-state
+# owner. It classifies a turn and exports discourse anchors, but does not append
+# to persistent discourse state, write memory/DB, or promote facts.
+let
+  ownerName = "stdlib.lib.ontology.discourse-state-projection";
+
+  materializedViewOwner = import ./materialized-context-view.px;
+  discourseState = import ../gate/algorithm-synthesis/discourse-state.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  materializedViewFrom = req:
+    if hasAttr req "materialized_context_view" && builtins.isAttrs req.materialized_context_view then
+      req.materialized_context_view
+    else if hasAttr req "materialized_context_view_contract" && builtins.isAttrs req.materialized_context_view_contract then
+      req.materialized_context_view_contract
+    else if hasAttr req "plan" && builtins.isAttrs req.plan then
+      req.plan
+    else { };
+
+  sourceViewOk = plan:
+    builtins.isAttrs plan
+    && stringAttrOr plan "schema" "" == "puncheetah.ontology-materialized-context-view.v0"
+    && stringAttrOr plan "outcome" "" == "ontology-materialized-context-view-built"
+    && getBool plan "verified" false == true
+    && getBool plan "materialized_context_view_contract_built" false == true
+    && getBool plan "source_semantic_chain_traversal_verified" false == true
+    && getBool plan "candidate_only" false == true
+    && getBool plan "materialized_context_graph_write_allowed" true == false
+    && getBool plan "materialized_view_write_allowed" true == false
+    && getBool plan "fact_index_write_allowed" true == false
+    && getBool plan "discourse_state_write_allowed" true == false
+    && getBool plan "ontology_query_allowed" true == false
+    && getBool plan "ontology_emit_allowed" true == false
+    && getBool plan "ontology_promote_allowed" true == false
+    && getBool plan "accepted_fact_promotion_allowed" true == false
+    && getBool plan "learning_promotion_allowed" true == false
+    && getBool plan "memory_write_allowed" true == false
+    && getBool plan "db_write_allowed" true == false
+    && getBool plan "policy_persistence_allowed" true == false;
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "discourse_state_write_requested" false
+    || getBool req "discourse_state_append_requested" false
+    || getBool req "discourse_state_persistence_requested" false
+    || getBool req "materialized_context_graph_write_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  turnFrom = req: source:
+    if hasAttr req "turn" && builtins.isAttrs req.turn then
+      req.turn
+    else {
+      turn_id = stringAttrOr req "turn_id" "";
+      thread_id = stringAttrOr req "thread_id" "";
+      actor_id = stringAttrOr req "actor_id" "";
+      tenant_id = stringAttrOr req "tenant_id" "";
+      utterance_digest = stringAttrOr source "trigger_fact_key" "";
+      stored_at_ms = getAttrOr req "stored_at_ms" 1;
+      derived_intent = "ontology-materialized-context-view";
+      utterance_summary = "materialized context view " + stringAttrOr source "from_context" "";
+      active_held_kind = null;
+      target_path = null;
+      language = "px";
+    };
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.ontology-discourse-state-projection.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    discourse_state_projection_built = false;
+    source_materialized_context_view_verified = false;
+    candidate_only = true;
+    discourse_state_write_allowed = false;
+    discourse_state_append_allowed = false;
+    discourse_state_persistence_allowed = false;
+    materialized_context_graph_write_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    reason = reason;
+    negative_receipt = {
+      kind = "ontology-discourse-state-projection-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "discourse-state projection bridge cannot append/write discourse state, persist, query/emit/promote ontology facts, write memory/DB, or accept facts";
+    };
+    receipt = {
+      kind = "ontology-discourse-state-projection-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      discourse_state_write_allowed = false;
+      discourse_state_append_allowed = false;
+      discourse_state_persistence_allowed = false;
+      accepted_fact_promotion_allowed = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName;
+
+  buildOntologyDiscourseStateProjection = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-ontology-discourse-state-projection-non-attr-request" "Discourse-state projection request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-ontology-discourse-state-projection-effect-blocked" "Discourse-state projection is contract-only; it cannot append/write/persist discourse state, query/emit/promote ontology facts, write memory/DB, route, or write code." { }
+    else
+      let
+        source = materializedViewFrom req;
+        turn = turnFrom req source;
+        thread =
+          if hasAttr req "thread_snapshot" then req.thread_snapshot else null;
+        classification = discourseState.classifyTurn {
+          turn = turn;
+          thread = thread;
+        };
+        ready = stringAttrOr classification "verdict" "" == "discourse-state-ready";
+        snapshot =
+          if ready then discourseState.appendTurn thread turn else null;
+        anchors =
+          if ready then discourseState.exportAnchors snapshot else null;
+        persistencePlan =
+          if ready then discourseState.buildPersistencePlan snapshot turn else null;
+      in
+        if source == { } then
+          mkHeld "held-ontology-discourse-state-projection-source-required" "Discourse-state projection requires a verified materialized context view contract." { }
+        else if !sourceViewOk source then
+          mkHeld "held-ontology-discourse-state-projection-source-unverified" "Discourse-state projection requires a verified effect-locked materialized context view contract." {
+            materialized_context_view = source;
+          }
+        else if !ready then
+          mkHeld "held-ontology-discourse-state-projection-turn-not-ready" "Discourse-state owner did not classify the projected turn as ready." {
+            turn = turn;
+            discourse_state_classification = classification;
+          }
+        else {
+          schema = "puncheetah.ontology-discourse-state-projection.v0";
+          owner = ownerName;
+          outcome = "ontology-discourse-state-projection-built";
+          is_held = false;
+          verified = true;
+          discourse_state_projection_built = true;
+          source_materialized_context_view_verified = true;
+          candidate_only = true;
+          turn_id = turn.turn_id;
+          thread_id = turn.thread_id;
+          actor_id = turn.actor_id;
+          tenant_id = turn.tenant_id;
+          discourse_state_classification = classification;
+          discourse_state_projection = {
+            kind = "ontology-discourse-state-projection-v0";
+            status = "Candidate";
+            turn = turn;
+            snapshot_candidate = snapshot;
+            exported_anchors = anchors;
+            persistence_plan_candidate = persistencePlan;
+            persistence_writes_allowed = false;
+            discourse_state_write_allowed = false;
+            discourse_state_append_allowed = false;
+            discourse_state_persistence_allowed = false;
+            receipt_required = true;
+            candidate_only = true;
+          };
+          source_owner_reuse = {
+            materialized_context_view_owner = materializedViewOwner.ownerName;
+            discourse_state_owner = discourseState.ownerName;
+            discourse_state_classify_reused = true;
+            discourse_state_export_anchors_reused = true;
+            discourse_state_write_replaced = false;
+            discourse_state_persistence_replaced = false;
+            pnix_db_append_gate_replaced = false;
+          };
+          next_gate = "response-assembly-surface";
+          discourse_state_write_allowed = false;
+          discourse_state_append_allowed = false;
+          discourse_state_persistence_allowed = false;
+          materialized_context_graph_write_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "ontology-discourse-state-projection-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "ontology-discourse-state-projection-built";
+            turn_id = turn.turn_id;
+            thread_id = turn.thread_id;
+            next_gate = "response-assembly-surface";
+            invariant = "discourse-state projection may classify and export anchors, but cannot append/write/persist discourse state or accept facts";
+            discourse_state_write_allowed = false;
+            discourse_state_append_allowed = false;
+            discourse_state_persistence_allowed = false;
+            accepted_fact_promotion_allowed = false;
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "ontology-discourse-state-projection-v0";
+    role = "candidate bridge from materialized context view to discourse-state anchors";
+    source_gate = "ontology-materialized-context-view + algorithm-synthesis discourse-state";
+    next_gate = "response-assembly-surface";
+    non_replacement_boundary = "does not replace discourse-state owner, discourse persistent carrier, response assembly, ontology router, materialized context view, or pnix-db append gates";
+    effect_policy = "contract only; no discourse-state append/write/persistence, no ontology query/emit/promote, no accepted fact promotion, no memory/DB write, no policy persistence, no route execution, and no code write";
+  };
+}

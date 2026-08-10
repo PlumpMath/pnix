@@ -1,0 +1,25 @@
+name: rs-meta
+
+on:
+  push:
+    paths:
+      - "rs-meta/**"
+      - ".github/workflows/rs-meta.yml"
+  pull_request:
+    paths:
+      - "rs-meta/**"
+      - ".github/workflows/rs-meta.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rs-meta
+    env:
+      CARGO_TARGET_DIR: /tmp/rs-meta-target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build
+      - run: /tmp/rs-meta-target/debug/bootstrap check

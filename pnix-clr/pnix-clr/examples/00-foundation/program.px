@@ -1,0 +1,7 @@
+let
+  identity = value: value;
+  flags = rec {
+    yes = true;
+    no = !yes;
+  };
+in [ (identity flags.yes) flags.no (flags.yes != flags.no) ]

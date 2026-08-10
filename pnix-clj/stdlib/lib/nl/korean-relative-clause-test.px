@@ -1,0 +1,22 @@
+# 관형절(adnominal/relative clause) lock — 동사 현재(는)·과거(은)·미래(을) + 형용사 현재(은). 은 중의=predicateKindOfStem 해소.
+#   {head;action;tense;predicate_kind;roles} ⟷ "밥을 먹는/먹은/먹을 사람"·"작은 사람". stemKindIdx 게이트로 명사(수은/사과는) 차단(fail-closed).
+let knm = import ./korean-nl-mirror.px; lift = import ./korean-taxonomy-lift.px; B = builtins;
+  splitSp = s: B.filter (w: B.isString w && w != "") (B.split " " s);
+  rr = knm.realizeRelativeNP; pr = lift.parseRelativeNP;
+  rt = rnp: let s = rr rnp; in { s = s; back = pr (splitSp s); };
+  r1 = { head="사람"; action="먹"; tense="present"; predicate_kind="verb";      roles=[{entity="밥";role="object";}]; };
+  r2 = { head="사람"; action="먹"; tense="past";    predicate_kind="verb";      roles=[{entity="밥";role="object";}]; };
+  r3 = { head="사람"; action="먹"; tense="future";  predicate_kind="verb";      roles=[{entity="밥";role="object";}]; };
+  r4 = { head="사람"; action="작"; tense="present";  predicate_kind="adjective"; roles=[]; };
+  r5 = { head="곳";   action="가"; tense="present";  predicate_kind="verb";      roles=[]; };
+in {
+  s1=(rt r1).s; s2=(rt r2).s; s3=(rt r3).s; s4=(rt r4).s; s5=(rt r5).s;
+  b1=(rt r1).back; b4=(rt r4).back;
+  all_ok =
+       ((rt r1).s == "밥을 먹는 사람") && ((rt r1).back == r1)
+    && ((rt r2).s == "밥을 먹은 사람") && ((rt r2).back == r2)
+    && ((rt r3).s == "밥을 먹을 사람") && ((rt r3).back == r3)
+    && ((rt r4).s == "작은 사람")      && ((rt r4).back == r4)
+    && ((rt r5).s == "가는 곳")        && ((rt r5).back == r5)
+    && (lift.parseRelativeNP [ "철수가" "사과는" "맛있다" ] == null);
+}

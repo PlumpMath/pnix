@@ -1,0 +1,189 @@
+let
+  ownerName = "stdlib.nl.category-monoidal-product";
+
+  cat = import nl/nl-flow-category-substrate.px;
+
+  # === Monoidal Product (agent-NL-134) =============================
+  #
+  # f ⊗ g — 독립 morphisms 의 병렬 적용.
+  # NL flow: dependency 없는 step 들 동시 실행.
+  #
+  # Monoidal category laws:
+  #   - associativity: (f ⊗ g) ⊗ h ≅ f ⊗ (g ⊗ h)
+  #   - identity: f ⊗ id_I ≅ f ≅ id_I ⊗ f
+  #   - symmetry (we use symmetric monoidal): f ⊗ g ≅ g ⊗ f
+
+  stepKind = "monoidal-product";
+  framework_step = "categorical body — f ⊗ g 병렬 morphism";
+
+  # === Tensor product of objects ==================================
+  #
+  # A ⊗ B = product object (parallel state)
+
+  tensorObjects = objA: objB: {
+    object_kind = "tensor-product";
+    factor_a = objA;
+    factor_b = objB;
+  };
+
+  # === Tensor product of morphisms ================================
+  #
+  # f : A → B, g : C → D    ⟹    f ⊗ g : A⊗C → B⊗D
+
+  tensorMorphisms = f: g: {
+    morphism_kind = "tensor-morphism";
+    source = tensorObjects f.source g.source;
+    target = tensorObjects f.target g.target;
+    action = "(" + f.action + " ⊗ " + g.action + ")";
+    factors = [ f g ];
+    params = f.params // g.params;
+    unknowns = f.unknowns ++ g.unknowns;
+    parallelizable = true;
+  };
+
+  # === Independence check (dependency analysis) ====================
+  #
+  # Two morphisms f, g are *independent* iff:
+  #   - f's writes do not feed g's reads, and
+  #   - g's writes do not feed f's reads
+  #
+  # In NL flow we encode each step's read/write effects in `params`
+  # under keys `reads` and `writes` (defaulting to []).
+
+  readsOf = m:
+    if builtins.isAttrs m && builtins.hasAttr "params" m
+       && builtins.hasAttr "reads" m.params
+    then m.params.reads else [];
+
+  writesOf = m:
+    if builtins.isAttrs m && builtins.hasAttr "params" m
+       && builtins.hasAttr "writes" m.params
+    then m.params.writes else [];
+
+  anyOverlap = listA: listB:
+    builtins.any (a: builtins.elem a listB) listA;
+
+  independent = f: g:
+    !(anyOverlap (writesOf f) (readsOf g))
+    && !(anyOverlap (writesOf g) (readsOf f))
+    && !(anyOverlap (writesOf f) (writesOf g));
+
+  # === Auto-parallelize a chain ===================================
+  #
+  # Given an ordered list of morphisms with read/write metadata,
+  # group consecutive independent morphisms into tensor products.
+
+  groupIndependentRuns = morphisms:
+    let
+      step = state: m:
+        if state.current == [] then
+          { current = [ m ]; groups = state.groups; }
+        else
+          let
+            allCompatible = builtins.all (c: independent c m)
+              state.current;
+          in
+            if allCompatible then
+              { current = state.current ++ [ m ]; groups = state.groups; }
+            else
+              {
+                current = [ m ];
+                groups = state.groups ++ [ state.current ];
+              };
+      result = builtins.foldl' step { current = []; groups = []; } morphisms;
+      finalGroups =
+        if result.current == [] then result.groups
+        else result.groups ++ [ result.current ];
+    in finalGroups;
+
+  # tensorChain : [m1, m2, ..., mn] → tensored morphism (parallel block)
+  tensorChain = morphisms:
+    if morphisms == [] then null
+    else if builtins.length morphisms == 1 then builtins.head morphisms
+    else
+      builtins.foldl' tensorMorphisms (builtins.head morphisms)
+        (builtins.tail morphisms);
+
+  # parallelizeChain : [m] → [sequential blocks of parallel morphisms]
+  parallelizeChain = morphisms:
+    let
+      groups = groupIndependentRuns morphisms;
+      blocks = builtins.map tensorChain groups;
+    in {
+      outcome = "chain-parallelized";
+      original_count = builtins.length morphisms;
+      block_count = builtins.length blocks;
+      parallel_groups = groups;
+      parallel_blocks = blocks;
+      speedup_factor =
+        let
+          total = builtins.foldl' (acc: g: acc + builtins.length g)
+            0 groups;
+          serial_length = builtins.length groups;
+        in
+          if serial_length == 0 then 1
+          else total * 100 / serial_length;  # ×100 (basis points)
+    };
+
+  # === Unit object (I = identity for ⊗) ===========================
+
+  unitObject = {
+    object_kind = "tensor-unit";
+    label = "I";
+  };
+
+  # === Plate entry =================================================
+
+  applyMonoidalProductPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if (builtins.hasAttr "tensor_morphisms" request)
+         && (builtins.hasAttr "f" request.tensor_morphisms)
+         && (builtins.hasAttr "g" request.tensor_morphisms) then
+      let
+        f = request.tensor_morphisms.f;
+        g = request.tensor_morphisms.g;
+      in {
+        outcome = "tensor-product-built";
+        result = tensorMorphisms f g;
+      }
+    else if builtins.hasAttr "parallelize_chain" request then
+      parallelizeChain request.parallelize_chain
+    else if (builtins.hasAttr "check_independent" request)
+         && (builtins.hasAttr "f" request.check_independent)
+         && (builtins.hasAttr "g" request.check_independent) then {
+      outcome = "independence-checked";
+      independent =
+        independent request.check_independent.f request.check_independent.g;
+    }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-category-monoidal-product-axiom-120";
+    composes = "axiom-119-nl-flow-category";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = false;
+    laws = [
+      "associativity: (f⊗g)⊗h ≅ f⊗(g⊗h)"
+      "identity: f⊗id_I ≅ f"
+      "symmetry: f⊗g ≅ g⊗f (symmetric monoidal)"
+    ];
+    primary_outcomes = [
+      "tensor-product-built"
+      "chain-parallelized"
+      "independence-checked"
+    ];
+  };
+
+in {
+  inherit ownerName tensorObjects tensorMorphisms
+    readsOf writesOf anyOverlap independent
+    groupIndependentRuns tensorChain parallelizeChain
+    unitObject applyMonoidalProductPlate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL category monoidal product (agent-NL-134)";
+    owner = ownerName;
+  };
+}

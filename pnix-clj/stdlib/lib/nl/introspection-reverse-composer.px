@@ -1,0 +1,179 @@
+let
+  ownerName = "stdlib.nl.introspection-reverse-composer";
+
+  # === Introspection query reverse composer (Axiom #77) ============
+  #
+  # 사용자 directive (2026-05-28): "양방향으로 제대로" — substrate
+  # introspection 도 양방향이어야 한다. #76 NL lifter 의 forward 후
+  # 같은 substrate 의 self-knowledge receipt 를 다시 NL 로 재구성.
+  #
+  # Roundtrip:
+  #   "총 axiom 몇 개?" → #76 lifter → introspection-query-lifted +
+  #     query_result (axiom 75 개 등) → #77 reverse → "박힌 axiom 은
+  #     75 개입니다 (architectural 37 + NL-bidirectional 29 + meta 7
+  #     + demo 2)."
+  #
+  # 5 query kind × en + ko bilingual reverse.
+  #
+  # Held-honest:
+  # - non-attrs receipt → held
+  # - missing query_kind → held
+  # - unknown query_kind → held
+
+  formatNumber = n: builtins.toString n;
+
+  composeTotalCoverage = result: language:
+    let
+      total = formatNumber result.total_axioms_count;
+      arch = formatNumber result.architectural_axioms_count;
+      nl = formatNumber result.nl_bidirectional_axioms_count;
+      meta = formatNumber result.meta_substrate_axioms_count;
+      demo = formatNumber result.demonstration_axioms_count;
+      pct = formatNumber result.nl_coverage_percentage;
+      kopct = formatNumber result.korean_expansion_percentage;
+    in
+      if language == "ko" then
+        "박힌 axiom 은 총 " + total + " 개입니다 (architectural " + arch
+        + " + NL-bidirectional " + nl + " + meta-substrate " + meta
+        + " + demo " + demo + "). NL coverage " + pct + "%, 한국어 보강 " + kopct + "%."
+      else
+        "Total " + total + " axioms (architectural " + arch
+        + " + NL-bidirectional " + nl + " + meta-substrate " + meta
+        + " + demo " + demo + "). NL coverage " + pct + "%, Korean expansion " + kopct + "%.";
+
+  composeBilingualLifters = result: language:
+    let cnt = formatNumber result.count;
+    in
+      if language == "ko" then
+        cnt + " 개의 양방향 NL lifter 가 박혀 있습니다 (모든 NL-bidirectional axiom)."
+      else
+        cnt + " bilingual NL lifters registered (all NL-bidirectional axioms).";
+
+  composeKoreanExpanded = result: language:
+    let cnt = formatNumber result.count;
+    in
+      if language == "ko" then
+        cnt + " 개 lifter 에 한국어 paraphrase / 일상어 보강이 적용됨 (" + result.expansion_date + ")."
+      else
+        cnt + " lifters received Korean paraphrase expansion (" + result.expansion_date + ").";
+
+  composeHeldOutcomes = result: language:
+    let cnt = formatNumber result.family_count;
+    in
+      if language == "ko" then
+        "Held outcome 가족은 " + cnt + " 개 — silent-guess 절대 금지 헌법 보존."
+      else
+        cnt + " Held outcome families — silent-guess prohibition constitution preserved.";
+
+  composeReceiptKinds = result: language:
+    let cnt = formatNumber result.count;
+    in
+      if language == "ko" then
+        cnt + " 개의 successful receipt kind (NL-bidirectional 모든 lifter)."
+      else
+        cnt + " successful receipt kinds (all NL-bidirectional lifters).";
+
+  # === Reverse compose entry ========================================
+
+  composeIntrospectionResultToNl = receipt: language:
+    if !(builtins.isAttrs receipt) then {
+      outcome = "held-non-attrs-receipt";
+    }
+    else if !(builtins.hasAttr "outcome" receipt) then {
+      outcome = "held-missing-outcome-field";
+    }
+    else
+      let o = receipt.outcome; in
+        if o == "total-substrate-coverage" then {
+          outcome = "introspection-nl-composed";
+          nl = composeTotalCoverage receipt language;
+          source_outcome = o;
+          language = language;
+          axiom_origin = "axiom-77-introspection-reverse-composer";
+        }
+        else if o == "bilingual-lifter-inventory" then {
+          outcome = "introspection-nl-composed";
+          nl = composeBilingualLifters receipt language;
+          source_outcome = o;
+          language = language;
+          axiom_origin = "axiom-77-introspection-reverse-composer";
+        }
+        else if o == "korean-expanded-inventory" then {
+          outcome = "introspection-nl-composed";
+          nl = composeKoreanExpanded receipt language;
+          source_outcome = o;
+          language = language;
+          axiom_origin = "axiom-77-introspection-reverse-composer";
+        }
+        else if o == "held-outcome-family-inventory" then {
+          outcome = "introspection-nl-composed";
+          nl = composeHeldOutcomes receipt language;
+          source_outcome = o;
+          language = language;
+          axiom_origin = "axiom-77-introspection-reverse-composer";
+        }
+        else if o == "receipt-kind-inventory" then {
+          outcome = "introspection-nl-composed";
+          nl = composeReceiptKinds receipt language;
+          source_outcome = o;
+          language = language;
+          axiom_origin = "axiom-77-introspection-reverse-composer";
+        }
+        else {
+          outcome = "held-no-reverse-template-for-outcome";
+          source_outcome = o;
+          known_outcomes = [
+            "total-substrate-coverage"
+            "bilingual-lifter-inventory"
+            "korean-expanded-inventory"
+            "held-outcome-family-inventory"
+            "receipt-kind-inventory"
+          ];
+        };
+
+  applyIntrospectionReverseComposerPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "receipt" request) then {
+      outcome = "held-missing-receipt-field";
+    }
+    else
+      let lang = if (builtins.hasAttr "language" request) then request.language else "en";
+      in composeIntrospectionResultToNl request.receipt lang;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "introspection-reverse-composer-axiom-77";
+    template_count = 5;  # 5 query outcomes
+    supported_languages = [ "en" "ko" ];
+    new_decision_count = 0;
+    do_not_rebuild = true;
+    bilingual = true;
+    composes_axiom = "axiom-75-substrate-coverage-introspection (reverse)";
+    held_outcomes = [
+      "held-non-attrs-receipt"
+      "held-missing-outcome-field"
+      "held-no-reverse-template-for-outcome"
+      "held-non-attrs-request"
+      "held-missing-receipt-field"
+    ];
+  };
+
+in {
+  inherit
+    ownerName
+    composeTotalCoverage composeBilingualLifters composeKoreanExpanded
+    composeHeldOutcomes composeReceiptKinds
+    composeIntrospectionResultToNl
+    applyIntrospectionReverseComposerPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL introspection reverse composer (Axiom #77)";
+    owner = ownerName;
+    base = "introspection-reverse-composer-v0";
+    rev_note = "사용자 directive (2026-05-28). NL super-set bidirectional 의 "
+      + "introspection self-knowledge 차원 reverse 측. #75 query 의 5 outcome "
+      + "kind × en+ko bilingual NL 재구성. DO NOT REBUILD — Axiom #75 의 "
+      + "receipt 만 소비. 한국어 발화 → #76 lift → #75 query → #77 reverse → "
+      + "한국어 응답 full roundtrip 가능.";
+  };
+}

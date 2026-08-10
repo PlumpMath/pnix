@@ -1,0 +1,227 @@
+# stdlib.lib.math.rational
+#
+# OWNER-LAW (v0.12-LL, div-math, 2026-05-21): exact rational
+# arithmetic over the Nat/Int literals.
+#
+# The math lane evaluates integer expressions (numeric-evaluator)
+# and answers integer-structure questions (number-theory). It had
+# no representation for a *non-integer exact quantity*: 1/3, 22/7,
+# the result of `2 / 3`. This owner adds one.
+#
+# A rational is the attrset `{ num; den; }` in lowest terms, with
+# `den` always strictly positive (the sign lives entirely in
+# `num`). Every constructor result is gcd-reduced, so two rationals
+# are equal IFF their `{ num; den; }` attrsets are byte-identical
+# -- equality needs no cross-multiplication.
+#
+# # Builds on number-theory
+#
+# Reduction uses `number-theory.px::gcd` (Euclidean, defined on
+# negatives). This is deliberate kernel layering: rational depends
+# on number-theory depends on nothing. Each owner's grammar stays
+# small.
+#
+# # Exactness
+#
+# There is no floating point anywhere. `1/3` is the pair
+# `{ num = 1; den = 3; }`, not `0.333...`. `ratAdd (1/3) (1/3)
+# (1/3)` is exactly `1/1`. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT arbitrary-precision. num/den are host ints.
+#   - NOT a continued-fraction or decimal-expansion engine.
+#   - NOT wired into numeric-evaluator's expression grammar --
+#     numeric-evaluator stays integer-only; rational is a separate
+#     value layer. Bridging them is a later slice.
+#   - NOT yet a registered mirror-plate lens (the registry owner
+#     lives outside stdlib/lib/math/**).
+#
+# # Plate-shaped entry
+#
+# `applyRational request` takes `{ operation; an; ad; (bn; bd); }`
+# -- raw integer numerator/denominator pairs -- and returns a
+# typed envelope. A zero denominator is Held, never a throw.
+
+let
+  ownerName = "stdlib/lib/math/rational.px";
+
+  numberTheory = import ./number-theory.px;
+  gcd = numberTheory.gcd;
+
+  # Construct a reduced rational from a numerator/denominator pair.
+  # `d` must be non-zero (the plate guards this before calling).
+  # Sign is normalised so `den > 0`; the pair is gcd-reduced so the
+  # representation is canonical.
+  mkRational = n: d:
+    if d == 0 then builtins.throw "rational: zero denominator"
+    else
+      let
+        sn = if d < 0 then 0 - n else n;
+        sd = if d < 0 then 0 - d else d;
+        # gcd takes absolute values internally and is > 0 here
+        # (sd > 0). gcd 0 sd = sd, so n = 0 reduces to 0/1.
+        g = gcd sn sd;
+      in { num = sn / g; den = sd / g; };
+
+  # The rational 0 and 1 as canonical pairs.
+  ratZero = { num = 0; den = 1; };
+  ratOne  = { num = 1; den = 1; };
+
+  # Lift an integer to a rational.
+  ratFromInt = k: { num = k; den = 1; };
+
+  # --- arithmetic ------------------------------------------------
+  # Every result is re-reduced by mkRational, so sums and products
+  # never accumulate a common factor.
+
+  ratAdd = a: b:
+    mkRational (a.num * b.den + b.num * a.den) (a.den * b.den);
+
+  ratSub = a: b:
+    mkRational (a.num * b.den - b.num * a.den) (a.den * b.den);
+
+  ratMul = a: b:
+    mkRational (a.num * b.num) (a.den * b.den);
+
+  # ratDiv assumes b != 0 (the plate guards b.num == 0).
+  ratDiv = a: b:
+    mkRational (a.num * b.den) (a.den * b.num);
+
+  ratNegate = a: { num = 0 - a.num; den = a.den; };
+
+  # ratReciprocal assumes a != 0 (the plate guards a.num == 0).
+  ratReciprocal = a: mkRational a.den a.num;
+
+  # --- comparison ------------------------------------------------
+  # Both operands are reduced with den > 0, so `{num;den}` equality
+  # is exact value equality, and cross-multiplication preserves the
+  # `<` ordering (positive denominators).
+
+  ratEq = a: b: a.num == b.num && a.den == b.den;
+  ratLt = a: b: a.num * b.den < b.num * a.den;
+  # -1 / 0 / 1 three-way comparison.
+  ratCompare = a: b:
+    if ratLt a b then (0 - 1)
+    else if ratLt b a then 1
+    else 0;
+
+  # --- predicates / projection ----------------------------------
+
+  ratIsInteger = a: a.den == 1;
+  ratIsZero = a: a.num == 0;
+
+  # Canonical text: bare integer when den == 1, else `num/den`.
+  ratToString = a:
+    if a.den == 1 then builtins.toString a.num
+    else builtins.toString a.num + "/" + builtins.toString a.den;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownRationalOperations = [
+    "make"
+    "add"
+    "subtract"
+    "multiply"
+    "divide"
+    "compare"
+    "reciprocal"
+    "negate"
+  ];
+
+  # Shared success envelope for the operations that return a single
+  # rational value.
+  ratEnvelope = op: r: {
+    outcome = "rational-computed";
+    operation = op;
+    num = r.num;
+    den = r.den;
+    is_integer = ratIsInteger r;
+    text = ratToString r;
+  };
+
+  applyRational = request:
+    let
+      op = request.operation;
+      an = request.an;
+      ad = request.ad;
+      bn = if request ? bn then request.bn else 0;
+      bd = if request ? bd then request.bd else 1;
+      binaryOp = builtins.elem op [
+        "add" "subtract" "multiply" "divide" "compare"
+      ];
+    in
+      if !(builtins.elem op knownRationalOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownRationalOperations;
+      }
+      else if ad == 0 then {
+        outcome = "held-zero-denominator";
+        operation = op;
+        which = "a";
+      }
+      else if binaryOp && bd == 0 then {
+        outcome = "held-zero-denominator";
+        operation = op;
+        which = "b";
+      }
+      else
+        let
+          a = mkRational an ad;
+          b = mkRational bn bd;
+        in
+          if op == "make" then ratEnvelope op a
+          else if op == "negate" then ratEnvelope op (ratNegate a)
+          else if op == "reciprocal" then
+            if a.num == 0 then {
+              outcome = "held-zero-reciprocal";
+              operation = op;
+            }
+            else ratEnvelope op (ratReciprocal a)
+          else if op == "add" then ratEnvelope op (ratAdd a b)
+          else if op == "subtract" then ratEnvelope op (ratSub a b)
+          else if op == "multiply" then ratEnvelope op (ratMul a b)
+          else if op == "divide" then
+            if b.num == 0 then {
+              outcome = "held-division-by-zero-rational";
+              operation = op;
+            }
+            else ratEnvelope op (ratDiv a b)
+          else {
+            # op == "compare"
+            outcome = "rational-computed";
+            operation = op;
+            comparison = ratCompare a b;
+            a_text = ratToString a;
+            b_text = ratToString b;
+          };
+
+in {
+  inherit
+    ownerName
+    mkRational
+    ratZero
+    ratOne
+    ratFromInt
+    ratAdd
+    ratSub
+    ratMul
+    ratDiv
+    ratNegate
+    ratReciprocal
+    ratEq
+    ratLt
+    ratCompare
+    ratIsInteger
+    ratIsZero
+    ratToString
+    knownRationalOperations
+    applyRational;
+  meta = {
+    source = "stdlib math rational";
+    owner = ownerName;
+    base = "parametric-math-rational-v0";
+    rev_note = "v0.12-LL (div-math): exact rational arithmetic owner. Rationals are gcd-reduced `{ num; den; }` pairs with den > 0, so value equality is byte equality. Add/sub/mul/div/negate/reciprocal/compare, all exact, no floating point. Reduction reuses number-theory.px::gcd -- deliberate kernel layering. NOT arbitrary-precision, NOT wired into numeric-evaluator's grammar, NOT yet a registered lens.";
+  };
+}

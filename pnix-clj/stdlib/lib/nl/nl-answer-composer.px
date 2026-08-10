@@ -1,0 +1,69 @@
+# stdlib.nl.nl-answer-composer
+#
+# **NL 답 구성 (.px, one-mirror 정본): 의미/평가 → 한국어 답 표현 (diverge 측).**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): 거울은 이해(converge)↔표현
+# (diverge) 둘 다. nl-meaning-pipeline 이 *이해*(발화→의미) 라면 이 owner 는 *표현*
+# (의미→답) — 둘이 합쳐 거울의 NL 왕복이 .px 하나에 닫힌다.
+#
+# 안티-transcript: 답은 *구조*(slots/result)에서 *조립*한다 — corpus prose 를 verbatim
+# 으로 뱉지 않는다(CLAUDE.md 안티-transcript 법). held 도 구조적 정직 메시지.
+#
+# 재구현 0: 평가는 pipeline 이 이미 함. 여기선 result → 표면 표현만.
+let
+  toString = builtins.toString;
+
+  # operation → 한국어 표면 (lexeme 의 역; bounded: add/subtract v0)
+  opKo = op:
+    if op == "add" then "더하기"
+    else if op == "subtract" then "빼기"
+    else op;
+
+  fieldOr = a: k: d: if a ? ${k} then a.${k} else d;
+
+  # ★ 파이프라인 결과 → 답 ★ (nl-meaning-pipeline.process 의 결과를 받음)
+  composeAnswer = result:
+    let outcome = fieldOr result "outcome" "?";
+    in
+      if outcome == "processed" then
+        let
+          s = fieldOr result "slots" { };
+          ev = fieldOr result "eval" { };
+          evOut = fieldOr ev "outcome" "?";
+        in
+          if evOut == "evaluated" then {
+            kind = "answer";
+            # 구조에서 조립 (verbatim 아님): "lhs op rhs = result"
+            text = (fieldOr s "lhs" "?") + " " + (opKo (fieldOr s "operation" "?"))
+                   + " " + (fieldOr s "rhs" "?") + " = " + (toString (fieldOr ev "result" "?"));
+            result_value = fieldOr ev "result" null;
+          } else {
+            kind = "held";
+            text = "계산할 수 없습니다.";
+            held_reason = evOut;          # held-missing-slot 등 구조 정직
+          }
+      else if outcome == "held-no-meaning" then
+        { kind = "held"; text = "무슨 뜻인지 아직 모르겠습니다."; held_reason = outcome; }
+      else if outcome == "held-ambiguous" then
+        { kind = "held"; text = "여러 뜻으로 해석되어 하나로 정하지 못했습니다."; held_reason = outcome; }
+      else
+        { kind = "held"; text = "처리할 수 없습니다."; held_reason = outcome; };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.nl-answer-composer";
+    consumes = "nl-meaning-pipeline.process 결과 (구조; verbatim corpus prose 아님)";
+    role = "NL 표현(diverge): 의미/평가 → 한국어 답. nl-meaning-pipeline(이해) 와 합쳐 거울 NL 왕복 .px 완결. held=구조 정직.";
+    boundary = "구조에서 조립(안티-transcript); 평가=pipeline. opKo bounded(add/subtract v0).";
+    note = "Rust answer/human-summary 측 = Phase 2/3 검토. ExpressionPlacement 공개-prose 규칙과 정합 필요(별 슬라이스).";
+  };
+
+in {
+  inherit opKo composeAnswer inventorySummary;
+  ownerName = "stdlib.nl.nl-answer-composer";
+  meta = {
+    source = "stdlib nl nl-answer-composer (.px: 의미→한국어 답 표현; one-mirror diverge 측)";
+    owner = "stdlib.nl.nl-answer-composer";
+    base = "nl-answer-composer-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1: 거울 NL 표현(diverge) 측 .px. nl-meaning-pipeline(converge/이해) 와 짝 → 발화→의미→eval→답 왕복이 .px 하나에. composeAnswer: 구조(slots/result)에서 조립(안티-transcript, verbatim 금지). 검증: '2 더하기 3' pipeline → '2 더하기 3 = 5'; held-no-meaning/ambiguous/eval-held → 구조 정직 메시지. opKo bounded(add/subtract). 공개-prose 는 ExpressionPlacement 규칙 정합 별 슬라이스.";
+  };
+}

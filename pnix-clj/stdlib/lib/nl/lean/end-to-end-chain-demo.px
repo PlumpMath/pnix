@@ -1,0 +1,206 @@
+let
+  ownerName = "stdlib.nl.lean.end-to-end-chain-demo";
+
+  bridge = import nl/lean/nl-to-mathlib-bridge.px;
+  paired = import nl/lean/paired-claim-aggregate.px;
+  lookup = import nl/lean/lookup-aggregate.px;
+
+  # === End-to-end chain demo (agent-NL-196) =========================
+  #
+  # 사용자 vision 의 *demonstration*:
+  # > "한글 query → mathlib lookup → 한글 응답 의 완전한 chain"
+  #
+  # 이 owner 는 *데모 instance* 박음 — substrate 가 자기 NL processing
+  # chain 을 *실제로 동작하는 receipt* 으로 emit.
+  #
+  # Chain (per query):
+  #   한글 utterance
+  #     → bridge.bridgeQuery (token + dictionary match + lookup)
+  #     → lookup.searchByKeyword (Mathlib entries)
+  #     → top result 추출
+  #     → paired claim cross-ref (있으면)
+  #     → 한글 응답 envelope 박음
+
+  stepKind = "end-to-end-chain-demo";
+  framework_step =
+    "한글 query → bridge → lookup → paired claim → 한글 응답 chain";
+
+  # =================================================================
+  # === End-to-end query primitive ===================================
+  # =================================================================
+
+  fullQuery = utterance:
+    let
+      bridgeResult = bridge.bridgeQuery utterance;
+    in
+      if bridgeResult.outcome != "mathlib-search-from-korean"
+      then bridgeResult  # Held 그대로 surface
+      else
+        let
+          topMatch =
+            if bridgeResult.top_matches == [] then null
+            else builtins.head bridgeResult.top_matches;
+          # paired claim 안에 같은 lean_full_name 있는지 확인
+          pairedClaims = paired.pairedClaims;
+          matchingPair =
+            let matches = builtins.filter
+                  (c: topMatch != null && c.lean_full_name == topMatch.full_name)
+                  pairedClaims;
+            in if matches == [] then null else builtins.head matches;
+        in {
+          outcome = "end-to-end-chain-emitted";
+          inherit utterance;
+          step_1_korean_match = bridgeResult.matched_korean_word;
+          step_2_english_keyword = bridgeResult.english_keyword;
+          step_3_category = bridgeResult.inferred_category;
+          step_4_mathlib_match_count = bridgeResult.match_count;
+          step_5_top_lean_name =
+            if topMatch == null then null else topMatch.full_name;
+          step_5_top_lean_file =
+            if topMatch == null then null else topMatch.file_path;
+          step_6_paired_claim_present = matchingPair != null;
+          step_6_substrate_concept =
+            if matchingPair == null then null
+            else matchingPair.substrate_concept;
+          step_6_substrate_file =
+            if matchingPair == null then null
+            else matchingPair.substrate_file;
+          step_7_korean_response =
+            "'" + bridgeResult.matched_korean_word + "' → Mathlib '" +
+            (if topMatch == null then "<none>" else topMatch.full_name) +
+            "' (총 " + builtins.toString bridgeResult.match_count + "개 매칭)" +
+            (if matchingPair != null
+             then ", substrate concept '" + matchingPair.substrate_concept + "' 와 paired"
+             else "");
+        };
+
+  # =================================================================
+  # === Demonstration cases ==========================================
+  # =================================================================
+  #
+  # 사용자 vision 의 *executed evidence* — substrate 가 *실제로* 동작.
+
+  demoCases = [
+    {
+      label = "case-galois";
+      utterance = "갈루아군";
+      expected_en = "Galois";
+      expected_category = "galois";
+    }
+    {
+      label = "case-sheaf";
+      utterance = "층";
+      expected_en = "Sheaf";
+      expected_category = "sheaf";
+    }
+    {
+      label = "case-group-cohomology";
+      utterance = "군코호몰로지";
+      expected_en = "groupCohomology";
+      expected_category = "group-cohomology";
+    }
+    {
+      label = "case-tannaka";
+      utterance = "타나카";
+      expected_en = "Tannaka";
+      expected_category = "representation-theory";
+    }
+    {
+      label = "case-padic";
+      utterance = "p진";
+      expected_en = "Padic";
+      expected_category = "p-adic";
+    }
+    {
+      label = "case-zeta";
+      utterance = "리만";
+      expected_en = "Riemann";
+      expected_category = "zeta";
+    }
+    {
+      label = "case-monoidal";
+      utterance = "모노이달";
+      expected_en = "Monoidal";
+      expected_category = "monoidal";
+    }
+    {
+      label = "case-held-no-vocab";
+      utterance = "지구는 둥글다";
+      expected_outcome = "held-no-korean-dictionary-match";
+    }
+  ];
+
+  # 각 demo case 의 실행 결과
+  runDemoCase = demoCase:
+    let result = fullQuery demoCase.utterance;
+    in {
+      inherit (demoCase) label utterance;
+      actual_outcome = result.outcome;
+      result_envelope = result;
+      expected_outcome_met =
+        if demoCase ? expected_outcome
+        then result.outcome == demoCase.expected_outcome
+        else result.outcome == "end-to-end-chain-emitted";
+    };
+
+  allDemoResults = builtins.map runDemoCase demoCases;
+
+  demoSuccessCount =
+    builtins.length
+      (builtins.filter (r: r.expected_outcome_met) allDemoResults);
+  demoTotalCount = builtins.length demoCases;
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_fullQuery = true;
+    has_demoCases = true;
+    has_runDemoCase = true;
+    demo_case_count = demoTotalCount;
+    demo_success_count = demoSuccessCount;
+    demo_success_rate_percent =
+      if demoTotalCount == 0 then 0
+      else (demoSuccessCount * 100) / demoTotalCount;
+    bridge_owner_inherited = bridge.ownerName;
+    paired_owner_inherited = paired.ownerName;
+    lookup_owner_inherited = lookup.ownerName;
+    deterministic = true;  # LLM 없이 fully deterministic
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyEndToEndChainDemoPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "end-to-end-chain-demo-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "full_query" request then
+      fullQuery request.full_query
+    else if builtins.hasAttr "demo_cases" request then {
+      outcome = "demo-cases-emitted"; receipt = demoCases;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "demo-results-emitted";
+      receipt = {
+        success = demoSuccessCount;
+        total = demoTotalCount;
+        results = allDemoResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "full_query" "demo_cases" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit fullQuery demoCases runDemoCase allDemoResults;
+  inherit demoSuccessCount demoTotalCount;
+  inherit inventorySummary applyEndToEndChainDemoPlate;
+}

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Publish the ClojureCLR runtime substrate from the pinned upstream `Clojure`
+# NuGet package (see clr-bootstrap/ClojureClrBootstrap.csproj). pnix-clr vendors
+# no upstream compiler sources; the signed, version-pinned package is the
+# explicit bootstrap trust root.
+#
+# The publish directory keeps its historical path so every downstream script
+# (clojure-clr-bootstrap, clr-meta, the stage gates) resolves the runtime the
+# same way it always has.
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+project="$root/clr-bootstrap/ClojureClrBootstrap.csproj"
+output="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish"
+
+dotnet restore "$project" --nologo
+
+dotnet publish "$project" \
+  --configuration Release \
+  --framework net10.0 \
+  --output "$output" \
+  -p:CopyLocalLockFileAssemblies=true \
+  --no-restore \
+  --nologo
+
+# The upstream package ships clojure's own sources embedded in
+# Clojure.Source.dll. Materialize them next to the runtime so tools that read
+# `clojure/*.clj` from the publish tree keep working.
+"$root/bin/extract-clojure-sources" "$output/Clojure.Source.dll" "$output"
+
+for required in \
+  Clojure.Main.dll \
+  Clojure.dll \
+  Microsoft.Extensions.DependencyModel.dll \
+  clojure/core.clj; do
+  if [[ ! -f "$output/$required" ]]; then
+    echo "ClojureCLR bootstrap: publish omitted $required" >&2
+    exit 1
+  fi
+done
+echo "ClojureCLR net10 bootstrap: published"

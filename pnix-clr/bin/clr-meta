@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+export CLR_META_SOURCE_ROOT="$root/clr-meta/src"
+caller_pwd="$PWD"
+runtime_root="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish"
+main_dll="$runtime_root/Clojure.Main.dll"
+
+absolute_from_caller() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *) printf '%s/%s\n' "$caller_pwd" "$1" ;;
+  esac
+}
+
+# C3 consumes an already-closed C2 bundle. Keep this dispatch ahead of every
+# ClojureCLR presence/build check so the transition needs only dotnet and jq.
+if [[ "${1:-}" == "--build-compiler-selfhost-stage7" ]]; then
+  if [[ "$#" -ne 3 ]]; then
+    echo "usage: clr-meta --build-compiler-selfhost-stage7 STAGE6_BUNDLE OUTPUT" >&2
+    exit 2
+  fi
+  stage6_bundle="$(absolute_from_caller "$2")"
+  output="$(absolute_from_caller "$3")"
+  exec "$root/clr-meta/scripts/clr-meta-build-compiler-selfhost-stage7" \
+    "$stage6_bundle" "$output"
+fi
+
+if [[ "${1:-}" == "--build-compiler-selfhost-stage6" ]]; then
+  if [[ "$#" -ne 3 ]]; then
+    echo "usage: clr-meta --build-compiler-selfhost-stage6 STAGE5_BUNDLE OUTPUT" >&2
+    exit 2
+  fi
+  stage5_bundle="$(absolute_from_caller "$2")"
+  output="$(absolute_from_caller "$3")"
+  exec "$root/clr-meta/scripts/clr-meta-build-compiler-selfhost-stage6" \
+    "$stage5_bundle" "$output"
+fi
+
+if [[ "${1:-}" == "--build-compiler-selfhost-stage5" ]]; then
+  if [[ "$#" -ne 3 ]]; then
+    echo "usage: clr-meta --build-compiler-selfhost-stage5 STAGE4_BUNDLE OUTPUT" >&2
+    exit 2
+  fi
+  stage4_bundle="$(absolute_from_caller "$2")"
+  output="$(absolute_from_caller "$3")"
+  exec "$root/clr-meta/scripts/clr-meta-build-compiler-selfhost-stage5" \
+    "$stage4_bundle" "$output"
+fi
+
+if [[ "${1:-}" == "--build-compiler-selfhost-stage4" ]]; then
+  if [[ "$#" -ne 3 ]]; then
+    echo "usage: clr-meta --build-compiler-selfhost-stage4 STAGE3_BUNDLE OUTPUT" >&2
+    exit 2
+  fi
+  stage3_bundle="$(absolute_from_caller "$2")"
+  output="$(absolute_from_caller "$3")"
+  exec "$root/clr-meta/scripts/clr-meta-build-compiler-selfhost-stage4" \
+    "$stage3_bundle" "$output"
+fi
+
+if [[ "${1:-}" == "--build-compiler-selfhost-stage3" ]]; then
+  if [[ "$#" -ne 3 ]]; then
+    echo "usage: clr-meta --build-compiler-selfhost-stage3 STAGE2_BUNDLE OUTPUT" >&2
+    exit 2
+  fi
+  stage2_bundle="$(absolute_from_caller "$2")"
+  output="$(absolute_from_caller "$3")"
+  exec "$root/clr-meta/scripts/clr-meta-build-compiler-selfhost-stage3" \
+    "$stage2_bundle" "$output"
+fi
+
+if [[ "${1:-}" == "--build-compiler-selfhost-stage2" ]]; then
+  if [[ "$#" -ne 3 ]]; then
+    echo "usage: clr-meta --build-compiler-selfhost-stage2 STAGE1_BUNDLE OUTPUT" >&2
+    exit 2
+  fi
+  stage1_bundle="$(absolute_from_caller "$2")"
+  output="$(absolute_from_caller "$3")"
+  exec "$root/clr-meta/scripts/clr-meta-build-compiler-selfhost-stage2" \
+    "$stage1_bundle" "$output"
+fi
+
+if [[ ! -f "$main_dll" ]]; then
+  "$root/bin/build-clr"
+fi
+[[ -f "$main_dll" ]] || {
+  echo "clr-meta: bootstrap runtime missing after build" >&2
+  exit 2
+}
+
+if [[ "${1:-}" == "--build-runtime" && "$#" -eq 4 ]]; then
+  plan="$(absolute_from_caller "$2")"
+  output="$(absolute_from_caller "$3")"
+  source_root="$(cd "$(absolute_from_caller "$4")" && pwd -P)"
+  export CLOJURE_LOAD_PATH="$root/clr-meta/src:$source_root"
+  set -- --build-runtime "$plan" "$output" "$source_root"
+elif [[ "${1:-}" == "--build-compiler-stage1" && "$#" -eq 5 ]]; then
+  profile="$(absolute_from_caller "$2")"
+  plan="$(absolute_from_caller "$3")"
+  source="$(absolute_from_caller "$4")"
+  output="$(absolute_from_caller "$5")"
+  export CLOJURE_LOAD_PATH="$root/clr-meta/src"
+  set -- --build-compiler-stage1 "$profile" "$plan" "$source" "$output"
+elif [[ "${1:-}" == "--build-compiler-selfhost-stage1" && "$#" -eq 2 ]]; then
+  output="$(absolute_from_caller "$2")"
+  exec "$root/clr-meta/scripts/clr-meta-build-compiler-selfhost-stage1" "$output"
+else
+  export CLOJURE_LOAD_PATH="$root/clr-meta/src"
+  if [[ "$#" -eq 1 && "$1" != --gate && "$1" != -* ]]; then
+    source="$(absolute_from_caller "$1")"
+    set -- "$source"
+  fi
+fi
+
+# ClojureCLR searches cwd before CLOJURE_LOAD_PATH. Run from the pinned runtime
+# root, which must contain no product namespace in any source/AOT spelling.
+if [[ -e "$runtime_root/pnix" || -L "$runtime_root/pnix" ]] || \
+   find "$runtime_root" -maxdepth 1 \
+     \( -name 'pnix.clr_meta.*.cljr.dll' \
+        -o -name 'pnix.clr_meta.*.cljc.dll' \
+        -o -name 'pnix.clr_meta.*.clj.dll' \) -print -quit | grep -q .; then
+  echo "clr-meta: pinned runtime contains a pnix.clr-meta shadow" >&2
+  exit 2
+fi
+
+cd "$runtime_root"
+exec "$root/bin/clojure-clr-bootstrap" -m pnix.clr-meta.main "$@"

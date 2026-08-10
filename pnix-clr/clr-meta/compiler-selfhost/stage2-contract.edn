@@ -1,0 +1,192 @@
+{:schema :pnix.clr-meta.compiler-selfhost-stage2-contract.v1
+ :id :pnix.clr-meta.compiler-kernel-c3.v1
+ :family :pnix.clr-meta.compiler-kernel.v1
+ :checkpoint :c3-executable-compiler-stage2
+ :extends
+ {:contract "contract.edn"
+  :profile "profile.edn"
+  :plan "plan.edn"
+  :canonical-source "compiler_kernel.clj"
+  :c2-contract "executable-contract.edn"
+  :c2-checkpoint :c2-executable-compiler-stage1}
+ :canonical-source
+ {:path "compiler-selfhost/compiler_kernel.clj"
+  :sha256 "e3c4f082b20f784f4dd2730b8e2af3d6aecb3f1a0ea0ece2f6519b69578dc7e1"
+  :language :pnix.clr-meta.compiler-kernel-source.v1
+  :compiled-language :pnix.clr-meta.compiler-kernel-source.v1
+  :same-source-required true
+  :alternate-source-argument false}
+ :parent-stage1
+ {:artifact-schema "pnix.clr-meta.compiler-selfhost-stage1-artifact.v1"
+  :checkpoint :c2-executable-compiler-stage1
+  :stage 1
+  :bundle-file-set
+  ["compiler/CompilerStage1.dll"
+   "manifest.json"
+   "runtime/Pnix.ClrMeta.CompilerSupport.deps.json"
+   "runtime/Pnix.ClrMeta.CompilerSupport.dll"
+   "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"]
+  :required-claims
+  {:compiler-stage1-artifact true
+   :compiler-executable true
+   :compiler-stage2 false
+   :self-reproduction false
+   :fixed-point false
+   :raw-artifact-reproducibility false
+   :clojureclr-replacement false}
+  :validation
+  [:regular-directory-no-reparse-points
+   :exact-file-set
+   :strict-manifest-shape
+   :live-input-hashes
+   :bundle-file-hashes
+   :input-and-bundle-closure-hashes
+   :compiler-description
+   :prepare-all-27-methods]}
+ :compilation
+ {:command
+  ["dotnet" "STAGE1/runtime/Pnix.ClrMeta.CompilerSupport.dll" "compile"
+   "STAGE1/compiler/CompilerStage1.dll"
+   "compiler-selfhost/compiler_kernel.clj" "CompilerStage2.dll"]
+  :compiler :generated-compiler-stage1
+  :host :pnix.clr-meta.compiler-support.v1
+  :reader :strict-bounded-utf8
+  :sink :transactional-managed-pe
+  :environment :clear-then-allowlist
+  :same-dotnet-toolchain-as-parent-required false
+  :toolchain-lineage :record-parent-and-transition-identities-separately
+  :transition-source-visibility :present-and-explicit
+  :canonical-source-freeze
+  {:directory-mode "0700"
+   :source :regular-non-symlink
+   :frozen-copy :regular-read-only
+   :byte-equality true}
+  :canonical-source-hash :live-before-frozen-copy-and-live-after
+  :generated-compiler-and-support-forbidden
+  [:bootstrap-b0 :clojure-main :clojure-compiler :clojure-eval
+   :host-source-load :process-spawn :network :alternate-source
+   :embedded-artifact-payload :direct-stage1-copy
+   :source-replay-fallback]}
+ :generated-stage2
+ {:assembly "Pnix.ClrMeta.Generated.CompilerKernel"
+  :type "Pnix.ClrMeta.Generated.CompilerKernel"
+  :fields 9
+  :methods 27
+  :entry "compile-source"
+  :entry-arity 2
+  :metadata-keys
+  ["GeneratedBy" "KernelEntry" "KernelIdentity" "KernelNamespace"
+   "SourceProfileId" "SupportAbiId"]
+  :references ["Pnix.ClrMeta.CompilerSupport" "System.Private.CoreLib"]
+  :resources []
+  :structural-description :exactly-equal-to-stage1
+  :prepare-all-methods true
+  :raw-bytes :observed-not-a-fixed-point-claim}
+ :bundle
+ {:command
+  ["bin/clr-meta" "--build-compiler-selfhost-stage2"
+   "STAGE1_BUNDLE" "OUTPUT"]
+  :file-set
+  ["compiler/CompilerStage2.dll"
+   "manifest.json"
+   "runtime/Pnix.ClrMeta.CompilerSupport.deps.json"
+   "runtime/Pnix.ClrMeta.CompilerSupport.dll"
+   "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"]
+  :parent-stage1-packaged false
+  :parent-manifest-packaged false
+  :lineage-storage :hashes-only
+  :canonical-source-packaged false
+  :clojureclr-packaged false
+  :publication :same-filesystem-directory-move-no-replace
+  :existing-output [:file-preserve :directory-preserve :symlink-preserve]}
+ :required-evidence
+ {:lineage
+  [:c3-contract-sha256 :parent-manifest-sha256
+   :parent-bundle-closure-sha256
+   :parent-compiler-sha256 :canonical-source-sha256
+   :support-triplet-sha256 :support-abi-id
+   :parent-dotnet-identity :transition-dotnet-identity
+   :stage2-compiler-sha256 :child-bundle-closure-sha256
+   :exact-compile-descriptor]
+  :same-source-compilation
+  {:parent-manifest-unchanged true
+   :stage1-unchanged true
+   :support-triplet-unchanged true
+   :canonical-source-unchanged true
+   :source-hash-chain
+   [:contract :parent-c2-input :live-before :frozen-copy-before
+    :frozen-copy-after :live-after]
+   :stage2-description-equals-stage1 true
+   :direct-copy-fallback false
+   :raw-stage-hash-equality :not-a-gate-condition}
+  :source-hidden-stage2-replay
+  {:process :fresh
+   :present [:compiler-stage2 :compiler-support :post-stage2-target-source]
+   :absent [:compiler-stage1 :canonical-compiler-source :clojureclr
+            :bootstrap-adapter :pnix-source-tree]
+   :fresh-post-stage2-nonce-target true
+   :nonce-absent-from [:compiler-stage1 :compiler-stage2 :compiler-support]
+   :target-compile true
+   :target-execution-process
+   {:fresh true
+    :present [:compiled-target :compiler-support]
+    :absent [:target-source :compiler-stage2 :stage2-manifest
+             :compiler-stage1 :canonical-compiler-source :clojureclr]}}
+  :delayed-source-mutations
+  [{:anchor :identity-literal
+    :stage1-compiles-mutated-compiler-source true
+    :mutated-source-sha256 :distinct-from-canonical
+    :mutated-stage2-prepares true
+    :mutated-stage2-kernel-identity :canonical-parent-identity
+    :grandchild-target-kernel-identity
+    :fresh-random-not-present-in-stage1-stage2-or-support
+    :grandchild-target-executes true
+    :mutated-source-packaged false}
+   {:anchor :add-lowering-rule
+    :source-change :replace-add-opcode-with-subtract-opcode
+    :stage1-compiles-mutated-compiler-source true
+    :mutated-source-sha256 :distinct-from-canonical
+    :mutated-stage2-prepares true
+    :grandchild-target :unseen-add
+    :arguments [20 22]
+    :expected -2
+    :grandchild-target-executes true
+    :mutated-source-packaged false}
+   {:anchor :subtract-lowering-rule
+    :source-change :replace-subtract-opcode-with-add-opcode
+    :stage1-compiles-mutated-compiler-source true
+    :mutated-source-sha256 :distinct-from-canonical
+    :mutated-stage2-prepares true
+    :grandchild-target :unseen-subtract
+    :arguments [20 22]
+    :expected 42
+    :grandchild-target-executes true
+    :mutated-source-packaged false}]
+  :negative-cases
+  [:parent-bundle-symlink :parent-extra-file :parent-manifest-symlink
+   :parent-compiler-symlink :parent-runtime-symlink
+   :parent-compiler-byte-drift :parent-runtime-byte-drift
+   :parent-manifest-contract-drift :parent-live-input-drift
+   :output-parent-missing :existing-output-file
+   :existing-output-directory :existing-output-symlink]}
+ :claims
+ {:parent-stage1-admitted true
+  :stage1-ancestor-validated true
+  :same-source-recompile :gate-required
+  :stage2 :gate-required
+  :stage2-fresh-target-replay :gate-required
+  :self-reproduction false
+  :stage3 false
+  :stage15-n false
+  :fixed-point false
+  :raw-reproducibility false
+  :host-free-bootstrap false
+  :full-clojure-surface false
+  :pnix-semantics false
+  :cross-host-canonical-equivalence false
+  :os-sandbox false
+  :formal-semantic-equivalence false
+  :clojureclr-replacement false
+  :compiler-source-free-runtime-bundle :gate-required
+  :standalone-lineage-replay false
+  :standalone-source-free-distribution false}}

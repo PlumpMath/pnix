@@ -1,0 +1,164 @@
+# tower m5+m6a: the specializer expressed IN px (S = L over a core subset).
+#
+# Adaptation of the pnix-hy MIX_IN_PNIX shape to this lane: our kind-encoding
+# (src/tower.rs reify), STRICT runtime, our operator set (no && || ! in px).
+#
+# m6a additions (first Futamura projection support):
+#   - static data nodes now include single-literal strings and CONST ATTRSETS
+#     ({ kind = "cattrs"; fields = [ { name; value = <data node>; } ]; });
+#   - select folds on const attrsets (dead branches are never mixed, so
+#     missing-field selects in statically-dead code cannot error);
+#   - == / != fold on static strings;
+#   - RECURSIVE closures without a lazy env knot: an all-lambda `let` binds
+#     each name to { kind = "recclo"; param; body; binds; outer; } and each
+#     APPLY of a recclo REBUILDS the recursive frame from `binds` + `outer` —
+#     the knot is reconstructed on demand (strict-friendly), terminating at
+#     spec time whenever the static recursion terminates (classic mix
+#     exposure otherwise). Mixed / non-lambda lets keep the A4-conservative
+#     residual rule (m5).
+#
+# senv is an attrset name -> already-folded NODE. The whole file evaluates to
+# `mix`, a curried lambda: ast: senv: node.
+let
+  fold = op: a: b:
+    if op == "+" then a + b
+    else if op == "-" then a - b
+    else if op == "*" then a * b
+    else if op == "/" then a / b
+    else if op == "==" then a == b
+    else if op == "!=" then a != b
+    else if op == "<" then a < b
+    else if op == "<=" then a <= b
+    else if op == ">" then a > b
+    else a >= b;
+
+  wrap = v:
+    if builtins.isInt v then { kind = "int"; value = v; }
+    else if builtins.isBool v then { kind = "bool"; value = v; }
+    else if builtins.isString v
+    then { kind = "str"; parts = [ { kind = "lit"; text = v; } ]; }
+    else { kind = "unsupported"; };
+
+  isLitStr = n:
+    if n.kind == "str"
+    then (if builtins.length n.parts == 0
+          then true
+          else (if builtins.length n.parts == 1
+                then (builtins.head n.parts).kind == "lit"
+                else false))
+    else false;
+
+  strText = n:
+    if builtins.length n.parts == 0 then "" else (builtins.head n.parts).text;
+
+  isData = n:
+    if n.kind == "int" then true
+    else if n.kind == "bool" then true
+    else if n.kind == "cattrs" then true
+    else isLitStr n;
+
+  dataFold = op: l: r:
+    if op == "==" then { kind = "bool"; value = strText l == strText r; }
+    else if op == "!=" then { kind = "bool"; value = strText l != strText r; }
+    else { kind = "unsupported"; };
+
+  bind1 = env: name: node:
+    env // builtins.listToAttrs [ { name = name; value = node; } ];
+
+  inBinds = n: bs:
+    if builtins.length bs == 0 then false
+    else if (builtins.head bs).name == n then true
+    else inBinds n (builtins.tail bs);
+
+  removeNames = senv: bs:
+    builtins.listToAttrs
+      (builtins.map (n: { name = n; value = builtins.getAttr n senv; })
+        (builtins.filter (n: if inBinds n bs then false else true)
+          (builtins.attrNames senv)));
+
+  mixBinds = bs: senv:
+    builtins.map (b: { name = b.name; value = mix b.value senv; }) bs;
+
+  mixParts = ps: senv:
+    builtins.map
+      (part: if part.kind == "lit" then part
+             else { kind = "sub"; node = mix part.node senv; })
+      ps;
+
+  allLitParts = ps:
+    if builtins.length ps == 0 then true
+    else if (builtins.head ps).kind == "lit" then allLitParts (builtins.tail ps)
+    else false;
+
+  mix = ast: senv:
+    if ast.kind == "int" then ast
+    else if ast.kind == "bool" then ast
+    else if ast.kind == "str" then
+      (if allLitParts ast.parts then ast
+       else { kind = "str"; parts = mixParts ast.parts senv; })
+    else if ast.kind == "cattrs" then ast
+    else if ast.kind == "closure" then ast
+    else if ast.kind == "var" then
+      (if builtins.hasAttr ast.name senv
+       then builtins.getAttr ast.name senv
+       else ast)
+    else if ast.kind == "binary" then
+      (let l = mix ast.lhs senv; r = mix ast.rhs senv;
+       in if isData l
+          then (if isData r
+                then (if isLitStr l
+                      then dataFold ast.op l r
+                      else wrap (fold ast.op l.value r.value))
+                else { kind = "binary"; op = ast.op; lhs = l; rhs = r; })
+          else { kind = "binary"; op = ast.op; lhs = l; rhs = r; })
+    else if ast.kind == "if" then
+      (let c = mix ast.cond senv;
+       in if c.kind == "bool"
+          then (if c.value then mix ast.then_e senv else mix ast.else_e senv)
+          else { kind = "if"; cond = c;
+                 then_e = mix ast.then_e senv;
+                 else_e = mix ast.else_e senv; })
+    else if ast.kind == "lambda" then
+      { kind = "closure"; param = ast.param; body = ast.body; senv = senv; }
+    else if ast.kind == "apply" then
+      (let f = mix ast.func senv; a = mix ast.arg senv;
+       in if f.kind == "closure"
+          then mix f.body (bind1 f.senv f.param a)
+          else if f.kind == "recclo"
+          then mix f.body (bind1 (recFrame f.binds f.outer) f.param a)
+          else { kind = "apply"; func = f; arg = a; })
+    else if ast.kind == "select" then
+      (let b = mix ast.base senv;
+       in if b.kind == "cattrs"
+          then builtins.getAttr ast.name
+                 (builtins.listToAttrs
+                   (builtins.map (fld: { name = fld.name; value = fld.value; }) b.fields))
+          else { kind = "select"; base = b; name = ast.name; })
+    else if ast.kind == "let" then
+      (let masked = removeNames senv ast.bindings;
+       in if allLambdas ast.bindings
+          then mix ast.body (recFrame ast.bindings masked)
+          else { kind = "let";
+                 bindings = mixBinds ast.bindings masked;
+                 body = mix ast.body masked; })
+    else { kind = "unsupported"; };
+
+  allLambdas = bs:
+    if builtins.length bs == 0 then true
+    else if (builtins.head bs).value.kind == "lambda"
+    then allLambdas (builtins.tail bs)
+    else false;
+
+  # Rebuild the recursive frame on demand: every let-bound lambda becomes a
+  # recclo remembering the WHOLE binding group + the outer static env.
+  recFrame = binds: outer:
+    outer // builtins.listToAttrs
+      (builtins.map
+        (b: { name = b.name;
+              value = { kind = "recclo";
+                        param = b.value.param;
+                        body = b.value.body;
+                        binds = binds;
+                        outer = outer; }; })
+        binds);
+in mix

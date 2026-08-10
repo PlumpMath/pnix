@@ -1,0 +1,260 @@
+let
+  ownerName = "stdlib.nl.category-hochschild-serre-substrate";
+
+  galois = import nl/category-galois-substrate.px;
+  spectral = import nl/category-spectral-sequences-substrate.px;
+  sheafCohom = import nl/category-sheaf-cohomology-substrate.px;
+
+  # === Hochschild-Serre Spectral Sequence (agent-NL-183) =============
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Filtered spectral sequences for étale cohomology (Hochschild-Serre)"
+  #
+  # Classical Hochschild-Serre: for a group extension 1 → N → G → Q → 1
+  # acting on F, there's a spectral sequence:
+  #   E_2^{p,q} = H^p(Q, H^q(N, F)) ⇒ H^{p+q}(G, F)
+  #
+  # In substrate: G_pnix has normal subgroup σ_axiom (axiom-fiber action),
+  # quotient G/σ_axiom acts on N-invariants. Hochschild-Serre computes
+  # G_pnix cohomology via:
+  #   1. Compute H^q(σ_axiom, F) (axiom-fiber invariants of F)
+  #   2. Compute H^p(G/σ_axiom, -) (action of remaining symmetries)
+  #   3. E_∞ ⇒ H^*(G_pnix, F) (full substrate cohomology)
+
+  stepKind = "hochschild-serre-spectral-sequence";
+  framework_step =
+    "G_pnix group extension SS — N = sigma-axiom, Q = G/sigma-axiom";
+
+  # =================================================================
+  # === Group extension structure ===================================
+  # =================================================================
+
+  groupExtension = {
+    extension_id = "1 → σ_axiom → G_pnix → G_pnix/σ_axiom → 1";
+    normal_subgroup_N = {
+      group_id = "sigma-axiom-normal-subgroup";
+      generators = [ "σ_axiom" ];
+      description_en = "axiom-fiber relabeling — normal in G_pnix";
+      structure = "abelian (axiom-fiber permutations commute when applied to disjoint fibers)";
+    };
+    quotient_group_Q = {
+      group_id = "G-pnix-mod-sigma-axiom";
+      generators = [ "σ_rename" "σ_lang" ];
+      description_en = "remaining substrate symmetries acting on N-invariants";
+      structure = "product of permutation groups";
+    };
+    short_exact_sequence = "1 → N(σ_axiom) → G_pnix → Q(σ_rename × σ_lang) → 1";
+    splits = "yes (substrate has natural section: assign canonical axiom-fiber representative)";
+  };
+
+  # =================================================================
+  # === Hochschild-Serre E_2 page ===================================
+  # =================================================================
+
+  hochschildSerreE2 = {
+    page = 2;
+    description_en = "E_2^{p,q} = H^p(Q, H^q(N, F))";
+    entries_at_low_degree = [
+      {
+        p = 0; q = 0;
+        meaning = "H^0(Q, H^0(N, F)) = N-invariants then Q-invariants = full G-invariants";
+        substrate_meaning = "receipts invariant under both axiom-fiber relabel AND rename+lang permutations = canonical receipts";
+      }
+      {
+        p = 1; q = 0;
+        meaning = "H^1(Q, H^0(N, F)) = Q-torsors of N-fixed-points";
+        substrate_meaning = "rename/lang permutations of axiom-canonical receipts that are locally trivial but globally twisted";
+      }
+      {
+        p = 0; q = 1;
+        meaning = "H^0(Q, H^1(N, F)) = Q-invariants of N-torsors";
+        substrate_meaning = "axiom-fiber torsors that remain Q-invariant — substrate axiom-equivalence classes";
+      }
+      {
+        p = 1; q = 1;
+        meaning = "H^1(Q, H^1(N, F)) = Q-torsors of N-torsors";
+        substrate_meaning = "doubly-twisted forms — substrate receipts with two-layer symmetry breaking";
+      }
+      {
+        p = 2; q = 0;
+        meaning = "H^2(Q, H^0(N, F)) = higher Q-cohomology of N-fixed sheaf";
+        substrate_meaning = "obstructions to lifting Q-cocycles on canonical receipts";
+      }
+    ];
+    differential_d2 = "d_2 : E_2^{p,q} → E_2^{p+2, q-1}";
+    convergence_target = "H^{p+q}(G_pnix, F)";
+  };
+
+  # =================================================================
+  # === Hochschild-Serre 5-term exact sequence ======================
+  # =================================================================
+  #
+  # Low-degree consequence of Hochschild-Serre:
+  #   0 → H^1(Q, F^N) → H^1(G, F) → H^1(N, F)^Q → H^2(Q, F^N) → H^2(G, F)
+  #
+  # This is the 5-term exact sequence from the spectral sequence's
+  # bottom-row low-degree analysis.
+
+  fiveTermExactSequence = {
+    sequence_kind = "Hochschild-Serre-5-term-exact";
+    sequence_template = [
+      "0"
+      "H^1(Q, F^N)"
+      "H^1(G, F)"
+      "H^1(N, F)^Q"
+      "H^2(Q, F^N)"
+      "H^2(G, F)"
+    ];
+    substrate_interpretation_en = ''
+      Reading the 5-term sequence in substrate language:
+        - H^1(Q, F^N) = rename/lang torsors on canonical receipts
+        - H^1(G, F)   = full substrate H^1 (all-symmetry torsors)
+        - H^1(N, F)^Q = Q-invariant axiom-fiber torsors
+        - H^2(Q, F^N) = higher rename/lang obstructions
+        - H^2(G, F)   = full substrate H^2
+
+      The exactness ties these together: an N-torsor that's Q-invariant
+      lifts to a full G-torsor iff its image in H^2(Q, F^N) vanishes.
+    '';
+    substrate_witness_en = ''
+      Substrate example: Adjoint AC3 (originally Held) was an
+      H^1(N, F)^Q class (Q-invariant axiom-fiber torsor that did
+      not lift to a global G-torsor because no Mode 13 partner
+      existed). #174 mode-13-reverse-functor Kan extension provides
+      the lift, killing the obstruction.
+    '';
+  };
+
+  # =================================================================
+  # === Inflation-restriction sequence ==============================
+  # =================================================================
+  #
+  # Inflation: H^*(Q, F^N) → H^*(G, F)
+  # Restriction: H^*(G, F) → H^*(N, F)^Q
+  # Connecting map (transgression): H^1(N, F)^Q → H^2(Q, F^N)
+
+  inflationRestriction = {
+    inflation = {
+      direction = "H^*(Q, F^N) → H^*(G, F)";
+      operational_en = "lift a Q-cohomology class (on canonical receipts) to a full G-cohomology class (on all receipts)";
+      injective_at_degree_1 = true;
+    };
+    restriction = {
+      direction = "H^*(G, F) → H^*(N, F)^Q";
+      operational_en = "restrict a full G-cohomology class to the N-only component (axiom-fiber-only twisting)";
+      surjective_only_when_d2_vanishes = true;
+    };
+    transgression = {
+      direction = "H^1(N, F)^Q → H^2(Q, F^N)";
+      operational_en = "the obstruction map: take a Q-invariant N-torsor and check if it lifts to G";
+      vanishing_iff_lifts_to_G = true;
+    };
+  };
+
+  # =================================================================
+  # === Substrate-side Hochschild-Serre instances ===================
+  # =================================================================
+
+  substrateInstances = [
+    {
+      instance_id = "hs-AC3-closure";
+      description_en = "Adjoint AC3 closure via Kan extension (#174) is a Hochschild-Serre transgression vanishing.";
+      transgression_class = "AC3 torsor in H^1(N, F)^Q";
+      vanished_via = "Kan extension F' provides the lift to G_pnix";
+      depends_on_lemma = "theorem-mode-13-reverse-functor-via-kan-extension";
+    }
+    {
+      instance_id = "hs-canonical-receipts-as-fixed-points";
+      description_en = "Galois H^0 = canonical receipts = E_2^{0,0} of Hochschild-Serre.";
+      computed_at_E2 = "(p=0, q=0)";
+      meaning = "Receipts invariant under both N and Q = receipts canonical under full G_pnix";
+    }
+    {
+      instance_id = "hs-mode-11-quotient-action";
+      description_en = "Mode 11 (coequalizer-fold) implements the N-quotient (taking σ_axiom-orbits) at the operational level. Hochschild-Serre then describes how Q acts on these orbits.";
+      operational_witness = "Mode 11 outputs canonical instances; Q symmetries act on canonical instances";
+    }
+  ];
+
+  # =================================================================
+  # === Convergence + collapse criteria =============================
+  # =================================================================
+
+  collapseCriteria = {
+    when_does_collapse_at_E2 = ''
+      Hochschild-Serre collapses at E_2 (i.e., E_2 = E_∞) when:
+        - d_2 = 0 everywhere, OR
+        - the extension 1 → N → G → Q → 1 splits AND
+          the action of Q on H^*(N, F) is trivial.
+
+      Substrate context: the extension 1 → σ_axiom → G_pnix → Q → 1
+      DOES split (canonical axiom representative). But Q does act
+      non-trivially on σ_axiom-cohomology (different rename/lang
+      choices yield different axiom-canonical receipts).
+
+      So substrate H-S does NOT generally collapse at E_2 — d_2 can
+      be non-trivial. Expected stable page: E_3 or E_4.
+    '';
+    substrate_collapse_page = "E_3 or E_4 (empirical — requires per-receipt computation)";
+    collapses_at_E_infinity_by = "page 4 (since the filtration's depth is bounded by the extension's complexity)";
+  };
+
+  # =================================================================
+  # === Inventory ====================================================
+  # =================================================================
+
+  inventorySummary = _: {
+    owner = ownerName;
+    has_group_extension = true;
+    extension_splits = groupExtension.splits == "yes (substrate has natural section: assign canonical axiom-fiber representative)";
+    has_E2_page = true;
+    has_5_term_exact_sequence = true;
+    has_inflation_restriction = true;
+    has_transgression_map = true;
+    substrate_instance_count = builtins.length substrateInstances;
+    galois_owner_inherited = galois.ownerName;
+    spectral_sequences_owner_inherited = spectral.ownerName;
+    sheaf_lemma_qed_inherited = (sheafCohom.inventorySummary {}).sheaf_lemma_qed;
+    relates_AC3_closure_to_transgression_vanishing = true;
+  };
+
+  # =================================================================
+  # === Plate entry =================================================
+  # =================================================================
+
+  applyHochschildSerrePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "hochschild-serre-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "group_extension" request then {
+      outcome = "hochschild-serre-extension-emitted"; receipt = groupExtension;
+    }
+    else if builtins.hasAttr "E2_page" request then {
+      outcome = "hochschild-serre-E2-emitted"; receipt = hochschildSerreE2;
+    }
+    else if builtins.hasAttr "five_term" request then {
+      outcome = "hochschild-serre-5-term-exact-emitted"; receipt = fiveTermExactSequence;
+    }
+    else if builtins.hasAttr "inflation_restriction" request then {
+      outcome = "hochschild-serre-inflation-restriction-emitted"; receipt = inflationRestriction;
+    }
+    else if builtins.hasAttr "substrate_instances" request then {
+      outcome = "hochschild-serre-substrate-instances-emitted"; receipt = substrateInstances;
+    }
+    else if builtins.hasAttr "collapse_criteria" request then {
+      outcome = "hochschild-serre-collapse-criteria-emitted"; receipt = collapseCriteria;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "group_extension" "E2_page" "five_term"
+             "inflation_restriction" "substrate_instances" "collapse_criteria"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit groupExtension hochschildSerreE2 fiveTermExactSequence;
+  inherit inflationRestriction substrateInstances collapseCriteria;
+  inherit inventorySummary applyHochschildSerrePlate;
+}

@@ -1,0 +1,344 @@
+let
+  ownerName = "stdlib.nl.sentence-invariant-convergence";
+
+  # === Sentence Invariant Convergence (agent-NL-103, propose step) ==
+  #
+  # 사용자 directive chain (2026-05-29):
+  # - "분해된 sentence 의 명확한 의미 결정 + 수렴 (4-piece) →
+  #    substrate 매핑 → 코드 생성"
+  # - "수학 커널적인 것과 code 응용 빠짐없이 — 수학!"
+  #
+  # 본 owner = algorithm-sentence-sequence 의 `propose` step.
+  # decomposer (#101) 의 atoms + detector (#102) 의 morphism pairs 를
+  # 받아, 모든 atom 이 *공유하고 보존하는 의미 핵심* (invariant) 을
+  # 추출. 이 invariant 가 *수렴된 의미* — substrate 매핑의 진입점.
+  #
+  # # 4-piece (#3 invariant) 의 NL 도메인 lift
+  #
+  #   math space invariant   = 공간이 변환을 거쳐도 보존하는 성질
+  #   sentence invariant     = atom 들이 다양해도 보존되는 의미 측면
+  #
+  # # 수학 응용 (사용자 강조)
+  #
+  # - equation chain: x²-1=0 ↔ (x-1)(x+1)=0 ↔ x=±1
+  #   → equation-equivalence morphism 체인 → math-truth-value-chain invariant
+  # - procedure chain: "풀어. 그 다음 검증해."
+  #   → temporal-sequence + math-procedure ambient → math-procedure-chain
+  # - definition + theorem: "정의 X 이다. 정리 Y 따른다."
+  #   → math-timeless ambient + causal morphism → math-knowledge-chain
+  #
+  # # public/carry envelope 헌법 보존
+
+  stepKind = "propose";
+  framework_step = "3 of 4 (invariant convergence — atoms 의 보존 핵심)";
+
+  # === Known invariant kinds ====================================
+  #
+  # 각 row:
+  #   id              — canonical kind
+  #   family          — generic / math
+  #   description_en/ko
+  #   detect          — predicate over (atoms, morphisms)
+  #   substrate_hint  — 수렴 시 추천 routing 후보
+
+  # Helper predicates over atoms and morphism pair detail.
+
+  allAtomsHaveAmbient = atoms: ambient_id:
+    builtins.all (a:
+      builtins.hasAttr "ambient_id" a
+      && a.ambient_id == ambient_id
+    ) atoms;
+
+  anyAtomHasAmbient = atoms: ambient_id:
+    builtins.any (a:
+      builtins.hasAttr "ambient_id" a
+      && a.ambient_id == ambient_id
+    ) atoms;
+
+  allAtomsInFamily = atoms: family:
+    builtins.all (a:
+      builtins.hasAttr "family" a
+      && a.family == family
+    ) atoms;
+
+  allMorphismsAre = pairs: morphism_id:
+    pairs != []
+    && builtins.all (p:
+      p.outcome == "morphism-resolved"
+      && p.morphism_id == morphism_id
+    ) pairs;
+
+  anyMorphismIs = pairs: morphism_id:
+    builtins.any (p:
+      p.outcome == "morphism-resolved"
+      && p.morphism_id == morphism_id
+    ) pairs;
+
+  uniqueAmbients = atoms:
+    let
+      ids = builtins.map (a:
+        if builtins.hasAttr "ambient_id" a then a.ambient_id else "unknown"
+      ) atoms;
+      uniq = builtins.foldl' (acc: id:
+        if builtins.elem id acc then acc else acc ++ [ id ]
+      ) [] ids;
+    in uniq;
+
+  # === Invariant detection ======================================
+
+  # 1. ambient-invariant — every atom shares the exact same ambient.
+  detectAmbientInvariant = atoms: _pairs:
+    let
+      uniq = uniqueAmbients atoms;
+    in
+      if builtins.length uniq == 1 then {
+        outcome = "invariant-found";
+        id = "ambient-invariant";
+        family = "generic";
+        shared_value = builtins.head uniq;
+        description_en = "All atoms share the same ambient mode.";
+        description_ko = "모든 atom 이 같은 ambient 모드를 공유.";
+      } else { outcome = "not-applicable"; };
+
+  # 2. family-invariant — every atom shares the same ambient family.
+  detectFamilyInvariant = atoms: _pairs:
+    let
+      fams = builtins.map (a:
+        if builtins.hasAttr "family" a then a.family else "unknown"
+      ) atoms;
+      uniq = builtins.foldl' (acc: f:
+        if builtins.elem f acc then acc else acc ++ [ f ]
+      ) [] fams;
+    in
+      if builtins.length uniq == 1 then {
+        outcome = "invariant-found";
+        id = "family-invariant";
+        family = "generic";
+        shared_value = builtins.head uniq;
+        description_en = "All atoms share the same semantic family.";
+        description_ko = "모든 atom 이 같은 의미론적 family 공유.";
+      } else { outcome = "not-applicable"; };
+
+  # 3. math-truth-value-chain — equation-equivalence morphism 으로
+  #    이어진 atom chain. atoms 모두 math 영역.
+  detectMathTruthValueChain = atoms: pairs:
+    if pairs == [] then { outcome = "not-applicable"; }
+    else if allAtomsInFamily atoms "math"
+         && allMorphismsAre pairs "equation-equivalence" then {
+      outcome = "invariant-found";
+      id = "math-truth-value-chain";
+      family = "math";
+      description_en = "All atoms denote equations with the same truth value (equivalence chain).";
+      description_ko = "모든 atom 이 같은 진리값의 등식 체인 (동치).";
+      substrate_hint = "stdlib/lib/math/parametric-equation-substrate.px";
+      math_object_kind = "equation-equivalence-chain";
+      timeless_or_ordered = "ordered";
+    } else { outcome = "not-applicable"; };
+
+  # 4. math-procedure-chain — 모든 atom 이 math-procedure ambient,
+  #    morphism 이 temporal-sequence 위주. 풀이 절차 chain.
+  detectMathProcedureChain = atoms: pairs:
+    if !(allAtomsHaveAmbient atoms "math-procedure") then {
+      outcome = "not-applicable";
+    }
+    else if pairs != [] && anyMorphismIs pairs "temporal-sequence" then {
+      outcome = "invariant-found";
+      id = "math-procedure-chain";
+      family = "math";
+      description_en = "Atoms form an ordered mathematical procedure (steps in time).";
+      description_ko = "atom 들이 시간순 수학 절차 (단계).";
+      substrate_hint = "stdlib/lib/math/equation-solving-procedure.px";
+      math_object_kind = "ordered-procedure";
+      timeless_or_ordered = "ordered";
+    } else { outcome = "not-applicable"; };
+
+  # 5. math-knowledge-chain — math-timeless 발화 + 인과/시간 morphism.
+  detectMathKnowledgeChain = atoms: pairs:
+    if !(allAtomsHaveAmbient atoms "math-timeless") then {
+      outcome = "not-applicable";
+    } else {
+      outcome = "invariant-found";
+      id = "math-knowledge-chain";
+      family = "math";
+      description_en = "Atoms form a timeless mathematical knowledge chain (definitions / theorems).";
+      description_ko = "atom 들이 시간 무관 수학 지식 체인 (정의 / 정리).";
+      substrate_hint = "stdlib/lib/math/ambient-space.px";
+      math_object_kind = "definition-theorem-chain";
+      timeless_or_ordered = "timeless";
+    };
+
+  # 6. correction-overrides-invariant — contradiction morphism 존재 시
+  #    이전 atom 의 의미는 후순위 atom 에 의해 override. 사용자의
+  #    "내 뜻은 X 다" 패턴. substrate 가 마지막 atom 을 진의로 본다.
+  detectCorrectionInvariant = _atoms: pairs:
+    if anyMorphismIs pairs "contradiction" then {
+      outcome = "invariant-found";
+      id = "correction-override";
+      family = "generic";
+      description_en = "User correction detected — later atoms override earlier ones.";
+      description_ko = "사용자 정정 감지 — 후순위 atom 이 우선순위.";
+    } else { outcome = "not-applicable"; };
+
+  # 7. math-family-chain — 모든 atom 이 math family (ambient mix OK).
+  #    예: "x²-1=0 을 풀어. 검증도 해줘." — atom1 math-procedure +
+  #    atom2 math-verification → 모두 math 영역.
+  #    routes to problem-kernel-substrate (mixed math chain owner).
+  detectMathFamilyChain = atoms: _pairs:
+    if allAtomsInFamily atoms "math" then {
+      outcome = "invariant-found";
+      id = "math-family-chain";
+      family = "math";
+      description_en = "All atoms are in the mathematics domain (mixed kinds — procedure / verification / definition).";
+      description_ko = "모든 atom 이 수학 도메인 (절차 / 검증 / 정의 혼합).";
+      substrate_hint = "stdlib/lib/math/problem-kernel-substrate.px";
+      math_object_kind = "math-family-chain";
+      timeless_or_ordered = "mixed";
+    } else { outcome = "not-applicable"; };
+
+  # Detection in priority order — most specific first.
+  invariantDetectors = [
+    { id = "math-truth-value-chain"; fn = detectMathTruthValueChain; }
+    { id = "math-procedure-chain";   fn = detectMathProcedureChain; }
+    { id = "math-knowledge-chain";   fn = detectMathKnowledgeChain; }
+    { id = "math-family-chain";      fn = detectMathFamilyChain; }
+    { id = "correction-override";    fn = detectCorrectionInvariant; }
+    { id = "ambient-invariant";      fn = detectAmbientInvariant; }
+    { id = "family-invariant";       fn = detectFamilyInvariant; }
+  ];
+
+  invariantKindCount = builtins.length invariantDetectors;
+  invariantKindIds = builtins.map (d: d.id) invariantDetectors;
+
+  # === Run all detectors, collect every invariant that holds =====
+
+  convergeInvariants = decompReceipt: morphReceipt:
+    if !(builtins.isAttrs decompReceipt) then {
+      outcome = "held-non-attrs-decomp";
+    }
+    else if !(builtins.hasAttr "carry" decompReceipt) then {
+      outcome = "held-missing-decomp-carry";
+    }
+    else
+      let
+        atoms = decompReceipt.carry.per_atom_ambient;
+        pairs =
+          if builtins.isAttrs morphReceipt
+             && builtins.hasAttr "carry" morphReceipt
+             && builtins.hasAttr "pair_detail" morphReceipt.carry
+          then morphReceipt.carry.pair_detail
+          else [];
+        results = builtins.map (d:
+          let r = d.fn atoms pairs; in
+            r // { detector_id = d.id; }
+        ) invariantDetectors;
+        held = builtins.filter
+          (r: r.outcome == "invariant-found") results;
+        heldCount = builtins.length held;
+        # Pick the first math-family invariant for substrate routing.
+        mathInv = builtins.filter
+          (h: builtins.hasAttr "family" h && h.family == "math") held;
+        primary = if mathInv != [] then builtins.head mathInv
+                  else if held != [] then builtins.head held
+                  else null;
+        substrateHint =
+          if primary != null && builtins.hasAttr "substrate_hint" primary
+          then primary.substrate_hint
+          else null;
+      in {
+        outcome = "invariants-converged";
+        atom_count = builtins.length atoms;
+        invariant_count = heldCount;
+        public = {
+          invariants = builtins.map (h: {
+            description_en = h.description_en;
+            description_ko = h.description_ko;
+          }) held;
+          atom_count = builtins.length atoms;
+          converged = heldCount > 0;
+        };
+        carry = {
+          held_invariants = held;
+          primary_invariant_id =
+            if primary == null then null else primary.id;
+          substrate_routing_hint = substrateHint;
+          axiom_origin =
+            "axiom-92-nl-sentence-invariant (lifts axiom-3-invariant)";
+          composes = [
+            "axiom-90-nl-sentence-decomposition"
+            "axiom-91-nl-sentence-morphism"
+            "axiom-3-invariant (math source)"
+          ];
+        };
+      };
+
+  # Convenience: derive from a single utterance string.
+  convergeFromUtterance = utterance:
+    let
+      decomposer = import ./sentence-decomposition-substrate.px;
+      detector = import ./sentence-morphism-detector.px;
+      dec = decomposer.decomposeUtterance utterance;
+      mor = detector.resolveMorphisms dec;
+    in convergeInvariants dec mor;
+
+  applyNlInvariantConvergencePlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "utterance" request then
+      convergeFromUtterance request.utterance
+    else if (builtins.hasAttr "decomp_receipt" request)
+            && (builtins.hasAttr "morph_receipt" request) then
+      convergeInvariants request.decomp_receipt request.morph_receipt
+    else {
+      outcome = "held-missing-input-field";
+      reason = "Provide either { utterance } or { decomp_receipt, morph_receipt }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-invariant-axiom-92";
+    invariant_kind_count = invariantKindCount;
+    invariant_kind_ids = invariantKindIds;
+    composes = "axiom-3-invariant (math/geometric → NL lift)";
+    inherit framework_step;
+    step_kind = stepKind;
+    next_step_owners = [
+      "stdlib/lib/nl/sentence-meta-detection.px        # hold/elevate (agent-NL-104)"
+      "stdlib/lib/nl/sentence-substrate-mapping.px     # full chain (agent-NL-105)"
+    ];
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-attrs-decomp"
+      "held-missing-decomp-carry"
+      "held-non-attrs-request"
+      "held-missing-input-field"
+    ];
+  };
+
+in {
+  inherit
+    ownerName invariantDetectors invariantKindCount invariantKindIds
+    allAtomsHaveAmbient anyAtomHasAmbient allAtomsInFamily
+    allMorphismsAre anyMorphismIs uniqueAmbients
+    detectAmbientInvariant detectFamilyInvariant
+    detectMathTruthValueChain detectMathProcedureChain
+    detectMathKnowledgeChain detectMathFamilyChain
+    detectCorrectionInvariant
+    convergeInvariants convergeFromUtterance
+    applyNlInvariantConvergencePlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL sentence invariant convergence (agent-NL-103)";
+    owner = ownerName;
+    base = "nl-sentence-invariant-convergence-v0";
+    rev_note = "4-piece (#1-#4) NL lift step 3. 6 invariant detector — "
+      + "3 generic (ambient / family / correction) + 3 math (truth-value "
+      + "chain / procedure chain / knowledge chain). 사용자 강조 '수학 "
+      + "커널' 응용 — math 동치 chain 이면 parametric-equation-substrate "
+      + "route, 풀이 chain 이면 equation-solving-procedure route, "
+      + "정의 chain 이면 ambient-space route. DO NOT REBUILD — "
+      + "invariant.px 자산 패턴 재사용.";
+  };
+}

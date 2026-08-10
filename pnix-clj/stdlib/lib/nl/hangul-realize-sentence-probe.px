@@ -1,0 +1,25 @@
+# stdlib/lib/nl/hangul-realize-sentence-probe.px
+#
+# S78: clause assembly slots → korean-nl-mirror.realizeSentence (not clj string concat).
+# Evaluated via pnixc-meta one-shot; Clojure durable layer keeps surface hash only.
+let
+  knm = import ./korean-nl-mirror.px;
+  B = builtins;
+
+  realizeFromArgs = args:
+    let roles = if B.isAttrs args then args.roles else [ ];
+        action = if B.isAttrs args then args.action else "";
+        tense = if B.isAttrs args then args.tense else "present";
+        mood = if B.isAttrs args && (args ? mood) then args.mood else "declarative";
+        prop = knm.mkProposition roles action tense mood;
+    in knm.realizeSentence prop;
+
+  runProbe = args:
+    let sentence = realizeFromArgs args;
+    in {
+      status = "ok";
+      sentence = sentence;
+      realizer = "stdlib/lib/nl/korean-nl-mirror.px";
+    };
+
+in { inherit realizeFromArgs runProbe; }

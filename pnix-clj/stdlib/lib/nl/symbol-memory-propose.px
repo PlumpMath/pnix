@@ -1,0 +1,51 @@
+# stdlib/lib/nl/symbol-memory-propose.px
+#
+# codec proposition → typed universal symbol(號) *후보* record들 (symbol-memory-store-plan 입력).
+# = "한글 지식이 내는 symbol을 시스템이 *스스로* 제안"의 propose 측(common 지능).
+#
+# 비파괴·propose-only: 코덱(korean-nl-mirror) 안 건드리고 그 liftToProposition 출력을 *consume*하는 apply.
+#   號 minter=solver-nl-entity-alias.aliasAll · canonical 수=term-dag.key · dedup label=predicate-concepts.conceptOf
+#   전부 *재사용*(새 거울/lane 0). 자기(self)는 지식 symbol 아니므로 제외.
+# ★신원=exact canonical_key(term-dag.key); hash 주소는 소비 store-plan이 붙인다(propose 후보/exact 신원, research w77tlsyzv).
+# dispose는 다음 칸(dedup exact-check + 3-face verify + rollback) — 여기선 *후보만* 낸다(durable 아님).
+let
+  B = builtins;
+  alias = import ../math/solver-nl-entity-alias.px;
+  td = import ../lisp/term-dag.px;
+  pc = import ./predicate-concepts.px;
+
+  leafKey = name: td.key { sym = name; };          # content-addressed 수 (s:name)
+  nsPrefix = "n:";                                 # = korean-nl-mirror.px:488 nsym (NL 네임스페이스, math 키공간 s:plus…와 물리분리)
+
+  # ★canonical_key를 propToTerm leaf와 *byte-identical*하게(§34-9 가): 술어=conceptOf 개념-축약(먹·잡수시→ingest),
+  #   개체=surface 유지(conceptOf=null=단서·격리), 둘 다 n: 네임스페이스 → 마디 term namespace와 한 keyspace로 정렬.
+  #   효과: 동의어가 *마디처럼 symbol도 합쳐져*(s:n:ingest) orphan-dispose 차단; index와 node-refs는 한 producer(proposeSymbols)라 drift 0.
+  toSym = r:
+    let c = pc.conceptOf r.name;                   # 술어 개념 label 또는 null(개체)
+        ident = nsPrefix + (if c == null then r.name else c);
+    in {
+      alias = r.alias;
+      ref_kind = r.ref_kind;
+      name = r.name;
+      canonical_key = leafKey ident;               # s:n:ingest(술어) / s:n:철수(개체) = propToTerm leaf와 동일
+      concept = c;                                 # 언어중립 label 또는 null
+    };
+
+  # proposition {roles=[{role,entity}], action} → alias 입력 entity list
+  propEntities = prop:
+    let roleEnts = B.map (p: { name = p.entity; role = p.role; ref_kind = "thing"; })
+                         (if prop ? roles then prop.roles else [ ]);
+        actEnt = if (prop ? action) && (prop.action != "")
+                 then [ { name = prop.action; role = "predicate"; ref_kind = "symbol"; } ]
+                 else [ ];
+    in roleEnts ++ actEnt;
+in {
+  # proposition → symbol 후보 record들 (store-plan symbols 입력). self·빈 제외. durable 아님(propose-only).
+  proposeSymbols = prop:
+    let aliased = (alias.aliasAll (propEntities prop)).entities;
+        nonSelf = B.filter (r: r.ref_kind != "self") aliased;
+        syms = B.map toSym nonSelf;
+    in { symbols = syms; symbol_count = B.length syms; proposer_only = true; durable_truth = false; };
+
+  inherit propEntities;
+}

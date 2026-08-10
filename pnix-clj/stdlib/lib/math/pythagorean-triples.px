@@ -1,0 +1,231 @@
+# stdlib.lib.math.pythagorean-triples
+#
+# OWNER-LAW (v0.12-ABE, div-math, 2026-05-22): Pythagorean triples
+# -- positive integers (a, b, c) with a^2 + b^2 = c^2.
+#
+# # Primitive triples and Euclid's formula
+#
+# A triple is PRIMITIVE when its three legs share no common factor
+# (gcd(a, b, c) = 1). Every triple is a primitive triple scaled by
+# a positive integer: (6, 8, 10) is 2 * (3, 4, 5).
+#
+# Euclid's formula generates every triple. For integers m > n > 0,
+#
+#     a = m^2 - n^2,   b = 2*m*n,   c = m^2 + n^2
+#
+# always satisfies a^2 + b^2 = c^2. The triple is primitive exactly
+# when gcd(m, n) = 1 and m, n have opposite parity (m + n odd).
+# Each primitive triple arises from exactly one such (m, n), so
+# `primitiveTriplesUpTo` enumerates them with no duplication and no
+# omission.
+#
+# # Kernel layering
+#
+#   pythagorean-triples -> number-theory   (gcd supplies both the
+#                                           primitivity test and
+#                                           the (m, n) coprimality
+#                                           filter)
+#
+# # Exact, deterministic
+#
+# All integer arithmetic; same request -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a Diophantine solver for a^x + b^x = c^x beyond x = 2.
+#   - NOT a triple-tree walker (the Berggren / Barning-Hall ternary
+#     tree of primitive triples) -- enumeration is by Euclid's
+#     formula only.
+#   - NOT memoised; `primitive-list` caps its limit.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/pythagorean-triples.px";
+
+  numberTheory = import ./number-theory.px;
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # gcd of three legs, via the number-theory Euclidean gcd.
+  gcd3 = a: b: c: numberTheory.gcd (numberTheory.gcd a b) c;
+
+  # Is (a, b, c) a Pythagorean triple? All three legs must be
+  # positive and a^2 + b^2 must equal c^2.
+  isTriple = a: b: c:
+    a > 0 && b > 0 && c > 0 && (a * a + b * b == c * c);
+
+  # "primitive-triple" / "non-primitive-triple" / "not-a-triple".
+  classify = a: b: c:
+    if !(isTriple a b c) then "not-a-triple"
+    else if gcd3 a b c == 1 then "primitive-triple"
+    else "non-primitive-triple";
+
+  # Euclid's formula for m > n > 0, with the legs normalised so the
+  # smaller leg is `a`.
+  euclidTriple = m: n:
+    let
+      p = m * m - n * n;
+      q = 2 * m * n;
+    in {
+      a = if p < q then p else q;
+      b = if p < q then q else p;
+      c = m * m + n * n;
+    };
+
+  # The (m, n) pair generates a PRIMITIVE triple iff the two are
+  # coprime and of opposite parity (m + n odd).
+  primitivePair = m: n:
+    numberTheory.gcd m n == 1 && (m + n) % 2 == 1;
+
+  # All primitive triples whose hypotenuse c does not exceed
+  # `limit`, sorted by hypotenuse then by smaller leg. For each m
+  # the smallest hypotenuse is m^2 + 1 (at n = 1), so once that
+  # exceeds the limit no larger m can contribute.
+  primitiveTriplesUpTo = limit:
+    let
+      collectForM = m: acc:
+        if m * m + 1 > limit then acc
+        else
+          let
+            ns = builtins.filter (primitivePair m) (rangeList 1 (m - 1));
+            here = builtins.filter
+              (t: t.c <= limit)
+              (builtins.map (n: euclidTriple m n) ns);
+          in collectForM (m + 1) (acc ++ here);
+      raw = collectForM 2 [];
+    in builtins.sort
+         (x: y: if x.c != y.c then x.c < y.c else x.a < y.a)
+         raw;
+
+  # Scale a triple by a positive integer factor.
+  scaleTriple = a: b: c: k: { a = k * a; b = k * b; c = k * c; };
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "is-triple"
+    "classify"
+    "from-euclid"
+    "primitive-list"
+    "primitive-count"
+    "scale"
+  ];
+
+  # `primitive-list` enumerates O(limit) candidate (m, n) pairs;
+  # the cap keeps one plate call bounded.
+  listLimit = 10000;
+  # `from-euclid` squares m; the cap keeps c in 64-bit range.
+  euclidLimit = 100000;
+
+  applyPythagoreanTriples = request:
+    let
+      op = request.operation;
+      a  = if request ? a then request.a else 0;
+      b  = if request ? b then request.b else 0;
+      c  = if request ? c then request.c else 0;
+      m  = if request ? m then request.m else 0;
+      n  = if request ? n then request.n else 0;
+      k  = if request ? k then request.k else 0;
+      limit = if request ? limit then request.limit else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "is-triple" then
+        if a < 0 || b < 0 || c < 0 then {
+          outcome = "held-negative-number";
+          operation = op; a = a; b = b; c = c;
+        }
+        else {
+          outcome = "pythagorean-triples-computed";
+          operation = op; a = a; b = b; c = c;
+          is_triple = isTriple a b c;
+        }
+      else if op == "classify" then
+        if a < 0 || b < 0 || c < 0 then {
+          outcome = "held-negative-number";
+          operation = op; a = a; b = b; c = c;
+        }
+        else {
+          outcome = "pythagorean-triples-computed";
+          operation = op; a = a; b = b; c = c;
+          classification = classify a b c;
+        }
+      else if op == "from-euclid" then
+        if n < 1 || m <= n then {
+          outcome = "held-invalid-euclid-parameters";
+          operation = op; m = m; n = n;
+          reason = "Euclid's formula requires m > n > 0";
+        }
+        else if m > euclidLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; m = m;
+          limit = euclidLimit;
+          reason = "m is capped so m^2 + n^2 stays in 64-bit range";
+        }
+        else {
+          outcome = "pythagorean-triples-computed";
+          operation = op; m = m; n = n;
+          triple = euclidTriple m n;
+          is_primitive = primitivePair m n;
+        }
+      else if op == "primitive-list" || op == "primitive-count" then
+        if limit < 0 then {
+          outcome = "held-negative-number";
+          operation = op; limit = limit;
+        }
+        else if limit > listLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; limit = limit;
+          cap = listLimit;
+          reason = "the hypotenuse limit is capped to keep one call bounded";
+        }
+        else
+          let triples = primitiveTriplesUpTo limit;
+          in
+            if op == "primitive-list" then {
+              outcome = "pythagorean-triples-computed";
+              operation = op; limit = limit;
+              triples = triples;
+              count = builtins.length triples;
+            }
+            else {
+              outcome = "pythagorean-triples-computed";
+              operation = op; limit = limit;
+              count = builtins.length triples;
+            }
+      else
+        # op == "scale"
+        if k < 1 then {
+          outcome = "held-invalid-scale-factor";
+          operation = op; k = k;
+          reason = "the scale factor must be a positive integer";
+        }
+        else {
+          outcome = "pythagorean-triples-computed";
+          operation = op; factor = k;
+          triple = scaleTriple a b c k;
+        };
+
+in {
+  inherit
+    ownerName
+    gcd3
+    isTriple
+    classify
+    euclidTriple
+    primitivePair
+    primitiveTriplesUpTo
+    scaleTriple
+    knownOperations
+    applyPythagoreanTriples;
+  meta = {
+    source = "stdlib math pythagorean triples";
+    owner = ownerName;
+    base = "parametric-math-pythagorean-triples-v0";
+    rev_note = "v0.12-ABE (div-math): Pythagorean triples -- positive integers with a^2+b^2=c^2. isTriple tests the relation; classify labels primitive / non-primitive / not-a-triple via gcd of the three legs; euclidTriple applies Euclid's formula (a=m^2-n^2, b=2mn, c=m^2+n^2) with normalised legs; primitivePair tests gcd(m,n)=1 with opposite parity; primitiveTriplesUpTo enumerates every primitive triple with hypotenuse <= limit, no duplication; scaleTriple scales a triple by a positive integer. Kernel layering: pythagorean-triples -> number-theory (gcd). Exact, deterministic. NOT a higher-power Diophantine solver, NOT a Barning-Hall triple-tree walker, NOT memoised (limit capped), NOT yet a registered lens.";
+  };
+}

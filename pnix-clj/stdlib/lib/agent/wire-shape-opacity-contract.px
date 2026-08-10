@@ -1,0 +1,312 @@
+let
+  ownerName = "stdlib.agent.wire-shape-opacity-contract";
+
+  mcpContract =
+    import agent/mcp-capability-contract.px;
+
+  # === Wire shape opacity contract (Round 70) =========================
+  #
+  # 사용자 directive (Round 69 후, 두 단계 nuance):
+  # > 'freecat ↔ pnixc-meta 간 wire 에 pnixc-meta 만 이해할 수 있는
+  #   meta-circular 적으로 해석될 수 있는 정보를 넣어보내면 리버스
+  #   엔지니어링 risk 가 될라나?'
+  # > '그러나 freecat 외부 표면언어는 js / x3d 같은 공개 표준이고,
+  #   pnixc-meta 는 모든 언어를 받아 분석 가능하기 때문에 freecat
+  #   runtime API 를 pnixc-meta 에 보내는건 맞다. pnixc-meta 의 *생성
+  #   알고리즘들* 노출이 문제일 뿐.'
+  #
+  # 이 owner = Round 69 의 *vocabulary scan* 위에 *structural shape*
+  # opacity 한 층 더. Input 방향 = 자유 (candidate floor 만 적용),
+  # Output 방향 = substrate generation 알고리즘 shape 차단.
+  #
+  # # Why this round (architectural fit)
+  #
+  # freecat 은 client app — 사용자 디바이스에 설치되어 *실행*되므로
+  # traffic capture / binary reverse / JS evaluation 셋 다 외부 관찰
+  # 가능. 즉 wire 의 *모든 단어 + 모든 shape* 은 결국 노출된다. 그러므로
+  # wire surface = MCP capability 의 *공개 결과 shape* 으로 strictly
+  # 제한.
+  #
+  # # 사용자가 잡은 비대칭 (정확):
+  #
+  #   input  (freecat → pnix):  공개 vocab 자유 + candidate floor 만
+  #   output (pnix → freecat):  substrate generation shape 차단
+  #   양방향:                    meta-circular re-interpretable shape 차단
+  #
+  # # Output verdict family
+  #
+  #   "wire-shape-opaque"                              — 양방향 깨끗
+  #   "held-public-vocab-field-name-leak"              — output field name 노출
+  #   "held-substrate-envelope-shape-leak"             — output 에 envelope shape
+  #   "held-meta-circular-input-injection"             — input 위장 시도
+  #   "held-axiom-derivation-process-leak"             — output 에 derivation trace
+  #   "held-unknown-wire-category"                     — closed 밖 카테고리
+
+  stepKind = "wire-shape-opacity";
+  framework_step =
+    "JSON wire envelope → public-vocab field check + structural shape check";
+
+  # ===================================================================
+  # === Public wire categories (closed; 양방향 OK) ====================
+  # ===================================================================
+  #
+  # 이 카테고리 안의 표현은 *모든 wire* (input + output) 에 자유.
+  # 모두 *공개 표준* 또는 *외부에서 알아야 작동하는 vocabulary*.
+
+  knownPublicWireCategories = [
+    "x3d-source"                # W3C 표준
+    "javascript-expression"     # ECMA 표준
+    "formula-source"            # MathML / LaTeX / plain text
+    "named-ref-or-slot-ref"     # @name, @[N], @[N].var
+    "capability-kind"           # 17 개 Round 69 closed
+    "mode-name"                 # 3 개 Round 69 closed
+    "actor-identity"            # actor_kind, actor_id, tenant_id
+    "external-app-native-code"  # MEL / VEX / Python (외부 공개)
+    "axiom-class-label"         # "monoid", "linear-affine" — *label 만*
+    "host-language-name"        # "rust", "python", "kotlin", ...
+    "sanitised-prose"           # OpaqueGuard 거친 NL
+    "scene-node-name"           # X3D node 이름 (Box, Transform, Material)
+    "behavior-event-name"       # 공개 X3D ROUTE / SCRIPT 표준
+  ];
+
+  # ===================================================================
+  # === Wire-allowed JSON field names (output 방향 closed) ============
+  # ===================================================================
+  #
+  # output JSON 의 field name 은 *반드시* 이 list 안. 새 field 추가 =
+  # 한 row + opaque review. 이 list 자체는 공개해도 됨 (반대로 noise
+  # signal: 우리가 어떤 결과를 *제공* 하는지의 공개 광고).
+
+  wireExposedFieldNames = [
+    # Identity / address
+    "session_id" "exchange_id" "responded_at_ms" "fetched_at_ms"
+
+    # Capability / mode / actor
+    "capability_kind" "mode" "actor" "actor_kind" "actor_id" "tenant_id"
+
+    # Formula slot surface
+    "slot_index" "formula_ref" "variable_refs" "variable_count"
+    "name" "domain" "rendered_mathml" "rendered_latex" "rendered_plain"
+    "supersedes" "superseded_by" "immutable"
+
+    # Axiom label surface (NOT process)
+    "axiom_class" "preserved_invariants" "typeclass_required"
+    "algorithm_class" "semantic_role"
+
+    # Exchange surface
+    "input_text" "response_kind" "summary" "body" "evidence" "confidence"
+    "held_reason" "follow_up_hint" "formula_refs"
+    "rejected_creation_attempts"
+
+    # Scene / world surface
+    "scene_source" "nodes" "edges" "transform" "material"
+
+    # Channel (Layer 2 JS DSL)
+    "channel_id" "slot_ref" "js_expression" "target_emit"
+
+    # External app emit
+    "target_app" "target_language" "emitted_code"
+
+    # Project / coding cockpit
+    "kind" "language" "analyzer" "root_node_ids"
+    "file" "line" "method" "attrs" "children" "label" "ref_id"
+
+    # Generic outcomes
+    "verdict" "outcome" "ok" "error" "code" "message"
+  ];
+
+  # ===================================================================
+  # === Forbidden structural shapes (output only) ====================
+  # ===================================================================
+  #
+  # 이 shape 들은 *substrate generation 알고리즘* 의 흔적이다. wire 에
+  # 한 번이라도 나타나면 reverse engineer 가 격자 shape 추측 가능.
+  #
+  # 사용자 표현 그대로 — "pnixc-meta 의 생성 알고리즘들 노출이 문제일
+  # 뿐". 이게 그 정의.
+
+  wireForbiddenStructuralFieldNames = [
+    # Mirror plate primitive shape
+    "construction_trace" "plate_application"
+    "lens_result" "lens_owner" "lens_verdict_name"
+    "mirror_plate" "applied_instance" "slot_bindings"
+
+    # Owner-law / firewall internal cascade
+    "owner_law_verdict" "gate_status_cascade" "firewall_step_trace"
+    "intent_receipt" "macro_fold_envelope" "axis_separation_envelope"
+    "regression_proof_envelope"
+
+    # Substrate registry shape
+    "registry_overlay" "ankh_overlay" "ankh_entry_receipt"
+    "auxiliary_verdicts" "known_verdicts"
+
+    # Axiom derivation process (NOT label)
+    "functor_lift_step_sequence" "round_51_meaning_object"
+    "axiom_derivation_chain"
+
+    # Meta-circular handoff signals
+    "lens_dispatch_envelope" "mirror_plate_lens_dispatched"
+    "substrate_judgement_envelope"
+  ];
+
+  # ===================================================================
+  # === Meta-circular renterable shape detection =====================
+  # ===================================================================
+  #
+  # 가장 미묘한 가드. JSON 안에 *nested envelope shape* 가 있어서
+  # substrate 가 그 JSON 을 *다시 read-and-dispatch* 가능하면 leak.
+  # 예: { kind: "*-envelope", verdict: ..., obligations: [...] }
+  #
+  # heuristic: top-level 또는 nested object 에 다음 키 조합 발견 시
+  # meta-circular renterable.
+
+  metaCircularEnvelopeSignatures = [
+    [ "kind" "verdict" ]                          # generic substrate envelope
+    [ "kind" "outcome" "step_kind" ]              # contract envelope
+    [ "lens_owner" "entry_fn" ]                   # lens dispatch envelope
+    [ "facts" "lens" "owner_law" "parameters" ]   # mirror plate slot set
+    [ "plate_application" "construction_trace" ]  # plate apply envelope
+    [ "kind" "verdict" "framework_step" ]         # agent contract envelope
+  ];
+
+  # ===================================================================
+  # === Helpers ======================================================
+  # ===================================================================
+
+  hasKey = attrs: key: builtins.elem key (builtins.attrNames attrs);
+
+  isInClosedList = list: value: builtins.elem value list;
+
+  allKeysAllowed = attrs: allowed:
+    let
+      ks = builtins.attrNames attrs;
+      bad = builtins.filter (k: !builtins.elem k allowed) ks;
+    in {
+      ok = (builtins.length bad) == 0;
+      offending_field_names = bad;
+    };
+
+  anyForbiddenKey = attrs: forbidden:
+    let
+      ks = builtins.attrNames attrs;
+      hits = builtins.filter (k: builtins.elem k forbidden) ks;
+    in {
+      hit = (builtins.length hits) > 0;
+      offending_field_names = hits;
+    };
+
+  # signature match: ALL keys in signature present in attrs.
+  matchesEnvelopeSignature = attrs: signature:
+    builtins.all (k: hasKey attrs k) signature;
+
+  hasMetaCircularSignature = attrs:
+    let
+      hits = builtins.filter (sig:
+        matchesEnvelopeSignature attrs sig
+      ) metaCircularEnvelopeSignatures;
+    in {
+      hit = (builtins.length hits) > 0;
+      matched_signature_count = builtins.length hits;
+    };
+
+  # ===================================================================
+  # === Main contract function =======================================
+  # ===================================================================
+  #
+  # Input shape:
+  #   {
+  #     direction = "inbound" | "outbound";
+  #     envelope_attrs = { ... };           # the JSON envelope (top level)
+  #     declared_category = "x3d-source";   # one of knownPublicWireCategories
+  #   }
+
+  validateWireEnvelope = req:
+    let
+      hasDirection = hasKey req "direction";
+      hasEnvelope  = hasKey req "envelope_attrs";
+      hasCategory  = hasKey req "declared_category";
+      shapeOk = hasDirection && hasEnvelope && hasCategory;
+
+      direction = if hasDirection then req.direction else "";
+      env = if hasEnvelope then req.envelope_attrs else {};
+      categoryKnown =
+        hasCategory && isInClosedList knownPublicWireCategories
+          req.declared_category;
+
+      isOutbound = direction == "outbound";
+      isInbound  = direction == "inbound";
+
+      # Outbound checks (substrate generation shape 차단)
+      keysAllowed =
+        if isOutbound
+        then allKeysAllowed env wireExposedFieldNames
+        else { ok = true; offending_field_names = []; };
+
+      forbiddenHit =
+        if isOutbound
+        then anyForbiddenKey env wireForbiddenStructuralFieldNames
+        else { hit = false; offending_field_names = []; };
+
+      # Both directions — meta-circular detection
+      metaSig = hasMetaCircularSignature env;
+
+      verdict =
+        if !shapeOk then "held-malformed-request"
+        else if !categoryKnown then "held-unknown-wire-category"
+        else if isOutbound && forbiddenHit.hit then "held-substrate-envelope-shape-leak"
+        else if isOutbound && !keysAllowed.ok then "held-public-vocab-field-name-leak"
+        else if isInbound && metaSig.hit then "held-meta-circular-input-injection"
+        else if isOutbound && metaSig.hit then "held-substrate-envelope-shape-leak"
+        else "wire-shape-opaque";
+
+      isHeld = verdict != "wire-shape-opaque";
+    in {
+      kind = "wire-shape-opacity-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      framework_step = framework_step;
+      verdict = verdict;
+      is_held = isHeld;
+      direction = direction;
+      declared_category = if hasCategory then req.declared_category else null;
+      held_diagnostics =
+        if !isHeld then null
+        else {
+          shape_ok = shapeOk;
+          category_known = categoryKnown;
+          forbidden_field_hit = forbiddenHit.hit;
+          forbidden_field_names = forbiddenHit.offending_field_names;
+          unknown_field_names = keysAllowed.offending_field_names;
+          meta_circular_signature_hit = metaSig.hit;
+          meta_circular_signature_match_count = metaSig.matched_signature_count;
+        };
+      derived_from = [
+        "mcp-capability-contract (Round 69 — vocab scan)"
+        "CLAUDE.md OWNER-LAW external-LLM clause"
+      ];
+    };
+
+  # ===================================================================
+  # === Inventory summary ============================================
+  # ===================================================================
+
+  inventorySummary = {
+    owner = ownerName;
+    step_kind = stepKind;
+    public_category_count = builtins.length knownPublicWireCategories;
+    public_categories = knownPublicWireCategories;
+    exposed_field_name_count = builtins.length wireExposedFieldNames;
+    forbidden_structural_field_name_count =
+      builtins.length wireForbiddenStructuralFieldNames;
+    meta_circular_signature_count =
+      builtins.length metaCircularEnvelopeSignatures;
+    asymmetry_held = "input free + output guarded + both block meta-circular";
+  };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit knownPublicWireCategories wireExposedFieldNames;
+  inherit wireForbiddenStructuralFieldNames metaCircularEnvelopeSignatures;
+  inherit validateWireEnvelope inventorySummary;
+  inherit hasMetaCircularSignature;
+}

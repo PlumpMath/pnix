@@ -1,0 +1,851 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+source="$clr_meta_root/compiler-selfhost/compiler_kernel.clj"
+stage2_contract="$clr_meta_root/compiler-selfhost/stage2-contract.edn"
+builder="$clr_meta_root/scripts/clr-meta-build-compiler-selfhost-stage2"
+dotnet_bin="$(command -v dotnet || true)"
+expected_source_sha256="e3c4f082b20f784f4dd2730b8e2af3d6aecb3f1a0ea0ece2f6519b69578dc7e1"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage2 builder: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+if [[ "$#" -ne 2 ]]; then
+  echo "usage: clr-meta-build-compiler-selfhost-stage2 STAGE1_BUNDLE OUTPUT" >&2
+  exit 2
+fi
+
+command -v jq >/dev/null 2>&1 || fail jq-missing
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+[[ -f "$source" && ! -L "$source" ]] || fail canonical-source-missing
+[[ -f "$stage2_contract" && ! -L "$stage2_contract" ]] || fail stage2-contract-missing
+[[ -f "$builder" && ! -L "$builder" ]] || fail builder-input-missing
+grep -Fq ':schema :pnix.clr-meta.compiler-selfhost-stage2-contract.v1' \
+  "$stage2_contract" || fail stage2-contract-schema
+grep -Fq ':checkpoint :c3-executable-compiler-stage2' \
+  "$stage2_contract" || fail stage2-contract-checkpoint
+grep -Fq ":sha256 \"$expected_source_sha256\"" \
+  "$stage2_contract" || fail stage2-contract-source-hash
+stage2_contract_sha256_initial="$(sha256_file "$stage2_contract")"
+builder_sha256_initial="$(sha256_file "$builder")"
+
+case "$1" in
+  /*) requested_stage1="$1" ;;
+  *) requested_stage1="$PWD/$1" ;;
+esac
+stage1_parent="$(dirname "$requested_stage1")"
+[[ -d "$stage1_parent" ]] || fail stage1-parent-missing
+stage1_parent="$(cd "$stage1_parent" && pwd -P)"
+stage1="$stage1_parent/$(basename "$requested_stage1")"
+[[ -d "$stage1" && ! -L "$stage1" ]] || fail stage1-bundle-missing
+
+case "$2" in
+  /*) requested_output="$2" ;;
+  *) requested_output="$PWD/$2" ;;
+esac
+case "$requested_output/" in
+  "$requested_stage1/"*) fail lexical-output-overlaps-stage1-bundle ;;
+esac
+case "$requested_stage1/" in
+  "$requested_output/"*) fail lexical-output-overlaps-stage1-bundle ;;
+esac
+output_parent="$(dirname "$requested_output")"
+[[ -d "$output_parent" ]] || fail output-parent-missing
+output_parent="$(cd "$output_parent" && pwd -P)"
+output="$output_parent/$(basename "$requested_output")"
+case "$output/" in
+  "$stage1/"*) fail physical-output-overlaps-stage1-bundle ;;
+esac
+case "$stage1/" in
+  "$output/"*) fail physical-output-overlaps-stage1-bundle ;;
+esac
+if [[ -e "$output" || -L "$output" ]]; then
+  fail output-exists
+fi
+
+temporary="$(mktemp -d "$output_parent/.compiler-selfhost-stage2.XXXXXX")"
+chmod 0700 "$temporary"
+cleanup() {
+  rm -rf "$temporary"
+}
+trap cleanup EXIT
+
+bundle="$temporary/bundle"
+mkdir -p \
+  "$bundle/runtime" "$bundle/compiler" \
+  "$temporary/transition-source" \
+  "$temporary/home" "$temporary/process-tmp" "$temporary/dotnet-home"
+chmod 0700 "$temporary/transition-source"
+
+clean_environment=(
+  env -i
+  "PATH=$PATH"
+  "HOME=$temporary/home"
+  "TMPDIR=$temporary/process-tmp"
+  "DOTNET_CLI_HOME=$temporary/dotnet-home"
+  "DOTNET_CLI_TELEMETRY_OPTOUT=1"
+  "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1"
+  "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1"
+  "DOTNET_NOLOGO=1"
+)
+if [[ -n "${DOTNET_ROOT:-}" ]]; then
+  clean_environment+=("DOTNET_ROOT=$DOTNET_ROOT")
+fi
+
+if find "$stage1" -type l -print -quit | grep -q .; then
+  fail stage1-bundle-symlink
+fi
+if find "$stage1" -mindepth 1 ! -type f ! -type d -print -quit | grep -q .; then
+  fail stage1-bundle-special-entry
+fi
+
+printf '%s\n' \
+  compiler/CompilerStage1.dll \
+  manifest.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  | LC_ALL=C sort >"$temporary/expected-stage1-files"
+(
+  cd "$stage1"
+  find . -type f -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$temporary/actual-stage1-files"
+cmp "$temporary/expected-stage1-files" "$temporary/actual-stage1-files" >/dev/null || \
+  fail stage1-bundle-file-set
+
+printf '%s\n' . compiler runtime | LC_ALL=C sort >"$temporary/expected-stage1-directories"
+(
+  cd "$stage1"
+  find . -type d -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$temporary/actual-stage1-directories"
+cmp "$temporary/expected-stage1-directories" "$temporary/actual-stage1-directories" >/dev/null || \
+  fail stage1-bundle-directory-set
+
+stage1_manifest="$stage1/manifest.json"
+stage1_compiler="$stage1/compiler/CompilerStage1.dll"
+stage1_support="$stage1/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+
+jq -e '
+  def exact_keys($expected):
+    (keys_unsorted | sort) == ($expected | sort);
+  def sha256:
+    type == "string" and test("^[0-9a-f]{64}$");
+  def hash_row:
+    exact_keys(["path","sha256"]) and
+    (.path | type == "string" and length > 0) and
+    (.sha256 | sha256);
+  exact_keys([
+    "admission","bootstrap","boundaries","bundle_closure_sha256",
+    "bundle_files","checkpoint","claims","compiler","execution","family",
+    "input_closure_sha256","inputs","schema","stage","toolchain"
+  ]) and
+  .schema == "pnix.clr-meta.compiler-selfhost-stage1-artifact.v1" and
+  .checkpoint == "c2-executable-compiler-stage1" and
+  .family == "pnix.clr-meta.compiler-kernel.v1" and
+  .stage == 1 and
+  (.admission | exact_keys(["checkpoint","ready","receipt_sha256"]) and
+    .checkpoint == "c1-source-admission" and .ready == true and
+    (.receipt_sha256 | sha256)) and
+  (.bootstrap | exact_keys([
+      "host_compiler_use","host_source_load_use","id","implementation"
+    ]) and
+    .id == "bootstrap-b0" and
+    .implementation == "pinned-host-clojureclr" and
+    .host_compiler_use == "seed-only" and
+    .host_source_load_use == "exact-canonical-source-seed-only") and
+  (.boundaries | exact_keys([
+      "compiler_source_packaged","embedded_artifact_payload",
+      "generated_artifact_clojureclr_reference",
+      "generated_artifact_host_compiler_use",
+      "generated_artifact_host_source_load_use","source_replay_fallback"
+    ]) and
+    .compiler_source_packaged == false and
+    .embedded_artifact_payload == false and
+    .generated_artifact_clojureclr_reference == false and
+    .generated_artifact_host_compiler_use == false and
+    .generated_artifact_host_source_load_use == false and
+    .source_replay_fallback == false) and
+  (.claims | exact_keys([
+      "clojureclr_replacement","compiler_executable","compiler_stage1_artifact",
+      "compiler_stage2","fixed_point","raw_artifact_reproducibility",
+      "self_reproduction"
+    ]) and
+    .compiler_stage1_artifact == true and .compiler_executable == true and
+    .compiler_stage2 == false and .self_reproduction == false and
+    .fixed_point == false and .raw_artifact_reproducibility == false and
+    .clojureclr_replacement == false) and
+  (.compiler | exact_keys(["description","path","prepared_methods","sha256"]) and
+    .path == "compiler/CompilerStage1.dll" and
+    .prepared_methods == 27 and (.sha256 | sha256)) and
+  (.compiler.description | exact_keys([
+      "assembly","fields","metadata","methods","references","resources",
+      "schema","type"
+    ]) and
+    .schema == "pnix.clr-meta.compiler-selfhost-description.v1" and
+    .assembly == "Pnix.ClrMeta.Generated.CompilerKernel" and
+    .type == "Pnix.ClrMeta.Generated.CompilerKernel" and
+    .fields == 9 and
+    .methods == [
+      "bind-parameters/3","bind-support-call/3","binding-arity-is?/2",
+      "binding-kind?/2","callable-binding?/1","collect-definitions/3",
+      "compile-source/2","count-at-least?/2","count-is?/2",
+      "declare-definitions/3","fn-initializer?/1","initialize-constants/4",
+      "literal-kind/1","literal?/1","lower-definition/3",
+      "lower-definitions/4","lower-node/5","lower-program/3",
+      "resolve-required/3","seed-intrinsics/1","seed-support-calls/1",
+      "select-intrinsic-opcode/2","symbol-named?/2","validate-definition/2",
+      "validate-definitions/3","validate-node/4","validate-program/1"
+    ] and
+    .references == ["Pnix.ClrMeta.CompilerSupport","System.Private.CoreLib"] and
+    .resources == [] and
+    (.metadata | exact_keys([
+        "GeneratedBy","KernelEntry","KernelIdentity","KernelNamespace",
+        "SourceProfileId","SupportAbiId"
+      ]) and
+      .GeneratedBy == "pnix.clr-meta.compiler-kernel.v1" and
+      .KernelEntry == "compile-source" and
+      .KernelIdentity == "pnix.clr-meta.compiler-kernel.v1" and
+      .KernelNamespace == "pnix.clr-meta.compiler-kernel.v1" and
+      .SourceProfileId == "pnix.clr-meta.compiler-kernel-source.v1" and
+      .SupportAbiId == "pnix.clr-meta.compiler-support.v1")) and
+  (.execution | exact_keys(["command","host"]) and
+    .host == "runtime/Pnix.ClrMeta.CompilerSupport.dll" and
+    .command == [
+      "dotnet","runtime/Pnix.ClrMeta.CompilerSupport.dll","compile",
+      "compiler/CompilerStage1.dll","SOURCE","OUTPUT"
+    ]) and
+  (.inputs | type == "array" and length == 17 and all(.[]; hash_row) and
+    map(.path) == [
+      "compiler-selfhost-runtime/Forms.cs",
+      "compiler-selfhost-runtime/PeSink.cs",
+      "compiler-selfhost-runtime/Pnix.ClrMeta.CompilerSupport.csproj",
+      "compiler-selfhost-runtime/Program.cs",
+      "compiler-selfhost/compiler_kernel.clj",
+      "compiler-selfhost/contract.edn",
+      "compiler-selfhost/executable-contract.edn",
+      "compiler-selfhost/plan.edn",
+      "compiler-selfhost/profile.edn",
+      "scripts/clr-meta-build-compiler-selfhost-stage1",
+      "scripts/clr-meta-compiler-selfhost-admission-gate",
+      "src/pnix/clr_meta/compiler_selfhost_admission.clj",
+      "src/pnix/clr_meta/compiler_selfhost_contract.clj",
+      "src/pnix/clr_meta/compiler_selfhost_source.clj",
+      "src/pnix/clr_meta/runtime_artifact.clj",
+      "src/pnix/clr_meta/compiler_selfhost_stage1.clj",
+      "test/pnix/clr_meta/compiler_selfhost_admission_test.clj"
+    ]) and
+  (.input_closure_sha256 | sha256) and
+  (.bundle_files | type == "array" and length == 4 and all(.[]; hash_row) and
+    map(.path) == [
+      "compiler/CompilerStage1.dll",
+      "runtime/Pnix.ClrMeta.CompilerSupport.deps.json",
+      "runtime/Pnix.ClrMeta.CompilerSupport.dll",
+      "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"
+    ]) and
+  (.bundle_closure_sha256 | sha256) and
+  (.toolchain | exact_keys([
+      "bootstrap_runtime","clojure_main_sha256","clojure_runtime_sha256",
+      "dotnet_host_sha256","dotnet_version"
+    ]) and
+    (.clojure_main_sha256 | sha256) and
+    (.clojure_runtime_sha256 | sha256) and
+    (.dotnet_host_sha256 | sha256) and
+    (.dotnet_version | type == "string" and length > 0) and
+    (.bootstrap_runtime | exact_keys([
+        "closure_sha256","file_count","files","unchanged_after_seed"
+      ]) and
+      (.closure_sha256 | sha256) and
+      (.file_count | type == "number" and . >= 2 and floor == .) and
+      .file_count == $ARGS.named.runtime_file_count and
+      .unchanged_after_seed == true and
+      (.files | type == "array" and length == $ARGS.named.runtime_file_count and
+        all(.[]; hash_row))))
+' --argjson runtime_file_count "$(jq '.toolchain.bootstrap_runtime.files | length' "$stage1_manifest")" \
+  "$stage1_manifest" >/dev/null || fail stage1-manifest-contract
+
+stage1_manifest_sha256="$(sha256_file "$stage1_manifest")"
+
+: >"$temporary/stage1-bundle-rows.jsonl"
+for relative in \
+  compiler/CompilerStage1.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$stage1/$relative")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/stage1-bundle-rows.jsonl"
+done
+jq -sS '.' "$temporary/stage1-bundle-rows.jsonl" >"$temporary/stage1-bundle-files.json"
+jq -S '.bundle_files' "$stage1_manifest" >"$temporary/manifest-stage1-bundle-files.json"
+cmp "$temporary/stage1-bundle-files.json" "$temporary/manifest-stage1-bundle-files.json" >/dev/null || \
+  fail stage1-bundle-file-hash
+[[ "$(jq -r '.compiler.sha256' "$stage1_manifest")" == \
+   "$(sha256_file "$stage1_compiler")" ]] || fail stage1-compiler-manifest-hash
+stage1_bundle_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/stage1-bundle-files.json"
+} | sha256_stdin)"
+[[ "$stage1_bundle_closure_sha256" == \
+   "$(jq -r '.bundle_closure_sha256' "$stage1_manifest")" ]] || \
+  fail stage1-bundle-closure
+
+stage1_input_paths=(
+  compiler-selfhost-runtime/Forms.cs
+  compiler-selfhost-runtime/PeSink.cs
+  compiler-selfhost-runtime/Pnix.ClrMeta.CompilerSupport.csproj
+  compiler-selfhost-runtime/Program.cs
+  compiler-selfhost/compiler_kernel.clj
+  compiler-selfhost/contract.edn
+  compiler-selfhost/executable-contract.edn
+  compiler-selfhost/plan.edn
+  compiler-selfhost/profile.edn
+  scripts/clr-meta-build-compiler-selfhost-stage1
+  scripts/clr-meta-compiler-selfhost-admission-gate
+  src/pnix/clr_meta/compiler_selfhost_admission.clj
+  src/pnix/clr_meta/compiler_selfhost_contract.clj
+  src/pnix/clr_meta/compiler_selfhost_source.clj
+  src/pnix/clr_meta/runtime_artifact.clj
+  src/pnix/clr_meta/compiler_selfhost_stage1.clj
+  test/pnix/clr_meta/compiler_selfhost_admission_test.clj
+)
+: >"$temporary/stage1-live-input-rows.jsonl"
+for relative in "${stage1_input_paths[@]}"; do
+  live="$clr_meta_root/$relative"
+  [[ -f "$live" && ! -L "$live" ]] || fail stage1-live-input-file-set
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$live")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/stage1-live-input-rows.jsonl"
+done
+jq -sS '.' "$temporary/stage1-live-input-rows.jsonl" >"$temporary/stage1-live-inputs.json"
+jq -S '.inputs' "$stage1_manifest" >"$temporary/manifest-stage1-inputs.json"
+cmp "$temporary/stage1-live-inputs.json" "$temporary/manifest-stage1-inputs.json" >/dev/null || \
+  fail stage1-live-input-hash
+stage1_input_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/stage1-live-inputs.json"
+} | sha256_stdin)"
+[[ "$stage1_input_closure_sha256" == \
+   "$(jq -r '.input_closure_sha256' "$stage1_manifest")" ]] || \
+  fail stage1-input-closure
+
+jq -S '.toolchain.bootstrap_runtime.files' "$stage1_manifest" \
+  >"$temporary/stage1-bootstrap-runtime-files.json"
+stage1_bootstrap_runtime_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/stage1-bootstrap-runtime-files.json"
+} | sha256_stdin)"
+[[ "$stage1_bootstrap_runtime_closure_sha256" == \
+   "$(jq -r '.toolchain.bootstrap_runtime.closure_sha256' "$stage1_manifest")" ]] || \
+  fail stage1-bootstrap-runtime-closure
+
+dotnet_host_sha256="$(sha256_file "$dotnet_bin")"
+dotnet_version="$("${clean_environment[@]}" "$dotnet_bin" --version)"
+[[ -n "$dotnet_version" ]] || fail dotnet-version-empty
+parent_dotnet_host_sha256="$(jq -r '.toolchain.dotnet_host_sha256' "$stage1_manifest")"
+parent_dotnet_version="$(jq -r '.toolchain.dotnet_version' "$stage1_manifest")"
+same_toolchain_observed=false
+if [[ "$dotnet_host_sha256" == "$parent_dotnet_host_sha256" && \
+      "$dotnet_version" == "$parent_dotnet_version" ]]; then
+  same_toolchain_observed=true
+fi
+
+"${clean_environment[@]}" "$dotnet_bin" "$stage1_support" \
+  describe "$stage1_compiler" \
+  >"$temporary/stage1-description.json" 2>"$temporary/stage1-description.stderr" || {
+  sed -n '1,160p' "$temporary/stage1-description.stderr" >&2
+  fail stage1-describe
+}
+[[ ! -s "$temporary/stage1-description.stderr" ]] || fail stage1-describe-stderr
+jq -S '.' "$temporary/stage1-description.json" >"$temporary/stage1-description.canonical.json"
+jq -S '.compiler.description' "$stage1_manifest" \
+  >"$temporary/manifest-stage1-description.canonical.json"
+cmp "$temporary/stage1-description.canonical.json" \
+  "$temporary/manifest-stage1-description.canonical.json" >/dev/null || \
+  fail stage1-live-description
+
+"${clean_environment[@]}" "$dotnet_bin" "$stage1_support" \
+  prepare "$stage1_compiler" \
+  >"$temporary/stage1-prepare.stdout" 2>"$temporary/stage1-prepare.stderr" || {
+  sed -n '1,160p' "$temporary/stage1-prepare.stderr" >&2
+  fail stage1-prepare
+}
+[[ ! -s "$temporary/stage1-prepare.stderr" ]] || fail stage1-prepare-stderr
+[[ "$(tr -d '\r\n' <"$temporary/stage1-prepare.stdout")" == 27 ]] || \
+  fail stage1-prepare-count
+[[ "$(wc -l <"$temporary/stage1-prepare.stdout" | tr -d ' ')" == 1 ]] || \
+  fail stage1-prepare-output
+
+for name in \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  cp "$stage1/runtime/$name" "$bundle/runtime/$name"
+  cmp "$stage1/runtime/$name" "$bundle/runtime/$name" >/dev/null || \
+    fail support-copy-mismatch
+done
+
+source_sha256_before="$(sha256_file "$source")"
+[[ "$source_sha256_before" == "$expected_source_sha256" ]] || \
+  fail canonical-source-contract-hash
+parent_source_sha256="$(jq -r \
+  '.[] | select(.path == "compiler-selfhost/compiler_kernel.clj") | .sha256' \
+  "$temporary/stage1-live-inputs.json")"
+[[ "$parent_source_sha256" == "$source_sha256_before" ]] || \
+  fail parent-source-lineage
+stage1_compiler_sha256_before="$(sha256_file "$stage1_compiler")"
+stage1_support_sha256_before="$(sha256_file "$stage1_support")"
+transition_source="$temporary/transition-source/compiler_kernel.clj"
+cp "$source" "$transition_source"
+chmod 0400 "$transition_source"
+[[ -f "$transition_source" && ! -L "$transition_source" ]] || \
+  fail transition-source-copy
+frozen_source_sha256_before="$(sha256_file "$transition_source")"
+[[ "$source_sha256_before" == "$frozen_source_sha256_before" ]] || \
+  fail transition-source-hash
+
+"${clean_environment[@]}" "$dotnet_bin" "$stage1_support" compile \
+  "$stage1_compiler" "$transition_source" "$bundle/compiler/CompilerStage2.dll" \
+  >"$temporary/stage2-descriptor.json" 2>"$temporary/stage2-compile.stderr" || {
+  sed -n '1,160p' "$temporary/stage2-descriptor.json" >&2
+  sed -n '1,160p' "$temporary/stage2-compile.stderr" >&2
+  fail stage1-to-stage2-compile
+}
+[[ ! -s "$temporary/stage2-compile.stderr" ]] || fail stage2-compile-stderr
+[[ -f "$bundle/compiler/CompilerStage2.dll" && \
+   ! -L "$bundle/compiler/CompilerStage2.dll" ]] || fail compiler-stage2-missing
+
+source_sha256_after="$(sha256_file "$source")"
+[[ "$source_sha256_before" == "$source_sha256_after" ]] || fail canonical-source-mutated
+frozen_source_sha256_after="$(sha256_file "$transition_source")"
+[[ "$frozen_source_sha256_before" == "$frozen_source_sha256_after" ]] || \
+  fail transition-source-mutated-during-compile
+[[ "$stage1_compiler_sha256_before" == "$(sha256_file "$stage1_compiler")" ]] || \
+  fail stage1-compiler-mutated
+[[ "$stage1_support_sha256_before" == "$(sha256_file "$stage1_support")" ]] || \
+  fail stage1-support-mutated
+
+stage2_sha256="$(sha256_file "$bundle/compiler/CompilerStage2.dll")"
+jq -e \
+  --arg output "$bundle/compiler/CompilerStage2.dll" \
+  --arg sha256 "$stage2_sha256" '
+  (keys_unsorted | sort) == ([
+    "kernel_entry","kernel_identity","kernel_namespace","path","schema",
+    "sha256","source_profile_id"
+  ] | sort) and
+  .schema == "pnix.clr-meta.compiler-selfhost-artifact-descriptor.v1" and
+  .kernel_entry == "compile-source" and
+  .kernel_identity == "pnix.clr-meta.compiler-kernel.v1" and
+  .kernel_namespace == "pnix.clr-meta.compiler-kernel.v1" and
+  .source_profile_id == "pnix.clr-meta.compiler-kernel-source.v1" and
+  .path == $output and .sha256 == $sha256
+' "$temporary/stage2-descriptor.json" >/dev/null || fail stage2-descriptor
+[[ "$(wc -l <"$temporary/stage2-descriptor.json" | tr -d ' ')" == 1 ]] || \
+  fail stage2-descriptor-output
+
+"${clean_environment[@]}" "$dotnet_bin" "$stage1_support" \
+  describe "$bundle/compiler/CompilerStage2.dll" \
+  >"$temporary/stage2-description.json" 2>"$temporary/stage2-description.stderr" || {
+  sed -n '1,160p' "$temporary/stage2-description.stderr" >&2
+  fail stage2-describe
+}
+[[ ! -s "$temporary/stage2-description.stderr" ]] || fail stage2-describe-stderr
+jq -S '.' "$temporary/stage2-description.json" >"$temporary/stage2-description.canonical.json"
+cmp "$temporary/stage1-description.canonical.json" \
+  "$temporary/stage2-description.canonical.json" >/dev/null || \
+  fail stage2-structural-description
+
+"${clean_environment[@]}" "$dotnet_bin" "$stage1_support" \
+  prepare "$bundle/compiler/CompilerStage2.dll" \
+  >"$temporary/stage2-prepare.stdout" 2>"$temporary/stage2-prepare.stderr" || {
+  sed -n '1,160p' "$temporary/stage2-prepare.stderr" >&2
+  fail stage2-prepare
+}
+[[ ! -s "$temporary/stage2-prepare.stderr" ]] || fail stage2-prepare-stderr
+[[ "$(tr -d '\r\n' <"$temporary/stage2-prepare.stdout")" == 27 ]] || \
+  fail stage2-prepare-count
+[[ "$(wc -l <"$temporary/stage2-prepare.stdout" | tr -d ' ')" == 1 ]] || \
+  fail stage2-prepare-output
+
+stage2_input_paths=(
+  compiler-selfhost/compiler_kernel.clj
+  compiler-selfhost/stage2-contract.edn
+  scripts/clr-meta-build-compiler-selfhost-stage2
+)
+: >"$temporary/stage2-input-rows.jsonl"
+for relative in "${stage2_input_paths[@]}"; do
+  live="$clr_meta_root/$relative"
+  [[ -f "$live" && ! -L "$live" ]] || fail stage2-input-file-set
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$live")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/stage2-input-rows.jsonl"
+done
+jq -sS '.' "$temporary/stage2-input-rows.jsonl" >"$temporary/stage2-inputs.json"
+stage2_input_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/stage2-inputs.json"
+} | sha256_stdin)"
+[[ "$source_sha256_before" == \
+   "$(jq -r '.[] | select(.path == "compiler-selfhost/compiler_kernel.clj") | .sha256' \
+      "$temporary/stage2-inputs.json")" ]] || fail stage2-source-input-hash
+stage2_contract_sha256="$(jq -r \
+  '.[] | select(.path == "compiler-selfhost/stage2-contract.edn") | .sha256' \
+  "$temporary/stage2-inputs.json")"
+[[ "$stage2_contract_sha256" == "$stage2_contract_sha256_initial" ]] || \
+  fail stage2-contract-mutated
+[[ "$(jq -r \
+     '.[] | select(.path == "scripts/clr-meta-build-compiler-selfhost-stage2") | .sha256' \
+     "$temporary/stage2-inputs.json")" == "$builder_sha256_initial" ]] || \
+  fail stage2-builder-mutated
+
+: >"$temporary/stage2-bundle-rows.jsonl"
+for relative in \
+  compiler/CompilerStage2.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$bundle/$relative")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/stage2-bundle-rows.jsonl"
+done
+jq -sS '.' "$temporary/stage2-bundle-rows.jsonl" >"$temporary/stage2-bundle-files.json"
+stage2_bundle_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/stage2-bundle-files.json"
+} | sha256_stdin)"
+jq '[.[] | select(.path | startswith("runtime/"))]' \
+  "$temporary/stage2-bundle-files.json" >"$temporary/stage2-support-files.json"
+jq '[.[] | select(.path | startswith("runtime/"))]' \
+  "$temporary/stage1-bundle-files.json" >"$temporary/stage1-support-files.json"
+cmp "$temporary/stage1-support-files.json" "$temporary/stage2-support-files.json" >/dev/null || \
+  fail support-triplet-lineage
+support_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/stage2-support-files.json"
+} | sha256_stdin)"
+
+stage1_description_sha256="$(sha256_file "$temporary/stage1-description.canonical.json")"
+stage2_description_sha256="$(sha256_file "$temporary/stage2-description.canonical.json")"
+[[ "$stage1_description_sha256" == "$stage2_description_sha256" ]] || \
+  fail stage2-description-hash
+
+jq -S -n \
+  --arg bundle_closure_sha256 "$stage2_bundle_closure_sha256" \
+  --arg compiler_sha256 "$stage2_sha256" \
+  --arg contract_sha256 "$stage2_contract_sha256" \
+  --arg description_sha256 "$stage2_description_sha256" \
+  --arg dotnet_host_sha256 "$dotnet_host_sha256" \
+  --arg dotnet_version "$dotnet_version" \
+  --arg input_closure_sha256 "$stage2_input_closure_sha256" \
+  --arg parent_bundle_closure_sha256 "$stage1_bundle_closure_sha256" \
+  --arg parent_compiler_sha256 "$stage1_compiler_sha256_before" \
+  --arg parent_description_sha256 "$stage1_description_sha256" \
+  --arg parent_input_closure_sha256 "$stage1_input_closure_sha256" \
+  --arg parent_manifest_sha256 "$stage1_manifest_sha256" \
+  --arg parent_dotnet_host_sha256 "$parent_dotnet_host_sha256" \
+  --arg parent_dotnet_version "$parent_dotnet_version" \
+  --arg parent_source_sha256 "$parent_source_sha256" \
+  --arg source_sha256 "$source_sha256_before" \
+  --arg source_sha256_after "$source_sha256_after" \
+  --arg frozen_source_sha256_before "$frozen_source_sha256_before" \
+  --arg frozen_source_sha256_after "$frozen_source_sha256_after" \
+  --arg support_closure_sha256 "$support_closure_sha256" \
+  --argjson same_toolchain_observed "$same_toolchain_observed" \
+  --argjson bundle_files "$(jq -c '.' "$temporary/stage2-bundle-files.json")" \
+  --argjson compiler_description "$(jq -c '.' "$temporary/stage2-description.json")" \
+  --argjson descriptor "$(jq -c '.path = "compiler/CompilerStage2.dll"' \
+    "$temporary/stage2-descriptor.json")" \
+  --argjson inputs "$(jq -c '.' "$temporary/stage2-inputs.json")" \
+  --argjson support_files "$(jq -c '.' "$temporary/stage2-support-files.json")" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage2-artifact.v1",
+    checkpoint:"c3-executable-compiler-stage2",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    stage:2,
+    contract:{
+      path:"compiler-selfhost/stage2-contract.edn",
+      sha256:$contract_sha256
+    },
+    parent:{
+      schema:"pnix.clr-meta.compiler-selfhost-stage1-artifact.v1",
+      checkpoint:"c2-executable-compiler-stage1",
+      stage:1,
+      manifest_sha256:$parent_manifest_sha256,
+      bundle_closure_sha256:$parent_bundle_closure_sha256,
+      input_closure_sha256:$parent_input_closure_sha256,
+      compiler_sha256:$parent_compiler_sha256,
+      compiler_description_sha256:$parent_description_sha256,
+      validated:true
+    },
+    compilation:{
+      canonical_source:"compiler-selfhost/compiler_kernel.clj",
+      canonical_source_sha256:$source_sha256,
+      source_language:"pnix.clr-meta.compiler-kernel-source.v1",
+      compiled_language:"pnix.clr-meta.compiler-kernel-source.v1",
+      source_language_equals_compiled_language:true,
+      transition_source_present:true,
+      replay_source_packaged:false,
+      source_unchanged_after_compile:true,
+      source_hash_chain:{
+        contract_sha256:$source_sha256,
+        parent_c2_input_sha256:$parent_source_sha256,
+        live_before_sha256:$source_sha256,
+        frozen_source_sha256_before:$frozen_source_sha256_before,
+        frozen_source_sha256_after:$frozen_source_sha256_after,
+        live_after_sha256:$source_sha256_after
+      },
+      compiler:"STAGE1_BUNDLE/compiler/CompilerStage1.dll",
+      host:"STAGE1_BUNDLE/runtime/Pnix.ClrMeta.CompilerSupport.dll",
+      command:[
+        "dotnet","STAGE1_BUNDLE/runtime/Pnix.ClrMeta.CompilerSupport.dll",
+        "compile","STAGE1_BUNDLE/compiler/CompilerStage1.dll",
+        "FROZEN_TRANSITION_SOURCE","compiler/CompilerStage2.dll"
+      ],
+      descriptor:$descriptor
+    },
+    compiler:{
+      path:"compiler/CompilerStage2.dll",
+      sha256:$compiler_sha256,
+      prepared_methods:27,
+      description:$compiler_description,
+      description_sha256:$description_sha256,
+      structural_description_equal_to_stage1:true
+    },
+    execution:{
+      host:"runtime/Pnix.ClrMeta.CompilerSupport.dll",
+      command:[
+        "dotnet","runtime/Pnix.ClrMeta.CompilerSupport.dll","compile",
+        "compiler/CompilerStage2.dll","SOURCE","OUTPUT"
+      ]
+    },
+    inputs:$inputs,
+    input_closure_sha256:$input_closure_sha256,
+    bundle_files:$bundle_files,
+    bundle_closure_sha256:$bundle_closure_sha256,
+    support:{
+      abi_id:"pnix.clr-meta.compiler-support.v1",
+      files:$support_files,
+      closure_sha256:$support_closure_sha256,
+      copied_from_parent:true
+    },
+    toolchain:{
+      parent_dotnet_host_sha256:$parent_dotnet_host_sha256,
+      parent_dotnet_version:$parent_dotnet_version,
+      transition_dotnet_host_sha256:$dotnet_host_sha256,
+      transition_dotnet_version:$dotnet_version,
+      same_toolchain_required:false,
+      same_toolchain_observed:$same_toolchain_observed
+    },
+    boundaries:{
+      compiler_source_packaged:false,
+      replay_source_packaged:false,
+      stage1_artifact_packaged:false,
+      direct_stage1_copy:false,
+      clojureclr_packaged:false,
+      generated_artifact_clojureclr_reference:false,
+      generated_artifact_host_compiler_use:false,
+      generated_artifact_host_source_load_use:false,
+      embedded_artifact_payload:false,
+      source_replay_fallback:false
+    },
+    claims:{
+      parent_stage1_admitted:true,
+      stage1_ancestor_validated:true,
+      compiler_executable:true,
+      compiler_stage2:true,
+      same_source_recompile:true,
+      stage2_fresh_target_replay:false,
+      self_reproduction:false,
+      stage3:false,
+      stage15_n:false,
+      fixed_point:false,
+      raw_artifact_reproducibility:false,
+      host_free_bootstrap:false,
+      full_clojure_surface:false,
+      pnix_semantics:false,
+      cross_host_canonical_equivalence:false,
+      os_sandbox:false,
+      formal_semantic_equivalence:false,
+      clojureclr_replacement:false,
+      compiler_source_free_runtime_bundle:true,
+      standalone_lineage_replay:false,
+      standalone_source_free_distribution:false
+    }
+  }
+' >"$bundle/manifest.json"
+
+jq -e '
+  def exact_keys($expected):
+    (keys_unsorted | sort) == ($expected | sort);
+  exact_keys([
+    "boundaries","bundle_closure_sha256","bundle_files","checkpoint","claims",
+    "compilation","compiler","contract","execution","family",
+    "input_closure_sha256","inputs","parent","schema","stage","support",
+    "toolchain"
+  ]) and
+  .schema == "pnix.clr-meta.compiler-selfhost-stage2-artifact.v1" and
+  .checkpoint == "c3-executable-compiler-stage2" and
+  .family == "pnix.clr-meta.compiler-kernel.v1" and .stage == 2 and
+  (.contract | exact_keys(["path","sha256"]) and
+    .path == "compiler-selfhost/stage2-contract.edn") and
+  (.parent | exact_keys([
+      "bundle_closure_sha256","checkpoint","compiler_description_sha256",
+      "compiler_sha256","input_closure_sha256","manifest_sha256","schema",
+      "stage","validated"
+    ]) and .stage == 1 and .validated == true) and
+  (.compilation | exact_keys([
+      "canonical_source","canonical_source_sha256","command","compiler",
+      "compiled_language","descriptor","host","replay_source_packaged",
+      "source_language","source_language_equals_compiled_language",
+      "source_hash_chain","source_unchanged_after_compile",
+      "transition_source_present"
+    ]) and .transition_source_present == true and
+    .replay_source_packaged == false and .source_unchanged_after_compile == true and
+    .source_language == "pnix.clr-meta.compiler-kernel-source.v1" and
+    .compiled_language == "pnix.clr-meta.compiler-kernel-source.v1" and
+    .source_language_equals_compiled_language == true and
+    .descriptor.path == "compiler/CompilerStage2.dll" and
+    (.source_hash_chain | exact_keys([
+      "contract_sha256","frozen_source_sha256_after",
+      "frozen_source_sha256_before","live_after_sha256","live_before_sha256",
+      "parent_c2_input_sha256"
+    ]) and ([.[]] | unique | length) == 1)) and
+  (.compiler | exact_keys([
+      "description","description_sha256","path","prepared_methods",
+      "structural_description_equal_to_stage1","sha256"
+    ]) and .path == "compiler/CompilerStage2.dll" and .prepared_methods == 27 and
+    .structural_description_equal_to_stage1 == true) and
+  (.execution | exact_keys(["command","host"])) and
+  (.toolchain | exact_keys([
+      "parent_dotnet_host_sha256","parent_dotnet_version",
+      "same_toolchain_observed","same_toolchain_required",
+      "transition_dotnet_host_sha256","transition_dotnet_version"
+    ]) and .same_toolchain_required == false and
+    (.same_toolchain_observed | type == "boolean")) and
+  (.support | exact_keys(["abi_id","closure_sha256","copied_from_parent","files"]) and
+    .abi_id == "pnix.clr-meta.compiler-support.v1" and
+    .copied_from_parent == true and
+    (.files | map(.path)) == [
+      "runtime/Pnix.ClrMeta.CompilerSupport.deps.json",
+      "runtime/Pnix.ClrMeta.CompilerSupport.dll",
+      "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"
+    ]) and
+  (.boundaries | exact_keys([
+      "clojureclr_packaged","compiler_source_packaged","embedded_artifact_payload",
+      "direct_stage1_copy",
+      "generated_artifact_clojureclr_reference",
+      "generated_artifact_host_compiler_use",
+      "generated_artifact_host_source_load_use","replay_source_packaged",
+      "source_replay_fallback","stage1_artifact_packaged"
+    ]) and all(.[]; . == false)) and
+  (.claims | exact_keys([
+      "clojureclr_replacement","compiler_executable",
+      "compiler_source_free_runtime_bundle","compiler_stage2",
+      "cross_host_canonical_equivalence","fixed_point",
+      "formal_semantic_equivalence","full_clojure_surface","host_free_bootstrap",
+      "os_sandbox","parent_stage1_admitted","pnix_semantics",
+      "raw_artifact_reproducibility",
+      "same_source_recompile","self_reproduction","stage1_ancestor_validated",
+      "stage15_n","stage2_fresh_target_replay","stage3","standalone_lineage_replay",
+      "standalone_source_free_distribution"
+    ]) and .parent_stage1_admitted == true and
+    .stage1_ancestor_validated == true and .compiler_executable == true and
+    .compiler_stage2 == true and .same_source_recompile == true and
+    .stage2_fresh_target_replay == false and .self_reproduction == false and
+    .stage3 == false and .stage15_n == false and .fixed_point == false and
+    .raw_artifact_reproducibility == false and .clojureclr_replacement == false and
+    .host_free_bootstrap == false and .full_clojure_surface == false and
+    .pnix_semantics == false and .cross_host_canonical_equivalence == false and
+    .os_sandbox == false and .formal_semantic_equivalence == false and
+    .compiler_source_free_runtime_bundle == true and
+    .standalone_lineage_replay == false and
+    .standalone_source_free_distribution == false)
+' "$bundle/manifest.json" >/dev/null || fail stage2-manifest-contract
+
+if find "$bundle" -type l -print -quit | grep -q .; then
+  fail stage2-bundle-symlink
+fi
+if find "$bundle" -mindepth 1 ! -type f ! -type d -print -quit | grep -q .; then
+  fail stage2-bundle-special-entry
+fi
+printf '%s\n' \
+  compiler/CompilerStage2.dll \
+  manifest.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  | LC_ALL=C sort >"$temporary/expected-stage2-files"
+(
+  cd "$bundle"
+  find . -type f -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$temporary/actual-stage2-files"
+cmp "$temporary/expected-stage2-files" "$temporary/actual-stage2-files" >/dev/null || \
+  fail stage2-bundle-file-set
+
+printf '%s\n' . compiler runtime | LC_ALL=C sort >"$temporary/expected-stage2-directories"
+(
+  cd "$bundle"
+  find . -type d -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$temporary/actual-stage2-directories"
+cmp "$temporary/expected-stage2-directories" "$temporary/actual-stage2-directories" >/dev/null || \
+  fail stage2-bundle-directory-set
+
+[[ "$source_sha256_before" == "$(sha256_file "$source")" ]] || \
+  fail canonical-source-mutated-after-description
+[[ "$source_sha256_before" == "$(sha256_file "$transition_source")" ]] || \
+  fail transition-source-mutated
+[[ "$stage1_manifest_sha256" == "$(sha256_file "$stage1_manifest")" ]] || \
+  fail stage1-manifest-mutated
+
+: >"$temporary/stage1-bundle-final-rows.jsonl"
+for relative in \
+  compiler/CompilerStage1.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$stage1/$relative")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/stage1-bundle-final-rows.jsonl"
+done
+jq -sS '.' "$temporary/stage1-bundle-final-rows.jsonl" \
+  >"$temporary/stage1-bundle-final-files.json"
+cmp "$temporary/stage1-bundle-files.json" "$temporary/stage1-bundle-final-files.json" >/dev/null || \
+  fail stage1-bundle-mutated
+
+: >"$temporary/stage2-input-final-rows.jsonl"
+for relative in "${stage2_input_paths[@]}"; do
+  live="$clr_meta_root/$relative"
+  [[ -f "$live" && ! -L "$live" ]] || fail stage2-input-mutated
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$live")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/stage2-input-final-rows.jsonl"
+done
+jq -sS '.' "$temporary/stage2-input-final-rows.jsonl" \
+  >"$temporary/stage2-input-final.json"
+cmp "$temporary/stage2-inputs.json" "$temporary/stage2-input-final.json" >/dev/null || \
+  fail stage2-input-mutated
+
+: >"$temporary/stage2-bundle-final-rows.jsonl"
+for relative in \
+  compiler/CompilerStage2.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$bundle/$relative")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/stage2-bundle-final-rows.jsonl"
+done
+jq -sS '.' "$temporary/stage2-bundle-final-rows.jsonl" \
+  >"$temporary/stage2-bundle-final-files.json"
+cmp "$temporary/stage2-bundle-files.json" "$temporary/stage2-bundle-final-files.json" >/dev/null || \
+  fail stage2-bundle-mutated
+
+"${clean_environment[@]}" "$dotnet_bin" "$stage1_support" \
+  publish-directory "$bundle" "$output" || fail publish-directory
+cat "$output/manifest.json"

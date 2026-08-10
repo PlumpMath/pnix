@@ -1,0 +1,296 @@
+let
+  ownerName = "stdlib.nl.category-spectral-sequences-substrate";
+
+  sheafCohom = import nl/category-sheaf-cohomology-substrate.px;
+  derived = import nl/category-etale-cohomology-and-derived-substrate.px;
+
+  # === Spectral Sequences Substrate (agent-NL-181) ==================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Spectral sequences (filtered chain complex → graded cohomology)"
+  #
+  # Spectral sequence = sequence of pages E_r^{p,q} converging to
+  # filtered cohomology.
+  #
+  # Substrate interpretation:
+  #   - Filtration on receipt chain complex by mode-group depth
+  #     (e.g., agent-NL modes / freecat-cli modes / freecat-execution modes)
+  #   - Each page E_r^{p,q} = "partial cohomology at filtration level p,
+  #     cohomology degree q, after r-stage refinement"
+  #   - Convergence E_∞^{p,q} ⇒ H^{p+q}(total complex)
+  #
+  # Three canonical spectral sequences:
+  #   1. Filtration spectral sequence (this slice's main object)
+  #   2. Grothendieck spectral sequence (composition of functors)
+  #   3. Leray spectral sequence (sheaf cohomology over a morphism)
+
+  stepKind = "spectral-sequences-substrate";
+  framework_step =
+    "filtered chain complex → graded cohomology via E_r^{p,q} pages";
+
+  # =================================================================
+  # === Filtration on 16-mode chain ================================
+  # =================================================================
+  #
+  # Filtration F^p of the 16-mode chain by family:
+  #   F^0 ⊃ F^1 ⊃ F^2 ⊃ F^3 = {}
+  # where:
+  #   F^0 = full chain (all 16 modes)
+  #   F^1 = freecat-cli + freecat-execution (modes 12-16)
+  #   F^2 = freecat-execution only (modes 15-16)
+  #   F^3 = empty
+  #
+  # Graded pieces: F^p / F^{p+1} = single family.
+
+  filtration = {
+    filtration_id = "F-by-mode-family";
+    levels = [
+      {
+        level = 0;
+        family = "agent-NL";
+        modes_included = [ 1 2 3 4 5 6 7 8 9 10 11 ];
+        mode_count = 11;
+      }
+      {
+        level = 1;
+        family = "freecat-cli";
+        modes_included = [ 12 13 14 ];
+        mode_count = 3;
+      }
+      {
+        level = 2;
+        family = "freecat-execution";
+        modes_included = [ 15 16 ];
+        mode_count = 2;
+      }
+    ];
+    total_levels = 3;
+    decreasing = true;  # F^0 ⊃ F^1 ⊃ F^2 ⊃ F^3
+    bounded = true;
+  };
+
+  # =================================================================
+  # === E_r^{p,q} pages =============================================
+  # =================================================================
+  #
+  # E_r^{p,q} are bi-graded abelian groups.
+  #   - p = filtration index (0, 1, 2)
+  #   - q = "complementary degree" — cohomology dimension inside
+  #         the graded piece
+  #   - r = page number (page 0, 1, 2, ..., ∞)
+  #
+  # Differentials d_r : E_r^{p,q} → E_r^{p+r, q-r+1}
+  # Convergence: E_∞^{p,q} = graded pieces of filtered H^{p+q}(total)
+
+  # E_0 page: graded pieces of the filtration.
+  page_E0 = {
+    page = 0;
+    description_en = "Graded pieces of the filtration — F^p / F^{p+1} at each (p, q)";
+    entries = [
+      { p = 0; q_meaning = "cohomology within agent-NL stage";  graded_piece = "F^0 / F^1 = agent-NL modes"; }
+      { p = 1; q_meaning = "cohomology within freecat-cli stage"; graded_piece = "F^1 / F^2 = freecat-cli modes"; }
+      { p = 2; q_meaning = "cohomology within freecat-execution"; graded_piece = "F^2 / F^3 = freecat-execution modes"; }
+    ];
+    differential_d0 = "d_0 : E_0^{p,q} → E_0^{p, q+1} (vertical differential within graded piece)";
+  };
+
+  # E_1 page: cohomology of E_0 with respect to d_0.
+  page_E1 = {
+    page = 1;
+    description_en = "Cohomology of E_0 graded pieces — each graded piece's intrinsic cohomology";
+    entries = [
+      { p = 0; q = 0; meaning = "H^0(agent-NL piece)"; }
+      { p = 0; q = 1; meaning = "H^1(agent-NL piece)"; }
+      { p = 1; q = 0; meaning = "H^0(freecat-cli piece)"; }
+      { p = 1; q = 1; meaning = "H^1(freecat-cli piece)"; }
+      { p = 2; q = 0; meaning = "H^0(freecat-execution piece)"; }
+    ];
+    differential_d1 = "d_1 : E_1^{p,q} → E_1^{p+1, q} (horizontal differential between graded pieces)";
+  };
+
+  # E_2 page: cohomology of E_1 with respect to d_1.
+  page_E2 = {
+    page = 2;
+    description_en = "Cohomology of E_1 with respect to d_1 — captures cross-family obstructions";
+    note_en = ''
+      E_2^{p,q} measures "obstructions to extending p-th-family
+      receipts across to (p+1)-th-family receipts". Substrate-side:
+      whether agent-NL receipts can be lifted to freecat-cli, etc.
+    '';
+    differential_d2 = "d_2 : E_2^{p,q} → E_2^{p+2, q-1} (longer-range differential)";
+  };
+
+  # E_∞ page: convergence.
+  page_E_infinity = {
+    page = "infinity";
+    description_en = ''
+      Stable page — for bounded filtrations (substrate's is bounded
+      since there are only 3 levels), E_r stabilizes at finite r.
+      E_∞^{p,q} = associated graded of filtered H^{p+q}(total complex).
+    '';
+    convergence_statement = "E_∞^{p,q} ⇒ Gr^p H^{p+q}(total)";
+    bounded_filtration_implies_convergence = true;
+    stabilization_page_bound = "r >= 3 (since filtration has 3 levels, d_r = 0 for r > 2)";
+  };
+
+  # =================================================================
+  # === Differentials d_r ===========================================
+  # =================================================================
+
+  differentialDefinition = {
+    d0_direction = { p_shift = 0; q_shift = 1; description = "vertical within graded piece"; };
+    d1_direction = { p_shift = 1; q_shift = 0; description = "horizontal between graded pieces"; };
+    d2_direction = { p_shift = 2; q_shift = -1; description = "diagonal longer-range"; };
+    dr_direction_general = { p_shift = "r"; q_shift = "1-r"; };
+    nilpotent_law = "d_r ∘ d_r = 0 at each page";
+    next_page_definition = "E_{r+1}^{p,q} = ker(d_r at E_r^{p,q}) / image(d_r at E_r^{p-r, q+r-1})";
+  };
+
+  # =================================================================
+  # === Convergence statement ======================================
+  # =================================================================
+
+  convergenceTheorem = {
+    statement_en = ''
+      For a bounded filtration F^* on a chain complex C^*, the
+      associated spectral sequence (E_r^{p,q}, d_r) converges to
+      the cohomology of the total complex:
+        E_∞^{p,q} = Gr^p H^{p+q}(C^*)
+
+      In substrate terms: the spectral sequence computes total
+      receipt cohomology by progressive refinement through the
+      mode-family filtration.
+    '';
+    substrate_meaning_en = ''
+      H^{p+q}(total) is computed by:
+        1. Compute cohomology within each mode-family (E_1).
+        2. Identify cross-family obstructions (E_2).
+        3. For substrate's 3-level filtration, E_3 = E_∞ (collapsed).
+
+      Substrate practical: the spectral sequence justifies WHY
+      Mode 14 (held-honest gate) needs to see ALL three family
+      receipts to decide gating — it's computing E_∞^{*,*} which
+      requires all filtration levels.
+    '';
+    bounded_filtration = filtration.bounded;
+    convergence_strong = true;
+  };
+
+  # =================================================================
+  # === Substrate-internal spectral sequence instances ==============
+  # =================================================================
+
+  substrateInternalSpectralSequences = [
+    {
+      ss_id = "ss-filtration-mode-family";
+      filtration_used = "F-by-mode-family";
+      description_en = "Compute receipt H^n by family-graded pieces — main substrate spectral sequence";
+      convergence_target = "H^*(receipt-chain-complex)";
+      collapses_at_page = 3;
+    }
+    {
+      ss_id = "ss-grothendieck-composition";
+      description_en = "Grothendieck SS for composition Mode 13 ∘ Mode 12. E_2^{p,q} = R^p(Mode 13)(R^q(Mode 12)(-)) ⇒ R^{p+q}(Mode 13 ∘ Mode 12)";
+      convergence_target = "derived functor of Mode 13 ∘ Mode 12 composition";
+      collapses_at_page = "ad-hoc — depends on input";
+    }
+    {
+      ss_id = "ss-leray-mode-13";
+      description_en = "Leray SS for Mode 13 = π_lang_* (direct image). E_2^{p,q} = H^p(target, R^q π_lang_* F) ⇒ H^{p+q}(MultiLangSite, F)";
+      convergence_target = "MultiLangSite total cohomology";
+      collapses_when = "F is π_lang_*-acyclic in degrees q ≥ 1";
+    }
+  ];
+
+  # =================================================================
+  # === Operational: compute E_1 for a synthetic receipt complex ====
+  # =================================================================
+
+  computeE1Page = filtrationLevelReceipts:
+    # filtrationLevelReceipts is a list of receipt-groups, one per
+    # filtration level. Each entry: { level; receipts; }.
+    let
+      computeForLevel = lvl: {
+        p = lvl.level;
+        receipt_count_q0 = builtins.length lvl.receipts;
+        cohomology_dim_estimate = if builtins.length lvl.receipts > 0
+                                   then "non-trivial-H0-at-this-level"
+                                   else "trivial";
+      };
+    in {
+      page = 1;
+      entries = builtins.map computeForLevel filtrationLevelReceipts;
+      bounded = filtration.bounded;
+      will_converge_by_page = 3;
+    };
+
+  # =================================================================
+  # === Inventory ===================================================
+  # =================================================================
+
+  inventorySummary = _: {
+    owner = ownerName;
+    has_filtration_definition = true;
+    filtration_level_count = filtration.total_levels;
+    filtration_bounded = filtration.bounded;
+    has_E0_page = true;
+    has_E1_page = true;
+    has_E2_page = true;
+    has_E_infinity_convergence = true;
+    has_differential_definitions = true;
+    has_convergence_theorem = true;
+    substrate_spectral_sequence_count = builtins.length substrateInternalSpectralSequences;
+    has_E1_computation = true;
+    sheaf_cohomology_qed_inherited = (sheafCohom.inventorySummary {}).sheaf_lemma_qed;
+    relates_to_derived_category = derived.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry =================================================
+  # =================================================================
+
+  applySpectralSequencesPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "spectral-sequences-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "filtration" request then {
+      outcome = "spectral-filtration-emitted"; receipt = filtration;
+    }
+    else if builtins.hasAttr "pages" request then {
+      outcome = "spectral-pages-emitted";
+      receipt = {
+        E_0 = page_E0;
+        E_1 = page_E1;
+        E_2 = page_E2;
+        E_infinity = page_E_infinity;
+      };
+    }
+    else if builtins.hasAttr "differentials" request then {
+      outcome = "spectral-differentials-emitted"; receipt = differentialDefinition;
+    }
+    else if builtins.hasAttr "convergence" request then {
+      outcome = "spectral-convergence-theorem-emitted"; receipt = convergenceTheorem;
+    }
+    else if builtins.hasAttr "compute_E1" request then
+      let r = request.compute_E1;
+      in { outcome = "spectral-E1-computed";
+           receipt = computeE1Page r; }
+    else if builtins.hasAttr "substrate_spectral_sequences" request then {
+      outcome = "spectral-substrate-sequences-emitted";
+      receipt = substrateInternalSpectralSequences;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "filtration" "pages" "differentials" "convergence"
+             "compute_E1" "substrate_spectral_sequences"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit filtration page_E0 page_E1 page_E2 page_E_infinity;
+  inherit differentialDefinition convergenceTheorem;
+  inherit substrateInternalSpectralSequences computeE1Page;
+  inherit inventorySummary applySpectralSequencesPlate;
+}

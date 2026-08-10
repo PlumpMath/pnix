@@ -1,0 +1,488 @@
+# pnix-mirror-runtime.primitives.mirror-plate-test-harness
+#
+# OWNER-LAW (2026-05-14, rev 2): the substrate's harness primitive.
+# The Harness-as-plate axiom (CLAUDE.md + `project-wiki/maps/ankh-
+# macro-mirror-turn-axiom.md::Harness-as-plate axiom`) says a test
+# harness must be a plate application emitting a verdict in the same
+# envelope family as any other plate apply.
+#
+# Rev 2 (2026-05-14): the harness is now ACTUALLY plate-first.
+# Earlier rev built `{verdict, ...}` envelopes manually, which itself
+# bypassed the axiom (review finding #1). Each assert function now:
+#
+#   1. constructs a six-slot mirror plate via the primitive's
+#      `mkMirrorRoom` + `instantiate` + `applyInstance`,
+#   2. then evaluates the assertion's semantic content,
+#   3. then wraps the result as a `harness-pass` / `harness-held` /
+#      `harness-fail` envelope that carries the underlying plate's
+#      `plate_application` (verdict + construction_trace) verbatim.
+#
+# That makes every harness call observably a plate application: the
+# plate primitive ran, emitted a typed receipt, and the harness's
+# verdict is a typed downstream judgement of *that* receipt + the
+# semantic question. Audit can replay the plate_application
+# independently and check the harness verdict against it.
+#
+# # Inventory source of truth
+#
+# Verdict names this harness validates against come from
+# `plate.knownVerdicts` (the union of `validPlateVerdicts` +
+# `auxiliaryVerdicts` in `parametric-mirror-plate.px`). The harness
+# owns ONLY its own verdict names (`harness-pass` / `harness-held` /
+# `harness-fail`). Adding a new plate-side verdict (e.g. a new lens-
+# dispatch outcome) extends the harness's inventory check without
+# editing this file.
+#
+# # Calling shape
+#
+#   harness = import ./mirror-plate-test-harness.px;
+#   plate   = import ./parametric-mirror-plate.px;
+#   verdict = (harness plate).assertHeldShape { ... };
+#
+# The plate primitive is passed in by the caller (Rust thin transport
+# or another `.px` owner) so the harness does not rely on pnix-eval's
+# cwd-anchored relative-import resolution.
+
+plate:
+
+let
+  ownerName =
+    "pnix-mirror-runtime/primitives/mirror-plate-test-harness.px";
+
+  # Harness-owned verdicts. Plate verdicts come from `plate.knownVerdicts`.
+  validHarnessVerdicts = [
+    "harness-pass"
+    "harness-held"
+    "harness-fail"
+  ];
+
+  # ─────────────────────────────────────────────────────────────────
+  # Internal: run an assertion through the plate primitive so the
+  # harness verdict is the downstream of a real plate_application.
+  # `check_name` becomes the plate id; the assertion's intent fills
+  # the six canonical slots.
+  # ─────────────────────────────────────────────────────────────────
+  runAsPlateApplication = check_name: subject_owner: args:
+    let
+      p = plate.mkMirrorRoom "harness.${check_name}.${subject_owner}";
+      atoms = [
+        {
+          slot = "facts";
+          value = builtins.toJSON [
+            "harness:${check_name}"
+            "subject:${subject_owner}"
+          ];
+        }
+        {
+          slot = "lens";
+          value = "${ownerName}::${check_name}";
+        }
+        {
+          slot = "owner_law";
+          value = "${ownerName}::owner-law";
+        }
+        {
+          slot = "capability_route";
+          value = "harness.run-assertion.${check_name}";
+        }
+        {
+          slot = "parameters";
+          # Note: args may be large and nested. We store the keys it
+          # carried as a stable summary; the full args attrset stays
+          # in the closure where the assertion body uses it.
+          value = builtins.toJSON {
+            arg_keys = builtins.attrNames args;
+            check_name = check_name;
+            subject_owner = subject_owner;
+          };
+        }
+        {
+          slot = "receipts";
+          value = builtins.toJSON [
+            "harness-${check_name}-application"
+          ];
+        }
+      ];
+      instance = plate.instantiate p atoms;
+      problem = {
+        check_name = check_name;
+        subject_owner = subject_owner;
+      };
+      application = plate.applyInstance instance problem;
+    in {
+      plate_application = application;
+      construction_trace = application.construction_trace or [];
+      plate_apply_verdict = application.verdict;
+    };
+
+  mkPass = check_name: subject_owner: args: observations:
+    let plateRun = runAsPlateApplication check_name subject_owner args; in {
+      verdict = "harness-pass";
+      check_name = check_name;
+      plate_owner = ownerName;
+      subject_owner = subject_owner;
+      reason = null;
+      observations = observations;
+      plate_application = plateRun.plate_application;
+      construction_trace = plateRun.construction_trace;
+      plate_apply_verdict = plateRun.plate_apply_verdict;
+    };
+
+  mkHeld = check_name: subject_owner: args: reason: observations:
+    let plateRun = runAsPlateApplication check_name subject_owner args; in {
+      verdict = "harness-held";
+      check_name = check_name;
+      plate_owner = ownerName;
+      subject_owner = subject_owner;
+      reason = reason;
+      observations = observations;
+      plate_application = plateRun.plate_application;
+      construction_trace = plateRun.construction_trace;
+      plate_apply_verdict = plateRun.plate_apply_verdict;
+    };
+
+  # `harness-fail` is reserved for malformed input that prevents the
+  # harness from even running the assertion. The plate application
+  # is still attempted with the partial atoms so the audit trail
+  # records WHERE the failure happened (e.g. missing required arg).
+  mkFail = check_name: subject_owner: args: reason: observations:
+    let plateRun = runAsPlateApplication check_name subject_owner args; in {
+      verdict = "harness-fail";
+      check_name = check_name;
+      plate_owner = ownerName;
+      subject_owner = subject_owner;
+      reason = reason;
+      observations = observations;
+      plate_application = plateRun.plate_application;
+      construction_trace = plateRun.construction_trace;
+      plate_apply_verdict = plateRun.plate_apply_verdict;
+    };
+
+  deepEqual = a: b: a == b;
+
+  # ─────────────────────────────────────────────────────────────────
+  # assertPlatesEquivalent
+  # ─────────────────────────────────────────────────────────────────
+  assertPlatesEquivalent = args:
+    let
+      check_name = "assertPlatesEquivalent";
+      subject_owner =
+        if args ? subject_owner then args.subject_owner else "unspecified";
+    in
+      if !(args ? left) || !(args ? right) then
+        mkFail check_name subject_owner args
+          "malformed args: `left` and `right` are required"
+          { malformed = true; arg_keys = builtins.attrNames args; }
+      else
+        let
+          left = args.left;
+          right = args.right;
+          pairs =
+            if args ? equivalence_keys then args.equivalence_keys else [];
+          lookup = receipt: key:
+            if receipt ? "${key}" then receipt."${key}" else null;
+          divergences =
+            builtins.foldl'
+              (acc: pair:
+                let
+                  leftKey = builtins.elemAt pair 0;
+                  rightKey = builtins.elemAt pair 1;
+                  leftVal = lookup left leftKey;
+                  rightVal = lookup right rightKey;
+                  equal = deepEqual leftVal rightVal;
+                in
+                  if equal then acc
+                  else acc ++ [{
+                    left_key = leftKey;
+                    right_key = rightKey;
+                    left_present = left ? "${leftKey}";
+                    right_present = right ? "${rightKey}";
+                  }])
+              []
+              pairs;
+          observations = {
+            compared_pairs = builtins.length pairs;
+            divergence_count = builtins.length divergences;
+            divergences = divergences;
+          };
+        in
+          if builtins.length pairs == 0 then
+            if deepEqual left right then
+              mkPass check_name subject_owner args
+                (observations // { mode = "whole-receipt"; })
+            else
+              mkHeld check_name subject_owner args
+                "whole-receipt comparison: left != right"
+                (observations // { mode = "whole-receipt"; })
+          else if builtins.length divergences == 0 then
+            mkPass check_name subject_owner args observations
+          else
+            mkHeld check_name subject_owner args
+              ("at least one equivalence pair diverged: "
+                + builtins.toJSON divergences)
+              observations;
+
+  # ─────────────────────────────────────────────────────────────────
+  # assertHeldShape
+  #
+  # Verdict-name inventory lookup goes against `plate.knownVerdicts`,
+  # which is owned by `parametric-mirror-plate.px`. Adding a new
+  # plate-side verdict instantly widens the harness's accepted set.
+  # ─────────────────────────────────────────────────────────────────
+  isKnownVerdictName = name: builtins.elem name plate.knownVerdicts;
+
+  assertHeldShape = args:
+    let
+      check_name = "assertHeldShape";
+      subject_owner =
+        if args ? subject_owner then args.subject_owner else "unspecified";
+    in
+      if !(args ? envelope) || !(args ? expected_verdict) then
+        mkFail check_name subject_owner args
+          "malformed args: `envelope` and `expected_verdict` are required"
+          { malformed = true; arg_keys = builtins.attrNames args; }
+      else if !(builtins.isAttrs args.envelope) then
+        mkFail check_name subject_owner args
+          "malformed envelope: not an attrset"
+          { malformed = true; envelope_type = builtins.typeOf args.envelope; }
+      else
+        let
+          envelope = args.envelope;
+          expected_verdict = args.expected_verdict;
+          expected_fields =
+            if args ? expected_fields then args.expected_fields else [];
+          verdict_in_inventory = isKnownVerdictName expected_verdict;
+          envelope_verdict =
+            if envelope ? verdict then envelope.verdict else null;
+          verdict_matches = envelope_verdict == expected_verdict;
+          missing_fields =
+            builtins.filter
+              (k: !(envelope ? "${k}"))
+              expected_fields;
+          observations = {
+            envelope_verdict = envelope_verdict;
+            expected_verdict = expected_verdict;
+            verdict_in_inventory = verdict_in_inventory;
+            verdict_matches = verdict_matches;
+            expected_fields = expected_fields;
+            missing_fields = missing_fields;
+            known_verdicts_count =
+              builtins.length plate.knownVerdicts;
+          };
+        in
+          if !verdict_in_inventory then
+            mkHeld check_name subject_owner args
+              ("expected_verdict `${expected_verdict}` is not in the plate "
+                + "primitive's `knownVerdicts` inventory; refusing to "
+                + "validate against an invented verdict name")
+              observations
+          else if !verdict_matches then
+            mkHeld check_name subject_owner args
+              ("envelope verdict mismatch: got "
+                + (if envelope_verdict == null then "<null>" else envelope_verdict)
+                + ", expected " + expected_verdict)
+              observations
+          else if builtins.length missing_fields > 0 then
+            mkHeld check_name subject_owner args
+              ("envelope is missing required fields: "
+                + builtins.concatStringsSep ", " missing_fields)
+              observations
+          else
+            mkPass check_name subject_owner args observations;
+
+  # ─────────────────────────────────────────────────────────────────
+  # assertInventoryClosed
+  # ─────────────────────────────────────────────────────────────────
+  assertInventoryClosed = args:
+    let
+      check_name = "assertInventoryClosed";
+      subject_owner =
+        if args ? subject_owner then args.subject_owner
+        else plate.ownerName;
+      slot_names = plate.plateSlotNames;
+      required_slots = plate.requiredSlots;
+      valid_verdicts = plate.validPlateVerdicts;
+      aux_verdicts = plate.auxiliaryVerdicts;
+      known_verdicts = plate.knownVerdicts;
+      registry = plate.mirrorPlateLensRegistry;
+      registered_lens_paths = builtins.attrNames registry;
+
+      slot_count = builtins.length slot_names;
+      slot_count_ok = slot_count == 6;
+      required_subset_ok =
+        builtins.all (s: builtins.elem s slot_names) required_slots;
+      verdict_count = builtins.length valid_verdicts;
+      verdicts_ok =
+        verdict_count >= 5
+        && builtins.all (v: builtins.isString v) valid_verdicts;
+      aux_ok = builtins.all (v: builtins.isString v) aux_verdicts;
+      known_is_union =
+        known_verdicts == (valid_verdicts ++ aux_verdicts);
+
+      registry_entry_ok = entry:
+        entry ? lensOwner
+        && entry ? entryFn
+        && entry ? requestBuilder
+        && entry ? lensVerdictName
+        && entry ? legacyEquivalenceTarget;
+      bad_registry_entries =
+        builtins.filter
+          (path: !(registry_entry_ok (builtins.getAttr path registry)))
+          registered_lens_paths;
+      registry_ok = builtins.length bad_registry_entries == 0;
+
+      observations = {
+        slot_count = slot_count;
+        slot_count_ok = slot_count_ok;
+        required_slot_count = builtins.length required_slots;
+        required_subset_ok = required_subset_ok;
+        verdict_count = verdict_count;
+        verdicts_ok = verdicts_ok;
+        aux_verdict_count = builtins.length aux_verdicts;
+        aux_ok = aux_ok;
+        known_verdict_count = builtins.length known_verdicts;
+        known_is_union = known_is_union;
+        registry_size = builtins.length registered_lens_paths;
+        registry_ok = registry_ok;
+        bad_registry_entries = bad_registry_entries;
+      };
+    in
+      if !slot_count_ok then
+        mkHeld check_name subject_owner args
+          ("plate slot inventory must have exactly 6 entries, found "
+            + toString slot_count)
+          observations
+      else if !required_subset_ok then
+        mkHeld check_name subject_owner args
+          "requiredSlots is not a subset of plateSlotNames"
+          observations
+      else if !verdicts_ok then
+        mkHeld check_name subject_owner args
+          ("validPlateVerdicts must be a non-empty list of strings; got "
+            + toString verdict_count + " entries")
+          observations
+      else if !aux_ok then
+        mkHeld check_name subject_owner args
+          "auxiliaryVerdicts must be a list of strings"
+          observations
+      else if !known_is_union then
+        mkHeld check_name subject_owner args
+          "knownVerdicts must equal validPlateVerdicts ++ auxiliaryVerdicts"
+          observations
+      else if !registry_ok then
+        mkHeld check_name subject_owner args
+          ("registry entries missing required keys: "
+            + builtins.concatStringsSep ", " bad_registry_entries)
+          observations
+      else
+        mkPass check_name subject_owner args observations;
+
+  # ─────────────────────────────────────────────────────────────────
+  # assertPlateApplyShape
+  # ─────────────────────────────────────────────────────────────────
+  assertPlateApplyShape = args:
+    let
+      check_name = "assertPlateApplyShape";
+      subject_owner =
+        if args ? subject_owner then args.subject_owner else "unspecified";
+    in
+      if !(args ? envelope) then
+        mkFail check_name subject_owner args
+          "malformed args: `envelope` is required"
+          { malformed = true; arg_keys = builtins.attrNames args; }
+      else if !(builtins.isAttrs args.envelope) then
+        mkFail check_name subject_owner args
+          "malformed envelope: not an attrset"
+          { malformed = true; envelope_type = builtins.typeOf args.envelope; }
+      else
+        let
+          envelope = args.envelope;
+          verdict =
+            if envelope ? verdict then envelope.verdict else null;
+          verdict_ok = verdict == "mirror-instance-applied";
+          trace =
+            if envelope ? construction_trace then envelope.construction_trace
+            else [];
+          trace_steps =
+            builtins.map (step: step.step) trace;
+          slot_names = plate.plateSlotNames;
+          trace_ok = trace_steps == slot_names;
+          kind =
+            if envelope ? receipt_envelope_kind then envelope.receipt_envelope_kind
+            else null;
+          kind_ok = kind == "parametric-mirror-plate-application";
+          observations = {
+            envelope_verdict = verdict;
+            verdict_ok = verdict_ok;
+            trace_steps = trace_steps;
+            expected_trace = slot_names;
+            trace_ok = trace_ok;
+            receipt_envelope_kind = kind;
+            kind_ok = kind_ok;
+          };
+        in
+          if !verdict_ok then
+            mkHeld check_name subject_owner args
+              ("expected mirror-instance-applied verdict, got "
+                + (if verdict == null then "<null>" else verdict))
+              observations
+          else if !trace_ok then
+            mkHeld check_name subject_owner args
+              ("construction_trace must walk plateSlotNames in declared order; "
+                + "got " + builtins.toJSON trace_steps)
+              observations
+          else if !kind_ok then
+            mkHeld check_name subject_owner args
+              ("receipt_envelope_kind must be parametric-mirror-plate-application, "
+                + "got " + (if kind == null then "<null>" else kind))
+              observations
+          else
+            mkPass check_name subject_owner args observations;
+
+  harnessInvariants = {
+    harness_is_plate_first =
+      "every harness verdict envelope carries a `plate_application` field "
+      + "produced by `parametric-mirror-plate.px::applyInstance`; the "
+      + "harness primitive does not synthesise verdicts without going "
+      + "through the plate primitive's instantiate+apply chain";
+    verdicts_are_inventory =
+      "harness verdict names are owned by this file (validHarnessVerdicts: "
+      + "harness-pass / harness-held / harness-fail). Verdicts the harness "
+      + "validates against are owned by parametric-mirror-plate.px's "
+      + "knownVerdicts (validPlateVerdicts ++ auxiliaryVerdicts).";
+    rust_assertion_scope =
+      "Rust integration tests must assert only `verdict == \"harness-pass\"`. "
+      + "Reading any other harness field for pass/fail decision is plate bypass.";
+    malformed_input_path =
+      "missing required args (e.g. envelope / expected_verdict / left+right) "
+      + "yield `harness-fail` with `malformed = true` on observations; "
+      + "the plate_application is still attempted so the audit trail names "
+      + "the failure point";
+    no_lane_specific_knowledge =
+      "this file does not import lane-specific owners (intent-recognition.px, "
+      + "operation-candidate-mapping.px, etc.). Lane knowledge enters via the "
+      + "receipts passed in by the caller — the harness only checks shape.";
+  };
+in {
+  inherit
+    ownerName
+    validHarnessVerdicts
+    assertPlatesEquivalent
+    assertHeldShape
+    assertInventoryClosed
+    assertPlateApplyShape
+    harnessInvariants;
+  meta = {
+    source = "pnix-mirror-runtime primitives";
+    owner = ownerName;
+    base = "mirror-plate-test-harness-v0r2";
+    rev_note =
+      "Rev 2 (2026-05-14): harness primitive is now actually plate-first. "
+      + "Each assert op runs through `mkMirrorRoom / instantiate / "
+      + "applyInstance` before evaluating its semantic content, and the "
+      + "result envelope carries the underlying `plate_application` + "
+      + "`construction_trace` verbatim. Auxiliary verdict inventory moved "
+      + "from harness to `parametric-mirror-plate.px::knownVerdicts`. "
+      + "`harness-fail` added for malformed input paths.";
+  };
+}

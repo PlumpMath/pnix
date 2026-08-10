@@ -1,0 +1,26 @@
+# stdlib/lib/nl/korean-rieul-open-stem-test.px — audit #10 lock: refoldRieulOpenStem ㄹ 과복원 차단.
+#
+# ★버그: refoldRieulOpenStem 이 OOV 개음절 base 에 무조건 ㄹ 복원 → 규칙 리-stem(달리/걸리/돌리/날리)이
+#   달릴/걸릴/돌릴/날릴 로 오복원(달린다→달릴=이해 오류; ㅂ니다도 동일 달립니다→달릴). 말한다→말할(하다-guard)의 친척.
+# ★fix(surgical, dict 무관·회귀0): base 마지막 음절 cho==ㄹ(5)=규칙 리/라/로-stem → ㄹ복원 차단(base 유지).
+#   ㄹ-탈락 불규칙(살/울/만들/알/열)은 *종성* ㄹ 탈락이라 base 마지막 음절 초성≠ㄹ(우/드/사/아) → fix 무영향=보존.
+let L = import ./korean-taxonomy-lift.px;
+  av = w: (L.analyzeVerb w).action;
+in {
+  # 리-class 규칙 stem: ㄴ다·ㅂ니다 둘 다 ㄹ복원 차단
+  dallinda = av "달린다"; dallimnida = av "달립니다";
+  geollinda = av "걸린다"; dollinda = av "돌린다"; nallinda = av "날린다";
+  # ㄹ-탈락 불규칙 보존(회귀 control)
+  unda = av "운다"; umnida = av "웁니다"; mandeumnida = av "만듭니다"; damnida = av "압니다";
+  # 모음/인식 stem 보존
+  ganda = av "간다"; sanda = av "산다";
+  all_ok =
+    # ★리-class 규칙 stem: 달릴/걸릴 아닌 달리/걸리 (ㄴ다 + ㅂ니다)
+       (av "달린다" == "달리") && (av "달립니다" == "달리")
+    && (av "걸린다" == "걸리") && (av "돌린다" == "돌리") && (av "날린다" == "날리")
+    # ★ㄹ-탈락 불규칙 보존(종성 ㄹ 탈락 → 초성≠ㄹ → fix 무영향)
+    && (av "운다" == "울") && (av "웁니다" == "울")
+    && (av "만든다" == "만들") && (av "만듭니다" == "만들") && (av "압니다" == "알")
+    # ★모음/인식 stem 보존
+    && (av "간다" == "가") && (av "산다" == "사");   # 산다=사다 인식(#4 동음 모호는 불변)
+}

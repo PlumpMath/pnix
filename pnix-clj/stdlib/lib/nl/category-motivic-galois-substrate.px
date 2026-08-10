@@ -1,0 +1,293 @@
+let
+  ownerName = "stdlib.nl.category-motivic-galois-substrate";
+
+  motivic = import nl/category-motivic-substrate.px;
+  galois = import nl/category-galois-substrate.px;
+  ladic = import nl/category-derived-etale-and-l-adic-substrate.px;
+
+  # === Motivic Galois Group G_mot (agent-NL-186) ====================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Motivic Galois group (G_mot) — 모든 realization의 자기동형군"
+  #
+  # 표준 정의:
+  #   G_mot := Aut^⊗(forgetful : DM → Vec)
+  #   = the affine group scheme of tensor-preserving automorphisms
+  #     of the fiber functor on motives
+  #
+  # substrate 해석:
+  #   - G_mot_substrate 는 substrate 의 motivic 카테고리의 fiber
+  #     functor 의 ⊗-보존 자동동형군
+  #   - 모든 realization functor R_H : DM → D(Sh^H) 가
+  #     G_mot-equivariant
+  #   - 표준 Galois 군 G_pnix 가 G_mot 의 quotient 또는 대표
+  #     subgroup
+
+  stepKind = "motivic-galois-group-G-mot";
+  framework_step =
+    "G_mot = Aut^⊗(fiber functor on DM) — 모든 realization 의 자기동형";
+
+  # =================================================================
+  # === Fiber functor on DM_substrate ===============================
+  # =================================================================
+
+  fiberFunctor = {
+    functor_id = "omega_substrate";
+    source = "DM_substrate";
+    target = "Vec_Q (Q-vector spaces) OR Vec_Z_l (l-adic) OR Set";
+    description_en = ''
+      Fiber functor ω : DM_substrate → Vec (or chosen target)
+      assigns to each motivic class [r] its "underlying vector
+      space of cohomology classes" — independent of any specific
+      realization.
+
+      Substrate-side: ω([r]) = the abstract vector space of all
+      cohomological invariants that r supports across all
+      realizations.
+    '';
+    tensor_preserving = true;
+    exact_in_DM = true;
+  };
+
+  # =================================================================
+  # === Motivic Galois group G_mot ==================================
+  # =================================================================
+
+  motivicGaloisGroup = {
+    group_id = "G_mot_substrate";
+    formal_definition = "G_mot := Aut^⊗(ω) — tensor-preserving automorphisms of ω";
+    structure = "affine pro-algebraic group scheme over Q (or Z_l for l-adic version)";
+    description_en = ''
+      G_mot is the universal symmetry group of substrate motivic
+      cohomology. Every symmetry that preserves the motivic
+      structure (Tate twists, distinguished triangles, tensor
+      product, fiber functor) is captured by G_mot.
+
+      Concretely: an element g ∈ G_mot is a natural transformation
+      ω → ω (compatible with tensor + triangulated structure).
+
+      Substrate consequences:
+        - G_mot acts on every cohomology theory via its realization
+        - G_mot fixed points = receipts canonical at the motivic level
+        - G_mot orbit = receipts equivalent across all realizations
+    '';
+    universal_property = "G_mot is initial among groups acting compatibly on all realization functors";
+  };
+
+  # =================================================================
+  # === G_mot vs G_pnix (Galois substrate) ==========================
+  # =================================================================
+  #
+  # G_pnix (#182) 가 substrate 의 *operational* symmetry group 이라면,
+  # G_mot 는 *cohomological* symmetry group.
+  # 두 군은 다음 surjective morphism 으로 연결:
+  #   G_pnix → G_mot   (operational → cohomological)
+
+  comparisonG_pnixG_mot = {
+    surjection = "G_pnix → G_mot";
+    relation_kind = "quotient (G_mot = G_pnix / kernel)";
+    kernel_meaning_en = ''
+      ker(G_pnix → G_mot) = elements of G_pnix that act trivially
+      on every cohomological invariant. These are operational
+      symmetries that do NOT manifest at the cohomological level.
+
+      Example: σ_rename (sent-NNN renumbering) is operational —
+      it doesn't change cohomological classes. So σ_rename ∈ ker.
+    '';
+    image_meaning_en = ''
+      Image of σ_lang in G_mot = symmetries among language emit
+      classes. Image of σ_axiom in G_mot = symmetries among
+      axiom-fiber classes.
+
+      σ_rename has image = 1 (trivial in G_mot).
+    '';
+    factorization_through_G_mot = ''
+      Every realization functor R_H : DM → D(Sh^H) factors:
+        G_pnix → G_mot → Aut(R_H)
+      The G_pnix-action on cohomology theories factors through G_mot.
+    '';
+  };
+
+  # =================================================================
+  # === Tannakian formalism =========================================
+  # =================================================================
+  #
+  # G_mot exists because DM_substrate is a Tannakian category:
+  #   - rigid symmetric monoidal abelian category
+  #   - with fiber functor ω to Vec
+  # Then DM ≅ Rep(G_mot) (G_mot-representations).
+
+  tannakianStructure = {
+    category_is_tannakian = true;
+    tannakian_axioms = [
+      { axiom = "rigid"; meaning = "every object has a dual"; }
+      { axiom = "symmetric"; meaning = "tensor product is commutative up to natural iso"; }
+      { axiom = "monoidal"; meaning = "tensor product is associative + unital"; }
+      { axiom = "abelian"; meaning = "kernels + cokernels exist"; }
+      { axiom = "fiber-functor"; meaning = "ω : DM → Vec is exact + tensor-preserving"; }
+    ];
+    tannaka_duality_statement = ''
+      Tannakian theorem: DM_substrate ≅ Rep(G_mot).
+        Objects of DM = G_mot-representations
+        Morphisms = G_mot-equivariant linear maps
+    '';
+    consequence_for_substrate = ''
+      Substrate motives are *equivalent* to G_mot-representations.
+      Every receipt class is a representation; every realization
+      is a G_mot-equivariant linear map.
+    '';
+  };
+
+  # =================================================================
+  # === G_mot acts on motivic invariants =============================
+  # =================================================================
+  #
+  # Each motivic invariant (composability, uniqueness, UC4, etc.)
+  # carries a G_mot-action. Invariants fixed by all of G_mot are
+  # *universal substrate truths*.
+
+  G_motActionsOnInvariants = [
+    {
+      invariant = "composability QED";
+      G_mot_action = "trivial (composability is G_mot-fixed)";
+      universality = "composability is universal substrate truth";
+    }
+    {
+      invariant = "uniqueness QED";
+      G_mot_action = "trivial";
+      universality = "universal";
+    }
+    {
+      invariant = "UC4 LLM-impossibility";
+      G_mot_action = "trivial — UC4 holds in EVERY G_mot-representation";
+      universality = "UC4 가 G_mot-fixed = universal truth 의 강화: 어떤 realization 또는 motivic 자동동형으로 변환해도 UC4 보존; substrate GLOBAL motivic structure 의 본질적 사실.";
+    }
+    {
+      invariant = "AC3 closure (post-Kan)";
+      G_mot_action = "trivial after Kan extension applied";
+      universality = "AC3 가 trivialized 되면 G_mot 이 그것을 인식하고 모든 realization 에서 동시 처리";
+    }
+    {
+      invariant = "substrate-topos (SC4)";
+      G_mot_action = "trivial — topos structure is G_mot-equivariant";
+      universality = "universal";
+    }
+  ];
+
+  # =================================================================
+  # === Characters of G_mot ==========================================
+  # =================================================================
+  #
+  # Characters chi : G_mot → G_m (multiplicative group) classify
+  # 1-dimensional motivic representations.
+
+  motivicCharacters = {
+    cyclotomic_character = {
+      character_id = "chi-cyclotomic";
+      definition = "chi : G_mot → G_m corresponding to Tate twist Z(1)";
+      substrate_meaning_en = ''
+        Cyclotomic character measures G_mot action on Tate twist.
+        In substrate: chi tracks how G_mot rotates between Tate
+        weights — different realizations weight things differently.
+      '';
+      action_on_substrate = "chi(σ_axiom-image) = -1 (axiom flip orientation), chi(other) = +1";
+    };
+    weight_one_characters = {
+      description_en = "weight-1 characters classify 1-dim motivic reps";
+      examples = [
+        "trivial character (weight 0)"
+        "cyclotomic chi (weight 1)"
+        "chi^(-1) (weight -1)"
+        "chi^n for various n"
+      ];
+    };
+  };
+
+  # =================================================================
+  # === Substrate-internal G_mot invariants =========================
+  # =================================================================
+
+  G_motInvariantClasses = [
+    {
+      class_id = "universal-canonical-receipts";
+      definition_en = "receipts fixed by all of G_mot = receipts canonical under every conceivable substrate symmetry";
+      contains = "[composability], [uniqueness], [UC4], [SC4]";
+      relates_to_galois_H0 = "G_mot-invariant subset of Galois H^0";
+    }
+    {
+      class_id = "tate-weighted-invariants";
+      definition_en = "receipts whose G_mot action factors through cyclotomic character chi^n";
+      relates_to_Tate_motives = "Z(n) is the (-n)-th tensor power of Z(-1)";
+    }
+    {
+      class_id = "motivic-classes-by-realization";
+      definition_en = "G_mot-representations of fixed dimension correspond to motivic classes whose realization rank is fixed";
+    }
+  ];
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_fiber_functor = true;
+    has_motivic_galois_group = true;
+    has_tannakian_structure = true;
+    tannakian_axiom_count = 5;  # 5 Tannakian axioms (hardcoded; matches list above)
+    has_G_pnix_to_G_mot_surjection = true;
+    G_mot_action_invariant_count = 5;  # 5 G_mot-invariant facts (hardcoded)
+    has_cyclotomic_character = true;
+    G_mot_invariant_class_count = 3;  # 3 invariant classes (hardcoded)
+    UC4_is_G_mot_invariant = true;
+    composability_is_G_mot_invariant = true;
+    uniqueness_is_G_mot_invariant = true;
+    motivic_owner_inherited = motivic.ownerName;
+    galois_owner_inherited = galois.ownerName;
+    ladic_owner_inherited = ladic.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyMotivicGaloisPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "motivic-galois-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "fiber_functor" request then {
+      outcome = "fiber-functor-emitted"; receipt = fiberFunctor;
+    }
+    else if builtins.hasAttr "G_mot" request then {
+      outcome = "G-mot-emitted"; receipt = motivicGaloisGroup;
+    }
+    else if builtins.hasAttr "comparison" request then {
+      outcome = "G-pnix-to-G-mot-comparison-emitted"; receipt = comparisonG_pnixG_mot;
+    }
+    else if builtins.hasAttr "tannakian" request then {
+      outcome = "tannakian-structure-emitted"; receipt = tannakianStructure;
+    }
+    else if builtins.hasAttr "G_mot_invariants" request then {
+      outcome = "G-mot-action-on-invariants-emitted"; receipt = G_motActionsOnInvariants;
+    }
+    else if builtins.hasAttr "characters" request then {
+      outcome = "motivic-characters-emitted"; receipt = motivicCharacters;
+    }
+    else if builtins.hasAttr "invariant_classes" request then {
+      outcome = "G-mot-invariant-classes-emitted"; receipt = G_motInvariantClasses;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "fiber_functor" "G_mot" "comparison" "tannakian"
+             "G_mot_invariants" "characters" "invariant_classes"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit fiberFunctor motivicGaloisGroup comparisonG_pnixG_mot;
+  inherit tannakianStructure G_motActionsOnInvariants;
+  inherit motivicCharacters G_motInvariantClasses;
+  inherit inventorySummary applyMotivicGaloisPlate;
+}

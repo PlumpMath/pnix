@@ -1,0 +1,24 @@
+# stdlib/lib/nl/korean-nl-mirror-roundtrip-probe.px
+#
+# S99-8: full korean-nl-mirror roundTrip probe for MSV admission witness (background only).
+# Ephemeral sentence in; flat JSON out — host persists verdict + regenerated surface hash only.
+let
+  knm = import ./korean-nl-mirror.px;
+  B = builtins;
+
+  runProbe = args:
+    let sentence = if args ? sentence then args.sentence else "";
+        prop = knm.liftToProposition sentence;
+        rt = knm.roundTrip prop;
+    in {
+      status = "ok";
+      verdict = rt.verdict;
+      structure_preserved = rt.structure_preserved;
+      regenerated_sentence = rt.sentence;
+    };
+
+  probeSelfTest = _:
+    let r = runProbe { sentence = "철수가 사과를 먹었다"; };
+    in (r.status == "ok") && (r.verdict == "nl-meaning-surface-are-one") && r.structure_preserved;
+
+in { inherit runProbe probeSelfTest; }

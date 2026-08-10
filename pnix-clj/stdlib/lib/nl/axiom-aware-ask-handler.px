@@ -1,0 +1,338 @@
+let
+  ownerName = "stdlib.nl.axiom-aware-ask-handler";
+
+  # === Substrate dependencies ====================================
+  baseHandler =
+    import nl/coding-ask-handler.px;
+  asq =
+    import nl/algorithm-sequence-substrate.px;
+  bt =
+    import nl/branch-tree-substrate.px;
+
+  # === 14 axiom family registries =================================
+  cf = import nl/algorithm-control-flow-axioms.px;
+  ap = import nl/algorithm-pattern-axioms.px;
+  ds = import nl/data-structure-axioms.px;
+  math = import nl/math-axioms-nl-layer.px;
+  ed = import nl/code-edit-refactor-axioms.px;
+  dg = import nl/diagnostic-axioms.px;
+  nv = import nl/navigation-axioms.px;
+  ts = import nl/test-axioms.px;
+  rv = import nl/review-axioms.px;
+  ex = import nl/execution-axioms.px;
+  bd = import nl/build-axioms.px;
+  cc = import nl/concurrency-axioms.px;
+  pf = import nl/performance-deep-axioms.px;
+  ar = import nl/architecture-axioms.px;
+
+  # === Axiom-aware integration (agent-NL-132) =====================
+  #
+  # 14 axiom family 가 *실제* 한 함수 호출로 발동.
+  #
+  # Flow:
+  #   1. coding-ask-handler.processAsk → instance + sequence
+  #   2. 14 family 모두 발화에 대해 activate
+  #   3. 활성된 모든 axiom 의 tree 들 합쳐서 unified composite
+  #   4. unified tree 를 root instance 의 bound_tree 로 부착
+  #   5. composite tree evaluate → substrate question emit
+
+  stepKind = "axiom-aware-integration";
+  framework_step =
+    "통합 — 14 axiom family 위 한 함수 호출 = 사용자 vision 의 *손/도구* + *피* 모두 발동";
+
+  # === Activate all 14 family on one utterance ====================
+
+  activateAllAxiomFamilies = utterance:
+    {
+      control_flow = cf.axiomsActivatedBy utterance;
+      algorithm_pattern = ap.axiomsActivatedBy utterance;
+      data_structure = ds.axiomsActivatedBy utterance;
+      math = math.axiomsActivatedBy utterance;
+      edit_refactor = ed.axiomsActivatedBy utterance;
+      diagnostic = dg.axiomsActivatedBy utterance;
+      navigation = nv.axiomsActivatedBy utterance;
+      test = ts.axiomsActivatedBy utterance;
+      review = rv.axiomsActivatedBy utterance;
+      execution = ex.axiomsActivatedBy utterance;
+      build = bd.axiomsActivatedBy utterance;
+      concurrency = cc.axiomsActivatedBy utterance;
+      performance_deep = pf.axiomsActivatedBy utterance;
+      architecture = ar.axiomsActivatedBy utterance;
+    };
+
+  # === Annotate axiom with its source family ======================
+  #
+  # When unifying axioms from 14 different family registries, we
+  # tag each axiom with its source family so the substrate question
+  # shows the user which dimension each branch comes from.
+
+  annotateWithFamily = familyName: axioms:
+    builtins.map (ax: ax // {
+      _source_family = familyName;
+    }) axioms;
+
+  # === Build unified composite tree ===============================
+
+  buildUnifiedCompositeTree = activations:
+    let
+      all =
+        (annotateWithFamily "control-flow" activations.control_flow)
+        ++ (annotateWithFamily "algorithm-pattern" activations.algorithm_pattern)
+        ++ (annotateWithFamily "data-structure" activations.data_structure)
+        ++ (annotateWithFamily "math" activations.math)
+        ++ (annotateWithFamily "edit" activations.edit_refactor)
+        ++ (annotateWithFamily "diagnostic" activations.diagnostic)
+        ++ (annotateWithFamily "navigation" activations.navigation)
+        ++ (annotateWithFamily "test" activations.test)
+        ++ (annotateWithFamily "review" activations.review)
+        ++ (annotateWithFamily "execution" activations.execution)
+        ++ (annotateWithFamily "build" activations.build)
+        ++ (annotateWithFamily "concurrency" activations.concurrency)
+        ++ (annotateWithFamily "perf-deep" activations.performance_deep)
+        ++ (annotateWithFamily "architecture" activations.architecture);
+    in
+      if all == [] then null
+      else
+        bt.mkTree {
+          node_label = "all axiom families activated";
+          branches = builtins.map (ax: bt.mkBranch {
+            name = ax.name + " [" + ax._source_family + "]";
+            hypothesis = "via " + ax._source_family + ": " + ax.name;
+            cues = ax.activation_cues;
+            sub_branches = ax.tree.branches;
+          }) all;
+        };
+
+  # === Summary metrics ============================================
+
+  summaryOf = activations:
+    let
+      counts = {
+        control_flow = builtins.length activations.control_flow;
+        algorithm_pattern = builtins.length activations.algorithm_pattern;
+        data_structure = builtins.length activations.data_structure;
+        math = builtins.length activations.math;
+        edit_refactor = builtins.length activations.edit_refactor;
+        diagnostic = builtins.length activations.diagnostic;
+        navigation = builtins.length activations.navigation;
+        test = builtins.length activations.test;
+        review = builtins.length activations.review;
+        execution = builtins.length activations.execution;
+        build = builtins.length activations.build;
+        concurrency = builtins.length activations.concurrency;
+        performance_deep = builtins.length activations.performance_deep;
+        architecture = builtins.length activations.architecture;
+      };
+      total =
+        counts.control_flow + counts.algorithm_pattern
+        + counts.data_structure + counts.math
+        + counts.edit_refactor + counts.diagnostic
+        + counts.navigation + counts.test
+        + counts.review + counts.execution + counts.build
+        + counts.concurrency + counts.performance_deep
+        + counts.architecture;
+      activeFamilies = builtins.filter (n: n > 0) [
+        counts.control_flow counts.algorithm_pattern
+        counts.data_structure counts.math counts.edit_refactor
+        counts.diagnostic counts.navigation counts.test
+        counts.review counts.execution counts.build
+        counts.concurrency counts.performance_deep counts.architecture
+      ];
+    in {
+      total_axioms = total;
+      active_family_count = builtins.length activeFamilies;
+      counts_per_family = counts;
+    };
+
+  # === Main entry: axiom-aware processAsk =========================
+  #
+  # Composes: coding-ask-handler.processAsk + 14 family activation
+  # + unified tree binding to root instance.
+
+  processAskWithAxioms = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance";
+    }
+    else if !(builtins.isString request.utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if request.utterance == "" then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      # Stage 1: delegate to base handler (cache + sequence + pin)
+      let
+        baseResult = baseHandler.processAsk {
+          utterance = request.utterance;
+          session_state = request.session_state or baseHandler.emptyState;
+          policy = request.policy or {};
+        };
+      in
+        if baseResult.outcome != "ask-step-emitted" then {
+          outcome = "held-base-handler-failed";
+          inner_outcome = baseResult.outcome;
+        }
+        else
+          # Stage 2: activate all 14 families
+          let
+            utterance = request.utterance;
+            activations = activateAllAxiomFamilies utterance;
+            summary = summaryOf activations;
+
+            # Stage 3: build unified composite tree
+            unifiedTree = buildUnifiedCompositeTree activations;
+
+            # Stage 4: bind tree to root instance (if non-null)
+            updatedState = baseResult.carry.updated_session_state;
+            rootId = baseResult.public.root_instance_id;
+            memWithTree =
+              if unifiedTree == null then updatedState.memory
+              else
+                asq.bindTreeToInstance updatedState.memory
+                  rootId unifiedTree;
+            finalState = updatedState // { memory = memWithTree; };
+
+            # Stage 5: evaluate the composite tree for next question
+            walkResult =
+              if unifiedTree == null then null
+              else bt.evaluateBranchTree unifiedTree utterance;
+          in {
+            outcome = "axiom-aware-step-emitted";
+            public = {
+              # Base handler shape
+              root_instance_id = rootId;
+              algorithm_step_count = baseResult.public.algorithm_step_count;
+              step_ids = baseResult.public.step_ids;
+              final_goal_id = baseResult.public.final_goal_id;
+              cache_hit = baseResult.public.cache_hit;
+              reused_from_fast_map = baseResult.public.reused_from_fast_map;
+              pin_count = baseResult.public.pin_count;
+              backbone_size = baseResult.public.backbone_size;
+              path_length = baseResult.public.path_length;
+              # New: axiom activation summary
+              axiom_summary = summary;
+              # Substrate's next question (if any branch active)
+              next_question_format =
+                if walkResult == null
+                then "no-axiom-activated"
+                else walkResult.public.question_format;
+              next_question_n =
+                if walkResult == null
+                then 0
+                else walkResult.public.active_branch_count;
+              next_question_en =
+                if walkResult == null
+                then ""
+                else walkResult.public.question_en;
+              next_question_ko =
+                if walkResult == null
+                then ""
+                else walkResult.public.question_ko;
+              message_en =
+                "Processed via "
+                + builtins.toString summary.active_family_count
+                + " axiom families ("
+                + builtins.toString summary.total_axioms
+                + " axioms). Root "
+                + rootId + " has unified bound_tree.";
+              message_ko =
+                builtins.toString summary.active_family_count
+                + " 개 axiom family 활성 ("
+                + builtins.toString summary.total_axioms
+                + " 개 axiom). Root "
+                + rootId + " 에 unified bound_tree 부착.";
+            };
+            carry = {
+              updated_session_state = finalState;
+              activations = activations;
+              unified_tree = unifiedTree;
+              walk_result = walkResult;
+              composed_substrates = [
+                "stdlib/lib/nl/coding-ask-handler.px (#115)"
+                "stdlib/lib/nl/branch-tree-substrate.px (#110)"
+                "stdlib/lib/nl/algorithm-sequence-substrate.px (#113)"
+                "14 axiom family registries (#118-#131)"
+              ];
+              axiom_origin =
+                "axiom-118-nl-axiom-aware-ask-handler "
+                + "(integrates 14 axiom family + handler)";
+            };
+          };
+
+  # === Plate entry =================================================
+
+  applyAxiomAwareAskPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "ask" request then
+      processAskWithAxioms (request.ask // (
+        if builtins.hasAttr "session_state" request
+        then { session_state = request.session_state; }
+        else {}
+      ) // (
+        if builtins.hasAttr "policy" request
+        then { policy = request.policy; }
+        else {}
+      ))
+    else {
+      outcome = "held-missing-input-field";
+      reason = "Provide { ask = { utterance; ... }, session_state?, policy? }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-axiom-aware-ask-handler-axiom-118";
+    composes =
+      "axiom-103-coding-ask + 14 axiom family registry (axiom-104..117)";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    integrated_family_count = 14;
+    family_names = [
+      "control-flow" "algorithm-pattern" "data-structure" "math"
+      "edit-refactor" "diagnostic" "navigation" "test"
+      "review" "execution" "build" "concurrency"
+      "performance-deep" "architecture"
+    ];
+    primary_outcomes = [
+      "axiom-aware-step-emitted"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-utterance"
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-base-handler-failed"
+      "held-missing-input-field"
+    ];
+    metaphor =
+      "사용자 vision *피의 14 방울* 의 실제 사용 wire. 한 함수 호출이 "
+      + "instance + sequence + 14 family activation + unified tree + "
+      + "branch walk + substrate question 전부 emit.";
+  };
+
+in {
+  inherit
+    ownerName
+    activateAllAxiomFamilies annotateWithFamily
+    buildUnifiedCompositeTree summaryOf
+    processAskWithAxioms
+    applyAxiomAwareAskPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL axiom-aware ask handler (agent-NL-132)";
+    owner = ownerName;
+    base = "nl-axiom-aware-ask-handler-v0";
+    rev_note = "agent-NL-132 (2026-05-29): 박힌 14 axiom family 가 한 함수 "
+      + "호출로 발동. coding-ask-handler 위에 14 family activation + unified "
+      + "composite tree + bound_tree binding + walk + substrate question. "
+      + "사용자 vision *손/도구* + *피* 모두 실행. DO NOT REBUILD — 모든 "
+      + "axiom family 의 axiomsActivatedBy 한 번씩 호출.";
+  };
+}

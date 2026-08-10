@@ -1,0 +1,129 @@
+# stdlib.lib.math.logarithm
+#
+# OWNER-LAW (v0.12-AAQ, div-math, 2026-05-21): exact integer
+# logarithms.
+#
+# numeric-evaluator.px gained `^` (exponentiation) at v0.12-JJ.
+# This owner adds its inverse in the integer world: the integer
+# logarithm. The real logarithm of an integer is almost always
+# irrational, so -- in the substrate's standing discipline of
+# never rounding a lie -- this owner returns the exact integer
+# FLOOR and CEILING of the logarithm, and an exact power test.
+#
+# # Operations
+#
+#   intLog base n   = the largest k with base^k <= n   (floor)
+#   ceilLog base n  = the smallest k with base^k >= n  (ceiling)
+#   isPowerOf b n   = whether n is exactly b^k for some k >= 0
+#
+# When `n` is an exact power of `base`, floor and ceiling agree;
+# otherwise they bracket the true (irrational) logarithm.
+#
+# # Standalone
+#
+# Imports nothing. base >= 2 and n >= 1 (the plate guards both).
+# Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT the real-valued logarithm -- it is irrational and this
+#     substrate does not round. Floor / ceiling only.
+#   - NOT logarithms of non-positive numbers or base < 2.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/logarithm.px";
+
+  # Floor of log_base(n): the largest k with base^k <= n. Walks
+  # powers of `base` upward until the next one would exceed n.
+  intLog = base: n:
+    let
+      go = k: acc:
+        if acc * base > n then k
+        else go (k + 1) (acc * base);
+    in go 0 1;
+
+  # Whether n is exactly base^k for some k >= 0.
+  isPowerOf = base: n:
+    let
+      k = intLog base n;
+      go = i: acc: if i >= k then acc else go (i + 1) (acc * base);
+    in (go 0 1) == n;
+
+  # Ceiling of log_base(n): the smallest k with base^k >= n. Equal
+  # to the floor when n is an exact power, one more otherwise.
+  ceilLog = base: n:
+    if isPowerOf base n then intLog base n
+    else intLog base n + 1;
+
+  # Convenience: the common bases.
+  intLog2 = n: intLog 2 n;
+  intLog10 = n: intLog 10 n;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "int-log"
+    "ceil-log"
+    "is-power-of"
+  ];
+
+  applyLogarithm = request:
+    let
+      op = request.operation;
+      base = if request ? base then request.base else 2;
+      n  = if request ? n then request.n else 1;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if base < 2 then {
+        outcome = "held-base-too-small";
+        operation = op;
+        base = base;
+        reason = "the logarithm base must be at least 2";
+      }
+      else if n < 1 then {
+        outcome = "held-non-positive-argument";
+        operation = op;
+        n = n;
+        reason = "the logarithm argument must be a positive integer";
+      }
+      else if op == "int-log" then {
+        outcome = "logarithm-computed";
+        operation = op; base = base; n = n;
+        value = intLog base n;
+        exact = isPowerOf base n;
+      }
+      else if op == "ceil-log" then {
+        outcome = "logarithm-computed";
+        operation = op; base = base; n = n;
+        value = ceilLog base n;
+        exact = isPowerOf base n;
+      }
+      else {
+        # op == "is-power-of"
+        outcome = "logarithm-computed";
+        operation = op; base = base; n = n;
+        holds = isPowerOf base n;
+      };
+
+in {
+  inherit
+    ownerName
+    intLog
+    ceilLog
+    isPowerOf
+    intLog2
+    intLog10
+    knownOperations
+    applyLogarithm;
+  meta = {
+    source = "stdlib math logarithm";
+    owner = ownerName;
+    base = "parametric-math-logarithm-v0";
+    rev_note = "v0.12-AAQ (div-math): exact integer logarithm owner -- the inverse of numeric-evaluator's `^`. intLog (floor of log_base n), ceilLog (ceiling), isPowerOf (exact power test); floor and ceiling agree exactly when n is a power of the base and bracket the irrational true logarithm otherwise. The substrate does not round -- it returns the exact integer bounds. Standalone, base >= 2, n >= 1. NOT the real-valued logarithm, NOT non-positive arguments, NOT yet a registered lens.";
+  };
+}

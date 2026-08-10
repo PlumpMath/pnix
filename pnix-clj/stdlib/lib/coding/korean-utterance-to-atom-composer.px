@@ -1,0 +1,522 @@
+let
+  ownerName = "stdlib.coding.korean-utterance-to-atom-composer";
+
+  # v0.16-BS: Korean utterance → atom forward composer.
+  # Owner thesis (BL/BM/BN/BO/BP/BQ/BR/BS dialogue):
+  #
+  # BQ closed forward 명사+조사 → role candidates.
+  # BR closed forward verb stem → atom kind candidates.
+  # BS closes the first end-to-end forward composition: a Korean
+  # utterance (예: "값을 출력하다", "프로그램을 종료하다",
+  # "개수를 읽다") gets tokenized, each token routed through BR
+  # (if verb) or BQ (if noun+조사), then BM role algebra fills
+  # atom slots by matching the verb's atom_kind slot_roles against
+  # noun candidates' possible_roles.
+  #
+  # v0 BS scope (substrate-honest):
+  #   - single-verb utterance (compound clause = held-multiple-verbs)
+  #   - 4 simple atom kinds: exit-with-code, print-line,
+  #     print-variable, read-line
+  #   - bind-variable (3-slot) intentionally deferred to BS+
+  #   - 1:n verb (출력하* → [print-line, print-variable]) returns
+  #     CANDIDATE LIST — substrate honest about ambiguity
+  #   - missing required slot → atom candidate carries
+  #     held-missing-slot per-kind (full utterance not necessarily
+  #     held; one kind may fill while another holds)
+  #
+  # 100% substrate-native: byte-safe whitespace tokenizer +
+  # BQ + BR + BM imports. No external NLP libraries.
+
+  caseMarker = import ./korean-case-marker-lens.px;
+  postpositionDetector = import ./korean-postposition-detector.px;
+  verbClassifier = import ./korean-verb-atom-classifier.px;
+  verbSuffixClassifier = import ./korean-verb-suffix-classifier.px;
+  slotRoles = import ./atom-slot-semantic-roles.px;
+
+  # v0.16-BT: bind-variable 의 value_kind slot 은 substrate 의
+  # atom-level value_kind (string/int/bool/float) 로 들어가는데,
+  # 한국어 utterance 는 "정수로" / "문자열로" / "실수로" / "참거짓
+  # 으로" 같은 한국어 표현으로 manner role 을 carry 한다. 둘 사이
+  # mapping 은 closed lookup. 외부에 없는 표현이면 held-unknown-
+  # value-kind 로 정직하게 hold (substrate 가 추측 안 함).
+  koreanValueKindLookup = {
+    "정수" = "int";
+    "문자열" = "string";
+    "실수" = "float";
+    "참거짓" = "bool";
+    "불리언" = "bool";
+    "논리값" = "bool";
+  };
+
+  # Lookup helper: Korean value_kind 표현 → atom-level value_kind
+  # ("int"/"string"/"float"/"bool"). Returns null if not in
+  # registry.
+  resolveKoreanValueKind = koreanText:
+    if builtins.hasAttr koreanText koreanValueKindLookup then
+      builtins.getAttr koreanText koreanValueKindLookup
+    else null;
+
+  # v0.16-BU: Korean connective verb endings — verb suffix 가
+  # 이 list 에 있으면 그 verb 는 *다음 clause 와 연결된 절*
+  # 의 마지막 (connective). 한국어 명사구가 가장 가까운 뒷쪽
+  # verb 에 attach 하는 default 와 함께 multi-atom chain 분해
+  # 가 가능해진다.
+  #
+  # 등록된 connective 어미 (closed v0):
+  #   고     — and (병렬 연결: 출력하고 종료하다)
+  #   고서   — and then (순차: 할당하고서 출력하다)
+  #   며     — and / while (동시: 출력하며 종료하다)
+  #   면서   — while (동시지속: 읽으면서 출력하다)
+  #   다가   — and then (중단/전환: 출력하다가 종료하다)
+  #
+  # final verb 의 suffix 는 일반적으로 final ending (다/한다/
+  # 했다/하면/해라 등) — non-connective. v0 에서는 connective
+  # list 와의 멤버십만 본다; suffix 가 list 에 없으면 final 로
+  # 간주.
+  knownConnectiveSuffixes = [
+    "고"
+    "고서"
+    "며"
+    "면서"
+    "다가"
+  ];
+
+  isConnectiveSuffix = suffix:
+    builtins.elem suffix knownConnectiveSuffixes;
+
+  # Byte-safe whitespace tokenizer. ASCII space (0x20) is the
+  # only separator we recognize at BS v0; Korean syllables encode
+  # as 0xE? bytes (UTF-8 3-byte sequences) which never contain a
+  # 0x20 byte, so byte-by-byte scanning is safe across mixed
+  # ASCII / Korean input. substring i 1 returns 1 raw byte; we
+  # only compare against " " which is also 1 byte.
+  splitByWhitespace = s:
+    let
+      sLen = builtins.stringLength s;
+      findNextSpace = i:
+        if i >= sLen then sLen
+        else if (builtins.substring i 1 s) == " " then i
+        else findNextSpace (i + 1);
+      iter = startPos: tokens:
+        if startPos >= sLen then tokens
+        else
+          let spacePos = findNextSpace startPos; in
+          if spacePos >= sLen then
+            (if startPos < sLen then
+              tokens ++ [(builtins.substring startPos (sLen - startPos) s)]
+            else tokens)
+          else
+            let tok = builtins.substring startPos (spacePos - startPos) s; in
+            if tok == "" then iter (spacePos + 1) tokens
+            else iter (spacePos + 1) (tokens ++ [tok]);
+    in
+      iter 0 [];
+
+  # Classify a single token via BR (verb) then BQ (noun+조사),
+  # falling back to "unknown" if neither matches. The order
+  # matters: a verb stem like "읽" appears at the start, while a
+  # postposition like "을" appears at the end — they never
+  # collide on the same token in practice, so order is just for
+  # consistency.
+  classifyToken = token:
+    let
+      verbHit = verbClassifier.classifyVerbFromForm token;
+    in
+      if verbHit != null then
+        { kind = "verb";
+          original_token = token;
+          matched_stem = verbHit.matched_stem;
+          atom_kinds = verbHit.atom_kinds;
+          suffix = verbHit.suffix;
+          ko_note = verbHit.ko_note; }
+      else
+        let
+          postHit = postpositionDetector.detectPostpositionAtEnd token;
+        in
+          if postHit != null && postHit.stripped_noun != "" then
+            { kind = "noun-with-postposition";
+              original_token = token;
+              stripped_noun = postHit.stripped_noun;
+              postposition_form = postHit.postposition_form;
+              possible_roles = postHit.possible_roles;
+              ko_note = postHit.ko_note; }
+          else
+            { kind = "unknown";
+              original_token = token; };
+
+  # Look up BM slot_roles for a given atom kind. Returns [] if
+  # the kind isn't registered (defensive — substrate refuses to
+  # invent slots).
+  lookupSlotRoles = atom_kind:
+    let
+      matching =
+        builtins.filter
+          (entry: entry.atom_kind == atom_kind)
+          slotRoles.knownAtomSlotRoles;
+    in
+      if matching == [] then []
+      else (builtins.head matching).slot_roles;
+
+  # Find a noun candidate whose possible_roles include `role`.
+  # Returns the first match (substrate-honest: doesn't fabricate
+  # tie-break; uses utterance-order priority). Returns null if
+  # no noun candidate carries that role.
+  findNounForRole = role: nounHits:
+    let
+      matches =
+        builtins.filter
+          (n: builtins.elem role n.possible_roles)
+          nounHits;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # Compose a single atom kind candidate from a verb hit + noun
+  # hits. Returns a record:
+  #   { kind; outcome; slot_fills; missing_slot_count; ko_note; }
+  #
+  # outcome ∈ {
+  #   "atom-shape-filled" — every required slot got a noun
+  #   "atom-shape-filled-with-default" — exit-with-code with no
+  #     manner noun gets default code "0" (honest about the
+  #     defaulting via _defaulted=true flag)
+  #   "held-missing-slot" — required slot has no matching noun
+  # }
+  composeAtomForKind = atom_kind: nounHits:
+    let
+      slotsForKind = lookupSlotRoles atom_kind;
+      # BT: bind-variable 의 manner role 매칭 noun 이 여러 개일 수
+      # 있을 때 (드물지만), 첫 후보를 가져옴 (BS와 동일 utterance-
+      # order priority). 단, bind-variable 은 같은 utterance 안에
+      # variable 의 target(에) + value 의 object(을/를) +
+      # value_kind 의 manner(으로/로) 가 모두 별 token 으로 등장
+      # 하는 패턴이라 충돌 없음.
+      fills =
+        builtins.map (sr:
+          let
+            noun = findNounForRole sr.role nounHits;
+          in
+            if noun == null then
+              { slot = sr.slot;
+                role = sr.role;
+                filled = false;
+                filled_from = null;
+                source_token = null; }
+            else
+              # BT: bind-variable.value_kind slot 은 한국어 value
+              # _kind 표현을 atom-level value_kind 로 lookup. lookup
+              # miss 시 raw 한국어를 carry 하되 _value_kind_resolved
+              # =false flag 명시. 상위에서 held-unknown-value-kind
+              # 로 cascade.
+              if atom_kind == "bind-variable" && sr.slot == "value_kind" then
+                let
+                  resolved = resolveKoreanValueKind noun.stripped_noun;
+                in
+                  if resolved == null then
+                    { slot = sr.slot;
+                      role = sr.role;
+                      filled = true;
+                      filled_from = noun.stripped_noun;
+                      source_token = noun.original_token;
+                      postposition_form = noun.postposition_form;
+                      _value_kind_resolved = false;
+                      _korean_raw = noun.stripped_noun; }
+                  else
+                    { slot = sr.slot;
+                      role = sr.role;
+                      filled = true;
+                      filled_from = resolved;
+                      source_token = noun.original_token;
+                      postposition_form = noun.postposition_form;
+                      _value_kind_resolved = true;
+                      _korean_raw = noun.stripped_noun; }
+              else
+                { slot = sr.slot;
+                  role = sr.role;
+                  filled = true;
+                  filled_from = noun.stripped_noun;
+                  source_token = noun.original_token;
+                  postposition_form = noun.postposition_form; })
+          slotsForKind;
+      missing = builtins.filter (f: !f.filled) fills;
+      missingCount = builtins.length missing;
+      # BT: bind-variable 만 — value_kind slot 의 한국어 표현이
+      # lookup 에 없으면 hold (다른 slot 모두 채워졌어도).
+      unresolvedValueKindCount =
+        if atom_kind == "bind-variable" then
+          builtins.length
+            (builtins.filter
+              (f: f.filled
+                && (f ? _value_kind_resolved)
+                && !f._value_kind_resolved)
+              fills)
+        else 0;
+    in
+      # BS v0 special-case: exit-with-code can default code="0"
+      # when no manner-marked noun is present. This is the one
+      # default the substrate carries — every other slot must be
+      # explicitly filled or the kind holds.
+      if atom_kind == "exit-with-code" && missingCount == 1 then
+        { kind = atom_kind;
+          outcome = "atom-shape-filled-with-default";
+          slot_fills = [
+            { slot = "code";
+              role = "manner";
+              filled = true;
+              filled_from = "0";
+              source_token = null;
+              _defaulted = true; }
+          ];
+          missing_slot_count = 0; }
+      else if missingCount > 0 then
+        { kind = atom_kind;
+          outcome = "held-missing-slot";
+          slot_fills = fills;
+          missing_slot_count = missingCount; }
+      # BT: 모든 slot 채워졌지만 value_kind 한국어 lookup 실패
+      else if unresolvedValueKindCount > 0 then
+        { kind = atom_kind;
+          outcome = "held-unknown-value-kind";
+          slot_fills = fills;
+          missing_slot_count = 0;
+          unresolved_value_kind_count = unresolvedValueKindCount;
+          known_value_kinds = builtins.attrNames koreanValueKindLookup; }
+      else
+        { kind = atom_kind;
+          outcome = "atom-shape-filled";
+          slot_fills = fills;
+          missing_slot_count = 0; };
+
+  # v0.16-BU: walk classified token stream and group nouns under
+  # the nearest following verb (한국어 default: noun phrase attach
+  # 는 가장 가까운 뒷쪽 verb 에). Returns:
+  #   { chunks; trailing_noun_count; }
+  # where each chunk = { verb; nouns; }. Trailing nouns (i.e.
+  # noun tokens AFTER the last verb in the utterance) are reported
+  # but NOT attached to any chunk — substrate is honest that they
+  # don't have a verb home.
+  chunkByVerbs = classified:
+    let
+      walk = list: chunks: nounBuf:
+        if list == [] then
+          { chunks = chunks;
+            trailing_noun_count = builtins.length nounBuf;
+            trailing_nouns =
+              builtins.map (n: n.original_token) nounBuf; }
+        else
+          let head = builtins.head list; in
+            if head.kind == "noun-with-postposition" then
+              walk (builtins.tail list) chunks (nounBuf ++ [head])
+            else if head.kind == "verb" then
+              walk
+                (builtins.tail list)
+                (chunks ++ [{ verb = head; nouns = nounBuf; }])
+                []
+            else
+              # unknown token — drop (substrate honest about
+              # unknown count via top-level unknown_token_count)
+              walk (builtins.tail list) chunks nounBuf;
+    in
+      walk classified [] [];
+
+  # v0.16-BU: compose one chunk (verb + leading nouns) into an
+  # atom candidate envelope. Mirrors single-verb composer shape
+  # so multi-atom-clause-composed envelope carries the same
+  # per-chunk anatomy as the BS atom-candidates-composed envelope.
+  #
+  # v0.16-BV: adds verb_suffix_classification — BR matched_stem +
+  # suffix 를 (tense, mood, form_label) metadata 로 의미화. is_
+  # connective 가 true 이면 BV classification 은 null 로 carry
+  # (BU 의 connective ending 은 BV mood registry 에 없음 —
+  # substrate 가 두 lens 의 영역을 분리해서 정직).
+  composeChunk = chunk:
+    let
+      atomCandidates =
+        builtins.map
+          (k: composeAtomForKind k chunk.nouns)
+          chunk.verb.atom_kinds;
+      isConnective = isConnectiveSuffix chunk.verb.suffix;
+      suffixClassification =
+        if isConnective then null
+        else
+          verbSuffixClassifier.classifyVerbSuffix
+            chunk.verb.matched_stem
+            chunk.verb.suffix;
+    in {
+      verb_stem = chunk.verb.matched_stem;
+      verb_suffix = chunk.verb.suffix;
+      verb_ko_note = chunk.verb.ko_note;
+      atom_kind_candidates = chunk.verb.atom_kinds;
+      atom_candidate_count = builtins.length atomCandidates;
+      atom_candidates = atomCandidates;
+      attached_noun_count = builtins.length chunk.nouns;
+      is_connective = isConnective;
+      verb_suffix_classification = suffixClassification;
+    };
+
+  # Main entry: utterance → atom candidate(s).
+  #
+  # Outcomes:
+  #   "atom-candidates-composed" — single-verb utterance; 1+ atom
+  #     kind candidates carry per BS shape
+  #   "multi-atom-clause-composed" — compound clause (2+ verbs);
+  #     BU: utterance chunked by verbs, each chunk produces its
+  #     own atom candidate list
+  #   "held-no-verb" — no verb token recognized
+  #   "held-empty-utterance" — empty input
+  composeAtomsFromUtterance = utterance:
+    let
+      tokens = splitByWhitespace utterance;
+      tokenCount = builtins.length tokens;
+    in
+      if tokenCount == 0 then
+        { outcome = "held-empty-utterance";
+          token_count = 0; }
+      else
+        let
+          classified = builtins.map classifyToken tokens;
+          verbHits =
+            builtins.filter (c: c.kind == "verb") classified;
+          nounHits =
+            builtins.filter
+              (c: c.kind == "noun-with-postposition")
+              classified;
+          unknownTokens =
+            builtins.filter (c: c.kind == "unknown") classified;
+          verbCount = builtins.length verbHits;
+        in
+          if verbCount == 0 then
+            { outcome = "held-no-verb";
+              token_count = tokenCount;
+              noun_token_count = builtins.length nounHits;
+              unknown_token_count = builtins.length unknownTokens;
+              tokens = tokens; }
+          else if verbCount == 1 then
+            # BV: single-verb path 도 suffix classification metadata
+            # carry (BS shape 보존 — 새 field 만 추가).
+            # connective suffix 인 경우 (utterance 가 incomplete —
+            # final ending 없음) classification 은 null.
+            let
+              verb = builtins.head verbHits;
+              atomCandidates =
+                builtins.map
+                  (k: composeAtomForKind k nounHits)
+                  verb.atom_kinds;
+              isConnective = isConnectiveSuffix verb.suffix;
+              suffixClassification =
+                if isConnective then null
+                else
+                  verbSuffixClassifier.classifyVerbSuffix
+                    verb.matched_stem
+                    verb.suffix;
+            in
+              { outcome = "atom-candidates-composed";
+                token_count = tokenCount;
+                noun_token_count = builtins.length nounHits;
+                unknown_token_count = builtins.length unknownTokens;
+                verb_stem = verb.matched_stem;
+                verb_suffix = verb.suffix;
+                verb_ko_note = verb.ko_note;
+                atom_kind_candidates = verb.atom_kinds;
+                atom_candidate_count =
+                  builtins.length atomCandidates;
+                atom_candidates = atomCandidates;
+                verb_suffix_classification = suffixClassification; }
+          else
+            # BU: compound clause path — chunk by verb tokens,
+            # each chunk composed independently. 한국어 default
+            # noun phrase attachment (gravitate to nearest
+            # following verb) 가 chunkByVerbs 안에 박힘.
+            let
+              walked = chunkByVerbs classified;
+              chunkResults = builtins.map composeChunk walked.chunks;
+              connectiveSuffixCount = builtins.length
+                (builtins.filter (c: c.is_connective) chunkResults);
+              finalSuffixCount = builtins.length
+                (builtins.filter (c: !c.is_connective) chunkResults);
+            in
+              { outcome = "multi-atom-clause-composed";
+                token_count = tokenCount;
+                noun_token_count = builtins.length nounHits;
+                unknown_token_count = builtins.length unknownTokens;
+                trailing_noun_count = walked.trailing_noun_count;
+                trailing_nouns = walked.trailing_nouns;
+                chunk_count = builtins.length chunkResults;
+                connective_chunk_count = connectiveSuffixCount;
+                final_chunk_count = finalSuffixCount;
+                verb_stems =
+                  builtins.map (v: v.matched_stem) verbHits;
+                chunks = chunkResults; };
+
+  # ── inventory ──
+
+  inventorySummary = _: {
+    owner = ownerName;
+    # BT (v0.16-BT) extension: bind-variable (3-slot) joins
+    # the composable set. Comment / if-true-then / repeat-n-times
+    # / loop-while-true 는 여전히 다른 owner (AC/BH/BL nested NL)
+    # 또는 deferred.
+    composable_atom_kinds = [
+      "exit-with-code"
+      "print-line"
+      "print-variable"
+      "read-line"
+      "bind-variable"
+    ];
+    composable_atom_kind_count = 5;
+    # BV: composer_chain 갱신 — classifyVerbSuffix 단계 추가.
+    composer_chain = [
+      "splitByWhitespace"
+      "classifyToken (BR verb classifier → BQ postposition detector)"
+      "lookupSlotRoles (BM role algebra)"
+      "findNounForRole + composeAtomForKind"
+      "resolveKoreanValueKind (BT: bind-variable value_kind lookup)"
+      "chunkByVerbs + composeChunk (BU: compound clause 분해)"
+      "classifyVerbSuffix (BV: tense/mood metadata carry)"
+      "composeAtomsFromUtterance (top-level entry)"
+    ];
+    held_outcomes = [
+      "held-empty-utterance"
+      "held-no-verb"
+      "held-missing-slot"
+      "held-unknown-value-kind"
+    ];
+    # BT: 한국어 value_kind 표현 lookup table (closed)
+    korean_value_kind_count = builtins.length
+      (builtins.attrNames koreanValueKindLookup);
+    korean_value_kinds =
+      builtins.sort (a: b: a < b)
+        (builtins.attrNames koreanValueKindLookup);
+    # BU: connective ending lookup table (closed)
+    connective_suffix_count = builtins.length knownConnectiveSuffixes;
+    connective_suffixes = knownConnectiveSuffixes;
+    # BU: top-level outcome shapes (mutually exclusive)
+    composed_outcomes = [
+      "atom-candidates-composed"        # single-verb (BS shape)
+      "multi-atom-clause-composed"      # 2+ verb (BU shape)
+    ];
+  };
+
+in {
+  inherit
+    ownerName
+    splitByWhitespace
+    classifyToken
+    lookupSlotRoles
+    findNounForRole
+    composeAtomForKind
+    composeAtomsFromUtterance
+    inventorySummary
+    koreanValueKindLookup
+    resolveKoreanValueKind
+    knownConnectiveSuffixes
+    isConnectiveSuffix
+    chunkByVerbs
+    composeChunk;
+  meta = {
+    source = "stdlib coding korean utterance to atom composer";
+    owner = ownerName;
+    base = "korean-utterance-to-atom-composer-v0";
+    rev_note = "v0.16-BV: verb suffix → tense/mood metadata 합류 — BR matched_stem + suffix 의 의미 layer. 새 import: korean-verb-suffix-classifier.px. composeChunk (BU multi-verb path) 와 single-verb path 둘 다 verb_suffix_classification field carry (BS shape 보존 — 새 field 추가만). connective suffix (BU 영역) 인 경우 classification = null (substrate 두 lens 영역 분리). 5 mood (declarative-formal / declarative-bare / imperative / propositive / modal-necessity) × 2 tense (present / past) — 한국어 phonology 의 -ㅆ- past tense marker 가 stem variant 의 마지막 syllable 에 fold (했/냈 = past). composer_chain 7 → 8 step (classifyVerbSuffix 단계 추가). v0.16-BU carry-forward: compound clause 분해 (multi-verb → multi-atom chain), 5 connective ending closed lookup, trailing nouns 보고만. v0.16-BT carry-forward: bind-variable 3-slot composition + 한국어 value_kind lookup. 100% substrate-native (외부 NLP 0). BV+ slices: interrogative / conditional / exclamatory mood (BR stem registry 의 미래/추측 stem 확장 필요), nested atom composition (if-true-then + consequence-body, AC nested NL 통합), 수학식 ↔ 한국어 bidirectional.";
+  };
+}

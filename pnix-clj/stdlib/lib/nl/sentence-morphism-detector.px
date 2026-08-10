@@ -1,0 +1,347 @@
+let
+  ownerName = "stdlib.nl.sentence-morphism-detector";
+
+  containsAny = haystack: needles:
+    let hl = builtins.stringLength haystack;
+    in builtins.any (n:
+      let nl = builtins.stringLength n;
+          scan = pos:
+            if pos + nl > hl then false
+            else if (builtins.substring pos nl haystack) == n then true
+            else scan (pos + 1);
+      in if nl == 0 then false else scan 0
+    ) needles;
+
+  # === Sentence Morphism Detector (agent-NL-102, resolve step) =====
+  #
+  # 사용자 directive chain (2026-05-29):
+  # - "의미를 인식할 때 분해/수렴 인식"
+  # - "분해된 sentence 의 명확한 의미 결정 + 수렴 (4-piece) → substrate 매핑"
+  # - "자연어 (양방향) 처리기 = NL 의 equation/refactoring. 알고리즘
+  #    마디 마디로부터 나온다."
+  # - "알고리즘 마디 마디 문장들이 들여올 때 수학적 배경이 우선 처리"
+  #
+  # 본 owner = algorithm-sentence-sequence 의 `resolve` step.
+  # decomposer (#101) 가 sentence atoms + ambient 를 emit 한 뒤,
+  # 본 detector 가 *atom 쌍의 morphism 관계* 를 식별. 두 atom 이
+  # paraphrase 인가 / 인과인가 / 시간순인가 / 수학적 equivalence 인가.
+  #
+  # # 4-piece (#2) 의 NL 도메인 lift
+  #
+  #   math morphism      = 두 공간 사이의 의미 보존 매핑 + 보존/손실 성질
+  #   sentence morphism  = 두 atom 사이의 의미 관계 + 보존/추가/변화 측면
+  #
+  # # public/carry envelope 헌법 보존
+  #
+  # detection 결과의 substrate-internal 식별자 (morphism id 의 axiom
+  # origin, downstream owner route 등) 는 carry 에만. public 에는
+  # 도메인 무관 generic 설명만 (description_en / description_ko).
+
+  stepKind = "resolve";
+  framework_step = "2 of 4 (morphism detection between atom pairs)";
+
+  # === Known sentence morphism kinds =============================
+  #
+  # 각 row:
+  #   id          — canonical kind name
+  #   family      — semantic category
+  #   description_en/ko — generic user-facing
+  #   detect_*    — heuristic signals (en/ko)
+  #   preserves   — 두 atom 이 공유하는 측면
+  #   adds        — 두 번째 atom 이 추가하는 측면
+  #   route_hint  — math substrate routing 후보 (선택)
+
+  knownSentenceMorphisms = [
+    {
+      id = "paraphrase";
+      family = "meaning-preserving";
+      description_en = "Two sentences express the same meaning in different words.";
+      description_ko = "두 문장이 같은 의미를 다른 표현으로.";
+      detect_en = [ "in other words" "that is" "which means" "namely" "i.e." ];
+      detect_ko = [ "즉" "다시 말해" "다시 말하면" "바꿔 말하면" "라는 뜻이다" ];
+      preserves = [ "meaning" "intent" ];
+      adds = [ "alternate-phrasing" ];
+    }
+    {
+      id = "refinement";
+      family = "meaning-narrowing";
+      description_en = "Second sentence specifies / narrows the first.";
+      description_ko = "둘째 문장이 첫째를 구체화 / 좁힌다.";
+      detect_en = [
+        "specifically" "Specifically" "more precisely" "More precisely"
+        "to be exact" "To be exact" "in particular" "In particular"
+      ];
+      detect_ko = [ "정확히" "구체적으로" "특히" "특별히" "자세히 말하면" ];
+      preserves = [ "intent" ];
+      adds = [ "specificity" ];
+    }
+    {
+      id = "causal-dependency";
+      family = "logical";
+      description_en = "Second follows from / depends on the first as cause-effect.";
+      description_ko = "둘째가 첫째의 결과 / 원인-결과 의존.";
+      detect_en = [ "therefore" "so " "hence" "thus" "as a result" "because of this" ];
+      detect_ko = [ "따라서" "그러므로" "그래서" "그 결과" "이로 인해" ];
+      preserves = [ "logical-context" ];
+      adds = [ "consequence" ];
+    }
+    {
+      id = "temporal-sequence";
+      family = "ordered";
+      description_en = "Sentences describe steps in time order.";
+      description_ko = "문장들이 시간 순서의 단계 기술.";
+      detect_en = [
+        "then " "Then " "next " "Next " "after that" "After that"
+        "first " "First " "second " "Second " "finally" "Finally"
+        "subsequently" "Subsequently"
+      ];
+      detect_ko = [ "그 다음" "그다음" "그 뒤" "먼저" "다음으로" "마지막으로" ];
+      preserves = [ "actor" "context" ];
+      adds = [ "next-step" ];
+    }
+    {
+      id = "conditional-binding";
+      family = "logical";
+      description_en = "First sentence is the hypothesis, second is the consequent.";
+      description_ko = "첫 문장이 가정, 둘째가 귀결.";
+      detect_en = [ "if " "If " "when " "When " "assuming " "Assuming " "suppose " "Suppose " ];
+      detect_ko = [ "만약" "만일" "라면" "이면" "한다면" ];
+      preserves = [ "logical-context" ];
+      adds = [ "hypothesis-consequent-pair" ];
+    }
+    {
+      id = "contradiction";
+      family = "meaning-overriding";
+      description_en = "Second sentence overrides / negates the first (user correction).";
+      description_ko = "둘째 문장이 첫째를 부정 / 정정 (사용자 수정).";
+      detect_en = [ "actually" "Actually" "no, " "No, " "wait, " "Wait, " "i meant" "I meant" "scratch that" ];
+      detect_ko = [ "아니다" "아니, " "실은" "사실" "잠시" "다시 말하면" "내 말은" ];
+      preserves = [ "intent" ];
+      adds = [ "override" ];
+    }
+    {
+      id = "elaboration";
+      family = "meaning-extending";
+      description_en = "Second sentence adds more detail on the same topic.";
+      description_ko = "둘째 문장이 같은 주제에 세부 정보 추가.";
+      detect_en = [ "also" "Also" "moreover" "Moreover" "furthermore" "Furthermore" "additionally" ];
+      detect_ko = [ "또한" "더하여" "게다가" "그리고" "또" "추가로" ];
+      preserves = [ "topic" "intent" ];
+      adds = [ "detail" ];
+    }
+    {
+      id = "equation-equivalence";
+      family = "math";
+      description_en = "Both sentences denote mathematically equivalent equations / expressions.";
+      description_ko = "두 문장이 수학적으로 동등한 식 / 표현.";
+      detect_en = [ "equivalently" "is the same as" "equal to" "rewrite as" "factor as" ];
+      detect_ko = [ "같다" "동등" "동치" "같은 식이다" "고쳐쓰면" "인수분해하면" ];
+      preserves = [ "math-truth-value" ];
+      adds = [ "alternate-form" ];
+      route_hint = "stdlib/lib/math/parametric-equation-substrate.px";
+    }
+  ];
+
+  morphismCount = builtins.length knownSentenceMorphisms;
+  morphismIds = builtins.map (m: m.id) knownSentenceMorphisms;
+  findMorphism = id:
+    let
+      found = builtins.filter (m: m.id == id) knownSentenceMorphisms;
+    in
+      if found == [] then null else builtins.head found;
+
+  # === Detection between an atom pair ============================
+  #
+  # Inputs: atomA = previous sentence atom (decomposer result), atomB
+  # = following atom. Each atom carries `sentence` text + ambient_id
+  # + (optional) math hints. Detection chooses the *narrowest morphism
+  # whose signal appears in atomB* — temporal signal beats elaboration,
+  # contradiction beats paraphrase, etc.
+  #
+  # Detection priority (narrowest first):
+  #   contradiction → conditional-binding → causal-dependency →
+  #   temporal-sequence → refinement → equation-equivalence →
+  #   paraphrase → elaboration
+
+  morphismPriority = [
+    "contradiction"
+    "conditional-binding"
+    "causal-dependency"
+    "temporal-sequence"
+    "refinement"
+    "equation-equivalence"
+    "paraphrase"
+    "elaboration"
+  ];
+
+  matchesMorphism = atomB: m:
+    let
+      sentence = atomB.sentence;
+      kwHit = containsAny sentence m.detect_en
+        || containsAny sentence m.detect_ko;
+    in kwHit;
+
+  detectAtomPairMorphism = atomA: atomB:
+    let
+      kinds = builtins.filter (m: matchesMorphism atomB m) knownSentenceMorphisms;
+      kindIds = builtins.map (m: m.id) kinds;
+      pick = pri:
+        if pri == [] then null
+        else
+          let h = builtins.head pri; t = builtins.tail pri; in
+          if builtins.elem h kindIds then h else pick t;
+      pickedId = pick morphismPriority;
+    in
+      if pickedId == null then {
+        outcome = "no-morphism-detected";
+        atom_a_text = atomA.sentence;
+        atom_b_text = atomB.sentence;
+      }
+      else
+        let m = findMorphism pickedId; in {
+          outcome = "morphism-resolved";
+          atom_a_text = atomA.sentence;
+          atom_b_text = atomB.sentence;
+          morphism_id = m.id;
+          family = m.family;
+          preserves = m.preserves;
+          adds = m.adds;
+          # carry math-route hint when this morphism is itself math-family
+          # and either atom carried math substrate hints.
+          math_route_hint =
+            let
+              eqEquiv = m.id == "equation-equivalence";
+              hasARoute = builtins.hasAttr "math_substrate_route" atomA;
+              hasBRoute = builtins.hasAttr "math_substrate_route" atomB;
+              fromA = if hasARoute then atomA.math_substrate_route else null;
+              fromB = if hasBRoute then atomB.math_substrate_route else null;
+              fromMorphism = if builtins.hasAttr "route_hint" m then m.route_hint else null;
+            in
+              if eqEquiv then fromMorphism
+              else if fromA != null then fromA
+              else if fromB != null then fromB
+              else null;
+        };
+
+  # === Resolve morphisms over a full decomposition receipt =======
+  #
+  # Input: receipt = output of decomposer.decomposeUtterance ...
+  # 단일 atom 인 경우 morphism 없음 (singleton).
+  # 둘 이상이면 (a0,a1), (a1,a2), ... 인접 쌍별 detection.
+
+  resolveMorphisms = receipt:
+    if !(builtins.isAttrs receipt) then {
+      outcome = "held-non-attrs-receipt";
+    }
+    else if !(builtins.hasAttr "carry" receipt) then {
+      outcome = "held-missing-carry-field";
+      reason = "Receipt must come from sentence-decomposition-substrate.";
+    }
+    else
+      let
+        atoms = receipt.carry.per_atom_ambient;
+        n = builtins.length atoms;
+      in
+        if n == 0 then {
+          outcome = "held-no-atoms";
+        }
+        else if n == 1 then {
+          outcome = "no-pairs-singleton";
+          sentence_count = 1;
+        }
+        else
+          let
+            # Build adjacency pairs and run detection for each.
+            indices = builtins.genList (i: i) (n - 1);
+            pairs = builtins.map (i:
+              detectAtomPairMorphism
+                (builtins.elemAt atoms i)
+                (builtins.elemAt atoms (i + 1))
+            ) indices;
+            resolved = builtins.filter (p: p.outcome == "morphism-resolved") pairs;
+            unresolved = builtins.filter (p: p.outcome != "morphism-resolved") pairs;
+          in {
+            outcome = "morphisms-resolved";
+            pair_count = builtins.length pairs;
+            resolved_count = builtins.length resolved;
+            unresolved_count = builtins.length unresolved;
+            public = {
+              pairs = builtins.map (p:
+                if p.outcome == "morphism-resolved" then
+                  let m = findMorphism p.morphism_id; in {
+                    a = p.atom_a_text;
+                    b = p.atom_b_text;
+                    relation_en = m.description_en;
+                    relation_ko = m.description_ko;
+                  }
+                else {
+                  a = p.atom_a_text;
+                  b = p.atom_b_text;
+                  relation_en = "no specific relation detected";
+                  relation_ko = "특정 관계 감지 없음";
+                }
+              ) pairs;
+              pair_count = builtins.length pairs;
+            };
+            carry = {
+              pair_detail = pairs;
+              axiom_origin =
+                "axiom-91-nl-sentence-morphism (lifts axiom-2-morphism)";
+              composes = [
+                "axiom-90-nl-sentence-decomposition (atom source)"
+                "axiom-2-morphism (math source)"
+              ];
+            };
+          };
+
+  applyNlSentenceMorphismPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "receipt" request) then {
+      outcome = "held-missing-receipt-field";
+    }
+    else resolveMorphisms request.receipt;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-morphism-axiom-91";
+    sentence_morphism_count = morphismCount;
+    sentence_morphism_ids = morphismIds;
+    composes = "axiom-2-morphism (math/geometric → NL lift)";
+    inherit framework_step;
+    step_kind = stepKind;
+    next_step_owners = [
+      "stdlib/lib/nl/sentence-invariant-convergence.px  # propose (agent-NL-103)"
+      "stdlib/lib/nl/sentence-meta-detection.px         # hold/elevate (agent-NL-104)"
+    ];
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-attrs-receipt"
+      "held-missing-carry-field"
+      "held-no-atoms"
+      "held-non-attrs-request"
+      "held-missing-receipt-field"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownSentenceMorphisms morphismCount morphismIds
+    morphismPriority findMorphism
+    matchesMorphism detectAtomPairMorphism
+    resolveMorphisms applyNlSentenceMorphismPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL sentence morphism detector (agent-NL-102)";
+    owner = ownerName;
+    base = "nl-sentence-morphism-detector-v0";
+    rev_note = "4-piece axiom (#1-#4) 의 NL 도메인 lift step 2 — `resolve` "
+      + "step. decomposer (#101) 의 atom list 위에서 adjacent pair 별 "
+      + "morphism kind 탐지. 8 morphism kind × en+ko bilingual. math "
+      + "route hint propagation (#101 의 carry → #102 의 carry). DO NOT "
+      + "REBUILD — morphism.px 자산 패턴 재사용, NL 도메인 surface 만 신규.";
+  };
+}

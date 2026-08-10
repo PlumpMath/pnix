@@ -1,0 +1,284 @@
+let
+  ownerName = "stdlib.math.fact-temporality";
+
+  # === Timeless vs Ordered fact (math substrate 의 5번째 axiom) ====
+  #
+  # 사용자 directive (2026-05-28):
+  # "math substrate 들은 시간이 존재하지 않지? 그런 문장에는 순서가
+  # 없다는거다. 그러나 대수로 ... 방정식을 구하는 조립/인수분해 식으로
+  # 분리될수있다. 이는 순서처럼 작동한다. meta-circular metaInterpreter
+  # (mirror primitive) 에서 처럼. 작도의 순서처럼, 수학이나 코딩같은
+  # 알고리즘이 순서를 갖게되는, (즉, NL 에서 알고리즘이 되는 방법)
+  # 4 piece 랑 비슷한 중요한 내용이지?"
+  #
+  # 핵심 axiom: math substrate 의 fact 는 두 카테고리로 분리.
+  #
+  #   timeless  — 순서 없음. set-theoretic 의미. e.g.
+  #                "SSS → congruent", "if curvature=0 then angle-sum=180"
+  #                redb 캐시 가능. 같은 query → 같은 receipt 영원히.
+  #
+  #   ordered   — 순서 있음. turn-sequence 의미. e.g.
+  #                방정식 풀이 (x+3=7 → x=4), 작도 (선분 양 등분),
+  #                알고리즘 (Euclidean GCD).
+  #                각 step 이 한 mirror turn. ankh = 현 상태, turn =
+  #                rule application.
+  #
+  # # 왜 이게 4-piece 와 동급인가
+  #
+  # 4-piece (ambient-space / morphism / invariant / second-order) 는
+  # *공간/의미* 의 axiom. 이 owner 는 *시간/순서* 의 axiom. 같은 격자
+  # 단위로 substrate self-shape 을 결정.
+  #
+  # # 학술 근거 (엄밀)
+  #
+  # - Timeless fact: set theory, model theory 의 표준 (Tarski 1933~)
+  # - Ordered procedure: λ-calculus reduction sequence (Church 1936),
+  #   term rewriting (Knuth-Bendix 1970), proof step (Gentzen 1934)
+  # - 작도: Euclid Elements II (BC 300)
+  # - 두 카테고리 구분은 *constructive* vs *classical* 수학 의
+  #   학계 표준 dichotomy 와 평행
+
+  # === Two categories ===============================================
+
+  validTemporalityCategories = [
+    "timeless"
+    "ordered"
+  ];
+
+  # === Examples — math substrate 의 어느 owner 가 어느 카테고리인가 ==
+  #
+  # 사용자 substrate 의 현재 owner 들 분류:
+
+  knownTemporalityRows = [
+    # === TIMELESS ====================================================
+    {
+      owner = "stdlib/lib/math/ambient-space.px";
+      category = "timeless";
+      reason = "Ambient space registry (R-2, S-2, ...) — set-theoretic; 순서 없음";
+      redb_cacheable = true;
+    }
+    {
+      owner = "stdlib/lib/math/morphism.px";
+      category = "timeless";
+      reason = "Morphism property (preserves/loses) — fact, 순서 없음";
+      redb_cacheable = true;
+    }
+    {
+      owner = "stdlib/lib/math/invariant.px";
+      category = "timeless";
+      reason = "Space invariant (curvature, angle-sum) — fact";
+      redb_cacheable = true;
+    }
+    {
+      owner = "stdlib/lib/math/second-order-lift.px";
+      category = "timeless";
+      reason = "Predicate-as-subject — fact-of-fact, 순서 없음";
+      redb_cacheable = true;
+    }
+    {
+      owner = "stdlib/lib/math/congruence-criteria.px";
+      category = "timeless";
+      reason = "합동 정리 — SSS/SAS/ASA/AAS/RHS 의 *결과* 는 timeless. (단 *증명* 의 step 은 ordered.)";
+      redb_cacheable = true;
+    }
+    {
+      owner = "stdlib/lib/math/theorem-store.px";
+      category = "timeless";
+      reason = "Theorem lifecycle status — 같은 axiom set + same theorem → same status 영원히";
+      redb_cacheable = true;
+    }
+    # === ORDERED =====================================================
+    {
+      owner = "stdlib/lib/math/proof-plate.px";
+      category = "ordered";
+      reason = "Proof step sequence — Gentzen 의 logical derivation. 각 step 의 *순서가 의미*. step N 의 facts_in 이 step N-1 의 facts_out.";
+      redb_cacheable = false;  # 결과는 cacheable 이지만 step sequence 자체는 turn-by-turn 재생
+    }
+    {
+      owner = "stdlib/lib/math/transformation-pipeline.px";
+      category = "ordered";
+      reason = "Multi-step composition — 2-step/3-step transformation chain. 순서 중요.";
+      redb_cacheable = false;
+    }
+    {
+      owner = "stdlib/lib/math/conjecture-generator.px";
+      category = "ordered";
+      reason = "Transformation 적용 — substring substitution, 순서 의미";
+      redb_cacheable = false;
+    }
+    {
+      owner = "stdlib/lib/math/equation-solving-procedure.px";  # 이번 슬라이스에서 박힘
+      category = "ordered";
+      reason = "방정식 풀이 step — x+3=7 → -3 → x=4. 각 step 이 mirror turn.";
+      redb_cacheable = false;
+    }
+  ];
+
+  # === Lookup ========================================================
+
+  findTemporalityForOwner = ownerPath:
+    let
+      matches = builtins.filter
+        (r: r.owner == ownerPath) knownTemporalityRows;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  ownersByCategory = category:
+    builtins.map (r: r.owner)
+      (builtins.filter (r: r.category == category) knownTemporalityRows);
+
+  # === Classify a fact instance ====================================
+  #
+  # 사용자가 fact 또는 procedure 받아 어느 카테고리인지 분류.
+
+  classifyFact = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(request ? fact_shape) then {
+      outcome = "held-fact-shape-required";
+      reason =
+        "request must declare fact_shape — substrate-honest: caller 가 "
+        + "이 fact 가 timeless 인지 ordered 인지 명시.";
+    }
+    else if request.fact_shape == "single-statement"
+            || request.fact_shape == "set-of-statements"
+            || request.fact_shape == "fact-of-fact" then {
+      outcome = "classified-timeless";
+      fact_shape = request.fact_shape;
+      category = "timeless";
+      redb_cacheable = true;
+      reason =
+        "Single statement / set / fact-of-fact 는 순서 의존 없음 — "
+        + "redb 캐시 가능. 같은 axiom 위에서 영원히 동일 verdict.";
+    }
+    else if request.fact_shape == "step-sequence"
+            || request.fact_shape == "derivation-chain"
+            || request.fact_shape == "construction-procedure"
+            || request.fact_shape == "algorithm" then {
+      outcome = "classified-ordered";
+      fact_shape = request.fact_shape;
+      category = "ordered";
+      redb_cacheable = false;
+      reason =
+        "Step sequence / derivation chain / construction / algorithm 은 "
+        + "*turn-by-turn replay* 가 의미 — mirror primitive 의 turn "
+        + "axiom 과 동일 구조. 각 step 이 한 turn.";
+      mirror_primitive_correspondence =
+        "ankh = 현재 상태 (equation / partial construction / proof state). "
+        + "turn = rule application. receipt = post-turn 상태 + 어느 rule 적용했나.";
+    }
+    else {
+      outcome = "held-unknown-fact-shape";
+      fact_shape = request.fact_shape;
+      known_shapes = [
+        "single-statement" "set-of-statements" "fact-of-fact"
+        "step-sequence" "derivation-chain" "construction-procedure"
+        "algorithm"
+      ];
+    };
+
+  # === Cross-category note (사용자 핵심 통찰) ======================
+  #
+  # 같은 *결과* 가 timeless 이라도, 그것을 *얻는 procedure* 는 ordered.
+  # 합동 정리의 결과 ("SSS → congruent") 는 timeless 이지만 *증명* 의
+  # step sequence (Euclid I.8 의 8 step) 는 ordered.
+  #
+  # 이게 사용자가 짚은 가장 깊은 통찰: substrate 가 두 모드 모두 carry
+  # 해야 한다. 결과는 redb 캐시, procedure 는 mirror turn sequence.
+
+  timelessResultWithOrderedProof = {
+    canonical_example = {
+      result = {
+        statement = "SSS triangles are congruent";
+        category = "timeless";
+        cacheable_at = "redb (mirror_receipt_store)";
+      };
+      proof = {
+        statement = "Euclid Elements I.8 proof";
+        category = "ordered";
+        step_count = 8;  # Euclid 의 실제 step 수
+        cacheable_at = "step-by-step turn sequence (NOT single-receipt)";
+      };
+      coexistence_axiom =
+        "결과와 증명이 같은 fact graph 안에 공존. 결과는 cacheable, "
+        + "증명은 replayable. 둘 다 audit-able.";
+    };
+  };
+
+  # === Mirror plate lens entry =======================================
+
+  applyFactTemporalityPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(request ? operation) then {
+      outcome = "held-operation-required";
+      known_operations = [
+        "classify-fact" "classify-owner" "list-by-category"
+      ];
+    }
+    else if request.operation == "classify-fact" then
+      classifyFact request
+    else if request.operation == "classify-owner" then
+      let
+        row = findTemporalityForOwner request.owner_path;
+      in
+        if row == null then {
+          outcome = "held-owner-not-registered";
+          owner_path = request.owner_path;
+        }
+        else {
+          outcome = "owner-classified";
+          owner = row.owner;
+          category = row.category;
+          redb_cacheable = row.redb_cacheable;
+          reason = row.reason;
+        }
+    else if request.operation == "list-by-category" then {
+      outcome = "category-listed";
+      category = request.category;
+      owners = ownersByCategory request.category;
+    }
+    else {
+      outcome = "held-unknown-operation";
+      operation = request.operation;
+    };
+
+  # === Introspection =================================================
+
+  timelessCount =
+    builtins.length (ownersByCategory "timeless");
+  orderedCount =
+    builtins.length (ownersByCategory "ordered");
+
+  inventorySummary = _: {
+    owner = ownerName;
+    valid_categories = validTemporalityCategories;
+    total_classified_owners = builtins.length knownTemporalityRows;
+    timeless_count = timelessCount;
+    ordered_count = orderedCount;
+    timeless_owners = ownersByCategory "timeless";
+    ordered_owners = ownersByCategory "ordered";
+    coexistence_axiom_present = true;
+  };
+
+in {
+  inherit
+    ownerName
+    validTemporalityCategories
+    knownTemporalityRows
+    findTemporalityForOwner
+    ownersByCategory
+    classifyFact
+    timelessResultWithOrderedProof
+    applyFactTemporalityPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib math fact temporality axiom";
+    owner = ownerName;
+    base = "fact-temporality-v0";
+    rev_note = "사용자 directive (2026-05-28): '수학 substrate 들은 시간이 존재하지 않지? 그런 문장에는 순서가 없다. 그러나 대수로 ... 방정식 풀이는 순서. 이는 mirror primitive turn 과 동일 구조. 4-piece 와 동급 axiom.' Timeless vs Ordered first-class 분리. timeless = set-theoretic fact, redb cacheable. ordered = turn-sequence, mirror primitive 와 동일. 10 owners 분류 (6 timeless + 4 ordered). coexistence axiom: 같은 result 는 timeless 이지만 그 proof procedure 는 ordered — 둘 다 audit-able 한 공존.";
+  };
+}

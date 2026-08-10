@@ -1,0 +1,44 @@
+# Khronos Vulkan/SPIR-V/OpenCL registry catalog -> repo-local redb corpus_source_records.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다. graph/math wiring 없음.
+let
+  B = builtins;
+  genPath = ./khronos-registry-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "code.khronos.registry_catalog.v1";
+    source = { name = "Khronos registry catalog"; license = "Apache-2.0 OR MIT / MIT / Apache-2.0"; scope = "empty seed fallback"; };
+    summary = { vulkan_type_count = 0; spirv_instruction_count = 0; opencl_define_count = 0; };
+    vulkan = { types = [ ]; enums = [ ]; commands = [ ]; features = [ ]; extensions = [ ]; };
+    spirv = { instructions = [ ]; operand_kinds = [ ]; xml_registry_rows = [ ]; };
+    opencl = { header_files = [ ]; defines = [ ]; typedefs = [ ]; functions = [ ]; };
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "khronos-registry-catalog-load-v0";
+      source_lens = "stdlib/lib/corpus/khronos-registry-catalog-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "code.khronos.registry_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "khronos-registry-catalog-query-v0";
+      source_lens = "stdlib/lib/corpus/khronos-registry-catalog-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "code.khronos.registry_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

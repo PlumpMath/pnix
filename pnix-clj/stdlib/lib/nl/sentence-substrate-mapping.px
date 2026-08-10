@@ -1,0 +1,360 @@
+let
+  ownerName = "stdlib.nl.sentence-substrate-mapping";
+
+  # === Chain end-to-end manifest (agent-NL-105) ====================
+  #
+  # 사용자 directive (2026-05-29 chain):
+  # - "분해 → 결정 → 수렴 (4-piece) → substrate 매핑 → 코드 생성"
+  # - "알고리즘 마디 마디, 수학적 배경이 우선 처리"
+  #
+  # 본 owner = 4-piece NL backbone (#101-#104) 의 *마지막* piece. 모든
+  # 이전 step 의 receipt 를 종합 → 다음 호출할 substrate owner manifest
+  # 산출. 코드 생성 / 수학 풀이 / patch 적용 등 모든 도메인 후속 chain
+  # 의 입구.
+  #
+  # # 결정 규칙 (priority — 가장 specific 먼저)
+  #
+  # R-1: meta 의 elevation_rule == R1 (correction-override) →
+  #       elevated_text 를 새 utterance 로 re-classify → 그 routing
+  # R-2: meta 의 elevation_rule == R2 (trailing-meta) →
+  #       elevated_text 의 routing 사용
+  # R-3: invariant 의 substrate_routing_hint 가 있음 (math 도메인) →
+  #       그 owner 가 primary substrate
+  # R-4: atoms 의 첫 atom 의 ambient 가 intent-instruction →
+  #       patch-ir-nl-lifter.px (refactoring lane)
+  # R-5: atoms 의 첫 atom 이 intent-question →
+  #       universal-nl-reverse-composer.px (응답 lane)
+  # R-6: atoms 의 첫 atom 이 intent-conditional →
+  #       held — caller 가 조건 명확화 필요
+  # R-7: default → held-no-routing
+  #
+  # Note: R-5b / R-6 / R-7 are autonomous branching points.
+  # They are intentionally not wired to a downstream action owner because
+  # they mark judgment boundaries, not executable tasks. Keeping them explicit
+  # helps later turn repair distinguish "missing intent" from "deliberate hold".
+  #
+  # # public/carry envelope 헌법 보존
+  #
+  # public 은 자연어 user-intent-summary + next-action-guidance.
+  # carry 에 primary_substrate_owner, secondary_owners, 모든 step
+  # receipt chain.
+
+  stepKind = "chain-resolved";
+  framework_step = "5 of 5 (chain end-to-end — substrate mapping manifest)";
+
+  # === Owner registry (생성 시 활용 가능한 substrate owner 목록) ===
+
+  knownSubstrateOwners = {
+    math_truth_value      = "stdlib/lib/math/parametric-equation-substrate.px";
+    math_procedure        = "stdlib/lib/math/equation-solving-procedure.px";
+    math_knowledge        = "stdlib/lib/math/ambient-space.px";
+    math_family           = "stdlib/lib/math/problem-kernel-substrate.px";
+    patch_ir_lifter       = "stdlib/lib/nl/patch-ir-nl-lifter.px";
+    patch_ir_plate        = "stdlib/lib/agent/patch-ir-plate.px";
+    agent_loop            = "stdlib/lib/coding/coding-agent-loop-primitives.px";
+    reverse_composer      = "stdlib/lib/nl/universal-nl-reverse-composer.px";
+    problem_kernel        = "stdlib/lib/math/problem-kernel-substrate.px";
+  };
+
+  # === Helpers =====================================================
+
+  firstAtomAmbient = atoms:
+    if atoms == [] then null
+    else
+      let a = builtins.head atoms; in
+      if builtins.hasAttr "ambient_id" a then a.ambient_id else null;
+
+  # 2026-05-29 fix: when atom0 is intent-conditional but a follow-up
+  # atom exists, the consequent atom carries the actionable intent.
+  # Skip leading conditional atoms and pick the next substantive one.
+  effectiveRoutingAmbient = atoms:
+    let
+      n = builtins.length atoms;
+      skipCond = i:
+        if i >= n then null
+        else
+          let a = builtins.elemAt atoms i; in
+          let amb = if builtins.hasAttr "ambient_id" a then a.ambient_id else null; in
+          if amb == "intent-conditional" && i < n - 1 then
+            skipCond (i + 1)
+          else amb;
+    in skipCond 0;
+
+  invariantRouteHint = convergenceReceipt:
+    if builtins.isAttrs convergenceReceipt
+       && builtins.hasAttr "carry" convergenceReceipt
+       && builtins.hasAttr "substrate_routing_hint" convergenceReceipt.carry
+       && convergenceReceipt.carry.substrate_routing_hint != null
+    then convergenceReceipt.carry.substrate_routing_hint
+    else null;
+
+  primaryInvariantId = convergenceReceipt:
+    if builtins.isAttrs convergenceReceipt
+       && builtins.hasAttr "carry" convergenceReceipt
+       && builtins.hasAttr "primary_invariant_id" convergenceReceipt.carry
+    then convergenceReceipt.carry.primary_invariant_id
+    else null;
+
+  metaElevationRule = metaReceipt:
+    if builtins.isAttrs metaReceipt
+       && builtins.hasAttr "carry" metaReceipt
+       && builtins.hasAttr "elevation_rule" metaReceipt.carry
+    then metaReceipt.carry.elevation_rule
+    else null;
+
+  metaElevatedText = metaReceipt:
+    if builtins.isAttrs metaReceipt
+       && builtins.hasAttr "public" metaReceipt
+       && builtins.hasAttr "elevated_text" metaReceipt.public
+       && metaReceipt.public.elevated_text != null
+    then metaReceipt.public.elevated_text
+    else null;
+
+  # === Single-pass routing for a given (atoms, invariant, meta) =====
+  #
+  # 두 개의 결과 layer:
+  #   layer 1: 직접 결정 (R-3 ~ R-7)
+  #   layer 2: meta override (R-1, R-2) 가 layer 1 결과를 *교체* 가능
+
+  routeBasic = decompReceipt: convergenceReceipt:
+    let
+      atoms = decompReceipt.carry.per_atom_ambient;
+      ambient0 = effectiveRoutingAmbient atoms;
+      routeHint = invariantRouteHint convergenceReceipt;
+    in
+      # R-3 — invariant 에 math substrate 힌트 있음
+      if routeHint != null then {
+        rule = "R-3-math-invariant-route";
+        primary_substrate_owner = routeHint;
+        intent_kind = "math";
+        secondary_owners = [];
+      }
+      # R-4 — intent-instruction (refactor / patch lane)
+      else if ambient0 == "intent-instruction" then {
+        rule = "R-4-instruction-to-patch-ir";
+        primary_substrate_owner = knownSubstrateOwners.patch_ir_lifter;
+        intent_kind = "refactor";
+        secondary_owners = [
+          knownSubstrateOwners.patch_ir_plate
+          knownSubstrateOwners.agent_loop
+        ];
+      }
+      # R-5 — intent-question (응답 lane)
+      else if ambient0 == "intent-question" then {
+        rule = "R-5-question-to-reverse-composer";
+        primary_substrate_owner = knownSubstrateOwners.reverse_composer;
+        intent_kind = "info-request";
+        secondary_owners = [];
+      }
+      # R-5b — intent-statement (declarative info — no substrate
+      # dispatch needed, just acknowledge). Caller can record /
+      # display / log. This avoids held-ing on perfectly valid
+      # informational sentences.
+      else if ambient0 == "intent-statement" then {
+        rule = "R-5b-statement-acknowledged";
+        primary_substrate_owner = null;
+        intent_kind = "info-statement";
+        secondary_owners = [];
+        ack_only = true;
+      }
+      # R-6 — intent-conditional (held; only fires when no non-
+      # conditional follow-up was found by effectiveRoutingAmbient)
+      else if ambient0 == "intent-conditional" then {
+        rule = "R-6-conditional-held";
+        primary_substrate_owner = null;
+        intent_kind = "conditional";
+        secondary_owners = [];
+        held = true;
+        held_reason_en = "Conditional sentence — substrate routing depends on the consequent.";
+        held_reason_ko = "조건 발화 — 귀결에 따라 substrate 결정.";
+      }
+      # R-7 — default held
+      else {
+        rule = "R-7-default-held";
+        primary_substrate_owner = null;
+        intent_kind = "unclassified";
+        secondary_owners = [];
+        held = true;
+        held_reason_en = "No clear routing signal; caller may ask the user for clarification.";
+        held_reason_ko = "명확한 routing 신호 없음 — 사용자에게 추가 정보 요청.";
+      };
+
+  # Re-route based on meta elevation: when correction-override or
+  # trailing-meta fires, re-classify the elevated text as a fresh
+  # utterance and use its routing. This is the core "사용자 진짜 의도"
+  # detection across the full chain.
+
+  resolveChain = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if utterance == "" then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let
+        decomposer = import ./sentence-decomposition-substrate.px;
+        detector = import ./sentence-morphism-detector.px;
+        convergence = import ./sentence-invariant-convergence.px;
+        metaDetector = import ./sentence-meta-detection.px;
+        dec = decomposer.decomposeUtterance utterance;
+      in
+        if builtins.hasAttr "outcome" dec
+           && dec.outcome != "utterance-decomposed" then {
+          outcome = "held-decomposition-failed";
+          decomposer_outcome = dec.outcome;
+        }
+        else
+          let
+            mor = detector.resolveMorphisms dec;
+            inv = convergence.convergeInvariants dec mor;
+            met = metaDetector.elevateIntent dec inv;
+
+            basicRoute = routeBasic dec inv;
+            metaRule = metaElevationRule met;
+            elevText = metaElevatedText met;
+
+            # When meta fires R1 (correction-override) or R2
+            # (trailing-meta), re-decompose the elevated text and
+            # route from THAT — that's the substrate the user's true
+            # intent points to. When meta is R3/R4, basicRoute stands.
+            shouldReClassify =
+              elevText != null
+              && (metaRule == "R1-correction-override"
+                  || metaRule == "R2-trailing-meta");
+            reClassified =
+              if shouldReClassify then
+                let
+                  dec2 = decomposer.decomposeUtterance elevText;
+                  mor2 = detector.resolveMorphisms dec2;
+                  inv2 = convergence.convergeInvariants dec2 mor2;
+                in routeBasic dec2 inv2
+              else null;
+
+            finalRoute = if reClassified != null then reClassified else basicRoute;
+            isHeld = builtins.hasAttr "held" finalRoute && finalRoute.held;
+
+            # Build user-intent summary for the public envelope
+            intentSummaryEn =
+              if elevText != null then
+                "User's elevated intent: \"" + elevText + "\""
+              else if isHeld then
+                "User intent could not be determined deterministically."
+              else
+                "User intent classified as " + finalRoute.intent_kind + ".";
+            intentSummaryKo =
+              if elevText != null then
+                "사용자의 elevated 의도: \"" + elevText + "\""
+              else if isHeld then
+                "사용자 의도를 결정론적으로 식별 불가."
+              else
+                "사용자 의도 분류: " + finalRoute.intent_kind + ".";
+
+            nextActionEn =
+              if isHeld then
+                (if builtins.hasAttr "held_reason_en" finalRoute
+                 then finalRoute.held_reason_en
+                 else "Hold for user clarification.")
+              else
+                "Dispatch to the resolved substrate owner; receipts will follow.";
+            nextActionKo =
+              if isHeld then
+                (if builtins.hasAttr "held_reason_ko" finalRoute
+                 then finalRoute.held_reason_ko
+                 else "사용자 명확화 대기.")
+              else
+                "결정된 substrate owner 에 dispatch; receipt 가 이어짐.";
+
+          in {
+            outcome = if isHeld then "chain-held" else "chain-resolved";
+            atom_count = builtins.length dec.carry.per_atom_ambient;
+            re_classified = shouldReClassify;
+            public = {
+              user_intent_summary_en = intentSummaryEn;
+              user_intent_summary_ko = intentSummaryKo;
+              next_action_en = nextActionEn;
+              next_action_ko = nextActionKo;
+              requires_clarification = isHeld;
+            };
+            carry = {
+              routing_rule = finalRoute.rule;
+              primary_substrate_owner =
+                if builtins.hasAttr "primary_substrate_owner" finalRoute
+                then finalRoute.primary_substrate_owner
+                else null;
+              secondary_substrate_owners =
+                if builtins.hasAttr "secondary_owners" finalRoute
+                then finalRoute.secondary_owners
+                else [];
+              inferred_intent_kind = finalRoute.intent_kind;
+              meta_elevation_rule = metaRule;
+              primary_invariant_id = primaryInvariantId inv;
+              re_classified_via_meta = shouldReClassify;
+              composed_receipts = {
+                inherit dec mor inv met;
+              };
+              axiom_origin =
+                "axiom-94-nl-chain-end-to-end (composes 90/91/92/93)";
+              composes = [
+                "axiom-90-nl-sentence-decomposition"
+                "axiom-91-nl-sentence-morphism"
+                "axiom-92-nl-sentence-invariant"
+                "axiom-93-nl-sentence-meta"
+              ];
+            };
+          };
+
+  applyNlChainPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else resolveChain request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-chain-end-to-end-axiom-94";
+    routing_rule_count = 7;
+    inherit framework_step;
+    step_kind = stepKind;
+    chain_composes = [
+      "agent-NL-101 (sentence-decomposition-substrate)"
+      "agent-NL-102 (sentence-morphism-detector)"
+      "agent-NL-103 (sentence-invariant-convergence)"
+      "agent-NL-104 (sentence-meta-detection)"
+    ];
+    known_substrate_owners = knownSubstrateOwners;
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-decomposition-failed"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "chain-held"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownSubstrateOwners
+    firstAtomAmbient effectiveRoutingAmbient invariantRouteHint primaryInvariantId
+    metaElevationRule metaElevatedText routeBasic
+    resolveChain applyNlChainPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL chain end-to-end manifest (agent-NL-105)";
+    owner = ownerName;
+    base = "nl-sentence-substrate-mapping-v0";
+    rev_note = "4-piece NL backbone (#101-#104) 의 마지막 piece. 모든 "
+      + "이전 step receipt 종합 + 7 routing rule (R-1 correction → "
+      + "R-7 default held) 으로 substrate owner manifest 산출. 사용자 "
+      + "vision 의 '분해 → 결정 → 수렴 → substrate 매핑 → 코드 생성' "
+      + "chain 의 마지막 입구. DO NOT REBUILD — #101-#104 + 박힌 substrate "
+      + "owner registry 재사용.";
+  };
+}

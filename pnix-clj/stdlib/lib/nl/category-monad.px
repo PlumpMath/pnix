@@ -1,0 +1,192 @@
+let
+  ownerName = "stdlib.nl.category-monad";
+
+  cat = import nl/nl-flow-category-substrate.px;
+
+  # === Monad (agent-NL-135) ========================================
+  #
+  # T : C → C with η : Id → T (return) and μ : T² → T (join).
+  # NL flow effects:
+  #   - Maybe T(A) = A | Nothing       — missing slot / unresolved
+  #   - Either T(A) = Right A | Left E  — error / success
+  #   - State T(A) = S → (A, S)         — code state mutation
+  #   - Async T(A) = Promise A          — deferred / IO
+  #
+  # Kleisli composition: f : A → T(B), g : B → T(C) →
+  #   f >=> g : A → T(C)
+
+  stepKind = "monadic-effect";
+  framework_step = "categorical body — effect-aware morphism (Maybe/Either/State/Async)";
+
+  # =================================================================
+  # === Maybe monad =================================================
+  # =================================================================
+  #
+  # T(A) = Just A | Nothing  (NL flow: filled-slot | missing-slot)
+
+  maybeJust = value: { monad = "Maybe"; tag = "Just"; inherit value; };
+  maybeNothing = reason: { monad = "Maybe"; tag = "Nothing"; inherit reason; };
+
+  maybeReturn = maybeJust;
+
+  maybeBind = mA: f:
+    if mA.tag == "Nothing" then mA
+    else f mA.value;
+
+  # =================================================================
+  # === Either monad ================================================
+  # =================================================================
+  #
+  # T(A) = Right A | Left E  (NL flow: success | error)
+
+  eitherRight = value: { monad = "Either"; tag = "Right"; inherit value; };
+  eitherLeft = err: { monad = "Either"; tag = "Left"; error = err; };
+
+  eitherReturn = eitherRight;
+
+  eitherBind = mA: f:
+    if mA.tag == "Left" then mA
+    else f mA.value;
+
+  # =================================================================
+  # === State monad =================================================
+  # =================================================================
+  #
+  # T(A) = S → { value : A; state : S }
+  # In .px we model as an attrset with explicit state passing.
+
+  stateReturn = a: state: { value = a; inherit state; };
+
+  stateBind = m: f: state:
+    let r = m state; in (f r.value) r.state;
+
+  stateGet = state: { value = state; inherit state; };
+
+  statePut = newState: oldState: { value = null; state = newState; };
+
+  # =================================================================
+  # === Async (Future-like) monad ===================================
+  # =================================================================
+  #
+  # Modeled as a deferred computation record (no real concurrency
+  # in pure .px — substrate-side representation only).
+
+  asyncPending = label: {
+    monad = "Async"; tag = "Pending";
+    inherit label;
+  };
+  asyncResolved = value: {
+    monad = "Async"; tag = "Resolved";
+    inherit value;
+  };
+  asyncRejected = reason: {
+    monad = "Async"; tag = "Rejected";
+    inherit reason;
+  };
+
+  asyncReturn = asyncResolved;
+
+  asyncBind = mA: f:
+    if mA.tag == "Resolved" then f mA.value
+    else mA;  # Pending or Rejected — propagate unchanged
+
+  # =================================================================
+  # === Kleisli composition for any monad ==========================
+  # =================================================================
+  #
+  # f >=> g  :  A → T(C)
+  # General-purpose Kleisli arrow using a supplied bind function.
+
+  kleisliCompose = bind: f: g:
+    a: bind (f a) g;
+
+  # =================================================================
+  # === Monad-aware NL flow step ===================================
+  # =================================================================
+  #
+  # Wraps a categorical morphism with monadic effect tag.
+  # The morphism's `unknowns` becoming the Maybe-Nothing case.
+
+  toMaybeMorphism = m:
+    if m.unknowns == [] then maybeJust m
+    else maybeNothing {
+      reason = "morphism has unresolved slots";
+      slots = m.unknowns;
+    };
+
+  toEitherMorphism = m: validator:
+    if validator m then eitherRight m
+    else eitherLeft { reason = "validator failed"; morphism = m; };
+
+  # === Chain of monadic morphisms =================================
+
+  maybeBindAll = morphisms:
+    let
+      step = mAcc: nextStep:
+        maybeBind mAcc (acc: maybeJust (acc ++ [ nextStep ]));
+    in
+      builtins.foldl' step (maybeJust []) morphisms;
+
+  # === Plate entry =================================================
+
+  applyMonadPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if (builtins.hasAttr "wrap_maybe" request) then
+      { outcome = "wrapped-maybe"; result = toMaybeMorphism request.wrap_maybe; }
+    else if (builtins.hasAttr "kleisli" request)
+         && (builtins.hasAttr "bind_kind" request)
+         && (builtins.hasAttr "f" request.kleisli)
+         && (builtins.hasAttr "g" request.kleisli) then
+      let
+        bind =
+          if request.bind_kind == "Maybe" then maybeBind
+          else if request.bind_kind == "Either" then eitherBind
+          else if request.bind_kind == "Async" then asyncBind
+          else null;
+      in
+        if bind == null then { outcome = "held-unknown-bind-kind"; }
+        else {
+          outcome = "kleisli-composed";
+          composed =
+            kleisliCompose bind request.kleisli.f request.kleisli.g;
+        }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-category-monad-axiom-121";
+    composes = "axiom-119-nl-flow-category";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = false;
+    monads = [
+      "Maybe (missing slot)"
+      "Either (error / success)"
+      "State (code state mutation)"
+      "Async (deferred / IO)"
+    ];
+    monad_laws = [
+      "left identity: return a >>= f = f a"
+      "right identity: m >>= return = m"
+      "associativity: (m >>= f) >>= g = m >>= (\\x -> f x >>= g)"
+    ];
+    primary_outcomes = [
+      "wrapped-maybe"
+      "kleisli-composed"
+    ];
+  };
+
+in {
+  inherit ownerName
+    maybeJust maybeNothing maybeReturn maybeBind
+    eitherRight eitherLeft eitherReturn eitherBind
+    stateReturn stateBind stateGet statePut
+    asyncPending asyncResolved asyncRejected asyncReturn asyncBind
+    kleisliCompose toMaybeMorphism toEitherMorphism maybeBindAll
+    applyMonadPlate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL category monad (agent-NL-135)";
+    owner = ownerName;
+  };
+}

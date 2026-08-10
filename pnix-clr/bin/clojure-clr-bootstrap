@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+dll="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
+
+if [[ ! -f "$dll" ]]; then
+  "$root/bin/build-clr"
+fi
+
+exec dotnet "$dll" "$@"

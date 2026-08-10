@@ -1,0 +1,279 @@
+# P6 — NL → spawn-request transducer
+#
+# OWNER-LAW (2026-05-13): natural-language utterance → typed
+# SpawnRequest. The transducer is *deterministic + auditable* —
+# every NL → spawn decision MUST emit a typed receipt naming which
+# cue triggered which field, so the resulting spawn carries a P4
+# receipt of its own NL origin.
+#
+# Why this is one substrate layer above P5:
+#   - P1-P4: per-spawn primitives
+#   - P5: cross-spawn session continuity
+#   - P6: cross-modality bridge (NL surface → typed spawn input)
+#
+# Without P6, a host can interact only by constructing
+# `SpawnRequest` records by hand. With P6, the host can say
+# "remember this", "what did I do last?", "spawn a math context"
+# and the substrate deterministically routes that to a typed
+# spawn. NO LLM. The transducer is a cue-registry + grammar, same
+# pattern as `stdlib/lib/gate/algorithm-synthesis/intent-recognition.px`.
+#
+# # Non-goals (constitutional)
+#
+# - NOT a language model. P6 covers the *register* of utterances
+#   that map to substrate verbs (spawn / project / inspect). NL
+#   outside that register Holds, with a typed Held receipt naming
+#   what was unrecognized.
+# - NOT fluent generation. P6 is one-way: NL → spawn. The reverse
+#   (spawn → NL) is a separate projection owner.
+# - NO LLM fallback. If the cue registry doesn't cover the
+#   utterance, the receipt is `nl-unmatched-utterance`, not a
+#   guess. Honest Held > silent miss.
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p6-nl-to-spawn-request.px";
+
+  # ─── verdict universe ─────────────────────────────────────────
+  validVerdicts = [
+    "nl-to-spawn-ready"
+    "nl-to-spawn-held"
+    "nl-to-spawn-rejected"
+  ];
+
+  validHeldKinds = [
+    "empty-utterance"
+    "no-verb-cue-matched"
+    "ambiguous-multi-verb"
+    "missing-required-slot"
+    "unsafe-utterance"
+  ];
+
+  # ─── verb cue registry ────────────────────────────────────────
+  #
+  # Each entry: an utterance contains the cue → emit the named
+  # spawn intent. Cues are kept short and explicit. Registry-
+  # driven, not if-else (CLAUDE.md §14, §20).
+  #
+  # `weight` ranks competing matches; highest non-tied wins.
+  # Ambiguous ties → Held with held_kind=ambiguous-multi-verb.
+  mkVerbCue = pattern: intent: weight: { inherit pattern intent weight; };
+
+  verbCues = [
+    # remember / record — establish a new ankh in this session
+    (mkVerbCue "기억해"   "remember" 0.95)
+    (mkVerbCue "기억하"   "remember" 0.90)
+    (mkVerbCue "외워"     "remember" 0.90)
+    (mkVerbCue "remember" "remember" 0.95)
+    (mkVerbCue "record"   "remember" 0.85)
+    (mkVerbCue "memorize" "remember" 0.85)
+    (mkVerbCue "store"    "remember" 0.80)
+    (mkVerbCue "save"     "remember" 0.75)
+
+    # recall / inspect — project an existing ankh outward
+    (mkVerbCue "기억나"   "recall" 0.95)
+    (mkVerbCue "뭐였"     "recall" 0.85)
+    (mkVerbCue "기억했"   "recall" 0.85)
+    (mkVerbCue "recall"   "recall" 0.95)
+    (mkVerbCue "remind"   "recall" 0.85)
+    (mkVerbCue "what was" "recall" 0.85)
+
+    # spawn — explicit mirror creation (scope-seed)
+    (mkVerbCue "거울"      "spawn" 0.85)
+    (mkVerbCue "spawn"     "spawn" 0.95)
+    (mkVerbCue "mirror"    "spawn" 0.85)
+    (mkVerbCue "context"   "spawn" 0.75)
+    (mkVerbCue "스코프"    "spawn" 0.80)
+
+    # explain — describe an in-mirror ankh by name (project shape)
+    (mkVerbCue "설명"     "explain" 0.90)
+    (mkVerbCue "뭐야"     "explain" 0.85)
+    (mkVerbCue "뭔지"     "explain" 0.85)
+    (mkVerbCue "describe" "explain" 0.85)
+    (mkVerbCue "explain"  "explain" 0.95)
+    (mkVerbCue "what is"  "explain" 0.85)
+
+    # define — declare a typed meaning with a definition body.
+    # P6.g: multi-slot extraction fills subject + definition.
+    (mkVerbCue "정의"     "define" 0.90)
+    (mkVerbCue "이다"     "define" 0.55)
+    (mkVerbCue "define"   "define" 0.95)
+    (mkVerbCue "is a"     "define" 0.82)
+
+    # list — enumerate items in a scope.
+    (mkVerbCue "목록"     "list" 0.90)
+    (mkVerbCue "나열"     "list" 0.85)
+    (mkVerbCue "보여줘"   "list" 0.75)
+    (mkVerbCue "list"     "list" 0.95)
+    (mkVerbCue "enumerate" "list" 0.85)
+    (mkVerbCue "show"     "list" 0.75)
+
+    # compare — diff two subjects. P6.g: multi-slot extraction
+    # fills left + right.
+    (mkVerbCue "비교"     "compare" 0.90)
+    (mkVerbCue "차이"     "compare" 0.85)
+    (mkVerbCue "compare"  "compare" 0.95)
+    (mkVerbCue "diff"     "compare" 0.85)
+    (mkVerbCue "vs"       "compare" 0.65)
+
+    # solve — compute / produce a result (math / coding / etc).
+    (mkVerbCue "풀어"     "solve" 0.90)
+    (mkVerbCue "계산"     "solve" 0.85)
+    (mkVerbCue "구해"     "solve" 0.80)
+    (mkVerbCue "solve"    "solve" 0.95)
+    (mkVerbCue "compute"  "solve" 0.85)
+    (mkVerbCue "evaluate" "solve" 0.75)
+  ];
+
+  validIntents = [
+    "remember" "recall" "spawn" "explain"
+    "define" "list" "compare" "solve"
+  ];
+
+  # ─── per-intent required slot table ───────────────────────────
+  #
+  # Each intent declares which SpawnRequest slots MUST be filled.
+  # Slots are *.px* contract names matching SpawnRequest fields.
+  # Missing slot → Held receipt with held_kind=missing-required-slot.
+  intentSlotRequirements = [
+    {
+      intent = "remember";
+      required_slots = [ "subject" ];  # what to remember
+      contributions_template = "single-meaning";
+    }
+    {
+      intent = "recall";
+      required_slots = [ "subject" ];  # what to recall
+      contributions_template = "query-meaning";
+    }
+    {
+      intent = "spawn";
+      required_slots = [ "scope" ];    # domain/context name
+      contributions_template = "scope-seed";
+    }
+    {
+      intent = "explain";
+      required_slots = [ "subject" ];
+      contributions_template = "single-meaning";
+    }
+    {
+      intent = "define";
+      required_slots = [ "subject" "definition" ];
+      contributions_template = "definition";
+    }
+    {
+      intent = "list";
+      required_slots = [ "scope" ];   # the scope to enumerate
+      contributions_template = "list-query";
+    }
+    {
+      intent = "compare";
+      required_slots = [ "left" "right" ];
+      contributions_template = "comparison";
+    }
+    {
+      intent = "solve";
+      required_slots = [ "subject" ];
+      contributions_template = "computation";
+    }
+  ];
+
+  # ─── slot extraction patterns ─────────────────────────────────
+  #
+  # Slot value extraction is intentionally simple and
+  # deterministic: trim around the matched cue, then split on
+  # declared delimiters for the few intents that need multiple
+  # slots. NO ML. NL → typed input boundary is the cue match
+  # itself; what follows is content.
+  slotExtractionMode = "trailing-after-cue";
+
+  slotExtractionRules = [
+    {
+      intent = "define";
+      mode = "define-two-slot";
+      slots = [ "subject" "definition" ];
+      delimiters = [
+        " as "
+        " means "
+        " is a "
+        " is "
+        " = "
+        ":"
+        "："
+        "은 "
+        "는 "
+        "란 "
+      ];
+    }
+    {
+      intent = "compare";
+      mode = "compare-two-slot";
+      slots = [ "left" "right" ];
+      delimiters = [
+        " vs "
+        " versus "
+        " compared to "
+        " and "
+        " / "
+        ","
+        "와 "
+        "과 "
+        "랑 "
+        "하고 "
+      ];
+    }
+  ];
+
+  # ─── safety floor ─────────────────────────────────────────────
+  unsafeMarkers = [
+    # shell injection patterns
+    "rm -rf"
+    "sudo rm"
+    "; rm "
+    "&& rm "
+    # secret exfil paths
+    "/etc/passwd"
+    "/etc/shadow"
+    "~/.ssh/id_"
+    # SQL injection
+    "DROP TABLE"
+    "DELETE FROM"
+    "UNION SELECT"
+    # code-injection patterns (eval-into-host)
+    "eval("
+    "exec("
+    "system("
+    "__import__"
+    # path-traversal common payload
+    "../../"
+  ];
+
+  # ─── declarative knobs ───────────────────────────────────────
+  ambiguityEpsilon = 0.05;
+  minMatchWeight = 0.50;
+in {
+  inherit
+    ownerName
+    validVerdicts
+    validHeldKinds
+    validIntents
+    verbCues
+    intentSlotRequirements
+    slotExtractionMode
+    slotExtractionRules
+    unsafeMarkers
+    ambiguityEpsilon
+    minMatchWeight;
+  meta = {
+    source = "pnix-mirror-runtime primitive P6";
+    owner = ownerName;
+    role = "deterministic NL utterance → typed SpawnRequest with provenance receipt";
+    consumes = [ "host NL utterance" ];
+    consumed_by = [ "MirrorSession.with_mirror" "MirrorRuntime.transduce_nl Rust adapter" ];
+    pattern_reference = "same cue-registry shape as stdlib/lib/gate/algorithm-synthesis/intent-recognition.px";
+    constitutional_alignment = [
+      "no LLM fallback — unrecognized utterance Holds, not guesses"
+      "deterministic — same utterance → same SpawnRequest"
+      "every transduction emits a typed P4 receipt (nl-to-spawn) anchoring NL origin to spawn provenance"
+    ];
+  };
+}

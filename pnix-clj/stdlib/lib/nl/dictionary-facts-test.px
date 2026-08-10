@@ -1,0 +1,22 @@
+# stdlib/lib/nl/dictionary-facts-test.px — 사전 facts rec{} 소비 + generic 품사 분류 회귀.
+# 사전 적재 전이라 합성 facts(rec{} 모양)로 .px 분류 로직만 격리 검증. redb 주입은 다음 슬라이스.
+let
+  df = import ./dictionary-facts.px;
+  facts = [
+    { lemma = "먹다"; pos = "동사"; }
+    { lemma = "사과"; pos = "명사"; }
+    { lemma = "예쁘다"; pos = "형용사"; }
+    { lemma = "매우"; pos = "부사"; }
+  ];
+  pos_ok = (df.posKind "동사" == "predicate") && (df.posKind "명사" == "entity")
+        && (df.posKind "형용사" == "predicate") && (df.posKind "부사" == "modifier")
+        && (df.posKind "조사" == "particle");
+  lookup_ok = (df.posOf facts "사과" == "명사") && (df.posOf facts "없는단어" == null)
+           && (df.knownLemma facts "먹다") && ((df.knownLemma facts "없는단어") == false);
+  kind_ok = (df.lemmaKind facts "먹다" == "predicate") && (df.lemmaKind facts "사과" == "entity")
+         && (df.lemmaKind facts "없는단어" == null);
+  pred_entity_ok = (df.isPredicatePos "동사") && (df.isEntityPos "명사") && ((df.isPredicatePos "명사") == false);
+in {
+  pos_ok = pos_ok; lookup_ok = lookup_ok; kind_ok = kind_ok; pred_entity_ok = pred_entity_ok;
+  all_ok = pos_ok && lookup_ok && kind_ok && pred_entity_ok;
+}

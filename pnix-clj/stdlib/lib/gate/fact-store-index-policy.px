@@ -1,0 +1,147 @@
+# stdlib.lib.gate.fact-store-index-policy
+#
+# OWNER-LAW (2026-05-31): contextual fact store index policy.
+#
+# # What this is for
+#
+# ContextualFact 가 store 에 들어갈 때 어느 secondary index 에 어떻게
+# push 되는가의 정본 declaration — fact 의 (context, layer, subj, pred,
+# obj) 5-tuple 의 각 차원 + 두 cross-product (subj×pred, obj×pred) +
+# canonical_fact_key projection.
+#
+# # Design discipline — declarative index registry
+#
+# 이전 doghouse-core::store::PendingIndexWrites::push_record 는 9 개의
+# push_pending_index 호출 chain. 이 owner-law 는 declarative index row
+# registry — 새 index 추가 = 한 row.
+#
+# # Closed fact indices (9 row)
+#
+#   facts_by_context        — fact.context
+#   facts_by_layer          — fact.layer
+#   facts_by_subject        — fact.subj
+#   facts_by_predicate      — fact.pred
+#   facts_by_object         — fact.obj
+#   facts_by_canonical      — canonical_fact_key(fact)
+#   facts_by_subject_pred   — fact.subj + SEP + fact.pred
+#   facts_by_object_pred    — fact.obj  + SEP + fact.pred
+#   records_by_episode      — episode_id (not fact-derived; record-level)
+#
+# # Knowledge indices (1 row)
+#
+#   knowledge_by_episode    — episode_id
+#
+# # Inputs
+#
+#   request_kind = "list-fact-indices" | "list-knowledge-indices" |
+#                  "list-all-indices"
+#
+# # Output
+#
+#   verdict : "indices-listed" | "held-unknown-request-kind"
+#   indices : declarative registry
+
+let
+  ownerName = "stdlib/lib/gate/fact-store-index-policy.px";
+
+  # KEY_SEP marker (declarative — actual char emit happens host-side via
+  # canonical-fact-key-policy lens (ff) for fact key).
+  keySeparatorToken = "U+001F";
+
+  # ─── declarative fact index registry ───────────────────────────────────
+  #
+  # 각 row: { index_name, key_formula, key_field?, key_kind, semantic }.
+  # key_kind:
+  #   "single-field"     — single fact field as key
+  #   "concat-fields"    — fact.<field1> + SEP + fact.<field2>
+  #   "canonical-key"    — canonical_fact_key(fact) projection
+  #   "episode-id"       — record-level episode id, not fact-derived
+
+  mkFactIndex = name: kind: field1: field2: comment:
+    { index_name = name; key_kind = kind;
+      key_field_1 = field1; key_field_2 = field2;
+      semantic = comment; };
+
+  factIndices = [
+    (mkFactIndex "facts_by_context"      "single-field"  "context" null
+      "facts indexed by ContextId 5-tuple slot 1")
+    (mkFactIndex "facts_by_layer"        "single-field"  "layer"   null
+      "facts indexed by LayerId (L1-L4)")
+    (mkFactIndex "facts_by_subject"      "single-field"  "subj"    null
+      "facts indexed by subject")
+    (mkFactIndex "facts_by_predicate"    "single-field"  "pred"    null
+      "facts indexed by predicate")
+    (mkFactIndex "facts_by_object"       "single-field"  "obj"     null
+      "facts indexed by object")
+    (mkFactIndex "facts_by_canonical"    "canonical-key" null      null
+      "facts indexed by canonical_fact_key projection")
+    (mkFactIndex "facts_by_subject_pred" "concat-fields" "subj"    "pred"
+      "subj × pred cross-product index")
+    (mkFactIndex "facts_by_object_pred"  "concat-fields" "obj"     "pred"
+      "obj × pred cross-product index")
+    (mkFactIndex "records_by_episode"    "episode-id"    null      null
+      "all record ids per episode (not fact-derived)")
+  ];
+
+  knowledgeIndices = [
+    { index_name = "knowledge_by_episode";
+      key_kind = "episode-id";
+      semantic = "knowledge records per episode"; }
+  ];
+
+  validRequestKinds = [
+    "list-fact-indices"
+    "list-knowledge-indices"
+    "list-all-indices"
+  ];
+
+  validVerdicts = [
+    "indices-listed"
+    "held-unknown-request-kind"
+  ];
+
+  asString = v: if builtins.isString v then v else "";
+
+  applyFactStoreIndexPolicy = request:
+    let
+      reqKind = asString (request.request_kind or "");
+    in
+      if reqKind == "list-fact-indices" then {
+        verdict = "indices-listed";
+        indices = factIndices;
+        index_count = builtins.length factIndices;
+        scope = "fact-records";
+        key_separator_token = keySeparatorToken;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "list-knowledge-indices" then {
+        verdict = "indices-listed";
+        indices = knowledgeIndices;
+        index_count = builtins.length knowledgeIndices;
+        scope = "knowledge-records";
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "list-all-indices" then {
+        verdict = "indices-listed";
+        fact_indices = factIndices;
+        knowledge_indices = knowledgeIndices;
+        total_index_count = (builtins.length factIndices)
+                          + (builtins.length knowledgeIndices);
+        key_separator_token = keySeparatorToken;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else {
+        verdict = "held-unknown-request-kind";
+        request_kind = reqKind;
+        valid_request_kinds = validRequestKinds;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName factIndices knowledgeIndices keySeparatorToken
+          validRequestKinds validVerdicts applyFactStoreIndexPolicy;
+}

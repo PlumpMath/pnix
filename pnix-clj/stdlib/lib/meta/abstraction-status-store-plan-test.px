@@ -1,0 +1,89 @@
+# stdlib/lib/meta/abstraction-status-store-plan-test.px
+#
+# P5-b lock (writer/store + source-mapping 닫힘): 실제 P3 체인(genesisCandidate → submitToGate) →
+#   mkEntry → P5-a projector(mkAbstractionStatusEvidence)까지 end-to-end로 잇는다.
+#   ★verified minting 0(status=gate_status 거울) · byte-identical about_concept(s:n:ingest) = read-back recognized_concepts
+#   ★held-pending-utility ≠ verified/law · raw gate receipt/source body 비저장 · 다음 "잡수시" 발화와 정확히 매칭
+let
+  sp = import ./abstraction-status-store-plan.px;
+  agc = import ./abstraction-genesis-core.px;
+  gb = import ./abstraction-gate-bridge.px;
+  ev = import ./abstraction-status-evidence.px;
+  propose = import ../nl/symbol-memory-propose.px;
+  B = builtins;
+
+  # 실제 P3 체인: 먹/잡수시 동의어 → ingest abstraction candidate (term은 propToTerm 식 프로그램 빌드 — td.parse Korean 미지원)
+  t1 = [ { sym = "eat"; } { sym = "철수"; } { sym = "사과"; } ];
+  t2 = [ { sym = "eat"; } { sym = "영희"; } { sym = "책"; } ];
+  cand = agc.genesisCandidate {
+    terms = [ t1 t2 ]; owner_candidate = "predicate-concepts";
+    relation = "predicate-synonym-collapse"; source_symbols = [ "먹" "잡수시" ];
+  };
+  gateRes = gb.submitToGate { candidate = cand; };          # → held-pending-utility(§38 concept abstraction)
+
+  entry = sp.mkEntry { candidate = cand; gate_result = gateRes; };
+
+  # ★byte-identical 링크 검증: 다음 "잡수시" 발화의 recognized concept key
+  nextSyms = (propose.proposeSymbols { action = "잡수시"; roles = [ { role = "agent"; entity = "철수"; } ]; }).symbols;
+  recogConcepts = B.map (s: s.canonical_key) (B.filter (s: s.concept != null) nextSyms);  # [s:n:ingest]
+
+  # ★P5-a projector가 이 entry를 *읽는다*(source-mapping 닫힘) — 다음 발화 인식 concept로 필터
+  evid = ev.mkAbstractionStatusEvidence { abstraction_statuses = [ entry ]; recognized_concepts = recogConcepts; };
+  pubEvid = ev.publicProjection evid;
+  item = B.head evid.items;
+
+  # mkPlan: append-only op-plan
+  plan = sp.mkPlan { pairs = [ { candidate = cand; gate_result = gateRes; } ]; };
+
+  # rejected/verified terminal vs held-pending-utility 구분 유지 검증(혼합)
+  verEntry = entry // { status = "verified"; };
+  rejEntry = entry // { status = "rejected"; };
+  mixEvid = ev.mkAbstractionStatusEvidence { abstraction_statuses = [ entry verEntry rejEntry ]; };
+
+  # ★C2 대칭 fix: entity-only source_symbols → about_concept=[](concept-only); 혼합 → concept만(entity 제외)
+  entCand = cand // { source_symbols = [ "철수" ]; };
+  entEntry = sp.mkEntry { candidate = entCand; gate_result = gateRes; };
+  mixCand = cand // { source_symbols = [ "먹" "철수" ]; };
+  mixEntry = sp.mkEntry { candidate = mixCand; gate_result = gateRes; };
+in {
+  gate_status = gateRes.gate_status;
+  entry_status = entry.status;
+  about = entry.about_concept;
+  recog = recogConcepts;
+  evid_count = evid.abstraction_status_count;
+  evid_held = evid.held_count;
+  item_status = item.status;
+  pub_keys = B.attrNames pubEvid;
+  plan_ops = plan.operation_count;
+  all_ok =
+    # ★P3 → entry: status = gate_status 거울(held-pending-utility), verified 아님
+       (gateRes.gate_status == "held-pending-utility")
+    && (entry.status == "held-pending-utility")
+    && (entry.entry_kind == "abstraction-status")
+    # ★byte-identical: about_concept = [s:n:ingest] = 다음 "잡수시" 발화 recognized concept
+    && (entry.about_concept == [ "s:n:ingest" ])
+    && (recogConcepts == [ "s:n:ingest" ])
+    # ★projector가 읽음(source-mapping 닫힘): held-pending-utility evidence 1개, held(pending) 집계
+    && (evid.abstraction_status_count == 1) && (evid.held_count == 1)
+    && (item.about == "s:n:ingest") && (item.status == "held-pending-utility")
+    && (item.relation == "predicate-synonym-collapse")
+    # ★held-pending-utility ≠ verified/law: truth 플래그 무조건 false
+    && (entry.durable_truth == false) && (entry.accepted_as_truth == false)
+    && (entry.ontology_assert_allowed == false) && (entry.proposer_only == true)
+    && (evid.durable_truth == false) && (evid.accepted_as_truth == false)
+    # ★공개 face: about/relation/status + truth-negation 표식만 (raw gate receipt/owner/source body 비노출)
+    && (((B.head pubEvid.items) ? abstraction_key) == false)
+    && (((B.head pubEvid.items) ? owner) == false)
+    && ((pubEvid ? internal_entries) == false)
+    && (pubEvid.durable_truth == false)
+    # ★verified minting 0: entry는 verified를 *만들지* 않음(거울). 수동 주입 verified/rejected만 terminal.
+    && (mixEvid.abstraction_status_count == 3) && (mixEvid.held_count == 1)   # held-pending만 pending
+    # ★C2 대칭: entity-only → about_concept=[](read-back과 키스페이스 일치); 혼합 → concept(s:n:ingest)만
+    && (entEntry.about_concept == [ ])
+    && (mixEntry.about_concept == [ "s:n:ingest" ])
+    # ★store-plan: append-only, corpus_abstraction_status 대상
+    && (plan.append_only == true) && (plan.operation_count == 2)              # manifest + 1 entry
+    && (plan.durable_truth == false)
+    && ((B.head plan.plan.operations).table == "corpus_abstraction_status")
+    && ((B.elemAt plan.plan.operations 1).op_kind == "append");
+}

@@ -1,0 +1,1405 @@
+let
+  bm = import coding/atom-slot-semantic-roles.px;
+  bn = import coding/korean-case-marker-lens.px;
+
+  ownerName = "stdlib.coding.korean-nl-composition-lens";
+
+  # v0.16-BP: REVERSE direction — atom → POS-aware Korean 단문장 NL.
+  # Owner thesis (BL/BM/BN/BO/BP dialogue):
+  #
+  # All representational systems (programming languages, math
+  # formulae, RDF / OWL / SQL / XML / HTML, English / Korean /
+  # Japanese / ..., meta-circular mirror introspection itself)
+  # are SURFACE PROJECTIONS of the same substrate atom algebra.
+  # Korean is the most ALIGNED surface — its postposition system
+  # carries typed semantic role markers in the morphology layer,
+  # matching atom slot algebra without word-order inference.
+  #
+  # BP closes the substrate's REVERSE direction: from an atom
+  # (or atom list) produce a natural Korean 단문장 / multi-clause
+  # NL utterance that faithfully describes the atom's semantics.
+  #
+  # The forward direction (BF/BG/BH/BJ/BK/BN's case marker
+  # composition) maps NL → atoms. The reverse direction maps
+  # atoms → NL. Both directions meet at the same atom slot
+  # algebra. When both are closed, the substrate can:
+  #   - INGEST any representational system into atoms (forward)
+  #   - EMIT any representational system from atoms (reverse)
+  # — and any pair of surfaces (e.g. Korean ↔ rust source,
+  # math ↔ RDF triple, SQL ↔ English) is a 2-step
+  # atom-mediated translation.
+  #
+  # Substrate-native: composes via BM (semantic role) × BO
+  # (auto-detect jongseong) × BN (case marker) chain plus
+  # atom-kind-specific verb templates. No external NLP,
+  # no LLM, no mecab-ko.
+
+  # ── value formatting helpers ──
+
+  # Format a string value as a quoted Korean NL noun (with
+  # surrounding 따옴표 so case markers attach to a token that
+  # ends in a non-Hangul ASCII quote — finalKind=non-korean →
+  # mapped to "none" by BN's applyCaseMarker fallback).
+  formatStringValue = s: "\"" + s + "\"";
+
+  # Format the value of a bind-variable atom by value_kind.
+  formatBindValue = value_kind: value:
+    if value_kind == "string" then formatStringValue value
+    else if value_kind == "int" then builtins.toString value
+    else if value_kind == "bool" then
+      if value then "참" else "거짓"
+    else if value_kind == "float" then builtins.toString value
+    else builtins.toString value;
+
+  # Map bind-variable's value_kind to the Korean noun for that
+  # type. Used in the "X에 <type-noun>을/를 ..." clause so the
+  # listener sees the declared type as a Korean concept.
+  koreanTypeNounFor = value_kind:
+    if value_kind == "string" then "문자열"
+    else if value_kind == "int" then "정수"
+    else if value_kind == "bool" then "참거짓"
+    else if value_kind == "float" then "실수"
+    else value_kind;
+
+  # ── per-atom-kind NL synthesis ──
+  #
+  # Each atom kind has a verb-led clause template. The slot
+  # values are wrapped with the BN case marker matching their
+  # BM-declared semantic role (BO auto-detects finalKind).
+  # Substrate-native: zero external NLP.
+
+  composeAtomAsKoreanNl = atom:
+    if atom.kind == "print-line" then
+      # text (object role) + 출력 verb
+      let
+        quoted = formatStringValue atom.slots.text;
+        marked = bn.applyCaseMarker quoted "object";
+      in
+        marked + " 출력"
+    else if atom.kind == "comment" then
+      # v0.16-DP (2026-05-21): comment reverse 가 quoted form 으로
+      # 바뀐다 (`주석 "<text>"`) — forward Korean comment surface 와
+      # mirror. 이전 colon form `주석: <text>` 는 unquoted 라서 forward
+      # decomposer 가 parse 못함 (text terminator 가 없음). DP 가
+      # bidirectional 닫기 위해 quoted form 으로 정정.
+      "주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "todo-comment" then
+      # §F Tier 5 round 101 (2026-05-27): TODO marker comment.
+      "할일 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "fixme-comment" then
+      # Floor round 133 (2026-05-27): FIXME marker comment.
+      "수정필요 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "warning-comment" then
+      # Floor round 134 (2026-05-27): WARNING marker comment.
+      "경고 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "section-comment" then
+      # Floor round 135 (2026-05-27): SECTION marker comment.
+      "섹션 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "region-start-comment" then
+      # Floor round 136 (2026-05-27): REGION start marker comment.
+      "영역시작 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "region-end-comment" then
+      # Floor round 137 (2026-05-27): REGION end marker comment.
+      "영역끝 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "invariant-comment" then
+      # Floor round 138 (2026-05-27): INVARIANT marker comment.
+      "불변조건 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "precondition-comment" then
+      # Floor round 139 (2026-05-27): PRECONDITION marker comment.
+      "사전조건 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "postcondition-comment" then
+      # Floor round 140 (2026-05-27): POSTCONDITION marker comment.
+      "사후조건 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "assumption-comment" then
+      # Floor round 141 (2026-05-27): ASSUMPTION marker comment.
+      "가정 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "rationale-comment" then
+      # Floor round 142 (2026-05-27): RATIONALE marker comment.
+      "근거 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "constraint-comment" then
+      # Floor round 143 (2026-05-27): CONSTRAINT marker comment.
+      "제약 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "acceptance-comment" then
+      # Floor round 144 (2026-05-27): ACCEPTANCE marker comment.
+      "수용기준 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "security-comment" then
+      # Floor round 145 (2026-05-27): SECURITY marker comment.
+      "보안 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "privacy-comment" then
+      # Floor round 146 (2026-05-27): PRIVACY marker comment.
+      "개인정보 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "performance-comment" then
+      # Floor round 147 (2026-05-27): PERFORMANCE marker comment.
+      "성능 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "reliability-comment" then
+      # Floor round 148 (2026-05-27): RELIABILITY marker comment.
+      "신뢰성 주석 \"" + atom.slots.text + "\""
+    else if atom.kind == "exit-with-code" then
+      # code (manner role) + 종료 verb
+      let
+        code_str = builtins.toString atom.slots.code;
+        marked = bn.applyCaseMarker code_str "manner";
+      in
+        marked + " 종료"
+    else if atom.kind == "read-line" then
+      # variable (target role) + 입력 받음 verb
+      let
+        marked = bn.applyCaseMarker atom.slots.variable "target";
+      in
+        marked + " 입력을 받음"
+    else if atom.kind == "bind-variable" then
+      # 3 slots, 3 roles: variable(target) + value(object) +
+      # value_kind(manner). Korean clause:
+      #   "<variable>에 <type-noun>로 <value>를 바인딩"
+      # Reads naturally: "count에 정수로 42를 바인딩" =
+      # "bind 42 to count as int". 한국어가 atom slot algebra 의
+      # typed surface 라는 게 가장 깨끗하게 보이는 케이스.
+      let
+        var = atom.slots.variable;
+        val = formatBindValue atom.slots.value_kind atom.slots.value;
+        typeNoun = koreanTypeNounFor atom.slots.value_kind;
+        var_marked = bn.applyCaseMarker var "target";
+        type_marked = bn.applyCaseMarker typeNoun "manner";
+        val_marked = bn.applyCaseMarker val "object";
+      in
+        var_marked + " " + type_marked + " " + val_marked + " 바인딩"
+    else if atom.kind == "print-variable" then
+      # variable (object role) + 출력 verb
+      let
+        marked = bn.applyCaseMarker atom.slots.variable "object";
+      in
+        marked + " 출력"
+    else if atom.kind == "if-true-then" then
+      # v0.16-DT (2026-05-21): reverse 를 forward 와 mirror 하게 정정.
+      # 이전 reverse `<cond>가 참이면 <body>` 는 forward surface
+      # `만약 <cond>이면 <body>` (knownNestedAtomSurfaces 의 ko row)
+      # 와 word order 가 달라 roundtrip (NL→atom→NL→atom) 이 깨졌다.
+      # DT 가 reverse 를 `만약 <cond>이면 <body>` 로 정정 — forward
+      # AC surface 와 정확히 같은 표면.
+      # v0.16-EQ (2026-05-21): condition_variable 가 string (bare
+      # variable) 또는 comparison atom. comparison atom 이면
+      # recursively compose (`a가 b보다 작음` 같은 절이 `만약 ...
+      # 이면` 안에).
+      let
+        body_nl = composeAtomListAsKoreanNl atom.slots.then_body;
+        cond = atom.slots.condition_variable;
+        cond_nl =
+          if builtins.isAttrs cond && cond ? kind
+          then composeAtomAsKoreanNl cond
+          else cond;
+      in
+        "만약 " + cond_nl + "이면 " + body_nl
+    else if atom.kind == "repeat-n-times" then
+      # count (manner role) + 번 + 반복 verb + recursive body
+      # Korean idiom uses "N번 반복하면 <body>" (matches BH's
+      # forward Korean scanner exactly).
+      let
+        count_str = builtins.toString atom.slots.count;
+        body_nl = composeAtomListAsKoreanNl atom.slots.body;
+      in
+        count_str + "번 반복하면 " + body_nl
+    else if atom.kind == "loop-while-true" then
+      # condition (predicate-condition role) + 참인 동안 +
+      # recursive body. Distinct from if-true-then's "참이면"
+      # — Korean morphology marks one-shot vs while-loop.
+      let
+        cond_marked =
+          bn.applyCaseMarker atom.slots.condition_variable "predicate-condition";
+        body_nl = composeAtomListAsKoreanNl atom.slots.body;
+      in
+        cond_marked + " 참인 동안 " + body_nl
+    else if atom.kind == "for-each" then
+      # §F Tier 1 (2026-05-22): for-each — collection 의 각 원소
+      # 순회. item_var + collection + recursive body. Korean idiom:
+      # "<collection>의 각 <item>마다 <body>". repeat-n-times 의
+      # "N번 반복하면" / loop-while-true 의 "참인 동안" 과 구별되는
+      # collection-driven 절.
+      let
+        body_nl = composeAtomListAsKoreanNl atom.slots.body;
+      in
+        atom.slots.collection + "의 각 " + atom.slots.item_var
+        + "마다 " + body_nl
+    else if atom.kind == "break" then
+      # §F Tier 1 round 2 (2026-05-22): break — zero-slot atom.
+      # 둘러싼 loop 를 즉시 종료. 고정 Korean 절 "반복 중단".
+      "반복 중단"
+    else if atom.kind == "continue" then
+      # §F Tier 1 round 3 (2026-05-22): continue — zero-slot atom.
+      # 현재 iteration 을 건너뜀. 고정 Korean 절 "다음 반복으로".
+      "다음 반복으로"
+    else if atom.kind == "for-range" then
+      # §F Tier 1 round 4 (2026-05-22): for-range — index 범위 순회.
+      # "<start>부터 <end>까지 <index>로 <body>".
+      let body_nl = composeAtomListAsKoreanNl atom.slots.body;
+      in atom.slots.start + "부터 " + atom.slots.end + "까지 "
+         + atom.slots.index_var + "로 " + body_nl
+    else if atom.kind == "if-else" then
+      # §F Tier 1 round 5 (2026-05-22): if-else — 양 갈래 조건.
+      # "<cond> 이면 <then> 아니면 <else>".
+      let
+        then_nl = composeAtomListAsKoreanNl atom.slots.then_body;
+        else_nl = composeAtomListAsKoreanNl atom.slots.else_body;
+      in atom.slots.condition_variable + " 이면 " + then_nl
+         + " 아니면 " + else_nl
+    else if atom.kind == "elif-chain" then
+      # §F Tier 1 round 6 (2026-05-22): elif-chain — 다중 분기.
+      # "<c1>이면 <b1>, <c2>이면 <b2>, 아니면 <else>".
+      let
+        clauseNl = c: c.condition + "이면 "
+          + composeAtomListAsKoreanNl c.body;
+        joined = builtins.concatStringsSep ", "
+          (builtins.map clauseNl atom.slots.clauses);
+        else_nl = composeAtomListAsKoreanNl atom.slots.else_body;
+      in joined + ", 아니면 " + else_nl
+    else if atom.kind == "switch-match" then
+      # §F Tier 1 round 7 (2026-05-22): switch-match — 값 분기.
+      # "<subject>가 <p1>이면 <b1>, ..., 그 외 <default>".
+      let
+        caseNl = c: c.pattern + "이면 "
+          + composeAtomListAsKoreanNl c.body;
+        joined = builtins.concatStringsSep ", "
+          (builtins.map caseNl atom.slots.cases);
+        default_nl = composeAtomListAsKoreanNl atom.slots.default_body;
+      in atom.slots.subject + "가 " + joined
+         + ", 그 외 " + default_nl
+    else if atom.kind == "function-declare" then
+      # v0.16-CY: function-declare → "X 라는 함수를 정의하면 body".
+      # name slot 은 declaration target (이름이 binding 의 target);
+      # body slot 은 consequence-body (function 호출 시 실행되는
+      # atom list).
+      # v0.16-DE: return_type slot prefix.
+      # v0.16-DN (2026-05-21): parameters slot 추가 — non-empty list
+      # 이면 받아-prefix. 형: `<type> <name>, ..., <type> <name>을/를
+      # 받아 ` (DM forward 의 mirror). Korean particle 을/를 는 last
+      # param name 의 종성에 따라 자동 선택 (bn.applyCaseMarker 가
+      # ASCII 이름 default → 를). bidirectional 완성: DM forward parse
+      # 가 multi-param 닫았으면 DN reverse compose 도 같은 shape emit.
+      let
+        body_nl = composeAtomListAsKoreanNl atom.slots.body;
+        return_type = atom.slots.return_type;
+        return_prefix =
+          if return_type == null then ""
+          else if return_type == "void" then ""
+          else if return_type == "string" then "문자열을 반환하는 "
+          else if return_type == "int" then "정수를 반환하는 "
+          else if return_type == "bool" then "참거짓을 반환하는 "
+          else if return_type == "float" then "실수를 반환하는 "
+          else "";
+        # v0.16-DN: parameters 합성. Korean type word per value_kind:
+        #   int → 정수, string → 문자열, bool → 참거짓, float → 실수.
+        koreanTypeNameForValueKind = vk:
+          if vk == "string" then "문자열"
+          else if vk == "int" then "정수"
+          else if vk == "bool" then "참거짓"
+          else if vk == "float" then "실수"
+          else "";
+        params = atom.slots.parameters;
+        param_count = builtins.length params;
+        params_prefix =
+          if param_count == 0 then ""
+          else
+            let
+              # 각 param: `<korean-type> <name>` form.
+              partsList = builtins.map
+                (p: (koreanTypeNameForValueKind p.value_kind) + " " + p.name)
+                params;
+              # All but last joined with ", ", then last gets attached
+              # particle (을/를) via BN case marker (auto-jongseong).
+              # Last param 의 name 에 조사 attach: object role → 을/를.
+              # bn.applyCaseMarker 가 jongseong 검사 후 적절한 form
+              # 반환 (ASCII name default → 를 via non-korean → none → 를).
+              last_idx = param_count - 1;
+              lastParam = builtins.elemAt params last_idx;
+              lastPart =
+                (koreanTypeNameForValueKind lastParam.value_kind)
+                + " "
+                + (bn.applyCaseMarker lastParam.name "object");
+              # All-but-last list (in source order).
+              allButLast =
+                if param_count <= 1 then []
+                else builtins.genList
+                       (i: builtins.elemAt partsList i)
+                       last_idx;
+              joinedAllButLast =
+                if allButLast == [] then ""
+                else (builtins.concatStringsSep ", " allButLast) + ", ";
+            in
+              joinedAllButLast + lastPart + " 받아 ";
+      in
+        # v0.16-DT (2026-05-21): reverse 를 forward DK surface
+        # (`함수 <name> 를 정의하면 <body>`) 와 mirror 하게 정정.
+        # 이전 reverse `"<name>" 함수를 정의하면` 는 함수 가 name
+        # 뒤에 오고 name 에 quote 가 붙어 forward 가 parse 못했다.
+        # DT 가 `함수 <name> 를 정의하면` 로 정정 (params/return
+        # prefix 는 그대로 앞에).
+        params_prefix + return_prefix + "함수 " + atom.slots.name + " 를 정의하면 " + body_nl
+    else if atom.kind == "class-declare" then
+      # v0.16-DU (2026-05-21): class-declare reverse. function-declare
+      # 와 같은 shape — `클래스 <name> 를 정의하면 <body>`. body 는
+      # member declaration list 의 recursive composition.
+      let
+        body_nl = composeAtomListAsKoreanNl atom.slots.body;
+      in
+        "클래스 " + atom.slots.name + " 를 정의하면 " + body_nl
+    else if atom.kind == "import-statement" then
+      # v0.16-DW (2026-05-21): import-statement reverse. module
+      # (object role) + 가져옴 verb. `<module>를/을 가져옴`.
+      let
+        marked = bn.applyCaseMarker atom.slots.module "object";
+      in
+        marked + " 가져옴"
+    else if atom.kind == "module-declare" then
+      # v0.16-DX (2026-05-21): module-declare reverse. `<module>
+      # 모듈 선언` — 이 파일이 어떤 모듈인지 선언. import 의
+      # `가져옴` 과 대칭되는 `선언`.
+      atom.slots.module + " 모듈 선언"
+    else if atom.kind == "enum-declare" then
+      # v0.16-DY (2026-05-21): enum-declare reverse. `<name> 열거형을
+      # 정의하면 <v1>, <v2>, ...` — name + variant list (`, ` join).
+      let
+        variants_nl =
+          builtins.concatStringsSep ", " atom.slots.variants;
+      in
+        atom.slots.name + " 열거형을 정의하면 " + variants_nl
+    else if atom.kind == "struct-declare" then
+      # v0.16-DZ (2026-05-21): struct-declare reverse. `<name>
+      # 구조체를 정의하면 <type1> <field1>, <type2> <field2>, ...`.
+      # field 의 type 은 Korean type noun (DN 의 koreanTypeNameForValueKind
+      # 와 같은 mapping).
+      let
+        koreanTypeNoun = vk:
+          if vk == "string" then "문자열"
+          else if vk == "int" then "정수"
+          else if vk == "bool" then "참거짓"
+          else if vk == "float" then "실수"
+          else "";
+        fields_nl =
+          builtins.concatStringsSep ", "
+            (builtins.map
+              (f: (koreanTypeNoun f.value_kind) + " " + f.name)
+              atom.slots.fields);
+      in
+        atom.slots.name + " 구조체를 정의하면 " + fields_nl
+    else if atom.kind == "interface-declare" then
+      # v0.16-EC (2026-05-21): interface-declare reverse. `<name>
+      # 인터페이스를 정의하면 <m1>, <m2>, ...` — name + method
+      # name list (`, ` join). enum-declare reverse 와 같은 shape.
+      let
+        methods_nl =
+          builtins.concatStringsSep ", " atom.slots.methods;
+      in
+        atom.slots.name + " 인터페이스를 정의하면 " + methods_nl
+    else if atom.kind == "try-catch" then
+      # v0.16-EE (2026-05-21): try-catch reverse. `<try_nl> 시도하고
+      # 실패하면 <catch_nl>` — try_body + catch_body 둘 다 recursive
+      # composition (if-true-then 의 then_body 와 같은 패턴, body 2개).
+      let
+        try_nl = composeAtomListAsKoreanNl atom.slots.try_body;
+        catch_nl = composeAtomListAsKoreanNl atom.slots.catch_body;
+      in
+        try_nl + " 시도하고 실패하면 " + catch_nl
+    else if atom.kind == "throw-error" then
+      # v0.16-EG (2026-05-21): throw-error reverse. `"<message>"
+      # 오류를 던짐` — message 는 quoted literal (postfix-quoted
+      # surface, print-line 의 `"<text>"를 출력` 과 같은 shape).
+      "\"" + atom.slots.message + "\" 오류를 던짐"
+    else if atom.kind == "return-value" then
+      # v0.16-EH (2026-05-21): return-value reverse. `<value>를 반환`
+      # — value (object role) + 반환 verb. print-variable 의
+      # `<var>를 출력` 과 같은 postfix-bare shape.
+      let
+        marked = bn.applyCaseMarker atom.slots.value "object";
+      in
+        marked + " 반환"
+    else if atom.kind == "assignment" then
+      # v0.16-EI (2026-05-21): assignment reverse. `<target>에
+      # <value>를 대입` — target (target role) + value (object role)
+      # + 대입 verb.
+      let
+        target_marked = bn.applyCaseMarker atom.slots.target "target";
+        value_marked = bn.applyCaseMarker atom.slots.value "object";
+      in
+        target_marked + " " + value_marked + " 대입"
+    else if atom.kind == "function-call" then
+      # v0.16-EK (2026-05-21): function-call reverse. `<name>(<args>)
+      # 호출` — name + paren-wrapped `, `-joined arguments + 호출
+      # verb. 한국어에서 `함수(인자)` paren 표기는 자연스러움.
+      let
+        args_nl =
+          builtins.concatStringsSep ", " atom.slots.arguments;
+      in
+        atom.slots.name + "(" + args_nl + ") 호출"
+    else if atom.kind == "comparison" then
+      # v0.16-EM (2026-05-21): comparison reverse. relation operator
+      # 별 한국어 비교 절. equals/not-equals 는 `<left>와 <right>가
+      # ...`, 부등호는 `<left>가 <right>보다 ...` 형.
+      let
+        l = atom.slots.left;
+        r = atom.slots.right;
+        op = atom.slots.operator;
+      in
+        if op == "equals" then l + "와 " + r + "가 같음"
+        else if op == "not-equals" then l + "와 " + r + "가 다름"
+        else if op == "less-than" then l + "가 " + r + "보다 작음"
+        else if op == "less-or-equal" then
+          l + "가 " + r + "보다 작거나 같음"
+        else if op == "greater-than" then l + "가 " + r + "보다 큼"
+        else if op == "greater-or-equal" then
+          l + "가 " + r + "보다 크거나 같음"
+        else l + " " + op + " " + r
+    else if atom.kind == "arithmetic" then
+      # v0.16-EO (2026-05-21): arithmetic reverse. arithmetic
+      # operator 별 한국어 산술 절 — `<left> 더하기 <right>` 형
+      # (더하기/빼기/곱하기/나누기/나머지 는 한국어 산술 연산 명사).
+      let
+        l = atom.slots.left;
+        r = atom.slots.right;
+        op = atom.slots.operator;
+      in
+        if op == "add" then l + " 더하기 " + r
+        else if op == "subtract" then l + " 빼기 " + r
+        else if op == "multiply" then l + " 곱하기 " + r
+        else if op == "divide" then l + " 나누기 " + r
+        else if op == "modulo" then l + " 나머지 " + r
+        else l + " " + op + " " + r
+    else if atom.kind == "boolean-expression" then
+      # v0.16-ER (2026-05-21): boolean-expression reverse. logical
+      # operator 별 한국어 논리 절 — and `<o1> 그리고 <o2>`, or
+      # `<o1> 또는 <o2>`, not `<o1> 아님`.
+      let
+        op = atom.slots.operator;
+        ops = atom.slots.operands;
+      in
+        if op == "and" then builtins.concatStringsSep " 그리고 " ops
+        else if op == "or" then builtins.concatStringsSep " 또는 " ops
+        else if op == "not" then (builtins.head ops) + " 아님"
+        else builtins.concatStringsSep (" " + op + " ") ops
+    else if atom.kind == "ternary" then
+      # §F Tier 2 round 1 (2026-05-22): ternary reverse — 조건식.
+      # "<condition>이면 <then_expr>, 아니면 <else_expr>". flat
+      # expression atom (comparison/arithmetic 처럼 nested body 없음).
+      atom.slots.condition + "이면 " + atom.slots.then_expr
+      + ", 아니면 " + atom.slots.else_expr
+    else if atom.kind == "array-literal" then
+      # §F Tier 2 round 2 (2026-05-22): array-literal reverse —
+      # 리스트 리터럴. "<e1>, <e2>, ... 의 배열". elements 를
+      # ", " 로 join 후 "의 배열" 후치.
+      (builtins.concatStringsSep ", " atom.slots.elements)
+      + " 의 배열"
+    else if atom.kind == "map-literal" then
+      # §F Tier 2 round 3 (2026-05-22): map-literal reverse — 맵
+      # 리터럴. "<k1>: <v1>, <k2>: <v2> ... 의 맵". 각 entry 를
+      # "<key>: <value>" 로, entries 를 ", " 로 join 후 "의 맵" 후치.
+      (builtins.concatStringsSep ", "
+        (builtins.map (e: e.key + ": " + e.value) atom.slots.entries))
+      + " 의 맵"
+    else if atom.kind == "tuple-literal" then
+      # §F Tier 2 round 4 (2026-05-22): tuple-literal reverse — 튜플
+      # 리터럴. "<e1>, <e2>, ... 의 튜플". elements 를 ", " 로 join
+      # 후 "의 튜플" 후치 (array-literal 의 "의 배열" 과 평행).
+      (builtins.concatStringsSep ", " atom.slots.elements)
+      + " 의 튜플"
+    else if atom.kind == "index-access" then
+      # §F Tier 2 round 5 (2026-05-22): index-access reverse — 인덱스
+      # 접근. "<target>의 <index>번째 요소". flat 2-slot expression atom.
+      atom.slots.target + "의 " + atom.slots.index + "번째 요소"
+    else if atom.kind == "slice-access" then
+      # §F Tier 2 round 6 (2026-05-22): slice-access reverse — 부분범위.
+      # "<target>의 <start>부터 <end>까지". flat 3-slot expression atom.
+      atom.slots.target + "의 " + atom.slots.start + "부터 "
+      + atom.slots.end + "까지"
+    else if atom.kind == "member-access" then
+      # §F Tier 2 round 7 (2026-05-22): member-access reverse — 멤버
+      # 접근. "<target>의 <member>" (genitive 의).
+      atom.slots.target + "의 " + atom.slots.member
+    else if atom.kind == "method-call" then
+      # §F Tier 2 round 8 (2026-05-22): method-call reverse — 메서드
+      # 호출. "<receiver>의 <method>(<args>) 호출".
+      atom.slots.receiver + "의 " + atom.slots.method + "("
+      + (builtins.concatStringsSep ", " atom.slots.arguments)
+      + ") 호출"
+    else if atom.kind == "lambda" then
+      # §F Tier 2 round 9 (2026-05-22): lambda reverse — 익명 함수.
+      # "<params> 를 받아 <body> 를 돌려주는 람다".
+      (builtins.concatStringsSep ", " atom.slots.parameters)
+      + " 를 받아 " + atom.slots.body + " 를 돌려주는 람다"
+    else if atom.kind == "string-interpolation" then
+      # §F Tier 2 round 10 (2026-05-22): string-interpolation reverse
+      # — 보간 문자열. literal 은 그대로, var 는 {이름} 으로 표기.
+      (builtins.concatStringsSep ""
+        (builtins.map
+          (p: if p.kind == "var" then "{" + p.text + "}" else p.text)
+          atom.slots.parts))
+      + " 보간 문자열"
+    else if atom.kind == "range-expression" then
+      # §F Tier 2 round 11 (2026-05-22): range-expression reverse —
+      # 범위. "<start>부터 <end>까지" (inclusive) / "<start>부터 <end>
+      # 미만" (exclusive), 후치 "의 범위".
+      atom.slots.start + "부터 " + atom.slots.end
+      + (if atom.slots.inclusive then "까지" else " 미만")
+      + "의 범위"
+    else if atom.kind == "unary-expression" then
+      # §F Tier 2 round 12 (2026-05-22): unary-expression reverse —
+      # 단항. negate → "<operand>의 음수", bitwise-not → "<operand>의
+      # 비트 반전".
+      if atom.slots.operator == "negate"
+      then atom.slots.operand + "의 음수"
+      else atom.slots.operand + "의 비트 반전"
+    else if atom.kind == "cast-expression" then
+      # §F Tier 2 round 13 (2026-05-22): cast-expression reverse —
+      # 타입 캐스트. "<value>를 <target_type> 타입으로 캐스트".
+      atom.slots.value + "를 " + atom.slots.target_type
+      + " 타입으로 캐스트"
+    else if atom.kind == "const-declare" then
+      # §F Tier 3 round 14 (2026-05-22): const-declare reverse —
+      # 상수 선언. "<variable> 상수를 <value> 로 선언".
+      atom.slots.variable + " 상수를 " + atom.slots.value + " 로 선언"
+    else if atom.kind == "augmented-assignment" then
+      # §F Tier 3 round 15 (2026-05-22): augmented-assignment reverse
+      # — 복합 대입. operator 별 한국어 절 + "복합대입".
+      let op = atom.slots.operator; t = atom.slots.target;
+          v = atom.slots.value;
+      in
+        if op == "add" then t + " 에 " + v + " 더하기 복합대입"
+        else if op == "subtract" then t + " 에서 " + v + " 빼기 복합대입"
+        else if op == "multiply" then t + " 에 " + v + " 곱하기 복합대입"
+        else if op == "divide" then t + " 를 " + v + " 로 나누기 복합대입"
+        else t + " 를 " + v + " 로 나머지 복합대입"
+    else if atom.kind == "destructuring-bind" then
+      # §F Tier 3 round 16 (2026-05-22): destructuring-bind reverse —
+      # 구조분해. "<value>를 <p1>, <p2>로 구조분해 바인딩".
+      atom.slots.value + "를 "
+      + (builtins.concatStringsSep ", " atom.slots.pattern)
+      + " 로 구조분해 바인딩"
+    else if atom.kind == "global-constant" then
+      # §F Tier 3 round 17 (2026-05-22): global-constant reverse —
+      # 모듈 수준 상수. "전역 상수 <name> 를 <value> 로 선언".
+      "전역 상수 " + atom.slots.name + " 를 " + atom.slots.value
+      + " 로 선언"
+    else if atom.kind == "default-parameter" then
+      # §F Tier 4 round 18 (2026-05-22): default-parameter reverse —
+      # 기본값 매개변수. "<name> 매개변수 (기본값 <default_value>)".
+      atom.slots.name + " 매개변수 (기본값 "
+      + atom.slots.default_value + ")"
+    else if atom.kind == "variadic-parameter" then
+      # §F Tier 4 round 19 (2026-05-22): variadic-parameter reverse —
+      # 가변인자 매개변수. "<name> 가변인자 매개변수".
+      atom.slots.name + " 가변인자 매개변수"
+    else if atom.kind == "named-argument" then
+      # §F Tier 4 round 20 (2026-05-22): named-argument reverse —
+      # 이름붙인 인자. "<name> 인자에 <value> 지정".
+      atom.slots.name + " 인자에 " + atom.slots.value + " 지정"
+    else if atom.kind == "multiple-return" then
+      # §F Tier 4 round 21 (2026-05-22): multiple-return reverse —
+      # 다중 값 반환. "<v1>, <v2> 다중 반환".
+      (builtins.concatStringsSep ", " atom.slots.values)
+      + " 다중 반환"
+    else if atom.kind == "type-alias" then
+      # §F Tier 5 round 22 (2026-05-22): type-alias reverse — 타입
+      # 별칭. "<name> 를 <target> 의 타입 별칭으로 선언".
+      atom.slots.name + " 를 " + atom.slots.target
+      + " 의 타입 별칭으로 선언"
+    else if atom.kind == "increment" then
+      # §F Tier 5 round 23 (2026-05-22): increment reverse — 후위
+      # 증감. "<operand> 1 증가" / "<operand> 1 감소".
+      atom.slots.operand
+      + (if atom.slots.operator == "increment" then " 1 증가" else " 1 감소")
+    else if atom.kind == "null-coalesce" then
+      # §F Tier 5 round 24 (2026-05-22): null-coalesce reverse — null
+      # 병합. "<left> 가 널이면 <right> 사용".
+      atom.slots.left + " 가 널이면 " + atom.slots.right + " 사용"
+    else if atom.kind == "optional-chaining" then
+      # §F Tier 5 round 25 (2026-05-22): optional-chaining reverse —
+      # 옵셔널 체이닝. "<object> 가 널 아니면 <member> 접근".
+      atom.slots.object + " 가 널 아니면 " + atom.slots.member + " 접근"
+    else if atom.kind == "spread-expression" then
+      # §F Tier 5 round 26 (2026-05-22): spread-expression reverse —
+      # 스프레드. "<expression> 펼치기".
+      atom.slots.expression + " 펼치기"
+    else if atom.kind == "await-expression" then
+      # §F Tier 5 round 27 (2026-05-22): await-expression reverse —
+      # 비동기 대기. "<expression> 완료 대기".
+      atom.slots.expression + " 완료 대기"
+    else if atom.kind == "yield-statement" then
+      # §F Tier 5 round 28 (2026-05-22): yield-statement reverse —
+      # 제너레이터 산출. "<expression> 산출".
+      atom.slots.expression + " 산출"
+    else if atom.kind == "do-while-loop" then
+      # §F Tier 5 round 29 (2026-05-22): do-while-loop reverse —
+      # 후위검사 루프. "<body> 실행 후 <condition> 인 동안 반복".
+      atom.slots.body + " 실행 후 " + atom.slots.condition
+      + " 인 동안 반복"
+    else if atom.kind == "decorator" then
+      # §F Tier 5 round 30 (2026-05-22): decorator reverse —
+      # 데코레이터/애노테이션. "<name> 데코레이터".
+      atom.slots.name + " 데코레이터"
+    else if atom.kind == "label-statement" then
+      # §F Tier 5 round 31 (2026-05-22): label-statement reverse —
+      # 레이블. "<name> 레이블".
+      atom.slots.name + " 레이블"
+    else if atom.kind == "goto-statement" then
+      # §F Tier 5 round 32 (2026-05-22): goto-statement reverse —
+      # 점프. "<target> 로 점프".
+      atom.slots.target + " 로 점프"
+    else if atom.kind == "assert-statement" then
+      # §F Tier 5 round 33 (2026-05-22): assert-statement reverse —
+      # 런타임 단언. "<condition> 단언".
+      atom.slots.condition + " 단언"
+    else if atom.kind == "delete-statement" then
+      # §F Tier 5 round 34 (2026-05-22): delete-statement reverse —
+      # 삭제/해제. "<target> 삭제".
+      atom.slots.target + " 삭제"
+    else if atom.kind == "with-resource" then
+      # §F Tier 5 round 35 (2026-05-22): with-resource reverse —
+      # 자원관리 블록. "<resource> 자원으로 <body> 실행".
+      atom.slots.resource + " 자원으로 " + atom.slots.body + " 실행"
+    else if atom.kind == "pass-statement" then
+      # §F Tier 5 round 36 (2026-05-22): pass-statement — zero-slot
+      # no-op atom. 고정 Korean 절 "아무것도 안 함".
+      "아무것도 안 함"
+    else if atom.kind == "bitwise-shift" then
+      # §F Tier 5 round 37 (2026-05-22): bitwise-shift reverse —
+      # 비트 시프트. "<left> 를 <right> 만큼 왼쪽/오른쪽 시프트".
+      atom.slots.left + " 를 " + atom.slots.right
+      + (if atom.slots.operator == "shift-left"
+         then " 만큼 왼쪽 시프트" else " 만큼 오른쪽 시프트")
+    else if atom.kind == "bitwise-and-or-xor" then
+      # §F Tier 5 round 38 (2026-05-22): bitwise-and-or-xor reverse —
+      # 비트 연산. "<left> 와 <right> 비트 AND/OR/XOR".
+      atom.slots.left + " 와 " + atom.slots.right
+      + (if atom.slots.operator == "bit-and" then " 비트 AND"
+         else if atom.slots.operator == "bit-or" then " 비트 OR"
+         else " 비트 XOR")
+    else if atom.kind == "char-literal" then
+      # §F Tier 5 round 39 (2026-05-22): char-literal reverse —
+      # 문자 리터럴. "문자 '<value>'".
+      "문자 '" + atom.slots.value + "'"
+    else if atom.kind == "power-operator" then
+      # §F Tier 5 round 40 (2026-05-22): power-operator reverse —
+      # 거듭제곱. "<base> 의 <exponent> 제곱".
+      atom.slots.base + " 의 " + atom.slots.exponent + " 제곱"
+    else if atom.kind == "string-concat" then
+      # §F Tier 5 round 41 (2026-05-22): string-concat reverse —
+      # 문자열 결합. "<left> 와 <right> 문자열 결합".
+      atom.slots.left + " 와 " + atom.slots.right + " 문자열 결합"
+    else if atom.kind == "string-length" then
+      # §F Tier 5 round 42 (2026-05-22): string-length reverse —
+      # 문자열 길이. "<target> 의 길이".
+      atom.slots.target + " 의 길이"
+    else if atom.kind == "string-upper-lower" then
+      # §F Tier 5 round 43 (2026-05-22): string-upper-lower reverse —
+      # 대소문자 변환. "<target> 대문자로/소문자로 변환".
+      atom.slots.target
+      + (if atom.slots.direction == "to-upper"
+         then " 대문자로 변환" else " 소문자로 변환")
+    else if atom.kind == "string-trim" then
+      # §F Tier 5 round 44 (2026-05-22): string-trim reverse —
+      # 공백 제거. "<target> 공백 제거".
+      atom.slots.target + " 공백 제거"
+    else if atom.kind == "string-contains" then
+      # §F Tier 5 round 45 (2026-05-22): string-contains reverse —
+      # 부분문자열 포함 검사. "<haystack> 가 <needle> 포함하는지".
+      atom.slots.haystack + " 가 " + atom.slots.needle + " 포함하는지"
+    else if atom.kind == "string-split" then
+      # §F Tier 5 round 46 (2026-05-22): string-split reverse —
+      # 문자열 분할. "<target> 를 <separator> 로 분할".
+      atom.slots.target + " 를 " + atom.slots.separator + " 로 분할"
+    else if atom.kind == "string-replace" then
+      # §F Tier 5 round 47 (2026-05-22): string-replace reverse —
+      # 부분문자열 치환. "<target> 에서 <old> 를 <new> 로 치환".
+      atom.slots.target + " 에서 " + atom.slots.old
+      + " 를 " + atom.slots.new + " 로 치환"
+    else if atom.kind == "list-length" then
+      # §F Tier 5 round 48 (2026-05-22): list-length reverse —
+      # 리스트/배열 길이. "<target> 의 항목 수".
+      atom.slots.target + " 의 항목 수"
+    else if atom.kind == "list-append" then
+      # §F Tier 5 round 49 (2026-05-22): list-append reverse —
+      # 리스트에 항목 추가. "<target> 에 <item> 추가".
+      atom.slots.target + " 에 " + atom.slots.item + " 추가"
+    else if atom.kind == "list-is-empty" then
+      # §F Tier 5 round 50 (2026-05-22): list-is-empty reverse —
+      # 리스트 빈검사. "<target> 가 비어있는지".
+      atom.slots.target + " 가 비어있는지"
+    else if atom.kind == "list-contains" then
+      # §F Tier 5 round 51 (2026-05-22): list-contains reverse —
+      # 리스트 포함 검사. "<haystack> 가 <needle> 를 항목으로 포함하는지".
+      atom.slots.haystack + " 가 " + atom.slots.needle
+      + " 를 항목으로 포함하는지"
+    else if atom.kind == "list-reverse" then
+      # §F Tier 5 round 52 (2026-05-22): list-reverse reverse —
+      # 리스트 뒤집기. "<target> 뒤집기".
+      atom.slots.target + " 뒤집기"
+    else if atom.kind == "list-sort" then
+      # §F Tier 5 round 53 (2026-05-22): list-sort reverse —
+      # 리스트 정렬. "<target> 정렬".
+      atom.slots.target + " 정렬"
+    else if atom.kind == "list-index" then
+      # §F Tier 5 round 54 (2026-05-22): list-index reverse —
+      # 리스트 인덱스 접근. "<target> 의 <index> 번째 항목".
+      atom.slots.target + " 의 " + atom.slots.index + " 번째 항목"
+    else if atom.kind == "map-get" then
+      # §F Tier 5 round 55 (2026-05-22): map-get reverse —
+      # 맵 키 접근. "<target> 맵의 <key> 키 값".
+      atom.slots.target + " 맵의 " + atom.slots.key + " 키 값"
+    else if atom.kind == "map-put" then
+      # §F Tier 5 round 56 (2026-05-22): map-put reverse —
+      # 맵 키-값 설정. "<target> 맵의 <key> 키에 <value> 설정".
+      atom.slots.target + " 맵의 " + atom.slots.key
+      + " 키에 " + atom.slots.value + " 설정"
+    else if atom.kind == "map-keys" then
+      # §F Tier 5 round 57 (2026-05-22): map-keys reverse —
+      # 맵 키 목록. "<target> 맵의 키 목록".
+      atom.slots.target + " 맵의 키 목록"
+    else if atom.kind == "map-has-key" then
+      # §F Tier 5 round 58 (2026-05-22): map-has-key reverse —
+      # 맵 키 존재 검사. "<target> 맵에 <key> 키 존재 여부".
+      atom.slots.target + " 맵에 " + atom.slots.key + " 키 존재 여부"
+    else if atom.kind == "map-size" then
+      # §F Tier 5 round 59 (2026-05-22): map-size reverse —
+      # 맵 항목 수. "<target> 맵의 항목 수".
+      atom.slots.target + " 맵의 항목 수"
+    else if atom.kind == "map-remove" then
+      # §F Tier 5 round 60 (2026-05-22): map-remove reverse —
+      # 맵 키 삭제. "<target> 맵에서 <key> 키 삭제".
+      atom.slots.target + " 맵에서 " + atom.slots.key + " 키 삭제"
+    else if atom.kind == "map-values" then
+      # §F Tier 5 round 61 (2026-05-22): map-values reverse —
+      # 맵 값 목록. "<target> 맵의 값 목록".
+      atom.slots.target + " 맵의 값 목록"
+    else if atom.kind == "list-clear" then
+      # §F Tier 5 round 62 (2026-05-22): list-clear reverse —
+      # 리스트 비우기. "<target> 비우기".
+      atom.slots.target + " 비우기"
+    else if atom.kind == "list-pop" then
+      # §F Tier 5 round 63 (2026-05-22): list-pop reverse —
+      # 리스트 마지막 항목 제거+반환. "<target> 의 마지막 항목 꺼내기".
+      atom.slots.target + " 의 마지막 항목 꺼내기"
+    else if atom.kind == "list-index-of" then
+      # §F Tier 5 round 64 (2026-05-22): list-index-of reverse —
+      # 리스트 항목 위치. "<haystack> 에서 <needle> 의 위치".
+      atom.slots.haystack + " 에서 " + atom.slots.needle + " 의 위치"
+    else if atom.kind == "list-join" then
+      # §F Tier 5 round 65 (2026-05-22): list-join reverse —
+      # 리스트 결합. "<target> 를 <separator> 로 결합".
+      atom.slots.target + " 를 " + atom.slots.separator + " 로 결합"
+    else if atom.kind == "list-sum" then
+      # §F Tier 5 round 66 (2026-05-22): list-sum reverse —
+      # 리스트 숫자 합. "<target> 의 합".
+      atom.slots.target + " 의 합"
+    else if atom.kind == "list-min" then
+      # §F Tier 5 round 67 (2026-05-22): list-min reverse —
+      # 리스트 최솟값. "<target> 의 최솟값".
+      atom.slots.target + " 의 최솟값"
+    else if atom.kind == "list-max" then
+      # §F Tier 5 round 68 (2026-05-22): list-max reverse —
+      # 리스트 최댓값. "<target> 의 최댓값".
+      atom.slots.target + " 의 최댓값"
+    else if atom.kind == "list-first" then
+      # §F Tier 5 round 69 (2026-05-22): list-first reverse —
+      # 리스트 첫 항목. "<target> 의 첫 항목".
+      atom.slots.target + " 의 첫 항목"
+    else if atom.kind == "list-last" then
+      # §F Tier 5 round 70 (2026-05-22): list-last reverse —
+      # 리스트 마지막 항목. "<target> 의 마지막 항목".
+      atom.slots.target + " 의 마지막 항목"
+    else if atom.kind == "list-take" then
+      # §F Tier 5 round 71 (2026-05-22): list-take reverse —
+      # 리스트 앞 n개. "<target> 의 앞 <count>개".
+      atom.slots.target + " 의 앞 " + atom.slots.count + "개"
+    else if atom.kind == "list-drop" then
+      # §F Tier 5 round 72 (2026-05-22): list-drop reverse —
+      # 리스트 앞 n개 제외. "<target> 의 앞 <count>개 제외".
+      atom.slots.target + " 의 앞 " + atom.slots.count + "개 제외"
+    else if atom.kind == "list-flatten" then
+      # §F Tier 5 round 73 (2026-05-22): list-flatten reverse —
+      # 중첩 리스트 한 단계 평탄화. "<target> 한 단계 평탄화".
+      atom.slots.target + " 한 단계 평탄화"
+    else if atom.kind == "list-distinct" then
+      # §F Tier 5 round 74 (2026-05-22): list-distinct reverse —
+      # 리스트 중복 제거. "<target> 중복 제거".
+      atom.slots.target + " 중복 제거"
+    else if atom.kind == "list-zip" then
+      # §F Tier 5 round 75 (2026-05-22): list-zip reverse —
+      # 두 리스트 짝짓기. "<first> 와 <second> 짝짓기".
+      atom.slots.first + " 와 " + atom.slots.second + " 짝짓기"
+    else if atom.kind == "list-count" then
+      # §F Tier 5 round 76 (2026-05-22): list-count reverse —
+      # 리스트 내 특정 값 개수. "<target> 에서 <value> 개수".
+      atom.slots.target + " 에서 " + atom.slots.value + " 개수"
+    else if atom.kind == "list-enumerate" then
+      # §F Tier 5 round 77 (2026-05-22): list-enumerate reverse —
+      # 리스트를 (인덱스, 값) 쌍으로. "<target> 인덱스 매기기".
+      atom.slots.target + " 인덱스 매기기"
+    else if atom.kind == "list-find" then
+      # §F Tier 5 round 78 (2026-05-22): list-find reverse —
+      # 리스트 첫 일치 원소. "<target> 에서 <value> 인 첫 원소".
+      atom.slots.target + " 에서 " + atom.slots.value + " 인 첫 원소"
+    else if atom.kind == "list-all" then
+      # §F Tier 5 round 79 (2026-05-23): list-all reverse —
+      # 모든 원소 동일 여부. "<target> 모두 <value> 인지".
+      atom.slots.target + " 모두 " + atom.slots.value + " 인지"
+    else if atom.kind == "list-chunk" then
+      # §F Tier 5 round 80 (2026-05-23): list-chunk reverse —
+      # 리스트 청크 분할. "<target> 를 <size> 개씩 분할".
+      atom.slots.target + " 를 " + atom.slots.size + " 개씩 분할"
+    else if atom.kind == "list-product" then
+      # §F Tier 5 round 81 (2026-05-23): list-product reverse —
+      # 리스트 원소 곱. "<target> 의 곱".
+      atom.slots.target + " 의 곱"
+    else if atom.kind == "list-take-while" then
+      # §F Tier 5 round 82 (2026-05-23): list-take-while reverse —
+      # 앞에서 조건 만족 동안 취득. "<target> 앞에서 <value> 인 동안".
+      atom.slots.target + " 앞에서 " + atom.slots.value + " 인 동안"
+    else if atom.kind == "list-drop-while" then
+      # §F Tier 5 round 83 (2026-05-23): list-drop-while reverse —
+      # 앞에서 조건 만족 동안 폐기. "<target> 앞에서 <value> 인 동안 버리기".
+      atom.slots.target + " 앞에서 " + atom.slots.value + " 인 동안 버리기"
+    else if atom.kind == "list-sort-desc" then
+      # §F Tier 5 round 84 (2026-05-23): list-sort-desc reverse —
+      # 리스트 내림차순 정렬. "<target> 내림차순 정렬".
+      atom.slots.target + " 내림차순 정렬"
+    else if atom.kind == "map-is-empty" then
+      # §F Tier 5 round 85 (2026-05-23): map-is-empty reverse —
+      # 맵 비움 검사. "<target> 가 비었는지".
+      atom.slots.target + " 가 비었는지"
+    else if atom.kind == "map-clear" then
+      # §F Tier 5 round 86 (2026-05-23): map-clear reverse —
+      # 맵 비우기. "<target> 비우기".
+      atom.slots.target + " 비우기"
+    else if atom.kind == "map-merge" then
+      # §F Tier 5 round 87 (2026-05-23): map-merge reverse —
+      # 두 맵 병합. "<first> 와 <second> 병합".
+      atom.slots.first + " 와 " + atom.slots.second + " 병합"
+    else if atom.kind == "map-entries" then
+      # §F Tier 5 round 88 (2026-05-23): map-entries reverse —
+      # 맵 (키,값) 쌍 목록. "<target> 의 키값 쌍 목록".
+      atom.slots.target + " 의 키값 쌍 목록"
+    else if atom.kind == "string-starts-with" then
+      # §F Tier 5 round 89 (2026-05-23): string-starts-with reverse —
+      # 문자열 접두사 검사. "<target> 가 <prefix> 로 시작하는지".
+      atom.slots.target + " 가 " + atom.slots.prefix + " 로 시작하는지"
+    else if atom.kind == "string-ends-with" then
+      # §F Tier 5 round 90 (2026-05-23): string-ends-with reverse —
+      # 문자열 접미사 검사. "<target> 가 <suffix> 로 끝나는지".
+      atom.slots.target + " 가 " + atom.slots.suffix + " 로 끝나는지"
+    else if atom.kind == "string-repeat" then
+      # §F Tier 5 round 91 (2026-05-23): string-repeat reverse —
+      # 문자열 N회 반복. "<target> 를 <count> 번 반복".
+      atom.slots.target + " 를 " + atom.slots.count + " 번 반복"
+    else if atom.kind == "string-index-of" then
+      # §F Tier 5 round 92 (2026-05-23): string-index-of reverse —
+      # 부분문자열 위치 인덱스. "<target> 에서 <needle> 의 위치".
+      atom.slots.target + " 에서 " + atom.slots.needle + " 의 위치"
+    else if atom.kind == "string-char-at" then
+      # §F Tier 5 round 93 (2026-05-23): string-char-at reverse —
+      # 문자열 N번째 문자. "<target> 의 <index> 번째 문자".
+      atom.slots.target + " 의 " + atom.slots.index + " 번째 문자"
+    else if atom.kind == "string-pad-left" then
+      # §F Tier 5 round 94 (2026-05-23): string-pad-left reverse —
+      # 문자열 왼쪽 공백 패딩. "<target> 를 너비 <width> 로 왼쪽 패딩".
+      atom.slots.target + " 를 너비 " + atom.slots.width + " 로 왼쪽 패딩"
+    else if atom.kind == "string-pad-right" then
+      # §F Tier 5 round 95 (2026-05-23): string-pad-right reverse —
+      # 문자열 오른쪽 공백 패딩. "<target> 를 너비 <width> 로 오른쪽 패딩".
+      atom.slots.target + " 를 너비 " + atom.slots.width + " 로 오른쪽 패딩"
+    else if atom.kind == "number-abs" then
+      # §F Tier 5 round 96 (2026-05-23): number-abs reverse —
+      # 숫자 절대값. "<target> 의 절대값".
+      atom.slots.target + " 의 절대값"
+    else if atom.kind == "number-sqrt" then
+      # §F Tier 5 round 97 (2026-05-23): number-sqrt reverse —
+      # 숫자 제곱근. "<target> 의 제곱근".
+      atom.slots.target + " 의 제곱근"
+    else if atom.kind == "number-round" then
+      # §F Tier 5 round 98 (2026-05-23): number-round reverse —
+      # 숫자 반올림. "<target> 의 반올림".
+      atom.slots.target + " 의 반올림"
+    else if atom.kind == "number-floor" then
+      # §F Tier 5 round 99 (2026-05-23): number-floor reverse —
+      # 숫자 내림. "<target> 의 내림".
+      atom.slots.target + " 의 내림"
+    else if atom.kind == "number-ceil" then
+      # §F Tier 5 round 100 (2026-05-23): number-ceil reverse —
+      # 숫자 올림. "<target> 의 올림".
+      atom.slots.target + " 의 올림"
+    else
+      # Substrate honest — unknown atom kind returns null. Lens
+      # refuses to invent a clause for an atom kind it doesn't
+      # know. Adding a new atom kind = one new branch here +
+      # one new BM slot-role assignment.
+      null;
+
+  # Compose a list of atoms as a sequential Korean NL utterance.
+  # Each atom's NL clause is joined with ", " — natural Korean
+  # 나열 pattern. Null clauses (from unknown atom kinds) are
+  # filtered out; if all null, returns "".
+  composeAtomListAsKoreanNl = atoms:
+    let
+      perAtom = builtins.map composeAtomAsKoreanNl atoms;
+      valid = builtins.filter (s: s != null) perAtom;
+    in
+      if valid == [] then ""
+      else builtins.concatStringsSep ", " valid;
+
+  # ── substrate-shape inventory ──
+
+  # Known atom kinds the lens covers. Should match
+  # behavior-atom.knownAtomKinds (= 9 at BL/BP baseline) for
+  # full closure. The substrate self-invariant for BP is:
+  # every atom kind has an NL composition template here.
+  coveredAtomKinds = [
+    "print-line"
+    "comment"
+    # §F Tier 5 round 101: todo-comment — explicit deferred-work
+    # marker in generated code/prompt scaffolds.
+    "todo-comment"
+    # Floor round 133: fixme-comment - explicit defect/risk marker.
+    "fixme-comment"
+    # Floor round 134: warning-comment - explicit risk/footgun marker.
+    "warning-comment"
+    # Floor round 135: section-comment - structural scaffold marker.
+    "section-comment"
+    # Floor round 136: region-start-comment - structural range-start
+    # marker for generated scaffold/fold regions.
+    "region-start-comment"
+    # Floor round 137: region-end-comment - structural range-end
+    # marker for generated scaffold/fold regions.
+    "region-end-comment"
+    # Floor round 138: invariant-comment - semantic scaffold marker
+    # for conditions that generated code must preserve.
+    "invariant-comment"
+    # Floor round 139: precondition-comment - semantic scaffold marker
+    # for requirements that should hold before generated code runs.
+    "precondition-comment"
+    # Floor round 140: postcondition-comment - semantic scaffold marker
+    # for guarantees that should hold after generated code runs.
+    "postcondition-comment"
+    # Floor round 141: assumption-comment - semantic scaffold marker
+    # for premises generated code relies on.
+    "assumption-comment"
+    # Floor round 142: rationale-comment - semantic scaffold marker
+    # for why generated code or prompt scaffolds choose a shape.
+    "rationale-comment"
+    # Floor round 143: constraint-comment - semantic scaffold marker
+    # for hard restrictions generated code must respect.
+    "constraint-comment"
+    # Floor round 144: acceptance-comment - semantic scaffold marker
+    # for acceptance criteria generated code must satisfy.
+    "acceptance-comment"
+    # Floor round 145: security-comment - semantic scaffold marker
+    # for security requirements generated code must keep visible.
+    "security-comment"
+    # Floor round 146: privacy-comment - semantic scaffold marker
+    # for privacy requirements generated code must keep visible.
+    "privacy-comment"
+    # Floor round 147: performance-comment - semantic scaffold marker
+    # for performance requirements generated code must keep visible.
+    "performance-comment"
+    # Floor round 148: reliability-comment - semantic scaffold marker
+    # for reliability requirements generated code must keep visible.
+    "reliability-comment"
+    "exit-with-code"
+    "read-line"
+    "bind-variable"
+    "print-variable"
+    "if-true-then"
+    "repeat-n-times"
+    "loop-while-true"
+    # v0.16-CY: function-declare — 10번째 atom kind. Korean NL
+    # synthesis: "\"<name>\" 함수를 정의하면 <body>" 형식.
+    "function-declare"
+    # v0.16-DU: class-declare — 11번째 atom kind. Korean NL
+    # synthesis: "클래스 <name> 를 정의하면 <body>" 형식.
+    "class-declare"
+    # v0.16-DW: import-statement — 12번째 atom kind. Korean NL
+    # synthesis: "<module>를 가져옴" 형식.
+    "import-statement"
+    # v0.16-DX: module-declare — 13번째 atom kind. Korean NL
+    # synthesis: "<module> 모듈 선언" 형식.
+    "module-declare"
+    # v0.16-DY: enum-declare — 14번째 atom kind. Korean NL
+    # synthesis: "<name> 열거형을 정의하면 <variants>" 형식.
+    "enum-declare"
+    # v0.16-DZ: struct-declare — 15번째 atom kind. Korean NL
+    # synthesis: "<name> 구조체를 정의하면 <fields>" 형식.
+    "struct-declare"
+    # v0.16-EC: interface-declare — 16번째 atom kind. Korean NL
+    # synthesis: "<name> 인터페이스를 정의하면 <methods>" 형식.
+    "interface-declare"
+    # v0.16-EE: try-catch — 17번째 atom kind. Korean NL synthesis:
+    # "<try_nl> 시도하고 실패하면 <catch_nl>" 형식.
+    "try-catch"
+    # v0.16-EG: throw-error — 18번째 atom kind. Korean NL synthesis:
+    # "\"<message>\" 오류를 던짐" 형식.
+    "throw-error"
+    # v0.16-EH: return-value — 19번째 atom kind. Korean NL synthesis:
+    # "<value>를 반환" 형식.
+    "return-value"
+    # v0.16-EI: assignment — 20번째 atom kind. Korean NL synthesis:
+    # "<target>에 <value>를 대입" 형식.
+    "assignment"
+    # v0.16-EK: function-call — 21번째 atom kind. Korean NL
+    # synthesis: "<name>(<args>) 호출" 형식.
+    "function-call"
+    # v0.16-EM: comparison — 22번째 atom kind. Korean NL synthesis:
+    # relation operator 별 비교 절 (`<left>가 <right>보다 작음` 등).
+    "comparison"
+    # v0.16-EO: arithmetic — 23번째 atom kind. Korean NL synthesis:
+    # arithmetic operator 별 산술 절 (`<left> 더하기 <right>` 등).
+    "arithmetic"
+    # v0.16-ER: boolean-expression — 24번째 atom kind. Korean NL
+    # synthesis: logical operator 별 논리 절 (`<o1> 그리고 <o2>` 등).
+    "boolean-expression"
+    # §F Tier 1: for-each — 25번째 atom kind. Korean NL synthesis:
+    # "<collection>의 각 <item>마다 <body>" 형식.
+    "for-each"
+    # §F Tier 1 round 2: break — 26번째 atom kind. Korean NL
+    # synthesis: 고정 절 "반복 중단".
+    "break"
+    # §F Tier 1 round 3: continue — 27번째 atom kind. Korean NL
+    # synthesis: 고정 절 "다음 반복으로".
+    "continue"
+    # §F Tier 1 round 4: for-range — 28번째 atom kind. Korean NL
+    # synthesis: "<start>부터 <end>까지 <index>로 <body>".
+    "for-range"
+    # §F Tier 1 round 5: if-else — 29번째 atom kind. Korean NL
+    # synthesis: "<cond> 이면 <then> 아니면 <else>".
+    "if-else"
+    # §F Tier 1 round 6: elif-chain — 30번째 atom kind. Korean NL
+    # synthesis: "<c>이면 <b>, ..., 아니면 <else>".
+    "elif-chain"
+    # §F Tier 1 round 7: switch-match — 31번째 atom kind. Korean NL
+    # synthesis: "<subj>가 <p>이면 <b>, ..., 그 외 <default>".
+    "switch-match"
+    # §F Tier 2 round 1: ternary — 32번째 atom kind. §F Tier 2
+    # (표현식 계층) Korean NL reverse-lens 시작. synthesis:
+    # "<condition>이면 <then>, 아니면 <else>".
+    "ternary"
+    # §F Tier 2 round 2: array-literal — 33번째 atom kind. Korean
+    # NL synthesis: "<e1>, <e2>, ... 의 배열".
+    "array-literal"
+    # §F Tier 2 round 3: map-literal — 34번째 atom kind. Korean
+    # NL synthesis: "<k1>: <v1>, <k2>: <v2> ... 의 맵".
+    "map-literal"
+    # §F Tier 2 round 4: tuple-literal — 35번째 atom kind. Korean
+    # NL synthesis: "<e1>, <e2>, ... 의 튜플".
+    "tuple-literal"
+    # §F Tier 2 round 5: index-access — 36번째 atom kind. Korean
+    # NL synthesis: "<target>의 <index>번째 요소".
+    "index-access"
+    # §F Tier 2 round 6: slice-access — 37번째 atom kind. Korean
+    # NL synthesis: "<target>의 <start>부터 <end>까지".
+    "slice-access"
+    # §F Tier 2 round 7: member-access — 38번째 atom kind. Korean
+    # NL synthesis: "<target>의 <member>".
+    "member-access"
+    # §F Tier 2 round 8: method-call — 39번째 atom kind. Korean
+    # NL synthesis: "<receiver>의 <method>(<args>) 호출".
+    "method-call"
+    # §F Tier 2 round 9: lambda — 40번째 atom kind. Korean NL
+    # synthesis: "<params> 를 받아 <body> 를 돌려주는 람다".
+    "lambda"
+    # §F Tier 2 round 10: string-interpolation — 41번째 atom kind.
+    # Korean NL synthesis: literal 그대로 + var 는 {이름}, 후치
+    # "보간 문자열".
+    "string-interpolation"
+    # §F Tier 2 round 11: range-expression — 42번째 atom kind. Korean
+    # NL synthesis: "<start>부터 <end>까지/미만 의 범위".
+    "range-expression"
+    # §F Tier 2 round 12: unary-expression — 43번째 atom kind. Korean
+    # NL synthesis: negate "<operand>의 음수" / bitwise-not "<operand>의
+    # 비트 반전".
+    "unary-expression"
+    # §F Tier 2 round 13: cast-expression — 44번째 atom kind. Korean
+    # NL synthesis: "<value>를 <target_type> 타입으로 캐스트".
+    "cast-expression"
+    # §F Tier 3 round 14: const-declare — 45번째 atom kind. Korean NL
+    # synthesis: "<variable> 상수를 <value> 로 선언".
+    "const-declare"
+    # §F Tier 3 round 15: augmented-assignment — 46번째 atom kind.
+    # Korean NL synthesis: operator 별 절 + "복합대입".
+    "augmented-assignment"
+    # §F Tier 3 round 16: destructuring-bind — 47번째 atom kind.
+    # Korean NL synthesis: "<value>를 <패턴>로 구조분해 바인딩".
+    "destructuring-bind"
+    # §F Tier 3 round 17: global-constant — 48번째 atom kind. Korean NL
+    # synthesis: "전역 상수 <name> 를 <value> 로 선언".
+    "global-constant"
+    # §F Tier 4 round 18: default-parameter — 49번째 atom kind. Korean
+    # NL synthesis: "<name> 매개변수 (기본값 <default_value>)".
+    "default-parameter"
+    # §F Tier 4 round 19: variadic-parameter — 50번째 atom kind. Korean
+    # NL synthesis: "<name> 가변인자 매개변수".
+    "variadic-parameter"
+    # §F Tier 4 round 20: named-argument — 51번째 atom kind. Korean NL
+    # synthesis: "<name> 인자에 <value> 지정".
+    "named-argument"
+    # §F Tier 4 round 21: multiple-return — 52번째 atom kind. Korean NL
+    # synthesis: "<v1>, <v2> 다중 반환".
+    "multiple-return"
+    # §F Tier 5 round 22: type-alias — 53번째 atom kind. Korean NL
+    # synthesis: "<name> 를 <target> 의 타입 별칭으로 선언".
+    "type-alias"
+    # §F Tier 5 round 23: increment — 54번째 atom kind. Korean NL
+    # synthesis: "<operand> 1 증가" / "<operand> 1 감소".
+    "increment"
+    # §F Tier 5 round 24: null-coalesce — 55번째 atom kind. Korean NL
+    # synthesis: "<left> 가 널이면 <right> 사용".
+    "null-coalesce"
+    # §F Tier 5 round 25: optional-chaining — 56번째 atom kind. Korean
+    # NL synthesis: "<object> 가 널 아니면 <member> 접근".
+    "optional-chaining"
+    # §F Tier 5 round 26: spread-expression — 57번째 atom kind. Korean
+    # NL synthesis: "<expression> 펼치기".
+    "spread-expression"
+    # §F Tier 5 round 27: await-expression — 58번째 atom kind. Korean
+    # NL synthesis: "<expression> 완료 대기".
+    "await-expression"
+    # §F Tier 5 round 28: yield-statement — 59번째 atom kind. Korean
+    # NL synthesis: "<expression> 산출".
+    "yield-statement"
+    # §F Tier 5 round 29: do-while-loop — 60번째 atom kind. Korean NL
+    # synthesis: "<body> 실행 후 <condition> 인 동안 반복".
+    "do-while-loop"
+    # §F Tier 5 round 30: decorator — 61번째 atom kind. Korean NL
+    # synthesis: "<name> 데코레이터".
+    "decorator"
+    # §F Tier 5 round 31: label-statement — 62번째 atom kind. Korean
+    # NL synthesis: "<name> 레이블".
+    "label-statement"
+    # §F Tier 5 round 32: goto-statement — 63번째 atom kind. Korean
+    # NL synthesis: "<target> 로 점프".
+    "goto-statement"
+    # §F Tier 5 round 33: assert-statement — 64번째 atom kind. Korean
+    # NL synthesis: "<condition> 단언".
+    "assert-statement"
+    # §F Tier 5 round 34: delete-statement — 65번째 atom kind. Korean
+    # NL synthesis: "<target> 삭제".
+    "delete-statement"
+    # §F Tier 5 round 35: with-resource — 66번째 atom kind. Korean NL
+    # synthesis: "<resource> 자원으로 <body> 실행".
+    "with-resource"
+    # §F Tier 5 round 36: pass-statement — 67번째 atom kind. Korean
+    # NL synthesis: 고정 절 "아무것도 안 함".
+    "pass-statement"
+    # §F Tier 5 round 37: bitwise-shift — 68번째 atom kind. Korean NL
+    # synthesis: "<left> 를 <right> 만큼 왼쪽/오른쪽 시프트".
+    "bitwise-shift"
+    # §F Tier 5 round 38: bitwise-and-or-xor — 69번째 atom kind. Korean
+    # NL synthesis: "<left> 와 <right> 비트 AND/OR/XOR".
+    "bitwise-and-or-xor"
+    # §F Tier 5 round 39: char-literal — 70번째 atom kind. Korean NL
+    # synthesis: "문자 '<value>'".
+    "char-literal"
+    # §F Tier 5 round 40: power-operator — 71번째 atom kind. Korean NL
+    # synthesis: "<base> 의 <exponent> 제곱".
+    "power-operator"
+    # §F Tier 5 round 41: string-concat — 72번째 atom kind. Korean NL
+    # synthesis: "<left> 와 <right> 문자열 결합".
+    "string-concat"
+    # §F Tier 5 round 42: string-length — 73번째 atom kind. Korean NL
+    # synthesis: "<target> 의 길이".
+    "string-length"
+    # §F Tier 5 round 43: string-upper-lower — 74번째 atom kind. Korean
+    # NL synthesis: "<target> 대문자로/소문자로 변환".
+    "string-upper-lower"
+    # §F Tier 5 round 44: string-trim — 75번째 atom kind. Korean NL
+    # synthesis: "<target> 공백 제거".
+    "string-trim"
+    # §F Tier 5 round 45: string-contains — 76번째 atom kind. Korean
+    # NL synthesis: "<haystack> 가 <needle> 포함하는지".
+    "string-contains"
+    # §F Tier 5 round 46: string-split — 77번째 atom kind. Korean NL
+    # synthesis: "<target> 를 <separator> 로 분할".
+    "string-split"
+    # §F Tier 5 round 47: string-replace — 78번째 atom kind. Korean NL
+    # synthesis: "<target> 에서 <old> 를 <new> 로 치환".
+    "string-replace"
+    # §F Tier 5 round 48: list-length — 79번째 atom kind. Korean NL
+    # synthesis: "<target> 의 항목 수".
+    "list-length"
+    # §F Tier 5 round 49: list-append — 80번째 atom kind. Korean NL
+    # synthesis: "<target> 에 <item> 추가".
+    "list-append"
+    # §F Tier 5 round 50: list-is-empty — 81번째 atom kind. Korean NL
+    # synthesis: "<target> 가 비어있는지".
+    "list-is-empty"
+    # §F Tier 5 round 51: list-contains — 82번째 atom kind. Korean NL
+    # synthesis: "<haystack> 가 <needle> 를 항목으로 포함하는지".
+    "list-contains"
+    # §F Tier 5 round 52: list-reverse — 83번째 atom kind. Korean NL
+    # synthesis: "<target> 뒤집기".
+    "list-reverse"
+    # §F Tier 5 round 53: list-sort — 84번째 atom kind. Korean NL
+    # synthesis: "<target> 정렬".
+    "list-sort"
+    # §F Tier 5 round 54: list-index — 85번째 atom kind. Korean NL
+    # synthesis: "<target> 의 <index> 번째 항목".
+    "list-index"
+    # §F Tier 5 round 55: map-get — 86번째 atom kind. Korean NL
+    # synthesis: "<target> 맵의 <key> 키 값".
+    "map-get"
+    # §F Tier 5 round 56: map-put — 87번째 atom kind. Korean NL
+    # synthesis: "<target> 맵의 <key> 키에 <value> 설정".
+    "map-put"
+    # §F Tier 5 round 57: map-keys — 88번째 atom kind. Korean NL
+    # synthesis: "<target> 맵의 키 목록".
+    "map-keys"
+    # §F Tier 5 round 58: map-has-key — 89번째 atom kind. Korean NL
+    # synthesis: "<target> 맵에 <key> 키 존재 여부".
+    "map-has-key"
+    # §F Tier 5 round 59: map-size — 90번째 atom kind. Korean NL
+    # synthesis: "<target> 맵의 항목 수".
+    "map-size"
+    # §F Tier 5 round 60: map-remove — 91번째 atom kind. Korean NL
+    # synthesis: "<target> 맵에서 <key> 키 삭제".
+    "map-remove"
+    # §F Tier 5 round 61: map-values — 92번째 atom kind. Korean NL
+    # synthesis: "<target> 맵의 값 목록".
+    "map-values"
+    # §F Tier 5 round 62: list-clear — 93번째 atom kind. Korean NL
+    # synthesis: "<target> 비우기".
+    "list-clear"
+    # §F Tier 5 round 63: list-pop — 94번째 atom kind. Korean NL
+    # synthesis: "<target> 의 마지막 항목 꺼내기".
+    "list-pop"
+    # §F Tier 5 round 64: list-index-of — 95번째 atom kind. Korean
+    # NL synthesis: "<haystack> 에서 <needle> 의 위치".
+    "list-index-of"
+    # §F Tier 5 round 65: list-join — 96번째 atom kind. Korean NL
+    # synthesis: "<target> 를 <separator> 로 결합".
+    "list-join"
+    # §F Tier 5 round 66: list-sum — 97번째 atom kind. Korean NL
+    # synthesis: "<target> 의 합".
+    "list-sum"
+    # §F Tier 5 round 67: list-min — 98번째 atom kind. Korean NL
+    # synthesis: "<target> 의 최솟값".
+    "list-min"
+    # §F Tier 5 round 68: list-max — 99번째 atom kind. Korean NL
+    # synthesis: "<target> 의 최댓값".
+    "list-max"
+    # §F Tier 5 round 69: list-first — 100번째 atom kind. Korean NL
+    # synthesis: "<target> 의 첫 항목".
+    "list-first"
+    # §F Tier 5 round 70: list-last — 101번째 atom kind. Korean NL
+    # synthesis: "<target> 의 마지막 항목".
+    "list-last"
+    # §F Tier 5 round 71: list-take — 102번째 atom kind. Korean NL
+    # synthesis: "<target> 의 앞 <count>개".
+    "list-take"
+    # §F Tier 5 round 72: list-drop — 103번째 atom kind. Korean NL
+    # synthesis: "<target> 의 앞 <count>개 제외".
+    "list-drop"
+    # §F Tier 5 round 73: list-flatten — 104번째 atom kind. Korean NL
+    # synthesis: "<target> 한 단계 평탄화".
+    "list-flatten"
+    # §F Tier 5 round 74: list-distinct — 105번째 atom kind. Korean NL
+    # synthesis: "<target> 중복 제거".
+    "list-distinct"
+    # §F Tier 5 round 75: list-zip — 106번째 atom kind. Korean NL
+    # synthesis: "<first> 와 <second> 짝짓기".
+    "list-zip"
+    # §F Tier 5 round 76: list-count — 107번째 atom kind. Korean NL
+    # synthesis: "<target> 에서 <value> 개수".
+    "list-count"
+    # §F Tier 5 round 77: list-enumerate — 108번째 atom kind. Korean
+    # NL synthesis: "<target> 인덱스 매기기".
+    "list-enumerate"
+    # §F Tier 5 round 78: list-find — 109번째 atom kind. Korean NL
+    # synthesis: "<target> 에서 <value> 인 첫 원소".
+    "list-find"
+    # §F Tier 5 round 79: list-all — 110번째 atom kind. Korean NL
+    # synthesis: "<target> 모두 <value> 인지".
+    "list-all"
+    # §F Tier 5 round 80: list-chunk — 111번째 atom kind. Korean NL
+    # synthesis: "<target> 를 <size> 개씩 분할".
+    "list-chunk"
+    # §F Tier 5 round 81: list-product — 112번째 atom kind. Korean NL
+    # synthesis: "<target> 의 곱".
+    "list-product"
+    # §F Tier 5 round 82: list-take-while — 113번째 atom kind. Korean
+    # NL synthesis: "<target> 앞에서 <value> 인 동안".
+    "list-take-while"
+    # §F Tier 5 round 83: list-drop-while — 114번째 atom kind. Korean
+    # NL synthesis: "<target> 앞에서 <value> 인 동안 버리기".
+    "list-drop-while"
+    # §F Tier 5 round 84: list-sort-desc — 115번째 atom kind. Korean
+    # NL synthesis: "<target> 내림차순 정렬".
+    "list-sort-desc"
+    # §F Tier 5 round 85: map-is-empty — 116번째 atom kind. Korean NL
+    # synthesis: "<target> 가 비었는지".
+    "map-is-empty"
+    # §F Tier 5 round 86: map-clear — 117번째 atom kind. Korean NL
+    # synthesis: "<target> 비우기".
+    "map-clear"
+    # §F Tier 5 round 87: map-merge — 118번째 atom kind. Korean NL
+    # synthesis: "<first> 와 <second> 병합".
+    "map-merge"
+    # §F Tier 5 round 88: map-entries — 119번째 atom kind. Korean NL
+    # synthesis: "<target> 의 키값 쌍 목록".
+    "map-entries"
+    # §F Tier 5 round 89: string-starts-with — 120번째 atom kind.
+    # Korean NL synthesis: "<target> 가 <prefix> 로 시작하는지".
+    "string-starts-with"
+    # §F Tier 5 round 90: string-ends-with — 121번째 atom kind.
+    # Korean NL synthesis: "<target> 가 <suffix> 로 끝나는지".
+    "string-ends-with"
+    # §F Tier 5 round 91: string-repeat — 122번째 atom kind.
+    # Korean NL synthesis: "<target> 를 <count> 번 반복".
+    "string-repeat"
+    # §F Tier 5 round 92: string-index-of — 123번째 atom kind.
+    # Korean NL synthesis: "<target> 에서 <needle> 의 위치".
+    "string-index-of"
+    # §F Tier 5 round 93: string-char-at — 124번째 atom kind.
+    # Korean NL synthesis: "<target> 의 <index> 번째 문자".
+    "string-char-at"
+    # §F Tier 5 round 94: string-pad-left — 125번째 atom kind.
+    # Korean NL synthesis: "<target> 를 너비 <width> 로 왼쪽 패딩".
+    "string-pad-left"
+    # §F Tier 5 round 95: string-pad-right — 126번째 atom kind.
+    # Korean NL synthesis: "<target> 를 너비 <width> 로 오른쪽 패딩".
+    "string-pad-right"
+    # §F Tier 5 round 96: number-abs — 127번째 atom kind. Korean NL
+    # synthesis: "<target> 의 절대값".
+    "number-abs"
+    # §F Tier 5 round 97: number-sqrt — 128번째 atom kind. Korean NL
+    # synthesis: "<target> 의 제곱근".
+    "number-sqrt"
+    # §F Tier 5 round 98: number-round — 129번째 atom kind. Korean NL
+    # synthesis: "<target> 의 반올림".
+    "number-round"
+    # §F Tier 5 round 99: number-floor — 130번째 atom kind. Korean NL
+    # synthesis: "<target> 의 내림".
+    "number-floor"
+    # §F Tier 5 round 100: number-ceil — 131번째 atom kind. Korean NL
+    # synthesis: "<target> 의 올림".
+    "number-ceil"
+  ];
+
+  inventorySummary = _: {
+    owner = ownerName;
+    covered_atom_kind_count = builtins.length coveredAtomKinds;
+    covered_atom_kinds = coveredAtomKinds;
+    bm_role_count =
+      (bm.inventorySummary {}).known_semantic_role_count;
+    bn_rule_count =
+      (bn.inventorySummary {}).case_marker_rule_count;
+  };
+
+in {
+  inherit
+    ownerName
+    coveredAtomKinds
+    composeAtomAsKoreanNl
+    composeAtomListAsKoreanNl
+    formatBindValue
+    koreanTypeNounFor
+    inventorySummary;
+  meta = {
+    source = "stdlib coding korean nl composition lens";
+    owner = ownerName;
+    base = "korean-nl-composition-lens-v0";
+    rev_note = "v0.16-BP: REVERSE direction first instance — atom -> POS-aware Korean 단문장 NL. Composes via BM (semantic role) x BO (auto-detect jongseong) x BN (case marker) chain plus atom-kind-specific verb templates. Substrate-native (no mecab-ko / lindera / LLM). Closes the substrate's bidirectional NL pipeline at the Korean axis for all 9 BL-baseline atom kinds (print-line / comment / exit-with-code / read-line / bind-variable / print-variable / if-true-then / repeat-n-times / loop-while-true). With BP closed, substrate atom algebra has both forward (NL -> atoms) and reverse (atoms -> NL) Korean surface conversion — owner thesis's universal-ontology-via-substrate hypothesis closes one more representational-system axis. Future surfaces (RDF / SQL / XML / HTML / math / English / other NL) follow the same pattern: each is a substrate-native lens family on top of BM atom slot algebra.";
+  };
+}

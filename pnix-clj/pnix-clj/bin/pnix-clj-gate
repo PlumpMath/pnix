@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLJ_META_ROOT="$ROOT/../clj-meta"
+REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
+
+# A local gate must never fall back to ~/pnix or another worktree's corpus.
+export PNIX_META_ROOT="${PNIX_META_ROOT:-$REPO_ROOT/pnix-meta}"
+
+# Keep local and CI behavior bounded. The complete foundation closure is
+# required to pass with this ceiling; callers may lower it, not hide a basic
+# failure by raising it in a gate wrapper.
+if [[ -z "${JAVA_TOOL_OPTIONS:-}" ]]; then
+  export JAVA_TOOL_OPTIONS="-Xms128m -Xmx768m -XX:MaxMetaspaceSize=384m -XX:+ExitOnOutOfMemoryError"
+fi
+
+run() {
+  printf '\n==> %s\n' "$*"
+  if [[ "${PNIX_CLJ_GATE_HEARTBEAT:-0}" == "1" ]]; then
+    "$@" &
+    local child=$!
+    (
+      while kill -0 "$child" 2>/dev/null; do
+        sleep "${PNIX_CLJ_GATE_HEARTBEAT_SECONDS:-60}"
+        if kill -0 "$child" 2>/dev/null; then
+          printf '\n==> heartbeat pid=%s elapsed=%ss\n' \
+            "$child" "${SECONDS}"
+          if command -v free >/dev/null 2>&1; then
+            free -m || true
+          fi
+          ps -eo pid,ppid,rss,vsz,etime,comm --sort=-rss 2>/dev/null \
+            | head -n 12 || true
+        fi
+      done
+    ) &
+    local monitor=$!
+    local status=0
+    wait "$child" || status=$?
+    kill "$monitor" 2>/dev/null || true
+    wait "$monitor" 2>/dev/null || true
+    return "$status"
+  fi
+  "$@"
+}
+
+run_tests() {
+  cd "$ROOT"
+  run clojure -M:test
+}
+
+run_foundation_tests() {
+  cd "$ROOT"
+  run clojure -M:test --foundation --timing
+}
+
+run_test_shard() {
+  local shard="$1"
+  cd "$ROOT"
+  run clojure -M:test --shard "$shard" --timing
+}
+
+run_foundation_test_shard() {
+  local shard="$1"
+  cd "$ROOT"
+  run clojure -M:test --foundation-shard "$shard" --timing
+}
+
+run_post_tests() {
+  cd "$ROOT"
+
+  run clojure -M:smoke
+  run clojure -M:mirror-pair
+  run clojure -M:mirror-error
+  run clojure -M:clojure-projection
+  run clojure -M:clojure-form
+  run clojure -M:runtime-plan
+  # gate-speed: all report kinds render in ONE JVM (was 13 separate cold
+  # starts; later kinds render on a warm JIT); per-kind failure semantics
+  # preserved by batch mode
+  run clojure -M:report-batch
+  run clojure -M:capabilities-check
+
+  if [[ ! -d "$CLJ_META_ROOT" ]]; then
+    printf '\nmissing clj-meta backend: %s\n' "$CLJ_META_ROOT" >&2
+    exit 1
+  fi
+
+  cd "$CLJ_META_ROOT"
+
+  run clojure -M:compiler-smoke
+  run clojure -M:conformance
+}
+
+run_foundation_post_tests() {
+  cd "$ROOT"
+
+  # The required product lane exercises source evaluation and both compiled
+  # projections. Research reports, synthesis, self-improvement, and mirrors
+  # remain available through `post-tests`, but do not own foundation closure.
+  run clojure -M:smoke
+  run clojure -M:clojure-projection
+  run clojure -M:clojure-form
+  run clojure -M:capabilities-check
+
+  if [[ ! -d "$CLJ_META_ROOT" ]]; then
+    printf '\nmissing clj-meta backend: %s\n' "$CLJ_META_ROOT" >&2
+    exit 1
+  fi
+
+  cd "$CLJ_META_ROOT"
+  run clojure -M:compiler-smoke
+  run clojure -M:conformance
+}
+
+mode="${1:-all}"
+case "$mode" in
+  all)
+    if [[ "$#" -ne 0 ]]; then
+      printf 'usage: %s [foundation|research-all|tests|test-shard INDEX/TOTAL|foundation-test-shard INDEX/TOTAL|post-tests|foundation-post-tests]\n' "$0" >&2
+      exit 2
+    fi
+    run_foundation_tests
+    run_foundation_post_tests
+    ;;
+  foundation)
+    [[ "$#" -eq 1 ]] || exit 2
+    run_foundation_tests
+    run_foundation_post_tests
+    ;;
+  research-all)
+    [[ "$#" -eq 1 ]] || exit 2
+    run_tests
+    run_post_tests
+    ;;
+  tests)
+    [[ "$#" -eq 1 ]] || exit 2
+    run_tests
+    ;;
+  test-shard)
+    if [[ "$#" -ne 2 ]]; then
+      printf 'usage: %s test-shard INDEX/TOTAL\n' "$0" >&2
+      exit 2
+    fi
+    run_test_shard "$2"
+    ;;
+  foundation-test-shard)
+    if [[ "$#" -ne 2 ]]; then
+      printf 'usage: %s foundation-test-shard INDEX/TOTAL\n' "$0" >&2
+      exit 2
+    fi
+    run_foundation_test_shard "$2"
+    ;;
+  post-tests)
+    [[ "$#" -eq 1 ]] || exit 2
+    run_post_tests
+    ;;
+  foundation-post-tests)
+    [[ "$#" -eq 1 ]] || exit 2
+    run_foundation_post_tests
+    ;;
+  *)
+    printf 'usage: %s [foundation|research-all|tests|test-shard INDEX/TOTAL|foundation-test-shard INDEX/TOTAL|post-tests|foundation-post-tests]\n' "$0" >&2
+    exit 2
+    ;;
+esac

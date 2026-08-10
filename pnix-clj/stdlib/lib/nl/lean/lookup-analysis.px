@@ -1,0 +1,2109 @@
+# AUTO-GENERATED — analysis
+# Entries: 300
+let
+  ownerName = "stdlib.nl.lean.lookup-analysis";
+  category = "analysis";
+  entries = [
+    {
+      full_name = "Norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 48;
+      code_preview = "@[notation_class] class Norm (E : Type*) where      norm : E → ℝ";
+    }
+    {
+      full_name = "NNNorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 56;
+      code_preview = "@[notation_class] class NNNorm (E : Type*) where      nnnorm : E → ℝ≥0";
+    }
+    {
+      full_name = "ENorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 62;
+      code_preview = "@[notation_class] class ENorm (E : Type*) where      enorm : E → ℝ≥0∞";
+    }
+    {
+      full_name = "NNNorm.toENorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 79;
+      code_preview = "instance NNNorm.toENorm : ENorm E where enorm := (‖·‖₊ : E → ℝ≥0∞)";
+    }
+    {
+      full_name = "enorm_eq_nnnorm";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 81;
+      code_preview = "lemma enorm_eq_nnnorm (x : E) : ‖x‖ₑ = ‖x‖₊ := rfl";
+    }
+    {
+      full_name = "toNNReal_enorm";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 83;
+      code_preview = "@[simp] lemma toNNReal_enorm (x : E) : ‖x‖ₑ.toNNReal = ‖x‖₊ := rfl";
+    }
+    {
+      full_name = "coe_le_enorm";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 85;
+      code_preview = "@[simp, norm_cast] lemma coe_le_enorm : r ≤ ‖x‖ₑ ↔ r ≤ ‖x‖₊ := by simp [enorm]";
+    }
+    {
+      full_name = "enorm_le_coe";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 86;
+      code_preview = "@[simp, norm_cast] lemma enorm_le_coe : ‖x‖ₑ ≤ r ↔ ‖x‖₊ ≤ r := by simp [enorm]";
+    }
+    {
+      full_name = "coe_lt_enorm";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 87;
+      code_preview = "@[simp, norm_cast] lemma coe_lt_enorm : r < ‖x‖ₑ ↔ r < ‖x‖₊ := by simp [enorm]";
+    }
+    {
+      full_name = "enorm_lt_coe";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 88;
+      code_preview = "@[simp, norm_cast] lemma enorm_lt_coe : ‖x‖ₑ < r ↔ ‖x‖₊ < r := by simp [enorm]";
+    }
+    {
+      full_name = "enorm_ne_top";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 90;
+      code_preview = "@[simp] lemma enorm_ne_top : ‖x‖ₑ ≠ ∞ := by simp [enorm]";
+    }
+    {
+      full_name = "enorm_lt_top";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 91;
+      code_preview = "@[simp] lemma enorm_lt_top : ‖x‖ₑ < ∞ := by simp [enorm]";
+    }
+    {
+      full_name = "ContinuousENorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 95;
+      code_preview = "class ContinuousENorm (E : Type*) [TopologicalSpace E] extends ENorm E where   continuous_enorm : Continuous enorm";
+    }
+    {
+      full_name = "ENormedAddMonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 102;
+      code_preview = "class ENormedAddMonoid (E : Type*) [TopologicalSpace E] extends ContinuousENorm E, AddMonoid E where   enorm_eq_zero : ∀ x : E, ‖x‖ₑ = 0 ↔ x = 0   protected enorm_add_le : ∀ x y : E, ‖x + y‖ₑ ≤ ‖x‖ₑ + ‖y‖ₑ";
+    }
+    {
+      full_name = "ENormedMonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 107;
+      code_preview = "@[to_additive] class ENormedMonoid (E : Type*) [TopologicalSpace E] extends ContinuousENorm E, Monoid E where   enorm_eq_zero : ∀ x : E, ‖x‖ₑ = 0 ↔ x = 1   enorm_mul_le : ∀ x y : E, ‖x * y‖ₑ ≤ ‖x‖ₑ + ‖y‖ₑ";
+    }
+    {
+      full_name = "ENormedAddCommMonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 113;
+      code_preview = "class ENormedAddCommMonoid (E : Type*) [TopologicalSpace E]   extends ENormedAddMonoid E, AddCommMonoid E where";
+    }
+    {
+      full_name = "ENormedCommMonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 122;
+      code_preview = "@[to_additive] class ENormedCommMonoid (E : Type*) [TopologicalSpace E] extends ENormedMonoid E, CommMonoid E where";
+    }
+    {
+      full_name = "SeminormedAddGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 126;
+      code_preview = "class SeminormedAddGroup (E : Type*) extends Norm E, AddGroup E, PseudoMetricSpace E where   dist := fun x y => ‖x - y‖      dist_eq : ∀ x y, dist x y = ‖x - y‖ := by aesop";
+    }
+    {
+      full_name = "SeminormedGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 133;
+      code_preview = "@[to_additive] class SeminormedGroup (E : Type*) extends Norm E, Group E, PseudoMetricSpace E where   dist := fun x y => ‖x / y‖      dist_eq : ∀ x y, dist x y = ‖x / y‖ := by aesop";
+    }
+    {
+      full_name = "NormedAddGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 141;
+      code_preview = "class NormedAddGroup (E : Type*) extends Norm E, AddGroup E, MetricSpace E where   dist := fun x y => ‖x - y‖      dist_eq : ∀ x y, dist x y = ‖x - y‖ := by aesop";
+    }
+    {
+      full_name = "NormedGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 148;
+      code_preview = "@[to_additive] class NormedGroup (E : Type*) extends Norm E, Group E, MetricSpace E where   dist := fun x y => ‖x / y‖      dist_eq : ∀ x y, dist x y = ‖x / y‖ := by aesop";
+    }
+    {
+      full_name = "SeminormedAddCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 156;
+      code_preview = "class SeminormedAddCommGroup (E : Type*) extends Norm E, AddCommGroup E,   PseudoMetricSpace E where   dist := fun x y => ‖x - y‖      dist_eq : ∀ x y, dist x y = ‖x - y‖ := by aesop";
+    }
+    {
+      full_name = "SeminormedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 164;
+      code_preview = "@[to_additive] class SeminormedCommGroup (E : Type*) extends Norm E, CommGroup E, PseudoMetricSpace E where   dist := fun x y => ‖x / y‖      dist_eq : ∀ x y, dist x y = ‖x / y‖ := by aesop";
+    }
+    {
+      full_name = "NormedAddCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 172;
+      code_preview = "class NormedAddCommGroup (E : Type*) extends Norm E, AddCommGroup E, MetricSpace E where   dist := fun x y => ‖x - y‖      dist_eq : ∀ x y, dist x y = ‖x - y‖ := by aesop";
+    }
+    {
+      full_name = "NormedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 179;
+      code_preview = "@[to_additive] class NormedCommGroup (E : Type*) extends Norm E, CommGroup E, MetricSpace E where   dist := fun x y => ‖x / y‖      dist_eq : ∀ x y, dist x y = ‖x / y‖ := by aesop";
+    }
+    {
+      full_name = "NormedGroup.toSeminormedGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 188;
+      code_preview = "@[to_additive] instance (priority := 100) NormedGroup.toSeminormedGroup [NormedGroup E] : SeminormedGroup E :=   { ‹NormedGroup E› with }";
+    }
+    {
+      full_name = "NormedCommGroup.toSeminormedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 193;
+      code_preview = "@[to_additive] instance (priority := 100) NormedCommGroup.toSeminormedCommGroup [NormedCommGroup E] :     SeminormedCommGroup E :=   { ‹NormedCommGroup E› with }";
+    }
+    {
+      full_name = "SeminormedCommGroup.toSeminormedGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 199;
+      code_preview = "@[to_additive] instance (priority := 100) SeminormedCommGroup.toSeminormedGroup [SeminormedCommGroup E] :     SeminormedGroup E :=   { ‹SeminormedCommGroup E› with }";
+    }
+    {
+      full_name = "NormedCommGroup.toNormedGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 205;
+      code_preview = "@[to_additive] instance (priority := 100) NormedCommGroup.toNormedGroup [NormedCommGroup E] : NormedGroup E :=   { ‹NormedCommGroup E› with }";
+    }
+    {
+      full_name = "NormedGroup.ofSeparation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 210;
+      code_preview = "@[to_additive \"Construct a `NormedAddGroup` from a `SeminormedAddGroup` satisfying `∀ x, ‖x‖ = 0 → x = 0`. This avoids having to go back to the `(Pseudo)MetricSpace` level when declaring a `NormedAddGroup` instance as a special case of a more general `SeminormedAddGroup` instance.\"] abbrev NormedGro";
+    }
+    {
+      full_name = "NormedCommGroup.ofSeparation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 225;
+      code_preview = "@[to_additive \"Construct a `NormedAddCommGroup` from a `SeminormedAddCommGroup` satisfying `∀ x, ‖x‖ = 0 → x = 0`. This avoids having to go back to the `(Pseudo)MetricSpace` level when declaring a `NormedAddCommGroup` instance as a special case of a more general `SeminormedAddCommGroup` instance.\"] ";
+    }
+    {
+      full_name = "SeminormedGroup.ofMulDist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 238;
+      code_preview = "@[to_additive   \"Construct a seminormed group from a translation-invariant distance.\"] abbrev SeminormedGroup.ofMulDist [Norm E] [Group E] [PseudoMetricSpace E]     (h₁ : ∀ x : E, ‖x‖ = dist x 1) (h₂ : ∀ x y z : E, dist x y ≤ dist (x * z) (y * z)) :     SeminormedGroup E where   dist_eq x y := by   ";
+    }
+    {
+      full_name = "SeminormedGroup.ofMulDist'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 250;
+      code_preview = "@[to_additive   \"Construct a seminormed group from a translation-invariant pseudodistance.\"] abbrev SeminormedGroup.ofMulDist' [Norm E] [Group E] [PseudoMetricSpace E]     (h₁ : ∀ x : E, ‖x‖ = dist x 1) (h₂ : ∀ x y z : E, dist (x * z) (y * z) ≤ dist x y) :     SeminormedGroup E where   dist_eq x y :";
+    }
+    {
+      full_name = "SeminormedCommGroup.ofMulDist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 262;
+      code_preview = "@[to_additive   \"Construct a seminormed group from a translation-invariant pseudodistance.\"] abbrev SeminormedCommGroup.ofMulDist [Norm E] [CommGroup E] [PseudoMetricSpace E]     (h₁ : ∀ x : E, ‖x‖ = dist x 1) (h₂ : ∀ x y z : E, dist x y ≤ dist (x * z) (y * z)) :     SeminormedCommGroup E :=   { Sem";
+    }
+    {
+      full_name = "SeminormedCommGroup.ofMulDist'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 272;
+      code_preview = "@[to_additive   \"Construct a seminormed group from a translation-invariant pseudodistance.\"] abbrev SeminormedCommGroup.ofMulDist' [Norm E] [CommGroup E] [PseudoMetricSpace E]     (h₁ : ∀ x : E, ‖x‖ = dist x 1) (h₂ : ∀ x y z : E, dist (x * z) (y * z) ≤ dist x y) :     SeminormedCommGroup E :=   { Se";
+    }
+    {
+      full_name = "NormedGroup.ofMulDist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 282;
+      code_preview = "@[to_additive   \"Construct a normed group from a translation-invariant distance.\"] abbrev NormedGroup.ofMulDist [Norm E] [Group E] [MetricSpace E] (h₁ : ∀ x : E, ‖x‖ = dist x 1)     (h₂ : ∀ x y z : E, dist x y ≤ dist (x * z) (y * z)) : NormedGroup E :=   { SeminormedGroup.ofMulDist h₁ h₂ with     eq";
+    }
+    {
+      full_name = "NormedGroup.ofMulDist'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 291;
+      code_preview = "@[to_additive   \"Construct a normed group from a translation-invariant pseudodistance.\"] abbrev NormedGroup.ofMulDist' [Norm E] [Group E] [MetricSpace E] (h₁ : ∀ x : E, ‖x‖ = dist x 1)     (h₂ : ∀ x y z : E, dist (x * z) (y * z) ≤ dist x y) : NormedGroup E :=   { SeminormedGroup.ofMulDist' h₁ h₂ wit";
+    }
+    {
+      full_name = "NormedCommGroup.ofMulDist";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 300;
+      code_preview = "@[to_additive \"Construct a normed group from a translation-invariant pseudodistance.\"] abbrev NormedCommGroup.ofMulDist [Norm E] [CommGroup E] [MetricSpace E]     (h₁ : ∀ x : E, ‖x‖ = dist x 1) (h₂ : ∀ x y z : E, dist x y ≤ dist (x * z) (y * z)) :     NormedCommGroup E :=   { NormedGroup.ofMulDist h";
+    }
+    {
+      full_name = "NormedCommGroup.ofMulDist'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 310;
+      code_preview = "@[to_additive   \"Construct a normed group from a translation-invariant pseudodistance.\"] abbrev NormedCommGroup.ofMulDist' [Norm E] [CommGroup E] [MetricSpace E]     (h₁ : ∀ x : E, ‖x‖ = dist x 1) (h₂ : ∀ x y z : E, dist (x * z) (y * z) ≤ dist x y) :     NormedCommGroup E :=   { NormedGroup.ofMulDis";
+    }
+    {
+      full_name = "GroupSeminorm.toSeminormedGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 320;
+      code_preview = "@[to_additive   \"Construct a seminormed group from a seminorm, i.e., registering the pseudodistance and the pseudometric space structure from the seminorm properties. Note that in most cases this instance creates bad definitional equalities (e.g., it does not take into account a possibly existing `U";
+    }
+    {
+      full_name = "GroupSeminorm.toSeminormedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 338;
+      code_preview = "@[to_additive   \"Construct a seminormed group from a seminorm, i.e., registering the pseudodistance and the pseudometric space structure from the seminorm properties. Note that in most cases this instance creates bad definitional equalities (e.g., it does not take into account a possibly existing `U";
+    }
+    {
+      full_name = "GroupNorm.toNormedGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 353;
+      code_preview = "@[to_additive   \"Construct a normed group from a norm, i.e., registering the distance and the metric space structure from the norm properties. Note that in most cases this instance creates bad definitional equalities (e.g., it does not take into account a possibly existing `UniformSpace` instance on";
+    }
+    {
+      full_name = "GroupNorm.toNormedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 367;
+      code_preview = "@[to_additive   \"Construct a normed group from a norm, i.e., registering the distance and the metric space structure from the norm properties. Note that in most cases this instance creates bad definitional equalities (e.g., it does not take into account a possibly existing `UniformSpace` instance on";
+    }
+    {
+      full_name = "dist_eq_norm_div";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 385;
+      code_preview = "@[to_additive] theorem dist_eq_norm_div (a b : E) : dist a b = ‖a / b‖";
+    }
+    {
+      full_name = "dist_eq_norm_div'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 389;
+      code_preview = "@[to_additive] theorem dist_eq_norm_div' (a b : E) : dist a b = ‖b / a‖";
+    }
+    {
+      full_name = "DiscreteTopology.of_forall_le_norm'";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 396;
+      code_preview = "@[to_additive of_forall_le_norm] lemma DiscreteTopology.of_forall_le_norm' (hpos : 0 < r) (hr : ∀ x : E, x ≠ 1 → r ≤ ‖x‖) :     DiscreteTopology E :=   .of_forall_le_dist hpos fun x y hne ↦ by     simp only [dist_eq_norm_div]     exact hr _ (div_ne_one.2 hne)";
+    }
+    {
+      full_name = "dist_one_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 403;
+      code_preview = "@[to_additive (attr := simp)] theorem dist_one_right (a : E) : dist a 1 = ‖a‖";
+    }
+    {
+      full_name = "inseparable_one_iff_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 406;
+      code_preview = "@[to_additive] theorem inseparable_one_iff_norm {a : E} : Inseparable a 1 ↔ ‖a‖ = 0";
+    }
+    {
+      full_name = "dist_one_left";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 410;
+      code_preview = "@[to_additive] lemma dist_one_left (a : E) : dist 1 a = ‖a‖ := by rw [dist_comm, dist_one_right]";
+    }
+    {
+      full_name = "dist_one";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Group/Basic.lean";
+      start_line = 413;
+      code_preview = "@[to_additive (attr := simp)] lemma dist_one : dist (1 : E) = norm := funext dist_one_left";
+    }
+    {
+      full_name = "NonUnitalSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 30;
+      code_preview = "class NonUnitalSeminormedRing (α : Type*) extends Norm α, NonUnitalRing α,   PseudoMetricSpace α where      dist_eq : ∀ x y, dist x y = norm (x - y)      protected norm_mul_le : ∀ a b, norm (a * b) ≤ norm a * norm b";
+    }
+    {
+      full_name = "SeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 39;
+      code_preview = "class SeminormedRing (α : Type*) extends Norm α, Ring α, PseudoMetricSpace α where      dist_eq : ∀ x y, dist x y = norm (x - y)      norm_mul_le : ∀ a b, norm (a * b) ≤ norm a * norm b";
+    }
+    {
+      full_name = "SeminormedRing.toNonUnitalSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 48;
+      code_preview = "instance (priority := 100) SeminormedRing.toNonUnitalSeminormedRing [β : SeminormedRing α] :     NonUnitalSeminormedRing α :=   { β with }";
+    }
+    {
+      full_name = "NonUnitalNormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 53;
+      code_preview = "class NonUnitalNormedRing (α : Type*) extends Norm α, NonUnitalRing α, MetricSpace α where      dist_eq : ∀ x y, dist x y = norm (x - y)      norm_mul_le : ∀ a b, norm (a * b) ≤ norm a * norm b";
+    }
+    {
+      full_name = "NonUnitalNormedRing.toNonUnitalSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 62;
+      code_preview = "instance (priority := 100) NonUnitalNormedRing.toNonUnitalSeminormedRing     [β : NonUnitalNormedRing α] : NonUnitalSeminormedRing α :=   { β with }";
+    }
+    {
+      full_name = "NormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 67;
+      code_preview = "class NormedRing (α : Type*) extends Norm α, Ring α, MetricSpace α where      dist_eq : ∀ x y, dist x y = norm (x - y)      norm_mul_le : ∀ a b, norm (a * b) ≤ norm a * norm b";
+    }
+    {
+      full_name = "NormedRing.toSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 75;
+      code_preview = "instance (priority := 100) NormedRing.toSeminormedRing [β : NormedRing α] : SeminormedRing α :=   { β with }";
+    }
+    {
+      full_name = "NormedRing.toNonUnitalNormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 80;
+      code_preview = "instance (priority := 100) NormedRing.toNonUnitalNormedRing [β : NormedRing α] :     NonUnitalNormedRing α :=   { β with }";
+    }
+    {
+      full_name = "NonUnitalSeminormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 85;
+      code_preview = "class NonUnitalSeminormedCommRing (α : Type*)     extends NonUnitalSeminormedRing α, NonUnitalCommRing α where";
+    }
+    {
+      full_name = "NonUnitalNormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 93;
+      code_preview = "class NonUnitalNormedCommRing (α : Type*) extends NonUnitalNormedRing α, NonUnitalCommRing α where";
+    }
+    {
+      full_name = "NonUnitalNormedCommRing.toNonUnitalSeminormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 101;
+      code_preview = "instance (priority := 100) NonUnitalNormedCommRing.toNonUnitalSeminormedCommRing     [β : NonUnitalNormedCommRing α] : NonUnitalSeminormedCommRing α :=   { β with }";
+    }
+    {
+      full_name = "SeminormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 106;
+      code_preview = "class SeminormedCommRing (α : Type*) extends SeminormedRing α, CommRing α where";
+    }
+    {
+      full_name = "NormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 113;
+      code_preview = "class NormedCommRing (α : Type*) extends NormedRing α, CommRing α where";
+    }
+    {
+      full_name = "SeminormedCommRing.toNonUnitalSeminormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 121;
+      code_preview = "instance (priority := 100) SeminormedCommRing.toNonUnitalSeminormedCommRing     [β : SeminormedCommRing α] : NonUnitalSeminormedCommRing α :=   { β with }";
+    }
+    {
+      full_name = "NormedCommRing.toNonUnitalNormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 127;
+      code_preview = "instance (priority := 100) NormedCommRing.toNonUnitalNormedCommRing     [β : NormedCommRing α] : NonUnitalNormedCommRing α :=   { β with }";
+    }
+    {
+      full_name = "NormedCommRing.toSeminormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 133;
+      code_preview = "instance (priority := 100) NormedCommRing.toSeminormedCommRing [β : NormedCommRing α] :     SeminormedCommRing α :=   { β with }";
+    }
+    {
+      full_name = "PUnit.normedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 138;
+      code_preview = "instance PUnit.normedCommRing : NormedCommRing PUnit :=   { PUnit.normedAddCommGroup, PUnit.commRing with     norm_mul_le _ _ := by simp }";
+    }
+    {
+      full_name = "NormOneClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 144;
+      code_preview = "class NormOneClass (α : Type*) [Norm α] [One α] : Prop where      norm_one : ‖(1 : α)‖ = 1";
+    }
+    {
+      full_name = "nnnorm_one";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 157;
+      code_preview = "@[simp] lemma nnnorm_one : ‖(1 : G)‖₊ = 1 := NNReal.eq norm_one";
+    }
+    {
+      full_name = "enorm_one";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 158;
+      code_preview = "@[simp] lemma enorm_one : ‖(1 : G)‖ₑ = 1 := by simp [enorm]";
+    }
+    {
+      full_name = "NormOneClass.nontrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 160;
+      code_preview = "theorem NormOneClass.nontrivial : Nontrivial G";
+    }
+    {
+      full_name = "NonUnitalNormedRing.toNormedAddCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 168;
+      code_preview = "instance (priority := 100) NonUnitalNormedRing.toNormedAddCommGroup [β : NonUnitalNormedRing α] :     NormedAddCommGroup α :=   { β with }";
+    }
+    {
+      full_name = "NonUnitalSeminormedRing.toSeminormedAddCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 173;
+      code_preview = "instance (priority := 100) NonUnitalSeminormedRing.toSeminormedAddCommGroup     [NonUnitalSeminormedRing α] : SeminormedAddCommGroup α :=   { ‹NonUnitalSeminormedRing α› with }";
+    }
+    {
+      full_name = "ULift.normOneClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 177;
+      code_preview = "instance ULift.normOneClass [SeminormedAddCommGroup α] [One α] [NormOneClass α] :     NormOneClass (ULift α) :=   ⟨by simp [ULift.norm_def]⟩";
+    }
+    {
+      full_name = "Prod.normOneClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 181;
+      code_preview = "instance Prod.normOneClass [SeminormedAddCommGroup α] [One α] [NormOneClass α]     [SeminormedAddCommGroup β] [One β] [NormOneClass β] : NormOneClass (α × β) :=   ⟨by simp [Prod.norm_def]⟩";
+    }
+    {
+      full_name = "Pi.normOneClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 185;
+      code_preview = "instance Pi.normOneClass {ι : Type*} {α : ι → Type*} [Nonempty ι] [Fintype ι]     [∀ i, SeminormedAddCommGroup (α i)] [∀ i, One (α i)] [∀ i, NormOneClass (α i)] :     NormOneClass (∀ i, α i) :=   ⟨by simpa [Pi.norm_def] using Finset.sup_const Finset.univ_nonempty 1⟩";
+    }
+    {
+      full_name = "MulOpposite.normOneClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 190;
+      code_preview = "instance MulOpposite.normOneClass [SeminormedAddCommGroup α] [One α] [NormOneClass α] :     NormOneClass αᵐᵒᵖ :=   ⟨@norm_one α _ _ _⟩";
+    }
+    {
+      full_name = "norm_mul_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 198;
+      code_preview = "theorem norm_mul_le (a b : α) : ‖a * b‖ ≤ ‖a‖ * ‖b‖";
+    }
+    {
+      full_name = "nnnorm_mul_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 202;
+      code_preview = "theorem nnnorm_mul_le (a b : α) : ‖a * b‖₊ ≤ ‖a‖₊ * ‖b‖₊";
+    }
+    {
+      full_name = "norm_mul_le_of_le";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 204;
+      code_preview = "lemma norm_mul_le_of_le {r₁ r₂ : ℝ} (h₁ : ‖a₁‖ ≤ r₁) (h₂ : ‖a₂‖ ≤ r₂) : ‖a₁ * a₂‖ ≤ r₁ * r₂ :=   (norm_mul_le ..).trans <| mul_le_mul h₁ h₂ (norm_nonneg _) ((norm_nonneg _).trans h₁)";
+    }
+    {
+      full_name = "nnnorm_mul_le_of_le";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 207;
+      code_preview = "lemma nnnorm_mul_le_of_le {r₁ r₂ : ℝ≥0} (h₁ : ‖a₁‖₊ ≤ r₁) (h₂ : ‖a₂‖₊ ≤ r₂) :     ‖a₁ * a₂‖₊ ≤ r₁ * r₂ := (nnnorm_mul_le ..).trans <| mul_le_mul' h₁ h₂";
+    }
+    {
+      full_name = "norm_mul₃_le";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 210;
+      code_preview = "lemma norm_mul₃_le : ‖a * b * c‖ ≤ ‖a‖ * ‖b‖ * ‖c‖ := norm_mul_le_of_le (norm_mul_le ..) le_rfl";
+    }
+    {
+      full_name = "nnnorm_mul₃_le";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 212;
+      code_preview = "lemma nnnorm_mul₃_le : ‖a * b * c‖₊ ≤ ‖a‖₊ * ‖b‖₊ * ‖c‖₊ :=   nnnorm_mul_le_of_le (norm_mul_le ..) le_rfl";
+    }
+    {
+      full_name = "one_le_norm_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 215;
+      code_preview = "theorem one_le_norm_one (β) [NormedRing β] [Nontrivial β] : 1 ≤ ‖(1 : β)‖";
+    }
+    {
+      full_name = "one_le_nnnorm_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 219;
+      code_preview = "theorem one_le_nnnorm_one (β) [NormedRing β] [Nontrivial β] : 1 ≤ ‖(1 : β)‖₊";
+    }
+    {
+      full_name = "mulLeft_bound";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 222;
+      code_preview = "theorem mulLeft_bound (x : α) : ∀ y : α, ‖AddMonoidHom.mulLeft x y‖ ≤ ‖x‖ * ‖y‖";
+    }
+    {
+      full_name = "mulRight_bound";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 226;
+      code_preview = "theorem mulRight_bound (x : α) : ∀ y : α, ‖AddMonoidHom.mulRight x y‖ ≤ ‖x‖ * ‖y‖";
+    }
+    {
+      full_name = "NonUnitalSubalgebra.nonUnitalSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 231;
+      code_preview = "instance NonUnitalSubalgebra.nonUnitalSeminormedRing {𝕜 : Type*} [CommRing 𝕜] {E : Type*}     [NonUnitalSeminormedRing E] [Module 𝕜 E] (s : NonUnitalSubalgebra 𝕜 E) :     NonUnitalSeminormedRing s :=   { s.toSubmodule.seminormedAddCommGroup, s.toNonUnitalRing with     norm_mul_le a b := norm_mul_le ";
+    }
+    {
+      full_name = "NonUnitalSubalgebraClass.nonUnitalSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 239;
+      code_preview = "@[nolint unusedArguments] instance (priority := 75) NonUnitalSubalgebraClass.nonUnitalSeminormedRing {S 𝕜 E : Type*}     [CommRing 𝕜] [NonUnitalSeminormedRing E] [Module 𝕜 E] [SetLike S E] [NonUnitalSubringClass S E]     [SMulMemClass S 𝕜 E] (s : S) :     NonUnitalSeminormedRing s :=   { AddSubgroup";
+    }
+    {
+      full_name = "NonUnitalSubalgebra.nonUnitalNormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 250;
+      code_preview = "instance NonUnitalSubalgebra.nonUnitalNormedRing {𝕜 : Type*} [CommRing 𝕜] {E : Type*}     [NonUnitalNormedRing E] [Module 𝕜 E] (s : NonUnitalSubalgebra 𝕜 E) : NonUnitalNormedRing s :=   { s.nonUnitalSeminormedRing with     eq_of_dist_eq_zero := eq_of_dist_eq_zero }";
+    }
+    {
+      full_name = "NonUnitalSubalgebraClass.nonUnitalNormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 257;
+      code_preview = "instance (priority := 75) NonUnitalSubalgebraClass.nonUnitalNormedRing {S 𝕜 E : Type*}     [CommRing 𝕜] [NonUnitalNormedRing E] [Module 𝕜 E] [SetLike S E] [NonUnitalSubringClass S E]     [SMulMemClass S 𝕜 E] (s : S) :     NonUnitalNormedRing s :=   { nonUnitalSeminormedRing s with     eq_of_dist_eq_";
+    }
+    {
+      full_name = "ULift.nonUnitalSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 266;
+      code_preview = "instance ULift.nonUnitalSeminormedRing : NonUnitalSeminormedRing (ULift α) :=   { ULift.seminormedAddCommGroup, ULift.nonUnitalRing with     norm_mul_le x y := norm_mul_le x.down y.down }";
+    }
+    {
+      full_name = "Prod.nonUnitalSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 270;
+      code_preview = "instance Prod.nonUnitalSeminormedRing [NonUnitalSeminormedRing β] :     NonUnitalSeminormedRing (α × β) :=   { seminormedAddCommGroup, instNonUnitalRing with     norm_mul_le x y := calc       ‖x * y‖ = ‖(x.1 * y.1, x.2 * y.2)‖ := rfl       _ = max ‖x.1 * y.1‖ ‖x.2 * y.2‖ := rfl       _ ≤ max (‖x.1‖ ";
+    }
+    {
+      full_name = "MulOpposite.instNonUnitalSeminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 286;
+      code_preview = "instance MulOpposite.instNonUnitalSeminormedRing : NonUnitalSeminormedRing αᵐᵒᵖ where   __ := instNonUnitalRing   __ := instSeminormedAddCommGroup   norm_mul_le := MulOpposite.rec' fun x ↦ MulOpposite.rec' fun y ↦     (norm_mul_le y x).trans_eq (mul_comm _ _)";
+    }
+    {
+      full_name = "Subalgebra.seminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 298;
+      code_preview = "instance Subalgebra.seminormedRing {𝕜 : Type*} [CommRing 𝕜] {E : Type*} [SeminormedRing E]     [Algebra 𝕜 E] (s : Subalgebra 𝕜 E) : SeminormedRing s :=   { s.toSubmodule.seminormedAddCommGroup, s.toRing with     norm_mul_le a b := norm_mul_le a.1 b.1 }";
+    }
+    {
+      full_name = "SubalgebraClass.seminormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 305;
+      code_preview = "@[nolint unusedArguments] instance (priority := 75) SubalgebraClass.seminormedRing {S 𝕜 E : Type*} [CommRing 𝕜]     [SeminormedRing E] [Algebra 𝕜 E] [SetLike S E] [SubringClass S E] [SMulMemClass S 𝕜 E]     (s : S) : SeminormedRing s :=   { AddSubgroupClass.seminormedAddCommGroup s, SubringClass.toR";
+    }
+    {
+      full_name = "Subalgebra.normedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 315;
+      code_preview = "instance Subalgebra.normedRing {𝕜 : Type*} [CommRing 𝕜] {E : Type*} [NormedRing E]     [Algebra 𝕜 E] (s : Subalgebra 𝕜 E) : NormedRing s :=   { s.seminormedRing with     eq_of_dist_eq_zero := eq_of_dist_eq_zero }";
+    }
+    {
+      full_name = "SubalgebraClass.normedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 321;
+      code_preview = "instance (priority := 75) SubalgebraClass.normedRing {S 𝕜 E : Type*} [CommRing 𝕜]     [NormedRing E] [Algebra 𝕜 E] [SetLike S E] [SubringClass S E] [SMulMemClass S 𝕜 E]     (s : S) : NormedRing s :=   { seminormedRing s with     eq_of_dist_eq_zero := eq_of_dist_eq_zero }";
+    }
+    {
+      full_name = "Nat.norm_cast_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 330;
+      code_preview = "theorem Nat.norm_cast_le : ∀ n : ℕ, ‖(n : α)‖ ≤ n * ‖(1 : α)‖";
+    }
+    {
+      full_name = "List.norm_prod_le'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Ring/Basic.lean";
+      start_line = 336;
+      code_preview = "theorem List.norm_prod_le' : ∀ {l : List α}, l ≠ [] → ‖l.prod‖ ≤ (l.map norm).prod";
+    }
+    {
+      full_name = "NormedDivisionRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 34;
+      code_preview = "class NormedDivisionRing (α : Type*) extends Norm α, DivisionRing α, MetricSpace α where      dist_eq : ∀ x y, dist x y = norm (x - y)      protected norm_mul : ∀ a b, norm (a * b) = norm a * norm b";
+    }
+    {
+      full_name = "NormedDivisionRing.toNormedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 43;
+      code_preview = "instance (priority := 100) NormedDivisionRing.toNormedRing [β : NormedDivisionRing α] :     NormedRing α :=   { β with norm_mul_le a b := (NormedDivisionRing.norm_mul a b).le }";
+    }
+    {
+      full_name = "NormedDivisionRing.toNormMulClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 49;
+      code_preview = "instance (priority := 100) NormedDivisionRing.toNormMulClass [NormedDivisionRing α] :     NormMulClass α where   norm_mul := NormedDivisionRing.norm_mul";
+    }
+    {
+      full_name = "NormedDivisionRing.to_normOneClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 58;
+      code_preview = "instance (priority := 900) NormedDivisionRing.to_normOneClass : NormOneClass α :=   ⟨mul_left_cancel₀ (mt norm_eq_zero.1 (one_ne_zero' α)) <| by rw [← norm_mul, mul_one, mul_one]⟩";
+    }
+    {
+      full_name = "norm_div";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 61;
+      code_preview = "@[simp] theorem norm_div (a b : α) : ‖a / b‖ = ‖a‖ / ‖b‖";
+    }
+    {
+      full_name = "nnnorm_div";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 65;
+      code_preview = "@[simp] theorem nnnorm_div (a b : α) : ‖a / b‖₊ = ‖a‖₊ / ‖b‖₊";
+    }
+    {
+      full_name = "norm_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 69;
+      code_preview = "@[simp] theorem norm_inv (a : α) : ‖a⁻¹‖ = ‖a‖⁻¹";
+    }
+    {
+      full_name = "nnnorm_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 73;
+      code_preview = "@[simp] theorem nnnorm_inv (a : α) : ‖a⁻¹‖₊ = ‖a‖₊⁻¹";
+    }
+    {
+      full_name = "enorm_inv";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 77;
+      code_preview = "@[simp] lemma enorm_inv {a : α} (ha : a ≠ 0) : ‖a⁻¹‖ₑ = ‖a‖ₑ⁻¹ := by simp [enorm, ENNReal.coe_inv, ha]";
+    }
+    {
+      full_name = "norm_zpow";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 80;
+      code_preview = "@[simp] theorem norm_zpow : ∀ (a : α) (n : ℤ), ‖a ^ n‖ = ‖a‖ ^ n";
+    }
+    {
+      full_name = "nnnorm_zpow";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 84;
+      code_preview = "@[simp] theorem nnnorm_zpow : ∀ (a : α) (n : ℤ), ‖a ^ n‖₊ = ‖a‖₊ ^ n";
+    }
+    {
+      full_name = "dist_inv_inv₀";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 88;
+      code_preview = "theorem dist_inv_inv₀ {z w : α} (hz : z ≠ 0) (hw : w ≠ 0) :     dist z⁻¹ w⁻¹ = dist z w / (‖z‖ * ‖w‖)";
+    }
+    {
+      full_name = "nndist_inv_inv₀";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 93;
+      code_preview = "theorem nndist_inv_inv₀ {z w : α} (hz : z ≠ 0) (hw : w ≠ 0) :     nndist z⁻¹ w⁻¹ = nndist z w / (‖z‖₊ * ‖w‖₊)";
+    }
+    {
+      full_name = "norm_commutator_sub_one_le";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 97;
+      code_preview = "lemma norm_commutator_sub_one_le (ha : a ≠ 0) (hb : b ≠ 0) :     ‖a * b * a⁻¹ * b⁻¹ - 1‖ ≤ 2 * ‖a‖⁻¹ * ‖b‖⁻¹ * ‖a - 1‖ * ‖b - 1‖ := by   simpa using norm_commutator_units_sub_one_le (.mk0 a ha) (.mk0 b hb)";
+    }
+    {
+      full_name = "nnnorm_commutator_sub_one_le";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 101;
+      code_preview = "lemma nnnorm_commutator_sub_one_le (ha : a ≠ 0) (hb : b ≠ 0) :     ‖a * b * a⁻¹ * b⁻¹ - 1‖₊ ≤ 2 * ‖a‖₊⁻¹ * ‖b‖₊⁻¹ * ‖a - 1‖₊ * ‖b - 1‖₊ := by   simpa using nnnorm_commutator_units_sub_one_le (.mk0 a ha) (.mk0 b hb)";
+    }
+    {
+      full_name = "NormedDivisionRing.norm_eq_one_iff_ne_zero_of_discrete";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 111;
+      code_preview = "lemma norm_eq_one_iff_ne_zero_of_discrete {x : 𝕜} : ‖x‖ = 1 ↔ x ≠ 0 := by   constructor <;> intro hx   · contrapose! hx     simp [hx]   · have : IsOpen {(0 : 𝕜)} := isOpen_discrete {0}     simp_rw [Metric.isOpen_singleton_iff, dist_eq_norm, sub_zero] at this     obtain ⟨ε, εpos, h'⟩ := this     wlog";
+    }
+    {
+      full_name = "NormedDivisionRing.norm_le_one_of_discrete";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 130;
+      code_preview = "@[simp] lemma norm_le_one_of_discrete     (x : 𝕜) : ‖x‖ ≤ 1 := by   rcases eq_or_ne x 0 with rfl|hx   · simp   · simp [norm_eq_one_iff_ne_zero_of_discrete.mpr hx]";
+    }
+    {
+      full_name = "NormedDivisionRing.unitClosedBall_eq_univ_of_discrete";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 137;
+      code_preview = "lemma unitClosedBall_eq_univ_of_discrete : (Metric.closedBall 0 1 : Set 𝕜) = Set.univ := by   ext   simp";
+    }
+    {
+      full_name = "NormedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 150;
+      code_preview = "class NormedField (α : Type*) extends Norm α, Field α, MetricSpace α where      dist_eq : ∀ x y, dist x y = norm (x - y)      protected norm_mul : ∀ a b, norm (a * b) = norm a * norm b";
+    }
+    {
+      full_name = "NontriviallyNormedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 157;
+      code_preview = "class NontriviallyNormedField (α : Type*) extends NormedField α where      non_trivial : ∃ x : α, 1 < ‖x‖";
+    }
+    {
+      full_name = "DenselyNormedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 164;
+      code_preview = "class DenselyNormedField (α : Type*) extends NormedField α where      lt_norm_lt : ∀ x y : ℝ, 0 ≤ x → x < y → ∃ a : α, x < ‖a‖ ∧ ‖a‖ < y";
+    }
+    {
+      full_name = "DenselyNormedField.toNontriviallyNormedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 173;
+      code_preview = "instance (priority := 100) DenselyNormedField.toNontriviallyNormedField [DenselyNormedField α] :     NontriviallyNormedField α where   non_trivial :=     let ⟨a, h, _⟩ := DenselyNormedField.lt_norm_lt 1 2 zero_le_one one_lt_two     ⟨a, h⟩";
+    }
+    {
+      full_name = "NormedField.toNormedDivisionRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 184;
+      code_preview = "instance (priority := 100) NormedField.toNormedDivisionRing : NormedDivisionRing α :=   { ‹NormedField α› with }";
+    }
+    {
+      full_name = "NormedField.toNormedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 188;
+      code_preview = "instance (priority := 100) NormedField.toNormedCommRing : NormedCommRing α :=   { ‹NormedField α› with norm_mul_le a b := (norm_mul a b).le }";
+    }
+    {
+      full_name = "NormedField.exists_one_lt_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 199;
+      code_preview = "theorem exists_one_lt_norm : ∃ x : α, 1 < ‖x‖";
+    }
+    {
+      full_name = "NormedField.exists_one_lt_nnnorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 202;
+      code_preview = "theorem exists_one_lt_nnnorm : ∃ x : α, 1 < ‖x‖₊";
+    }
+    {
+      full_name = "NormedField.exists_one_lt_enorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 204;
+      code_preview = "theorem exists_one_lt_enorm : ∃ x : α, 1 < ‖x‖ₑ";
+    }
+    {
+      full_name = "NormedField.exists_lt_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 207;
+      code_preview = "theorem exists_lt_norm (r : ℝ) : ∃ x : α, r < ‖x‖";
+    }
+    {
+      full_name = "NormedField.exists_lt_nnnorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 212;
+      code_preview = "theorem exists_lt_nnnorm (r : ℝ≥0) : ∃ x : α, r < ‖x‖₊";
+    }
+    {
+      full_name = "NormedField.exists_lt_enorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 214;
+      code_preview = "theorem exists_lt_enorm {r : ℝ≥0∞} (hr : r ≠ ∞) : ∃ x : α, r < ‖x‖ₑ";
+    }
+    {
+      full_name = "NormedField.exists_norm_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 218;
+      code_preview = "theorem exists_norm_lt {r : ℝ} (hr : 0 < r) : ∃ x : α, 0 < ‖x‖ ∧ ‖x‖ < r";
+    }
+    {
+      full_name = "NormedField.exists_nnnorm_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 222;
+      code_preview = "theorem exists_nnnorm_lt {r : ℝ≥0} (hr : 0 < r) : ∃ x : α, 0 < ‖x‖₊ ∧ ‖x‖₊ < r";
+    }
+    {
+      full_name = "NormedField.exists_enorm_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 225;
+      code_preview = "theorem exists_enorm_lt {r : ℝ≥0∞} (hr : 0 < r) : ∃ x : α, 0 < ‖x‖ₑ ∧ ‖x‖ₑ < r";
+    }
+    {
+      full_name = "NormedField.exists_norm_lt_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 232;
+      code_preview = "theorem exists_norm_lt_one : ∃ x : α, 0 < ‖x‖ ∧ ‖x‖ < 1";
+    }
+    {
+      full_name = "NormedField.exists_nnnorm_lt_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 235;
+      code_preview = "theorem exists_nnnorm_lt_one : ∃ x : α, 0 < ‖x‖₊ ∧ ‖x‖₊ < 1";
+    }
+    {
+      full_name = "NormedField.exists_enorm_lt_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 237;
+      code_preview = "theorem exists_enorm_lt_one : ∃ x : α, 0 < ‖x‖ₑ ∧ ‖x‖ₑ < 1";
+    }
+    {
+      full_name = "NormedField.nhdsNE_neBot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 241;
+      code_preview = "@[instance] theorem nhdsNE_neBot (x : α) : NeBot (𝓝[≠] x)";
+    }
+    {
+      full_name = "NormedField.nhdsWithin_isUnit_neBot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 252;
+      code_preview = "@[instance] theorem nhdsWithin_isUnit_neBot : NeBot (𝓝[{ x : α | IsUnit x }] 0)";
+    }
+    {
+      full_name = "NormedField.exists_lt_norm_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 262;
+      code_preview = "theorem exists_lt_norm_lt {r₁ r₂ : ℝ} (h₀ : 0 ≤ r₁) (h : r₁ < r₂) : ∃ x : α, r₁ < ‖x‖ ∧ ‖x‖ < r₂";
+    }
+    {
+      full_name = "NormedField.exists_lt_nnnorm_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 265;
+      code_preview = "theorem exists_lt_nnnorm_lt {r₁ r₂ : ℝ≥0} (h : r₁ < r₂) : ∃ x : α, r₁ < ‖x‖₊ ∧ ‖x‖₊ < r₂";
+    }
+    {
+      full_name = "NormedField.denselyOrdered_range_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 268;
+      code_preview = "instance denselyOrdered_range_norm : DenselyOrdered (Set.range (norm : α → ℝ)) where   dense := by     rintro ⟨-, x, rfl⟩ ⟨-, y, rfl⟩ hxy     let ⟨z, h⟩ := exists_lt_norm_lt α (norm_nonneg _) hxy     exact ⟨⟨‖z‖, z, rfl⟩, h⟩";
+    }
+    {
+      full_name = "NormedField.denselyOrdered_range_nnnorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 274;
+      code_preview = "instance denselyOrdered_range_nnnorm : DenselyOrdered (Set.range (nnnorm : α → ℝ≥0)) where   dense := by     rintro ⟨-, x, rfl⟩ ⟨-, y, rfl⟩ hxy     let ⟨z, h⟩ := exists_lt_nnnorm_lt α hxy     exact ⟨⟨‖z‖₊, z, rfl⟩, h⟩";
+    }
+    {
+      full_name = "NontriviallyNormedField.ofNormNeOne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 284;
+      code_preview = "def NontriviallyNormedField.ofNormNeOne {𝕜 : Type*} [h' : NormedField 𝕜]     (h : ∃ x : 𝕜, x ≠ 0 ∧ ‖x‖ ≠ 1) : NontriviallyNormedField 𝕜 where   toNormedField := h'   non_trivial := by     rcases h with ⟨x, hx, hx1⟩     rcases hx1.lt_or_lt with hlt | hlt     · use x⁻¹       rw [norm_inv]       exact ";
+    }
+    {
+      full_name = "Real.normedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 297;
+      code_preview = "noncomputable instance Real.normedField : NormedField ℝ :=   { Real.normedAddCommGroup, Real.field with     norm_mul := abs_mul }";
+    }
+    {
+      full_name = "Real.denselyNormedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 301;
+      code_preview = "noncomputable instance Real.denselyNormedField : DenselyNormedField ℝ where   lt_norm_lt _ _ h₀ hr :=     let ⟨x, h⟩ := exists_between hr     ⟨x, by rwa [Real.norm_eq_abs, abs_of_nonneg (h₀.trans h.1.le)]⟩";
+    }
+    {
+      full_name = "Real.toNNReal_mul_nnnorm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 308;
+      code_preview = "theorem toNNReal_mul_nnnorm {x : ℝ} (y : ℝ) (hx : 0 ≤ x) : x.toNNReal * ‖y‖₊ = ‖x * y‖₊";
+    }
+    {
+      full_name = "Real.nnnorm_mul_toNNReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 313;
+      code_preview = "theorem nnnorm_mul_toNNReal (x : ℝ) {y : ℝ} (hy : 0 ≤ y) : ‖x‖₊ * y.toNNReal = ‖x * y‖₊";
+    }
+    {
+      full_name = "NormedDivisionRing.induced";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 324;
+      code_preview = "abbrev NormedDivisionRing.induced [DivisionRing R] [NormedDivisionRing S]     [NonUnitalRingHomClass F R S] (f : F) (hf : Function.Injective f) : NormedDivisionRing R :=   { NormedAddCommGroup.induced R S f hf, ‹DivisionRing R› with     norm_mul x y := show ‖f _‖ = _ from (map_mul f x y).symm ▸ norm";
+    }
+    {
+      full_name = "NormedField.induced";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 333;
+      code_preview = "abbrev NormedField.induced [Field R] [NormedField S] [NonUnitalRingHomClass F R S] (f : F)     (hf : Function.Injective f) : NormedField R :=   { NormedDivisionRing.induced R S f hf with     mul_comm := mul_comm }";
+    }
+    {
+      full_name = "SubfieldClass.toNormedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Normed/Field/Basic.lean";
+      start_line = 348;
+      code_preview = "instance toNormedField [NormedField F] [SubfieldClass S F] (s : S) : NormedField s :=   NormedField.induced s F (SubringClass.subtype s) Subtype.val_injective";
+    }
+    {
+      full_name = "RCLike";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 52;
+      code_preview = "class RCLike (K : semiOutParam Type*) extends DenselyNormedField K, StarRing K,     NormedAlgebra ℝ K, CompleteSpace K where      re : K →+ ℝ      im : K →+ ℝ      I : K   I_re_ax : re I = 0   I_mul_I_ax : I = 0 ∨ I * I = -1   re_add_im_ax : ∀ z : K, 𝓚 (re z) + 𝓚 (im z) * I = z   ofReal_re_ax : ∀ r ";
+    }
+    {
+      full_name = "RCLike.ofReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 90;
+      code_preview = "@[coe] abbrev ofReal : ℝ → K := Algebra.cast";
+    }
+    {
+      full_name = "RCLike.algebraMapCoe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 95;
+      code_preview = "noncomputable instance (priority := 900) algebraMapCoe : CoeTC ℝ K :=   ⟨ofReal⟩";
+    }
+    {
+      full_name = "RCLike.ofReal_alg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 98;
+      code_preview = "theorem ofReal_alg (x : ℝ) : (x : K) = x • (1 : K)";
+    }
+    {
+      full_name = "RCLike.real_smul_eq_coe_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 101;
+      code_preview = "theorem real_smul_eq_coe_mul (r : ℝ) (z : K) : r • z = (r : K) * z";
+    }
+    {
+      full_name = "RCLike.real_smul_eq_coe_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 104;
+      code_preview = "theorem real_smul_eq_coe_smul [AddCommGroup E] [Module K E] [Module ℝ E] [IsScalarTower ℝ K E]     (r : ℝ) (x : E) : r • x = (r : K) • x";
+    }
+    {
+      full_name = "RCLike.algebraMap_eq_ofReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 107;
+      code_preview = "theorem algebraMap_eq_ofReal : ⇑(algebraMap ℝ K) = ofReal";
+    }
+    {
+      full_name = "RCLike.re_add_im";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 110;
+      code_preview = "@[simp, rclike_simps] theorem re_add_im (z : K) : (re z : K) + im z * I = z";
+    }
+    {
+      full_name = "RCLike.ofReal_re";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 114;
+      code_preview = "@[simp, norm_cast, rclike_simps] theorem ofReal_re : ∀ r : ℝ, re (r : K) = r";
+    }
+    {
+      full_name = "RCLike.ofReal_im";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 118;
+      code_preview = "@[simp, norm_cast, rclike_simps] theorem ofReal_im : ∀ r : ℝ, im (r : K) = 0";
+    }
+    {
+      full_name = "RCLike.mul_re";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 122;
+      code_preview = "@[simp, rclike_simps] theorem mul_re : ∀ z w : K, re (z * w) = re z * re w - im z * im w";
+    }
+    {
+      full_name = "RCLike.mul_im";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 126;
+      code_preview = "@[simp, rclike_simps] theorem mul_im : ∀ z w : K, im (z * w) = re z * im w + im z * re w";
+    }
+    {
+      full_name = "RCLike.ext_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 130;
+      code_preview = "theorem ext_iff {z w : K} : z = w ↔ re z = re w ∧ im z = im w";
+    }
+    {
+      full_name = "RCLike.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 133;
+      code_preview = "theorem ext {z w : K} (hre : re z = re w) (him : im z = im w) : z = w";
+    }
+    {
+      full_name = "RCLike.ofReal_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 136;
+      code_preview = "@[norm_cast] theorem ofReal_zero : ((0 : ℝ) : K) = 0";
+    }
+    {
+      full_name = "RCLike.zero_re'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 140;
+      code_preview = "@[rclike_simps] theorem zero_re' : re (0 : K) = (0 : ℝ)";
+    }
+    {
+      full_name = "RCLike.ofReal_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 144;
+      code_preview = "@[norm_cast] theorem ofReal_one : ((1 : ℝ) : K) = 1";
+    }
+    {
+      full_name = "RCLike.one_re";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 148;
+      code_preview = "@[simp, rclike_simps] theorem one_re : re (1 : K) = 1";
+    }
+    {
+      full_name = "RCLike.one_im";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 151;
+      code_preview = "@[simp, rclike_simps] theorem one_im : im (1 : K) = 0";
+    }
+    {
+      full_name = "RCLike.ofReal_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 154;
+      code_preview = "theorem ofReal_injective : Function.Injective ((↑) : ℝ → K)";
+    }
+    {
+      full_name = "RCLike.ofReal_inj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 157;
+      code_preview = "@[norm_cast] theorem ofReal_inj {z w : ℝ} : (z : K) = (w : K) ↔ z = w";
+    }
+    {
+      full_name = "RCLike.ofReal_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 164;
+      code_preview = "theorem ofReal_eq_zero {x : ℝ} : (x : K) = 0 ↔ x = 0";
+    }
+    {
+      full_name = "RCLike.ofReal_ne_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 167;
+      code_preview = "theorem ofReal_ne_zero {x : ℝ} : (x : K) ≠ 0 ↔ x ≠ 0";
+    }
+    {
+      full_name = "RCLike.ofReal_add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 170;
+      code_preview = "@[rclike_simps, norm_cast] theorem ofReal_add (r s : ℝ) : ((r + s : ℝ) : K) = r + s";
+    }
+    {
+      full_name = "RCLike.ofReal_neg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 176;
+      code_preview = "@[rclike_simps, norm_cast] theorem ofReal_neg (r : ℝ) : ((-r : ℝ) : K) = -r";
+    }
+    {
+      full_name = "RCLike.ofReal_sub";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 180;
+      code_preview = "@[rclike_simps, norm_cast] theorem ofReal_sub (r s : ℝ) : ((r - s : ℝ) : K) = r - s";
+    }
+    {
+      full_name = "RCLike.ofReal_sum";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 184;
+      code_preview = "@[rclike_simps, norm_cast] theorem ofReal_sum {α : Type*} (s : Finset α) (f : α → ℝ) :     ((∑ i ∈ s, f i : ℝ) : K) = ∑ i ∈ s, (f i : K)";
+    }
+    {
+      full_name = "RCLike.ofReal_finsupp_sum";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 189;
+      code_preview = "@[simp, rclike_simps, norm_cast] theorem ofReal_finsupp_sum {α M : Type*} [Zero M] (f : α →₀ M) (g : α → M → ℝ) :     ((f.sum fun a b => g a b : ℝ) : K) = f.sum fun a b => (g a b : K)";
+    }
+    {
+      full_name = "RCLike.ofReal_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 194;
+      code_preview = "@[rclike_simps, norm_cast] theorem ofReal_mul (r s : ℝ) : ((r * s : ℝ) : K) = r * s";
+    }
+    {
+      full_name = "RCLike.ofReal_pow";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 198;
+      code_preview = "@[rclike_simps, norm_cast] theorem ofReal_pow (r : ℝ) (n : ℕ) : ((r ^ n : ℝ) : K) = (r : K) ^ n";
+    }
+    {
+      full_name = "RCLike.ofReal_prod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 202;
+      code_preview = "@[rclike_simps, norm_cast] theorem ofReal_prod {α : Type*} (s : Finset α) (f : α → ℝ) :     ((∏ i ∈ s, f i : ℝ) : K) = ∏ i ∈ s, (f i : K)";
+    }
+    {
+      full_name = "RCLike.ofReal_finsuppProd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 207;
+      code_preview = "@[simp, rclike_simps, norm_cast] theorem ofReal_finsuppProd {α M : Type*} [Zero M] (f : α →₀ M) (g : α → M → ℝ) :     ((f.prod fun a b => g a b : ℝ) : K) = f.prod fun a b => (g a b : K)";
+    }
+    {
+      full_name = "RCLike.real_smul_ofReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 214;
+      code_preview = "@[simp, norm_cast, rclike_simps] theorem real_smul_ofReal (r x : ℝ) : r • (x : K) = (r : K) * (x : K)";
+    }
+    {
+      full_name = "RCLike.re_ofReal_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 218;
+      code_preview = "@[rclike_simps] theorem re_ofReal_mul (r : ℝ) (z : K) : re (↑r * z) = r * re z";
+    }
+    {
+      full_name = "RCLike.im_ofReal_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 222;
+      code_preview = "@[rclike_simps] theorem im_ofReal_mul (r : ℝ) (z : K) : im (↑r * z) = r * im z";
+    }
+    {
+      full_name = "RCLike.smul_re";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 226;
+      code_preview = "@[rclike_simps] theorem smul_re (r : ℝ) (z : K) : re (r • z) = r * re z";
+    }
+    {
+      full_name = "RCLike.smul_im";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 230;
+      code_preview = "@[rclike_simps] theorem smul_im (r : ℝ) (z : K) : im (r • z) = r * im z";
+    }
+    {
+      full_name = "RCLike.norm_ofReal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 234;
+      code_preview = "@[rclike_simps, norm_cast] theorem norm_ofReal (r : ℝ) : ‖(r : K)‖ = |r|";
+    }
+    {
+      full_name = "RCLike.charZero_rclike";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 241;
+      code_preview = "instance (priority := 100) charZero_rclike : CharZero K :=   (RingHom.charZero_iff (algebraMap ℝ K).injective).1 inferInstance";
+    }
+    {
+      full_name = "RCLike.ofReal_expect";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 245;
+      code_preview = "@[rclike_simps, norm_cast] lemma ofReal_expect {α : Type*} (s : Finset α) (f : α → ℝ) : 𝔼 i ∈ s, f i = 𝔼 i ∈ s, (f i : K) :=   map_expect (algebraMap ..) ..";
+    }
+    {
+      full_name = "RCLike.ofReal_balance";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 249;
+      code_preview = "@[norm_cast] lemma ofReal_balance {ι : Type*} [Fintype ι] (f : ι → ℝ) (i : ι) :     ((balance f i : ℝ) : K) = balance ((↑) ∘ f) i := map_balance (algebraMap ..) ..";
+    }
+    {
+      full_name = "RCLike.ofReal_comp_balance";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 253;
+      code_preview = "@[simp] lemma ofReal_comp_balance {ι : Type*} [Fintype ι] (f : ι → ℝ) :     ofReal ∘ balance f = balance (ofReal ∘ f : ι → K) := funext <| ofReal_balance _";
+    }
+    {
+      full_name = "RCLike.I_re";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 258;
+      code_preview = "@[simp, rclike_simps] theorem I_re : re (I : K) = 0";
+    }
+    {
+      full_name = "RCLike.I_im";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 263;
+      code_preview = "@[simp, rclike_simps] theorem I_im (z : K) : im z * im (I : K) = im z";
+    }
+    {
+      full_name = "RCLike.I_im'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 267;
+      code_preview = "@[simp, rclike_simps] theorem I_im' (z : K) : im (I : K) * im z = im z";
+    }
+    {
+      full_name = "RCLike.I_mul_re";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 270;
+      code_preview = "@[rclike_simps] theorem I_mul_re (z : K) : re (I * z) = -im z";
+    }
+    {
+      full_name = "RCLike.I_mul_I";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 274;
+      code_preview = "theorem I_mul_I : (I : K) = 0 ∨ (I : K) * I = -1";
+    }
+    {
+      full_name = "RCLike.I_eq_zero_or_im_I_eq_one";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 278;
+      code_preview = "lemma I_eq_zero_or_im_I_eq_one : (I : K) = 0 ∨ im (I : K) = 1 :=   I_mul_I (K := K) |>.imp_right fun h ↦ by simpa [h] using (I_mul_re (I : K)).symm";
+    }
+    {
+      full_name = "RCLike.conj_re";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 281;
+      code_preview = "@[simp, rclike_simps] theorem conj_re (z : K) : re (conj z) = re z";
+    }
+    {
+      full_name = "RCLike.conj_im";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/RCLike/Basic.lean";
+      start_line = 285;
+      code_preview = "@[simp, rclike_simps] theorem conj_im (z : K) : im (conj z) = -im z";
+    }
+    {
+      full_name = "inner_conj_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 51;
+      code_preview = "@[simp] theorem inner_conj_symm (x y : E) : ⟪y, x⟫† = ⟪x, y⟫";
+    }
+    {
+      full_name = "real_inner_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 55;
+      code_preview = "theorem real_inner_comm (x y : F) : ⟪y, x⟫_ℝ = ⟪x, y⟫_ℝ";
+    }
+    {
+      full_name = "inner_eq_zero_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 58;
+      code_preview = "theorem inner_eq_zero_symm {x y : E} : ⟪x, y⟫ = 0 ↔ ⟪y, x⟫ = 0";
+    }
+    {
+      full_name = "inner_self_im";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 62;
+      code_preview = "@[simp] theorem inner_self_im (x : E) : im ⟪x, x⟫ = 0";
+    }
+    {
+      full_name = "inner_add_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 65;
+      code_preview = "theorem inner_add_left (x y z : E) : ⟪x + y, z⟫ = ⟪x, z⟫ + ⟪y, z⟫";
+    }
+    {
+      full_name = "inner_add_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 68;
+      code_preview = "theorem inner_add_right (x y z : E) : ⟪x, y + z⟫ = ⟪x, y⟫ + ⟪x, z⟫";
+    }
+    {
+      full_name = "inner_re_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 72;
+      code_preview = "theorem inner_re_symm (x y : E) : re ⟪x, y⟫ = re ⟪y, x⟫";
+    }
+    {
+      full_name = "inner_im_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 74;
+      code_preview = "theorem inner_im_symm (x y : E) : im ⟪x, y⟫ = -im ⟪y, x⟫";
+    }
+    {
+      full_name = "inner_smul_left_eq_star_smul";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 80;
+      code_preview = "lemma inner_smul_left_eq_star_smul (x y : E) (r : 𝕝) : ⟪r • x, y⟫ = r† • ⟪x, y⟫ := by   rw [← algebraMap_smul 𝕜 r, InnerProductSpace.smul_left, starRingEnd_apply, starRingEnd_apply,     ← algebraMap_star_comm, ← smul_eq_mul, algebraMap_smul]";
+    }
+    {
+      full_name = "inner_smul_left_eq_smul";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 85;
+      code_preview = "lemma inner_smul_left_eq_smul [TrivialStar 𝕝] (x y : E) (r : 𝕝) : ⟪r • x, y⟫ = r • ⟪x, y⟫ := by   rw [inner_smul_left_eq_star_smul, starRingEnd_apply, star_trivial]";
+    }
+    {
+      full_name = "inner_smul_right_eq_smul";
+      kind = "lemma";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 90;
+      code_preview = "lemma inner_smul_right_eq_smul (x y : E) (r : 𝕝) : ⟪x, r • y⟫ = r • ⟪x, y⟫ := by   rw [← inner_conj_symm, inner_smul_left_eq_star_smul, starRingEnd_apply, starRingEnd_apply,     star_smul, star_star, ← starRingEnd_apply, inner_conj_symm]";
+    }
+    {
+      full_name = "inner_smul_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 97;
+      code_preview = "theorem inner_smul_left (x y : E) (r : 𝕜) : ⟪r • x, y⟫ = r† * ⟪x, y⟫";
+    }
+    {
+      full_name = "real_inner_smul_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 101;
+      code_preview = "theorem real_inner_smul_left (x y : F) (r : ℝ) : ⟪r • x, y⟫_ℝ = r * ⟪x, y⟫_ℝ";
+    }
+    {
+      full_name = "inner_smul_real_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 104;
+      code_preview = "theorem inner_smul_real_left (x y : E) (r : ℝ) : ⟪(r : 𝕜) • x, y⟫ = r • ⟪x, y⟫";
+    }
+    {
+      full_name = "inner_smul_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 107;
+      code_preview = "theorem inner_smul_right (x y : E) (r : 𝕜) : ⟪x, r • y⟫ = r * ⟪x, y⟫";
+    }
+    {
+      full_name = "real_inner_smul_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 111;
+      code_preview = "theorem real_inner_smul_right (x y : F) (r : ℝ) : ⟪x, r • y⟫_ℝ = r * ⟪x, y⟫_ℝ";
+    }
+    {
+      full_name = "inner_smul_real_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 114;
+      code_preview = "theorem inner_smul_real_right (x y : E) (r : ℝ) : ⟪x, (r : 𝕜) • y⟫ = r • ⟪x, y⟫";
+    }
+    {
+      full_name = "sesqFormOfInner";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 117;
+      code_preview = "@[simps!] def sesqFormOfInner : E →ₗ[𝕜] E →ₗ⋆[𝕜] 𝕜 :=   LinearMap.mk₂'ₛₗ (RingHom.id 𝕜) (starRingEnd _) (fun x y => ⟪y, x⟫)     (fun _x _y _z => inner_add_right _ _ _) (fun _r _x _y => inner_smul_right _ _ _)     (fun _x _y _z => inner_add_left _ _ _) fun _r _x _y => inner_smul_left _ _ _";
+    }
+    {
+      full_name = "bilinFormOfRealInner";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 126;
+      code_preview = "@[simps!] def bilinFormOfRealInner : BilinForm ℝ F := sesqFormOfInner.flip";
+    }
+    {
+      full_name = "sum_inner";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 132;
+      code_preview = "theorem sum_inner {ι : Type*} (s : Finset ι) (f : ι → E) (x : E) :     ⟪∑ i ∈ s, f i, x⟫ = ∑ i ∈ s, ⟪f i, x⟫";
+    }
+    {
+      full_name = "inner_sum";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 137;
+      code_preview = "theorem inner_sum {ι : Type*} (s : Finset ι) (f : ι → E) (x : E) :     ⟪x, ∑ i ∈ s, f i⟫ = ∑ i ∈ s, ⟪x, f i⟫";
+    }
+    {
+      full_name = "Finsupp.sum_inner";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 142;
+      code_preview = "protected theorem Finsupp.sum_inner {ι : Type*} (l : ι →₀ 𝕜) (v : ι → E) (x : E) :     ⟪l.sum fun (i : ι) (a : 𝕜) => a • v i, x⟫ = l.sum fun (i : ι) (a : 𝕜) => conj a • ⟪v i, x⟫";
+    }
+    {
+      full_name = "Finsupp.inner_sum";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 148;
+      code_preview = "protected theorem Finsupp.inner_sum {ι : Type*} (l : ι →₀ 𝕜) (v : ι → E) (x : E) :     ⟪x, l.sum fun (i : ι) (a : 𝕜) => a • v i⟫ = l.sum fun (i : ι) (a : 𝕜) => a • ⟪x, v i⟫";
+    }
+    {
+      full_name = "DFinsupp.sum_inner";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 154;
+      code_preview = "protected theorem DFinsupp.sum_inner {ι : Type*} [DecidableEq ι] {α : ι → Type*}     [∀ i, AddZeroClass (α i)] [∀ (i) (x : α i), Decidable (x ≠ 0)] (f : ∀ i, α i → E)     (l : Π₀ i, α i) (x : E) : ⟪l.sum f, x⟫ = l.sum fun i a => ⟪f i a, x⟫";
+    }
+    {
+      full_name = "DFinsupp.inner_sum";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 159;
+      code_preview = "protected theorem DFinsupp.inner_sum {ι : Type*} [DecidableEq ι] {α : ι → Type*}     [∀ i, AddZeroClass (α i)] [∀ (i) (x : α i), Decidable (x ≠ 0)] (f : ∀ i, α i → E)     (l : Π₀ i, α i) (x : E) : ⟪x, l.sum f⟫ = l.sum fun i a => ⟪x, f i a⟫";
+    }
+    {
+      full_name = "inner_zero_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 164;
+      code_preview = "@[simp] theorem inner_zero_left (x : E) : ⟪0, x⟫ = 0";
+    }
+    {
+      full_name = "inner_re_zero_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 168;
+      code_preview = "theorem inner_re_zero_left (x : E) : re ⟪0, x⟫ = 0";
+    }
+    {
+      full_name = "inner_zero_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 171;
+      code_preview = "@[simp] theorem inner_zero_right (x : E) : ⟪x, 0⟫ = 0";
+    }
+    {
+      full_name = "inner_re_zero_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 175;
+      code_preview = "theorem inner_re_zero_right (x : E) : re ⟪x, 0⟫ = 0";
+    }
+    {
+      full_name = "inner_self_nonneg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 178;
+      code_preview = "theorem inner_self_nonneg {x : E} : 0 ≤ re ⟪x, x⟫";
+    }
+    {
+      full_name = "real_inner_self_nonneg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 181;
+      code_preview = "theorem real_inner_self_nonneg {x : F} : 0 ≤ ⟪x, x⟫_ℝ";
+    }
+    {
+      full_name = "inner_self_ofReal_re";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 184;
+      code_preview = "@[simp] theorem inner_self_ofReal_re (x : E) : (re ⟪x, x⟫ : 𝕜) = ⟪x, x⟫";
+    }
+    {
+      full_name = "inner_self_eq_norm_sq_to_K";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 188;
+      code_preview = "theorem inner_self_eq_norm_sq_to_K (x : E) : ⟪x, x⟫ = (‖x‖ : 𝕜) ^ 2";
+    }
+    {
+      full_name = "inner_self_re_eq_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 191;
+      code_preview = "theorem inner_self_re_eq_norm (x : E) : re ⟪x, x⟫ = ‖⟪x, x⟫‖";
+    }
+    {
+      full_name = "inner_self_ofReal_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 196;
+      code_preview = "theorem inner_self_ofReal_norm (x : E) : (‖⟪x, x⟫‖ : 𝕜) = ⟪x, x⟫";
+    }
+    {
+      full_name = "real_inner_self_abs";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 200;
+      code_preview = "theorem real_inner_self_abs (x : F) : |⟪x, x⟫_ℝ| = ⟪x, x⟫_ℝ";
+    }
+    {
+      full_name = "norm_inner_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 203;
+      code_preview = "theorem norm_inner_symm (x y : E) : ‖⟪x, y⟫‖ = ‖⟪y, x⟫‖";
+    }
+    {
+      full_name = "inner_neg_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 205;
+      code_preview = "@[simp] theorem inner_neg_left (x y : E) : ⟪-x, y⟫ = -⟪x, y⟫";
+    }
+    {
+      full_name = "inner_neg_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 210;
+      code_preview = "@[simp] theorem inner_neg_right (x y : E) : ⟪x, -y⟫ = -⟪x, y⟫";
+    }
+    {
+      full_name = "inner_neg_neg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 214;
+      code_preview = "theorem inner_neg_neg (x y : E) : ⟪-x, -y⟫ = ⟪x, y⟫";
+    }
+    {
+      full_name = "inner_self_conj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 216;
+      code_preview = "theorem inner_self_conj (x : E) : ⟪x, x⟫† = ⟪x, x⟫";
+    }
+    {
+      full_name = "inner_sub_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 218;
+      code_preview = "theorem inner_sub_left (x y z : E) : ⟪x - y, z⟫ = ⟪x, z⟫ - ⟪y, z⟫";
+    }
+    {
+      full_name = "inner_sub_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 221;
+      code_preview = "theorem inner_sub_right (x y z : E) : ⟪x, y - z⟫ = ⟪x, y⟫ - ⟪x, z⟫";
+    }
+    {
+      full_name = "inner_mul_symm_re_eq_norm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 224;
+      code_preview = "theorem inner_mul_symm_re_eq_norm (x y : E) : re (⟪x, y⟫ * ⟪y, x⟫) = ‖⟪x, y⟫ * ⟪y, x⟫‖";
+    }
+    {
+      full_name = "inner_add_add_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 228;
+      code_preview = "theorem inner_add_add_self (x y : E) : ⟪x + y, x + y⟫ = ⟪x, x⟫ + ⟪x, y⟫ + ⟪y, x⟫ + ⟪y, y⟫";
+    }
+    {
+      full_name = "real_inner_add_add_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 232;
+      code_preview = "theorem real_inner_add_add_self (x y : F) :     ⟪x + y, x + y⟫_ℝ = ⟪x, x⟫_ℝ + 2 * ⟪x, y⟫_ℝ + ⟪y, y⟫_ℝ";
+    }
+    {
+      full_name = "inner_sub_sub_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 240;
+      code_preview = "theorem inner_sub_sub_self (x y : E) : ⟪x - y, x - y⟫ = ⟪x, x⟫ - ⟪x, y⟫ - ⟪y, x⟫ + ⟪y, y⟫";
+    }
+    {
+      full_name = "real_inner_sub_sub_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 243;
+      code_preview = "theorem real_inner_sub_sub_self (x y : F) :     ⟪x - y, x - y⟫_ℝ = ⟪x, x⟫_ℝ - 2 * ⟪x, y⟫_ℝ + ⟪y, y⟫_ℝ";
+    }
+    {
+      full_name = "parallelogram_law";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 250;
+      code_preview = "theorem parallelogram_law {x y : E} : ⟪x + y, x + y⟫ + ⟪x - y, x - y⟫ = 2 * (⟪x, x⟫ + ⟪y, y⟫)";
+    }
+    {
+      full_name = "inner_mul_inner_self_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/InnerProductSpace/Basic.lean";
+      start_line = 255;
+      code_preview = "theorem inner_mul_inner_self_le (x y : E) : ‖⟪x, y⟫‖ * ‖⟪y, x⟫‖ ≤ re ⟪x, x⟫ * re ⟪y, y⟫";
+    }
+    {
+      full_name = "HasDerivAtFilter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 105;
+      code_preview = "def HasDerivAtFilter (f : 𝕜 → F) (f' : F) (x : 𝕜) (L : Filter 𝕜) :=   HasFDerivAtFilter f (smulRight (1 : 𝕜 →L[𝕜] 𝕜) f') x L";
+    }
+    {
+      full_name = "HasDerivWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 112;
+      code_preview = "def HasDerivWithinAt (f : 𝕜 → F) (f' : F) (s : Set 𝕜) (x : 𝕜) :=   HasDerivAtFilter f f' x (𝓝[s] x)";
+    }
+    {
+      full_name = "HasDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 119;
+      code_preview = "def HasDerivAt (f : 𝕜 → F) (f' : F) (x : 𝕜) :=   HasDerivAtFilter f f' x (𝓝 x)";
+    }
+    {
+      full_name = "HasStrictDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 126;
+      code_preview = "def HasStrictDerivAt (f : 𝕜 → F) (f' : F) (x : 𝕜) :=   HasStrictFDerivAt f (smulRight (1 : 𝕜 →L[𝕜] 𝕜) f') x";
+    }
+    {
+      full_name = "derivWithin";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 133;
+      code_preview = "def derivWithin (f : 𝕜 → F) (s : Set 𝕜) (x : 𝕜) :=   fderivWithin 𝕜 f s x 1";
+    }
+    {
+      full_name = "deriv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 141;
+      code_preview = "def deriv (f : 𝕜 → F) (x : 𝕜) :=   fderiv 𝕜 f x 1";
+    }
+    {
+      full_name = "hasFDerivAtFilter_iff_hasDerivAtFilter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 157;
+      code_preview = "theorem hasFDerivAtFilter_iff_hasDerivAtFilter {f' : 𝕜 →L[𝕜] F} :     HasFDerivAtFilter f f' x L ↔ HasDerivAtFilter f (f' 1) x L";
+    }
+    {
+      full_name = "HasFDerivAtFilter.hasDerivAtFilter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 161;
+      code_preview = "theorem HasFDerivAtFilter.hasDerivAtFilter {f' : 𝕜 →L[𝕜] F} :     HasFDerivAtFilter f f' x L → HasDerivAtFilter f (f' 1) x L";
+    }
+    {
+      full_name = "hasFDerivWithinAt_iff_hasDerivWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 165;
+      code_preview = "theorem hasFDerivWithinAt_iff_hasDerivWithinAt {f' : 𝕜 →L[𝕜] F} :     HasFDerivWithinAt f f' s x ↔ HasDerivWithinAt f (f' 1) s x";
+    }
+    {
+      full_name = "hasDerivWithinAt_iff_hasFDerivWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 170;
+      code_preview = "theorem hasDerivWithinAt_iff_hasFDerivWithinAt {f' : F} :     HasDerivWithinAt f f' s x ↔ HasFDerivWithinAt f (smulRight (1 : 𝕜 →L[𝕜] 𝕜) f') s x";
+    }
+    {
+      full_name = "HasFDerivWithinAt.hasDerivWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 175;
+      code_preview = "theorem HasFDerivWithinAt.hasDerivWithinAt {f' : 𝕜 →L[𝕜] F} :     HasFDerivWithinAt f f' s x → HasDerivWithinAt f (f' 1) s x";
+    }
+    {
+      full_name = "HasDerivWithinAt.hasFDerivWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 179;
+      code_preview = "theorem HasDerivWithinAt.hasFDerivWithinAt {f' : F} :     HasDerivWithinAt f f' s x → HasFDerivWithinAt f (smulRight (1 : 𝕜 →L[𝕜] 𝕜) f') s x";
+    }
+    {
+      full_name = "hasFDerivAt_iff_hasDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 183;
+      code_preview = "theorem hasFDerivAt_iff_hasDerivAt {f' : 𝕜 →L[𝕜] F} : HasFDerivAt f f' x ↔ HasDerivAt f (f' 1) x";
+    }
+    {
+      full_name = "HasFDerivAt.hasDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 187;
+      code_preview = "theorem HasFDerivAt.hasDerivAt {f' : 𝕜 →L[𝕜] F} : HasFDerivAt f f' x → HasDerivAt f (f' 1) x";
+    }
+    {
+      full_name = "hasStrictFDerivAt_iff_hasStrictDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 190;
+      code_preview = "theorem hasStrictFDerivAt_iff_hasStrictDerivAt {f' : 𝕜 →L[𝕜] F} :     HasStrictFDerivAt f f' x ↔ HasStrictDerivAt f (f' 1) x";
+    }
+    {
+      full_name = "HasStrictFDerivAt.hasStrictDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 194;
+      code_preview = "protected theorem HasStrictFDerivAt.hasStrictDerivAt {f' : 𝕜 →L[𝕜] F} :     HasStrictFDerivAt f f' x → HasStrictDerivAt f (f' 1) x";
+    }
+    {
+      full_name = "hasStrictDerivAt_iff_hasStrictFDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 198;
+      code_preview = "theorem hasStrictDerivAt_iff_hasStrictFDerivAt :     HasStrictDerivAt f f' x ↔ HasStrictFDerivAt f (smulRight (1 : 𝕜 →L[𝕜] 𝕜) f') x";
+    }
+    {
+      full_name = "hasDerivAt_iff_hasFDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 204;
+      code_preview = "theorem hasDerivAt_iff_hasFDerivAt {f' : F} :     HasDerivAt f f' x ↔ HasFDerivAt f (smulRight (1 : 𝕜 →L[𝕜] 𝕜) f') x";
+    }
+    {
+      full_name = "derivWithin_zero_of_not_differentiableWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 212;
+      code_preview = "theorem derivWithin_zero_of_not_differentiableWithinAt (h : ¬DifferentiableWithinAt 𝕜 f s x) :     derivWithin f s x = 0";
+    }
+    {
+      full_name = "differentiableWithinAt_of_derivWithin_ne_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 218;
+      code_preview = "theorem differentiableWithinAt_of_derivWithin_ne_zero (h : derivWithin f s x ≠ 0) :     DifferentiableWithinAt 𝕜 f s x";
+    }
+    {
+      full_name = "derivWithin_zero_of_not_accPt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 233;
+      code_preview = "theorem derivWithin_zero_of_not_accPt (h : ¬AccPt x (𝓟 s)) : derivWithin f s x = 0";
+    }
+    {
+      full_name = "derivWithin_zero_of_not_uniqueDiffWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 236;
+      code_preview = "theorem derivWithin_zero_of_not_uniqueDiffWithinAt (h : ¬UniqueDiffWithinAt 𝕜 s x) :     derivWithin f s x = 0";
+    }
+    {
+      full_name = "derivWithin_zero_of_isolated";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 241;
+      code_preview = "@[deprecated derivWithin_zero_of_not_accPt (since := \"2025-04-20\")] theorem derivWithin_zero_of_isolated (h : 𝓝[s \\ {x}] x = ⊥) : derivWithin f s x = 0";
+    }
+    {
+      full_name = "derivWithin_zero_of_nmem_closure";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 245;
+      code_preview = "theorem derivWithin_zero_of_nmem_closure (h : x ∉ closure s) : derivWithin f s x = 0";
+    }
+    {
+      full_name = "deriv_zero_of_not_differentiableAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 248;
+      code_preview = "theorem deriv_zero_of_not_differentiableAt (h : ¬DifferentiableAt 𝕜 f x) : deriv f x = 0";
+    }
+    {
+      full_name = "differentiableAt_of_deriv_ne_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 253;
+      code_preview = "theorem differentiableAt_of_deriv_ne_zero (h : deriv f x ≠ 0) : DifferentiableAt 𝕜 f x";
+    }
+    {
+      full_name = "UniqueDiffWithinAt.eq_deriv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 256;
+      code_preview = "theorem UniqueDiffWithinAt.eq_deriv (s : Set 𝕜) (H : UniqueDiffWithinAt 𝕜 s x)     (h : HasDerivWithinAt f f' s x) (h₁ : HasDerivWithinAt f f₁' s x) : f' = f₁'";
+    }
+    {
+      full_name = "hasDerivAtFilter_iff_isLittleO";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 260;
+      code_preview = "theorem hasDerivAtFilter_iff_isLittleO :     HasDerivAtFilter f f' x L ↔ (fun x' : 𝕜 => f x' - f x - (x' - x) • f') =o[L] fun x' => x' - x";
+    }
+    {
+      full_name = "hasDerivAtFilter_iff_tendsto";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 264;
+      code_preview = "theorem hasDerivAtFilter_iff_tendsto :     HasDerivAtFilter f f' x L ↔       Tendsto (fun x' : 𝕜 => ‖x' - x‖⁻¹ * ‖f x' - f x - (x' - x) • f'‖) L (𝓝 0)";
+    }
+    {
+      full_name = "hasDerivWithinAt_iff_isLittleO";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 269;
+      code_preview = "theorem hasDerivWithinAt_iff_isLittleO :     HasDerivWithinAt f f' s x ↔       (fun x' : 𝕜 => f x' - f x - (x' - x) • f') =o[𝓝[s] x] fun x' => x' - x";
+    }
+    {
+      full_name = "hasDerivWithinAt_iff_tendsto";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 274;
+      code_preview = "theorem hasDerivWithinAt_iff_tendsto :     HasDerivWithinAt f f' s x ↔       Tendsto (fun x' => ‖x' - x‖⁻¹ * ‖f x' - f x - (x' - x) • f'‖) (𝓝[s] x) (𝓝 0)";
+    }
+    {
+      full_name = "hasDerivAt_iff_isLittleO";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 279;
+      code_preview = "theorem hasDerivAt_iff_isLittleO :     HasDerivAt f f' x ↔ (fun x' : 𝕜 => f x' - f x - (x' - x) • f') =o[𝓝 x] fun x' => x' - x";
+    }
+    {
+      full_name = "hasDerivAt_iff_tendsto";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 283;
+      code_preview = "theorem hasDerivAt_iff_tendsto :     HasDerivAt f f' x ↔ Tendsto (fun x' => ‖x' - x‖⁻¹ * ‖f x' - f x - (x' - x) • f'‖) (𝓝 x) (𝓝 0)";
+    }
+    {
+      full_name = "HasDerivAtFilter.isBigO_sub";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 287;
+      code_preview = "theorem HasDerivAtFilter.isBigO_sub (h : HasDerivAtFilter f f' x L) :     (fun x' => f x' - f x) =O[L] fun x' => x' - x";
+    }
+    {
+      full_name = "HasDerivAtFilter.isBigO_sub_rev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 291;
+      code_preview = "nonrec theorem HasDerivAtFilter.isBigO_sub_rev (hf : HasDerivAtFilter f f' x L) (hf' : f' ≠ 0) :     (fun x' => x' - x) =O[L] fun x' => f x' - f x";
+    }
+    {
+      full_name = "HasStrictDerivAt.hasDerivAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 297;
+      code_preview = "theorem HasStrictDerivAt.hasDerivAt (h : HasStrictDerivAt f f' x) : HasDerivAt f f' x";
+    }
+    {
+      full_name = "hasDerivWithinAt_congr_set'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 300;
+      code_preview = "theorem hasDerivWithinAt_congr_set' {s t : Set 𝕜} (y : 𝕜) (h : s =ᶠ[𝓝[{y}ᶜ] x] t) :     HasDerivWithinAt f f' s x ↔ HasDerivWithinAt f f' t x";
+    }
+    {
+      full_name = "hasDerivWithinAt_congr_set";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 304;
+      code_preview = "theorem hasDerivWithinAt_congr_set {s t : Set 𝕜} (h : s =ᶠ[𝓝 x] t) :     HasDerivWithinAt f f' s x ↔ HasDerivWithinAt f f' t x";
+    }
+    {
+      full_name = "hasDerivWithinAt_diff_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 310;
+      code_preview = "@[simp] theorem hasDerivWithinAt_diff_singleton :     HasDerivWithinAt f f' (s \\ {x}) x ↔ HasDerivWithinAt f f' s x";
+    }
+    {
+      full_name = "hasDerivWithinAt_Ioi_iff_Ici";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 315;
+      code_preview = "@[simp] theorem hasDerivWithinAt_Ioi_iff_Ici [PartialOrder 𝕜] :     HasDerivWithinAt f f' (Ioi x) x ↔ HasDerivWithinAt f f' (Ici x) x";
+    }
+    {
+      full_name = "hasDerivWithinAt_Iio_iff_Iic";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 322;
+      code_preview = "@[simp] theorem hasDerivWithinAt_Iio_iff_Iic [PartialOrder 𝕜] :     HasDerivWithinAt f f' (Iio x) x ↔ HasDerivWithinAt f f' (Iic x) x";
+    }
+    {
+      full_name = "HasDerivWithinAt.Ioi_iff_Ioo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 329;
+      code_preview = "theorem HasDerivWithinAt.Ioi_iff_Ioo [LinearOrder 𝕜] [OrderClosedTopology 𝕜] {x y : 𝕜} (h : x < y) :     HasDerivWithinAt f f' (Ioo x y) x ↔ HasDerivWithinAt f f' (Ioi x) x";
+    }
+    {
+      full_name = "hasDerivAt_iff_isLittleO_nhds_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 335;
+      code_preview = "theorem hasDerivAt_iff_isLittleO_nhds_zero :     HasDerivAt f f' x ↔ (fun h => f (x + h) - f x - h • f') =o[𝓝 0] fun h => h";
+    }
+    {
+      full_name = "HasDerivAtFilter.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 339;
+      code_preview = "theorem HasDerivAtFilter.mono (h : HasDerivAtFilter f f' x L₂) (hst : L₁ ≤ L₂) :     HasDerivAtFilter f f' x L₁";
+    }
+    {
+      full_name = "HasDerivWithinAt.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 343;
+      code_preview = "theorem HasDerivWithinAt.mono (h : HasDerivWithinAt f f' t x) (hst : s ⊆ t) :     HasDerivWithinAt f f' s x";
+    }
+    {
+      full_name = "HasDerivWithinAt.mono_of_mem_nhdsWithin";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 347;
+      code_preview = "theorem HasDerivWithinAt.mono_of_mem_nhdsWithin (h : HasDerivWithinAt f f' t x) (hst : t ∈ 𝓝[s] x) :     HasDerivWithinAt f f' s x";
+    }
+    {
+      full_name = "HasDerivAt.hasDerivAtFilter";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 354;
+      code_preview = "theorem HasDerivAt.hasDerivAtFilter (h : HasDerivAt f f' x) (hL : L ≤ 𝓝 x) :     HasDerivAtFilter f f' x L";
+    }
+    {
+      full_name = "HasDerivAt.hasDerivWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 358;
+      code_preview = "theorem HasDerivAt.hasDerivWithinAt (h : HasDerivAt f f' x) : HasDerivWithinAt f f' s x";
+    }
+    {
+      full_name = "HasDerivWithinAt.differentiableWithinAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 361;
+      code_preview = "theorem HasDerivWithinAt.differentiableWithinAt (h : HasDerivWithinAt f f' s x) :     DifferentiableWithinAt 𝕜 f s x";
+    }
+    {
+      full_name = "HasDerivAt.differentiableAt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Analysis/Calculus/Deriv/Basic.lean";
+      start_line = 365;
+      code_preview = "theorem HasDerivAt.differentiableAt (h : HasDerivAt f f' x) : DifferentiableAt 𝕜 f x";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

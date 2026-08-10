@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/nrc-public-catalog-store-plan.px — NRC public page catalog metadata.
+# redb corpus_source_records에 pnix attrset source(JSON 아님)로 append한다.
+# report bodies, incident/inspection narrative, safety interpretation, graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./nrc-public-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "radiation.nrc_public_catalog.v1";
+    source = { name = "NRC public page catalog metadata"; license = "U.S. government public information"; scope = "empty seed fallback"; };
+    summary = { page_count = 0; html_bodies_persisted = false; report_bodies_ingested = false; incident_narratives_ingested = false; inspection_narratives_ingested = false; security_details_ingested = false; safety_grade_interpretation_ingested = false; mirror_graph_wiring = false; };
+    pages = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "nrc-public-catalog-load-v0";
+      source_lens = "stdlib/lib/corpus/nrc-public-catalog-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "radiation.nrc_public_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "nrc-public-catalog-query-v0";
+      source_lens = "stdlib/lib/corpus/nrc-public-catalog-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "radiation.nrc_public_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

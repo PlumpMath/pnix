@@ -1,0 +1,196 @@
+let
+  ownerName = "stdlib.nl.problem-archetype-nl-lifter";
+
+  problemKernel =
+    import math/problem-kernel-substrate.px;
+
+  # === Problem archetype NL lifter (Axiom #39) =====================
+  #
+  # 사용자 directive (2026-05-28): "NL 이 super 셋... 수학식 알고리즘 code 가
+  # 양방향으로 제대로~*"
+  #
+  # NL utterance → 7 problem archetype 중 하나로 lift. Axiom #11
+  # (math-problem-kernel-substrate) 의 NL surface 입구.
+  #
+  # 7 archetypes 모두 cover (en + ko 키워드):
+  # - function-analysis      함수 분석 / 도메인 / 치역 / 단조
+  # - equation-solving       방정식 풀이
+  # - limit-and-continuity   극한 / 연속
+  # - derivative-and-integral 미분 / 적분
+  # - linear-algebra         행렬 / 벡터 / 선형
+  # - geometry-and-congruence 도형 / 합동 / 닮음
+  # - proof-construction     증명 / 귀류법 / 귀납
+  #
+  # # Held-honest 헌법 보존
+  #
+  # 키워드 0 match → held-no-archetype-matched.
+  # 키워드 multiple match → held-multi-archetype-candidates.
+  #
+  # # Bidirectional axiom 보존
+  #
+  # 모든 archetype 은 problem-kernel-substrate 의 verifier set 으로 routing.
+  # 이 routing 자체가 receipt 의 한 차원으로 carry — 역방향 atom→NL 시
+  # 어느 archetype 이 적용됐는지 explainable.
+  #
+  # # DO NOT REBUILD
+  #
+  # problem-kernel-substrate 의 7 archetype + 8 check 는 *기존 박힘*.
+  # 이 owner 는 NL surface routing layer 만 추가.
+
+  knownArchetypeNLPatterns = [
+    {
+      archetype_id = "function-analysis";
+      en_keywords = [ "function" "domain" "range" "monotonic" "increasing" "decreasing" "even" "odd" ];
+      ko_keywords = [ "함수" "정의역" "치역" "단조" "증가" "감소" "우함수" "기함수" ];
+      receipt_kind = "function-analysis-query";
+    }
+    {
+      archetype_id = "equation-solving";
+      en_keywords = [ "equation" "solve" "root" "zero" "find x" "isolate" ];
+      ko_keywords = [ "방정식" "풀이" "해를 구" "해를 찾" "근을 구" "근 찾" "미지수" "x 를 구" "방정식 풀어" "방정식 풀이" "방정식의 해" ];
+      receipt_kind = "equation-query";
+    }
+    {
+      archetype_id = "limit-and-continuity";
+      en_keywords = [ "limit" "continuity" "continuous" "approaches" "epsilon" ];
+      ko_keywords = [ "극한" "연속" "수렴" "발산" "엡실론" ];
+      receipt_kind = "limit-query";
+    }
+    {
+      archetype_id = "derivative-and-integral";
+      en_keywords = [ "derivative" "differentiate" "integral" "integrate" "antiderivative" "differentiable" "calculus" ];
+      ko_keywords = [ "미분" "도함수" "적분" "원시함수" "정적분" "부정적분" "미분해" "적분해" "미분 가능" "적분값" "도함수 구해" ];
+      receipt_kind = "calculus-query";
+    }
+    {
+      archetype_id = "linear-algebra";
+      en_keywords = [ "matrix" "vector" "linear" "eigenvalue" "determinant" "rank" "basis" ];
+      ko_keywords = [ "행렬" "벡터" "선형" "고유값" "행렬식" "기저" "차원" ];
+      receipt_kind = "linear-algebra-query";
+    }
+    {
+      archetype_id = "geometry-and-congruence";
+      en_keywords = [ "triangle" "circle" "polygon" "congruent" "similar" "geometry" ];
+      ko_keywords = [ "삼각형" "원" "다각형" "합동" "닮음" "기하" ];
+      receipt_kind = "geometry-query";
+    }
+    {
+      archetype_id = "proof-construction";
+      en_keywords = [ "prove" "proof" "induction" "contradiction" "theorem" "lemma" "show that" "demonstrate" ];
+      ko_keywords = [ "증명" "귀납" "귀류법" "정리" "보조정리" "QED" "증명하라" "증명해" "증명해라" "보여라" "보여줘" ];
+      receipt_kind = "proof-query";
+    }
+  ];
+
+  archetypePatternCount = builtins.length knownArchetypeNLPatterns;
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  matchArchetypeForUtterance = utterance:
+    builtins.filter (p:
+      (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords))
+      knownArchetypeNLPatterns;
+
+  # === Bridge entry: NL → archetype lift ============================
+
+  liftToArchetype = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let matches = matchArchetypeForUtterance utterance;
+      in
+        if matches == [] then {
+          outcome = "held-no-archetype-matched";
+          known_archetype_count = archetypePatternCount;
+          known_archetypes = builtins.map (p: p.archetype_id) knownArchetypeNLPatterns;
+          reason = "박힌 7 archetype 어느 곳에도 NL 키워드 match 안 됨. utterance 재구성 또는 새 키워드 등록 필요.";
+        }
+        else if (builtins.length matches) > 1 then {
+          outcome = "held-multi-archetype-candidates";
+          candidate_count = builtins.length matches;
+          candidates = builtins.map (m: m.archetype_id) matches;
+          reason = "여러 archetype 의 키워드 가 동시 match. NL 추가 disambiguation 필요.";
+        }
+        else
+          let
+            m = builtins.head matches;
+            archetypeInfo = problemKernel.findArchetype m.archetype_id;
+          in {
+            outcome = "archetype-lifted";
+            utterance = utterance;
+            archetype_id = m.archetype_id;
+            receipt_kind = m.receipt_kind;
+            required_checks =
+              if archetypeInfo == null then []
+              else archetypeInfo.required_checks;
+            substrate_action =
+              "problem-kernel-substrate 의 archetype " + m.archetype_id
+              + " 가 활성화. caller 는 required_checks 의 verifier 들을 "
+              + "순서대로 실행 (deterministic, no probability).";
+            axiom_origin = "axiom-11-math-problem-kernel-substrate (LLM-zero)";
+          };
+
+  # === Mirror plate lens entry =======================================
+
+  applyProblemArchetypeNlLifterPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else liftToArchetype request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-39";
+    archetype_pattern_count = archetypePatternCount;
+    en_keyword_total = builtins.foldl' (a: p: a + (builtins.length p.en_keywords)) 0 knownArchetypeNLPatterns;
+    ko_keyword_total = builtins.foldl' (a: p: a + (builtins.length p.ko_keywords)) 0 knownArchetypeNLPatterns;
+    routed_substrate = "stdlib/lib/math/problem-kernel-substrate.px (Axiom #11)";
+    new_decision_count = 0;
+    do_not_rebuild = true;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-archetype-matched"
+      "held-multi-archetype-candidates"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownArchetypeNLPatterns archetypePatternCount
+    containsAny matchArchetypeForUtterance
+    liftToArchetype applyProblemArchetypeNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL problem archetype lifter (Axiom #39)";
+    owner = ownerName;
+    base = "problem-archetype-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-28) 'NL super-set bidirectional + "
+      + "수학식 알고리즘 code 양방향'. 7 problem archetype (function-analysis "
+      + "/ equation-solving / limit-and-continuity / derivative-and-integral "
+      + "/ linear-algebra / geometry-and-congruence / proof-construction) 의 "
+      + "NL surface routing. en + ko 양어 키워드. routed_substrate = Axiom #11 "
+      + "math-problem-kernel-substrate (LLM-zero). DO NOT REBUILD — problem "
+      + "kernel 의 7 archetype + 8 check 는 기존 owner 재사용. 6 Held outcome "
+      + "(silent guess 금지).";
+  };
+}

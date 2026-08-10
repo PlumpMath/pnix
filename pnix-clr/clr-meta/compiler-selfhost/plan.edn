@@ -1,0 +1,72 @@
+{:schema :pnix.clr-meta.compiler-selfhost-plan.v1
+ :id :pnix.clr-meta.compiler-kernel-c0-c1-plan.v1
+ :family :pnix.clr-meta.compiler-kernel.v1
+ :contract "contract.edn"
+ :profile "profile.edn"
+ :source {:path "compiler_kernel.clj"
+          :namespace pnix.clr-meta.compiler-kernel.v1
+          :entry compile-source
+          :source-language-id :pnix.clr-meta.compiler-kernel-source.v1
+          :compiled-language-id :pnix.clr-meta.compiler-kernel-source.v1}
+ :compiler-abi {:contract "contract.edn"
+                :source [:compiler-abi]
+                :arguments [:source-text :pe-sink]
+                :atomicity :commit-only-on-pesink-finish}
+ :stages
+ [{:id :c0
+   :kind :low-level-support-abi
+   :status :contracted
+   :executable false}
+  {:id :c1
+   :kind :same-language-canonical-source-admission
+   :status :gate-required
+   :executable false}
+  {:id :compiler-stage1
+   :kind :artifact
+   :status :not-attempted
+   :executable false}
+  {:id :compiler-stage2
+   :kind :one-step-same-source-compilation
+   :status :not-attempted
+   :executable false}
+  {:id :compiler-stage3
+   :kind :self-reproduction-evidence
+   :status :not-attempted
+   :executable false}]
+ :future-chain
+ [{:from :bootstrap-b0
+   :input "compiler_kernel.clj"
+   :language-id :pnix.clr-meta.compiler-kernel-source.v1
+   :output :compiler-stage1-pe}
+  {:from :compiler-stage1-pe
+   :input "compiler_kernel.clj"
+   :language-id :pnix.clr-meta.compiler-kernel-source.v1
+   :output :compiler-stage2-pe}
+  {:from :compiler-stage2-pe
+   :input "compiler_kernel.clj"
+   :language-id :pnix.clr-meta.compiler-kernel-source.v1
+   :output :compiler-stage3-pe}]
+ :mutation-checks
+ [{:id :identity-literal
+   :contract-site :identity-literal
+   :mutation :replace-identity-string
+   :c1-required-result :reject
+   :executable-required-result :propagate
+   :executable-status :unexecuted}
+  {:id :add-lowering-rule
+   :contract-site :add-lowering-rule
+   :mutation :replace-add-opcode
+   :c1-required-result :reject
+   :executable-required-result :propagate
+   :executable-status :unexecuted}
+  {:id :subtract-lowering-rule
+   :contract-site :subtract-lowering-rule
+   :mutation :replace-subtract-opcode
+   :c1-required-result :reject
+   :executable-required-result :propagate
+   :executable-status :unexecuted}]
+ :claims {:stage1_artifact false
+          :stage2 false
+          :self_reproduction false
+          :fixed_point false
+          :raw_reproducibility false}}

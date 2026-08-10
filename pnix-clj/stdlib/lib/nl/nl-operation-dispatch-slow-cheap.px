@@ -1,0 +1,27 @@
+# stdlib.nl.nl-operation-dispatch-slow-cheap — thin cheap-path shell (O-008-slow P3).
+let
+  transportPath = ./nl-operation-dispatch-slow-transport.px;
+  quickPath = ./nl-operation-dispatch-slow-quick.px;
+  codingPath = ./nl-operation-dispatch-slow-coding.px;
+  extractPath = ./nl-operation-dispatch-slow-extract.px;
+in {
+  name = "stdlib.nl.nl-operation-dispatch-slow-cheap";
+  import_shell = "thin-delegate";
+
+  tryCheapSlowPath = utterance: context:
+    let symCode = import ../math/symbolic-code-witness.px;
+    in if symCode.deferFastMathForCodeEmit utterance then null
+    else
+      let transport = (import transportPath).dispatchFromTransportPreextract utterance context;
+      in if transport != null then transport
+    else
+      let quick = (import quickPath).quickGeneralIfBenign utterance;
+      in if quick != null then quick
+      else
+        let coding = (import codingPath).tryCodingIntentCodeTransform utterance;
+        in if coding != null then coding
+        else (import extractPath).tryExtractOrKeyword utterance;
+
+  cheapSlowPathTerminal = result:
+    (import quickPath).cheapSlowPathTerminal result;
+}

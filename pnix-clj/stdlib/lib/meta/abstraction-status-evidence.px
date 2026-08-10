@@ -1,0 +1,99 @@
+# stdlib/lib/meta/abstraction-status-evidence.px
+#
+# P5 evidence-projector: 저장된 abstraction-gate 상태(P3 submitToGate 결과)를 다음 한국어 이해 receipt에
+#   *공개안전* abstraction_status evidence로 비춤. = P4 거울(symbol-memory-recognition-evidence.px)의 abstraction 판.
+#   "기억이 다음 해석을 바꾼다"의 *meta* 층: 내가 *무엇을 아직 검증 못 했는지*(held-pending-utility)를 기억한다.
+#
+# ★status ≠ truth(원칙 a): durable_truth/accepted_as_truth/ontology_assert_allowed = false *무조건*(verified status여도 예외 없음).
+#   "verified abstraction을 알아봤다" ≠ "이 발화의 해석이 참이다". read-back은 proposer/센서지 판사 아님(redb≠판사).
+# ★read-back은 status를 *계산/승격 안 함*(원칙 b, authority-outside): 저장된 status를 normStatus로 정규화해 *거울*만.
+# ★현재 P3 gate-bridge는 {held, held-pending-utility, submit-to-promoteCandidate}만 냄(abstraction-gate-bridge.px:41-44).
+#   "verified"는 *어떤 런타임 경로도 안 만듦*(§38 promotion-by-utility 영구 Held) — KNOWN_STATUS엔 두되 입력엔 안 옴.
+#   효과: held_count(=verified 아닌 것)는 사실상 전체와 같아짐 = verified-자동생성 회귀를 잡는 정직한 동치.
+# ★leak 차단(원칙 c, P4 wire-leak 사고 방지): publicProjection은 {about, relation, status}·count만. abstraction_key/owner/
+#   schema/internal_entries 절대 public wire 비노출. (누설 검증은 grep 아닌 .px all_ok bool 안에서.)
+# ★갈라치기 0: P4 mkMemoryEvidence/chatRespond/Rust 무수정(별도 파일). 통합은 *call-site 합성*(P5-b) — 다른 evidence_kind를
+#   한 함수에 합치지 않는다. about_concept는 genesis/bridge가 안 냄 → status를 *쓰는* 경로가 source_symbols→concept key(s:n:...)
+#   로 박제하고, P5-a는 그 엔트리의 about_concept를 *읽기만* 한다(재분류/재-anti-unify 금지=원칙 b).
+let
+  B = builtins;
+
+  # P3 gate-bridge가 실제로 내는 status + (reported-only) verified/rejected. 모르면 held(fail-closed).
+  #   ★list는 *inline*(let 상수 closure 금지): pnix Stage-1은 import된 함수가 sibling let-bound 값을
+  #    closure로 잡으면 자유변수를 모듈 set으로 오해소(elem second-arg=set 에러). 그래서 KNOWN을 직접 박음.
+  normStatus = s:
+    if B.elem s [ "held" "held-pending-utility" "submit-to-promoteCandidate" "verified" "rejected" ]
+    then s else "held";
+
+  # leaf concept key 형태(s:... 시작, composite "(...)" / 메타변수 "?g" 아님). ★public about에 composite/민감 키가
+  #   producer 버그/악의로 새는 것 차단(allow-list 둘레 = containment). recognized_concepts(s:n:...)와 키스페이스 일치.
+  isLeafConceptKey = k:
+    (B.isString k) && (B.stringLength k >= 2)
+    && (B.substring 0 2 k == "s:") && (B.substring 0 1 k != "(");
+
+  # about_concept를 leaf concept key list로 정규화(단일/list/없음 허용 + leaf-shape allow-list).
+  #   abstraction.key(composite·?g 소실)는 about로 안 쓴다 — 들어와도 여기서 걸러진다.
+  aboutList = e:
+    let raw = if e ? about_concept
+              then (if B.isList e.about_concept then e.about_concept else [ e.about_concept ])
+              else [ ];
+    in B.filter isLeafConceptKey raw;
+
+  # mkAbstractionStatusEvidence { abstraction_statuses, recognized_concepts? }
+  #   abstraction_statuses: 저장된 status 엔트리 list. each = { abstraction_key; status; owner?; relation?; about_concept?; }
+  #   recognized_concepts: 현재 발화에서 인식된 concept canonical key list.
+  #     null = 필터 안 함(전부 relevant); list = union 멤버십(about 중 *어느 하나라도* 인식되면 relevant).
+  #   [] (또는 무매칭) = 빈 evidence(count=0) = P4와 동형 fail-closed 비파괴.
+  mkAbstractionStatusEvidence = args:
+    let entries = if args ? abstraction_statuses then args.abstraction_statuses else [ ];
+        recog = if args ? recognized_concepts then args.recognized_concepts else null;
+        isRelevant = e:
+          if recog == null then true
+          else B.any (c: B.elem c recog) (aboutList e);
+        relevant = B.filter isRelevant entries;
+        # ★allow-list 정규화(deny-by-projection 회피 — 헌법 allow-list 권고): 입력 엔트리의 *알려진 필드만* 보존.
+        #   임의 추가 키(store_key·internal_addr 등)가 섞여 들어와도 norm/internal_entries에 *안* 실린다(누설 표면 0).
+        norm = B.map (e: {
+          abstraction_key = e.abstraction_key or "";
+          status = normStatus (e.status or "held");
+          owner = e.owner or "";
+          relation = e.relation or "common-structure";
+          about_concept = aboutList e;       # 항상 list로 정규화(읽기만, 재분류 0)
+        }) relevant;
+        # public-safe item: about(첫 concept key 또는 relation fallback)·relation·status만 (abstraction_key/owner 비노출)
+        items = B.map (e: {
+          about = if e.about_concept == [ ] then e.relation else B.head e.about_concept;
+          relation = e.relation;
+          status = e.status;
+        }) norm;
+        # 검증 *대기*(pending) 수 = terminal(verified/rejected: 이미 판정남) *아닌* 것 = "아직 검증 못 한 것"의 기억.
+        #   ★list는 inline(let-const closure 금지, dialect 함정 #8). rejected를 pending으로 세는 의미오류 차단.
+        heldCount = B.length (B.filter (e: (B.elem e.status [ "verified" "rejected" ]) == false) norm);
+    in {
+      evidence_kind = "abstraction.status";
+      evidence_role = "what-i-have-not-yet-verified";
+      abstraction_status_count = B.length norm;
+      held_count = heldCount;
+      items = items;                       # ★public-safe (about·relation·status)
+      internal_entries = norm;             # ★internal only(key/owner 포함; publicProjection서 제거)
+      # ★status ≠ truth — *무조건* false(verified status여도 예외 없음)
+      proposer_only = true;
+      durable_truth = false;
+      accepted_as_truth = false;
+      ontology_assert_allowed = false;
+      note = "abstraction gate-status 거울일 뿐 — read-back은 판사 아님; verified조차 현재 발화의 truth 아님";
+    };
+
+  # ★public projection: 외부 wire 안전 subset. internal_entries/abstraction_key/owner/schema 절대 비노출.
+  #   ★공개 face에도 "이건 truth 아님" 표식을 *명시* 동봉(status=verified여도) — 외부 consumer가 status를 truth로 오인 못 하게.
+  publicProjection = ev: {
+    evidence_kind = ev.evidence_kind;
+    abstraction_status_count = ev.abstraction_status_count;
+    held_count = ev.held_count;
+    items = B.map (i: { about = i.about; relation = i.relation; status = i.status; }) ev.items;
+    proposer_only = true;     # ★status ≠ truth — 공개 face에 명시
+    durable_truth = false;
+  };
+in {
+  inherit mkAbstractionStatusEvidence publicProjection normStatus aboutList;
+}

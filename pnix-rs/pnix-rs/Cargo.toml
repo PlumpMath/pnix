@@ -1,0 +1,29 @@
+[package]
+name = "pnix-rs"
+version = "0.0.1"
+edition = "2021"
+description = "rs-meta backed pnix runtime front-end (Rust host lane)"
+publish = false
+
+[lib]
+name = "pnix_rs"
+path = "src/lib.rs"
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+# pnix-rs constitution follows rs-meta: ZERO crates.io dependencies, std only.
+# ../rs-meta is the Rust meta-circular compiler/evaluator substrate this lane
+# depends on. The dependency is exercised through the rs-meta `bootstrap`
+# binary (substrate-check): rs-meta interprets pnix-rs's own px engine source
+# and must agree with rustc on its behavior. Do NOT add a [dependencies] table.
+
+[[bin]]
+name = "pnix-rs"
+path = "src/main.rs"
+
+[[bin]]
+name = "pnix-machine-outcome-check"
+path = "src/bin/pnix-machine-outcome-check.rs"
+
+[[bin]]
+name = "pnix-production-outcome-check"
+path = "src/bin/pnix-production-outcome-check.rs"

@@ -1,0 +1,208 @@
+# stdlib.lib.math.vector
+#
+# OWNER-LAW (v0.12-AAJ, div-math, 2026-05-21): exact integer
+# vector algebra.
+#
+# geometry.px reasons about points, polygons, and areas in the
+# plane. This owner reasons about *vectors* -- the algebra of
+# directed quantities: addition, the dot product, the cross
+# product, parallelism. Vectors here are integer-component lists
+# of any dimension.
+#
+# # Exact, with the irrationality named honestly
+#
+# Addition, the dot product, and the cross product stay in the
+# integers exactly. The MAGNITUDE of a vector, sqrt(v . v), is
+# irrational for almost every integer vector -- so, as geometry.px
+# and complex-number.px do, this owner returns the exact squared
+# norm `v . v` and names it as such.
+#
+# # The cross product is three-dimensional
+#
+# The cross product is defined only for 3-vectors; `vecCross`
+# Held-guards the dimension through the plate.
+#
+# # Standalone
+#
+# Imports nothing. A vector is a list of integers. Same input ->
+# same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT floating-point vectors -- integer components only, so no
+#     unit vectors and no true magnitude (only the squared norm).
+#   - NOT a vector-space / basis / span engine.
+#   - NOT matrices -- that is matrix.px.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/vector.px";
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  dimension = v: builtins.length v;
+  at = v: i: builtins.elemAt v i;
+  sameDimension = a: b: dimension a == dimension b;
+
+  # Element-wise sum / difference -- assume equal dimension (the
+  # plate guards).
+  vecAdd = a: b:
+    builtins.map (i: (at a i) + (at b i))
+      (rangeList 0 (dimension a - 1));
+
+  vecSub = a: b:
+    builtins.map (i: (at a i) - (at b i))
+      (rangeList 0 (dimension a - 1));
+
+  # Multiply every component by an integer scalar.
+  vecScale = k: v: builtins.map (x: k * x) v;
+
+  vecNegate = v: builtins.map (x: 0 - x) v;
+
+  # Dot product: sum of component-wise products.
+  vecDot = a: b:
+    builtins.foldl'
+      (acc: i: acc + (at a i) * (at b i))
+      0
+      (rangeList 0 (dimension a - 1));
+
+  # Squared magnitude v . v -- exact (the magnitude itself is
+  # generally irrational).
+  vecNormSquared = v: vecDot v v;
+
+  # Cross product -- defined for 3-vectors only.
+  vecCross = a: b: [
+    ((at a 1) * (at b 2) - (at a 2) * (at b 1))
+    ((at a 2) * (at b 0) - (at a 0) * (at b 2))
+    ((at a 0) * (at b 1) - (at a 1) * (at b 0))
+  ];
+
+  vecEquals = a: b:
+    sameDimension a b && (vecSub a b) == (vecNegate (vecSub a b));
+
+  vecIsZero = v: builtins.all (x: x == 0) v;
+
+  # Two vectors are parallel iff every 2x2 minor a_i b_j - a_j b_i
+  # vanishes -- one is a scalar multiple of the other. The zero
+  # vector is parallel to everything by this test.
+  vecParallel = a: b:
+    let
+      n = dimension a;
+      checkFrom = i: j:
+        if i >= n then true
+        else if j >= n then checkFrom (i + 1) (i + 2)
+        else if (at a i) * (at b j) - (at a j) * (at b i) != 0
+        then false
+        else checkFrom i (j + 1);
+    in sameDimension a b && checkFrom 0 1;
+
+  # Two vectors are perpendicular iff their dot product is zero.
+  vecPerpendicular = a: b: (vecDot a b) == 0;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "add"
+    "subtract"
+    "scale"
+    "negate"
+    "dot"
+    "cross"
+    "norm-squared"
+    "parallel"
+    "perpendicular"
+  ];
+
+  binaryOps = [ "add" "subtract" "dot" "cross" "parallel" "perpendicular" ];
+
+  applyVector = request:
+    let
+      op = request.operation;
+      a  = if request ? a then request.a else [];
+      b  = if request ? b then request.b else [];
+      k  = if request ? k then request.k else 1;
+      binary = builtins.elem op binaryOps;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if a == [] then {
+        outcome = "held-empty-vector";
+        operation = op;
+      }
+      else if binary && !(sameDimension a b) then {
+        outcome = "held-dimension-mismatch";
+        operation = op;
+        reason = "both vectors must have the same dimension";
+      }
+      else if op == "cross" && dimension a != 3 then {
+        outcome = "held-not-three-dimensional";
+        operation = op;
+        reason = "the cross product is defined only for 3-vectors";
+      }
+      else if op == "add" then {
+        outcome = "vector-computed"; operation = op;
+        vector = vecAdd a b;
+      }
+      else if op == "subtract" then {
+        outcome = "vector-computed"; operation = op;
+        vector = vecSub a b;
+      }
+      else if op == "scale" then {
+        outcome = "vector-computed"; operation = op; k = k;
+        vector = vecScale k a;
+      }
+      else if op == "negate" then {
+        outcome = "vector-computed"; operation = op;
+        vector = vecNegate a;
+      }
+      else if op == "cross" then {
+        outcome = "vector-computed"; operation = op;
+        vector = vecCross a b;
+      }
+      else if op == "dot" then {
+        outcome = "vector-computed"; operation = op;
+        value = vecDot a b;
+      }
+      else if op == "norm-squared" then {
+        outcome = "vector-computed"; operation = op;
+        value = vecNormSquared a;
+      }
+      else if op == "parallel" then {
+        outcome = "vector-computed"; operation = op;
+        holds = vecParallel a b;
+      }
+      else {
+        # op == "perpendicular"
+        outcome = "vector-computed"; operation = op;
+        holds = vecPerpendicular a b;
+      };
+
+in {
+  inherit
+    ownerName
+    dimension
+    sameDimension
+    vecAdd
+    vecSub
+    vecScale
+    vecNegate
+    vecDot
+    vecNormSquared
+    vecCross
+    vecEquals
+    vecIsZero
+    vecParallel
+    vecPerpendicular
+    knownOperations
+    applyVector;
+  meta = {
+    source = "stdlib math vector";
+    owner = ownerName;
+    base = "parametric-math-vector-v0";
+    rev_note = "v0.12-AAJ (div-math): exact integer vector algebra owner. Integer-component vectors of any dimension: add / subtract / scale / negate, dot product, cross product (3-vectors only), squared norm (the magnitude is irrational so the owner returns the exact square), parallelism (all 2x2 minors vanish) and perpendicularity (dot product zero). Standalone. NOT floating-point vectors, NOT a vector-space/basis engine, NOT matrices, NOT yet a registered lens.";
+  };
+}

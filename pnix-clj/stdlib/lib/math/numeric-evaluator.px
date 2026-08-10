@@ -1,0 +1,1044 @@
+# stdlib.lib.math.numeric-evaluator
+#
+# OWNER-LAW (v0.10-A, 2026-05-15): first symbolic primitive in the
+# math lane. v0.9 series (A through E) judged candidate statements
+# by registry lookup against hand-registered knownFalsehoods rows
+# carrying string-surface counterexamples. v0.10-A is the first
+# step beyond that: the substrate actually *evaluates* small Peano
+# arithmetic expressions and can mechanically discover whether a
+# universally-quantified claim like "forall n : Nat. 1 + n = n"
+# holds over a finite domain n in {0..5} -- producing the
+# counterexample evidence string automatically, with no
+# pre-registered row.
+#
+# # Closed grammar
+#
+# The numeric evaluator handles a small fixed grammar:
+#
+#   expr   := term  (('+' | '*')  term)*
+#   term   := literal | variable | '(' expr ')'
+#   literal  := digit{1,3}
+#   variable := letter{1,4}        (e.g. n, m, k)
+#
+# No subtraction, no division, no negative literals, no exponents,
+# no function calls in v0. Adding any of those = grammar extension
+# in a future slice.
+#
+# Operator precedence: same as standard. '*' binds tighter than
+# '+'. Parens override.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a general arithmetic evaluator. Exact integer results are
+#     returned by evaluateNumericExpression; non-integer division is
+#     handled by evaluateRationalExpression via rational.px, never by
+#     silent truncation.
+#   - NOT a symbolic algebra system. Cannot simplify n + 0 to n
+#     symbolically -- only evaluates closed expressions or
+#     expressions parametrised by a variable substituted to a
+#     concrete Nat.
+#   - NOT an unbounded domain prover. The finite-domain checker
+#     only verifies a universal claim over a small explicit range
+#     (default {0..5}); a passing finite-domain check is NOT a
+#     proof for all naturals.
+#   - NOT integrated with v0.9-B's judgeStatement yet. v0.10-A
+#     exposes the evaluator as a primitive; a future slice
+#     (v0.10-B+) can rewire judgeStatement to call it when no
+#     knownFalsehoods row matches.
+
+let
+  ownerName = "stdlib/lib/math/numeric-evaluator.px";
+  rationalOwner = import ./rational.px;
+
+  digitChars  = [ "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" ];
+  letterChars =
+    let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    in builtins.genList (i: builtins.substring i 1 letters) 52;
+  # v0.11-A: `-` added as a binary operator at `+` precedence.
+  # v0.11-E: leading `-` is also a unary prefix (desugared into
+  # `0 - <atom>` by parseAtom).
+  # v0.11-F: `/` added as a binary operator at `*` precedence.
+  # Division by zero raises an eval error at runtime; the parser
+  # accepts the operator unconditionally.
+  # v0.11-I: `%` (modulo) added at `*` precedence. Defined as
+  # `lv - rv * (lv / rv)` so it shares the v0.11-F integer-
+  # division semantics (truncation toward zero); division by zero
+  # surfaces the same structured error.
+  # v0.12-JJ (div-math, 2026-05-21): `^` (exponentiation) added at
+  # a NEW precedence level tighter than `*`/`/`/`%`, right-
+  # associative (`2 ^ 3 ^ 2` = `2 ^ (3 ^ 2)` = 512). Nix has no
+  # host `^`, so eval computes it by `intPow` (repeated multiply).
+  # The exponent must be a Nat (>= 0); a negative exponent would
+  # leave Nat and surfaces a structured eval error.
+  opChars     = [ "+" "*" "-" "/" "%" "^" ];
+  parenChars  = [ "(" ")" ];
+  spaceChars  = [ " " "\t" "\n" ];
+
+  isDigit  = c: builtins.elem c digitChars;
+  isLetter = c: builtins.elem c letterChars;
+  isOp     = c: builtins.elem c opChars;
+  isParen  = c: builtins.elem c parenChars;
+  isSpace  = c: builtins.elem c spaceChars;
+
+  digitValue = c:
+    if c == "0" then 0 else if c == "1" then 1
+    else if c == "2" then 2 else if c == "3" then 3
+    else if c == "4" then 4 else if c == "5" then 5
+    else if c == "6" then 6 else if c == "7" then 7
+    else if c == "8" then 8 else if c == "9" then 9
+    else -1;
+
+  # Tokenizer. Returns a list of tokens:
+  #   { kind = "lit"   ; value = <int>; }
+  #   { kind = "var"   ; name  = <string>; }
+  #   { kind = "op"    ; op    = "+" | "*"; }
+  #   { kind = "lparen"; }
+  #   { kind = "rparen"; }
+  #   { kind = "error" ; reason = <string>; pos = <int>; }
+  tokenize = s:
+    let
+      n = builtins.stringLength s;
+      charAt = i: builtins.substring i 1 s;
+      # Scan a digit run starting at i; return { value; nextPos }.
+      scanDigits = i:
+        let
+          step = j: acc:
+            if j >= n || !(isDigit (charAt j)) then { value = acc; nextPos = j; }
+            else step (j + 1) (acc * 10 + digitValue (charAt j));
+        in step i 0;
+      # Scan a letter run starting at i; return { name; nextPos }.
+      scanLetters = i:
+        let
+          step = j: acc:
+            if j >= n || !(isLetter (charAt j)) then { name = acc; nextPos = j; }
+            else step (j + 1) (acc + charAt j);
+        in step i "";
+      go = i: acc:
+        if i >= n then acc
+        else
+          let c = charAt i;
+          in
+            if isSpace c then go (i + 1) acc
+            else if isDigit c then
+              let r = scanDigits i;
+              in go r.nextPos (acc ++ [ { kind = "lit"; value = r.value; } ])
+            else if isLetter c then
+              let r = scanLetters i;
+              in go r.nextPos (acc ++ [ { kind = "var"; name = r.name; } ])
+            else if isOp c then
+              go (i + 1) (acc ++ [ { kind = "op"; op = c; } ])
+            else if c == "(" then
+              go (i + 1) (acc ++ [ { kind = "lparen"; } ])
+            else if c == ")" then
+              go (i + 1) (acc ++ [ { kind = "rparen"; } ])
+            else
+              acc ++ [ { kind = "error"; reason = "unexpected char `" + c + "`"; pos = i; } ];
+    in go 0 [];
+
+  # AST node constructors.
+  mkLit = v: { kind = "lit"; value = v; };
+  mkVar = name: { kind = "var"; name = name; };
+  mkBin = op: l: r: { kind = "binop"; op = op; left = l; right = r; };
+  mkErr = msg: pos: { kind = "error"; reason = msg; pos = pos; };
+
+  isErr = node: builtins.isAttrs node && node ? kind && node.kind == "error";
+  isEvalErr = v: builtins.isAttrs v && v ? kind && v.kind == "error";
+
+  tokenAt = toks: i:
+    if i >= builtins.length toks then { kind = "eof"; }
+    else builtins.elemAt toks i;
+
+  tokenStartsAtom = t:
+    t.kind == "lit" || t.kind == "var" || t.kind == "lparen";
+
+  # Parser. Recursive-descent, two precedence levels (+/- then *).
+  # `+` and `-` share precedence and are left-associative. Returns
+  # { node; pos } on success or { node = error; pos } on failure.
+  parseExpr = toks: i: parseSumLevel toks i;
+
+  parseSumLevel = toks: i:
+    let
+      first = parseProdLevel toks i;
+    in
+      if isErr first.node then first
+      else
+        let
+          loop = node: p:
+            let t = tokenAt toks p;
+            in
+              # v0.11-A: `+` and `-` share the same precedence
+              # level. left-associative: `a - b + c` parses as
+              # `(a - b) + c`. The op string is carried verbatim
+              # into the binop node so eval and semantic-canon
+              # can dispatch on it.
+              if t.kind == "op" && (t.op == "+" || t.op == "-") then
+                let r = parseProdLevel toks (p + 1);
+                in if isErr r.node then r
+                   else loop (mkBin t.op node r.node) r.pos
+              else { node = node; pos = p; };
+        in loop first.node first.pos;
+
+  parseProdLevel = toks: i:
+    let
+      first = parsePowLevel toks i;
+    in
+      if isErr first.node then first
+      else
+        let
+          loop = node: p:
+            let t = tokenAt toks p;
+            in
+              # v0.11-F: `*` and `/` share the same precedence
+              # level and are left-associative. `a / b * c` parses
+              # as `(a / b) * c`. The op string is carried verbatim
+              # so eval and semantic-canon dispatch on it.
+              # v0.11-I: `%` joins the same precedence level.
+              if t.kind == "op"
+                && (t.op == "*" || t.op == "/" || t.op == "%") then
+                let r = parsePowLevel toks (p + 1);
+                in if isErr r.node then r
+                   else loop (mkBin t.op node r.node) r.pos
+              else { node = node; pos = p; };
+        in loop first.node first.pos;
+
+  # v0.12-JJ (div-math): power level. Binds tighter than `*` and is
+  # RIGHT-associative -- `2 ^ 3 ^ 2` parses as `2 ^ (3 ^ 2)`. The
+  # leaf is parseAtom; the right operand recurses into parsePowLevel
+  # so the right-associative chain folds correctly. A non-`^` atom
+  # just passes through (parsePowLevel of a plain atom == parseAtom).
+  parsePowLevel = toks: i:
+    let
+      base = parseAtom toks i;
+    in
+      if isErr base.node then base
+      else
+        let t = tokenAt toks base.pos;
+        in
+          # Postfix percent: `30%` means `30 / 100`. Binary modulo still
+          # parses in parseProdLevel when `%` is followed by a RHS atom
+          # (`9 % 4`), so the two surfaces stay distinct.
+          # `x % -y` is genuinely ambiguous (binary modulo `a % (-b)` vs
+          # postfix-percent minus `(a%) - b`); refuse to guess and surface a
+          # held error instead of silently picking the percent reading.
+          if t.kind == "op" && t.op == "%"
+             && !(tokenStartsAtom (tokenAt toks (base.pos + 1))) then
+            (if ((tokenAt toks (base.pos + 1)).op or "") == "-" then
+               { node = mkErr "ambiguous `%` before `-`: parenthesize as modulo `a % (-b)` or percent `(a%) - b`" base.pos; pos = base.pos + 1; }
+             else
+               { node = mkBin "/" base.node (mkLit 100); pos = base.pos + 1; })
+          else if t.kind == "op" && t.op == "^" then
+            let r = parsePowLevel toks (base.pos + 1);
+            in if isErr r.node then r
+               else { node = mkBin "^" base.node r.node; pos = r.pos; }
+          else base;
+
+  parseAtom = toks: i:
+    let t = tokenAt toks i;
+    in
+      if t.kind == "lit" then { node = mkLit t.value; pos = i + 1; }
+      else if t.kind == "var" then { node = mkVar t.name; pos = i + 1; }
+      else if t.kind == "lparen" then
+        let inner = parseExpr toks (i + 1);
+        in
+          if isErr inner.node then inner
+          else
+            let close = tokenAt toks inner.pos;
+            in
+              if close.kind == "rparen"
+              then { node = inner.node; pos = inner.pos + 1; }
+              else { node = mkErr "expected )" inner.pos; pos = inner.pos; }
+      # v0.11-E: unary minus + negative literals. A `-` token at
+      # atom position is desugared into a binop `(0 - atom)`. The
+      # evaluator's `-` branch (v0.11-A) handles the result without
+      # any new node kind. Binding-time precedence: the unary form
+      # has the same precedence as parseAtom itself, so `-n * 2`
+      # parses as `(-n) * 2` (= `(0 - n) * 2`), matching standard
+      # arithmetic.
+      else if t.kind == "op" && t.op == "-" then
+        # v0.12-JJ: the inner recurses into parsePowLevel (not
+        # parseAtom) so unary minus binds LOOSER than `^` --
+        # `-2 ^ 2` parses as `0 - (2 ^ 2)` = -4, matching standard
+        # arithmetic precedence.
+        let inner = parsePowLevel toks (i + 1);
+        in
+          if isErr inner.node then inner
+          else {
+            node = mkBin "-" (mkLit 0) inner.node;
+            pos = inner.pos;
+          }
+      else if t.kind == "error" then { node = mkErr t.reason t.pos; pos = i; }
+      else { node = mkErr "expected literal, variable, or `(`" i; pos = i; };
+
+  # Top-level parse: tokenize, parse expression, ensure all tokens
+  # consumed.
+  parseExpression = s:
+    let
+      toks = tokenize s;
+      r = parseExpr toks 0;
+    in
+      if isErr r.node then { ok = false; node = null; error = r.node; }
+      else if r.pos < builtins.length toks then {
+        ok = false;
+        node = null;
+        error = mkErr "trailing tokens after expression" r.pos;
+      }
+      else { ok = true; node = r.node; error = null; };
+
+  # v0.12-JJ (div-math): integer exponentiation by repeated
+  # multiply. Nix has no host `^`. `exp` is assumed >= 0 (the
+  # caller in evalAst rejects negative exponents first). `intPow
+  # base 0 = 1` for every base, including `intPow 0 0 = 1` (the
+  # standard combinatorial convention).
+  intPow = base: exp:
+    if exp == 0 then 1
+    else base * (intPow base (exp - 1));
+
+  # Evaluate an AST under an environment `env` mapping variable
+  # names to integers. Returns either an int or an error attrset.
+  evalAst = ast: env:
+    if ast.kind == "lit" then ast.value
+    else if ast.kind == "var" then
+      if env ? "${ast.name}" then env."${ast.name}"
+      else mkErr ("unbound variable `" + ast.name + "`") (-1)
+    else if ast.kind == "binop" then
+      let
+        lv = evalAst ast.left env;
+        rv = evalAst ast.right env;
+      in
+        if isEvalErr lv then lv
+        else if isEvalErr rv then rv
+        else if ast.op == "+" then lv + rv
+        else if ast.op == "-" then lv - rv
+        else if ast.op == "*" then lv * rv
+        # v0.11-F: exact integer division. Division by zero is
+        # intercepted before the host call. Non-exact division is
+        # rejected here instead of silently truncating; callers that
+        # need `1/3` use evaluateRationalExpression below.
+        else if ast.op == "/" then
+          if rv == 0 then mkErr "division by zero" (-1)
+          else
+            let q = lv / rv;
+            in
+              if q * rv == lv then q
+              else mkErr "non-exact division leaves integer evaluator" (-1)
+        # v0.11-I: integer modulo, defined as
+        # `lv - rv * (lv / rv)` to reuse the host's truncation-
+        # toward-zero division semantics. Modulo by zero shares
+        # the same structured error as division.
+        else if ast.op == "%" then
+          if rv == 0 then mkErr "modulo by zero" (-1)
+          else lv - rv * (lv / rv)
+        # v0.12-JJ (div-math): exponentiation. The exponent must be
+        # a Nat -- a negative exponent would produce a non-integer
+        # (`2 ^ -1 = 1/2`), leaving the Nat universe, so it surfaces
+        # a structured eval error the checker folds into
+        # held-eval-error like division-by-zero does.
+        else if ast.op == "^" then
+          if rv < 0 then mkErr "negative exponent leaves Nat" (-1)
+          else intPow lv rv
+        else mkErr ("unsupported op `" + ast.op + "`") (-1)
+    else mkErr ("unsupported AST kind `" + ast.kind + "`") (-1);
+
+  # Parse-and-eval convenience.
+  evaluateNumericExpression = s: env:
+    let p = parseExpression s;
+    in
+      if !p.ok then { ok = false; value = null; error = p.error; }
+      else
+        let v = evalAst p.node env;
+        in
+          if isEvalErr v
+          then { ok = false; value = null; error = v; }
+          else { ok = true; value = v; error = null; };
+
+  ratPow = base: exp:
+    if exp == 0 then rationalOwner.ratOne
+    else rationalOwner.ratMul base (ratPow base (exp - 1));
+
+  # Exact rational evaluator over the same AST. This is the non-integer
+  # division lane for arithmetic surfaces such as `1/3` and `1/2 + 1/3`.
+  # It reuses rational.px instead of adding a second fraction owner.
+  evalAstRational = ast: env:
+    if ast.kind == "lit" then rationalOwner.ratFromInt ast.value
+    else if ast.kind == "var" then
+      if env ? "${ast.name}" then rationalOwner.ratFromInt env."${ast.name}"
+      else mkErr ("unbound variable `" + ast.name + "`") (-1)
+    else if ast.kind == "binop" then
+      let
+        lv = evalAstRational ast.left env;
+        rv = evalAstRational ast.right env;
+      in
+        if isEvalErr lv then lv
+        else if isEvalErr rv then rv
+        else if ast.op == "+" then rationalOwner.ratAdd lv rv
+        else if ast.op == "-" then rationalOwner.ratSub lv rv
+        else if ast.op == "*" then rationalOwner.ratMul lv rv
+        else if ast.op == "/" then
+          if rationalOwner.ratIsZero rv then mkErr "division by zero" (-1)
+          else rationalOwner.ratDiv lv rv
+        else if ast.op == "%" then
+          if !(rationalOwner.ratIsInteger lv) || !(rationalOwner.ratIsInteger rv) then
+            mkErr "modulo requires integer operands" (-1)
+          else if rv.num == 0 then mkErr "modulo by zero" (-1)
+          else rationalOwner.ratFromInt (lv.num - rv.num * (lv.num / rv.num))
+        else if ast.op == "^" then
+          if !(rationalOwner.ratIsInteger rv) then
+            mkErr "rational exponent unsupported" (-1)
+          else if rv.num < 0 then
+            mkErr "negative exponent leaves rational evaluator scope" (-1)
+          else ratPow lv rv.num
+        else mkErr ("unsupported op `" + ast.op + "`") (-1)
+    else mkErr ("unsupported AST kind `" + ast.kind + "`") (-1);
+
+  evaluateRationalExpression = s: env:
+    let p = parseExpression s;
+    in
+      if !p.ok then { ok = false; value = null; rational = null; text = null; is_integer = false; error = p.error; }
+      else
+        let v = evalAstRational p.node env;
+        in
+          if isEvalErr v then {
+            ok = false;
+            value = null;
+            rational = null;
+            text = null;
+            is_integer = false;
+            error = v;
+          } else {
+            ok = true;
+            value = if rationalOwner.ratIsInteger v then v.num else null;
+            rational = v;
+            text = rationalOwner.ratToString v;
+            is_integer = rationalOwner.ratIsInteger v;
+            error = null;
+          };
+
+  # Statement matcher. Accepted shapes:
+  #
+  #   forall <var> : Nat. <LHS> = <RHS>                (v0.10-A)
+  #   forall <var1> <var2> [<var3> ...] : Nat. <LHS> = <RHS>
+  #                                                    (v0.11-B)
+  #
+  # Returns either:
+  #   { ok = true; binders; binder; lhs; rhs; }
+  # or
+  #   { ok = false; reason = ...; }
+  #
+  # `binders` is the list of bound variable names in declaration
+  # order. `binder` is `head binders` (single-binder back-compat
+  # surface; downstream code that only handles one variable still
+  # works on single-binder statements).
+  parseUniversalEquation = statement:
+    let
+      # v0.12-N (2026-05-16): explicit recognition of `exists!`
+      # (unique existence) statements. v0.10-A grammar handles
+      # `forall ...` only; `exists!` lifts the statement into a
+      # quantifier shape the substrate doesn't yet evaluate, but
+      # surfaces honestly as held-existential instead of folding
+      # into the generic "no relation operator" reason. Future
+      # slices can add real evaluation; v0.12-N just opens the
+      # vocabulary so downstream audit views (theorem-store
+      # evidence_status, discovered-store classify, judge audit)
+      # can route exists-statements distinctly from parse errors.
+      existsPrefix = "exists! ";
+      epl = builtins.stringLength existsPrefix;
+      sl0 = builtins.stringLength statement;
+      isExists = sl0 >= epl
+        && (builtins.substring 0 epl statement) == existsPrefix;
+      prefix = "forall ";
+      pl = builtins.stringLength prefix;
+      sl = builtins.stringLength statement;
+      startsOk = sl > pl && (builtins.substring 0 pl statement) == prefix;
+      rest1 = builtins.substring pl (sl - pl) statement;
+      # Find " : Nat. " separator.
+      sep = " : Nat. ";
+      sepLen = builtins.stringLength sep;
+      r1l = builtins.stringLength rest1;
+      sepIdxScan = i:
+        if i + sepLen > r1l then -1
+        else if (builtins.substring i sepLen rest1) == sep then i
+        else sepIdxScan (i + 1);
+      sepIdx = if startsOk then sepIdxScan 0 else -1;
+    in
+      # v0.12-N: explicit held-existential surface.
+      if isExists then {
+        ok = false;
+        reason = "held-existential: substrate does not yet evaluate `exists!` statements";
+        shape = "exists-unique";
+      }
+      else if !startsOk then {
+        ok = false;
+        reason = "statement does not start with `forall `";
+      }
+      else if sepIdx < 0 then {
+        ok = false;
+        reason = "statement is not in the shape `forall <var> : Nat. <LHS> = <RHS>`";
+      }
+      else
+        let
+          binder = builtins.substring 0 sepIdx rest1;
+          afterSep = builtins.substring (sepIdx + sepLen)
+            (r1l - sepIdx - sepLen) rest1;
+          # v0.12-E: scan for any supported binary relation between
+          # LHS and RHS. v0.12-F extends the v0.12-E `=` + `<` set
+          # with `<=`, `>=`, `>`, `!=`. At the same starting index
+          # the 4-char tokens (` <= `, ` >= `, ` != `) take priority
+          # over the 3-char tokens (` = `, ` < `, ` > `) so that
+          # `a <= b` does not get misread as `a` followed by `< b`
+          # at the leading-position ` <= ` start. The leading and
+          # trailing spaces in each token are intentional -- they
+          # match the v0.10-A LHS/RHS surface convention.
+          asLen = builtins.stringLength afterSep;
+          matchRelation = i:
+            if i >= asLen then null
+            else
+              let
+                here4 =
+                  if i + 4 > asLen then null
+                  else builtins.substring i 4 afterSep;
+                here3 =
+                  if i + 3 > asLen then null
+                  else builtins.substring i 3 afterSep;
+              in
+                # 4-char tokens first.
+                if here4 == " <= " then
+                  { idx = i; tokenLen = 4; op = "<="; }
+                else if here4 == " >= " then
+                  { idx = i; tokenLen = 4; op = ">="; }
+                else if here4 == " != " then
+                  { idx = i; tokenLen = 4; op = "!="; }
+                # 3-char tokens.
+                else if here3 == " = " then
+                  { idx = i; tokenLen = 3; op = "="; }
+                else if here3 == " < " then
+                  { idx = i; tokenLen = 3; op = "<"; }
+                else if here3 == " > " then
+                  { idx = i; tokenLen = 3; op = ">"; }
+                else matchRelation (i + 1);
+          relMatch = matchRelation 0;
+        in
+          if relMatch == null then {
+            ok = false;
+            reason = "no relation operator (=, <, <=, >, >=, !=) in the predicate body";
+          }
+          else
+            let
+              # v0.11-B: `binder` substring may contain multiple
+              # whitespace-separated variable names. Split into a
+              # list; the head is the back-compat single binder.
+              splitOn = ch: s:
+                let
+                  n = builtins.stringLength s;
+                  step = i: cur: acc:
+                    if i >= n then
+                      if cur == "" then acc else acc ++ [ cur ]
+                    else
+                      let c = builtins.substring i 1 s;
+                      in
+                        if c == ch then
+                          step (i + 1) ""
+                            (if cur == "" then acc else acc ++ [ cur ])
+                        else step (i + 1) (cur + c) acc;
+                in step 0 "" [];
+              binderList = splitOn " " binder;
+              firstBinder =
+                if binderList == [] then "" else builtins.head binderList;
+            in {
+              ok = true;
+              # v0.12-E: `op` surfaces the matched relation. "="
+              # preserves the v0.10-A back-compat semantics; "<"
+              # is the v0.12-E addition.
+              op = relMatch.op;
+              binder = firstBinder;
+              binders = binderList;
+              lhs = builtins.substring 0 relMatch.idx afterSep;
+              rhs = builtins.substring (relMatch.idx + relMatch.tokenLen)
+                (asLen - relMatch.idx - relMatch.tokenLen) afterSep;
+            };
+
+  # Universal claim checker over a finite domain.
+  #
+  # Given `forall n : Nat. LHS = RHS`, evaluate LHS and RHS for
+  # each n in `domain`. If all n satisfy LHS == RHS, return
+  # `small-domain-verified` (NOT a proof for all naturals -- just
+  # for the explicit domain). If any n fails, return
+  # `counterexample-found-at-n` with an auto-generated evidence
+  # string.
+  checkUniversalOverFiniteDomain = statement: domain:
+    let
+      parsed = parseUniversalEquation statement;
+    in
+      if !parsed.ok then {
+        outcome = "held-statement-shape";
+        reason = parsed.reason;
+        statement = statement;
+      }
+      else
+      let
+        # v0.12-E: relation dispatch. `=` retains v0.10-A semantics;
+        # `<` is the new comparison. Unknown ops fold to false
+        # (treated as counterexample at every binding) so future
+        # additions to parseUniversalEquation that forget to wire
+        # the comparator surface as universal counterexamples
+        # rather than silent successes.
+        relationHolds = lv: rv:
+          if parsed.op == "=" then lv == rv
+          else if parsed.op == "<" then lv < rv
+          else if parsed.op == "<=" then lv <= rv
+          else if parsed.op == ">" then lv > rv
+          else if parsed.op == ">=" then lv >= rv
+          else if parsed.op == "!=" then lv != rv
+          else false;
+        # v0.12-E: evidence message uses the relation operator.
+        formatEvidenceSingle = ce:
+          parsed.lhs + " " + parsed.op + " " + parsed.rhs
+            + " at " + parsed.binder + "="
+            + builtins.toString ce.n + " is false: "
+            + parsed.lhs + "=" + builtins.toString ce.lhs_value
+            + ", " + parsed.rhs + "=" + builtins.toString ce.rhs_value;
+        formatEvidenceMulti = ce: formatter:
+          parsed.lhs + " " + parsed.op + " " + parsed.rhs
+            + " at " + (formatter ce.bindings) + " is false: "
+            + parsed.lhs + "=" + builtins.toString ce.lhs_value
+            + ", " + parsed.rhs + "=" + builtins.toString ce.rhs_value;
+      in
+      if builtins.length parsed.binders > 1 then
+        # v0.11-C: multi-binder check walks the Cartesian product
+        # `domain^k` of the bound variables and evaluates LHS / RHS
+        # for each binding combination. Same closing-loop verdict
+        # vocabulary as the single-binder case
+        # (small-domain-verified, counterexample-found,
+        # held-eval-error); the counterexample envelope additionally
+        # carries the full `bindings` map and the binder list so a
+        # downstream consumer sees the witness assignment.
+        let
+          binders = parsed.binders;
+          k = builtins.length binders;
+          # Build the Cartesian product of `domain` over the binder
+          # list. Each result is an attrset binding every name to a
+          # value from `domain`. Order: leftmost binder varies
+          # slowest, matching nested-loop intuition.
+          cartesian = bs:
+            if bs == [] then [ {} ]
+            else
+              let
+                first = builtins.head bs;
+                rest = builtins.tail bs;
+                tailEnvs = cartesian rest;
+              in
+                builtins.concatMap
+                  (n: builtins.map
+                    (env: env // { "${first}" = n; })
+                    tailEnvs)
+                  domain;
+          envs = cartesian binders;
+          # Evaluate LHS / RHS under one env binding.
+          checkEnv = env:
+            let
+              lv = evaluateNumericExpression parsed.lhs env;
+              rv = evaluateNumericExpression parsed.rhs env;
+            in
+              if !lv.ok then {
+                kind = "held-lhs-eval-error";
+                bindings = env;
+                error = lv.error;
+              }
+              else if !rv.ok then {
+                kind = "held-rhs-eval-error";
+                bindings = env;
+                error = rv.error;
+              }
+              else {
+                kind =
+                  if relationHolds lv.value rv.value then "ok"
+                  else "counterexample";
+                bindings = env;
+                lhs_value = lv.value;
+                rhs_value = rv.value;
+              };
+          results = builtins.map checkEnv envs;
+          firstFail = builtins.foldl'
+            (acc: r:
+              if acc != null then acc
+              else if r.kind != "ok" then r
+              else null)
+            null
+            results;
+          # Format a bindings attrset as `n=0, m=1` for evidence.
+          formatBindings = env:
+            let
+              entries = builtins.map
+                (b: b + "=" + builtins.toString env."${b}")
+                binders;
+            in builtins.concatStringsSep ", " entries;
+        in
+          if firstFail == null then {
+            outcome = "small-domain-verified";
+            statement = statement;
+            binders = binders;
+            binder_count = k;
+            domain = domain;
+            domain_size = builtins.length domain;
+            evaluation_count = builtins.length envs;
+            counterexample = null;
+            evidence = null;
+          }
+          else if firstFail.kind == "counterexample" then {
+            outcome = "counterexample-found";
+            statement = statement;
+            binders = binders;
+            binder_count = k;
+            domain = domain;
+            evaluation_count = builtins.length envs;
+            counterexample = firstFail;
+            evidence =
+              # v0.12-E: equality preserves v0.11-C evidence format
+              # byte-identical; new ops use the v0.12-E generic format.
+              if parsed.op == "=" then
+                parsed.lhs + " at " + (formatBindings firstFail.bindings)
+                  + " is " + builtins.toString firstFail.lhs_value
+                  + ", but " + parsed.rhs + " at "
+                  + (formatBindings firstFail.bindings) + " is "
+                  + builtins.toString firstFail.rhs_value
+              else formatEvidenceMulti firstFail formatBindings;
+          }
+          else {
+            outcome = "held-eval-error";
+            statement = statement;
+            binders = binders;
+            binder_count = k;
+            first_failure = firstFail;
+            evidence = null;
+          }
+      else
+        let
+          checkOne = n:
+            let
+              env = { "${parsed.binder}" = n; };
+              lv = evaluateNumericExpression parsed.lhs env;
+              rv = evaluateNumericExpression parsed.rhs env;
+            in
+              if !lv.ok then {
+                kind = "held-lhs-eval-error";
+                n = n;
+                error = lv.error;
+              }
+              else if !rv.ok then {
+                kind = "held-rhs-eval-error";
+                n = n;
+                error = rv.error;
+              }
+              else {
+                kind = if relationHolds lv.value rv.value then "ok"
+                       else "counterexample";
+                n = n;
+                lhs_value = lv.value;
+                rhs_value = rv.value;
+              };
+          results = builtins.map checkOne domain;
+          firstFail = builtins.foldl'
+            (acc: r:
+              if acc != null then acc
+              else if r.kind != "ok" then r
+              else null)
+            null
+            results;
+        in
+          if firstFail == null then {
+            outcome = "small-domain-verified";
+            statement = statement;
+            binder = parsed.binder;
+            domain = domain;
+            domain_size = builtins.length domain;
+            results = results;
+            counterexample = null;
+            evidence = null;
+          }
+          else if firstFail.kind == "counterexample" then {
+            outcome = "counterexample-found";
+            statement = statement;
+            binder = parsed.binder;
+            domain = domain;
+            counterexample = firstFail;
+            evidence =
+              # v0.12-E: equality preserves v0.10-A evidence format
+              # byte-identical; new ops use the v0.12-E generic format.
+              if parsed.op == "=" then
+                parsed.lhs + " evaluated at " + parsed.binder + "="
+                  + builtins.toString firstFail.n + " is "
+                  + builtins.toString firstFail.lhs_value
+                  + ", but " + parsed.rhs + " evaluated at "
+                  + parsed.binder + "=" + builtins.toString firstFail.n
+                  + " is " + builtins.toString firstFail.rhs_value
+              else formatEvidenceSingle firstFail;
+          }
+          else {
+            outcome = "held-eval-error";
+            statement = statement;
+            binder = parsed.binder;
+            first_failure = firstFail;
+            evidence = null;
+          };
+
+  # Default finite domain: {0..5}.
+  defaultFiniteDomain = builtins.genList (i: i) 6;
+
+  # v0.12-O (2026-05-16): `exists! <binders> : Nat. <body>` parser.
+  # Mirrors parseUniversalEquation's shape but accepts the exists!
+  # prefix instead of forall. Body uses the same v0.12-E/F relation
+  # operator set. Returns the same envelope shape with an extra
+  # `quantifier = "exists-unique"` field.
+  parseExistentialEquation = statement:
+    let
+      existsPrefix = "exists! ";
+      epl = builtins.stringLength existsPrefix;
+      sl = builtins.stringLength statement;
+      startsOk = sl > epl
+        && (builtins.substring 0 epl statement) == existsPrefix;
+      rest1 =
+        if startsOk then builtins.substring epl (sl - epl) statement
+        else "";
+      sep = " : Nat. ";
+      sepLen = builtins.stringLength sep;
+      r1l = builtins.stringLength rest1;
+      sepIdxScan = i:
+        if i + sepLen > r1l then -1
+        else if (builtins.substring i sepLen rest1) == sep then i
+        else sepIdxScan (i + 1);
+      sepIdx = if startsOk then sepIdxScan 0 else -1;
+    in
+      if !startsOk then {
+        ok = false;
+        reason = "statement does not start with `exists! `";
+      }
+      else if sepIdx < 0 then {
+        ok = false;
+        reason = "no ` : Nat. ` separator after exists! binders";
+      }
+      else
+        let
+          binderRaw = builtins.substring 0 sepIdx rest1;
+          afterSep = builtins.substring (sepIdx + sepLen)
+            (r1l - sepIdx - sepLen) rest1;
+          asLen = builtins.stringLength afterSep;
+          matchRelation = i:
+            if i >= asLen then null
+            else
+              let
+                here4 =
+                  if i + 4 > asLen then null
+                  else builtins.substring i 4 afterSep;
+                here3 =
+                  if i + 3 > asLen then null
+                  else builtins.substring i 3 afterSep;
+              in
+                if here4 == " <= " then
+                  { idx = i; tokenLen = 4; op = "<="; }
+                else if here4 == " >= " then
+                  { idx = i; tokenLen = 4; op = ">="; }
+                else if here4 == " != " then
+                  { idx = i; tokenLen = 4; op = "!="; }
+                else if here3 == " = " then
+                  { idx = i; tokenLen = 3; op = "="; }
+                else if here3 == " < " then
+                  { idx = i; tokenLen = 3; op = "<"; }
+                else if here3 == " > " then
+                  { idx = i; tokenLen = 3; op = ">"; }
+                else matchRelation (i + 1);
+          relMatch = matchRelation 0;
+        in
+          if relMatch == null then {
+            ok = false;
+            reason = "no relation operator (=, <, <=, >, >=, !=) in the exists! body";
+          }
+          else
+            let
+              splitOn = ch: s:
+                let
+                  n = builtins.stringLength s;
+                  step = i: cur: acc:
+                    if i >= n then
+                      if cur == "" then acc else acc ++ [ cur ]
+                    else
+                      let c = builtins.substring i 1 s;
+                      in
+                        if c == ch then
+                          step (i + 1) ""
+                            (if cur == "" then acc else acc ++ [ cur ])
+                        else step (i + 1) (cur + c) acc;
+                in step 0 "" [];
+              binderList = splitOn " " binderRaw;
+              firstBinder =
+                if binderList == [] then "" else builtins.head binderList;
+            in {
+              ok = true;
+              quantifier = "exists-unique";
+              op = relMatch.op;
+              binder = firstBinder;
+              binders = binderList;
+              lhs = builtins.substring 0 relMatch.idx afterSep;
+              rhs = builtins.substring (relMatch.idx + relMatch.tokenLen)
+                (asLen - relMatch.idx - relMatch.tokenLen) afterSep;
+            };
+
+  # v0.12-O: finite-domain witness search for `exists!` statements.
+  # Enumerates every binding in `domain^k` (k = binder count), counts
+  # bindings that satisfy the body, classifies outcome:
+  #
+  #   exists-unique-verified-witness  exactly 1 satisfying binding
+  #                                    (the witness is carried)
+  #   exists-unique-multiple-witnesses  2+ satisfying bindings
+  #                                    (statement is FALSE because
+  #                                     `exists!` requires uniqueness)
+  #   exists-unique-no-witness          0 satisfying bindings
+  #                                    (statement is FALSE for lack
+  #                                     of any witness)
+  #   held-statement-shape              parse failed (not exists! shape)
+  #   held-eval-error                   one of the bindings hit an
+  #                                    eval error
+  #
+  # The substrate now answers `exists!` claims mechanically over the
+  # finite domain -- not a universal proof (the domain is bounded),
+  # but no longer just held-existential.
+  checkExistsUniqueOverFiniteDomain = statement: domain:
+    let
+      parsed = parseExistentialEquation statement;
+    in
+      if !parsed.ok then {
+        outcome = "held-statement-shape";
+        reason = parsed.reason;
+        statement = statement;
+      }
+      else
+        let
+          binders = parsed.binders;
+          k = builtins.length binders;
+          relationHolds = lv: rv:
+            if parsed.op == "=" then lv == rv
+            else if parsed.op == "<" then lv < rv
+            else if parsed.op == "<=" then lv <= rv
+            else if parsed.op == ">" then lv > rv
+            else if parsed.op == ">=" then lv >= rv
+            else if parsed.op == "!=" then lv != rv
+            else false;
+          cartesian = bs:
+            if bs == [] then [ {} ]
+            else
+              let
+                first = builtins.head bs;
+                rest = builtins.tail bs;
+                tailEnvs = cartesian rest;
+              in
+                builtins.concatMap
+                  (n: builtins.map
+                    (env: env // { "${first}" = n; })
+                    tailEnvs)
+                  domain;
+          envs = cartesian binders;
+          evalOne = env:
+            let
+              lv = evaluateNumericExpression parsed.lhs env;
+              rv = evaluateNumericExpression parsed.rhs env;
+            in
+              if !lv.ok then {
+                kind = "eval-error";
+                bindings = env;
+                error = lv.error;
+              }
+              else if !rv.ok then {
+                kind = "eval-error";
+                bindings = env;
+                error = rv.error;
+              }
+              else {
+                kind =
+                  if relationHolds lv.value rv.value then "satisfies"
+                  else "no-match";
+                bindings = env;
+                lhs_value = lv.value;
+                rhs_value = rv.value;
+              };
+          results = builtins.map evalOne envs;
+          anyError = builtins.foldl'
+            (acc: r: acc || r.kind == "eval-error") false results;
+          satisfying = builtins.filter
+            (r: r.kind == "satisfies") results;
+          witnessCount = builtins.length satisfying;
+        in
+          if anyError then {
+            outcome = "held-eval-error";
+            statement = statement;
+            binders = binders;
+            binder_count = k;
+            evaluation_count = builtins.length envs;
+          }
+          else if witnessCount == 0 then {
+            outcome = "exists-unique-no-witness";
+            statement = statement;
+            binders = binders;
+            binder_count = k;
+            domain_size = builtins.length domain;
+            evaluation_count = builtins.length envs;
+            witness = null;
+            witness_count = 0;
+          }
+          else if witnessCount == 1 then {
+            outcome = "exists-unique-verified-witness";
+            statement = statement;
+            binders = binders;
+            binder_count = k;
+            domain_size = builtins.length domain;
+            evaluation_count = builtins.length envs;
+            witness = builtins.head satisfying;
+            witness_count = 1;
+          }
+          else {
+            outcome = "exists-unique-multiple-witnesses";
+            statement = statement;
+            binders = binders;
+            binder_count = k;
+            domain_size = builtins.length domain;
+            evaluation_count = builtins.length envs;
+            first_two_witnesses = [
+              (builtins.elemAt satisfying 0)
+              (builtins.elemAt satisfying 1)
+            ];
+            witness_count = witnessCount;
+          };
+
+  # Lens entry. Request `{ statement; domain? }`. Falls back to
+  # `defaultFiniteDomain` when `domain` is absent.
+  applyNumericEvaluatorPlate = request:
+    let
+      stmt = request.statement;
+      dom =
+        if request ? domain && builtins.isList request.domain
+        then request.domain
+        else defaultFiniteDomain;
+    in checkUniversalOverFiniteDomain stmt dom;
+
+in {
+  inherit
+    ownerName
+    digitChars
+    letterChars
+    opChars
+    tokenize
+    parseExpression
+    evalAst
+    evaluateNumericExpression
+    evalAstRational
+    evaluateRationalExpression
+    parseUniversalEquation
+    checkUniversalOverFiniteDomain
+    parseExistentialEquation
+    checkExistsUniqueOverFiniteDomain
+    defaultFiniteDomain
+    applyNumericEvaluatorPlate;
+  meta = {
+    source = "stdlib math numeric evaluator";
+    owner = ownerName;
+    base = "parametric-math-numeric-evaluator-v0";
+    rev_note = "First symbolic primitive in the math lane: a recursive-descent parser + evaluator for Peano arithmetic over Nat literals + + and * + parens + named variables, paired with a finite-domain universal-claim checker. The substrate now MECHANICALLY discovers counterexamples for statements like `forall n : Nat. 1 + n = n` at n=0 without consulting v0.9-B's hand-registered knownFalsehoods registry. NOT a general algebra system; NOT unbounded universal proof; NOT integrated into judgeStatement yet (a future slice can wire numeric-evaluator into judge's held-for-search path).";
+  };
+}

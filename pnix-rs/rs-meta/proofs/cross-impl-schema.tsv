@@ -1,0 +1,7 @@
+# implementation	status	export_schema	comparison_policy	conflict_policy	note
+rs-meta-local	DONE	canonical-json-v1	local-bootstrap-check	fail-closed	rs-meta local interpreter and rustc native receipts are the current checked implementation pair
+rustc-native	DONE	stdout-receipt-v1	local-rustc-output	fail-closed	native tier records rustc stdout and artifact receipts for local comparison
+github-actions	DISABLED	workflow-yml-v1	no-remote-comparison	fail-closed	remote CI is disabled and cannot act as a comparison oracle
+alternate-rustc	HELD	canonical-json-v1	explicit-toolchain-receipt-required	fail-closed	alternate rustc versions require explicit local export receipts before comparison
+other-evaluator	HELD	canonical-json-v1	explicit-import-required	fail-closed	other Rust evaluators must provide canonical exports and remain held until checked
+ddc-style-rebuild	HELD	artifact-receipt-v1	explicit-ddc-track-required	fail-closed	diverse double-compiling is a separate held track not claimed by stage14 seed

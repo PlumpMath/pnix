@@ -1,0 +1,87 @@
+# stdlib/lib/nl/korean-term-mirror-test.px — 이해측 종착 회귀 하니스 (Slice 7 / converge 게이트)
+#
+# ★회의 결론(2026-06-17) 실증: 한글 이해가 한글 proposition 에서 멈추지 않고 *math DSL canonical
+#   (term-DAG)* 까지 접히고, 그 등가가 왕복으로 닫히는지. = "한글을 math로 재조립"의 진짜 닫힘.
+#   한글 문장 → 명제 → math DSL term → 명제 → 한글 문장' 이 전부 닫히면 → 한글 ≡ math DSL term (등가 증명).
+#   term 의 content-key(td.key) = 그 의미의 canonical "수"(math DSL 주소). 새 거울 0(korean-nl-mirror apply).
+let
+  knl = import ./korean-nl-mirror.px;
+  td  = import ../lisp/term-dag.px;
+  B = builtins;
+  sentence = "철수가 사과를 먹는다";
+  prop  = knl.liftToProposition sentence;        # 한글 → 명제 (converge)
+  term  = knl.propToTerm prop;                   # 명제 → math DSL term (이해측 종착)
+  prop2 = knl.termToProp term;                   # term → 명제 (역)
+  sentence2 = knl.realizeSentence prop2;          # 명제 → 한글 (diverge)
+  # ★어순 무관 canonical: 같은 의미의 두 어순 → 같은 term_key (마스터플랜 ②.4)
+  propAO = knl.mkProposition [ { entity = "철수"; role = "agent"; } { entity = "사과"; role = "object"; } ] "먹" "present" "declarative";
+  propOA = knl.mkProposition [ { entity = "사과"; role = "object"; } { entity = "철수"; role = "agent"; } ] "먹" "present" "declarative";
+  keyAO = td.key (knl.propToTerm propAO);
+  keyOA = td.key (knl.propToTerm propOA);
+  # ★일반화: 다양한 역할/시제/서법에서도 prop→term→prop 왕복이 닫히나 (worked-example 라이브러리)
+  cases = [
+    (knl.mkProposition [ { entity = "철수"; role = "agent"; } { entity = "영희"; role = "recipient"; } { entity = "책"; role = "object"; } ] "주" "past" "declarative")
+    (knl.mkProposition [ { entity = "나"; role = "agent"; } { entity = "펜"; role = "instrument"; } { entity = "글"; role = "object"; } ] "쓰" "present" "declarative")
+    (knl.mkProposition [ { entity = "너"; role = "agent"; } { entity = "문"; role = "object"; } ] "열" "present" "imperative")
+    (knl.mkProposition [ { entity = "우리"; role = "agent"; } { entity = "산"; role = "location"; } ] "가" "future" "propositive")
+    (knl.mkProposition [ { entity = "그"; role = "agent"; } { entity = "집"; role = "source"; } ] "오" "past" "interrogative")
+  ];
+  casesAllOk = B.all (p: (knl.termRoundTrip p).structure_preserved) cases;
+  # ★converge 게이트: 구조문장 → math-keep / 잡담 → held-nl (일상NL)
+  gateStruct = knl.convergeGate "철수가 사과를 먹는다";
+  gateChat   = knl.convergeGate "안녕";
+  gateOk = (gateStruct.verdict == "math-keep") && (gateChat.verdict == "held-nl");
+  # ★topic(는) ≠ agent(가) collapse 금지 (마스터플랜 ②.4): 다른 역할 → 다른 term_key, 둘 다 math-keep
+  gTopic = knl.convergeGate "철수는 사과를 먹는다";
+  gAgent = knl.convergeGate "철수가 사과를 먹는다";
+  topicAgentDistinct = (gTopic.verdict == "math-keep") && (gAgent.verdict == "math-keep")
+                       && (gTopic.term_key != gAgent.term_key);
+  # ★Slice1(P0): convergeGate 등가 = term_key 동치 + well-formedness (표면 byte 아님)
+  gWordOrder = knl.convergeGate "사과를 철수가 먹었다";   # 어순 변이 → 같은 등가 → math-keep (표면-eq false-neg 해소)
+  gDupAgent  = knl.convergeGate "철수가 영희가 먹었다";   # 중복 agent → malformed → held-nl (false-pos 차단)
+  slice1Ok = (gWordOrder.verdict == "math-keep") && (gDupAgent.verdict == "held-nl");
+  # ★Slice2(P2): aspect/modality/negation 인식 → held-nl (인식≠주입; 오염 head 'math-keep' admit 차단)
+  gAspect = knl.convergeGate "철수가 사과를 먹고있었다";   # 진행상 → operator-not-pure
+  gModal  = knl.convergeGate "철수가 사과를 먹어야한다";   # 당위 양상 → operator-not-pure
+  gNeg    = knl.convergeGate "철수가 사과를 먹지않았다";   # 부정 → operator-not-pure
+  slice2Ok = (gAspect.verdict == "held-nl") && (gAspect.held_reason == "operator-not-pure")
+             && (gModal.verdict == "held-nl") && (gNeg.verdict == "held-nl");
+  # ★math-side 출발: term → 한글(diverge) → term(converge) = id (converge∘diverge=id ON math DSL 피벗)
+  term0 = knl.propToTerm prop;
+  hangul0 = knl.realizeSentence (knl.termToProp term0);
+  term1 = knl.propToTerm (knl.liftToProposition hangul0);
+  termPivotStable = (td.key term0) == (td.key term1);
+  # ★술어 약분(quotient): 먹·잡수시(높임)가 같은 개념(ingest) → 같은 term_key. 다른 표면 → 한 개념-수에서 만남.
+  propMeok = knl.mkProposition [ { entity = "철수"; role = "agent"; } { entity = "사과"; role = "object"; } ] "먹" "present" "declarative";
+  propJab  = knl.mkProposition [ { entity = "철수"; role = "agent"; } { entity = "사과"; role = "object"; } ] "잡수시" "present" "declarative";
+  predicateQuotient = (td.key (knl.propToTerm propMeok)) == (td.key (knl.propToTerm propJab));
+  predicateHeadIsConcept = (B.head (knl.propToTerm prop)).sym == "n:ingest";   # 술어 head=n:네임스페이스 언어중립 개념
+  casesKeysDistinct = (B.length (B.foldl' (acc: p: let k = td.key (knl.propToTerm p); in if B.elem k acc then acc else acc ++ [ k ]) [ ] cases)) == (B.length cases);
+in {
+  term_text  = td.serialize term;                # (먹 (agent 철수) (object 사과) (tense present) (mood declarative))
+  term_key   = td.key term;                       # canonical "수" (구조주소)
+  prop_term_roundtrip = knl.propEq prop prop2;    # 명제 → term → 명제 == 명제
+  full_sentence_roundtrip = sentence == sentence2; # ★한글 → math DSL term → 한글 왕복 닫힘 = 등가 증명
+  termRoundTrip_verdict = (knl.termRoundTrip prop).verdict;   # "nl-meaning-math-are-one"
+  order_invariant = keyAO == keyOA;               # 어순 달라도 같은 canonical 수
+  cases_all_ok = casesAllOk;                      # 다양한 shape 일반화
+  cases_keys_distinct = casesKeysDistinct;        # 다른 의미 → 다른 수 (충돌 0)
+  gate_struct_verdict = gateStruct.verdict;       # "math-keep"
+  gate_chat_verdict = gateChat.verdict;           # "held-nl" (일상NL)
+  gate_ok = gateOk;
+  slice1_ok = slice1Ok;                           # term_key 등가 + well-formedness (어순 keep / 중복역할 held)
+  word_order_verdict = gWordOrder.verdict; dup_agent_verdict = gDupAgent.verdict;
+  slice2_ok = slice2Ok;                           # aspect/modality/negation 인식 → held-nl (오염 head 차단)
+  aspect_verdict = gAspect.verdict; aspect_reason = gAspect.held_reason;
+  topic_agent_distinct = topicAgentDistinct;      # 는≠가 (의미 다름 보존)
+  topic_verdict = gTopic.verdict; agent_verdict = gAgent.verdict;
+  term_pivot_stable = termPivotStable;            # math-side 왕복 = id (term_key 안정)
+  predicate_quotient = predicateQuotient;         # 먹·잡수시 → 같은 개념-term (약분)
+  predicate_head = (B.head term0).sym;            # 술어 head = "ingest" (언어중립 개념)
+  predicate_head_is_concept = predicateHeadIsConcept;
+  # 등가 = 양방향 왕복 + 어순무관 + 일반화 + 키충돌0 + 게이트 + topic≠agent + 술어 개념화/약분
+  all_ok = (knl.propEq prop prop2) && (sentence == sentence2)
+           && ((knl.termRoundTrip prop).verdict == "nl-meaning-math-are-one")
+           && (keyAO == keyOA) && casesAllOk && casesKeysDistinct && gateOk && topicAgentDistinct
+           && termPivotStable && predicateQuotient && predicateHeadIsConcept && slice1Ok && slice2Ok;
+}

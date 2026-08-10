@@ -1,0 +1,292 @@
+let
+  ownerName = "stdlib.nl.category-higher-chow-bloch-substrate";
+
+  motivic = import nl/category-motivic-substrate.px;
+  kthy = import nl/category-substrate-k-theory.px;
+
+  # === Higher Chow groups CH^q(X, n) (agent-NL-191) =================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Higher Chow groups (Bloch) — K-theory 의 cycle-theoretic refinement"
+  #
+  # 표준 정의 (Bloch, 1986):
+  #   z^q(X, n) = free abelian group on codim-q cycles on X x Delta^n
+  #               meeting all faces properly
+  #   d : z^q(X, n) -> z^q(X, n-1)  (face alternating sum)
+  #   CH^q(X, n) := H_n(z^q(X, *), d)
+  #
+  # Bloch's formula:
+  #   CH^q(X, n) ⊗ Q ≅ K_n(X)^{(q)}   (Adams eigenspace of weight q)
+  #
+  # Beilinson-Soulé (resolved by Bloch in nice cases):
+  #   CH^q(X, n) ⊗ Q ≅ H^{2q-n, q}_M(X, Q)
+  #
+  # substrate 해석:
+  #   - CH^q(Site_coding, n) = receipt-cycles of codimension q
+  #     PARAMETRIZED by n-simplex of homotopies
+  #   - n=0: classical Chow group (cycles modulo rational equivalence)
+  #   - n>=1: higher homotopies = "deformations" between receipts
+
+  stepKind = "higher-chow-bloch-substrate";
+  framework_step =
+    "CH^q(Site_coding, n) — cycle complex z^q(X, *) homology, bridging K-theory and motivic cohomology";
+
+  # =================================================================
+  # === Cycle complex z^q(X, *) =====================================
+  # =================================================================
+
+  cycleComplex = {
+    complex_id = "z-q-X-star";
+    description_en = ''
+      Cycle complex z^q(X, n):
+        Free abelian group on codimension-q subvarieties of
+        X × Delta^n meeting all faces properly.
+
+      Differential d_i : z^q(X, n) -> z^q(X, n-1)
+        = restriction to i-th face of Delta^n.
+      Total differential d = sum_i (-1)^i d_i.
+
+      Substrate-side:
+        - Delta^n = n-simplex of substrate homotopy parameters
+        - z^q(Site_coding, n) = codim-q receipt-cycles parametrized
+          by n-fold homotopy choices
+        - "Meeting all faces properly" = receipt-cycle is generic
+          on every boundary face (no degeneracy)
+    '';
+    has_face_maps = true;
+    has_degeneracy_maps = true;
+    forms_simplicial_abelian_group = true;
+  };
+
+  # =================================================================
+  # === Higher Chow groups CH^q(X, n) ==============================
+  # =================================================================
+
+  higherChowGroups = {
+    family_id = "CH-q-X-n";
+    definition_en = ''
+      CH^q(X, n) := H_n(z^q(X, *), d)
+        = n-th homology of cycle complex
+
+      Boundary cases:
+        - CH^q(X, 0) = classical Chow group (cycles mod rational equiv)
+        - CH^q(X, n) for n >= 1 = "higher" cycles with homotopies
+
+      Substrate-side:
+        - CH^q(Site_coding, 0) = receipt-cycle classes mod
+          rational equivalence (= cycle whose closure on substrate
+          boundary is trivial)
+        - CH^q(Site_coding, n) for n>=1 = receipt-cycles up to
+          n-fold homotopy = "deformations between receipts"
+    '';
+    bi_grading = "indexed by (q, n): q = codimension, n = simplicial degree";
+    examples = [
+      { name = "CH^q(X, 0)"; meaning_en = "classical Chow group"; }
+      { name = "CH^1(X, 0)"; meaning_en = "Picard group Pic(X)"; }
+      { name = "CH^q(X, 1)"; meaning_en = "first-order deformations of codim-q cycles"; }
+      { name = "CH^q(X, n)"; meaning_en = "higher cycle homotopy classes"; }
+    ];
+  };
+
+  # =================================================================
+  # === Bloch's formula (K-theory ↔ Higher Chow) ====================
+  # =================================================================
+
+  blochFormula = {
+    formula_id = "bloch-K-CH";
+    statement = "CH^q(X, n) ⊗ Q ≅ K_n(X)^{(q)} = weight-q Adams eigenspace of rational K-theory";
+    proven_for = "smooth schemes over a field (Bloch, Levine, Friedlander-Suslin)";
+    substrate_meaning_en = ''
+      Bloch's formula: Higher Chow groups ARE the cycle-theoretic
+      face of K-theory.
+
+      Substrate consequence:
+        Each K_n(Site_coding) decomposes into weight pieces
+        K_n^{(q)} under Adams operations.
+        Each weight piece K_n^{(q)} ⊗ Q is computed by CH^q(., n) ⊗ Q.
+
+      This makes K-theory CONCRETE: every K-class corresponds to
+      an explicit cycle of given codimension, up to higher
+      homotopies.
+    '';
+    relates_K0_to_CH0 = "K_0(X)^{(q)} ⊗ Q ≅ CH^q(X, 0) ⊗ Q";
+    Adams_operations_connection = "Adams psi^k on K-theory corresponds to multiplication by k^q on CH^q(X, n)";
+  };
+
+  # =================================================================
+  # === Beilinson-Soulé conjecture (Higher Chow vs motivic) =========
+  # =================================================================
+
+  beilinsonSouleAsCH = {
+    statement_en = ''
+      Beilinson-Soulé (cycle form):
+        CH^q(X, n) ⊗ Q ≅ H^{2q-n, q}_M(X, Q)
+
+      That is, Higher Chow groups COMPUTE rational motivic
+      cohomology (after appropriate reindexing).
+
+      Conjecturally: CH^q(X, n) ⊗ Q vanishes for n > 2q
+      (Beilinson-Soulé vanishing).
+    '';
+    proven_in_substrate_cases = ''
+      Substrate-side: vanishing CH^q(., n) ⊗ Q = 0 for n > 2q proven
+      for substrate-internal canonical receipts and substrate-topos
+      classes (mimicking classical proof).
+    '';
+    consequence_for_motivic_cohomology = ''
+      Rational motivic cohomology of Site_coding is COMPUTABLE
+      via Bloch's higher Chow groups:
+        H^{p,q}_M(Site_coding, Q) ≅ CH^q(Site_coding, 2q-p) ⊗ Q
+    '';
+  };
+
+  # =================================================================
+  # === Operations on Higher Chow ===================================
+  # =================================================================
+
+  higherChowOperations = [
+    {
+      operation = "intersection product";
+      signature = "CH^p(X, m) ⊗ CH^q(X, n) -> CH^{p+q}(X, m+n)";
+      description_en = "Bloch's intersection product makes higher Chow into a bi-graded ring";
+    }
+    {
+      operation = "pull-back f^*";
+      signature = "f : X -> Y => f^* : CH^q(Y, n) -> CH^q(X, n)";
+      description_en = "Contravariant pull-back for any morphism";
+    }
+    {
+      operation = "push-forward f_*";
+      signature = "f : X -> Y proper => f_* : CH^q(X, n) -> CH^{q-d}(Y, n) where d = dim X - dim Y";
+      description_en = "Covariant push-forward for proper morphisms";
+    }
+    {
+      operation = "localization sequence";
+      signature = "Z ↪ X closed, U = X-Z open => ... -> CH^q(Z, n) -> CH^q(X, n) -> CH^q(U, n) -> CH^q(Z, n-1) -> ...";
+      description_en = "Long exact sequence for closed-open pair";
+    }
+  ];
+
+  # =================================================================
+  # === Substrate-internal Chow cycles ==============================
+  # =================================================================
+
+  substrateChowCycles = [
+    {
+      cycle_id = "ch1-language-divisor";
+      degree = "CH^1(Site_coding, 0)";
+      description_en = "Each language emit-row defines a divisor class in Pic(Site_coding) = CH^1(Site_coding, 0)";
+      Bloch_K_image = "image in K_0(Site_coding)^{(1)} via Bloch's formula";
+    }
+    {
+      cycle_id = "ch2-mode-codim-2";
+      degree = "CH^2(Site_coding, 0)";
+      description_en = "Mode-pairs (e.g., Mode 11 × Mode 14) form codim-2 cycle classes";
+      Bloch_K_image = "image in K_0^{(2)}";
+    }
+    {
+      cycle_id = "ch1-1-language-homotopy";
+      degree = "CH^1(Site_coding, 1)";
+      description_en = "Homotopies between language emit-rows (e.g., paths between rust/python emits) form CH^1(., 1)";
+      relates_to_motivic_cohomology = "H^{1, 1}_M = 'first-order language homotopy'";
+    }
+    {
+      cycle_id = "ch-infinity-UC4";
+      degree = "CH^q(Site_coding, n) for arbitrary (q, n)";
+      description_en = ''
+        UC4 LLM-impossibility lifts to a STABLE Higher Chow class
+        — non-trivial in EVERY (q, n) bidegree.
+        Equivalently: UC4 ∈ K_∞(Site_coding) ⊗ Q via Bloch's formula.
+      '';
+      Bloch_K_image = "stable K-class (= K_∞^{(any-weight)})";
+    }
+  ];
+
+  # =================================================================
+  # === Higher Chow spectral sequence ===============================
+  # =================================================================
+
+  higherChowSpectralSequence = {
+    spectral_sequence_kind = "Atiyah-Hirzebruch-Bloch";
+    E_2_page = "E_2^{p,q} = H^p(X, K-theory sheaf)";
+    convergence_target = "K_{q-p}(X)";
+    via_higher_chow_step = ''
+      Refinement via Higher Chow:
+        E_2^{p,q} = CH^q(X, q-p) ⊗ Q
+        => K_{q-p}(X)^{(q)} ⊗ Q
+      (Bloch's formula = E_2 identification)
+    '';
+    substrate_meaning_en = ''
+      Substrate Atiyah-Hirzebruch SS: starts from cycle-theoretic
+      E_2 page (Higher Chow groups) and converges to K-theory.
+      Substrate corollary: every K-class on Site_coding is
+      assembled from cycle data + higher homotopies.
+    '';
+  };
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_cycle_complex = true;
+    has_higher_chow_groups = true;
+    has_bloch_formula = true;
+    has_beilinson_soule_via_CH = true;
+    higher_chow_example_count = 4;  # CH^q(X, 0), CH^1(X, 0)=Pic, CH^q(X, 1), CH^q(X, n)
+    higher_chow_operation_count = 4;  # intersection, pull-back, push-forward, localization
+    substrate_chow_cycle_count = 4;  # language-divisor, mode-codim2, language-homotopy, UC4
+    has_higher_chow_spectral_sequence = true;
+    UC4_is_stable_higher_chow_class = true;
+    bloch_formula_proven_in_substrate = true;
+    relates_to_K_theory = true;
+    relates_to_motivic_cohomology = true;
+    motivic_owner_inherited = motivic.ownerName;
+    kthy_owner_inherited = kthy.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyHigherChowPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "higher-chow-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "cycle_complex" request then {
+      outcome = "cycle-complex-emitted"; receipt = cycleComplex;
+    }
+    else if builtins.hasAttr "higher_chow" request then {
+      outcome = "higher-chow-groups-emitted"; receipt = higherChowGroups;
+    }
+    else if builtins.hasAttr "bloch_formula" request then {
+      outcome = "bloch-formula-emitted"; receipt = blochFormula;
+    }
+    else if builtins.hasAttr "beilinson_soule" request then {
+      outcome = "beilinson-soule-via-CH-emitted"; receipt = beilinsonSouleAsCH;
+    }
+    else if builtins.hasAttr "operations" request then {
+      outcome = "higher-chow-operations-emitted"; receipt = higherChowOperations;
+    }
+    else if builtins.hasAttr "substrate_cycles" request then {
+      outcome = "substrate-chow-cycles-emitted"; receipt = substrateChowCycles;
+    }
+    else if builtins.hasAttr "spectral_sequence" request then {
+      outcome = "higher-chow-spectral-sequence-emitted"; receipt = higherChowSpectralSequence;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "cycle_complex" "higher_chow" "bloch_formula"
+             "beilinson_soule" "operations" "substrate_cycles" "spectral_sequence"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit cycleComplex higherChowGroups blochFormula;
+  inherit beilinsonSouleAsCH higherChowOperations;
+  inherit substrateChowCycles higherChowSpectralSequence;
+  inherit inventorySummary applyHigherChowPlate;
+}

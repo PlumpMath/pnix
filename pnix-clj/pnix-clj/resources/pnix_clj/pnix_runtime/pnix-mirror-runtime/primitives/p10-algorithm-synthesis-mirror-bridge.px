@@ -1,0 +1,368 @@
+# P10 — algorithm-synthesis ↔ mirror-world bridge
+#
+# OWNER-LAW (2026-05-13): the algorithm-synthesis evolution lane
+# (stdlib/lib/gate/algorithm-synthesis/*) already lowers compressed
+# NL into an `AlgorithmSentenceSequence` (intent → operation →
+# parameter → sequence). Each `AlgorithmStep` declares a typed
+# decision (`Inspect` / `Resolve` / `Propose` / `Hold`) with a
+# description, optional transform, and provenance signals.
+#
+# P10 declares the contract by which that sequence is *executed
+# inside a mirror world* — each step becomes a P4 fold-step
+# receipt, the chain links back to the spawn that anchored the
+# sequence, and a terminal `Hold` step emits a `held` receipt.
+#
+# This is the row that closes the two parallel substrates
+# (algorithm-synthesis lane + mirror-world P1-P9) into ONE audit
+# chain. After P10, a compressed NL utterance can travel:
+#
+#   NL → P6 transduce → SpawnRequest
+#                    → mirror.spawn → mirror-spawn receipt
+#                    → AlgorithmSentenceSequence (synthesis lane)
+#                    → P10 execute_in_mirror
+#                       → fold-step receipt × N (one per step)
+#                       → optional held receipt (terminal Hold)
+#                    → P7 narrate → NL story
+#
+# All inside one hydrate-able audit chain, replay-stable, no LLM.
+#
+# # Non-goals
+#
+# - NOT a code-action runner. P10 emits *receipts of decisions*,
+#   not effects on the host filesystem. The 5-gate firewall +
+#   hot-reload owners (`registry-overlay`, `runtime-hot-reload`)
+#   still gate actual `.px` mutations.
+# - NOT a new sequence kind. P10 consumes the existing
+#   `AlgorithmSentenceSequence` shape verbatim; it does NOT add
+#   step kinds, temporal shapes, or signal fields.
+# - NO LLM execution of steps. Step interpretation is by typed
+#   kind tag, not generated prose.
+# - NOT a sequence editor. P10 is one-way (sequence → receipts).
+#   Reverse projection (receipts → narrated sequence) is P7's
+#   responsibility via `fold-step` template.
+#
+# # RT preservation
+#
+# Same `(spawn_receipt_id, sequence)` → same fold-step receipt
+# ids in same order. Receipt id fingerprint:
+#
+#   receipt|fold-step|<parent_receipt_id>|<mirror_id>|<step_index>|<step_kind>
+#
+# The `<step_kind>` segment is the canonical `as_str` form
+# (`inspect` / `resolve` / `propose` / `hold`). Description text
+# is NOT in the id — same step kind at same index under same
+# parent collapses to the same receipt.
+#
+# # P9 compatibility
+#
+# P10 inherits the spawn's visibility. The sequence's fold-step
+# receipts live in the *same* mirror chain as the anchoring
+# spawn, so a private spawn → private fold-step chain (per-user
+# isolated, owner_user_id segment in P1 fingerprint via the
+# spawn). Public spawn → public chain (dedup across users). P10
+# never invents a different visibility for its step receipts.
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p10-algorithm-synthesis-mirror-bridge.px";
+  version = "0.1.0";
+
+  # ─── canonical step kinds (mirror of pnix-core's StepKind) ────
+  #
+  # The Rust adapter's `StepKind::as_str()` MUST produce one of
+  # these. Drift is caught by a parity test (
+  # `p10_step_kinds_match_pnix_core_enum` in tests/p10_*).
+  validStepKinds = [
+    "inspect"
+    "resolve"
+    "propose"
+    "hold"
+  ];
+
+  # ─── canonical receipt kinds emitted by P10 ───────────────────
+  #
+  # Both already exist in the P4 valid set. P10 doesn't invent
+  # new receipt kinds — it specifies *which* P4 kind each step
+  # category lowers to.
+  receiptKindByStep = {
+    inspect = "fold-step";
+    resolve = "fold-step";
+    propose = "fold-step";
+    hold    = "held";
+  };
+
+  # ─── receipt id fingerprint algorithm ─────────────────────────
+  #
+  # Declarative spec; Rust adapter MUST match bit-for-bit. Drift
+  # is caught by `p10_fold_step_fingerprint_matches_owner_law`.
+  foldStepFingerprintFields = [
+    "literal:receipt"
+    "literal:fold-step"
+    "parent_receipt_id"
+    "mirror_id"
+    "step_index"
+    "step_kind"
+  ];
+  heldStepFingerprintFields = [
+    "literal:receipt"
+    "literal:held"
+    "parent_receipt_id"
+    "mirror_id"
+    "step_index"
+    "step_kind"
+  ];
+  fingerprintSeparator = "|";
+
+  # ─── evidence schema for fold-step / held receipts ────────────
+  foldStepEvidenceFields = [
+    "step_index"
+    "step_kind"
+    "description"
+    "transform"     # optional, may be empty/null
+    "signals"       # provenance cues (Vec<String>)
+    "temporal_shape"  # sequence-level context
+    "source_intent"
+    "source_transform"
+  ];
+  heldEvidenceFields = [
+    "step_index"
+    "step_kind"
+    "description"
+    "signals"
+    "reason"
+    "held_kind"
+    "temporal_shape"
+    "source_intent"
+    "source_transform"
+  ];
+
+  # ─── held kinds emitted by P10 ────────────────────────────────
+  validHeldKinds = [
+    "empty-sequence"
+    "step-kind-out-of-vocabulary"
+    "step-after-terminal-hold"
+    "missing-anchor-receipt"
+    "sequence-not-ready-and-no-hold"
+  ];
+
+  # ─── invariants ───────────────────────────────────────────────
+  invariants = {
+    one_step_one_receipt =
+      "every AlgorithmStep produces EXACTLY one P4 receipt — fold-step for inspect/resolve/propose, held for hold";
+    linear_chain =
+      "step N's receipt parent_receipt_id = step N-1's receipt id; step 0's parent = the anchoring spawn-leaf receipt";
+    hold_terminates =
+      "a `hold` step emits a `held` receipt and the chain terminates; no fold-step receipts MAY follow";
+    rt_preserved =
+      "same (spawn_receipt_id, sequence) → same receipt id set in same order — the fingerprint depends on (parent, mirror, index, kind) only, not on description/signals/transform";
+    one_audit_chain =
+      "the sequence's fold-step receipts MUST live in the same MirrorReceiptStore as the anchoring spawn, hydratable as one chain by walking parent_receipt_id";
+    visibility_passthrough =
+      "P10 inherits the anchoring spawn's P9 visibility — never invents a different scope. Private spawn ⇒ per-user isolated chain. Public spawn ⇒ shared chain.";
+    no_filesystem_effect =
+      "P10 emits receipts only. Actual `.px` mutations are gated by the 5-gate firewall + hot-reload owners; P10 records *decisions*, not *effects*.";
+    append_only =
+      "P10 uses MirrorReceiptStore::append_batch (P11.a); the whole sequence commits atomically as one redb tx";
+    not_ready_without_hold =
+      "if AlgorithmSentenceSequence.ready=false, the last step MUST be a `hold`; otherwise emit `sequence-not-ready-and-no-hold` Held";
+  };
+
+  # ─── narration mapping (P7 already declares fold-step + held) ─
+  #
+  # P7's existing templates handle fold-step and held kinds, so
+  # P10's per-receipt narration uses the existing P7 surface
+  # without new templates.
+  narrationContract = {
+    fold_step_template_owner = "pnix-mirror-runtime/primitives/p7-nl-projection.px";
+    held_template_owner = "pnix-mirror-runtime/primitives/p7-nl-projection.px";
+    sequence_narration = "walk fold-step receipts in chain order; each → P7 sentence; the held terminator (if any) → P7 held sentence";
+  };
+
+  # ─── P10.b sequence-narration owner ────────────────────────────
+  #
+  # P7 narrates *one receipt → one sentence*. P10.b adds the
+  # reverse-projection layer that joins a fold-step chain into
+  # ONE locale-specific story shaped by `temporal_shape`. Same
+  # (trace, locale) → same story (RT).
+  #
+  # # Why this exists
+  #
+  # The algorithm-synthesis lane already lowers compressed NL
+  # into an ordered/conditional/causal/immediate-edit sequence.
+  # After P10.a emits one receipt per step, P10.b folds those
+  # receipts back into a single narrative the operator can read.
+  # No LLM — deterministic template substitution.
+  #
+  # # Placeholder grammar (resolved by the Rust adapter)
+  #
+  #   {intent}          — sequence.source_intent
+  #   {transform}       — sequence.source_transform
+  #   {temporal_shape}  — sequence.temporal_shape.as_str()
+  #   {idx}             — step index (zero-based array position)
+  #   {step_sentence}   — P7 sentence for the receipt at that step
+  #   {hold_idx}        — array index of the terminal hold step
+  #
+  # # Non-goals
+  #
+  # - NOT a translator. Each (temporal_shape, locale) has its own
+  #   opener / step_prefix / terminator strings. No generated
+  #   prose, no template synthesis.
+  # - NOT a new receipt. Narration is a *read-only projection* of
+  #   the existing chain; it does not append, mutate, or supersede.
+  # - NO LLM call. Same trace + locale → same lines, byte-identical.
+
+  mkNarrationStyle = temporal_shape: locale: opener: step_prefix: terminator_ok: terminator_held:
+    {
+      inherit temporal_shape locale opener step_prefix terminator_ok terminator_held;
+    };
+
+  narrationStyles = [
+    # ─── ordered — explicit step-by-step ────────────────────────
+    (mkNarrationStyle "ordered" "en"
+      "Sequence to {transform} ({intent}):"
+      "  {idx}. {step_sentence}"
+      "  ✓ chain closed (ready)."
+      "  — stopped at step {hold_idx}: {step_sentence}")
+    (mkNarrationStyle "ordered" "ko"
+      "{transform} 까지의 sequence ({intent}):"
+      "  {idx}. {step_sentence}"
+      "  ✓ chain 닫힘 (ready)."
+      "  — step {hold_idx} 에서 멈춤: {step_sentence}")
+
+    # ─── conditional — branching plan ───────────────────────────
+    (mkNarrationStyle "conditional" "en"
+      "Conditional plan for {intent} ({transform}):"
+      "  · {step_sentence}"
+      "  ✓ branch resolved."
+      "  — branch held at step {hold_idx}: {step_sentence}")
+    (mkNarrationStyle "conditional" "ko"
+      "{intent} 의 conditional plan ({transform}):"
+      "  · {step_sentence}"
+      "  ✓ branch 해결."
+      "  — step {hold_idx} 에서 branch held: {step_sentence}")
+
+    # ─── causal-repair — diagnose-then-fix ─────────────────────
+    (mkNarrationStyle "causal-repair" "en"
+      "Diagnose-then-fix for {intent} ({transform}):"
+      "  → {step_sentence}"
+      "  ✓ repair proposed."
+      "  — repair held at step {hold_idx}: {step_sentence}")
+    (mkNarrationStyle "causal-repair" "ko"
+      "{intent} 의 diagnose-then-fix ({transform}):"
+      "  → {step_sentence}"
+      "  ✓ repair 제안 완료."
+      "  — step {hold_idx} 에서 repair held: {step_sentence}")
+
+    # ─── immediate-edit — single direct action ─────────────────
+    (mkNarrationStyle "immediate-edit" "en"
+      "Direct edit — {intent} via {transform}."
+      "  · {step_sentence}"
+      "  ✓ proposed."
+      "  — held at step {hold_idx}: {step_sentence}")
+    (mkNarrationStyle "immediate-edit" "ko"
+      "직접 edit — {transform} 으로 {intent}."
+      "  · {step_sentence}"
+      "  ✓ 제안 완료."
+      "  — step {hold_idx} 에서 held: {step_sentence}")
+  ];
+
+  # Fallback when (temporal_shape, locale) is not in the table.
+  # No silent drop — the cockpit still sees a coherent story
+  # even if a future TemporalShape variant is added before its
+  # narration row.
+  narrationFallback = {
+    opener = "Sequence ({temporal_shape}) for {intent} via {transform}:";
+    step_prefix = "  {idx}. {step_sentence}";
+    terminator_ok = "  ✓ done.";
+    terminator_held = "  — held at step {hold_idx}: {step_sentence}";
+  };
+
+  narrationDefaultLocale = "en";
+  narrationValidLocales = [ "en" "ko" ];
+
+  narrationPlaceholders = [
+    "{intent}"
+    "{transform}"
+    "{temporal_shape}"
+    "{idx}"
+    "{step_sentence}"
+    "{hold_idx}"
+  ];
+
+  narrationInvariants = {
+    rt_preserved =
+      "same (trace, sequence, locale) → same Vec<String> story";
+    no_synthesis =
+      "every line is deterministic template substitution; no novel claims, no fluent generation";
+    per_receipt_sentence_from_p7 =
+      "step sentences are produced by the existing P7 NlProjector — P10.b does not duplicate per-receipt templates";
+    fallback_visible =
+      "unknown (temporal_shape, locale) falls back to narrationFallback; cockpit never receives an empty story when receipts exist";
+    held_terminator =
+      "if the chain ended with a held receipt, the last narrated line MUST use terminator_held (not terminator_ok)";
+    locale_passthrough =
+      "the same locale is passed to the P7 step-sentence projector — narrative locale and per-step locale stay in sync";
+  };
+
+  # ─── P10.c — REMOVED (2026-05-14) ────────────────────────────
+  #
+  # An earlier slice introduced `demoGenerationCuePatterns`,
+  # `demoGenerationStopwords`, `demoGenerationProfiles` and a
+  # Rust `DemoGenerationPlanner`. That was a parallel hardcode
+  # lane — fixed if/elif demo-profile inventory smuggled into
+  # substrate. Violated:
+  #   - 자율 substrate axiom: pnix must enable demos via its
+  #     existing algorithm-synthesis lane, not a separate
+  #     demo-cue/demo-profile registry.
+  #   - CLAUDE.md §14 / §20: `.px` MUST NOT be a hardcoded
+  #     enumeration; use generic constructors.
+  #   - reuse-existing rule: extend intent_recognition /
+  #     operation_candidate_mapping / parameter_resolution
+  #     rather than invent a sibling lane.
+  #
+  # If a future slice wants demo planning, extend the
+  # algorithm-synthesis rows in stdlib/lib/gate/, NOT this file.
+in {
+  inherit
+    ownerName
+    version
+    validStepKinds
+    receiptKindByStep
+    foldStepFingerprintFields
+    heldStepFingerprintFields
+    fingerprintSeparator
+    foldStepEvidenceFields
+    heldEvidenceFields
+    validHeldKinds
+    invariants
+    narrationContract
+    narrationStyles
+    narrationFallback
+    narrationDefaultLocale
+    narrationValidLocales
+    narrationPlaceholders
+    narrationInvariants;
+  meta = {
+    source = "pnix-mirror-runtime primitive P10";
+    owner = ownerName;
+    role = "execute an AlgorithmSentenceSequence inside a mirror — each step → one P4 receipt, one audit chain shared with the anchoring spawn";
+    consumes = [
+      "P1 mirror-identity-registry (mirror_id anchor)"
+      "P4 typed-receipt-stream (fold-step + held receipt kinds)"
+      "P5 mirror-session-contract (chain head advancement)"
+      "P9 contribution-visibility (passthrough)"
+      "P11 write-batching-contract (atomic batch commit)"
+      "stdlib algorithm-synthesis lane (sequence carrier)"
+    ];
+    consumed_by = [
+      "doghouse-core algorithm_synthesis_mirror_bridge"
+      "freecat-cli coding-agent cockpit (future)"
+    ];
+    constitutional_alignment = [
+      "格子 안 row 추가 — 새 step kind, 새 receipt kind, 새 temporal shape 없음"
+      "RT 보존 — receipt id 는 (parent, mirror, index, kind) 결정"
+      "두 substrate (algorithm-synthesis + mirror-world) 가 *한* audit chain 으로 통합"
+      "no LLM — step interpretation 은 typed enum, prose synthesis 없음"
+      "decisions only — host effect 는 별 owner (5-gate firewall + hot-reload)"
+    ];
+  };
+}

@@ -1,0 +1,88 @@
+# stdlib/lib/math/math-evidence.px
+#
+# P7-a evidence-projector: 결정론 수학 분석 결과를 receipt에 붙일 *공개안전* math_evidence(4번째 evidence kind).
+#   = memory_evidence(P4)·abstraction_status_evidence(P5)·understanding_report(P6) 옆에 병치.
+#   106-agent deep-research(reference_math_generic_intelligence_p7_verdict) 판정을 *구조로* 인코딩:
+#
+# ★SOUND CORE(차원대수, 결정가능·건전): dimension_status = consistent|mismatch — 단위=free abelian group 정수지수
+#   normalize-compare(unitary), Bridgman 동질성(+/−/=/≤ 같은 차원). "velocity + time = mismatch"는 깨끗한 gate.
+# ★HELD FRONTIER(차원벡터서 *도출 불가*=fail-closed): 아래 held_reason kind들은 결정론 gate가 *판정 안 함* —
+#   concept-ambiguous(N·m torque vs energy, 관습)·affine-unit(°C/°F)·log-scale-unit(dB)·angle-dimensionless(rad↔Hz
+#   collapse)·unit-vs-dimension(km/h=m/s 차원OK 단위틀림)·proof-required(정리증명 undecidable)·cross-domain-semantic.
+#   이것들은 *candidate/held*로만 표면화(derived truth 아님). promotion-by-utility 0.
+# ★row 존재 ≠ truth: anchors(QUDT/BIPM read-back)는 공개 표준사실 lookup지 truth 주장 아님. proposer_only·durable false.
+# ★leak-safe: publicProjection은 status/reason/anchors(symbol·quantity_kind·dimension)·held_reasons만. 내부 anchor row 주소 비노출.
+let
+  B = builtins;
+
+  # 차원 분석 status 정규화(모르면 none = fail-closed: 분석 안 됨).
+  #   consistent/mismatch = SOUND CORE 판정. held = carve-out(차원대수 밖). none = 미분석.
+  normDimStatus = s:
+    if B.elem s [ "consistent" "mismatch" "held" "none" ] then s else "none";
+
+  # Held carve-out kind(연구 판정의 frontier 목록) — 모르면 그대로(정직).
+  KNOWN_HELD = [
+    "concept-ambiguous"      # 같은 차원 다른 양(torque vs energy) — 관습, 차원서 도출 불가
+    "affine-unit"            # °C/°F — non-multiplicative, abelian group 밖
+    "log-scale-unit"         # dB — non-multiplicative
+    "angle-dimensionless"    # rad/Hz — zero vector collapse, 2π 위험
+    "unit-vs-dimension"      # km/h=m/s 차원일치≠단위일치 (수치정확성 별도)
+    "proof-required"         # 정리증명 — 일반 undecidable(정의 read-back만 CORE)
+    "cross-domain-semantic"  # schema↔math 매핑 — semantic gap
+  ];
+
+  mkMathEvidence = args:
+    let dim = if args ? dimension_check then args.dimension_check else { };
+        anchors = if args ? anchors then args.anchors else [ ];
+        heldReasons = if args ? held_reasons then args.held_reasons else [ ];
+        dimStatus = normDimStatus (dim.status or "none");
+        # public-safe anchor: symbol(발화 기호)·quantity_kind(QUDT 표준)·dimension(차원벡터 문자열) — 내부 row 주소 비노출
+        anchorsPub = B.map (a: {
+          symbol = a.symbol or "";
+          quantity_kind = a.quantity_kind or "";
+          dimension = a.dimension or "";
+        }) anchors;
+        # held_reason: kind(연구 carve-out) + detail(한국어/구조 설명). 모르는 kind도 보존(정직).
+        heldPub = B.map (h: {
+          kind = h.kind or "unspecified";
+          detail = h.detail or "";
+        }) heldReasons;
+    in {
+      evidence_kind = "math.analysis";
+      # ★SOUND CORE: 차원-동등 gate 판정(consistent/mismatch) 또는 held(carve-out)/none(미분석)
+      dimension_status = dimStatus;
+      dimension_reason = dim.reason or "";
+      anchors = anchorsPub;                 # ★public-safe (QUDT/BIPM read-back = 표준 공개사실)
+      anchor_count = B.length anchorsPub;
+      # ★Held carve-out 명시(차원대수 밖 = derived truth 아님)
+      held_reasons = heldPub;
+      held_count = B.length heldPub;
+      # ★verdict 요약: mismatch=invalid-candidate, held=carve-out, consistent=차원OK(단 단위/개념은 별도 Held 가능)
+      verdict = if dimStatus == "mismatch" then "invalid-candidate"
+                else if (dimStatus == "held") || (B.length heldPub > 0) then "held"
+                else if dimStatus == "consistent" then "dimension-consistent-candidate"
+                else "no-analysis";
+      # ★status ≠ truth (row 존재·차원일치 ≠ 참) — candidate/held만, promotion 0
+      proposer_only = true;
+      durable_truth = false;
+      accepted_as_truth = false;
+      ontology_assert_allowed = false;
+      note = "결정론 차원-동등 CORE만 sound; concept/affine/log/angle/unit-numeric/proof/cross-domain은 Held(차원서 도출불가)";
+    };
+
+  # ★public projection: 외부 wire 안전 subset(전부 공개 math/unit 사실 + 설명; 내부 anchor row 주소 비노출).
+  publicProjection = ev: {
+    evidence_kind = ev.evidence_kind;
+    dimension_status = ev.dimension_status;
+    dimension_reason = ev.dimension_reason;
+    verdict = ev.verdict;
+    anchor_count = ev.anchor_count;
+    anchors = B.map (a: { symbol = a.symbol; quantity_kind = a.quantity_kind; dimension = a.dimension; }) ev.anchors;
+    held_reasons = B.map (h: { kind = h.kind; detail = h.detail; }) ev.held_reasons;
+    held_count = ev.held_count;
+    proposer_only = true;     # ★status ≠ truth 공개 표식
+    durable_truth = false;
+  };
+in {
+  inherit mkMathEvidence publicProjection normDimStatus;
+}

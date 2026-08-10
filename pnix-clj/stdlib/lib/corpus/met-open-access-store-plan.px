@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/met-open-access-store-plan.px — The Met Open Access bounded object metadata.
+# redb corpus_source_records에 pnix attrset source(JSON 아님)로 append한다.
+# images/provenance/artist-person metadata/prose/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./met-open-access.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "culture.met_open_access.v1";
+    source = { name = "The Met Open Access Collection API"; license = "CC0-1.0"; scope = "empty seed fallback"; };
+    summary = { department_count = 0; object_count_stored = 0; public_domain_filter = true; end_date_lte = 1925; images_ingested = false; image_urls_ingested = false; provenance_prose_ingested = false; artist_person_metadata_ingested = false; mirror_graph_wiring = false; };
+    departments = [ ]; objects = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "met-open-access-load-v0";
+      source_lens = "stdlib/lib/corpus/met-open-access-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "culture.met_open_access.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "met-open-access-query-v0";
+      source_lens = "stdlib/lib/corpus/met-open-access-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "culture.met_open_access.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

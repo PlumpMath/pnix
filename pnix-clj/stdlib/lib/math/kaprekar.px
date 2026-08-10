@@ -1,0 +1,243 @@
+# stdlib.lib.math.kaprekar
+#
+# OWNER-LAW (v0.12-ABI, div-math, 2026-05-22): Kaprekar's routine,
+# Kaprekar's constant, and the Kaprekar numbers.
+#
+# # Kaprekar's routine and the constant 6174
+#
+# Take a number, write it with a fixed digit count d (padding with
+# leading zeros). Sort its digits descending to form one number,
+# ascending to form another, and subtract. Repeat.
+#
+# For d = 4 every starting value whose digits are not all equal
+# reaches 6174 -- Kaprekar's constant -- within seven steps, and
+# 6174 maps to itself (7641 - 1467 = 6174). For d = 3 the constant
+# is 495. A repdigit (all digits equal) collapses to 0 instead;
+# the owner reports that honestly rather than pretending it
+# reaches the constant.
+#
+# # Kaprekar numbers
+#
+# Separately, a positive integer n is a Kaprekar NUMBER when n^2
+# can be split into a left part L and a positive right part R with
+# L + R = n. For example 45^2 = 2025 splits as 20 + 25 = 45, and
+# 297^2 = 88209 splits as 88 + 209 = 297. (1 counts, via 1^2 = 1
+# read as 0 + 1.) The first few: 1, 9, 45, 55, 99, 297, 703, 999.
+#
+# # Standalone, exact
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - The routine is offered only for d = 3 and d = 4, the two
+#     digit counts with a single famous attracting constant. Other
+#     digit counts fall into several cycles and have no single
+#     "Kaprekar constant", so they are Held rather than guessed.
+#   - NOT base-independent -- base 10 only.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/kaprekar.px";
+
+  # Divide-and-conquer range builder: the recursion depth is
+  # logarithmic in (hi - lo), so `kaprekar-numbers-up-to` stays
+  # well inside the evaluator's recursion budget even at the cap.
+  rangeList = lo: hi:
+    if lo > hi then []
+    else if lo == hi then [ lo ]
+    else
+      let mid = (lo + hi) / 2;
+      in (rangeList lo mid) ++ (rangeList (mid + 1) hi);
+
+  # 10^d.
+  pow10 = d: if d <= 0 then 1 else 10 * pow10 (d - 1);
+
+  # The d least-significant digits of n, as a list (order does not
+  # matter -- callers only ever sort it).
+  digitMultiset = n: d:
+    let
+      go = k: cur: acc:
+        if k >= d then acc
+        else go (k + 1) (cur / 10) (acc ++ [ (cur - (cur / 10) * 10) ]);
+    in go 0 n [];
+
+  # Interpret a digit list, most-significant-first, as a number.
+  fromDigits = ds:
+    builtins.foldl' (acc: x: acc * 10 + x) 0 ds;
+
+  # One step of Kaprekar's routine on a d-digit number.
+  kaprekarStep = n: d:
+    let
+      ms   = digitMultiset n d;
+      desc = builtins.sort (a: b: a > b) ms;
+      asc  = builtins.sort (a: b: a < b) ms;
+    in (fromDigits desc) - (fromDigits asc);
+
+  # Iterate the routine from n (digit count d) to its fixed point.
+  # The step cap is generous; for d in {3,4} convergence is always
+  # within seven steps.
+  runRoutine = n: d:
+    let
+      go = cur: seq: iter:
+        if iter > 25 then { sequence = seq; fixed_point = cur; }
+        else
+          let nxt = kaprekarStep cur d;
+          in if nxt == cur then { sequence = seq; fixed_point = cur; }
+             else go nxt (seq ++ [ nxt ]) (iter + 1);
+    in go n [ n ] 0;
+
+  # Number of base-10 digits of m (m >= 1).
+  numDigitsOf = m: if m < 10 then 1 else 1 + numDigitsOf (m / 10);
+
+  # Is n a Kaprekar number: does n^2 split into L + R = n, R > 0?
+  isKaprekarNumber = n:
+    if n < 1 then false
+    else if n == 1 then true
+    else
+      let
+        sq = n * n;
+        nd = numDigitsOf sq;
+        tryP = p:
+          if p >= nd then false
+          else
+            let
+              tens = pow10 p;
+              r = sq - (sq / tens) * tens;
+              l = sq / tens;
+            in if r > 0 && l + r == n then true else tryP (p + 1);
+      in tryP 1;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "routine-step"
+    "routine"
+    "kaprekar-constant"
+    "is-kaprekar-number"
+    "kaprekar-numbers-up-to"
+  ];
+
+  # The routine has a single famous constant only for these two
+  # digit counts.
+  supportedDigitCounts = [ 3 4 ];
+
+  # n^2 must stay in 64-bit range for the Kaprekar-number test.
+  numberLimit = 1000000;
+  # `kaprekar-numbers-up-to` scans 1..limit; this cap bounds it.
+  listLimit = 100000;
+
+  applyKaprekar = request:
+    let
+      op = request.operation;
+      n      = if request ? n then request.n else 0;
+      digits = if request ? digits then request.digits else 0;
+      limit  = if request ? limit then request.limit else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "kaprekar-constant" then
+        if !(builtins.elem digits supportedDigitCounts) then {
+          outcome = "held-unsupported-digit-count";
+          operation = op; digits = digits;
+          supported = supportedDigitCounts;
+          reason = "only 3-digit (495) and 4-digit (6174) routines have one constant";
+        }
+        else {
+          outcome = "kaprekar-computed";
+          operation = op; digits = digits;
+          constant = if digits == 3 then 495 else 6174;
+        }
+      else if op == "is-kaprekar-number" then
+        if n < 1 then {
+          outcome = "held-nonpositive-number";
+          operation = op; n = n;
+        }
+        else if n > numberLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; n = n;
+          limit = numberLimit;
+          reason = "n^2 is capped to stay in 64-bit range";
+        }
+        else {
+          outcome = "kaprekar-computed";
+          operation = op; n = n;
+          is_kaprekar = isKaprekarNumber n;
+        }
+      else if op == "kaprekar-numbers-up-to" then
+        if limit < 1 then {
+          outcome = "kaprekar-computed";
+          operation = op; limit = limit;
+          numbers = []; count = 0;
+        }
+        else if limit > listLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; limit = limit;
+          cap = listLimit;
+          reason = "the scan is linear in the limit; it is capped to stay bounded";
+        }
+        else
+          let nums = builtins.filter isKaprekarNumber (rangeList 1 limit);
+          in {
+            outcome = "kaprekar-computed";
+            operation = op; limit = limit;
+            numbers = nums;
+            count = builtins.length nums;
+          }
+      else
+        # op == "routine-step" or "routine"
+        if !(builtins.elem digits supportedDigitCounts) then {
+          outcome = "held-unsupported-digit-count";
+          operation = op; digits = digits;
+          supported = supportedDigitCounts;
+          reason = "the routine is offered only for 3-digit and 4-digit numbers";
+        }
+        else if n < 0 then {
+          outcome = "held-negative-number";
+          operation = op; n = n;
+        }
+        else if n >= pow10 digits then {
+          outcome = "held-too-many-digits";
+          operation = op; n = n; digits = digits;
+          reason = "n must fit within the requested digit count";
+        }
+        else if op == "routine-step" then {
+          outcome = "kaprekar-computed";
+          operation = op; n = n; digits = digits;
+          result = kaprekarStep n digits;
+        }
+        else
+          # op == "routine"
+          let
+            r = runRoutine n digits;
+            fp = r.fixed_point;
+            isConst = (digits == 3 && fp == 495)
+                      || (digits == 4 && fp == 6174);
+          in {
+            outcome = "kaprekar-computed";
+            operation = op; n = n; digits = digits;
+            fixed_point = fp;
+            steps = builtins.length r.sequence - 1;
+            sequence = r.sequence;
+            reached_kaprekar_constant = isConst;
+          };
+
+in {
+  inherit
+    ownerName
+    pow10
+    kaprekarStep
+    runRoutine
+    isKaprekarNumber
+    knownOperations
+    applyKaprekar;
+  meta = {
+    source = "stdlib math kaprekar";
+    owner = ownerName;
+    base = "parametric-math-kaprekar-v0";
+    rev_note = "v0.12-ABI (div-math): Kaprekar's routine, Kaprekar's constant, and the Kaprekar numbers. kaprekarStep sorts the d digits descending and ascending and subtracts; runRoutine iterates to the fixed point (6174 for d=4, 495 for d=3, both within seven steps; a repdigit collapses to 0, reported honestly); isKaprekarNumber tests whether n^2 splits into L + R = n with R > 0 (1, 9, 45, 55, 99, 297, 703, 999, ...). Plate applyKaprekar (5 operations): routine-step, routine, kaprekar-constant, is-kaprekar-number, kaprekar-numbers-up-to. The routine is offered only for d in {3,4} -- other digit counts fall into several cycles with no single constant, so they are Held rather than guessed. Standalone, imports nothing, base 10. NOT base-independent, NOT yet a registered lens.";
+  };
+}

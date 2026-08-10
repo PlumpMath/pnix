@@ -1,0 +1,36 @@
+# stdlib/lib/nl/korean-nested-relative-test.px — 중첩 관형절(논항 수식, *문장 통합*) 이해/생성 lock.
+#   (standalone relativeNP "밥을 먹는 사람"은 korean-relative-clause-test.px 별도.)
+#
+# 이전: liftToProposition이 논항 안 관형절을 처리 못 해 "철수가 먹은 사과를 영희가 좋아한다"→held-nl(adnominal-clause scope gap, fail-closed).
+# 수정: liftRelativeClauseSentence(parseRelativeNP로 관형NP 추출 + 주문장 liftToProposition 재사용 + head role에 relative_clause 주입).
+#   realizeSentence/propToTerm에 relative_clause 분기 추가(additive). convergeRelativeGate(prop→realize→re-lift→term_key 일치).
+#   chatRespond가 관형절 라우팅. core liftSentence 무수정=일반/복합문 무영향.
+# slice1=관형형 직전 1개 어절만 rc-arg(rc ≤1 overt arg, 선두·중간 위치 모두). 다항 rc·fusion 형용사(예쁜)·OOV는 held(fail-closed).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  headRC = s: let p = knm.liftRelativeClauseSentence s;
+    in if p == null then null
+       else let hr = B.filter (r: r ? relative_clause) p.roles;
+            in if hr == [] then null else (B.head hr).relative_clause;
+  relV = s: (knm.convergeRelativeGate s).verdict;
+  chatRel = s: let r = knm.chatRespond s; in (r ? relative) && r.relative;
+  chatV = s: (knm.chatRespond s).verdict;
+in {
+  all_ok =
+    # ★중첩 관형절 lift: head 사과의 relative_clause = {action=먹, tense=past, roles=[agent=철수]}
+       (let rc = headRC "철수가 먹은 사과를 영희가 좋아한다";
+        in (rc != null) && (rc.action == "먹") && (rc.tense == "past")
+           && (B.length rc.roles == 1) && ((B.head rc.roles).entity == "철수") && ((B.head rc.roles).role == "agent"))
+    # ★rc 목적어(사과를 먹은 영희): rc.action=먹, rc.roles=[object=사과]
+    && (let rc = headRC "철수가 사과를 먹은 영희를 좋아한다";
+        in (rc != null) && (rc.action == "먹") && ((B.head rc.roles).entity == "사과") && ((B.head rc.roles).role == "object"))
+    # ★convergeRelativeGate round-trip 검증(선두·중간 위치)
+    && (relV "철수가 먹은 사과를 영희가 좋아한다" == "math-keep-rel")
+    && (relV "영희가 철수가 먹은 사과를 좋아한다" == "math-keep-rel")
+    && (relV "철수가 사과를 먹은 영희를 좋아한다" == "math-keep-rel")
+    # ★라이브 chatRespond 라우팅: relative=true + math-keep
+    && (chatRel "철수가 먹은 사과를 영희가 좋아한다") && (chatV "철수가 먹은 사과를 영희가 좋아한다" == "math-keep")
+    # ★일반 단문 무영향(관형절 아님 → relative=false, 단문 경로)
+    && ((headRC "영희가 사과를 좋아한다") == null)
+    && ((chatRel "영희가 사과를 좋아한다") == false)
+    && (chatV "영희가 사과를 좋아한다" == "math-keep");
+}

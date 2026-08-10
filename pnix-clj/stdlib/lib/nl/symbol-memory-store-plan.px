@@ -1,0 +1,193 @@
+# stdlib/lib/nl/symbol-memory-store-plan.px
+#
+# Symbol-memory (COMMON 지능): 한글 지식이 내는 typed universal symbol(號)을 redb
+# `corpus_symbol_memory_by_canonical_key` *addressing index*로 append-only materialize 하는 store-plan.
+#   ※ 개인/privacy 지능 층 = *존재하지 않음·계획 없음*(운영자 2026-06-20) — common 단일층.
+#
+# ★구조 수렴(research wxpv3543o, 104-agent 3-0): durable substance = 마디(node)+엣지(edge) 그래프 =
+#   **`record-to-gate-graph`(stdlib/lib/corpus/) 정본 writer 소관**(`corpus_gate_graph_nodes`에 {node,faces,kept,..}).
+#   symbol(號) = 그 substance를 가리키는 *주소/index*이지 substance가 *아니다*(Unison 이름=별도저장 repointable
+#   포인터, hash-consing 노드=substance·정수tag=핸들). 그래서 여기는 substance 마디를 *안 쓴다* — name→신원
+#   addressing index만 쓴다(별도 테이블). 마디를 "symbol으로 저장"하면 라벨↔substance conflation = 문헌이 경고한 오류.
+#
+# ★신원(identity) = (ref_kind, canonical_key=term-dag 수) *exact*. index key = sha256(identity)
+#   → **같은 symbol은 같은 key = append idempotent = dedup**. alias의 #idx(per-mention 핸들)는
+#   durable 신원에 *안 들어간다*(stable_alias=@ref_kind:name만). = research w77tlsyzv 교정
+#   ("hash 동등은 ground-truth 신원 아님; 신원은 exact"): 여기선 key를 *exact 신원*에서 직접 파생해 충돌 자체를 없앰.
+#
+# 비파괴(stability): content-hash key · append-only(executor atomic: 실패=DB 무변경) · proposer_only=true
+#   / durable_truth=false(gate 전 truth 아님). pnix rec{}(JSON 금지). dispose=다음칸(§33: 순수 append-only는
+#   utility-problem으로 퇴화 — 결정론 reference-count/utility dispose gate 필수, random 망각 금지).
+# 새 거울/lane 0: 號 minter=solver-nl-entity-alias · canonical 수=term-dag.key는 *소비측(propose)*이 재사용.
+let
+  B = builtins;
+  ser = import ./pnix-value-literal.px;
+  propose = import ./symbol-memory-propose.px;   # codec proposition → 號 후보(재사용, 새 거울 0)
+  schema = "nl.symbol-memory.v0";
+  table = "corpus_symbol_memory_by_canonical_key";
+
+  # 제안 symbol → durable *addressing index* entry(신원→주소). per-mention idx 제거 = 같은 symbol 한 신원.
+  # ★substance 아님: node/faces/kept 없음 — 이건 name→content-addressed 신원 포인터다(record-to-gate-graph가 마디 소관).
+  normalizeSym = s:
+    let name = s.name or "";
+        refKind = s.ref_kind or "symbol";
+        canonicalKey = s.canonical_key or "";
+    in {
+      inherit schema;
+      entry_kind = "symbol-index/address";         # = substance 아닌 주소 entry(Unison 이름=repointable 포인터)
+      name = name;
+      ref_kind = refKind;
+      canonical_key = canonicalKey;                # term-dag.key = exact 신원
+      index_target = canonicalKey;                 # 가리키는 content-addressed substance 신원(마디=record-to-gate-graph)
+      stable_alias = "@" + refKind + ":" + name;   # per-mention #idx 제거된 안정 핸들
+      concept = s.concept or null;                 # predicate-concepts label (언어중립), null 허용
+      evidence_kind = "korean-codec.symbol";
+      proposer_only = true;
+      durable_truth = false;
+      ontology_assert_allowed = false;
+    };
+
+  symInfo = s:
+    let node = normalizeSym s;
+        idStr = node.ref_kind + "|" + node.canonical_key;   # exact identity
+        contentHash = B.hashString "sha256" idStr;          # ★identity-based → 같은 symbol=같은 key=dedup
+        valueSrc = ser.toPnixSource node;
+        key = schema + "/sym/" + contentHash;
+    in {
+      op = { op_kind = "append"; table = table; key = key; value_bytes = valueSrc; };
+      meta = { key = key; content_hash = contentHash; canonical_key = node.canonical_key;
+               ref_kind = node.ref_kind; stable_alias = node.stable_alias; };
+    };
+
+  # identity key로 dedup (같은 symbol 1회) — O(n²)이나 문장당 symbol 소수.
+  dedupByKey = infos:
+    B.foldl' (acc: x: if B.any (y: y.meta.key == x.meta.key) acc then acc else acc ++ [ x ]) [ ] infos;
+
+  # batch ingest: 이미 understand된 proposition record들 → propose로 號 후보(liftToProposition 재실행·재구현 0,
+  #   propose가 alias/term-dag/predicate-concepts 재사용). record = {proposition={roles,action};} 또는 {roles,action} 직접.
+  symbolsFromRecords = records:
+    B.concatMap (r: (propose.proposeSymbols (r.proposition or r)).symbols) records;
+  readRecords = path:
+    let p = B.fromJSON (B.readFile path); in p.records or [ ];   # ingest 경계 fromJSON 허용(외부 raw, CLAUDE.md)
+
+  # ── §34 Layer-1 dispose core (set-difference + 재유도 guard) ──
+  disposeCore = args:
+    let current = args.current_keys or [ ];
+        live = args.live_keys or [ ];
+        rederivable = args.rederivable_keys or [ ];             # §34-4 재유도 witness (fail-closed: 없으면 [])
+        stale = B.filter (k: ! (B.elem k live)) current;        # current − live
+        removable = B.filter (k: B.elem k rederivable) stale;   # ★retraction-only: 재유도 witness된 stale만
+        held = B.filter (k: ! (B.elem k rederivable)) stale;    # stale이나 비-재유도 → HELD(excision 위험 차단)
+        removeOps = B.map (k: { op_kind = "remove"; table = table; key = k; }) removable;
+    in {
+      plan = {
+        plan_id = "symbol-memory-dispose-v0";
+        source_lens = "stdlib/lib/nl/symbol-memory-store-plan.px";
+        source_verdict = "dispose-symbol-memory";
+        operations = removeOps;
+        receipt_owner = "nl.symbol-memory.v0";
+        plan_built_at_ms = args.built_at_ms or 0;
+      };
+      inherit schema;
+      dispose_kind = "retraction";       # 가역(재유도 witness된 것만) — excision(비가역·backup-only) 아님 (§34-3)
+      reversible = true;                 # removable = proposeSymbols 재실행으로 재유도 (§34-4 보장, witness로 강제)
+      arena_required = false;            # 구조 set-difference + witness = held-out Arena 불요 (§34-1/2)
+      current_count = B.length current;
+      live_count = B.length live;
+      stale_count = B.length stale;
+      removable_count = B.length removable;
+      held_count = B.length held;        # ★stale-but-not-rederivable = fail-closed 보존(제거 안 함)
+      operation_count = B.length removeOps;
+      append_only = false;               # ★dispose 층은 append-only 아님(materialize와 분리, §34-3)
+      proposer_only = true;
+      durable_truth = false;
+    };
+
+  # ── §34 host-wired dispose: ferry된 kept 마디서 live(symbol_refs union) 도출 → disposeCore ──
+  #   live = kept knowledge.proposition 마디의 symbol_refs union(byte-identical, §33-3 엣지). index=재구성가능 projection
+  #   이므로 rederivable=current(전부 retraction, excision 0). host: corpus_gate_graph_nodes scan→ferry(import 경로), index scan→current.
+  disposeFromScan = args:
+    let nodes = if args ? nodes then args.nodes
+                else if args ? nodes_path then (let np = args.nodes_path; mod = import np; in if mod ? nodes then mod.nodes else [ ])
+                else [ ];
+        current = args.current_keys or [ ];
+        # ★ '?' has-check + 직접 접근(괄호식+or 는 이 dialect서 오결합 → 무조건 false 버그였음)
+        isLiveNode = n: (n ? node) && (n.node ? kind) && (n.node.kind == "knowledge.proposition")
+                        && (n ? kept) && n.kept;
+        liveNodes = B.filter isLiveNode nodes;
+        live = B.concatMap (n: if n ? symbol_refs then n.symbol_refs else [ ]) liveNodes;  # union(elem 검사라 중복 무관)
+        core = disposeCore { current_keys = current; live_keys = live;
+                             rederivable_keys = current;   # projection → 전부 retraction(§34-5)
+                             built_at_ms = args.built_at_ms or 0; };
+    in core // { live_node_count = B.length liveNodes; };
+in {
+  # mkPlan: polymorphic 진입 — (a) {symbols,..} 직접 후보, (b) {raw_path,source_id,..} batch ingest
+  #   (--corpus-source-ingest 진입, fromJSON records → propose), (c) {records,..} in-memory batch. 우선순위 a>b>c.
+  #   → manifest + dedup된 per-symbol append op-plan (비파괴·append-only). 새 lane/플래그 0(기존 generic dispatcher 재사용).
+  inherit symbolsFromRecords;
+  # ★storeKeyOfSymbol: symbol record → 그 durable store key(=index entry key). 마디 writer가 import해
+  #   symbol_refs를 *byte-identical*로 emit(재구현 0, §34-9). symInfo가 유일 key 산식.
+  storeKeyOfSymbol = s: (symInfo s).meta.key;
+  mkPlan = args:
+    let records = if args ? raw_path then readRecords args.raw_path
+                  else if args ? records then args.records else [ ];
+        syms = if args ? symbols then args.symbols else symbolsFromRecords records;
+        infos = dedupByKey (B.map symInfo syms);
+        symOps = B.map (x: x.op) infos;
+        manifestRecord = {
+          inherit schema;
+          source = "korean-codec symbol-memory (common)";
+          symbol_count = B.length infos;
+          symbols = B.map (x: x.meta) infos;
+          proposer_only = true;
+          durable_truth = false;
+          ontology_assert_allowed = false;
+        };
+        manifestSrc = ser.toPnixSource manifestRecord;
+        manifestHash = B.hashString "sha256" manifestSrc;
+        manifestKey = schema + "/manifest/" + manifestHash;
+        manifestOp = { op_kind = "append"; table = table; key = manifestKey; value_bytes = manifestSrc; };
+    in {
+      plan = {
+        plan_id = "symbol-memory-load-v0";
+        source_lens = "stdlib/lib/nl/symbol-memory-store-plan.px";
+        source_verdict = "materialize-symbol-memory";
+        operations = [ manifestOp ] ++ symOps;
+        receipt_owner = "nl.symbol-memory.v0";
+        plan_built_at_ms = args.built_at_ms or 0;
+      };
+      inherit schema;
+      symbol_count = B.length infos;               # distinct(dedup된) 신원 수
+      record_count = B.length records;             # batch 입력 proposition record 수(--corpus-source-ingest 보고)
+      raw_count = B.length syms;
+      operation_count = 1 + (B.length symOps);
+      content_hash = manifestHash;
+      value_bytes_len = B.stringLength manifestSrc;
+      proposer_only = true;
+      durable_truth = false;
+      ontology_assert_allowed = false;
+      append_only = true;
+    };
+
+  # mkQuery: schema prefix scan (소비측이 exact canonical_key로 신원 확인)
+  mkQuery = args: {
+    plan = {
+      plan_id = "symbol-memory-query-v0";
+      source_lens = "stdlib/lib/nl/symbol-memory-store-plan.px";
+      source_verdict = "query-symbol-memory";
+      operations = [
+        { op_kind = "scan-prefix"; table = table; key = ""; key_prefix = schema + "/"; }
+      ];
+      receipt_owner = "nl.symbol-memory.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_schema = schema;
+  };
+
+  # mkDisposePlan {current_keys, live_keys, rederivable_keys}: ★§34 Layer-1 구조-dispose core.
+  #   stale = current − live (구조 차집합, Arena-free) + ★재유도 guard(§34-4): witness된 stale만 remove(retraction),
+  #   witness 없으면 HELD(fail-closed, oracle 맹신 차단). host 배선=mkDisposeFromScan.
+  mkDisposePlan = disposeCore;
+  # host-wired: corpus_gate_graph_nodes scan(ferry된 마디)서 live 도출 + index scan(current) → disposeCore.
+  mkDisposeFromScan = disposeFromScan;
+}

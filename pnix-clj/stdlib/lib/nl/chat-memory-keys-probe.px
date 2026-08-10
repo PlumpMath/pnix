@@ -1,0 +1,30 @@
+# stdlib/lib/nl/chat-memory-keys-probe.px
+#
+# P53: derive symbol-memory store keys from an ephemeral sentence via liftToProposition → proposeSymbols.
+# Evaluated via pnixc-meta one-shot; Clojure durable layer keeps key list hash only.
+let
+  knm = import ./korean-nl-mirror.px;
+  propose = import ./symbol-memory-propose.px;
+  spm = import ./symbol-memory-store-plan.px;
+  B = builtins;
+
+  memoryKeysForSentence = sentence:
+    let prop = knm.liftToProposition sentence;
+        syms = if prop == null then [ ] else (propose.proposeSymbols prop).symbols;
+    in B.map (s: spm.storeKeyOfSymbol s) syms;
+
+  runProbe = args:
+    let sentence = if B.isAttrs args then (if args ? sentence then args.sentence else "") else args;
+        keys = memoryKeysForSentence sentence;
+    in {
+      status = "ok";
+      memory_keys = keys;
+      key_count = B.length keys;
+    };
+
+  probeSelfTest = _:
+    let keys = memoryKeysForSentence "철수가 사과를 먹었다";
+    in (B.length keys) >= 3;
+in {
+  inherit memoryKeysForSentence runProbe probeSelfTest;
+}

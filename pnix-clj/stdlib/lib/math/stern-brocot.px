@@ -1,0 +1,171 @@
+# stdlib.lib.math.stern-brocot
+#
+# OWNER-LAW (v0.12-ABA, div-math, 2026-05-22): the Stern-Brocot /
+# Calkin-Wilf enumeration of the rationals.
+#
+# rational.px represents one fraction p/q. decimal-expansion.px
+# and continued-fraction.px give it alternative forms. This owner
+# answers a different question entirely: how to ENUMERATE every
+# positive rational, each exactly once, with no repeats and no
+# omissions.
+#
+# # The mediant, and Stern's diatomic sequence
+#
+# The Stern-Brocot construction inserts, between a/b and c/d,
+# their mediant (a+c)/(b+d). Iterating this from 0/1 and 1/0
+# reaches every positive rational in lowest terms exactly once.
+#
+# The same structure read breadth-first is Stern's diatomic
+# sequence ("fusc"):
+#
+#   fusc(0)=0, fusc(1)=1,
+#   fusc(2n)=fusc(n), fusc(2n+1)=fusc(n)+fusc(n+1)
+#
+# and the consecutive ratios fusc(n)/fusc(n+1) for n = 1, 2, 3,
+# ... ARE the Calkin-Wilf enumeration: 1/1, 1/2, 2/1, 1/3, 3/2,
+# 2/3, 3/1, ... -- every positive rational, once.
+#
+# # Standalone, exact
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT memoised -- fusc is recomputed, so the plate caps n.
+#   - NOT the L/R path encoding of the Stern-Brocot tree.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/stern-brocot.px";
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # The mediant of a/b and c/d: (a+c)/(b+d). The numerator and
+  # denominator are returned separately (already in lowest terms
+  # when the two inputs are Stern-Brocot neighbours).
+  mediant = an: ad: bn: bd: {
+    num = an + bn;
+    den = ad + bd;
+  };
+
+  # Stern's diatomic sequence by its defining recurrence.
+  fusc = n:
+    if n <= 0 then 0
+    else if n == 1 then 1
+    else if n - 2 * (n / 2) == 0 then fusc (n / 2)
+    else
+      let h = (n - 1) / 2;
+      in fusc h + fusc (h + 1);
+
+  # [ fusc(0), fusc(1), ..., fusc(n) ].
+  fuscSequence = n:
+    if n < 0 then []
+    else builtins.map fusc (rangeList 0 n);
+
+  # The n-th positive rational in the Calkin-Wilf enumeration
+  # (n >= 1): fusc(n) / fusc(n+1). Already in lowest terms.
+  calkinWilfRational = n: {
+    num = fusc n;
+    den = fusc (n + 1);
+  };
+
+  # The first n positive rationals of the enumeration.
+  calkinWilfSequence = n:
+    if n < 1 then []
+    else builtins.map calkinWilfRational (rangeList 1 n);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "mediant"
+    "fusc"
+    "fusc-sequence"
+    "rational-at"
+    "rational-sequence"
+  ];
+
+  fuscLimit = 1500;
+  sequenceLimit = 300;
+
+  applySternBrocot = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      an = if request ? an then request.an else 0;
+      ad = if request ? ad then request.ad else 1;
+      bn = if request ? bn then request.bn else 0;
+      bd = if request ? bd then request.bd else 1;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "mediant" then {
+        outcome = "stern-brocot-computed";
+        operation = op;
+        mediant = mediant an ad bn bd;
+      }
+      else if (op == "fusc" || op == "rational-at") && n < 0 then {
+        outcome = "held-negative-index";
+        operation = op;
+        n = n;
+      }
+      else if (op == "fusc" || op == "rational-at") && n > fuscLimit then {
+        outcome = "held-index-too-large";
+        operation = op;
+        n = n;
+        limit = fuscLimit;
+      }
+      else if (op == "fusc-sequence" || op == "rational-sequence")
+              && n > sequenceLimit then {
+        outcome = "held-index-too-large";
+        operation = op;
+        n = n;
+        limit = sequenceLimit;
+      }
+      else if op == "fusc" then {
+        outcome = "stern-brocot-computed";
+        operation = op; n = n;
+        value = fusc n;
+      }
+      else if op == "fusc-sequence" then {
+        outcome = "stern-brocot-computed";
+        operation = op; n = n;
+        sequence = fuscSequence n;
+      }
+      else if op == "rational-at" then
+        if n < 1 then {
+          outcome = "held-non-positive-index";
+          operation = op; n = n;
+        }
+        else {
+          outcome = "stern-brocot-computed";
+          operation = op; n = n;
+          rational = calkinWilfRational n;
+        }
+      else {
+        # op == "rational-sequence"
+        outcome = "stern-brocot-computed";
+        operation = op; n = n;
+        rationals = calkinWilfSequence n;
+      };
+
+in {
+  inherit
+    ownerName
+    mediant
+    fusc
+    fuscSequence
+    calkinWilfRational
+    calkinWilfSequence
+    knownOperations
+    applySternBrocot;
+  meta = {
+    source = "stdlib math stern brocot";
+    owner = ownerName;
+    base = "parametric-math-stern-brocot-v0";
+    rev_note = "v0.12-ABA (div-math): the Stern-Brocot / Calkin-Wilf enumeration of the rationals. mediant ((a+c)/(b+d)); fusc (Stern's diatomic sequence by its recurrence); calkinWilfRational (the n-th positive rational, fusc(n)/fusc(n+1)) -- every positive rational exactly once. Standalone, exact. NOT memoised (fusc recomputed; n capped), NOT the L/R path encoding, NOT yet a registered lens.";
+  };
+}

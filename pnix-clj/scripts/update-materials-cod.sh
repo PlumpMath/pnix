@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="${PNIX_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+OUT_DIR="$ROOT/ingest/materials/cod"
+YEAR="${COD_YEAR:-$(date -u +%Y)}"
+URL="${COD_URL:-https://www.crystallography.net/cod/result?format=json&year=$YEAR}"
+OUT="$OUT_DIR/cod-$YEAR-result.json"
+TMP="$OUT.tmp.$$"
+mkdir -p "$OUT_DIR"
+echo "download: $URL"
+curl -fL --retry 3 --retry-delay 2 "$URL" -o "$TMP"
+mv "$TMP" "$OUT"
+shasum -a 256 "$OUT" > "$OUT.sha256"
+{
+  echo "source_url=$URL"
+  echo "year=$YEAR"
+  echo "retrieved_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "sha256=$(cut -d' ' -f1 "$OUT.sha256")"
+} > "$OUT.meta"
+echo "wrote: $OUT"
+cat "$OUT.sha256"

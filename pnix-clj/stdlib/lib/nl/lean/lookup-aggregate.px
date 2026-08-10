@@ -1,0 +1,161 @@
+# Aggregate Mathlib4 lookup
+let
+  ownerName = "stdlib.nl.lean.lookup-aggregate";
+
+  abelian = import nl/lean/lookup-abelian.px;
+  algebra_group = import nl/lean/lookup-algebra-group.px;
+  algebra_module = import nl/lean/lookup-algebra-module.px;
+  algebra_order = import nl/lean/lookup-algebra-order.px;
+  algebra_ring = import nl/lean/lookup-algebra-ring.px;
+  analysis = import nl/lean/lookup-analysis.px;
+  combinatorics = import nl/lean/lookup-combinatorics.px;
+  data_foundation = import nl/lean/lookup-data-foundation.px;
+  galois = import nl/lean/lookup-galois.px;
+  group_cohomology = import nl/lean/lookup-group-cohomology.px;
+  homological = import nl/lean/lookup-homological.px;
+  linear_algebra = import nl/lean/lookup-linear-algebra.px;
+  measure_theory = import nl/lean/lookup-measure-theory.px;
+  monoidal = import nl/lean/lookup-monoidal.px;
+  number_field = import nl/lean/lookup-number-field.px;
+  order_theory = import nl/lean/lookup-order-theory.px;
+  p_adic = import nl/lean/lookup-p-adic.px;
+  representation_theory = import nl/lean/lookup-representation-theory.px;
+  ring_theory = import nl/lean/lookup-ring-theory.px;
+  sheaf = import nl/lean/lookup-sheaf.px;
+  topology = import nl/lean/lookup-topology.px;
+  triangulated = import nl/lean/lookup-triangulated.px;
+  zeta = import nl/lean/lookup-zeta.px;
+
+  entries =
+    abelian.entries ++
+    algebra_group.entries ++
+    algebra_module.entries ++
+    algebra_order.entries ++
+    algebra_ring.entries ++
+    analysis.entries ++
+    combinatorics.entries ++
+    data_foundation.entries ++
+    galois.entries ++
+    group_cohomology.entries ++
+    homological.entries ++
+    linear_algebra.entries ++
+    measure_theory.entries ++
+    monoidal.entries ++
+    number_field.entries ++
+    order_theory.entries ++
+    p_adic.entries ++
+    representation_theory.entries ++
+    ring_theory.entries ++
+    sheaf.entries ++
+    topology.entries ++
+    triangulated.entries ++
+    zeta.entries;
+
+  entryCount = builtins.length entries;
+
+  byCategory = category:
+    let cats = {
+      "abelian" = abelian.entries;
+      "algebra-group" = algebra_group.entries;
+      "algebra-module" = algebra_module.entries;
+      "algebra-order" = algebra_order.entries;
+      "algebra-ring" = algebra_ring.entries;
+      "analysis" = analysis.entries;
+      "combinatorics" = combinatorics.entries;
+      "data-foundation" = data_foundation.entries;
+      "galois" = galois.entries;
+      "group-cohomology" = group_cohomology.entries;
+      "homological" = homological.entries;
+      "linear-algebra" = linear_algebra.entries;
+      "measure-theory" = measure_theory.entries;
+      "monoidal" = monoidal.entries;
+      "number-field" = number_field.entries;
+      "order-theory" = order_theory.entries;
+      "p-adic" = p_adic.entries;
+      "representation-theory" = representation_theory.entries;
+      "ring-theory" = ring_theory.entries;
+      "sheaf" = sheaf.entries;
+      "topology" = topology.entries;
+      "triangulated" = triangulated.entries;
+      "zeta" = zeta.entries;
+    };
+    in cats.${category} or [];
+
+  lookupByName = name:
+    let matches = builtins.filter (e: e.full_name == name) entries;
+    in if matches == [] then null else builtins.head matches;
+
+  searchByKeyword = keyword:
+    let contains = haystack: needle:
+      let hLen = builtins.stringLength haystack; nLen = builtins.stringLength needle;
+          go = i: if i + nLen > hLen then false
+                  else if builtins.substring i nLen haystack == needle then true
+                  else go (i + 1);
+      in if nLen == 0 then true else if hLen < nLen then false else go 0;
+    in builtins.filter (e: contains e.full_name keyword) entries;
+
+  filterByFilePrefix = prefix:
+    let startsWith = s: p:
+      let sLen = builtins.stringLength s; pLen = builtins.stringLength p;
+      in if pLen == 0 then true
+         else if sLen < pLen then false
+         else builtins.substring 0 pLen s == p;
+    in builtins.filter (e: startsWith e.file_path prefix) entries;
+
+  categoryInventory = [
+    { name = "abelian"; entry_count = abelian.entryCount; }
+    { name = "algebra-group"; entry_count = algebra_group.entryCount; }
+    { name = "algebra-module"; entry_count = algebra_module.entryCount; }
+    { name = "algebra-order"; entry_count = algebra_order.entryCount; }
+    { name = "algebra-ring"; entry_count = algebra_ring.entryCount; }
+    { name = "analysis"; entry_count = analysis.entryCount; }
+    { name = "combinatorics"; entry_count = combinatorics.entryCount; }
+    { name = "data-foundation"; entry_count = data_foundation.entryCount; }
+    { name = "galois"; entry_count = galois.entryCount; }
+    { name = "group-cohomology"; entry_count = group_cohomology.entryCount; }
+    { name = "homological"; entry_count = homological.entryCount; }
+    { name = "linear-algebra"; entry_count = linear_algebra.entryCount; }
+    { name = "measure-theory"; entry_count = measure_theory.entryCount; }
+    { name = "monoidal"; entry_count = monoidal.entryCount; }
+    { name = "number-field"; entry_count = number_field.entryCount; }
+    { name = "order-theory"; entry_count = order_theory.entryCount; }
+    { name = "p-adic"; entry_count = p_adic.entryCount; }
+    { name = "representation-theory"; entry_count = representation_theory.entryCount; }
+    { name = "ring-theory"; entry_count = ring_theory.entryCount; }
+    { name = "sheaf"; entry_count = sheaf.entryCount; }
+    { name = "topology"; entry_count = topology.entryCount; }
+    { name = "triangulated"; entry_count = triangulated.entryCount; }
+    { name = "zeta"; entry_count = zeta.entryCount; }
+  ];
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    total_entry_count = 3291;
+    category_count = 23;
+    categories = categoryInventory;
+    dataset_source = "LeanDojo Benchmark 4";
+    dataset_license = "CC-BY-4.0";
+    mathlib_commit = "c44e0c8ee63ca166450922a373c7409c5d26b00b";
+    has_lookupByName = true;
+    has_searchByKeyword = true;
+    has_filterByFilePrefix = true;
+    has_byCategory = true;
+    file_layout = "split-by-category";
+    file_layout_root = "stdlib/lib/nl/lean/";
+  };
+
+  applyMathlibLookupPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then { outcome = "mathlib-lookup-inventory"; receipt = inventorySummary {}; }
+    else if builtins.hasAttr "by_name" request then let r = lookupByName request.by_name; in if r == null then { outcome = "held-no-matching-theorem-name"; receipt = { queried_name = request.by_name; }; } else { outcome = "mathlib-theorem-found"; receipt = r; }
+    else if builtins.hasAttr "search" request then let r = searchByKeyword request.search; in { outcome = "mathlib-search-results"; receipt = { keyword = request.search; match_count = builtins.length r; matches = r; }; }
+    else if builtins.hasAttr "by_file_prefix" request then let r = filterByFilePrefix request.by_file_prefix; in { outcome = "mathlib-file-filtered"; receipt = { prefix = request.by_file_prefix; match_count = builtins.length r; matches = r; }; }
+    else if builtins.hasAttr "by_category" request then let r = byCategory request.by_category; in { outcome = "mathlib-category-entries"; receipt = { category = request.by_category; entry_count = builtins.length r; entries = r; }; }
+    else if builtins.hasAttr "categories" request then { outcome = "mathlib-categories-inventory"; receipt = categoryInventory; }
+    else { outcome = "held-unknown-request-shape"; receipt = { allowed_keys = [ "inventory" "by_name" "search" "by_file_prefix" "by_category" "categories" ]; }; };
+
+in {
+  inherit ownerName entries entryCount categoryInventory;
+  inherit lookupByName searchByKeyword filterByFilePrefix byCategory;
+  inherit inventorySummary applyMathlibLookupPlate;
+}

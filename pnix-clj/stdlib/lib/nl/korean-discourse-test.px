@@ -1,0 +1,23 @@
+# stdlib/lib/nl/korean-discourse-test.px — Slice6: ②context 연결 (코덱 좌표 위 문장간 지시어 해소)
+#
+# liftDiscourse: 단문 좌표(역할-entity)를 문장 가로질러 잇고, 지시어(그/그것…=닫힌 문법집합)를 kind-aware 로 해소.
+# '철수가 사과를 먹었다. 그가 잔다.' → '그'(agent 지시어) → 가장 최근 agent = 철수 (가장 최근 entity 사과가 아님).
+# live 알고리즘(저장X). 의미는 코덱이 아니라 이 *연결*에서 창발(코덱 단방향, n: 경계 유지).
+let
+  knl = import ./korean-nl-mirror.px;
+  B = builtins;
+  disc = knl.liftDiscourse [ "철수가 사과를 먹었다" "그가 잔다" ];
+  s2 = B.elemAt disc 1;
+  bind = B.head s2.resolved;
+  resolvedName = if bind.entity == null then "null" else bind.entity.name;
+  resolvedKind = if bind.entity == null then "null" else bind.entity.kind;
+  # dangling: 앞에 entity 없는 첫 문장 지시어 → null = Held(가리킬 것 없음)
+  disc2 = knl.liftDiscourse [ "그가 잔다" ];
+  dang = let r = B.head (B.elemAt disc2 0).resolved; in r.entity == null;
+in {
+  ref_token = bind.ref;             # "그"
+  resolved_name = resolvedName;     # "철수" — kind-aware (사과 아님)
+  resolved_kind = resolvedKind;     # "agent"
+  dangling_null = dang;             # true
+  all_ok = (resolvedName == "철수") && (resolvedKind == "agent") && dang;
+}

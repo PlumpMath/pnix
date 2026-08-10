@@ -1,0 +1,145 @@
+# P2 — ontology-extension-event
+#
+# OWNER-LAW (2026-05-13): every mirror spawn EMITS an explicit
+# ontology-extension event with the delta (which meanings are new).
+# The substrate-level ontology meaning set is content-addressed:
+# same (parent_ontology_id, contributions) → same resulting_ontology_id.
+#
+# Why: today there's no global Ontology data structure to extend —
+# only per-fact ContextualFact instances. P2 is the new substrate
+# construct that the R7 walking experiment confirmed is missing.
+# Without P2, "mirror spawn = ontology extension" cannot be verified.
+#
+# Consumes: MirrorIdentity from P1.
+# Emits: OntologyExtensionEvent (with delta).
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p2-ontology-extension-event.px";
+
+  # Required fields on a Meaning record that a mirror contributes.
+  requiredMeaningFields = [
+    "name"
+    "shape"
+    "brought_by_id"
+    "brought_at_ms"
+  ];
+
+  validateMeaning = m:
+    let
+      hasField = field:
+        m ? "${field}" && (
+          let v = m."${field}"; in
+          if builtins.isString v then builtins.stringLength v > 0
+          else if builtins.isInt v then true
+          else v != null
+        );
+    in builtins.filter (f: !(hasField f)) requiredMeaningFields;
+
+  # Build content-addressed ontology id from parent + sorted
+  # contribution names. Same algorithm as P1.buildId — third use
+  # of this fingerprint pattern; extraction candidate when a fourth
+  # owner appears.
+  #
+  # # Design decision (2026-05-13 audit resolution)
+  #
+  # The id depends ONLY on (parent_ontology_id, contribution_names).
+  # NOT on mirror_id. Consequence: two sibling mirrors that spawn
+  # from the same parent ontology with the same contribution names
+  # produce the *same* resulting_ontology_id.
+  #
+  # This is **content-addressed by intent.** Two mirrors that
+  # contribute the same meanings deterministically reach the same
+  # ontology. RT axiom: same input → same output. The mirrors
+  # themselves remain distinct (P1 mirror_id), but the *ontology*
+  # they create is identical because the content is identical.
+  #
+  # This resolves the audit-noted conflict: earlier boot-orchestrator
+  # axis "sibling ontology distinct" was MISFRAMED. The correct
+  # axis is "sibling MIRROR distinct" (P1, ✓) — sibling ontology
+  # being identical for identical contributions is *feature*, not
+  # bug. The design-draft map's "siblings distinct" expectation has
+  # been updated to reflect this.
+  buildOntologyId = parent_id: contribution_names:
+    let
+      parent = if parent_id == null then "root-ontology" else parent_id;
+      sorted = builtins.sort (a: b: a < b) contribution_names;
+      parts = [ "ontology" parent ] ++ sorted;
+    in builtins.concatStringsSep "|" parts;
+
+  # Emit the OntologyExtensionEvent. Caller supplies the
+  # MirrorIdentity (from P1.spawnMirror) and the contribution list.
+  emitExtension = request:
+    let
+      mirror_id = request.mirror_id;
+      parent_ontology_id =
+        if request ? parent_ontology_id then request.parent_ontology_id else null;
+      contributions =
+        if request ? contributions then request.contributions else [];
+
+      # Validate each meaning. Collect any with missing fields.
+      perMeaningMissing = builtins.map
+        (m: { name = if m ? name then m.name else "<unnamed>";
+              missing = validateMeaning m; })
+        contributions;
+      anyMeaningInvalid = builtins.foldl'
+        (acc: r: acc || builtins.length r.missing > 0)
+        false
+        perMeaningMissing;
+
+      contribution_names = builtins.map
+        (m: if m ? name then m.name else "<unnamed>")
+        contributions;
+      resulting_ontology_id = buildOntologyId parent_ontology_id contribution_names;
+
+      base_count =
+        if request ? base_meaning_count then request.base_meaning_count else 0;
+      contribution_count = builtins.length contributions;
+    in
+      if mirror_id == null || mirror_id == "" then {
+        verdict = "ontology-extension-held";
+        held_kind = "missing-mirror-id";
+        event = null;
+      }
+      else if anyMeaningInvalid then {
+        verdict = "ontology-extension-held";
+        held_kind = "invalid-meanings";
+        per_meaning_missing = perMeaningMissing;
+        event = null;
+      }
+      else if contribution_count == 0 then {
+        verdict = "ontology-extension-held";
+        held_kind = "empty-contributions";
+        event = null;
+        reason = "a mirror spawn with zero contributions is not an extension event";
+      }
+      else {
+        verdict = "ontology-extension-ready";
+        held_kind = null;
+        event = {
+          mirror_id = mirror_id;
+          parent_ontology_id = parent_ontology_id;
+          resulting_ontology_id = resulting_ontology_id;
+          contributions = contributions;
+          delta = {
+            before_count = base_count;
+            after_count = base_count + contribution_count;
+            added_count = contribution_count;
+            added_names = contribution_names;
+          };
+        };
+      };
+in {
+  inherit
+    ownerName
+    requiredMeaningFields
+    validateMeaning
+    buildOntologyId
+    emitExtension;
+  meta = {
+    source = "pnix-mirror-runtime primitive P2";
+    owner = ownerName;
+    role = "emit ontology-extension event with explicit delta on mirror spawn";
+    consumes = [ "P1-mirror-identity (mirror_id)" ];
+    consumed_by = [ "P3-boundary-projection" "P4-typed-receipt-stream" ];
+  };
+}

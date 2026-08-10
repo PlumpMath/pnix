@@ -1,0 +1,36 @@
+# IANA GSS-API/Kerberos/SASL Service Names redb store-plan. 적재까지만, graph/mirror/math 연결 없음.
+let
+  B = builtins;
+  genPath = ./iana-gssapi-service-names.generated.px;
+  seed = if B.pathExists genPath then import genPath else { schema = "registry.iana.gssapi_service_names.v1"; source = { project = "IANA GSS-API/Kerberos/SASL Service Names"; }; registries = [ ]; registry_count = 0; record_count = 0; };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "registry-iana-gssapi-service-names-load-v0";
+      source_lens = "stdlib/lib/corpus/iana-gssapi-service-names-store-plan.px";
+      source_verdict = "materialize-registry-iana-gssapi-service-names";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "registry.iana.gssapi_service_names.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "registry-iana-gssapi-service-names-query-v0";
+      source_lens = "stdlib/lib/corpus/iana-gssapi-service-names-store-plan.px";
+      source_verdict = "query-registry-iana-gssapi-service-names";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "registry.iana.gssapi_service_names.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

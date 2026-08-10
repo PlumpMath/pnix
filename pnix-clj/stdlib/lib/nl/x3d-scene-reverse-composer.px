@@ -1,0 +1,196 @@
+let
+  ownerName = "stdlib.nl.x3d-scene-reverse-composer";
+
+  # === X3D scene reverse composer (Axiom #80) ======================
+  #
+  # 사용자 directive (2026-05-29 dawn): "양방향으로 제대로". X3D mirror
+  # runtime 도 forward + reverse 모두 박혀야 양방향 완성.
+  #
+  # # Roundtrip
+  #
+  # "빨간 큐브" → #79 forward → x3d-scene-lifted (intent=draw-box, color=red)
+  #             → #80 reverse → "빨간 큐브가 있는 3D scene"
+  #
+  # # Reverse template (7 intent × en+ko)
+  #
+  # draw-box / draw-sphere / draw-cylinder / draw-text-label /
+  # molecule-pair / empty-3d-scene / empty-2d-scene
+  #
+  # # Color name → KO/EN reverse mapping
+  #
+  # 6 basic colors (en+ko 양방향).
+  #
+  # # Held-honest
+  #
+  # missing intent_id → held
+  # unsupported language → held
+  # unknown intent → held
+
+  knownReverseColorMap = [
+    { intent_color = "red"; en = "red"; ko = "빨간"; }
+    { intent_color = "green"; en = "green"; ko = "초록"; }
+    { intent_color = "blue"; en = "blue"; ko = "파란"; }
+    { intent_color = "yellow"; en = "yellow"; ko = "노란"; }
+    { intent_color = "white"; en = "white"; ko = "흰"; }
+    { intent_color = "white-default"; en = "white"; ko = "흰"; }
+    { intent_color = "black"; en = "black"; ko = "검은"; }
+  ];
+
+  lookupColorWord = colorApplied: language:
+    let
+      hits = builtins.filter (c: c.intent_color == colorApplied) knownReverseColorMap;
+    in
+      if hits == [] then (if language == "ko" then "어떤" else "some")
+      else
+        let h = builtins.head hits;
+        in if language == "ko" then h.ko else h.en;
+
+  knownReverseShapeTemplate = [
+    { intent_id = "draw-box"; en_word = "cube"; ko_word = "큐브"; }
+    { intent_id = "draw-sphere"; en_word = "sphere"; ko_word = "구"; }
+    { intent_id = "draw-cylinder"; en_word = "cylinder"; ko_word = "원기둥"; }
+    { intent_id = "draw-text-label"; en_word = "text label"; ko_word = "텍스트 라벨"; }
+  ];
+
+  templateCount = (builtins.length knownReverseShapeTemplate) + 3;  # +3 for molecule/empty-3d/empty-2d
+
+  lookupShapeWord = intentId: language:
+    let
+      hits = builtins.filter (s: s.intent_id == intentId) knownReverseShapeTemplate;
+    in
+      if hits == [] then null
+      else
+        let h = builtins.head hits;
+        in if language == "ko" then h.ko_word else h.en_word;
+
+  numToStr = n: builtins.toString n;
+
+  composeForBasicShape = intentId: dimension: colorApplied: language:
+    let
+      colorWord = lookupColorWord colorApplied language;
+      shapeWord = lookupShapeWord intentId language;
+      dimStr = numToStr dimension;
+    in
+      if shapeWord == null then null
+      else if language == "ko" then
+        colorWord + " " + shapeWord + "가 있는 " + dimStr + "D scene"
+      else
+        "A " + colorWord + " " + shapeWord + " in a " + dimStr + "D scene";
+
+  composeForMoleculePair = dimension: language:
+    let dimStr = numToStr dimension; in
+    if language == "ko" then
+      "원자 두 개가 결합 (cylinder bond) 으로 연결된 " + dimStr + "D 분자 scene"
+    else
+      "Two atoms connected by a cylinder bond in a " + dimStr + "D molecule scene";
+
+  composeForEmptyScene = dimension: language:
+    let dimStr = numToStr dimension; in
+    if language == "ko" then
+      "viewpoint 만 있는 빈 " + dimStr + "D scene"
+    else
+      "An empty " + dimStr + "D scene with only viewpoint";
+
+  composeReverseForX3dReceipt = receipt: language:
+    if !(builtins.isAttrs receipt) then {
+      outcome = "held-non-attrs-receipt";
+    }
+    else if !(builtins.hasAttr "outcome" receipt) then {
+      outcome = "held-missing-outcome-field";
+    }
+    else if receipt.outcome != "x3d-scene-lifted" then {
+      outcome = "held-non-x3d-scene-lifted-receipt";
+      provided_outcome = receipt.outcome;
+    }
+    else if !(builtins.hasAttr "intent_id" receipt) then {
+      outcome = "held-missing-intent-id";
+    }
+    else if language != "ko" && language != "en" then {
+      outcome = "held-unsupported-language";
+      supported_languages = [ "ko" "en" ];
+    }
+    else
+      let
+        intentId = receipt.intent_id;
+        dimension =
+          if (builtins.hasAttr "dimension" receipt) then receipt.dimension else 3;
+        colorApplied =
+          if (builtins.hasAttr "color_applied" receipt) then receipt.color_applied
+          else "white-default";
+        nl =
+          if intentId == "draw-box" || intentId == "draw-sphere"
+            || intentId == "draw-cylinder" || intentId == "draw-text-label"
+          then composeForBasicShape intentId dimension colorApplied language
+          else if intentId == "molecule-pair"
+          then composeForMoleculePair dimension language
+          else if intentId == "empty-3d-scene" || intentId == "empty-2d-scene"
+          then composeForEmptyScene dimension language
+          else null;
+      in
+        if nl == null then {
+          outcome = "held-no-reverse-template-for-intent";
+          intent_id = intentId;
+        }
+        else {
+          outcome = "x3d-nl-composed";
+          nl = nl;
+          source_intent_id = intentId;
+          source_dimension = dimension;
+          source_color = colorApplied;
+          language = language;
+          axiom_origin = "axiom-80-x3d-scene-reverse-composer (composes axiom-79)";
+        };
+
+  applyX3dSceneReverseComposerPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "receipt" request) then {
+      outcome = "held-missing-receipt-field";
+    }
+    else
+      let language =
+        if (builtins.hasAttr "language" request) then request.language else "en";
+      in composeReverseForX3dReceipt request.receipt language;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "x3d-mirror-runtime-reverse-axiom-80";
+    template_count = templateCount;
+    intents_covered = [
+      "draw-box" "draw-sphere" "draw-cylinder" "draw-text-label"
+      "molecule-pair" "empty-3d-scene" "empty-2d-scene"
+    ];
+    color_count = (builtins.length knownReverseColorMap) - 1;  # exclude white-default alias
+    supported_languages = [ "ko" "en" ];
+    composes_axiom = "axiom-79-x3d-scene-nl-lifter (receipt)";
+    new_decision_count = 0;
+    do_not_rebuild = true;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-attrs-receipt"
+      "held-missing-outcome-field"
+      "held-non-x3d-scene-lifted-receipt"
+      "held-missing-intent-id"
+      "held-unsupported-language"
+      "held-no-reverse-template-for-intent"
+      "held-non-attrs-request"
+      "held-missing-receipt-field"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownReverseColorMap knownReverseShapeTemplate
+    templateCount lookupColorWord lookupShapeWord numToStr
+    composeForBasicShape composeForMoleculePair composeForEmptyScene
+    composeReverseForX3dReceipt applyX3dSceneReverseComposerPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL X3D scene reverse composer (Axiom #80)";
+    owner = ownerName;
+    base = "x3d-scene-reverse-composer-v0";
+    rev_note = "사용자 directive (2026-05-29 dawn): 'X3D mirror runtime 도 "
+      + "양방향으로'. #79 receipt → NL utterance 재구성. 7 intent × en+ko "
+      + "bilingual templates. color 6종 양방향 매핑. DO NOT REBUILD — "
+      + "Axiom #79 receipt 만 소비.";
+  };
+}

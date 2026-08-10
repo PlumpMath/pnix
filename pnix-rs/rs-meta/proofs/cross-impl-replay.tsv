@@ -1,0 +1,7 @@
+# implementation	status	command	marker	export_schema	comparison_policy	conflict_policy	note
+rs-meta-local	DONE	stage13-horizon-replay-check	stage13-horizon-replay-check	canonical-json-v1	local-bootstrap-check	fail-closed	local rs-meta export is represented by the latest checked horizon replay receipt
+rustc-native	DONE	tv-check	tv-check	stdout-receipt-v1	local-rustc-output	fail-closed	rustc native export is represented by translation-validation stdout receipts
+github-actions	DISABLED	actions-disabled	actions_disabled=ok	workflow-yml-v1	no-remote-comparison	fail-closed	remote CI is disabled and cannot act as a comparison oracle
+alternate-rustc	HELD	held	explicit-toolchain-receipt-required	canonical-json-v1	explicit-toolchain-receipt-required	fail-closed	alternate rustc requires explicit local export receipt before comparison
+other-evaluator	HELD	held	explicit-import-required	canonical-json-v1	explicit-import-required	fail-closed	other Rust evaluators require canonical imports before comparison
+ddc-style-rebuild	HELD	held	explicit-ddc-track-required	artifact-receipt-v1	explicit-ddc-track-required	fail-closed	diverse double-compiling remains a separate held track

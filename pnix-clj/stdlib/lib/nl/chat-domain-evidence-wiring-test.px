@@ -1,0 +1,52 @@
+# stdlib/lib/nl/chat-domain-evidence-wiring-test.px
+#
+# C단계 배선 lock: chatRespondWithMemory가 domain hint(catalog_terms/math_query) 있을 때만 catalog/math evidence
+#   병치 + 없으면 byte-stable(비파괴). P4-P6 키는 유지. distinct kind·truth 승급 0.
+let
+  knm = import ./korean-nl-mirror.px;
+  B = builtins;
+  # plain 문자열(도메인 힌트 없음) → byte-stable(도메인 키 없음, P4-P6 키는 유지)
+  tPlain = knm.chatRespondWithMemory "안녕하세요";
+  # domain hint(속도+시간) → catalog evidence + math derivation 병치
+  tDom = knm.chatRespondWithMemory {
+    sentence = "속도와 시간";
+    catalog_terms = [ { source_schema = "physics.standard_quantities"; key = "속도"; key_kind = "quantity_ko"; }
+                      { source_schema = "physics.standard_quantities"; key = "시간"; key_kind = "quantity_ko"; } ];
+    math_query = { a = "속도"; op = "더하기"; b = "시간"; };
+  };
+  domReport = tDom.understanding_report;
+  # ★Fix #6: 빈 catalog_terms / null math_query = 도메인 정보 0 → 미부착(byte-stable)
+  tEmpty = knm.chatRespondWithMemory { sentence = "안녕하세요"; catalog_terms = [ ]; math_query = null; };
+in {
+  plain_has_catalog = tPlain ? catalog_readback_evidence;
+  plain_has_memory = tPlain ? memory_evidence;
+  dom_has_catalog = tDom ? catalog_readback_evidence;
+  dom_cat_kind = if tDom ? catalog_readback_evidence then tDom.catalog_readback_evidence.evidence_kind else "absent";
+  dom_math_verdict = if tDom ? math_evidence then (if tDom.math_evidence == null then "null" else tDom.math_evidence.verdict) else "absent";
+  all_ok =
+    # ★plain: 도메인 키 없음(byte-stable, 비파괴) · P4-P6 키는 유지
+       ((tPlain ? catalog_readback_evidence) == false)
+    && ((tPlain ? math_evidence) == false)
+    && ((tPlain ? memory_evidence) == true)
+    && ((tPlain ? understanding_report) == true)
+    # ★domain hint: catalog evidence + math derivation 병치
+    && ((tDom ? catalog_readback_evidence) == true)
+    && ((tDom ? math_evidence) == true)
+    && (tDom.catalog_readback_evidence.evidence_kind == "catalog.readback.bundle")
+    # ★math derivation: 속도 더하기 시간 = 차원 불일치(도출, 회상 아님)
+    && (tDom.math_evidence.evidence_kind == "math.derivation")
+    && (tDom.math_evidence.verdict == "invalid-candidate")
+    # ★P4-P6 키도 여전히 병치(머지 아님 — 종류 분리 유지)
+    && ((tDom ? memory_evidence) == true) && ((tDom ? understanding_report) == true)
+    # ★truth 승급 0
+    && (tDom.math_evidence.durable_truth == false)
+    && (tDom.catalog_readback_evidence.durable_truth == false)
+    # ★D: understanding_report 4-face가 domain evidence로 채워짐(도출=invalid-candidate, 증거 2줄, 보류 0)
+    && (domReport.report_faces.derivation.verdict == "invalid-candidate")
+    && (B.length domReport.report_faces.source_evidence.lines == 2)
+    && (domReport.report_faces.held.lines == [ ])
+    # ★Fix #6: 빈 catalog_terms/null math_query → 도메인 키 미부착(byte-stable, plain과 동일)
+    && ((tEmpty ? catalog_readback_evidence) == false)
+    && ((tEmpty ? math_evidence) == false)
+    && ((tEmpty ? memory_evidence) == true);
+}

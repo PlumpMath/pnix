@@ -1,0 +1,269 @@
+# Category theory helpers for NL/SETO verification
+let
+  # Basic regex for meaning-layer SETO ids.
+  isMeaningSeto = id:
+    builtins.isString id && builtins.match "meaning/.*" id != null;
+
+  # Find a SETO definition in a list or attrset db.
+  findSeto = seto_id: setoDb:
+    if builtins.isAttrs setoDb && builtins.hasAttr seto_id setoDb then
+      setoDb.${seto_id}
+    else if builtins.isList setoDb then
+      let
+        matches = builtins.filter (item:
+          let
+            sid = item.seto_id or item.id or null;
+          in
+            sid == seto_id
+        ) setoDb;
+      in
+        if builtins.length matches > 0 then builtins.head matches else null
+    else
+      null;
+
+  # Commutative diagram check using a concrete SETO graph schema.
+  # Expected shape:
+  # morphism.diagram = {
+  #   graph = { nodes = [...]; edges = [ { from = "..."; to = "..."; kind = "semantic"; } ... ]; };
+  #   source = "meaning/...";
+  #   target = "meaning/...";
+  #   paths = [
+  #     { nodes = [ "meaning/a" "meaning/b" "meaning/c" ]; } # or edges = [ {from,to,kind} ... ]
+  #     { nodes = [ "meaning/a" "meaning/x" "meaning/c" ]; signature = "f∘g" }
+  #   ];
+  # };
+  verifyCommutativeDiagram = morphism: setoDb:
+    let
+      diagram = morphism.diagram or null;
+      graph = if diagram == null then {} else (diagram.graph or {});
+      graphEdges = graph.edges or [];
+
+      edgeKind = edge:
+        if builtins.isString (edge.kind or null) then edge.kind
+        else if builtins.isString (edge.label or null) then edge.label
+        else "";
+
+      pathEdges = path:
+        if builtins.isList (path.edges or null) then
+          path.edges
+        else if builtins.isList (path.nodes or null) then
+          let
+            nodes = path.nodes;
+            len = builtins.length nodes;
+            buildEdges = self: i:
+              if i >= (len - 1) then []
+              else
+                [
+                  {
+                    from = builtins.elemAt nodes i;
+                    to = builtins.elemAt nodes (i + 1);
+                  }
+                ] ++ ((self self) (i + 1));
+          in
+            if len < 2 then []
+            else (buildEdges buildEdges) 0
+        else
+          [];
+
+      edgeExists = edge:
+        builtins.any (candidate:
+          candidate.from == edge.from
+            && candidate.to == edge.to
+            && (
+              (edge.kind or null) == null
+              || edgeKind candidate == edge.kind
+              || edgeKind candidate == ""
+            )
+        ) graphEdges;
+
+      pathSignature = path:
+        if builtins.isString (path.signature or null) then
+          path.signature
+        else
+          let
+            edges = pathEdges path;
+            kinds = builtins.filter (kind: kind != "") (builtins.map edgeKind edges);
+            fold = self: acc: remaining:
+              if remaining == [] then acc
+              else
+                let
+                  head = builtins.head remaining;
+                  tail = builtins.tail remaining;
+                  next = if acc == "" then head else acc + "∘" + head;
+                in
+                  (self self) next tail;
+          in
+            (fold fold) "" kinds;
+
+      pathInfo = path:
+        let
+          edges = pathEdges path;
+          len = builtins.length edges;
+          start = if len > 0 then (builtins.elemAt edges 0).from else null;
+          end = if len > 0 then (builtins.elemAt edges (len - 1)).to else null;
+          missing = builtins.filter (edge: !(edgeExists edge)) edges;
+        in {
+          start = start;
+          end = end;
+          missing = missing;
+          signature = pathSignature path;
+        };
+
+      paths = if diagram == null then [] else (diagram.paths or []);
+      infos = builtins.map (path: pathInfo path) paths;
+
+      starts = builtins.filter (s: s != null) (builtins.map (p: p.start) infos);
+      ends = builtins.filter (e: e != null) (builtins.map (p: p.end) infos);
+      sigs = builtins.filter (s: s != "") (builtins.map (p: p.signature) infos);
+
+      allValid = builtins.all (p: p.missing == []) infos;
+      startOk = starts != [] && builtins.all (s: s == builtins.head starts) starts;
+      endOk = ends != [] && builtins.all (e: e == builtins.head ends) ends;
+      sourceOk =
+        if diagram == null || (diagram.source or null) == null then true
+        else starts != [] && builtins.head starts == diagram.source;
+      targetOk =
+        if diagram == null || (diagram.target or null) == null then true
+        else ends != [] && builtins.head ends == diagram.target;
+      sigOk = sigs == [] || builtins.all (s: s == builtins.head sigs) sigs;
+    in
+      if diagram == null then true
+      else paths != [] && allValid && startOk && endOk && sourceOk && targetOk && sigOk;
+
+  # Extract SETO ids from an m-seto graph.
+  msetoGraphSetos = graph:
+    let
+      nodes = graph.nodes or [];
+    in
+      builtins.filter (id: builtins.isString id)
+        (builtins.map (node: node.seto or node.seto_id or node.id or null) nodes);
+
+  # Validate a morphism between SETOs (structure/relations).
+  validateMorphism = morphism: setoDb:
+    let
+      localFindSeto = seto_id: db:
+        if builtins.isAttrs db && builtins.hasAttr seto_id db then
+          db.${seto_id}
+        else if builtins.isList db then
+          let
+            matches = builtins.filter (item:
+              let
+                sid = item.seto_id or item.id or null;
+              in
+                sid == seto_id
+            ) db;
+          in
+            if builtins.length matches > 0 then builtins.head matches else null
+        else
+          null;
+      sourceSeto = localFindSeto morphism.source_seto setoDb;
+      targetSeto = localFindSeto morphism.target_seto setoDb;
+
+      sourceType =
+        if sourceSeto == null then null
+        else (sourceSeto.type or sourceSeto.kind or sourceSeto.layer or null);
+      targetType =
+        if targetSeto == null then null
+        else (targetSeto.type or targetSeto.kind or targetSeto.layer or null);
+
+      sourceRelates = if sourceSeto == null then [] else (sourceSeto.relates or []);
+      targetRelates = if targetSeto == null then [] else (targetSeto.relates or []);
+
+      structurePreserved = sourceSeto != null && targetSeto != null && sourceType == targetType;
+      relationsPreserved = builtins.all (rel: builtins.elem rel targetRelates) sourceRelates;
+      commutative = verifyCommutativeDiagram morphism setoDb;
+    in
+      structurePreserved && relationsPreserved && commutative;
+
+  # Validate m-seto graph structure (skeleton).
+  validateMSetoGraph = graph:
+    let
+      localIsMeaningSeto = id:
+        builtins.isString id && builtins.match "meaning/.*" id != null;
+      localMSetoGraphSetos = inputGraph:
+        let
+          nodes = inputGraph.nodes or [];
+        in
+          builtins.filter (id: builtins.isString id)
+            (builtins.map (node: node.seto or node.seto_id or node.id or null) nodes);
+      kindOk = (graph.kind or null) == "m-seto-graph";
+      setoIds = localMSetoGraphSetos graph;
+      nonMeaning = builtins.filter (id: !(localIsMeaningSeto id)) setoIds;
+      hasIntent = builtins.any (id: builtins.match "meaning/intent/.*" id != null) setoIds;
+      hasRole = builtins.any (id: builtins.match "meaning/role/.*" id != null) setoIds;
+      hasSlot = builtins.any (id: builtins.match "meaning/slot/.*" id != null) setoIds;
+      errors =
+        (if kindOk then [] else [ "kind-not-m-seto-graph" ])
+        ++ (builtins.map (id: "non-meaning-seto:" + id) nonMeaning);
+      warnings =
+        (if hasIntent then [] else [ "missing-intent" ])
+        ++ (if hasRole then [] else [ "missing-role" ])
+        ++ (if hasSlot then [] else [ "missing-slot" ]);
+    in {
+      ok = kindOk && nonMeaning == [];
+      errors = errors;
+      warnings = warnings;
+    };
+
+  # Validate a full m-seto package (m_seto_id + graph + metadata).
+  validateMSetoPackage = pkg:
+    let
+      localValidateMSetoGraph = inputGraph:
+        let
+          localIsMeaningSeto = id:
+            builtins.isString id && builtins.match "meaning/.*" id != null;
+          setoIds =
+            let
+              nodes = inputGraph.nodes or [];
+            in
+              builtins.filter (id: builtins.isString id)
+                (builtins.map (node: node.seto or node.seto_id or node.id or null) nodes);
+          kindOk = (inputGraph.kind or null) == "m-seto-graph";
+          nonMeaning = builtins.filter (id: !(localIsMeaningSeto id)) setoIds;
+          hasIntent = builtins.any (id: builtins.match "meaning/intent/.*" id != null) setoIds;
+          hasRole = builtins.any (id: builtins.match "meaning/role/.*" id != null) setoIds;
+          hasSlot = builtins.any (id: builtins.match "meaning/slot/.*" id != null) setoIds;
+          errors =
+            (if kindOk then [] else [ "kind-not-m-seto-graph" ])
+            ++ (builtins.map (id: "non-meaning-seto:" + id) nonMeaning);
+          warnings =
+            (if hasIntent then [] else [ "missing-intent" ])
+            ++ (if hasRole then [] else [ "missing-role" ])
+            ++ (if hasSlot then [] else [ "missing-slot" ]);
+        in {
+          ok = kindOk && nonMeaning == [];
+          errors = errors;
+          warnings = warnings;
+        };
+      graphResult = localValidateMSetoGraph (pkg.graph or {});
+      idOk = builtins.isString (pkg.m_seto_id or "") && builtins.match "meaning/.*" (pkg.m_seto_id or "") != null;
+      errors = graphResult.errors ++ (if idOk then [] else [ "m-seto-id-not-meaning" ]);
+    in {
+      ok = graphResult.ok && idOk;
+      errors = errors;
+      warnings = graphResult.warnings;
+    };
+in {
+  name = "stdlib.lib.nl.universal.category_theory";
+
+  types = [ "String" "AttrSet" "List" "Bool" "Int" ];
+
+  inherit
+    isMeaningSeto
+    findSeto
+    validateMorphism
+    verifyCommutativeDiagram
+    msetoGraphSetos
+    validateMSetoGraph
+    validateMSetoPackage
+    ;
+
+  # Example LanguageMorphism template.
+  LanguageMorphism = {
+    source_seto = "meaning/create";
+    target_seto = "meaning/create";
+    morphism = [ "make" "create" ];
+    preserves_structure = true;
+    preserves_relations = true;
+  };
+}

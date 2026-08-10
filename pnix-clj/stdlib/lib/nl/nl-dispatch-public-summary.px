@@ -1,0 +1,148 @@
+# stdlib.nl.nl-dispatch-public-summary
+#
+# Public receipt projection for the single NL gate. The dispatcher may carry a
+# large internal classification graph; product surfaces must receive only the
+# bounded, stable fields they can display or thread into the next session.
+let
+  has = attrs: key:
+    builtins.isAttrs attrs && builtins.hasAttr key attrs;
+
+  getOr = attrs: key: fallback:
+    if has attrs key then builtins.getAttr key attrs else fallback;
+
+  listLengthOr = value:
+    if builtins.isList value then builtins.length value else 0;
+
+  publicRouteId = operationKind:
+    if operationKind == "equation" then "puncheetah.capability.math.solve.v0"
+    else if operationKind == "arithmetic" then "puncheetah.capability.math.evaluate.v0"
+    else if operationKind == "math-judge" then "puncheetah.capability.math.judge.v0"
+    else if operationKind == "math-factor" then "puncheetah.capability.math.factor.v0"
+    else if operationKind == "math-diff" then "puncheetah.capability.math.differentiate.v0"
+    else if operationKind == "symbolic-code" then "puncheetah.capability.code.symbolic-result.v0"
+    else if operationKind == "symbolic-code-algorithm" then "puncheetah.capability.code.symbolic-algorithm.v0"
+    else if operationKind == "code-transform" then "puncheetah.capability.code.transform.v0"
+    else if operationKind == "code-generation" then "puncheetah.capability.code.generate.v0"
+    else if operationKind == "test" then "puncheetah.capability.project.test.v0"
+    else if operationKind == "build" then "puncheetah.capability.project.build.v0"
+    else if operationKind == "world3d-command" then "puncheetah.capability.deferred.world3d-command.v0"
+    else if operationKind == "freecat-js" then "puncheetah.capability.deferred.construction-js.v0"
+    else if operationKind == "context-update" then "puncheetah.capability.context.update.v0"
+    else if operationKind == "weather-tool-needed" then "puncheetah.capability.weather.tool-needed.v0"
+    else if operationKind == "finance-tool-needed" then "puncheetah.capability.finance.tool-needed.v0"
+    else if operationKind == "sports-tool-needed" then "puncheetah.capability.sports.tool-needed.v0"
+    else if operationKind == "time-tool-needed" then "puncheetah.capability.time.tool-needed.v0"
+    else if operationKind == "calendar-tool-needed" then "puncheetah.capability.calendar.tool-needed.v0"
+    else if operationKind == "logistics-tool-needed" then "puncheetah.capability.logistics.tool-needed.v0"
+    else if operationKind == "secure-memory-needed" then "puncheetah.capability.secure-memory.held.v0"
+    else if operationKind == "conversation-control" then "puncheetah.capability.dialogue.control.v0"
+    else if operationKind == "general" then "puncheetah.capability.nl.general-answer.v0"
+    else "puncheetah.capability.unknown.v0";
+
+  candidateSummary = candidate:
+    if candidate == null || !(builtins.isAttrs candidate) then null else
+    let operationKind = getOr candidate "operation_kind" "";
+    in {
+      candidate_id = getOr candidate "candidate_id" (getOr candidate "id" "");
+      canonical_meaning = getOr candidate "canonical_meaning" "";
+      operation_kind = operationKind;
+      public_route_id = publicRouteId operationKind;
+      internal_route_elided = true;
+      target_language = getOr candidate "target_language" null;
+      extracted_symbolic = getOr candidate "extracted_symbolic" "";
+      context_reference = getOr candidate "context_reference" null;
+      score = getOr candidate "score" null;
+    };
+
+  graphSummary = graph:
+    if graph == null || !(builtins.isAttrs graph) then null else {
+      outcome = getOr graph "outcome" "";
+      has_final = getOr graph "has_final" false;
+      sentence_count = getOr graph "sentence_count" 0;
+      fact_count = listLengthOr (getOr graph "facts" [ ]);
+      binding_count = listLengthOr (getOr graph "bindings" [ ]);
+      final = getOr graph "final" null;
+      env = getOr graph "env" { };
+      bindings = getOr graph "bindings" [ ];
+      facts = getOr graph "facts" [ ];
+      world = getOr graph "world" { };
+      route_equivalence_checked = getOr graph "route_equivalence_checked" null;
+    };
+
+  realizationSummary = realization:
+    if realization == null || !(builtins.isAttrs realization) then { } else {
+      language = getOr realization "language" "";
+      format = getOr realization "format" "markdown";
+      text = getOr realization "text" "";
+    };
+
+  discoursePlanSummary = plan:
+    if plan == null || !(builtins.isAttrs plan) then { } else {
+      plan_kind = getOr plan "plan_kind" "";
+      outcome = getOr plan "outcome" "";
+      roles = getOr plan "roles" [ ];
+      next_action = getOr plan "next_action" null;
+    };
+
+  # Bounded live-coding projection for world3d-command (single-hole chain output).
+  # js_source bytes are never surfaced — presence flag only.
+  liveCodeSummary = result:
+    if result == null || !(builtins.isAttrs result) then null else
+    let
+      verdict = getOr result "verdict" "";
+      ctxVerb = getOr result "ctx_verb" null;
+      js = getOr result "js_source" null;
+      hasJs = builtins.isString js && js != "";
+    in {
+      verdict = verdict;
+      ctx_verb = ctxVerb;
+      js_source_present = hasJs;
+      host_execution_deferred = true;
+      js_source_elided = true;
+      single_hole_preserved = true;
+    };
+in
+rec {
+  ownerName = "stdlib/lib/nl/nl-dispatch-public-summary.px";
+
+  summarizeDispatch = dispatch:
+    if dispatch == null || !(builtins.isAttrs dispatch) then { } else {
+      kind = "puncheetah.shared-nl-dispatch-summary.v0";
+      outcome = getOr dispatch "outcome" "";
+      operation_kind = getOr dispatch "operation_kind" "none";
+      dispatched_to = getOr dispatch "dispatched_to" "";
+      via = getOr dispatch "via" "";
+      symbolic_intent = getOr dispatch "symbolic_intent" null;
+      extracted_expression = getOr dispatch "extracted_expression" null;
+      chosen_candidate = candidateSummary (getOr dispatch "chosen_candidate" null);
+      symbolic_context_graph = graphSummary (getOr dispatch "symbolic_context_graph" null);
+      result = getOr dispatch "result" { };
+      live_code =
+        if (getOr dispatch "operation_kind" "") == "world3d-command"
+        then liveCodeSummary (getOr dispatch "result" { })
+        else null;
+    };
+
+  summarizeDiscourse = discourse:
+    if discourse == null || !(builtins.isAttrs discourse) then { } else {
+      kind = "puncheetah.shared-nl-discourse-summary.v0";
+      outcome = getOr discourse "outcome" "";
+      summary = getOr discourse "summary" "";
+      discourse_plan = discoursePlanSummary (getOr discourse "discourse_plan" null);
+      realization = realizationSummary (getOr discourse "realization" null);
+    };
+
+  buildPublicBundle = dispatch: discourse: {
+    kind = "puncheetah.shared-nl-public-bundle.v0";
+    dispatch = summarizeDispatch dispatch;
+    discourse = summarizeDiscourse discourse;
+  };
+
+  contract = {
+    public_projection_only = true;
+    internal_classification_graph_exposed = false;
+    internal_route_exposed = false;
+    surface_local_interpreter_allowed = false;
+    prompt_hardcoded_branch_allowed = false;
+  };
+}

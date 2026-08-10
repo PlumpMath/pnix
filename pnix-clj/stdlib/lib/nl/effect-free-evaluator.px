@@ -1,0 +1,71 @@
+# stdlib.nl.effect-free-evaluator
+#
+# **K5 in .px (one-mirror 정본): protocol evaluator id → effect-free 평가.**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): 의미 후보의 effect-free 평가기는
+# Rust(`nl_corpus/effect_free_evaluator.rs`)가 아니라 거울(.px)에. 어느 문장이 어느
+# 평가기에 닿는지는 rule row(corpus data)가 정함 — 여기선 평가만.
+#
+# 재구현 0: 산술은 기존 `math/numeric-evaluator.px` 재사용(파싱·exact·overflow-free 공짜).
+#   evaluator_id 디스패치만 이 owner.
+let
+  numeric = import math/numeric-evaluator.px;
+
+  fieldOr = a: k: d: if a ? ${k} then a.${k} else d;
+
+  # arithmetic.binary.integer: slots {operation; lhs; rhs} → 결과 (add/subtract).
+  evalArithmeticBinaryInteger = candidate:
+    let
+      slots = fieldOr candidate "slots" { };
+      op  = fieldOr slots "operation" null;
+      lhs = fieldOr slots "lhs" null;
+      rhs = fieldOr slots "rhs" null;
+    in
+      if op == null || lhs == null || rhs == null then
+        { outcome = "held-missing-slot"; evaluator_id = "arithmetic.binary.integer"; }
+      else
+        let sym = if op == "add" then "+" else if op == "subtract" then "-" else null;
+        in
+          if sym == null then
+            { outcome = "held-unsupported-operation"; operation = op; }
+          else
+            # ★ 산술=numeric-evaluator 위임(재구현0): 파싱·exact·overflow-free ★
+            let r = numeric.evaluateNumericExpression (lhs + " " + sym + " " + rhs) { };
+            in
+              if r.ok then {
+                outcome = "evaluated";
+                evaluator_id = "arithmetic.binary.integer";
+                result = r.value;
+              } else {
+                outcome = "held-invalid-integer";
+                evaluator_id = "arithmetic.binary.integer";
+                reason = fieldOr (fieldOr r "error" { }) "reason" "?";
+              };
+
+  # ★ 후보 평가 (evaluator_id 디스패치) ★
+  #   evaluator_id 없음 = state/transition rule (no-evaluator, 정상).
+  evaluateCandidate = candidate:
+    let evId = fieldOr candidate "evaluator_id" null;
+    in
+      if evId == null then { outcome = "no-evaluator"; }
+      else if evId == "arithmetic.binary.integer" then evalArithmeticBinaryInteger candidate
+      else { outcome = "held-missing-evaluator"; evaluator_id = evId; };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.effect-free-evaluator";
+    consumes = "math/numeric-evaluator.evaluateNumericExpression (산술; 재구현 0)";
+    role = "K5 effect-free 평가기: evaluator_id 디스패치 → 산술 등. 어느 평가기인지는 rule row 가 정함. .px 정본.";
+    boundary = "산술 파싱/계산=numeric-evaluator 위임; 디스패치만 여기.";
+    note = "arithmetic.binary.integer(add/subtract) v0. 그 외 evaluator_id=held-missing 정직. Rust effect_free_evaluator.rs K5 = Phase 2/3 삭제 대상.";
+  };
+
+in {
+  inherit evalArithmeticBinaryInteger evaluateCandidate inventorySummary;
+  ownerName = "stdlib.nl.effect-free-evaluator";
+  meta = {
+    source = "stdlib nl effect-free-evaluator (.px K5: evaluator_id→effect-free 평가; one-mirror 정본)";
+    owner = "stdlib.nl.effect-free-evaluator";
+    base = "effect-free-evaluator-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1: K5 effect-free 평가기의 .px 정본. evaluateCandidate(evaluator_id 디스패치): arithmetic.binary.integer → slots operation/lhs/rhs → numeric-evaluator 위임(재구현0, 파싱·exact·overflow-free). 검증: add 2,3→5; subtract 10,3→7; missing slot/unsupported op/missing evaluator→held 정직; no evaluator_id→no-evaluator(state rule). Rust effect_free_evaluator.rs=Phase 2/3 삭제.";
+  };
+}

@@ -1,0 +1,35 @@
+# stdlib.knowledge.math-symbol-korean
+#
+# pnix math 심볼/규칙패턴 ↔ 한국어(english) *단일 source* 어휘 grounding (Explore 가 식별한 갭).
+# 운영자: 한국수학·미국수학 공통 → `한국어(english)`. 한국 교육과정 표준 용어 + 국제 영어명.
+# = 학습된 규칙을 *명명된 수학 개념*으로 재인(perceive)하는 사전. genesis 는 궤적에서 일반화를 *채굴*하고,
+#   이 사전은 그게 알려진 개념과 alpha-동치면 *이름*을 준다(개념을 미리 *짓는* 게 아니라 *명명*만 = governing law 정합).
+# ⚠ 사전(reference knowledge), 인라인 로직 아님. 새 개념/연산 추가 시 여기 한 곳만. korean-morphology.px
+#   (더하기→+→덧셈)와 연속선; 여긴 pnix 심볼 형태 + 규칙패턴 + 영어명까지.
+{
+  # 연산 operator: pnix 심볼 → 한국어(english)
+  operators = [
+    { sym = "plus"; ko = "덧셈"; en = "addition";       verb_ko = "더하기"; }
+    { sym = "mul";  ko = "곱셈"; en = "multiplication"; verb_ko = "곱하기"; }
+    { sym = "sub";  ko = "뺄셈"; en = "subtraction";    verb_ko = "빼기"; }
+    { sym = "div";  ko = "나눗셈"; en = "division";      verb_ko = "나누기"; }
+  ];
+  # 특수 원소 element
+  elements = [
+    { sym = "zero"; ko = "영"; en = "zero"; }
+    { sym = "one";  ko = "일"; en = "one"; }
+  ];
+  # ★ 명명된 개념 concept: 규칙 패턴(alpha-동치)이 이 중 하나면 그 이름을 부여(Level-2 재인).
+  #   pattern = "lhs => rhs" (parseRule + alpha-canonical key 로 비교).
+  concepts = [
+    { ko = "덧셈의 항등원"; en = "additive identity";        pattern = "(plus ?x zero) => ?x"; }
+    { ko = "곱셈의 항등원"; en = "multiplicative identity";  pattern = "(mul ?x one) => ?x"; }
+    { ko = "덧셈의 역원";   en = "additive inverse";         pattern = "(plus ?x (neg ?x)) => zero"; }
+    { ko = "곱셈의 영원소"; en = "multiplicative zero";      pattern = "(mul ?x zero) => zero"; }
+    { ko = "멱등";          en = "idempotence";              pattern = "(op ?x ?x) => ?x"; }
+    # 기본 법칙(2022 개정 "변화와 관계" 표준 용어) — 표면 패턴(=law 형태; 재작성으론 비종료라 인식용)
+    { ko = "덧셈의 교환법칙"; en = "commutativity of addition";    pattern = "(plus ?x ?y) => (plus ?y ?x)"; }
+    { ko = "덧셈의 결합법칙"; en = "associativity of addition";    pattern = "(plus (plus ?x ?y) ?z) => (plus ?x (plus ?y ?z))"; }
+    { ko = "분배법칙";       en = "distributivity";              pattern = "(mul ?x (plus ?y ?z)) => (plus (mul ?x ?y) (mul ?x ?z))"; }
+  ];
+}

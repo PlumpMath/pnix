@@ -1,0 +1,196 @@
+# stdlib.lib.math.tetrahedral-numbers
+#
+# OWNER-LAW (v0.12-ABF, div-math, 2026-05-22): three-dimensional
+# figurate numbers -- the pyramidal families.
+#
+# figurate-numbers.px covers the 2D polygonal numbers (triangular,
+# square, pentagonal, ...) and explicitly excludes the 3D ones.
+# This owner is that excluded family: numbers that count points
+# stacked into a solid.
+#
+# # The four pyramidal families
+#
+#   tetrahedral          Te(n)  = n(n+1)(n+2)/6   = C(n+2, 3)
+#                        the sum of the first n triangular numbers
+#                        1, 4, 10, 20, 35, 56, 84, ...
+#
+#   square-pyramidal     Pyr(n) = n(n+1)(2n+1)/6
+#                        the sum of the first n squares
+#                        1, 5, 14, 30, 55, 91, 140, ...
+#
+#   octahedral           Oct(n) = n(2n^2 + 1)/3
+#                        1, 6, 19, 44, 85, 146, ...
+#
+#   pentagonal-pyramidal PPyr(n) = n^2 (n+1)/2
+#                        the sum of the first n pentagonal numbers
+#                        1, 6, 18, 40, 75, 126, ...
+#
+# Each numerator is divisible by its denominator for every n, so
+# the result is always an exact integer.
+#
+# # The inverse test
+#
+# `isTetrahedral` walks Te(n) upward (it is strictly increasing)
+# and reports whether a given k is a tetrahedral number and, if so,
+# at which index.
+#
+# # Standalone, exact
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT the 2D polygonal numbers (figurate-numbers.px).
+#   - NOT the general r-dimensional simplex / hyperpyramidal
+#     recursion -- only the four named 3D families.
+#   - NOT a generating-function engine.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/tetrahedral-numbers.px";
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # Te(n) -- the nth tetrahedral number.
+  tetrahedral = n: (n * (n + 1) * (n + 2)) / 6;
+
+  # Pyr(n) -- the nth square pyramidal number.
+  squarePyramidal = n: (n * (n + 1) * (2 * n + 1)) / 6;
+
+  # Oct(n) -- the nth octahedral number.
+  octahedral = n: (n * (2 * n * n + 1)) / 3;
+
+  # PPyr(n) -- the nth pentagonal pyramidal number.
+  pentagonalPyramidal = n: (n * n * (n + 1)) / 2;
+
+  # [ Te(1), Te(2), ..., Te(n) ].
+  tetrahedralList = n:
+    if n < 1 then []
+    else builtins.map tetrahedral (rangeList 1 n);
+
+  # Is k a tetrahedral number? Te is strictly increasing, so walk
+  # the index up until Te(idx) reaches or passes k.
+  isTetrahedral = k:
+    let
+      go = idx:
+        let t = tetrahedral idx;
+        in if t == k then { is_tetrahedral = true; index = idx; }
+           else if t > k then { is_tetrahedral = false; index = null; }
+           else go (idx + 1);
+    in if k < 1 then { is_tetrahedral = false; index = null; }
+       else go 1;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "tetrahedral"
+    "square-pyramidal"
+    "octahedral"
+    "pentagonal-pyramidal"
+    "tetrahedral-list"
+    "is-tetrahedral"
+  ];
+
+  # n^3-scale arithmetic; this cap keeps every family in 64-bit
+  # range (Te(100000) is about 1.7e14).
+  indexLimit = 100000;
+  # `tetrahedral-list` builds n entries; this cap keeps one plate
+  # call bounded.
+  listLimit = 2000;
+  # `is-tetrahedral` linear-walks the index; this cap bounds it.
+  searchLimit = 1000000000;
+
+  applyTetrahedralNumbers = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      k  = if request ? k then request.k else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "is-tetrahedral" then
+        if k < 0 then {
+          outcome = "held-negative-number";
+          operation = op; k = k;
+        }
+        else if k > searchLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; k = k;
+          limit = searchLimit;
+          reason = "the inverse search is linear; k is capped to stay bounded";
+        }
+        else
+          let r = isTetrahedral k;
+          in {
+            outcome = "tetrahedral-numbers-computed";
+            operation = op; k = k;
+            is_tetrahedral = r.is_tetrahedral;
+            index = r.index;
+          }
+      else if n < 0 then {
+        outcome = "held-negative-number";
+        operation = op;
+        n = n;
+      }
+      else if op == "tetrahedral-list" then
+        if n > listLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; n = n;
+          limit = listLimit;
+          reason = "the list builds n entries; n is capped to stay bounded";
+        }
+        else {
+          outcome = "tetrahedral-numbers-computed";
+          operation = op; n = n;
+          list = tetrahedralList n;
+        }
+      else if n > indexLimit then {
+        outcome = "held-argument-too-large";
+        operation = op; n = n;
+        limit = indexLimit;
+        reason = "the index is capped so the value stays in 64-bit range";
+      }
+      else if op == "tetrahedral" then {
+        outcome = "tetrahedral-numbers-computed";
+        operation = op; n = n;
+        value = tetrahedral n;
+      }
+      else if op == "square-pyramidal" then {
+        outcome = "tetrahedral-numbers-computed";
+        operation = op; n = n;
+        value = squarePyramidal n;
+      }
+      else if op == "octahedral" then {
+        outcome = "tetrahedral-numbers-computed";
+        operation = op; n = n;
+        value = octahedral n;
+      }
+      else {
+        # op == "pentagonal-pyramidal"
+        outcome = "tetrahedral-numbers-computed";
+        operation = op; n = n;
+        value = pentagonalPyramidal n;
+      };
+
+in {
+  inherit
+    ownerName
+    tetrahedral
+    squarePyramidal
+    octahedral
+    pentagonalPyramidal
+    tetrahedralList
+    isTetrahedral
+    knownOperations
+    applyTetrahedralNumbers;
+  meta = {
+    source = "stdlib math tetrahedral numbers";
+    owner = ownerName;
+    base = "parametric-math-tetrahedral-numbers-v0";
+    rev_note = "v0.12-ABF (div-math): three-dimensional figurate numbers -- the pyramidal families excluded by figurate-numbers.px. tetrahedral Te(n)=n(n+1)(n+2)/6 (sum of triangular numbers, 1,4,10,20,35); squarePyramidal Pyr(n)=n(n+1)(2n+1)/6 (sum of squares, 1,5,14,30,55); octahedral Oct(n)=n(2n^2+1)/3 (1,6,19,44,85); pentagonalPyramidal PPyr(n)=n^2(n+1)/2 (1,6,18,40,75); tetrahedralList; and the inverse isTetrahedral (k a tetrahedral number, at which index). Exact integers -- every numerator divides its denominator. Standalone, imports nothing. NOT the 2D polygonal numbers, NOT the general r-dimensional simplex recursion, NOT a generating-function engine, NOT yet a registered lens.";
+  };
+}

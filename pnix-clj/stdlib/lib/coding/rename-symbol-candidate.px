@@ -1,0 +1,273 @@
+# stdlib.lib.coding.rename-symbol-candidate
+#
+# OWNER-LAW (v0.13-B, 2026-05-16): mirror plate ENTRY for the
+# rename-symbol code-transform. v0.13-A classified utterances
+# into 5 intent kinds; v0.13-B opens the next stage: a coding
+# intent of kind=refactor (specifically the rename pattern)
+# lowers to a candidate row -- or surfaces Held with concrete
+# missing slots.
+#
+# This is the substrate's mirror version of the v0.7-A firewall
+# gate plate-wrapping pattern: existing Rust carrier
+# (crates/pnix-core/src/code_transform/rename_symbol.rs) is the
+# BODY; v0.13-B is the .px ENTRY that builds the candidate row
+# before the body executes. No body migration -- just the
+# semantic boundary made plate-shaped.
+#
+# Utterance shape (normalized):
+#   "rename <target_symbol> to <replacement_symbol>"
+#
+# Outcomes (closed):
+#   candidate-proposed     full target + replacement extracted;
+#                          ready to feed the Rust body
+#   held-missing-slots     parser found one or both names
+#                          unresolved; the substrate names the
+#                          missing slot(s) explicitly so the
+#                          next mirror turn can ask for them
+#   held-malformed         utterance has the right prefix shape
+#                          but tokenisation fails (e.g. no
+#                          target between "rename " and " to ")
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT the code transform itself. The actual rename
+#     execution still lives in the Rust carrier. v0.13-B is the
+#     ENTRY surface; the body runs after candidate-proposed
+#     receipt routes through the firewall (v0.7 / v0.6 lanes).
+#   - NOT a parser for arbitrary syntactic rename forms.
+#     Expects the substrate's canonical phrasing
+#     "rename X to Y" (after v0.12-R/S/T normalisation).
+#   - NOT identifier validation. The target/replacement strings
+#     are passed verbatim; symbol-shape rules live in the Rust
+#     carrier.
+
+let
+  ownerName = "stdlib/lib/coding/rename-symbol-candidate.px";
+
+  nlNorm =
+    import ../nl/phrase-normalization.px;
+
+  validOutcomes = [
+    "candidate-proposed"
+    "held-missing-slots"
+    "held-malformed"
+  ];
+
+  # Look for `<head><sep><tail>` shape. Returns
+  # `{ found = true; head; tail; }` on match, `{ found = false; }`
+  # otherwise. Used to split "rename X to Y" into head "X" and
+  # tail "Y".
+  splitFirst = haystack: sep:
+    let
+      hl = builtins.stringLength haystack;
+      sl = builtins.stringLength sep;
+      scan = i:
+        if i + sl > hl then -1
+        else if (builtins.substring i sl haystack) == sep then i
+        else scan (i + 1);
+      idx = scan 0;
+    in
+      if idx < 0 then { found = false; }
+      else {
+        found = true;
+        head = builtins.substring 0 idx haystack;
+        tail = builtins.substring (idx + sl) (hl - idx - sl) haystack;
+      };
+
+  # Strip a leading prefix from a string. Returns null when the
+  # prefix is absent.
+  stripPrefix = prefix: s:
+    let
+      pl = builtins.stringLength prefix;
+      sl = builtins.stringLength s;
+    in
+      if sl < pl then null
+      else if (builtins.substring 0 pl s) == prefix
+      then builtins.substring pl (sl - pl) s
+      else null;
+
+  # The core candidate proposer. Returns a closed-vocabulary
+  # outcome envelope; the substrate names missing slots
+  # explicitly when the utterance is incomplete.
+  # 2026-05-27 (priority G): Korean rename. Accepted shapes after
+  # the leading sentinel `이름 바꿔줘 `:
+  #   `이름 바꿔줘 foo bar`            → split on first space (space form)
+  #   `이름 바꿔줘 foo 를 bar 로`      → split on ` 를 ` then strip ` 로` suffix
+  #   `이름 바꿔줘 foo 을 bar 로`      → split on ` 을 ` then strip ` 로` suffix
+  # Yields { target_symbol; replacement_symbol; } if shape matches,
+  # null otherwise.
+  parseKoreanRenameTail = tail:
+    let
+      tryParticle = particle: suffix:
+        let
+          findSep =
+            let
+              haystackLen = builtins.stringLength tail;
+              pLen = builtins.stringLength particle;
+              scan = i:
+                if i + pLen > haystackLen then -1
+                else if (builtins.substring i pLen tail) == particle then i
+                else scan (i + 1);
+            in scan 0;
+        in
+          if findSep < 0 then null
+          else
+            let
+              head = builtins.substring 0 findSep tail;
+              afterParticle = builtins.substring (findSep + builtins.stringLength particle)
+                (builtins.stringLength tail - findSep - builtins.stringLength particle) tail;
+              # Strip suffix if present.
+              suffixLen = builtins.stringLength suffix;
+              afterLen = builtins.stringLength afterParticle;
+              stripped =
+                if afterLen >= suffixLen
+                  && (builtins.substring (afterLen - suffixLen) suffixLen afterParticle) == suffix
+                then builtins.substring 0 (afterLen - suffixLen) afterParticle
+                else afterParticle;
+            in
+              if head == "" || stripped == "" then null
+              else { target_symbol = head; replacement_symbol = stripped; };
+      koSplit = tryParticle " 를 " " 로";
+      koSplitUn = if koSplit != null then koSplit else tryParticle " 을 " " 로";
+      # Space form: simple two-token split on first " ".
+      spaceFindFirst =
+        let
+          haystackLen = builtins.stringLength tail;
+          scan = i:
+            if i >= haystackLen then -1
+            else if (builtins.substring i 1 tail) == " " then i
+            else scan (i + 1);
+        in scan 0;
+      spaceForm =
+        if spaceFindFirst < 0 then null
+        else
+          let
+            head = builtins.substring 0 spaceFindFirst tail;
+            tailPart = builtins.substring (spaceFindFirst + 1)
+              (builtins.stringLength tail - spaceFindFirst - 1) tail;
+          in
+            if head == "" || tailPart == "" then null
+            # Skip if the tail part contains another space (i.e. it
+            # was already 3+ tokens — the particle form should have
+            # been used).
+            else if (
+              let scan2 = i:
+                    if i >= builtins.stringLength tailPart then false
+                    else if (builtins.substring i 1 tailPart) == " " then true
+                    else scan2 (i + 1);
+              in scan2 0
+            ) then null
+            else { target_symbol = head; replacement_symbol = tailPart; };
+    in
+      if koSplitUn != null then koSplitUn
+      else spaceForm;
+
+  proposeRenameSymbolCandidate = utterance:
+    let
+      # v0.12-R/S/T normalize so "Rename foo to bar" /
+      # "  rename   foo   to   bar  " / etc. all land at the
+      # same canonical input.
+      normalized =
+        if nlNorm.isAsciiOnly utterance
+        then nlNorm.normalizePhrase utterance
+        else utterance;
+      afterPrefix = stripPrefix "rename " normalized;
+      # Korean lane.
+      isAscii = nlNorm.isAsciiOnly utterance;
+      koAfter =
+        if isAscii then null
+        else
+          let stripped = stripPrefix "이름 바꿔줘 " utterance;
+          in stripped;
+      koParsed =
+        if koAfter == null then null
+        else parseKoreanRenameTail koAfter;
+    in
+      if koParsed != null then {
+        outcome = "candidate-proposed";
+        utterance = utterance;
+        normalized = utterance;
+        reason = "Korean rename request; target + replacement parsed";
+        missing_slots = [];
+        candidate = {
+          transform_kind = "rename-symbol";
+          target_symbol = koParsed.target_symbol;
+          replacement_symbol = koParsed.replacement_symbol;
+        };
+      }
+      else if afterPrefix == null then {
+        outcome = "held-malformed";
+        utterance = utterance;
+        normalized = normalized;
+        reason = "utterance does not start with `rename `";
+        missing_slots = [ "rename-prefix" ];
+        candidate = null;
+      }
+      else
+        let
+          split = splitFirst afterPrefix " to ";
+        in
+          if !split.found then {
+            outcome = "held-missing-slots";
+            utterance = utterance;
+            normalized = normalized;
+            reason =
+              "utterance starts with `rename ` but has no ` to ` separator";
+            missing_slots = [ "replacement_symbol" ];
+            partial =
+              if afterPrefix == "" then null
+              else { target_symbol = afterPrefix; };
+            candidate = null;
+          }
+          else if split.head == "" then {
+            outcome = "held-missing-slots";
+            utterance = utterance;
+            normalized = normalized;
+            reason =
+              "utterance has ` to ` but no target symbol before it";
+            missing_slots = [ "target_symbol" ];
+            partial = { replacement_symbol = split.tail; };
+            candidate = null;
+          }
+          else if split.tail == "" then {
+            outcome = "held-missing-slots";
+            utterance = utterance;
+            normalized = normalized;
+            reason =
+              "utterance has `rename X to ` but no replacement symbol";
+            missing_slots = [ "replacement_symbol" ];
+            partial = { target_symbol = split.head; };
+            candidate = null;
+          }
+          else {
+            outcome = "candidate-proposed";
+            utterance = utterance;
+            normalized = normalized;
+            reason = "target + replacement symbols both present";
+            missing_slots = [];
+            candidate = {
+              transform_kind = "rename-symbol";
+              target_symbol = split.head;
+              replacement_symbol = split.tail;
+            };
+          };
+
+  # Lens entry. Request `{ utterance; }`.
+  applyRenameSymbolCandidatePlate = request:
+    proposeRenameSymbolCandidate request.utterance;
+
+in {
+  inherit
+    ownerName
+    validOutcomes
+    splitFirst
+    stripPrefix
+    proposeRenameSymbolCandidate
+    applyRenameSymbolCandidatePlate;
+  meta = {
+    source = "stdlib coding rename-symbol candidate";
+    owner = ownerName;
+    base = "parametric-coding-rename-symbol-candidate-v0";
+    rev_note = "v0.13-B: mirror plate ENTRY for the rename-symbol code-transform. v0.13-A intent classification + v0.12-R/S/T paraphrase normalization feed in; the entry extracts target/replacement symbols or surfaces Held with EXPLICITLY NAMED missing slots. v0.7-A firewall gate plate-wrapping pattern reused -- existing Rust carrier (crates/pnix-core/src/code_transform/rename_symbol.rs) stays as the body; v0.13-B is the semantic boundary made plate-shaped. NOT a transform executor; just the candidate-row entry.";
+  };
+}

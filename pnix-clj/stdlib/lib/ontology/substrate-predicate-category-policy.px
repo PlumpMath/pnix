@@ -1,0 +1,167 @@
+# stdlib.lib.ontology.substrate-predicate-category-policy
+#
+# OWNER-LAW (2026-05-31): substrate predicate algebra taxonomy.
+#
+# # What this is for
+#
+# ContextualFact 의 *predicate* (subject-predicate-object) 차원의 closed
+# taxonomy. 어느 predicate (IsA / Causes / RelatedTo 등) 가 어느
+# semantic category (taxonomy / causal / relational 등) 에 속하는가.
+#
+# # Design discipline — declarative predicate category registry
+#
+# 이전 doghouse-core::substrate_inventory_store::SubstratePredicateCategory
+# 는 Rust enum 10 variant. 이 owner-law 는 declarative category registry
+# + per-category example predicates.
+#
+# # 10 closed categories
+#
+#   ontological   — IsA / PartOf / InstanceOf 류 taxonomy
+#   causal        — Causes / Enables / Prevents 류 인과
+#   relational    — RelatedTo / Antonym / Synonym 류 유사/대조
+#   temporal      — Before / After / During 류 시간
+#   spatial       — Above / NextTo / Inside 류 공간
+#   referential   — Mentions / Cites / Quotes 류 인용/참조
+#   morphological — HasParticle / HasHonorific / IsRoot 류 한국어 형태소
+#   domain-bridge — HasFormula / HasImplementation / HasExpression 류 도메인 brid
+#   substrate     — pnix-specific (pattern-id / risky-pattern 류)
+#   unclassified  — caller 가 분류 못 함 (held)
+#
+# # Inputs
+#
+#   request_kind = "list-all" | "lookup-by-id" |
+#                   "categorize-predicate" (caller hint based)
+
+let
+  ownerName = "stdlib/lib/ontology/substrate-predicate-category-policy.px";
+
+  mkCategory = id: kebab: examples: comment:
+    { category_id = id; kebab_case = kebab;
+      example_predicates = examples; semantic = comment; };
+
+  predicateCategories = [
+    (mkCategory "Ontological"   "ontological"
+      [ "IsA" "PartOf" "InstanceOf" "Subclass" "TypeOf" ]
+      "taxonomy hierarchy")
+    (mkCategory "Causal"        "causal"
+      [ "Causes" "Enables" "Prevents" "Inhibits" "Triggers" ]
+      "causal relations")
+    (mkCategory "Relational"    "relational"
+      [ "RelatedTo" "Antonym" "Synonym" "OppositeOf" ]
+      "similarity / contrast")
+    (mkCategory "Temporal"      "temporal"
+      [ "Before" "After" "During" "Concurrent" "Precedes" ]
+      "temporal ordering")
+    (mkCategory "Spatial"       "spatial"
+      [ "Above" "NextTo" "Inside" "Contains" "Adjacent" ]
+      "spatial relations")
+    (mkCategory "Referential"   "referential"
+      [ "Mentions" "Cites" "Quotes" "ReferencesText" ]
+      "referential / citation")
+    (mkCategory "Morphological" "morphological"
+      [ "HasParticle" "HasHonorific" "IsRoot" "HasSyllable" "HasMood" ]
+      "Korean morphology — particles / mood / syllables")
+    (mkCategory "DomainBridge"  "domain-bridge"
+      [ "HasFormula" "HasImplementation" "HasExpression" "HasModel" ]
+      "cross-domain projection")
+    (mkCategory "Substrate"     "substrate"
+      [ "pattern-id" "risky-pattern" "known-import" "owner-law-link" ]
+      "pnix-specific substrate predicates")
+    (mkCategory "Unclassified"  "unclassified"
+      [ ]
+      "caller did not assign — Held shape")
+  ];
+
+  validRequestKinds = [
+    "list-all"
+    "lookup-by-id"
+    "categorize-predicate"
+  ];
+
+  validVerdicts = [
+    "categories-listed"
+    "category-resolved"
+    "category-unknown"
+    "predicate-categorized"
+    "predicate-uncategorized"
+    "held-unknown-request-kind"
+  ];
+
+  asString = v: if builtins.isString v then v else "";
+
+  lookupCategory = id:
+    builtins.foldl' (acc: c: if acc != null then acc
+      else if c.category_id == id then c else null) null predicateCategories;
+
+  categorizePredicate = predName:
+    builtins.foldl'
+      (acc: c: if acc != null then acc
+        else if builtins.elem predName c.example_predicates then c else null)
+      null
+      predicateCategories;
+
+  applySubstratePredicateCategoryPolicy = request:
+    let
+      reqKind = asString (request.request_kind or "");
+    in
+      if reqKind == "list-all" then {
+        verdict = "categories-listed";
+        categories = predicateCategories;
+        total_category_count = builtins.length predicateCategories;
+        total_example_predicate_count = builtins.foldl'
+          (acc: c: acc + (builtins.length c.example_predicates))
+          0
+          predicateCategories;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "lookup-by-id" then
+        let
+          id = asString (request.category_id or "");
+          hit = lookupCategory id;
+        in
+          if hit != null then {
+            verdict = "category-resolved";
+            inherit (hit) category_id kebab_case example_predicates semantic;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+          else {
+            verdict = "category-unknown";
+            category_id = id;
+            valid_category_ids = builtins.map (c: c.category_id) predicateCategories;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+      else if reqKind == "categorize-predicate" then
+        let
+          predName = asString (request.predicate_name or "");
+          hit = categorizePredicate predName;
+        in
+          if hit != null then {
+            verdict = "predicate-categorized";
+            predicate_name = predName;
+            inherit (hit) category_id kebab_case semantic;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+          else {
+            verdict = "predicate-uncategorized";
+            predicate_name = predName;
+            held_reason = "predicate not in any category's example_predicates";
+            fallback_category = "Unclassified";
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+      else {
+        verdict = "held-unknown-request-kind";
+        request_kind = reqKind;
+        valid_request_kinds = validRequestKinds;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName predicateCategories validRequestKinds validVerdicts
+          applySubstratePredicateCategoryPolicy;
+}

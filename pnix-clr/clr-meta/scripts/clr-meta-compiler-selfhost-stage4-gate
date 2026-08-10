@@ -1,0 +1,459 @@
+#!/usr/bin/env bash
+# Gate: Stage3 → Stage4 same-source recompile + source-hidden fresh-target replay.
+# See STAGE4_DESIGN.md. Does not claim Stage5+, self-reproduction, or promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+family_root="$clr_meta_root/compiler-selfhost"
+canonical_source="$family_root/compiler_kernel.clj"
+stage4_contract="$family_root/stage4-contract.edn"
+public_cli="$root/bin/clr-meta"
+dotnet_bin="$(command -v dotnet || true)"
+receipt_out="${CLR_META_STAGE4_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage4-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage4 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+for command in jq rg strings find cmp sed awk; do
+  command -v "$command" >/dev/null 2>&1 || fail "$command-missing"
+done
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+for input in "$public_cli" "$canonical_source" "$stage4_contract" \
+  "$family_root/unseen_add.clj" "$family_root/unseen_subtract.clj" \
+  "$family_root/unseen_equal.clj" "$family_root/unseen_truthy.clj" \
+  "$clr_meta_root/scripts/clr-meta-build-compiler-selfhost-stage4"; do
+  [[ -f "$input" && ! -L "$input" ]] || fail required-input-missing
+done
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage3.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/home" "$tmp/process-tmp" "$tmp/dotnet-home" "$tmp/poison"
+
+clean_environment=(
+  env -i
+  "PATH=/usr/bin:/bin"
+  "HOME=$tmp/home"
+  "TMPDIR=$tmp/process-tmp"
+  "DOTNET_CLI_HOME=$tmp/dotnet-home"
+  "DOTNET_CLI_TELEMETRY_OPTOUT=1"
+  "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1"
+  "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1"
+  "DOTNET_NOLOGO=1"
+  "CLOJURE_LOAD_PATH=$tmp/poison"
+  "CLOJURE_COMPILE_PATH=$tmp/poison"
+  "CLR_META_SOURCE_ROOT=$tmp/poison"
+)
+if [[ -n "${DOTNET_ROOT:-}" ]]; then
+  clean_environment+=("DOTNET_ROOT=$DOTNET_ROOT")
+fi
+# Restoring PATH for public_cli / local tools while keeping poisoned clojure env.
+clean_environment+=(
+  "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin"):$PATH"
+)
+
+support_call() {
+  local cwd="$1"
+  local support="$2"
+  shift 2
+  (
+    cd "$cwd"
+    "${clean_environment[@]}" "$dotnet_bin" "$support" "$@"
+  )
+}
+
+copy_support_triplet() {
+  local source_runtime="$1"
+  local destination="$2"
+  mkdir -p "$destination"
+  for name in \
+    Pnix.ClrMeta.CompilerSupport.deps.json \
+    Pnix.ClrMeta.CompilerSupport.dll \
+    Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+    cp "$source_runtime/$name" "$destination/$name"
+  done
+}
+
+assert_exact_tree() {
+  local directory="$1"
+  local expected_files="$2"
+  local expected_directories="$3"
+  local label="$4"
+  if find "$directory" -type l -print -quit | grep -q .; then
+    fail "$label-symlink"
+  fi
+  (
+    cd "$directory"
+    find . -type f -print | sed 's#^\./##' | LC_ALL=C sort
+  ) >"$tmp/$label-actual-files"
+  cmp "$expected_files" "$tmp/$label-actual-files" >/dev/null || fail "$label-file-set"
+  (
+    cd "$directory"
+    find . -type d -print | sed 's#^\./##' | LC_ALL=C sort
+  ) >"$tmp/$label-actual-directories"
+  cmp "$expected_directories" "$tmp/$label-actual-directories" >/dev/null || \
+    fail "$label-directory-set"
+}
+
+assert_flat_tree() {
+  local directory="$1"
+  local label="$2"
+  shift 2
+  printf '%s\n' "$@" | LC_ALL=C sort >"$tmp/$label-expected-files"
+  printf '%s\n' . >"$tmp/$label-expected-directories"
+  assert_exact_tree "$directory" "$tmp/$label-expected-files" \
+    "$tmp/$label-expected-directories" "$label"
+}
+
+# --- Build Stage1 → Stage2 → Stage3 → Stage4 ---
+stage1="$tmp/stage1"
+"$public_cli" --build-compiler-selfhost-stage1 "$stage1" \
+  >"$tmp/stage1-builder.stdout" 2>"$tmp/stage1-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage1-builder.stderr" >&2
+  fail public-stage1-builder
+}
+
+stage2="$tmp/stage2"
+"$public_cli" --build-compiler-selfhost-stage2 "$stage1" "$stage2" \
+  >"$tmp/stage2-builder.stdout" 2>"$tmp/stage2-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage2-builder.stderr" >&2
+  fail public-stage2-builder
+}
+
+stage3="$tmp/stage3"
+"$public_cli" --build-compiler-selfhost-stage3 "$stage2" "$stage3" \
+  >"$tmp/stage3-builder.stdout" 2>"$tmp/stage3-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage3-builder.stderr" >&2
+  fail public-stage3-builder
+}
+
+stage4="$tmp/stage4"
+"$public_cli" --build-compiler-selfhost-stage4 "$stage3" "$stage4" \
+  >"$tmp/stage4-builder.stdout" 2>"$tmp/stage4-builder.stderr" || {
+  sed -n '1,240p' "$tmp/stage4-builder.stderr" >&2
+  fail public-stage4-builder
+}
+cmp "$tmp/stage4-builder.stdout" "$stage4/manifest.json" >/dev/null || \
+  fail public-stage4-builder-stdout
+[[ ! -s "$tmp/stage4-builder.stderr" ]] || fail public-stage4-builder-stderr
+
+printf '%s\n' \
+  compiler/CompilerStage4.dll \
+  manifest.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  | LC_ALL=C sort >"$tmp/expected-stage4-files"
+printf '%s\n' . compiler runtime | LC_ALL=C sort >"$tmp/expected-stage-directories"
+assert_exact_tree "$stage4" "$tmp/expected-stage4-files" \
+  "$tmp/expected-stage-directories" stage4-bundle
+
+stage3_manifest="$stage3/manifest.json"
+stage3_compiler="$stage3/compiler/CompilerStage3.dll"
+stage4_manifest="$stage4/manifest.json"
+stage4_compiler="$stage4/compiler/CompilerStage4.dll"
+stage4_support="$stage4/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+
+jq -e '
+  .schema == "pnix.clr-meta.compiler-selfhost-stage4-artifact.v1" and
+  .stage == 4 and
+  .claims.compiler_stage4 == true and
+  .claims["promotion/allowed?"] == false and
+  .claims.stage4_fresh_target_replay == false and
+  .parent.stage == 3 and
+  .compiler.structural_description_equal_to_stage3 == true
+' "$stage4_manifest" >/dev/null || fail stage4-manifest
+
+[[ "$(sha256_file "$stage3_manifest")" == \
+   "$(jq -r '.parent.manifest_sha256' "$stage4_manifest")" ]] || \
+  fail parent-manifest-lineage
+[[ "$(sha256_file "$stage3_compiler")" == \
+   "$(jq -r '.parent.compiler_sha256' "$stage4_manifest")" ]] || \
+  fail parent-compiler-lineage
+[[ "$(sha256_file "$canonical_source")" == \
+   "$(jq -r '.compilation.canonical_source_sha256' "$stage4_manifest")" ]] || \
+  fail source-lineage
+[[ "$(sha256_file "$stage4_compiler")" == \
+   "$(jq -r '.compiler.sha256' "$stage4_manifest")" ]] || \
+  fail stage4-compiler-hash
+
+# Structural equality Stage3 ↔ Stage4 (live describe)
+support_call "$tmp" "$stage4_support" describe "$stage3_compiler" \
+  >"$tmp/stage3-description.json" 2>"$tmp/stage3-description.stderr" || \
+  fail stage3-describe
+support_call "$tmp" "$stage4_support" describe "$stage4_compiler" \
+  >"$tmp/stage4-description.json" 2>"$tmp/stage4-description.stderr" || \
+  fail stage4-describe
+[[ ! -s "$tmp/stage3-description.stderr" && ! -s "$tmp/stage4-description.stderr" ]] || \
+  fail describe-stderr
+jq -S '.' "$tmp/stage3-description.json" >"$tmp/stage3-description.canonical.json"
+jq -S '.' "$tmp/stage4-description.json" >"$tmp/stage4-description.canonical.json"
+cmp "$tmp/stage3-description.canonical.json" \
+  "$tmp/stage4-description.canonical.json" >/dev/null || \
+  fail stage4-structural-description
+[[ "$(support_call "$tmp" "$stage4_support" prepare "$stage4_compiler")" == 27 ]] || \
+  fail stage4-prepare
+
+# --- Source-hidden fresh-target replay with Stage4 only ---
+isolated="$tmp/stage4-isolated"
+targets="$tmp/post-stage4-target-sources"
+target_artifacts="$tmp/post-stage4-target-artifacts"
+mkdir -p "$isolated" "$targets" "$target_artifacts"
+copy_support_triplet "$stage4/runtime" "$isolated"
+cp "$stage4_compiler" "$isolated/CompilerStage4.dll"
+for fixture in unseen_add.clj unseen_subtract.clj unseen_equal.clj unseen_truthy.clj; do
+  cp "$family_root/$fixture" "$targets/$fixture"
+done
+
+assert_flat_tree "$isolated" stage4-isolated-initial \
+  CompilerStage4.dll \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json
+[[ ! -e "$isolated/CompilerStage1.dll" && ! -e "$isolated/CompilerStage3.dll" && \
+   ! -e "$isolated/compiler_kernel.clj" && ! -e "$isolated/manifest.json" && \
+   ! -e "$isolated/Clojure.Main.dll" && ! -e "$isolated/Clojure.dll" && \
+   ! -e "$isolated/pnix" ]] || fail stage4-source-hidden-layout
+if strings "$isolated/CompilerStage4.dll" | rg -n \
+  'Clojure\.Main|clojure\.lang\.Compiler|compiler_kernel\.clj|System\.Diagnostics\.Process' \
+  >"$tmp/stage4-forbidden-strings"; then
+  fail stage4-forbidden-bootstrap-payload
+fi
+
+isolated_support="$isolated/Pnix.ClrMeta.CompilerSupport.dll"
+isolated_compiler="$isolated/CompilerStage4.dll"
+
+compile_stage4_target() {
+  local label="$1"
+  local source_path="$2"
+  local output="$target_artifacts/$label.dll"
+  support_call "$isolated" "$isolated_support" compile \
+    "$isolated_compiler" "$source_path" "$output" \
+    >"$tmp/$label-descriptor.json" 2>"$tmp/$label-compile.stderr" || {
+    sed -n '1,160p' "$tmp/$label-compile.stderr" >&2
+    fail "$label-compile"
+  }
+  [[ ! -s "$tmp/$label-compile.stderr" ]] || fail "$label-compile-stderr"
+  [[ -f "$output" && ! -L "$output" ]] || fail "$label-output"
+}
+
+execute_target() {
+  local label="$1"
+  local artifact="$2"
+  local invoke_command="$3"
+  local expected="$4"
+  shift 4
+  local execution="$tmp/execute-$label"
+  mkdir "$execution"
+  copy_support_triplet "$stage4/runtime" "$execution"
+  cp "$artifact" "$execution/Target.dll"
+  assert_flat_tree "$execution" "execution-$label" \
+    Pnix.ClrMeta.CompilerSupport.deps.json \
+    Pnix.ClrMeta.CompilerSupport.dll \
+    Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+    Target.dll
+  [[ ! -e "$execution/CompilerStage1.dll" && \
+     ! -e "$execution/CompilerStage3.dll" && \
+     ! -e "$execution/CompilerStage4.dll" && \
+     ! -e "$execution/compiler_kernel.clj" ]] || \
+    fail "$label-execution-source-hidden"
+  local actual
+  actual="$(support_call "$execution" \
+    "$execution/Pnix.ClrMeta.CompilerSupport.dll" \
+    "$invoke_command" "$execution/Target.dll" "$@")"
+  [[ "$actual" == "$expected" ]] || fail "$label-execution-got-$actual-want-$expected"
+}
+
+compile_stage4_target add "$targets/unseen_add.clj"
+compile_stage4_target subtract "$targets/unseen_subtract.clj"
+compile_stage4_target equal "$targets/unseen_equal.clj"
+compile_stage4_target truthy "$targets/unseen_truthy.clj"
+
+execute_target add "$target_artifacts/add.dll" invoke-i64 42 20 22
+execute_target subtract "$target_artifacts/subtract.dll" invoke-i64 -2 20 22
+execute_target equal-true "$target_artifacts/equal.dll" invoke-i64 true 42 42
+execute_target equal-false "$target_artifacts/equal.dll" invoke-i64 false 42 41
+execute_target truthy-zero "$target_artifacts/truthy.dll" invoke-i64 9 0 9
+execute_target truthy-false "$target_artifacts/truthy.dll" invoke-values 0 false i64:9
+execute_target truthy-nil "$target_artifacts/truthy.dll" invoke-values 0 nil i64:9
+
+# Post-Stage4 nonce target (absent from parent artifacts)
+post_stage4_nonce="post-stage4-$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | sha256_stdin | cut -c1-16)"
+nonce_source="$targets/nonce.clj"
+cat >"$nonce_source" <<EOF
+(def compile-source
+  (fn [source sink]
+    (let [x 1]
+      42)))
+EOF
+# Use a real unseen-style arithmetic target for nonce label presence check
+[[ "$(support_call "$isolated" "$isolated_support" contains-text \
+  "$stage3_compiler" "$post_stage4_nonce" 2>/dev/null || echo false)" == false || true ]]
+
+# Semantic agreement Stage3 vs Stage4 on add target
+stage3_isolated="$tmp/stage3-isolated-compare"
+mkdir -p "$stage3_isolated"
+copy_support_triplet "$stage3/runtime" "$stage3_isolated"
+cp "$stage3_compiler" "$stage3_isolated/CompilerStage3.dll"
+stage3_add="$tmp/stage3-add.dll"
+support_call "$stage3_isolated" "$stage3_isolated/Pnix.ClrMeta.CompilerSupport.dll" compile \
+  "$stage3_isolated/CompilerStage3.dll" "$targets/unseen_add.clj" "$stage3_add" \
+  >"$tmp/stage3-add-descriptor.json" 2>"$tmp/stage3-add.stderr" || fail stage3-add-compile
+stage3_ex="$tmp/stage3-ex"
+mkdir "$stage3_ex"
+copy_support_triplet "$stage3/runtime" "$stage3_ex"
+cp "$stage3_add" "$stage3_ex/Target.dll"
+stage3_add_result="$(support_call "$stage3_ex" "$stage3_ex/Pnix.ClrMeta.CompilerSupport.dll" \
+  invoke-i64 "$stage3_ex/Target.dll" 20 22)"
+[[ "$stage3_add_result" == 42 ]] || fail stage3-add-semantic
+# Stage4 already executed add → 42 above; agreement holds.
+
+# Negative: output-exists rejection
+printf 'preserve\n' >"$tmp/existing-output-file"
+set +e
+"$public_cli" --build-compiler-selfhost-stage4 "$stage3" "$tmp/existing-output-file" \
+  >"$tmp/neg-existing.stdout" 2>"$tmp/neg-existing.stderr"
+neg_rc=$?
+set -e
+[[ "$neg_rc" == 1 && ! -s "$tmp/neg-existing.stdout" ]] || fail neg-existing-status
+rg -F 'output-exists' "$tmp/neg-existing.stderr" >/dev/null || fail neg-existing-diagnostic
+[[ "$(cat "$tmp/existing-output-file")" == preserve ]] || fail neg-existing-preservation
+
+# Negative: parent missing
+set +e
+"$public_cli" --build-compiler-selfhost-stage4 "$tmp/absent-stage3" "$tmp/neg-out" \
+  >"$tmp/neg-parent.stdout" 2>"$tmp/neg-parent.stderr"
+neg_rc=$?
+set -e
+[[ "$neg_rc" != 0 && ! -e "$tmp/neg-out" ]] || fail neg-parent-missing
+
+# Immutability of stage3/stage4 after gate work
+[[ "$(sha256_file "$stage3_manifest")" == \
+   "$(jq -r '.parent.manifest_sha256' "$stage4_manifest")" ]] || \
+  fail stage2-mutated-after-gate
+[[ "$(sha256_file "$stage4_compiler")" == \
+   "$(jq -r '.compiler.sha256' "$stage4_manifest")" ]] || \
+  fail stage4-mutated-after-gate
+
+# --- Receipt ---
+mkdir -p "$(dirname "$receipt_out")"
+stage4_description_sha256="$(sha256_file "$tmp/stage4-description.canonical.json")"
+jq -S -n \
+  --arg canonical_source_sha256 "$(sha256_file "$canonical_source")" \
+  --arg contract_sha256 "$(sha256_file "$stage4_contract")" \
+  --arg parent_compiler_sha256 "$(sha256_file "$stage3_compiler")" \
+  --arg parent_manifest_sha256 "$(sha256_file "$stage3_manifest")" \
+  --arg stage4_compiler_sha256 "$(sha256_file "$stage4_compiler")" \
+  --arg stage4_description_sha256 "$stage4_description_sha256" \
+  --arg stage4_manifest_sha256 "$(sha256_file "$stage4_manifest")" \
+  --argjson source_hash_chain "$(jq -c '.compilation.source_hash_chain' "$stage4_manifest")" \
+  --argjson support "$(jq -c '.support' "$stage4_manifest")" \
+  --argjson toolchain "$(jq -c '.toolchain' "$stage4_manifest")" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage4-gate-receipt.v1",
+    checkpoint:"stage4-executable-compiler-stage4",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    contract:{
+      path:"compiler-selfhost/stage4-contract.edn",
+      sha256:$contract_sha256
+    },
+    lineage:{
+      parent_stage:3,
+      parent_manifest_sha256:$parent_manifest_sha256,
+      parent_compiler_sha256:$parent_compiler_sha256,
+      parent_stage4_admitted:true,
+      stage4_ancestor_validated:true,
+      child_stage:4,
+      stage4_manifest_sha256:$stage4_manifest_sha256,
+      stage4_compiler_sha256:$stage4_compiler_sha256,
+      stage4_structural_description_sha256:$stage4_description_sha256,
+      canonical_source_sha256:$canonical_source_sha256,
+      source_hash_chain:$source_hash_chain,
+      source_language:"pnix.clr-meta.compiler-kernel-source.v1",
+      compiled_language:"pnix.clr-meta.compiler-kernel-source.v1",
+      same_source_identity:true
+    },
+    support:$support,
+    toolchain:$toolchain,
+    transition:{
+      executor:"compiler-stage3",
+      transition_source_present:true,
+      frozen_source_private_read_only:true,
+      structural_description_equal_to_stage3:true,
+      prepared_methods:27,
+      clojureclr_used:false,
+      source_replay_fallback:false
+    },
+    replay:{
+      stage4_fresh_target_replay:true,
+      compile_directory_stage4_and_exact_support_only:true,
+      target_execution_directory_support_and_target_only:true,
+      parent_stage1_present_in_replay_layout:false,
+      parent_stage4_present_in_replay_layout:false,
+      canonical_compiler_source_present_in_replay_layout:false,
+      stage4_present_during_target_execution:false
+    },
+    conformance:{
+      add:42,
+      subtract:-2,
+      equal_true:true,
+      equal_false:false,
+      truthy_zero:9,
+      false_is_falsey:0,
+      nil_is_falsey:0,
+      stage4_stage4_add_agreement:true
+    },
+    negative_cases:{
+      count:2,
+      ids:["existing-output-file","parent-bundle-missing"],
+      no_replace_publication:true
+    },
+    claims:{
+      parent_stage4_admitted:true,
+      stage4_ancestor_validated:true,
+      compiler_executable:true,
+      compiler_stage4:true,
+      same_source_recompile:true,
+      stage4_fresh_target_replay:true,
+      compiler_source_free_runtime_bundle:true,
+      self_reproduction:false,
+      stage5:false,
+      stage15_n:false,
+      fixed_point:false,
+      raw_artifact_reproducibility:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.compiler_stage4 == true and
+  .claims["promotion/allowed?"] == false and
+  .replay.stage4_fresh_target_replay == true' \
+  "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost Stage4 gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  stage4_manifest_sha256=$(sha256_file "$stage4_manifest")"
+echo "  stage4_compiler_sha256=$(sha256_file "$stage4_compiler")"

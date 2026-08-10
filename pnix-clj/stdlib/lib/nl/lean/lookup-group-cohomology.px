@@ -1,0 +1,1682 @@
+# AUTO-GENERATED — group-cohomology
+# Entries: 239
+let
+  ownerName = "stdlib.nl.lean.lookup-group-cohomology";
+  category = "group-cohomology";
+  entries = [
+    {
+      full_name = "groupCohomology.resolution.actionDiagonalSucc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 95;
+      code_preview = "def actionDiagonalSucc (G : Type u) [Group G] :     ∀ n : ℕ, diagonal G (n + 1) ≅ leftRegular G ⊗ Action.mk (Fin n → G) 1   | 0 =>     diagonalOneIsoLeftRegular G ≪≫       (ρ_ _).symm ≪≫ tensorIso (Iso.refl _) (tensorUnitIso (Equiv.ofUnique PUnit _).toIso)   | n + 1 =>     diagonalSucc _ _ ≪≫       ";
+    }
+    {
+      full_name = "groupCohomology.resolution.actionDiagonalSucc_hom_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 110;
+      code_preview = "theorem actionDiagonalSucc_hom_apply {G : Type u} [Group G] {n : ℕ} (f : Fin (n + 1) → G) :     (actionDiagonalSucc G n).hom.hom f = (f 0, fun i => (f (Fin.castSucc i))⁻¹ * f i.succ)";
+    }
+    {
+      full_name = "groupCohomology.resolution.actionDiagonalSucc_inv_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 129;
+      code_preview = "theorem actionDiagonalSucc_inv_apply {G : Type u} [Group G] {n : ℕ} (g : G) (f : Fin n → G) :     (actionDiagonalSucc G n).inv.hom (g, f) = (g • Fin.partialProd f : Fin (n + 1) → G)";
+    }
+    {
+      full_name = "groupCohomology.resolution.diagonalSucc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 164;
+      code_preview = "def diagonalSucc (n : ℕ) :     diagonal k G (n + 1) ≅ leftRegular k G ⊗ trivial k G ((Fin n → G) →₀ k) :=   (linearization k G).mapIso (actionDiagonalSucc G n) ≪≫     (Functor.Monoidal.μIso (linearization k G) _ _).symm ≪≫       tensorIso (Iso.refl _) (linearizationTrivialIso k G (Fin n → G))";
+    }
+    {
+      full_name = "groupCohomology.resolution.diagonalSucc_hom_single";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 176;
+      code_preview = "theorem diagonalSucc_hom_single (f : Gⁿ⁺¹) (a : k) :     (diagonalSucc k G n).hom.hom (single f a) =       single (f 0) 1 ⊗ₜ single (fun i => (f (Fin.castSucc i))⁻¹ * f i.succ) a";
+    }
+    {
+      full_name = "groupCohomology.resolution.diagonalSucc_inv_single_single";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 186;
+      code_preview = "theorem diagonalSucc_inv_single_single (g : G) (f : Gⁿ) (a b : k) :     (diagonalSucc k G n).inv.hom (Finsupp.single g a ⊗ₜ Finsupp.single f b) =       single (g • partialProd f) (a * b)";
+    }
+    {
+      full_name = "groupCohomology.resolution.diagonalSucc_inv_single_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 206;
+      code_preview = "theorem diagonalSucc_inv_single_left (g : G) (f : Gⁿ →₀ k) (r : k) :     (diagonalSucc k G n).inv.hom (Finsupp.single g r ⊗ₜ f) =       Finsupp.lift (Gⁿ⁺¹ →₀ k) k Gⁿ (fun f => single (g • partialProd f) r) f";
+    }
+    {
+      full_name = "groupCohomology.resolution.diagonalSucc_inv_single_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 217;
+      code_preview = "theorem diagonalSucc_inv_single_right (g : G →₀ k) (f : Gⁿ) (r : k) :     (diagonalSucc k G n).inv.hom (g ⊗ₜ Finsupp.single f r) =       Finsupp.lift _ k G (fun a => single (a • partialProd f) r) g";
+    }
+    {
+      full_name = "groupCohomology.resolution.ofMulActionBasisAux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 233;
+      code_preview = "def ofMulActionBasisAux :     MonoidAlgebra k G ⊗[k] ((Fin n → G) →₀ k) ≃ₗ[MonoidAlgebra k G]       (ofMulAction k G (Fin (n + 1) → G)).asModule :=   haveI e := (Rep.equivalenceModuleMonoidAlgebra.1.mapIso (diagonalSucc k G n).symm).toLinearEquiv   { e with     map_smul' := fun r x => by       rw [R";
+    }
+    {
+      full_name = "groupCohomology.resolution.ofMulActionBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 260;
+      code_preview = "def ofMulActionBasis :     Basis (Fin n → G) (MonoidAlgebra k G) (ofMulAction k G (Fin (n + 1) → G)).asModule :=   Basis.map     (Algebra.TensorProduct.basis (MonoidAlgebra k G)       (Finsupp.basisSingleOne : Basis (Fin n → G) k ((Fin n → G) →₀ k)))     (ofMulActionBasisAux k G n)";
+    }
+    {
+      full_name = "groupCohomology.resolution.ofMulAction_free";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 269;
+      code_preview = "theorem ofMulAction_free :     Module.Free (MonoidAlgebra k G) (ofMulAction k G (Fin (n + 1) → G)).asModule";
+    }
+    {
+      full_name = "Rep.diagonalHomEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 283;
+      code_preview = "noncomputable def diagonalHomEquiv :     (Rep.diagonal k G (n + 1) ⟶ A) ≃ₗ[k] (Fin n → G) → A :=   Linear.homCongr k         ((diagonalSucc k G n).trans ((Representation.ofMulAction k G G).repOfTprodIso 1))         (Iso.refl _) ≪≫ₗ       (Rep.MonoidalClosed.linearHomEquivComm _ _ _ ≪≫ₗ Rep.leftRegul";
+    }
+    {
+      full_name = "Rep.diagonalHomEquiv_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 295;
+      code_preview = "theorem diagonalHomEquiv_apply (f : Rep.diagonal k G (n + 1) ⟶ A) (x : Fin n → G) :     diagonalHomEquiv n A f x = f.hom (Finsupp.single (Fin.partialProd x) 1)";
+    }
+    {
+      full_name = "Rep.diagonalHomEquiv_symm_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 311;
+      code_preview = "theorem diagonalHomEquiv_symm_apply (f : (Fin n → G) → A) (x : Fin (n + 1) → G) :     ((diagonalHomEquiv n A).symm f).hom (Finsupp.single x 1) =       A.ρ (x 0) (f fun i : Fin n => (x (Fin.castSucc i))⁻¹ * x i.succ)";
+    }
+    {
+      full_name = "Rep.diagonalHomEquiv_symm_partialProd_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 347;
+      code_preview = "theorem diagonalHomEquiv_symm_partialProd_succ (f : (Fin n → G) → A) (g : Fin (n + 1) → G)     (a : Fin (n + 1)) :     ((diagonalHomEquiv n A).symm f).hom (Finsupp.single (Fin.partialProd g ∘ a.succ.succAbove) 1)       = f (Fin.contractNth a (· * ·) g)";
+    }
+    {
+      full_name = "classifyingSpaceUniversalCover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 365;
+      code_preview = "def classifyingSpaceUniversalCover [Monoid G] :     SimplicialObject (Action (Type u) G) where   obj n := Action.ofMulAction G (Fin (n.unop.len + 1) → G)   map f :=     { hom := fun x => x ∘ f.unop.toOrderHom       comm := fun _ => rfl }   map_id _ := rfl   map_comp _ _ := rfl";
+    }
+    {
+      full_name = "classifyingSpaceUniversalCover.cechNerveTerminalFromIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 381;
+      code_preview = "def cechNerveTerminalFromIso :     cechNerveTerminalFrom (Action.ofMulAction G G) ≅ classifyingSpaceUniversalCover G :=   NatIso.ofComponents (fun _ => limit.isoLimitCone (Action.ofMulActionLimitCone _ _)) fun f => by     refine IsLimit.hom_ext (Action.ofMulActionLimitCone.{u, 0} G fun _ => G).2 fun";
+    }
+    {
+      full_name = "classifyingSpaceUniversalCover.cechNerveTerminalFromIsoCompForget";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 391;
+      code_preview = "def cechNerveTerminalFromIsoCompForget :     cechNerveTerminalFrom G ≅ classifyingSpaceUniversalCover G ⋙ forget _ :=   NatIso.ofComponents (fun _ => Types.productIso _) fun _ =>     Matrix.ext fun _ _ => Types.Limit.lift_π_apply (Discrete.functor fun _ ↦ G) _ _ _";
+    }
+    {
+      full_name = "classifyingSpaceUniversalCover.compForgetAugmented";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 402;
+      code_preview = "def compForgetAugmented : SimplicialObject.Augmented (Type u) :=   SimplicialObject.augment (classifyingSpaceUniversalCover G ⋙ forget _) (terminal _)     (terminal.from _) fun _ _ _ => Subsingleton.elim _ _";
+    }
+    {
+      full_name = "classifyingSpaceUniversalCover.extraDegeneracyAugmentedCechNerve";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 408;
+      code_preview = "def extraDegeneracyAugmentedCechNerve :     ExtraDegeneracy (Arrow.mk <| terminal.from G).augmentedCechNerve :=   AugmentedCechNerve.extraDegeneracy (Arrow.mk <| terminal.from G)     ⟨fun _ => (1 : G),       @Subsingleton.elim _ (@Unique.instSubsingleton _ (Limits.uniqueToTerminal _)) _ _⟩";
+    }
+    {
+      full_name = "classifyingSpaceUniversalCover.extraDegeneracyCompForgetAugmented";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 416;
+      code_preview = "def extraDegeneracyCompForgetAugmented : ExtraDegeneracy (compForgetAugmented G) := by   refine     ExtraDegeneracy.ofIso (?_ : (Arrow.mk <| terminal.from G).augmentedCechNerve ≅ _)       (extraDegeneracyAugmentedCechNerve G)   exact     Comma.isoMk (CechNerveTerminalFrom.iso G ≪≫ cechNerveTerminalF";
+    }
+    {
+      full_name = "classifyingSpaceUniversalCover.compForgetAugmented.toModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 426;
+      code_preview = "def compForgetAugmented.toModule : SimplicialObject.Augmented (ModuleCat.{u} k) :=   ((SimplicialObject.Augmented.whiskering _ _).obj (ModuleCat.free k)).obj (compForgetAugmented G)";
+    }
+    {
+      full_name = "classifyingSpaceUniversalCover.extraDegeneracyCompForgetAugmentedToModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 432;
+      code_preview = "def extraDegeneracyCompForgetAugmentedToModule :     ExtraDegeneracy (compForgetAugmented.toModule k G) :=   ExtraDegeneracy.map (extraDegeneracyCompForgetAugmented G) (ModuleCat.free k)";
+    }
+    {
+      full_name = "groupCohomology.resolution";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 444;
+      code_preview = "def groupCohomology.resolution [Monoid G] :=   (AlgebraicTopology.alternatingFaceMapComplex (Rep k G)).obj     (classifyingSpaceUniversalCover G ⋙ Rep.linearization k G)";
+    }
+    {
+      full_name = "groupCohomology.resolution.d";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 456;
+      code_preview = "def d (G : Type u) (n : ℕ) : ((Fin (n + 1) → G) →₀ k) →ₗ[k] (Fin n → G) →₀ k :=   Finsupp.lift ((Fin n → G) →₀ k) k (Fin (n + 1) → G) fun g =>     (@Finset.univ (Fin (n + 1)) _).sum fun p =>       Finsupp.single (g ∘ p.succAbove) ((-1 : k) ^ (p : ℕ))";
+    }
+    {
+      full_name = "groupCohomology.resolution.d_of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 465;
+      code_preview = "@[simp] theorem d_of {G : Type u} {n : ℕ} (c : Fin (n + 1) → G) :     d k G n (Finsupp.single c 1) =       Finset.univ.sum fun p : Fin (n + 1) =>         Finsupp.single (c ∘ p.succAbove) ((-1 : k) ^ (p : ℕ))";
+    }
+    {
+      full_name = "groupCohomology.resolution.xIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 474;
+      code_preview = "def xIso (n : ℕ) : (groupCohomology.resolution k G).X n ≅ Rep.ofMulAction k G (Fin (n + 1) → G) :=   Iso.refl _";
+    }
+    {
+      full_name = "groupCohomology.resolution.x_projective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 479;
+      code_preview = "instance x_projective (G : Type u) [Group G] (n : ℕ) :     Projective ((groupCohomology.resolution k G).X n) :=   Rep.equivalenceModuleMonoidAlgebra.toAdjunction.projective_of_map_projective _ <|     @ModuleCat.projective_of_free.{u} _ _       (ModuleCat.of (MonoidAlgebra k G) (Representation.ofMulA";
+    }
+    {
+      full_name = "groupCohomology.resolution.d_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 486;
+      code_preview = "theorem d_eq (n : ℕ) : ((groupCohomology.resolution k G).d (n + 1) n).hom =     ModuleCat.ofHom (d k G (n + 1))";
+    }
+    {
+      full_name = "groupCohomology.resolution.forget₂ToModuleCat";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 510;
+      code_preview = "def forget₂ToModuleCat :=   ((forget₂ (Rep k G) (ModuleCat.{u} k)).mapHomologicalComplex _).obj     (groupCohomology.resolution k G)";
+    }
+    {
+      full_name = "groupCohomology.resolution.compForgetAugmentedIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 515;
+      code_preview = "def compForgetAugmentedIso :     AlternatingFaceMapComplex.obj         (SimplicialObject.Augmented.drop.obj (compForgetAugmented.toModule k G)) ≅       groupCohomology.resolution.forget₂ToModuleCat k G :=   eqToIso     (Functor.congr_obj (map_alternatingFaceMapComplex (forget₂ (Rep k G) (ModuleCat.{";
+    }
+    {
+      full_name = "groupCohomology.resolution.forget₂ToModuleCatHomotopyEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 527;
+      code_preview = "def forget₂ToModuleCatHomotopyEquiv :     HomotopyEquiv (groupCohomology.resolution.forget₂ToModuleCat k G)       ((ChainComplex.single₀ (ModuleCat k)).obj ((forget₂ (Rep k G) _).obj <| Rep.trivial k G k)) :=   (HomotopyEquiv.ofIso (compForgetAugmentedIso k G).symm).trans <|     (SimplicialObject.Au";
+    }
+    {
+      full_name = "groupCohomology.resolution.ε";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 540;
+      code_preview = "def ε : Rep.ofMulAction k G (Fin 1 → G) ⟶ Rep.trivial k G k where   hom := ModuleCat.ofHom <| Finsupp.linearCombination _ fun _ => (1 : k)   comm g := ModuleCat.hom_ext <| Finsupp.lhom_ext' fun _ => LinearMap.ext_ring (by     show       Finsupp.linearCombination k (fun _ => (1 : k)) (Finsupp.mapDoma";
+    }
+    {
+      full_name = "groupCohomology.resolution.forget₂ToModuleCatHomotopyEquiv_f_0_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 549;
+      code_preview = "theorem forget₂ToModuleCatHomotopyEquiv_f_0_eq :     (forget₂ToModuleCatHomotopyEquiv k G).1.f 0 = (forget₂ (Rep k G) _).map (ε k G)";
+    }
+    {
+      full_name = "groupCohomology.resolution.d_comp_ε";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 578;
+      code_preview = "theorem d_comp_ε : (groupCohomology.resolution k G).d 1 0 ≫ ε k G = 0";
+    }
+    {
+      full_name = "groupCohomology.resolution.εToSingle₀";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 588;
+      code_preview = "def εToSingle₀ :     groupCohomology.resolution k G ⟶ (ChainComplex.single₀ _).obj (Rep.trivial k G k) :=   ((groupCohomology.resolution k G).toSingle₀Equiv _).symm ⟨ε k G, d_comp_ε k G⟩";
+    }
+    {
+      full_name = "groupCohomology.resolution.εToSingle₀_comp_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 594;
+      code_preview = "theorem εToSingle₀_comp_eq :     ((forget₂ _ (ModuleCat.{u} k)).mapHomologicalComplex _).map (εToSingle₀ k G) ≫         (HomologicalComplex.singleMapHomologicalComplex _ _ _).hom.app _ =       (forget₂ToModuleCatHomotopyEquiv k G).hom";
+    }
+    {
+      full_name = "groupCohomology.resolution.quasiIso_forget₂_εToSingle₀";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 603;
+      code_preview = "theorem quasiIso_forget₂_εToSingle₀ :     QuasiIso (((forget₂ _ (ModuleCat.{u} k)).mapHomologicalComplex _).map (εToSingle₀ k G))";
+    }
+    {
+      full_name = "groupCohomology.projectiveResolution";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 621;
+      code_preview = "def groupCohomology.projectiveResolution : ProjectiveResolution (Rep.trivial k G k) where   complex := resolution k G   π := εToSingle₀ k G";
+    }
+    {
+      full_name = "groupCohomology.extIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Resolution.lean";
+      start_line = 629;
+      code_preview = "def groupCohomology.extIso (V : Rep k G) (n : ℕ) :     ((Ext k (Rep k G) n).obj (Opposite.op <| Rep.trivial k G k)).obj V ≅       ((groupCohomology.resolution k G).linearYonedaObj k V).homology n :=   (groupCohomology.projectiveResolution k G).isoExt n V";
+    }
+    {
+      full_name = "groupCohomology.linearYonedaObjResolution";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 83;
+      code_preview = "abbrev linearYonedaObjResolution (A : Rep k G) : CochainComplex (ModuleCat.{u} k) ℕ :=   (groupCohomology.resolution k G).linearYonedaObj k A";
+    }
+    {
+      full_name = "groupCohomology.linearYonedaObjResolution_d_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 88;
+      code_preview = "theorem linearYonedaObjResolution_d_apply {A : Rep k G} (i j : ℕ) (x : (resolution k G).X i ⟶ A) :     (linearYonedaObjResolution A).d i j x = (resolution k G).d j i ≫ x";
+    }
+    {
+      full_name = "inhomogeneousCochains.d";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 98;
+      code_preview = "@[simps] def d [Monoid G] (n : ℕ) (A : Rep k G) : ((Fin n → G) → A) →ₗ[k] (Fin (n + 1) → G) → A where   toFun f g :=     A.ρ (g 0) (f fun i => g i.succ) +       Finset.univ.sum fun j : Fin (n + 1) =>         (-1 : k) ^ ((j : ℕ) + 1) • f (Fin.contractNth j (· * ·) g)   map_add' f g := by     ext x   ";
+    }
+    {
+      full_name = "inhomogeneousCochains.d_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 118;
+      code_preview = "theorem d_eq :     d n A =       ((diagonalHomEquiv n A).toModuleIso.inv ≫         (linearYonedaObjResolution A).d n (n + 1) ≫           (diagonalHomEquiv (n + 1) A).toModuleIso.hom).hom";
+    }
+    {
+      full_name = "groupCohomology.inhomogeneousCochains";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 171;
+      code_preview = "noncomputable abbrev inhomogeneousCochains : CochainComplex (ModuleCat k) ℕ :=   CochainComplex.of (fun n => ModuleCat.of k ((Fin n → G) → A))     (fun n => ModuleCat.ofHom (inhomogeneousCochains.d n A)) fun n => by      ext x     have : ∀ x, _ = (0 : _ →ₗ[_] _) x := LinearMap.ext_iff.1 (ModuleCat.h";
+    }
+    {
+      full_name = "groupCohomology.inhomogeneousCochains.d_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 200;
+      code_preview = "@[simp] theorem inhomogeneousCochains.d_def (n : ℕ) :     (inhomogeneousCochains A).d n (n + 1) = ModuleCat.ofHom (inhomogeneousCochains.d n A)";
+    }
+    {
+      full_name = "groupCohomology.inhomogeneousCochainsIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 205;
+      code_preview = "def inhomogeneousCochainsIso : inhomogeneousCochains A ≅ linearYonedaObjResolution A := by   refine HomologicalComplex.Hom.isoOfComponents (fun i =>     (Rep.diagonalHomEquiv i A).toModuleIso.symm) ?_   rintro i j (h : i + 1 = j)   subst h   ext   simp only [ChainComplex.linearYonedaObj_X, linearYon";
+    }
+    {
+      full_name = "groupCohomology.cocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 222;
+      code_preview = "abbrev cocycles (n : ℕ) : ModuleCat k := (inhomogeneousCochains A).cycles n";
+    }
+    {
+      full_name = "groupCohomology.iCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 226;
+      code_preview = "abbrev iCocycles (n : ℕ) : cocycles A n ⟶ ModuleCat.of k ((Fin n → G) → A) :=   (inhomogeneousCochains A).iCycles n";
+    }
+    {
+      full_name = "groupCohomology.toCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 230;
+      code_preview = "abbrev toCocycles (i j : ℕ) : ModuleCat.of k ((Fin i → G) → A) ⟶ cocycles A j :=   (inhomogeneousCochains A).toCycles i j";
+    }
+    {
+      full_name = "groupCohomology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 239;
+      code_preview = "def groupCohomology [Group G] (A : Rep k G) (n : ℕ) : ModuleCat k :=   (inhomogeneousCochains A).homology n";
+    }
+    {
+      full_name = "groupCohomologyπ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 244;
+      code_preview = "abbrev groupCohomologyπ [Group G] (A : Rep k G) (n : ℕ) :     groupCohomology.cocycles A n ⟶ groupCohomology A n :=   (inhomogeneousCochains A).homologyπ n";
+    }
+    {
+      full_name = "groupCohomologyIsoExt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Basic.lean";
+      start_line = 250;
+      code_preview = "def groupCohomologyIsoExt [Group G] (A : Rep k G) (n : ℕ) :     groupCohomology A n ≅ ((Ext k (Rep k G) n).obj (Opposite.op <| Rep.trivial k G k)).obj A :=   isoOfQuasiIsoAt (HomotopyEquiv.ofIso (inhomogeneousCochainsIso A)).hom n ≪≫     (extIso k G A n).symm";
+    }
+    {
+      full_name = "groupCohomology.zeroCochainsLequiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 66;
+      code_preview = "def zeroCochainsLequiv : (inhomogeneousCochains A).X 0 ≃ₗ[k] A :=   LinearEquiv.funUnique (Fin 0 → G) k A";
+    }
+    {
+      full_name = "groupCohomology.oneCochainsLequiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 71;
+      code_preview = "def oneCochainsLequiv : (inhomogeneousCochains A).X 1 ≃ₗ[k] G → A :=   LinearEquiv.funCongrLeft k A (Equiv.funUnique (Fin 1) G).symm";
+    }
+    {
+      full_name = "groupCohomology.twoCochainsLequiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 76;
+      code_preview = "def twoCochainsLequiv : (inhomogeneousCochains A).X 2 ≃ₗ[k] G × G → A :=   LinearEquiv.funCongrLeft k A <| (piFinTwoEquiv fun _ => G).symm";
+    }
+    {
+      full_name = "groupCohomology.threeCochainsLequiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 81;
+      code_preview = "def threeCochainsLequiv : (inhomogeneousCochains A).X 3 ≃ₗ[k] G × G × G → A :=   LinearEquiv.funCongrLeft k A <| ((Fin.consEquiv _).symm.trans     ((Equiv.refl G).prodCongr (piFinTwoEquiv fun _ => G))).symm";
+    }
+    {
+      full_name = "groupCohomology.dZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 91;
+      code_preview = "@[simps] def dZero : A →ₗ[k] G → A where   toFun m g := A.ρ g m - m   map_add' x y := funext fun g => by simp only [map_add, add_sub_add_comm]; rfl   map_smul' r x := funext fun g => by dsimp; rw [map_smul, smul_sub]";
+    }
+    {
+      full_name = "groupCohomology.dZero_ker_eq_invariants";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 99;
+      code_preview = "theorem dZero_ker_eq_invariants : LinearMap.ker (dZero A) = invariants A.ρ";
+    }
+    {
+      full_name = "groupCohomology.dZero_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 104;
+      code_preview = "@[simp] theorem dZero_eq_zero [A.IsTrivial] : dZero A = 0";
+    }
+    {
+      full_name = "groupCohomology.dZero_comp_subtype";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 108;
+      code_preview = "lemma dZero_comp_subtype : dZero A ∘ₗ A.ρ.invariants.subtype = 0 := by   ext ⟨x, hx⟩ g   replace hx := hx g   rw [← sub_eq_zero] at hx   exact hx";
+    }
+    {
+      full_name = "groupCohomology.dOne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 114;
+      code_preview = "@[simps] def dOne : (G → A) →ₗ[k] G × G → A where   toFun f g := A.ρ g.1 (f g.2) - f (g.1 * g.2) + f g.1   map_add' x y := funext fun g => by dsimp; rw [map_add, add_add_add_comm, add_sub_add_comm]   map_smul' r x := funext fun g => by dsimp; rw [map_smul, smul_add, smul_sub]";
+    }
+    {
+      full_name = "groupCohomology.dTwo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 123;
+      code_preview = "@[simps] def dTwo : (G × G → A) →ₗ[k] G × G × G → A where   toFun f g :=     A.ρ g.1 (f (g.2.1, g.2.2)) - f (g.1 * g.2.1, g.2.2) + f (g.1, g.2.1 * g.2.2) - f (g.1, g.2.1)   map_add' x y :=     funext fun g => by       dsimp       rw [map_add, add_sub_add_comm (A.ρ _ _), add_sub_assoc, add_sub_add_co";
+    }
+    {
+      full_name = "groupCohomology.dZero_comp_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 137;
+      code_preview = "theorem dZero_comp_eq : dZero A ∘ₗ (zeroCochainsLequiv A) =     oneCochainsLequiv A ∘ₗ ((inhomogeneousCochains A).d 0 1).hom";
+    }
+    {
+      full_name = "groupCohomology.dOne_comp_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 158;
+      code_preview = "theorem dOne_comp_eq : dOne A ∘ₗ oneCochainsLequiv A =     twoCochainsLequiv A ∘ₗ ((inhomogeneousCochains A).d 1 2).hom";
+    }
+    {
+      full_name = "groupCohomology.dTwo_comp_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 180;
+      code_preview = "theorem dTwo_comp_eq :     dTwo A ∘ₗ twoCochainsLequiv A =       threeCochainsLequiv A ∘ₗ ((inhomogeneousCochains A).d 2 3).hom";
+    }
+    {
+      full_name = "groupCohomology.dOne_comp_dZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 204;
+      code_preview = "theorem dOne_comp_dZero : dOne A ∘ₗ dZero A = 0";
+    }
+    {
+      full_name = "groupCohomology.dTwo_comp_dOne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 210;
+      code_preview = "theorem dTwo_comp_dOne : dTwo A ∘ₗ dOne A = 0";
+    }
+    {
+      full_name = "groupCohomology.shortComplexH0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 221;
+      code_preview = "def shortComplexH0 : ShortComplex (ModuleCat k) :=   moduleCatMk _ _ (dZero_comp_subtype A)";
+    }
+    {
+      full_name = "groupCohomology.shortComplexH1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 225;
+      code_preview = "def shortComplexH1 : ShortComplex (ModuleCat k) :=   moduleCatMk (dZero A) (dOne A) (dOne_comp_dZero A)";
+    }
+    {
+      full_name = "groupCohomology.shortComplexH2";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 229;
+      code_preview = "def shortComplexH2 : ShortComplex (ModuleCat k) :=   moduleCatMk (dOne A) (dTwo A) (dTwo_comp_dOne A)";
+    }
+    {
+      full_name = "groupCohomology.oneCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 237;
+      code_preview = "def oneCocycles : Submodule k (G → A) := LinearMap.ker (dOne A)";
+    }
+    {
+      full_name = "groupCohomology.twoCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 241;
+      code_preview = "def twoCocycles : Submodule k (G × G → A) := LinearMap.ker (dTwo A)";
+    }
+    {
+      full_name = "groupCohomology.oneCocycles.coe_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 250;
+      code_preview = "@[simp] theorem oneCocycles.coe_mk (f : G → A) (hf) : ((⟨f, hf⟩ : oneCocycles A) : G → A) = f";
+    }
+    {
+      full_name = "groupCohomology.oneCocycles.val_eq_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 253;
+      code_preview = "@[simp] theorem oneCocycles.val_eq_coe (f : oneCocycles A) : f.1 = f";
+    }
+    {
+      full_name = "groupCohomology.oneCocycles_ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 256;
+      code_preview = "@[ext] theorem oneCocycles_ext {f₁ f₂ : oneCocycles A} (h : ∀ g : G, f₁ g = f₂ g) : f₁ = f₂";
+    }
+    {
+      full_name = "groupCohomology.mem_oneCocycles_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 260;
+      code_preview = "theorem mem_oneCocycles_def (f : G → A) :     f ∈ oneCocycles A ↔ ∀ g h : G, A.ρ g (f h) - f (g * h) + f g = 0";
+    }
+    {
+      full_name = "groupCohomology.mem_oneCocycles_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 266;
+      code_preview = "theorem mem_oneCocycles_iff (f : G → A) :     f ∈ oneCocycles A ↔ ∀ g h : G, f (g * h) = A.ρ g (f h) + f g";
+    }
+    {
+      full_name = "groupCohomology.oneCocycles_map_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 270;
+      code_preview = "@[simp] theorem oneCocycles_map_one (f : oneCocycles A) : f 1 = 0";
+    }
+    {
+      full_name = "groupCohomology.oneCocycles_map_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 274;
+      code_preview = "@[simp] theorem oneCocycles_map_inv (f : oneCocycles A) (g : G) :     A.ρ g (f g⁻¹) = - f g";
+    }
+    {
+      full_name = "groupCohomology.dZero_apply_mem_oneCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 279;
+      code_preview = "theorem dZero_apply_mem_oneCocycles (x : A) :     dZero A x ∈ oneCocycles A";
+    }
+    {
+      full_name = "groupCohomology.oneCocycles_map_mul_of_isTrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 283;
+      code_preview = "theorem oneCocycles_map_mul_of_isTrivial [A.IsTrivial] (f : oneCocycles A) (g h : G) :     f (g * h) = f g + f h";
+    }
+    {
+      full_name = "groupCohomology.mem_oneCocycles_of_addMonoidHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 287;
+      code_preview = "theorem mem_oneCocycles_of_addMonoidHom [A.IsTrivial] (f : Additive G →+ A) :     f ∘ Additive.ofMul ∈ oneCocycles A";
+    }
+    {
+      full_name = "groupCohomology.oneCocyclesLequivOfIsTrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 295;
+      code_preview = "@[simps] def oneCocyclesLequivOfIsTrivial [hA : A.IsTrivial] :     oneCocycles A ≃ₗ[k] Additive G →+ A where   toFun f :=     { toFun := f ∘ Additive.toMul       map_zero' := oneCocycles_map_one f       map_add' := oneCocycles_map_mul_of_isTrivial f }   map_add' _ _ := rfl   map_smul' _ _ := rfl   i";
+    }
+    {
+      full_name = "groupCohomology.twoCocycles.coe_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 313;
+      code_preview = "@[simp] theorem twoCocycles.coe_mk (f : G × G → A) (hf) : ((⟨f, hf⟩ : twoCocycles A) : G × G → A) = f";
+    }
+    {
+      full_name = "groupCohomology.twoCocycles.val_eq_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 316;
+      code_preview = "@[simp] theorem twoCocycles.val_eq_coe (f : twoCocycles A) : f.1 = f";
+    }
+    {
+      full_name = "groupCohomology.twoCocycles_ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 319;
+      code_preview = "@[ext] theorem twoCocycles_ext {f₁ f₂ : twoCocycles A} (h : ∀ g h : G, f₁ (g, h) = f₂ (g, h)) : f₁ = f₂";
+    }
+    {
+      full_name = "groupCohomology.mem_twoCocycles_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 323;
+      code_preview = "theorem mem_twoCocycles_def (f : G × G → A) :     f ∈ twoCocycles A ↔ ∀ g h j : G,       A.ρ g (f (h, j)) - f (g * h, j) + f (g, h * j) - f (g, h) = 0";
+    }
+    {
+      full_name = "groupCohomology.mem_twoCocycles_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 330;
+      code_preview = "theorem mem_twoCocycles_iff (f : G × G → A) :     f ∈ twoCocycles A ↔ ∀ g h j : G,       f (g * h, j) + f (g, h) =         A.ρ g (f (h, j)) + f (g, h * j)";
+    }
+    {
+      full_name = "groupCohomology.twoCocycles_map_one_fst";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 337;
+      code_preview = "theorem twoCocycles_map_one_fst (f : twoCocycles A) (g : G) :     f (1, g) = f (1, 1)";
+    }
+    {
+      full_name = "groupCohomology.twoCocycles_map_one_snd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 342;
+      code_preview = "theorem twoCocycles_map_one_snd (f : twoCocycles A) (g : G) :     f (g, 1) = A.ρ g (f (1, 1))";
+    }
+    {
+      full_name = "groupCohomology.twoCocycles_ρ_map_inv_sub_map_inv";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 347;
+      code_preview = "lemma twoCocycles_ρ_map_inv_sub_map_inv (f : twoCocycles A) (g : G) :     A.ρ g (f (g⁻¹, g)) - f (g, g⁻¹)       = f (1, 1) - f (g, 1) := by   have := (mem_twoCocycles_iff f).1 f.2 g g⁻¹ g   simp only [mul_inv_cancel, inv_mul_cancel, twoCocycles_map_one_fst _ g]     at this   exact sub_eq_sub_iff_add";
+    }
+    {
+      full_name = "groupCohomology.dOne_apply_mem_twoCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 355;
+      code_preview = "theorem dOne_apply_mem_twoCocycles (x : G → A) :     dOne A x ∈ twoCocycles A";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundaries";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 363;
+      code_preview = "def oneCoboundaries : Submodule k (G → A) :=   LinearMap.range (dZero A)";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundaries";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 368;
+      code_preview = "def twoCoboundaries : Submodule k (G × G → A) :=   LinearMap.range (dOne A)";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundaries.coe_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 377;
+      code_preview = "@[simp] theorem oneCoboundaries.coe_mk (f : G → A) (hf) :     ((⟨f, hf⟩ : oneCoboundaries A) : G → A) = f";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundaries.val_eq_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 381;
+      code_preview = "@[simp] theorem oneCoboundaries.val_eq_coe (f : oneCoboundaries A) : f.1 = f";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundaries_ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 384;
+      code_preview = "@[ext] theorem oneCoboundaries_ext {f₁ f₂ : oneCoboundaries A} (h : ∀ g : G, f₁ g = f₂ g) : f₁ = f₂";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundaries_le_oneCocycles";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 389;
+      code_preview = "lemma oneCoboundaries_le_oneCocycles : oneCoboundaries A ≤ oneCocycles A := by   rintro _ ⟨x, rfl⟩   exact dZero_apply_mem_oneCocycles x";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundariesToOneCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 394;
+      code_preview = "abbrev oneCoboundariesToOneCocycles : oneCoboundaries A →ₗ[k] oneCocycles A :=   Submodule.inclusion (oneCoboundaries_le_oneCocycles A)";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundariesToOneCocycles_apply";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 398;
+      code_preview = "@[simp] lemma oneCoboundariesToOneCocycles_apply (x : oneCoboundaries A) :     oneCoboundariesToOneCocycles A x = x.1 := rfl";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundaries_eq_bot_of_isTrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 402;
+      code_preview = "theorem oneCoboundaries_eq_bot_of_isTrivial (A : Rep k G) [A.IsTrivial] :     oneCoboundaries A = ⊥";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundaries.coe_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 409;
+      code_preview = "@[simp] theorem twoCoboundaries.coe_mk (f : G × G → A) (hf) :     ((⟨f, hf⟩ : twoCoboundaries A) : G × G → A) = f";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundaries.val_eq_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 413;
+      code_preview = "@[simp] theorem twoCoboundaries.val_eq_coe (f : twoCoboundaries A) : f.1 = f";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundaries_ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 416;
+      code_preview = "@[ext] theorem twoCoboundaries_ext {f₁ f₂ : twoCoboundaries A} (h : ∀ g h : G, f₁ (g, h) = f₂ (g, h)) :     f₁ = f₂";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundaries_le_twoCocycles";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 422;
+      code_preview = "lemma twoCoboundaries_le_twoCocycles : twoCoboundaries A ≤ twoCocycles A := by   rintro _ ⟨x, rfl⟩   exact dOne_apply_mem_twoCocycles x";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundariesToTwoCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 427;
+      code_preview = "abbrev twoCoboundariesToTwoCocycles : twoCoboundaries A →ₗ[k] twoCocycles A :=   Submodule.inclusion (twoCoboundaries_le_twoCocycles A)";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundariesToTwoCocycles_apply";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 431;
+      code_preview = "@[simp] lemma twoCoboundariesToTwoCocycles_apply (x : twoCoboundaries A) :     twoCoboundariesToTwoCocycles A x = x.1 := rfl";
+    }
+    {
+      full_name = "groupCohomology.IsOneCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 443;
+      code_preview = "def IsOneCocycle (f : G → A) : Prop := ∀ g h : G, f (g * h) = g • f h + f g";
+    }
+    {
+      full_name = "groupCohomology.IsTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 447;
+      code_preview = "def IsTwoCocycle (f : G × G → A) : Prop :=   ∀ g h j : G, f (g * h, j) + f (g, h) = g • (f (h, j)) + f (g, h * j)";
+    }
+    {
+      full_name = "groupCohomology.map_one_of_isOneCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 458;
+      code_preview = "theorem map_one_of_isOneCocycle {f : G → A} (hf : IsOneCocycle f) :     f 1 = 0";
+    }
+    {
+      full_name = "groupCohomology.map_one_fst_of_isTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 462;
+      code_preview = "theorem map_one_fst_of_isTwoCocycle {f : G × G → A} (hf : IsTwoCocycle f) (g : G) :     f (1, g) = f (1, 1)";
+    }
+    {
+      full_name = "groupCohomology.map_one_snd_of_isTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 466;
+      code_preview = "theorem map_one_snd_of_isTwoCocycle {f : G × G → A} (hf : IsTwoCocycle f) (g : G) :     f (g, 1) = g • f (1, 1)";
+    }
+    {
+      full_name = "groupCohomology.map_inv_of_isOneCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 476;
+      code_preview = "@[scoped simp] theorem map_inv_of_isOneCocycle {f : G → A} (hf : IsOneCocycle f) (g : G) :     g • f g⁻¹ = - f g";
+    }
+    {
+      full_name = "groupCohomology.smul_map_inv_sub_map_inv_of_isTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 480;
+      code_preview = "theorem smul_map_inv_sub_map_inv_of_isTwoCocycle {f : G × G → A} (hf : IsTwoCocycle f) (g : G) :     g • f (g⁻¹, g) - f (g, g⁻¹) = f (1, 1) - f (g, 1)";
+    }
+    {
+      full_name = "groupCohomology.IsOneCoboundary";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 494;
+      code_preview = "def IsOneCoboundary (f : G → A) : Prop := ∃ x : A, ∀ g : G, g • x - x = f g";
+    }
+    {
+      full_name = "groupCohomology.IsTwoCoboundary";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 498;
+      code_preview = "def IsTwoCoboundary (f : G × G → A) : Prop :=   ∃ x : G → A, ∀ g h : G, g • x h - x (g * h) + x g = f (g, h)";
+    }
+    {
+      full_name = "groupCohomology.oneCocyclesOfIsOneCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 510;
+      code_preview = "@[simps] def oneCocyclesOfIsOneCocycle {f : G → A} (hf : IsOneCocycle f) :     oneCocycles (Rep.ofDistribMulAction k G A) :=   ⟨f, (mem_oneCocycles_iff (A := Rep.ofDistribMulAction k G A) f).2 hf⟩";
+    }
+    {
+      full_name = "groupCohomology.isOneCocycle_of_mem_oneCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 518;
+      code_preview = "theorem isOneCocycle_of_mem_oneCocycles     (f : G → A) (hf : f ∈ oneCocycles (Rep.ofDistribMulAction k G A)) :     IsOneCocycle f";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundariesOfIsOneCoboundary";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 523;
+      code_preview = "@[simps] def oneCoboundariesOfIsOneCoboundary {f : G → A} (hf : IsOneCoboundary f) :     oneCoboundaries (Rep.ofDistribMulAction k G A) :=   ⟨f, hf.choose, funext hf.choose_spec⟩";
+    }
+    {
+      full_name = "groupCohomology.isOneCoboundary_of_mem_oneCoboundaries";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 531;
+      code_preview = "theorem isOneCoboundary_of_mem_oneCoboundaries     (f : G → A) (hf : f ∈ oneCoboundaries (Rep.ofDistribMulAction k G A)) :     IsOneCoboundary f";
+    }
+    {
+      full_name = "groupCohomology.twoCocyclesOfIsTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 537;
+      code_preview = "@[simps] def twoCocyclesOfIsTwoCocycle {f : G × G → A} (hf : IsTwoCocycle f) :     twoCocycles (Rep.ofDistribMulAction k G A) :=   ⟨f, (mem_twoCocycles_iff (A := Rep.ofDistribMulAction k G A) f).2 hf⟩";
+    }
+    {
+      full_name = "groupCohomology.isTwoCocycle_of_mem_twoCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 545;
+      code_preview = "theorem isTwoCocycle_of_mem_twoCocycles     (f : G × G → A) (hf : f ∈ twoCocycles (Rep.ofDistribMulAction k G A)) :     IsTwoCocycle f";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundariesOfIsTwoCoboundary";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 549;
+      code_preview = "@[simps] def twoCoboundariesOfIsTwoCoboundary {f : G × G → A} (hf : IsTwoCoboundary f) :     twoCoboundaries (Rep.ofDistribMulAction k G A) :=   ⟨f, hf.choose,funext fun g ↦ hf.choose_spec g.1 g.2⟩";
+    }
+    {
+      full_name = "groupCohomology.isTwoCoboundary_of_mem_twoCoboundaries";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 557;
+      code_preview = "theorem isTwoCoboundary_of_mem_twoCoboundaries     (f : G × G → A) (hf : f ∈ twoCoboundaries (Rep.ofDistribMulAction k G A)) :     IsTwoCoboundary f";
+    }
+    {
+      full_name = "groupCohomology.IsMulOneCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 575;
+      code_preview = "def IsMulOneCocycle (f : G → M) : Prop := ∀ g h : G, f (g * h) = g • f h * f g";
+    }
+    {
+      full_name = "groupCohomology.IsMulTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 579;
+      code_preview = "def IsMulTwoCocycle (f : G × G → M) : Prop :=   ∀ g h j : G, f (g * h, j) * f (g, h) = g • (f (h, j)) * f (g, h * j)";
+    }
+    {
+      full_name = "groupCohomology.map_one_of_isMulOneCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 590;
+      code_preview = "theorem map_one_of_isMulOneCocycle {f : G → M} (hf : IsMulOneCocycle f) :     f 1 = 1";
+    }
+    {
+      full_name = "groupCohomology.map_one_fst_of_isMulTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 594;
+      code_preview = "theorem map_one_fst_of_isMulTwoCocycle {f : G × G → M} (hf : IsMulTwoCocycle f) (g : G) :     f (1, g) = f (1, 1)";
+    }
+    {
+      full_name = "groupCohomology.map_one_snd_of_isMulTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 598;
+      code_preview = "theorem map_one_snd_of_isMulTwoCocycle {f : G × G → M} (hf : IsMulTwoCocycle f) (g : G) :     f (g, 1) = g • f (1, 1)";
+    }
+    {
+      full_name = "groupCohomology.map_inv_of_isMulOneCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 608;
+      code_preview = "@[scoped simp] theorem map_inv_of_isMulOneCocycle {f : G → M} (hf : IsMulOneCocycle f) (g : G) :     g • f g⁻¹ = (f g)⁻¹";
+    }
+    {
+      full_name = "groupCohomology.smul_map_inv_div_map_inv_of_isMulTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 612;
+      code_preview = "theorem smul_map_inv_div_map_inv_of_isMulTwoCocycle     {f : G × G → M} (hf : IsMulTwoCocycle f) (g : G) :     g • f (g⁻¹, g) / f (g, g⁻¹) = f (1, 1) / f (g, 1)";
+    }
+    {
+      full_name = "groupCohomology.IsMulOneCoboundary";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 627;
+      code_preview = "def IsMulOneCoboundary (f : G → M) : Prop := ∃ x : M, ∀ g : G, g • x / x = f g";
+    }
+    {
+      full_name = "groupCohomology.IsMulTwoCoboundary";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 631;
+      code_preview = "def IsMulTwoCoboundary (f : G × G → M) : Prop :=   ∃ x : G → M, ∀ g h : G, g • x h / x (g * h) * x g = f (g, h)";
+    }
+    {
+      full_name = "groupCohomology.oneCocyclesOfIsMulOneCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 642;
+      code_preview = "@[simps] def oneCocyclesOfIsMulOneCocycle {f : G → M} (hf : IsMulOneCocycle f) :     oneCocycles (Rep.ofMulDistribMulAction G M) :=   ⟨Additive.ofMul ∘ f, (mem_oneCocycles_iff (A := Rep.ofMulDistribMulAction G M) f).2 hf⟩";
+    }
+    {
+      full_name = "groupCohomology.isMulOneCocycle_of_mem_oneCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 650;
+      code_preview = "theorem isMulOneCocycle_of_mem_oneCocycles     (f : G → M) (hf : f ∈ oneCocycles (Rep.ofMulDistribMulAction G M)) :     IsMulOneCocycle (Additive.toMul ∘ f)";
+    }
+    {
+      full_name = "groupCohomology.oneCoboundariesOfIsMulOneCoboundary";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 655;
+      code_preview = "@[simps] def oneCoboundariesOfIsMulOneCoboundary {f : G → M} (hf : IsMulOneCoboundary f) :     oneCoboundaries (Rep.ofMulDistribMulAction G M) :=   ⟨f, hf.choose, funext hf.choose_spec⟩";
+    }
+    {
+      full_name = "groupCohomology.isMulOneCoboundary_of_mem_oneCoboundaries";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 663;
+      code_preview = "theorem isMulOneCoboundary_of_mem_oneCoboundaries     (f : G → M) (hf : f ∈ oneCoboundaries (Rep.ofMulDistribMulAction G M)) :     IsMulOneCoboundary (M := M) (Additive.ofMul ∘ f)";
+    }
+    {
+      full_name = "groupCohomology.twoCocyclesOfIsMulTwoCocycle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 669;
+      code_preview = "@[simps] def twoCocyclesOfIsMulTwoCocycle {f : G × G → M} (hf : IsMulTwoCocycle f) :     twoCocycles (Rep.ofMulDistribMulAction G M) :=   ⟨Additive.ofMul ∘ f, (mem_twoCocycles_iff (A := Rep.ofMulDistribMulAction G M) f).2 hf⟩";
+    }
+    {
+      full_name = "groupCohomology.isMulTwoCocycle_of_mem_twoCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 677;
+      code_preview = "theorem isMulTwoCocycle_of_mem_twoCocycles     (f : G × G → M) (hf : f ∈ twoCocycles (Rep.ofMulDistribMulAction G M)) :     IsMulTwoCocycle (Additive.toMul ∘ f)";
+    }
+    {
+      full_name = "groupCohomology.twoCoboundariesOfIsMulTwoCoboundary";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 682;
+      code_preview = "def twoCoboundariesOfIsMulTwoCoboundary {f : G × G → M} (hf : IsMulTwoCoboundary f) :     twoCoboundaries (Rep.ofMulDistribMulAction G M) :=   ⟨f, hf.choose, funext fun g ↦ hf.choose_spec g.1 g.2⟩";
+    }
+    {
+      full_name = "groupCohomology.isMulTwoCoboundary_of_mem_twoCoboundaries";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 689;
+      code_preview = "theorem isMulTwoCoboundary_of_mem_twoCoboundaries     (f : G × G → M) (hf : f ∈ twoCoboundaries (Rep.ofMulDistribMulAction G M)) :     IsMulTwoCoboundary (M := M) (Additive.toMul ∘ f)";
+    }
+    {
+      full_name = "groupCohomology.H0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 699;
+      code_preview = "abbrev H0 := ModuleCat.of k A.ρ.invariants";
+    }
+    {
+      full_name = "groupCohomology.H1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 703;
+      code_preview = "abbrev H1 := (shortComplexH1 A).moduleCatHomology";
+    }
+    {
+      full_name = "groupCohomology.H1π";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 708;
+      code_preview = "abbrev H1π : ModuleCat.of k (oneCocycles A) ⟶ H1 A := (shortComplexH1 A).moduleCatHomologyπ";
+    }
+    {
+      full_name = "groupCohomology.H1π_eq_zero_iff";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 712;
+      code_preview = "lemma H1π_eq_zero_iff (x : oneCocycles A) : H1π A x = 0 ↔ ⇑x ∈ oneCoboundaries A := by   show (LinearMap.range ((dZero A).codRestrict (oneCocycles A) _)).mkQ _ = 0 ↔ _   simp [LinearMap.range_codRestrict, oneCoboundaries]";
+    }
+    {
+      full_name = "groupCohomology.H2";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 716;
+      code_preview = "abbrev H2 := (shortComplexH2 A).moduleCatHomology";
+    }
+    {
+      full_name = "groupCohomology.H2π";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 721;
+      code_preview = "abbrev H2π : ModuleCat.of k (twoCocycles A) ⟶ H2 A := (shortComplexH2 A).moduleCatHomologyπ";
+    }
+    {
+      full_name = "groupCohomology.H2π_eq_zero_iff";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 725;
+      code_preview = "lemma H2π_eq_zero_iff (x : twoCocycles A) : H2π A x = 0 ↔ ⇑x ∈ twoCoboundaries A := by   show (LinearMap.range ((dOne A).codRestrict (twoCocycles A) _)).mkQ _ = 0 ↔ _   simp [LinearMap.range_codRestrict, twoCoboundaries]";
+    }
+    {
+      full_name = "groupCohomology.H0LequivOfIsTrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 733;
+      code_preview = "def H0LequivOfIsTrivial [A.IsTrivial] :     H0 A ≃ₗ[k] A := LinearEquiv.ofTop _ (invariants_eq_top A.ρ)";
+    }
+    {
+      full_name = "groupCohomology.H0LequivOfIsTrivial_eq_subtype";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 737;
+      code_preview = "@[simp] theorem H0LequivOfIsTrivial_eq_subtype [A.IsTrivial] :     H0LequivOfIsTrivial A = A.ρ.invariants.subtype";
+    }
+    {
+      full_name = "groupCohomology.H0LequivOfIsTrivial_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 740;
+      code_preview = "theorem H0LequivOfIsTrivial_apply [A.IsTrivial] (x : H0 A) :     H0LequivOfIsTrivial A x = x";
+    }
+    {
+      full_name = "groupCohomology.H0LequivOfIsTrivial_symm_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 743;
+      code_preview = "@[simp] theorem H0LequivOfIsTrivial_symm_apply [A.IsTrivial] (x : A) :     (H0LequivOfIsTrivial A).symm x = x";
+    }
+    {
+      full_name = "groupCohomology.H1LequivOfIsTrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 750;
+      code_preview = "def H1LequivOfIsTrivial [A.IsTrivial] :     H1 A ≃ₗ[k] Additive G →+ A :=   (Submodule.quotEquivOfEqBot _     (by simp [shortComplexH1, ShortComplex.moduleCatToCycles, Submodule.eq_bot_iff])).trans   (oneCocyclesLequivOfIsTrivial A)";
+    }
+    {
+      full_name = "groupCohomology.H1LequivOfIsTrivial_comp_H1π";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 758;
+      code_preview = "theorem H1LequivOfIsTrivial_comp_H1π [A.IsTrivial] :     (H1LequivOfIsTrivial A).comp (H1π A).hom = oneCocyclesLequivOfIsTrivial A";
+    }
+    {
+      full_name = "groupCohomology.H1LequivOfIsTrivial_H1_π_apply_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 762;
+      code_preview = "@[simp] theorem H1LequivOfIsTrivial_H1_π_apply_apply     [A.IsTrivial] (f : oneCocycles A) (x : Additive G) :     H1LequivOfIsTrivial A (Submodule.Quotient.mk f) x = f x.toMul";
+    }
+    {
+      full_name = "groupCohomology.H1LequivOfIsTrivial_symm_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 766;
+      code_preview = "@[simp] theorem H1LequivOfIsTrivial_symm_apply [A.IsTrivial] (f : Additive G →+ A) :     (H1LequivOfIsTrivial A).symm f = H1π A ((oneCocyclesLequivOfIsTrivial A).symm f)";
+    }
+    {
+      full_name = "groupCohomology.shortComplexH0_exact";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 782;
+      code_preview = "lemma shortComplexH0_exact : (shortComplexH0 A).Exact := by   rw [ShortComplex.moduleCat_exact_iff]   intro (x : A) (hx : dZero _ x = 0)   refine ⟨⟨x, fun g => ?_⟩, rfl⟩   rw [← sub_eq_zero]   exact congr_fun hx g";
+    }
+    {
+      full_name = "groupCohomology.dZeroArrowIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 789;
+      code_preview = "@[simps! hom_left hom_right inv_left inv_right] def dZeroArrowIso : Arrow.mk ((inhomogeneousCochains A).d 0 1) ≅     Arrow.mk (ModuleCat.ofHom (dZero A)) :=   Arrow.isoMk (zeroCochainsLequiv A).toModuleIso     (oneCochainsLequiv A).toModuleIso (ModuleCat.hom_ext (dZero_comp_eq A))";
+    }
+    {
+      full_name = "groupCohomology.isoZeroCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 797;
+      code_preview = "def isoZeroCocycles : cocycles A 0 ≅ H0 A :=   KernelFork.mapIsoOfIsLimit     ((inhomogeneousCochains A).cyclesIsKernel 0 1 (by simp)) (shortComplexH0_exact A).fIsKernel       (dZeroArrowIso A)";
+    }
+    {
+      full_name = "groupCohomology.isoZeroCocycles_hom_comp_subtype";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 804;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma isoZeroCocycles_hom_comp_subtype :     (isoZeroCocycles A).hom ≫ ModuleCat.ofHom A.ρ.invariants.subtype =       iCocycles A 0 ≫ (zeroCochainsLequiv A).toModuleIso.hom := by   dsimp [isoZeroCocycles]   apply KernelFork.mapOfIsLimit_ι";
+    }
+    {
+      full_name = "groupCohomology.isoZeroCocycles_inv_comp_iCocycles";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 811;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma isoZeroCocycles_inv_comp_iCocycles :     (isoZeroCocycles A).inv ≫ iCocycles A 0 =         ModuleCat.ofHom A.ρ.invariants.subtype ≫ (zeroCochainsLequiv A).toModuleIso.inv := by   rw [Iso.inv_comp_eq, ← Category.assoc, Iso.eq_comp_inv, isoZe";
+    }
+    {
+      full_name = "groupCohomology.isoH0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 817;
+      code_preview = "def isoH0 : groupCohomology A 0 ≅ H0 A :=   (CochainComplex.isoHomologyπ₀ _).symm ≪≫ isoZeroCocycles A";
+    }
+    {
+      full_name = "groupCohomology.groupCohomologyπ_comp_isoH0_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 822;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma groupCohomologyπ_comp_isoH0_hom  :     groupCohomologyπ A 0 ≫ (isoH0 A).hom = (isoZeroCocycles A).hom := by   simp [isoH0]";
+    }
+    {
+      full_name = "groupCohomology.shortComplexH1Iso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 831;
+      code_preview = "@[simps! hom inv] def shortComplexH1Iso : (inhomogeneousCochains A).sc' 0 1 2 ≅ shortComplexH1 A :=     isoMk (zeroCochainsLequiv A).toModuleIso (oneCochainsLequiv A).toModuleIso       (twoCochainsLequiv A).toModuleIso         (ModuleCat.hom_ext (dZero_comp_eq A))         (ModuleCat.hom_ext (dOne_co";
+    }
+    {
+      full_name = "groupCohomology.isoOneCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 840;
+      code_preview = "def isoOneCocycles : cocycles A 1 ≅ ModuleCat.of k (oneCocycles A) :=   (inhomogeneousCochains A).cyclesIsoSc' _ _ _ (by simp) (by simp) ≪≫     cyclesMapIso (shortComplexH1Iso A) ≪≫ (shortComplexH1 A).moduleCatCyclesIso";
+    }
+    {
+      full_name = "groupCohomology.isoOneCocycles_hom_comp_subtype";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 846;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma isoOneCocycles_hom_comp_subtype :     (isoOneCocycles A).hom ≫ ModuleCat.ofHom (oneCocycles A).subtype =       iCocycles A 1 ≫ (oneCochainsLequiv A).toModuleIso.hom := by   have := (shortComplexH1 A).moduleCatCyclesIso_hom_subtype   simp_al";
+    }
+    {
+      full_name = "groupCohomology.toCocycles_comp_isoOneCocycles_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 853;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma toCocycles_comp_isoOneCocycles_hom :     toCocycles A 0 1 ≫ (isoOneCocycles A).hom =       (zeroCochainsLequiv A).toModuleIso.hom ≫         ModuleCat.ofHom (shortComplexH1 A).moduleCatToCycles := by   simp [isoOneCocycles]";
+    }
+    {
+      full_name = "groupCohomology.isoH1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 860;
+      code_preview = "def isoH1 : groupCohomology A 1 ≅ H1 A :=   (inhomogeneousCochains A).homologyIsoSc' _ _ _ (by simp) (by simp) ≪≫     homologyMapIso (shortComplexH1Iso A) ≪≫ (shortComplexH1 A).moduleCatHomologyIso";
+    }
+    {
+      full_name = "groupCohomology.groupCohomologyπ_comp_isoH1_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 866;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma groupCohomologyπ_comp_isoH1_hom  :     groupCohomologyπ A 1 ≫ (isoH1 A).hom = (isoOneCocycles A).hom ≫ H1π A := by   simp [isoH1, isoOneCocycles]";
+    }
+    {
+      full_name = "groupCohomology.shortComplexH2Iso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 875;
+      code_preview = "@[simps! hom inv] def shortComplexH2Iso :     (inhomogeneousCochains A).sc' 1 2 3 ≅ shortComplexH2 A :=   isoMk (oneCochainsLequiv A).toModuleIso (twoCochainsLequiv A).toModuleIso     (threeCochainsLequiv A).toModuleIso       (ModuleCat.hom_ext (dOne_comp_eq A))       (ModuleCat.hom_ext (dTwo_comp_e";
+    }
+    {
+      full_name = "groupCohomology.isoTwoCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 885;
+      code_preview = "def isoTwoCocycles : cocycles A 2 ≅ ModuleCat.of k (twoCocycles A) :=   (inhomogeneousCochains A).cyclesIsoSc' _ _ _ (by simp) (by simp) ≪≫     cyclesMapIso (shortComplexH2Iso A) ≪≫ (shortComplexH2 A).moduleCatCyclesIso";
+    }
+    {
+      full_name = "groupCohomology.isoTwoCocycles_hom_comp_subtype";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 891;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma isoTwoCocycles_hom_comp_subtype :     (isoTwoCocycles A).hom ≫ ModuleCat.ofHom (twoCocycles A).subtype =       iCocycles A 2 ≫ (twoCochainsLequiv A).toModuleIso.hom := by   have := (shortComplexH2 A).moduleCatCyclesIso_hom_subtype   simp_al";
+    }
+    {
+      full_name = "groupCohomology.toCocycles_comp_isoTwoCocycles_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 898;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma toCocycles_comp_isoTwoCocycles_hom :     toCocycles A 1 2 ≫ (isoTwoCocycles A).hom =       (oneCochainsLequiv A).toModuleIso.hom ≫         ModuleCat.ofHom (shortComplexH2 A).moduleCatToCycles := by   simp [isoTwoCocycles]";
+    }
+    {
+      full_name = "groupCohomology.isoH2";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 905;
+      code_preview = "def isoH2 : groupCohomology A 2 ≅ H2 A :=   (inhomogeneousCochains A).homologyIsoSc' _ _ _ (by simp) (by simp) ≪≫     homologyMapIso (shortComplexH2Iso A) ≪≫ (shortComplexH2 A).moduleCatHomologyIso";
+    }
+    {
+      full_name = "groupCohomology.groupCohomologyπ_comp_isoH2_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/LowDegree.lean";
+      start_line = 911;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma groupCohomologyπ_comp_isoH2_hom  :     groupCohomologyπ A 2 ≫ (isoH2 A).hom = (isoTwoCocycles A).hom ≫ H2π A := by   simp [isoH2, isoTwoCocycles]";
+    }
+    {
+      full_name = "groupCohomology.Hilbert90.aux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Hilbert90.lean";
+      start_line = 55;
+      code_preview = "noncomputable def aux (f : (L ≃ₐ[K] L) → Lˣ) : L → L :=   Finsupp.linearCombination L (fun φ : L ≃ₐ[K] L ↦ (φ : L → L))     (Finsupp.equivFunOnFinite.symm (fun φ => (f φ : L)))";
+    }
+    {
+      full_name = "groupCohomology.Hilbert90.aux_ne_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Hilbert90.lean";
+      start_line = 60;
+      code_preview = "theorem aux_ne_zero (f : (L ≃ₐ[K] L) → Lˣ) : aux f ≠ 0";
+    }
+    {
+      full_name = "groupCohomology.isMulOneCoboundary_of_isMulOneCocycle_of_aut_to_units";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Hilbert90.lean";
+      start_line = 76;
+      code_preview = "theorem isMulOneCoboundary_of_isMulOneCocycle_of_aut_to_units     (f : (L ≃ₐ[K] L) → Lˣ) (hf : IsMulOneCocycle f) :     IsMulOneCoboundary f";
+    }
+    {
+      full_name = "groupCohomology.H1ofAutOnUnitsUnique";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Hilbert90.lean";
+      start_line = 100;
+      code_preview = "noncomputable instance H1ofAutOnUnitsUnique : Unique (H1 (Rep.ofAlgebraAutOnUnits K L)) where   default := 0   uniq := fun a => Quotient.inductionOn' a fun x => (H1π_eq_zero_iff _).2 <| by     refine (oneCoboundariesOfIsMulOneCoboundary ?_).2     rcases isMulOneCoboundary_of_isMulOneCocycle_of_aut_t";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 34;
+      code_preview = "@[simps! -isSimp f f_hom] noncomputable def cochainsMap :     inhomogeneousCochains A ⟶ inhomogeneousCochains B where   f i := ModuleCat.ofHom <|     φ.hom.hom.compLeft (Fin i → G) ∘ₗ LinearMap.funLeft k A (fun x : Fin i → G => (f ∘ x))   comm' i j (hij : _ = _) := by     subst hij     ext     funex";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_id";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 47;
+      code_preview = "@[simp] lemma cochainsMap_id :     cochainsMap (MonoidHom.id _) (𝟙 A) = 𝟙 (inhomogeneousCochains A) := by   rfl";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_id_f_eq_compLeft";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 52;
+      code_preview = "@[simp] lemma cochainsMap_id_f_eq_compLeft {A B : Rep k G} (f : A ⟶ B) (i : ℕ) :     (cochainsMap (MonoidHom.id G) f).f i = ModuleCat.ofHom (f.hom.hom.compLeft _) := by   ext   rfl";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_comp";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 58;
+      code_preview = "@[reassoc] lemma cochainsMap_comp {G H K : Type u} [Group G] [Group H] [Group K]     {A : Rep k K} {B : Rep k H} {C : Rep k G} (f : H →* K) (g : G →* H)     (φ : (Action.res _ f).obj A ⟶ B) (ψ : (Action.res _ g).obj B ⟶ C) :     cochainsMap (f.comp g) ((Action.res _ g).map φ ≫ ψ) =       cochainsMap";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_id_comp";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 66;
+      code_preview = "@[reassoc] lemma cochainsMap_id_comp {A B C : Rep k G} (φ : A ⟶ B) (ψ : B ⟶ C) :     cochainsMap (MonoidHom.id G) (φ ≫ ψ) =       cochainsMap (MonoidHom.id G) φ ≫ cochainsMap (MonoidHom.id G) ψ := by   rfl";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_zero";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 72;
+      code_preview = "@[simp] lemma cochainsMap_zero : cochainsMap (A := A) (B := B) f 0 = 0 := by rfl";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_f_map_mono";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 75;
+      code_preview = "lemma cochainsMap_f_map_mono (hf : Function.Surjective f) [Mono φ] (i : ℕ) :     Mono ((cochainsMap f φ).f i) := by   simpa [ModuleCat.mono_iff_injective] using     ((Rep.mono_iff_injective φ).1 inferInstance).comp_left.comp <|     LinearMap.funLeft_injective_of_surjective k A _ hf.comp_left";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_id_f_map_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 81;
+      code_preview = "instance cochainsMap_id_f_map_mono {A B : Rep k G} (φ : A ⟶ B) [Mono φ] (i : ℕ) :     Mono ((cochainsMap (MonoidHom.id G) φ).f i) :=   cochainsMap_f_map_mono (MonoidHom.id G) φ (fun x => ⟨x, rfl⟩) i";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_f_map_epi";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 85;
+      code_preview = "lemma cochainsMap_f_map_epi (hf : Function.Injective f) [Epi φ] (i : ℕ) :     Epi ((cochainsMap f φ).f i) := by   simpa [ModuleCat.epi_iff_surjective] using     ((Rep.epi_iff_surjective φ).1 inferInstance).comp_left.comp <|     LinearMap.funLeft_surjective_of_injective k A _ hf.comp_left";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_id_f_map_epi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 91;
+      code_preview = "instance cochainsMap_id_f_map_epi {A B : Rep k G} (φ : A ⟶ B) [Epi φ] (i : ℕ) :     Epi ((cochainsMap (MonoidHom.id G) φ).f i) :=   cochainsMap_f_map_epi (MonoidHom.id G) φ (fun _ _ h => h) i";
+    }
+    {
+      full_name = "groupCohomology.cocyclesMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 95;
+      code_preview = "noncomputable abbrev cocyclesMap (n : ℕ) :     groupCohomology.cocycles A n ⟶ groupCohomology.cocycles B n :=   HomologicalComplex.cyclesMap (cochainsMap f φ) n";
+    }
+    {
+      full_name = "groupCohomology.cocyclesMap_id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 102;
+      code_preview = "@[reassoc] theorem cocyclesMap_id_comp {A B C : Rep k G} (φ : A ⟶ B) (ψ : B ⟶ C) (n : ℕ) :     cocyclesMap (MonoidHom.id G) (φ ≫ ψ) n =       cocyclesMap (MonoidHom.id G) φ n ≫ cocyclesMap (MonoidHom.id G) ψ n";
+    }
+    {
+      full_name = "groupCohomology.map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 108;
+      code_preview = "noncomputable abbrev map (n : ℕ) :     groupCohomology A n ⟶ groupCohomology B n :=   HomologicalComplex.homologyMap (cochainsMap f φ) n";
+    }
+    {
+      full_name = "groupCohomology.map_id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 115;
+      code_preview = "@[reassoc] theorem map_id_comp {A B C : Rep k G} (φ : A ⟶ B) (ψ : B ⟶ C) (n : ℕ) :     map (MonoidHom.id G) (φ ≫ ψ) n =       map (MonoidHom.id G) φ n ≫ map (MonoidHom.id G) ψ n";
+    }
+    {
+      full_name = "groupCohomology.fOne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 121;
+      code_preview = "abbrev fOne : (H → A) →ₗ[k] (G → B) := φ.hom.hom.compLeft G ∘ₗ LinearMap.funLeft k A f";
+    }
+    {
+      full_name = "groupCohomology.fTwo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 125;
+      code_preview = "abbrev fTwo : (H × H → A) →ₗ[k] (G × G → B) :=   φ.hom.hom.compLeft (G × G) ∘ₗ LinearMap.funLeft k A (Prod.map f f)";
+    }
+    {
+      full_name = "groupCohomology.fThree";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 130;
+      code_preview = "abbrev fThree : (H × H × H → A) →ₗ[k] (G × G × G → B) :=   φ.hom.hom.compLeft (G × G × G) ∘ₗ LinearMap.funLeft k A (Prod.map f (Prod.map f f))";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_f_0_comp_zeroCochainsLequiv";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 136;
+      code_preview = "@[reassoc] lemma cochainsMap_f_0_comp_zeroCochainsLequiv :     (cochainsMap f φ).f 0 ≫ (zeroCochainsLequiv B).toModuleIso.hom =       (zeroCochainsLequiv A).toModuleIso.hom ≫ φ.hom := by   ext x   simp only [cochainsMap_f, Unique.eq_default (f ∘ _)]   rfl";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_f_1_comp_oneCochainsLequiv";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 144;
+      code_preview = "@[reassoc] lemma cochainsMap_f_1_comp_oneCochainsLequiv :     (cochainsMap f φ).f 1 ≫ (oneCochainsLequiv B).toModuleIso.hom =       (oneCochainsLequiv A).toModuleIso.hom ≫ ModuleCat.ofHom (fOne f φ) := by   ext x   simp only [cochainsMap_f, Unique.eq_default (f ∘ _)]   rfl";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_f_2_comp_twoCochainsLequiv";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 152;
+      code_preview = "@[reassoc] lemma cochainsMap_f_2_comp_twoCochainsLequiv :     (cochainsMap f φ).f 2 ≫ (twoCochainsLequiv B).toModuleIso.hom =       (twoCochainsLequiv A).toModuleIso.hom ≫ ModuleCat.ofHom (fTwo f φ) := by   ext x g   show φ.hom (x _) = φ.hom (x _)   rcongr x   fin_cases x <;> rfl";
+    }
+    {
+      full_name = "groupCohomology.cochainsMap_f_3_comp_threeCochainsLequiv";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 161;
+      code_preview = "@[reassoc] lemma cochainsMap_f_3_comp_threeCochainsLequiv :     (cochainsMap f φ).f 3 ≫ (threeCochainsLequiv B).toModuleIso.hom =       (threeCochainsLequiv A).toModuleIso.hom ≫ ModuleCat.ofHom (fThree f φ) := by   ext x g   show φ.hom (x _) = φ.hom (x _)   rcongr x   fin_cases x <;> rfl";
+    }
+    {
+      full_name = "groupCohomology.H0Map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 172;
+      code_preview = "abbrev H0Map : H0 A ⟶ H0 B :=   ModuleCat.ofHom <| LinearMap.codRestrict _ (φ.hom.hom ∘ₗ A.ρ.invariants.subtype)     fun ⟨c, hc⟩ g => by simpa [hc (f g)] using (hom_comm_apply φ g c).symm";
+    }
+    {
+      full_name = "groupCohomology.H0Map_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 178;
+      code_preview = "@[simp] theorem H0Map_id : H0Map (MonoidHom.id _) (𝟙 A) = 𝟙 _";
+    }
+    {
+      full_name = "groupCohomology.H0Map_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 182;
+      code_preview = "@[reassoc] theorem H0Map_comp {G H K : Type u} [Group G] [Group H] [Group K]     {A : Rep k K} {B : Rep k H} {C : Rep k G} (f : H →* K) (g : G →* H)     (φ : (Action.res _ f).obj A ⟶ B) (ψ : (Action.res _ g).obj B ⟶ C) :     H0Map (f.comp g) ((Action.res _ g).map φ ≫ ψ) = H0Map f φ ≫ H0Map g ψ";
+    }
+    {
+      full_name = "groupCohomology.H0Map_id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 189;
+      code_preview = "@[reassoc] theorem H0Map_id_comp {A B C : Rep k G} (φ : A ⟶ B) (ψ : B ⟶ C) :     H0Map (MonoidHom.id G) (φ ≫ ψ) = H0Map (MonoidHom.id G) φ ≫ H0Map (MonoidHom.id G) ψ";
+    }
+    {
+      full_name = "groupCohomology.H0Map_id_eq_invariantsFunctor_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 193;
+      code_preview = "theorem H0Map_id_eq_invariantsFunctor_map {A B : Rep k G} (f : A ⟶ B) :     H0Map (MonoidHom.id G) f = (invariantsFunctor k G).map f";
+    }
+    {
+      full_name = "groupCohomology.mono_H0Map_of_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 197;
+      code_preview = "instance mono_H0Map_of_mono {A B : Rep k G} (f : A ⟶ B) [Mono f] :     Mono (H0Map (MonoidHom.id G) f) :=   (ModuleCat.mono_iff_injective _).2 fun _ _ hxy => Subtype.ext <|     (mono_iff_injective f).1 ‹_› (Subtype.ext_iff.1 hxy)";
+    }
+    {
+      full_name = "groupCohomology.cocyclesMap_comp_isoZeroCocycles_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 202;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] theorem cocyclesMap_comp_isoZeroCocycles_hom :     cocyclesMap f φ 0 ≫ (isoZeroCocycles B).hom = (isoZeroCocycles A).hom ≫ H0Map f φ";
+    }
+    {
+      full_name = "groupCohomology.map_comp_isoH0_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 210;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] theorem map_comp_isoH0_hom :     map f φ 0 ≫ (isoH0 B).hom = (isoH0 A).hom ≫ H0Map f φ";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH1";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 215;
+      code_preview = "@[simps] def mapShortComplexH1 :     shortComplexH1 A ⟶ shortComplexH1 B where   τ₁ := φ.hom   τ₂ := ModuleCat.ofHom (fOne f φ)   τ₃ := ModuleCat.ofHom (fTwo f φ)   comm₁₂ := by     ext x     funext g     simpa [shortComplexH1, dZero, fOne] using (hom_comm_apply φ g x).symm   comm₂₃ := by     ext x ";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH1_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 233;
+      code_preview = "@[simp] theorem mapShortComplexH1_zero :     mapShortComplexH1 (A := A) (B := B) f 0 = 0";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH1_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 238;
+      code_preview = "@[simp] theorem mapShortComplexH1_id :     mapShortComplexH1 (MonoidHom.id _) (𝟙 A) = 𝟙 _";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH1_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 243;
+      code_preview = "@[reassoc] theorem mapShortComplexH1_comp {G H K : Type u} [Group G] [Group H] [Group K]     {A : Rep k K} {B : Rep k H} {C : Rep k G} (f : H →* K) (g : G →* H)     (φ : (Action.res _ f).obj A ⟶ B) (ψ : (Action.res _ g).obj B ⟶ C) :     mapShortComplexH1 (f.comp g) ((Action.res _ g).map φ ≫ ψ) =    ";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH1_id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 250;
+      code_preview = "@[reassoc] theorem mapShortComplexH1_id_comp {A B C : Rep k G} (φ : A ⟶ B) (ψ : B ⟶ C) :     mapShortComplexH1 (MonoidHom.id G) (φ ≫ ψ) =       mapShortComplexH1 (MonoidHom.id G) φ ≫ mapShortComplexH1 (MonoidHom.id G) ψ";
+    }
+    {
+      full_name = "groupCohomology.mapOneCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 255;
+      code_preview = "noncomputable abbrev mapOneCocycles :     ModuleCat.of k (oneCocycles A) ⟶ ModuleCat.of k (oneCocycles B) :=   ShortComplex.cyclesMap' (mapShortComplexH1 f φ) (shortComplexH1 A).moduleCatLeftHomologyData     (shortComplexH1 B).moduleCatLeftHomologyData";
+    }
+    {
+      full_name = "groupCohomology.mapOneCocycles_comp_subtype";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 262;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma mapOneCocycles_comp_subtype :     mapOneCocycles f φ ≫ ModuleCat.ofHom (oneCocycles B).subtype =       ModuleCat.ofHom (oneCocycles A).subtype ≫ ModuleCat.ofHom (fOne f φ) :=   ShortComplex.cyclesMap'_i (mapShortComplexH1 f φ) (moduleCatLef";
+    }
+    {
+      full_name = "groupCohomology.cocyclesMap_comp_isoOneCocycles_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 269;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma cocyclesMap_comp_isoOneCocycles_hom :     cocyclesMap f φ 1 ≫ (isoOneCocycles B).hom = (isoOneCocycles A).hom ≫ mapOneCocycles f φ := by   simp_rw [← cancel_mono (moduleCatLeftHomologyData (shortComplexH1 B)).i, mapOneCocycles,       Catego";
+    }
+    {
+      full_name = "groupCohomology.H1Map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 276;
+      code_preview = "noncomputable abbrev H1Map : H1 A ⟶ H1 B :=   ShortComplex.leftHomologyMap' (mapShortComplexH1 f φ)     (shortComplexH1 A).moduleCatLeftHomologyData (shortComplexH1 B).moduleCatLeftHomologyData";
+    }
+    {
+      full_name = "groupCohomology.H1Map_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 282;
+      code_preview = "@[simp] theorem H1Map_id : H1Map (MonoidHom.id _) (𝟙 A) = 𝟙 _";
+    }
+    {
+      full_name = "groupCohomology.H1Map_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 287;
+      code_preview = "@[reassoc] theorem H1Map_comp {G H K : Type u} [Group G] [Group H] [Group K]     {A : Rep k K} {B : Rep k H} {C : Rep k G} (f : H →* K) (g : G →* H)     (φ : (Action.res _ f).obj A ⟶ B) (ψ : (Action.res _ g).obj B ⟶ C) :     H1Map (f.comp g) ((Action.res _ g).map φ ≫ ψ) = H1Map f φ ≫ H1Map g ψ";
+    }
+    {
+      full_name = "groupCohomology.H1Map_id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 294;
+      code_preview = "@[reassoc] theorem H1Map_id_comp {A B C : Rep k G} (φ : A ⟶ B) (ψ : B ⟶ C) :     H1Map (MonoidHom.id G) (φ ≫ ψ) = H1Map (MonoidHom.id G) φ ≫ H1Map (MonoidHom.id G) ψ";
+    }
+    {
+      full_name = "groupCohomology.H1π_comp_H1Map";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 299;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma H1π_comp_H1Map :     H1π A ≫ H1Map f φ = mapOneCocycles f φ ≫ H1π B :=   leftHomologyπ_naturality' (mapShortComplexH1 f φ) _ _";
+    }
+    {
+      full_name = "groupCohomology.map_comp_isoH1_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 304;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma map_comp_isoH1_hom :     map f φ 1 ≫ (isoH1 B).hom = (isoH1 A).hom ≫ H1Map f φ := by   simp [← cancel_epi (groupCohomologyπ _ _), H1Map, Category.assoc]";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH2";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 309;
+      code_preview = "@[simps] def mapShortComplexH2 :     shortComplexH2 A ⟶ shortComplexH2 B where   τ₁ := ModuleCat.ofHom (fOne f φ)   τ₂ := ModuleCat.ofHom (fTwo f φ)   τ₃ := ModuleCat.ofHom (fThree f φ)   comm₁₂ := by     ext x     funext g     simpa [shortComplexH2, dOne, fOne, fTwo] using (hom_comm_apply φ _ _).sy";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH2_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 328;
+      code_preview = "@[simp] theorem mapShortComplexH2_zero :     mapShortComplexH2 (A := A) (B := B) f 0 = 0";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH2_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 332;
+      code_preview = "@[simp] theorem mapShortComplexH2_id :     mapShortComplexH2 (MonoidHom.id _) (𝟙 A) = 𝟙 _";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH2_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 337;
+      code_preview = "@[reassoc] theorem mapShortComplexH2_comp {G H K : Type u} [Group G] [Group H] [Group K]     {A : Rep k K} {B : Rep k H} {C : Rep k G} (f : H →* K) (g : G →* H)     (φ : (Action.res _ f).obj A ⟶ B) (ψ : (Action.res _ g).obj B ⟶ C) :     mapShortComplexH2 (f.comp g) ((Action.res _ g).map φ ≫ ψ) =    ";
+    }
+    {
+      full_name = "groupCohomology.mapShortComplexH2_id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 344;
+      code_preview = "@[reassoc] theorem mapShortComplexH2_id_comp {A B C : Rep k G} (φ : A ⟶ B) (ψ : B ⟶ C) :     mapShortComplexH2 (MonoidHom.id G) (φ ≫ ψ) =       mapShortComplexH2 (MonoidHom.id G) φ ≫ mapShortComplexH2 (MonoidHom.id G) ψ";
+    }
+    {
+      full_name = "groupCohomology.mapTwoCocycles";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 349;
+      code_preview = "noncomputable abbrev mapTwoCocycles :     ModuleCat.of k (twoCocycles A) ⟶ ModuleCat.of k (twoCocycles B) :=   ShortComplex.cyclesMap' (mapShortComplexH2 f φ) (shortComplexH2 A).moduleCatLeftHomologyData     (shortComplexH2 B).moduleCatLeftHomologyData";
+    }
+    {
+      full_name = "groupCohomology.mapTwoCocycles_comp_subtype";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 356;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma mapTwoCocycles_comp_subtype :     mapTwoCocycles f φ ≫ ModuleCat.ofHom (twoCocycles B).subtype =       ModuleCat.ofHom (twoCocycles A).subtype ≫ ModuleCat.ofHom (fTwo f φ) :=   ShortComplex.cyclesMap'_i (mapShortComplexH2 f φ) (moduleCatLef";
+    }
+    {
+      full_name = "groupCohomology.cocyclesMap_comp_isoTwoCocycles_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 363;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma cocyclesMap_comp_isoTwoCocycles_hom :     cocyclesMap f φ 2 ≫ (isoTwoCocycles B).hom = (isoTwoCocycles A).hom ≫ mapTwoCocycles f φ := by   simp_rw [← cancel_mono (moduleCatLeftHomologyData (shortComplexH2 B)).i, mapTwoCocycles,       Catego";
+    }
+    {
+      full_name = "groupCohomology.H2Map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 370;
+      code_preview = "noncomputable abbrev H2Map : H2 A ⟶ H2 B :=   ShortComplex.leftHomologyMap' (mapShortComplexH2 f φ)     (shortComplexH2 A).moduleCatLeftHomologyData (shortComplexH2 B).moduleCatLeftHomologyData";
+    }
+    {
+      full_name = "groupCohomology.H2Map_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 376;
+      code_preview = "@[simp] theorem H2Map_id : H2Map (MonoidHom.id _) (𝟙 A) = 𝟙 _";
+    }
+    {
+      full_name = "groupCohomology.H2Map_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 381;
+      code_preview = "@[reassoc] theorem H2Map_comp {G H K : Type u} [Group G] [Group H] [Group K]     {A : Rep k K} {B : Rep k H} {C : Rep k G} (f : H →* K) (g : G →* H)     (φ : (Action.res _ f).obj A ⟶ B) (ψ : (Action.res _ g).obj B ⟶ C) :     H2Map (f.comp g) ((Action.res _ g).map φ ≫ ψ) = H2Map f φ ≫ H2Map g ψ";
+    }
+    {
+      full_name = "groupCohomology.H2Map_id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 388;
+      code_preview = "@[reassoc] theorem H2Map_id_comp {A B C : Rep k G} (φ : A ⟶ B) (ψ : B ⟶ C) :     H2Map (MonoidHom.id G) (φ ≫ ψ) = H2Map (MonoidHom.id G) φ ≫ H2Map (MonoidHom.id G) ψ";
+    }
+    {
+      full_name = "groupCohomology.H2π_comp_H2Map";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 393;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma H2π_comp_H2Map :     H2π A ≫ H2Map f φ = mapTwoCocycles f φ ≫ H2π B :=   leftHomologyπ_naturality' (mapShortComplexH2 f φ) _ _";
+    }
+    {
+      full_name = "groupCohomology.map_comp_isoH2_hom";
+      kind = "lemma";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 398;
+      code_preview = "@[reassoc (attr := simp), elementwise (attr := simp)] lemma map_comp_isoH2_hom :     map f φ 2 ≫ (isoH2 B).hom = (isoH2 A).hom ≫ H2Map f φ := by   simp [← cancel_epi (groupCohomologyπ _ _), H2Map, Category.assoc]";
+    }
+    {
+      full_name = "groupCohomology.cochainsFunctor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 404;
+      code_preview = "@[simps] noncomputable def cochainsFunctor : Rep k G ⥤ CochainComplex (ModuleCat k) ℕ where   obj A := inhomogeneousCochains A   map f := cochainsMap (MonoidHom.id _) f   map_id _ := cochainsMap_id   map_comp φ ψ := cochainsMap_comp (MonoidHom.id G) (MonoidHom.id G) φ ψ";
+    }
+    {
+      full_name = "groupCohomology.functor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RepresentationTheory/GroupCohomology/Functoriality.lean";
+      start_line = 416;
+      code_preview = "@[simps] noncomputable def functor (n : ℕ) : Rep k G ⥤ ModuleCat k where   obj A := groupCohomology A n   map φ := map (MonoidHom.id _) φ n   map_id _ := HomologicalComplex.homologyMap_id _ _   map_comp _ _ := by     simp only [← HomologicalComplex.homologyMap_comp]     rfl";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

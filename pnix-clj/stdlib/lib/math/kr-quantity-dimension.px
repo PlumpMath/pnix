@@ -1,0 +1,70 @@
+# stdlib/lib/math/kr-quantity-dimension.px
+#
+# P7-b(한국) 확장: 한국어 *물리량*(파생 포함)을 SI 차원 exact 앵커로. KR 법정 기본단위(7개) 위에 표준 파생량을 *합성*으로.
+#   = deep-research(reference_bilingual_corpus_reasoning_verdict) CORE 패턴: 고정 enumerable 표준 anchor + 다국어 label
+#     = Wikidata Q-id 모델(language-neutral concept + ko/en label). exact match=결정론, 미등록어=Held(fuzzy 금지).
+#
+# ★파생 차원은 *base에서 합성*(dimension-gate dimSub/dimAdd/dimScale)으로 도출 — 하드코딩 아님, 표준 물리 정의:
+#   velocity=length/time · force=mass·length/time² · energy=mass·length²/time² · frequency=1/time 등.
+# ★fail-closed: registry에 없는 한국어/약어/표기변형은 anchor 0 = held "no-exact-quantity-anchor"(추측 0, cross-lingual 의미정렬=Held).
+# ★row≠truth(표준 물리 구조 lookup, candidate). 새 거울 0(dimension-gate 합성 재사용).
+# ★dialect 함정 #8 회피: registry를 *함수*로(let-const list closure 금지).
+let
+  B = builtins;
+  dg = import ./dimension-gate.px;
+
+  # 표준 물리량 registry(고정 enumerable). dim = *표준 dimension code 직접 parse*(QUDT qkdv 코드와 정합).
+  #   ★합성(dimSub/dimAdd) 대신 코드 직접 — dialect 함정 #8(탈출 list thunk가 중간 let-value/깊은 nest closure 시 오해소)
+  #    회피. 각 dim은 parseDimCode 단일 호출(velocity/force가 그렇게 작동). 차원은 표준 물리(velocity=L T⁻¹ 등) = 합성과 동치.
+  registry = _: [
+    { ko = "길이"; en = "length"; dim = dg.parseDimCode "A0E0L1I0M0H0T0D0"; }
+    { ko = "질량"; en = "mass"; dim = dg.parseDimCode "A0E0L0I0M1H0T0D0"; }
+    { ko = "시간"; en = "time"; dim = dg.parseDimCode "A0E0L0I0M0H0T1D0"; }
+    { ko = "전류"; en = "electric current"; dim = dg.parseDimCode "A0E1L0I0M0H0T0D0"; }
+    { ko = "온도"; en = "thermodynamic temperature"; dim = dg.parseDimCode "A0E0L0I0M0H1T0D0"; }
+    { ko = "물질량"; en = "amount of substance"; dim = dg.parseDimCode "A1E0L0I0M0H0T0D0"; }
+    { ko = "광도"; en = "luminous intensity"; dim = dg.parseDimCode "A0E0L0I1M0H0T0D0"; }
+    { ko = "넓이"; en = "area"; dim = dg.parseDimCode "A0E0L2I0M0H0T0D0"; }
+    { ko = "면적"; en = "area"; dim = dg.parseDimCode "A0E0L2I0M0H0T0D0"; }
+    { ko = "부피"; en = "volume"; dim = dg.parseDimCode "A0E0L3I0M0H0T0D0"; }
+    { ko = "체적"; en = "volume"; dim = dg.parseDimCode "A0E0L3I0M0H0T0D0"; }
+    { ko = "속도"; en = "velocity"; dim = dg.parseDimCode "A0E0L1I0M0H0T-1D0"; }          # L T⁻¹
+    { ko = "속력"; en = "speed"; dim = dg.parseDimCode "A0E0L1I0M0H0T-1D0"; }
+    { ko = "가속도"; en = "acceleration"; dim = dg.parseDimCode "A0E0L1I0M0H0T-2D0"; }     # L T⁻²
+    { ko = "운동량"; en = "momentum"; dim = dg.parseDimCode "A0E0L1I0M1H0T-1D0"; }         # M L T⁻¹
+    { ko = "힘"; en = "force"; dim = dg.parseDimCode "A0E0L1I0M1H0T-2D0"; }                # M L T⁻²
+    { ko = "에너지"; en = "energy"; dim = dg.parseDimCode "A0E0L2I0M1H0T-2D0"; }           # M L² T⁻²
+    { ko = "일"; en = "work"; dim = dg.parseDimCode "A0E0L2I0M1H0T-2D0"; }                 # M L² T⁻² (= energy)
+    { ko = "일률"; en = "power"; dim = dg.parseDimCode "A0E0L2I0M1H0T-3D0"; }              # M L² T⁻³
+    { ko = "압력"; en = "pressure"; dim = dg.parseDimCode "A0E0L-1I0M1H0T-2D0"; }          # M L⁻¹ T⁻²
+    { ko = "밀도"; en = "density"; dim = dg.parseDimCode "A0E0L-3I0M1H0T0D0"; }            # M L⁻³
+    { ko = "진동수"; en = "frequency"; dim = dg.parseDimCode "A0E0L0I0M0H0T-1D0"; }        # T⁻¹
+    { ko = "주파수"; en = "frequency"; dim = dg.parseDimCode "A0E0L0I0M0H0T-1D0"; }        # T⁻¹
+    { ko = "전하량"; en = "electric charge"; dim = dg.parseDimCode "A0E1L0I0M0H0T1D0"; }   # E T (coulomb)
+  ];
+
+  # lookupQuantity { term }: 한국어/영어 물리량명 exact → 차원 앵커 또는 held(미등록=fuzzy 금지).
+  lookupQuantity = args:
+    let term = args.term or "";
+        reg = registry { };
+        matches = B.filter (q: (q.ko == term) || (q.en == term)) reg;
+    in if (term == "") || (matches == [ ])
+       then { status = "held"; term = term; reason = "no-exact-quantity-anchor"; }
+       else let q = B.head matches;
+            in { status = "anchor"; term = term; dimension = q.dim;
+                 quantity_ko = q.ko; quantity_en = q.en;
+                 source = "physics.standard_quantities"; };
+
+  # readQuantities { terms }: 일괄(anchor/held 분리).
+  readQuantities = args:
+    let terms = args.terms or [ ];
+        results = B.map (t: lookupQuantity { term = t; }) terms;
+        anchors = B.filter (r: r.status == "anchor") results;
+        held = B.map (r: { term = r.term; reason = r.reason; }) (B.filter (r: r.status == "held") results);
+    in { readback_kind = "math.anchor.kr-quantity";
+         anchors = anchors; anchor_count = B.length anchors;
+         held = held; held_count = B.length held;
+         proposer_only = true; durable_truth = false; accepted_as_truth = false; };
+in {
+  inherit lookupQuantity readQuantities registry;
+}

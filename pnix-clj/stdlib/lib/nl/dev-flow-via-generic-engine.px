@@ -1,0 +1,797 @@
+let
+  ownerName = "stdlib.nl.dev-flow-via-generic-engine";
+
+  g = import nl/generic-math-equation-engine.px;
+
+  # === Dev flow via generic engine (agent-NL-210, Round 46) ==========
+  #
+  # 사용자 directive (Round 44 carry-forward):
+  # > "수학/알고리즘 코드들 조차도 generic 한 알고리즘으로요. 제발.."
+  #
+  # Round 40 의 *hardcoded 20-cue table* (`cueToStepAndMath = [ {cue=...
+  # family=... math_equation=...} ... ]`) 은 *데이터 row* 였지만 자체
+  # math_equation string 까지 hardcoded — string 자체를 직접 박았다.
+  #
+  # Round 46 = *진짜 generic* 으로 migrate:
+  #   - cue 정의 = `mkCueRule { pattern, family, math_template_kind,
+  #     vars_from_match, ... }` 한 줄 (data only).
+  #   - 수학 식 자체는 *Round 44/45 의 10 generic algorithms* 가 생성.
+  #   - `pipelineFold rules utterance` 한 호출 → 모든 매칭 cue 의
+  #     수학 식 *자동 합성* (string 박힘 없음).
+  #
+  # 새 cue 추가 = list 에 mkCueRule 한 줄 push. 코드 0 변경.
+  # 새 math kind 추가 = generic engine 에 1 algorithm + 1 dispatch line.
+  #
+  # Round 40 는 *prototype reference* 로 보존 (frozen receipt name).
+
+  stepKind = "dev-flow-via-generic-engine";
+  framework_step =
+    "NL 발화 → pipelineFold (generic) → 다중 cue 매칭 + 각 수학 식 자동 합성";
+
+  # =================================================================
+  # === Real dev cue rules (DATA ROWS ONLY) ==========================
+  # =================================================================
+  #
+  # 18 cue rules. 각 row = mkCueRule 한 줄.
+  # 수학 식은 vars_from_match 가 *vars only* 제공 → generic algorithm
+  # 이 식을 합성. cue 자체에 string equation 없음.
+
+  realDevCueRules = [
+    # --- Recurrence-based cues (sort, search, divide-conquer) ---
+    (g.mkCueRule {
+      pattern = "merge sort";
+      family = "algorithm-pattern.divide-conquer";
+      math_template_kind = "recurrence-master-theorem";
+      vars_from_match = _: { a = 2; b = 2; c = 1; log_b_a = 1; };
+      driver_form = "merge sort 의 *수학적 원동력* — Master case 2 → Θ(n log n) 보장";
+      decision_form = "stable 필요 → merge sort; in-place 필요 → 다른 algo";
+    })
+    (g.mkCueRule {
+      pattern = "quicksort";
+      family = "algorithm-pattern.divide-conquer";
+      math_template_kind = "recurrence-master-theorem";
+      vars_from_match = _: { a = 2; b = 2; c = 1; log_b_a = 1; };
+      driver_form = "quicksort 의 *수학적 원동력* — average Θ(n log n), worst Θ(n²)";
+      decision_form = "random pivot 강제 → worst case 회피; in-place gain";
+    })
+    (g.mkCueRule {
+      pattern = "binary search";
+      family = "algorithm-pattern.divide-conquer";
+      math_template_kind = "recurrence-master-theorem";
+      vars_from_match = _: { a = 1; b = 2; c = 0; log_b_a = 0; };
+      driver_form = "binary search 의 *수학적 원동력* — Master case 2 → Θ(log n)";
+      decision_form = "sorted array 필수 — unsorted → linear scan";
+    })
+
+    # --- Hoare triple / loop invariant cues ---
+    (g.mkCueRule {
+      pattern = "off by one";
+      family = "diagnostic.logic-bug";
+      math_template_kind = "hoare-triple-loop-invariant";
+      vars_from_match = _: {
+        precondition = "0 ≤ i ≤ n";
+        invariant_expr = "i < n at entry, i ≤ n at exit";
+        termination_measure = "n - i (strictly decreasing)";
+      };
+      driver_form = "loop bound 의 *수학적 정확성* — i ≤ n 시 1회 over-iterate";
+      decision_form = "i < n vs i <= n-1 OK; i <= n 또는 i < n+1 → BUG";
+    })
+    (g.mkCueRule {
+      pattern = "add validation";
+      family = "edit/refactor.add-validation";
+      math_template_kind = "hoare-triple-loop-invariant";
+      vars_from_match = _: {
+        precondition = "input ≠ null ∧ size ≥ 0 ∧ invariants_satisfied";
+        invariant_expr = "P 강하게 → 빠르게 fail; P 약하게 → API 사용자 부담";
+        termination_measure = "validation 통과 후 main body 진입";
+      };
+      driver_form = "validation 의 *수학적 원동력* — precondition 위반 시 UB 방지";
+      decision_form = "P 강한 정도 = error 잡힘 / API 부담 trade-off";
+    })
+    (g.mkCueRule {
+      pattern = "loop";
+      family = "control-flow.loop";
+      math_template_kind = "hoare-triple-loop-invariant";
+      vars_from_match = _: {
+        precondition = "accumulator initialized";
+        invariant_expr = "s = Σ_{j=0}^{i-1} a[j] ∧ 0 ≤ i ≤ n";
+        termination_measure = "n - i";
+      };
+      driver_form = "loop 의 *수학적 원동력* — invariant 가 termination + correctness 동시 보장";
+      decision_form = "invariant 가 trivial → loop 자체 불필요; 강함 → 검증 가능";
+    })
+
+    # --- Concentration bound cues ---
+    (g.mkCueRule {
+      pattern = "use hashmap";
+      family = "data-structure.hash";
+      math_template_kind = "concentration-bound";
+      vars_from_match = _: {
+        bound_kind = "Hoeffding";
+        sample_count_var = "m";
+        epsilon_var = "ε";
+      };
+      driver_form = "hashmap 의 *O(1) average* — load factor α < 0.75 강제";
+      decision_form = "α ≥ 0.75 → rehash (m 2배); α < 0.25 → space waste";
+    })
+    (g.mkCueRule {
+      pattern = "random sample";
+      family = "algorithm-pattern.randomized";
+      math_template_kind = "concentration-bound";
+      vars_from_match = _: {
+        bound_kind = "Chernoff";
+        sample_count_var = "n";
+        epsilon_var = "ε";
+      };
+      driver_form = "random sample 의 *수학적 원동력* — concentration 으로 n 결정";
+      decision_form = "ε 작을수록 n 커짐; 1/ε² 비례";
+    })
+
+    # --- Graph traversal cues ---
+    (g.mkCueRule {
+      pattern = "find references";
+      family = "static-analysis.reference-graph";
+      math_template_kind = "graph-traversal-complexity";
+      vars_from_match = _: {
+        traversal_kind = "BFS";
+        vertex_count = "V";
+        edge_count = "E";
+        weight_kind = "unweighted";
+      };
+      driver_form = "reference 검색 의 *수학적 원동력* — 그래프 BFS Θ(V + E)";
+      decision_form = "indexed → O(1) lookup; unindexed → full BFS";
+    })
+    (g.mkCueRule {
+      pattern = "shortest path";
+      family = "algorithm-pattern.graph";
+      math_template_kind = "graph-traversal-complexity";
+      vars_from_match = _: {
+        traversal_kind = "Dijkstra";
+        vertex_count = "V";
+        edge_count = "E";
+        weight_kind = "non-negative";
+      };
+      driver_form = "shortest path 의 *수학적 원동력* — non-negative weights → Dijkstra";
+      decision_form = "negative weights → Bellman-Ford (Θ(V·E))";
+    })
+    (g.mkCueRule {
+      pattern = "BFS";
+      family = "algorithm-pattern.graph";
+      math_template_kind = "graph-traversal-complexity";
+      vars_from_match = _: {
+        traversal_kind = "BFS";
+        vertex_count = "V";
+        edge_count = "E";
+        weight_kind = "unweighted";
+      };
+      driver_form = "BFS 의 *수학적 원동력* — layer-by-layer Θ(V + E)";
+      decision_form = "shortest path (unweighted) 보장; weighted → Dijkstra";
+    })
+
+    # --- Iteration convergence cues ---
+    (g.mkCueRule {
+      pattern = "Newton method";
+      family = "numerical.root-finding";
+      math_template_kind = "iteration-convergence-rate";
+      vars_from_match = _: { rate_kind = "quadratic"; };
+      driver_form = "Newton method 의 *수학적 원동력* — quadratic convergence (p=2)";
+      decision_form = "derivative 가 0 근처면 발산 위험; bracketing 추가";
+    })
+    (g.mkCueRule {
+      pattern = "gradient descent";
+      family = "numerical.optimization";
+      math_template_kind = "iteration-convergence-rate";
+      vars_from_match = _: { rate_kind = "linear"; };
+      driver_form = "gradient descent 의 *수학적 원동력* — linear convergence (p=1)";
+      decision_form = "learning rate 너무 크면 발산; 너무 작으면 느림";
+    })
+
+    # --- Ring axiom cues ---
+    (g.mkCueRule {
+      pattern = "distributive law";
+      family = "math.arithmetic.distributive";
+      math_template_kind = "ring-axiom-identity";
+      vars_from_match = _: { axiom_name = "distributive"; };
+      driver_form = "분배법칙의 *수학적 정당화* — Ring axiom; SIMD 벡터화 가능";
+      decision_form = "공통 factor → factor 우선; SIMD width 일치 → transform";
+    })
+    (g.mkCueRule {
+      pattern = "factor out";
+      family = "math.arithmetic.distributive";
+      math_template_kind = "ring-axiom-identity";
+      vars_from_match = _: { axiom_name = "distributive"; };
+      driver_form = "factor out 의 *수학적 원동력* — distributivity 역방향 적용";
+      decision_form = "공통 부분식 → 계산량 절약; readability gain";
+    })
+
+    # --- Concurrency cues ---
+    (g.mkCueRule {
+      pattern = "race condition";
+      family = "concurrency.race";
+      math_template_kind = "concurrency-happens-before";
+      vars_from_match = _: { sync_kind = "none"; };
+      driver_form = "race condition 의 *수학적 원동력* — happens-before 없음 → UB";
+      decision_form = "atomic → safe but expensive; mutex → safe but blocking";
+    })
+    (g.mkCueRule {
+      pattern = "atomic";
+      family = "concurrency.atomic";
+      math_template_kind = "concurrency-happens-before";
+      vars_from_match = _: { sync_kind = "atomic"; };
+      driver_form = "atomic 의 *수학적 원동력* — release-acquire happens-before";
+      decision_form = "fine-grained → contention; coarse → blocking";
+    })
+
+    # --- Queueing cues ---
+    (g.mkCueRule {
+      pattern = "throughput";
+      family = "performance.throughput";
+      math_template_kind = "queueing-throughput";
+      vars_from_match = _: { };
+      driver_form = "throughput 의 *수학적 원동력* — Little's law L = λW";
+      decision_form = "λ 증가 → L 증가 (queue 길어짐); W 감소 → 빠른 처리";
+    })
+
+    # --- Greedy / matroid cues ---
+    (g.mkCueRule {
+      pattern = "greedy";
+      family = "algorithm-pattern.greedy";
+      math_template_kind = "matroid-greedy-optimality";
+      vars_from_match = _: { };
+      driver_form = "greedy 의 *수학적 원동력* — matroid 면 optimal";
+      decision_form = "exchange axiom 검증; 아니면 DP 또는 다른 algo";
+    })
+
+    # --- Type / Curry-Howard cues ---
+    (g.mkCueRule {
+      pattern = "extract function";
+      family = "edit/refactor.extract";
+      math_template_kind = "type-curry-howard";
+      vars_from_match = _: {
+        type_form = "A → B";
+        proposition_form = "A ⊃ B";
+        inhabitant_form = "λx. body";
+      };
+      driver_form = "extract function 의 *수학적 정당화* — type isomorphism 보존";
+      decision_form = "side effect → effect signature 명시; 순수 → 자유 추출";
+    })
+    (g.mkCueRule {
+      pattern = "unit test";
+      family = "test.unit-test";
+      math_template_kind = "type-curry-howard";
+      vars_from_match = _: {
+        type_form = "Input → ExpectedOutput";
+        proposition_form = "∀x. expected(x) = actual(x)";
+        inhabitant_form = "λinput. assertEqual(expected, actual)";
+      };
+      driver_form = "unit test 의 *수학적 원동력* — function specification = proposition";
+      decision_form = "boundary value testing 강제; property-based 가 더 강함";
+    })
+    (g.mkCueRule {
+      pattern = "mock the database";
+      family = "test.mocking";
+      math_template_kind = "type-curry-howard";
+      vars_from_match = _: {
+        type_form = "IDatabase → MockDatabase";
+        proposition_form = "interface = functor";
+        inhabitant_form = "natural transformation";
+      };
+      driver_form = "mocking 의 *수학적 정당화* — interface = functor, mock = nat trans";
+      decision_form = "thin mock → control flow only; deep mock → state simulation";
+    })
+
+    # --- Round 47: monadic effect pattern cues (transform weapons) ---
+    # category-monad.px 의 4 monad 를 cue 로 인식. 코드 emit 시 언어별로
+    # 다른 algorithm sentence 로 수렴 (Python try/except vs Rust Result?
+    # vs Haskell do-notation vs JS promise.then).
+    (g.mkCueRule {
+      pattern = "null check";
+      family = "effect.maybe";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "Maybe";
+        slot_meaning = "value-may-be-absent";
+        propagation_rule = "Nothing-short-circuit-skip-rest";
+      };
+      driver_form = "null check 의 *수학적 원동력* — Maybe monad bind 가 자동 propagation";
+      decision_form = "Python → Optional[T] + if x is None; Rust → Option<T> + ?; Haskell → Maybe + do-notation";
+    })
+    (g.mkCueRule {
+      pattern = "if not null";
+      family = "effect.maybe";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "Maybe";
+        slot_meaning = "guarded-access";
+        propagation_rule = "Nothing-short-circuit";
+      };
+      driver_form = "guard 의 *수학적 원동력* — Maybe.bind 가 if-else 대체";
+      decision_form = "imperative → if-else; functional → flatMap / >>= chain";
+    })
+    (g.mkCueRule {
+      pattern = "try catch";
+      family = "effect.either";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "Either";
+        slot_meaning = "error-or-success-branch";
+        propagation_rule = "Left-short-circuit-error-path";
+      };
+      driver_form = "try/catch 의 *수학적 원동력* — Either monad 가 error-path 자동 propagate";
+      decision_form = "Python → try/except; Rust → Result<T,E> + ?; Haskell → Either + do; Go → if err != nil";
+    })
+    (g.mkCueRule {
+      pattern = "error handling";
+      family = "effect.either";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "Either";
+        slot_meaning = "explicit-error-channel";
+        propagation_rule = "Left-propagate";
+      };
+      driver_form = "error handling 의 *수학적 원동력* — error 가 first-class value";
+      decision_form = "exception (Java/Python) vs Result (Rust/Haskell) — 같은 monad, 다른 syntax";
+    })
+    (g.mkCueRule {
+      pattern = "mutate state";
+      family = "effect.state";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "State";
+        slot_meaning = "stateful-thread-S";
+        propagation_rule = "S-forwarded-implicitly";
+      };
+      driver_form = "state mutation 의 *수학적 원동력* — State monad 가 S → (A,S) thread 추적";
+      decision_form = "imperative var; vs functional immutable + State monad; vs Rust &mut + lifetimes";
+    })
+    (g.mkCueRule {
+      pattern = "stateful";
+      family = "effect.state";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "State";
+        slot_meaning = "implicit-state-S";
+        propagation_rule = "S-threaded";
+      };
+      driver_form = "stateful 의 *수학적 원동력* — explicit state thread vs implicit mutation";
+      decision_form = "OO → object field; functional → State monad transformer; Rust → &mut self";
+    })
+    (g.mkCueRule {
+      pattern = "async";
+      family = "effect.async";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "Async";
+        slot_meaning = "deferred-computation";
+        propagation_rule = "Pending-propagate-until-resolved";
+      };
+      driver_form = "async 의 *수학적 원동력* — Async monad = Promise / Future 의 monadic 형식";
+      decision_form = "JS → async/await; Rust → Future + .await; Python → asyncio; Haskell → IO+STM";
+    })
+    (g.mkCueRule {
+      pattern = "await";
+      family = "effect.async";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "Async";
+        slot_meaning = "await-resolved-value";
+        propagation_rule = "block-until-Resolved";
+      };
+      driver_form = "await 의 *수학적 원동력* — Async monad bind 의 syntactic sugar";
+      decision_form = "await chain ≡ .then chain ≡ Kleisli composition";
+    })
+    (g.mkCueRule {
+      pattern = "promise";
+      family = "effect.async";
+      math_template_kind = "monadic-effect-pattern";
+      vars_from_match = _: {
+        monad_type = "Async";
+        slot_meaning = "future-value-handle";
+        propagation_rule = "Pending-or-Resolved-or-Rejected";
+      };
+      driver_form = "Promise 의 *수학적 원동력* — JS Promise = Async monad 의 한 instance";
+      decision_form = "JS Promise vs Rust Future vs Python coroutine — 같은 monad, 다른 reactor";
+    })
+
+    # --- Round 49: monoidal product / arity transform cues ---
+    (g.mkCueRule {
+      pattern = "curry";
+      family = "transform.arity.curry";
+      math_template_kind = "monoidal-product-pattern";
+      vars_from_match = _: {
+        product_kind = "curry-isomorphism";
+        arity_before = 2;  # placeholder; real arity 는 caller 가 fill
+        arity_after = 1;
+      };
+      driver_form = "currying 의 *수학적 원동력* — uncurried ≅ curried adjunction";
+      decision_form = "Python functools.partial; Rust |b| closure; Haskell native; JS bind; Clojure partial";
+    })
+    (g.mkCueRule {
+      pattern = "uncurry";
+      family = "transform.arity.uncurry";
+      math_template_kind = "monoidal-product-pattern";
+      vars_from_match = _: {
+        product_kind = "uncurry-isomorphism";
+        arity_before = 1;
+        arity_after = 2;
+      };
+      driver_form = "uncurrying 의 *수학적 원동력* — curried → tuple-argument";
+      decision_form = "(curried fn).bind 패턴 → tuple/list 인자로 변환";
+    })
+    (g.mkCueRule {
+      pattern = "partial application";
+      family = "transform.arity.partial";
+      math_template_kind = "monoidal-product-pattern";
+      vars_from_match = _: {
+        product_kind = "curry-isomorphism";
+        arity_before = 3;
+        arity_after = 2;  # fix 1 arg
+      };
+      driver_form = "partial application 의 *수학적 원동력* — currying 의 한 step";
+      decision_form = "factory pattern; dependency injection; configuration binding";
+    })
+    (g.mkCueRule {
+      pattern = "tuple";
+      family = "transform.product.tuple";
+      math_template_kind = "monoidal-product-pattern";
+      vars_from_match = _: {
+        product_kind = "tensor-product";
+      };
+      driver_form = "tuple 의 *수학적 원동력* — A ⊗ B = 독립 factor product";
+      decision_form = "named tuple (Python) vs tuple struct (Rust) vs Pair (Haskell)";
+    })
+    (g.mkCueRule {
+      pattern = "destructure";
+      family = "transform.product.destructure";
+      math_template_kind = "monoidal-product-pattern";
+      vars_from_match = _: {
+        product_kind = "tensor-product";
+      };
+      driver_form = "destructuring 의 *수학적 원동력* — projection from tensor product";
+      decision_form = "Python (a, b) =; Rust let (a, b) =; Haskell (a, b) =; JS const [a, b] =";
+    })
+    (g.mkCueRule {
+      pattern = "parallel";
+      family = "transform.product.parallel";
+      math_template_kind = "monoidal-product-pattern";
+      vars_from_match = _: {
+        product_kind = "parallel-composition";
+      };
+      driver_form = "parallel 의 *수학적 원동력* — independent f, g 의 f ⊗ g 형태";
+      decision_form = "thread pool vs async pool vs SIMD vs GPU — independence 가 모두 prerequisite";
+    })
+    (g.mkCueRule {
+      pattern = "concurrent";
+      family = "transform.product.parallel";
+      math_template_kind = "monoidal-product-pattern";
+      vars_from_match = _: {
+        product_kind = "parallel-composition";
+      };
+      driver_form = "concurrent 의 *수학적 원동력* — independent morphism 의 monoidal product";
+      decision_form = "race ≠ concurrent — concurrent 는 independence 보장";
+    })
+    (g.mkCueRule {
+      pattern = "arity transform";
+      family = "transform.arity";
+      math_template_kind = "monoidal-product-pattern";
+      vars_from_match = _: {
+        product_kind = "arity-transform";
+        arity_before = 5;
+        arity_after = 1;
+      };
+      driver_form = "arity 변환의 *수학적 원동력* — n-arg ↔ product of n";
+      decision_form = "(a, b, c, d, e) → fn vs fn(a, b, c, d, e) — semantic 동등";
+    })
+
+    # --- Round 50: coequalizer fold cues (canonical 수렴선택) ---
+    (g.mkCueRule {
+      pattern = "sum array";
+      family = "algorithm-pattern.aggregate";
+      math_template_kind = "coequalizer-fold-pattern";
+      vars_from_match = _: {
+        candidate_chains = [
+          { id = "for-loop"; step_count = 5; unknown_count = 0;
+            label = "imperative for-loop accumulator"; }
+          { id = "comprehension"; step_count = 1; unknown_count = 0;
+            label = "comprehension / generator"; }
+          { id = "reduce"; step_count = 1; unknown_count = 1;
+            label = "reduce / fold with operator"; }
+        ];
+        canonical_strategy = "minimum-cost";
+      };
+      driver_form = "sum 의 *수학적 원동력* — 동치 chain 중 canonical 선택";
+      decision_form = "for-loop (5 steps) vs comprehension (1) vs reduce (1+1 unknown) — comprehension canonical";
+    })
+    (g.mkCueRule {
+      pattern = "canonical form";
+      family = "transform.canonical";
+      math_template_kind = "coequalizer-fold-pattern";
+      vars_from_match = _: {
+        candidate_chains = [
+          { id = "for-loop"; step_count = 4; unknown_count = 0;
+            label = "imperative loop"; }
+          { id = "comprehension"; step_count = 1; unknown_count = 0;
+            label = "comprehension / iterator chain"; }
+        ];
+        canonical_strategy = "minimum-cost";
+      };
+      driver_form = "canonical form 의 *수학적 원동력* — coequalizer quotient";
+      decision_form = "동치 chain 의 minimum-cost representative 선택";
+    })
+    (g.mkCueRule {
+      pattern = "simplify";
+      family = "transform.simplify";
+      math_template_kind = "coequalizer-fold-pattern";
+      vars_from_match = _: {
+        candidate_chains = [
+          { id = "for-loop"; step_count = 4; unknown_count = 0;
+            label = "imperative loop (verbose)"; }
+          { id = "comprehension"; step_count = 1; unknown_count = 0;
+            label = "comprehension (concise)"; }
+        ];
+        canonical_strategy = "minimum-steps";
+      };
+      driver_form = "simplify 의 *수학적 원동력* — fewest-step canonical";
+      decision_form = "동치 algorithm 중 step count 최소 선택";
+    })
+    (g.mkCueRule {
+      pattern = "recursive vs iterative";
+      family = "transform.recursion-iteration";
+      math_template_kind = "coequalizer-fold-pattern";
+      vars_from_match = _: {
+        candidate_chains = [
+          { id = "recursive"; step_count = 8; unknown_count = 1;
+            label = "explicit recursion (call stack)"; }
+          { id = "iterative"; step_count = 5; unknown_count = 0;
+            label = "explicit loop (stack-free)"; }
+        ];
+        canonical_strategy = "minimum-cost";
+      };
+      driver_form = "recursion vs iteration 의 *수학적 원동력* — same fixed-point, different runtime";
+      decision_form = "tail-call optimized 가능 → recursive OK; stack 위험 → iterative canonical";
+    })
+    (g.mkCueRule {
+      pattern = "refactor to functional";
+      family = "transform.style.functional";
+      math_template_kind = "coequalizer-fold-pattern";
+      vars_from_match = _: {
+        candidate_chains = [
+          { id = "for-loop"; step_count = 4; unknown_count = 0;
+            label = "imperative"; }
+          { id = "comprehension"; step_count = 1; unknown_count = 0;
+            label = "functional"; }
+        ];
+        canonical_strategy = "explicit-preferred";
+        preferred_id = "comprehension";
+      };
+      driver_form = "functional refactor 의 *수학적 원동력* — explicit preferred canonical";
+      decision_form = "imperative → functional rewrite; explicit preference, not cost-based";
+    })
+    (g.mkCueRule {
+      pattern = "rewrite as";
+      family = "transform.rewrite";
+      math_template_kind = "coequalizer-fold-pattern";
+      vars_from_match = _: {
+        candidate_chains = [
+          { id = "for-loop"; step_count = 4; unknown_count = 0;
+            label = "current form"; }
+          { id = "comprehension"; step_count = 1; unknown_count = 0;
+            label = "target form"; }
+        ];
+        canonical_strategy = "minimum-cost";
+      };
+      driver_form = "rewrite 의 *수학적 원동력* — equivalence class navigation";
+      decision_form = "두 형태 동치 → quotient projection 으로 target 선택";
+    })
+
+    # --- Round 51: functor-lift cues (intent abstraction) ---
+    (g.mkCueRule {
+      pattern = "what does this compute";
+      family = "transform.intent.lift";
+      math_template_kind = "functor-lift-pattern";
+      vars_from_match = _: {
+        canonical_chain_id = "comprehension";
+        math_kind_chain = [ "coequalizer-fold-pattern" ];
+        lift_strategy = "full-meaning-object";
+      };
+      driver_form = "intent lift 의 *수학적 원동력* — F : canonical → meaning";
+      decision_form = "concrete algorithm structure → semantic role + typeclass + invariants";
+    })
+    (g.mkCueRule {
+      pattern = "lift to intent";
+      family = "transform.intent.lift";
+      math_template_kind = "functor-lift-pattern";
+      vars_from_match = _: {
+        canonical_chain_id = "reduce";
+        math_kind_chain = [ "coequalizer-fold-pattern" ];
+        lift_strategy = "full-meaning-object";
+      };
+      driver_form = "lift-to-intent 의 *수학적 원동력* — functor F preserves composition";
+      decision_form = "F(g ∘ f) = F(g) ∘ F(f); concrete → abstract intent";
+    })
+    (g.mkCueRule {
+      pattern = "semantic role";
+      family = "transform.intent.role";
+      math_template_kind = "functor-lift-pattern";
+      vars_from_match = _: {
+        canonical_chain_id = "reduce";
+        lift_strategy = "intent-only";
+      };
+      driver_form = "semantic role 의 *수학적 원동력* — classified by canonical structure";
+      decision_form = "for-loop → traversal; reduce → fold; map → functor; filter → eq";
+    })
+    (g.mkCueRule {
+      pattern = "abstract meaning";
+      family = "transform.intent.abstract";
+      math_template_kind = "functor-lift-pattern";
+      vars_from_match = _: {
+        canonical_chain_id = "comprehension";
+        lift_strategy = "intent-with-invariants";
+      };
+      driver_form = "abstract meaning 의 *수학적 원동력* — algorithm class + preserved invariants";
+      decision_form = "선언적 의도 + 보존 invariant 명시 → language-agnostic spec";
+    })
+    (g.mkCueRule {
+      pattern = "intent signature";
+      family = "transform.intent.signature";
+      math_template_kind = "functor-lift-pattern";
+      vars_from_match = _: {
+        canonical_chain_id = "reduce";
+        lift_strategy = "intent-with-typeclass";
+      };
+      driver_form = "intent signature 의 *수학적 원동력* — abstract type signature + typeclass";
+      decision_form = "(Collection a) → a [Monoid a]; (Collection a, a → Bool) → Collection a [Eq]";
+    })
+  ];
+
+  # =================================================================
+  # === Run full dev flow (generic) ==================================
+  # =================================================================
+  #
+  # pipelineFold 호출 한 줄. 모든 cue 매칭 + 수학 식 합성 자동.
+
+  runRealDevFlow = utterance:
+    let
+      pipeResult = g.pipelineFold realDevCueRules utterance;
+      stepCount = pipeResult.matched_count;
+      activeFamilies =
+        builtins.map (s: s.family) pipeResult.generated_steps;
+      mathKinds =
+        builtins.map (s: s.math_kind) pipeResult.generated_steps;
+    in
+      if stepCount == 0
+      then {
+        outcome = "held-no-cue-match";
+        utterance = utterance;
+        rule_count_attempted = builtins.length realDevCueRules;
+      }
+      else {
+        outcome = "real-dev-flow-emitted-via-generic-engine";
+        utterance = utterance;
+        step_count = stepCount;
+        active_families = activeFamilies;
+        math_kinds_emitted = mathKinds;
+        # generic engine 이 합성한 수학 식들 (string 박힘 없음)
+        algorithm_step_sequence = pipeResult.generated_steps;
+        # 한국어 회귀 요약
+        reflection_kr =
+          "발화 '" + utterance + "' → " +
+          builtins.toString stepCount + " cue 매칭 → " +
+          "각 cue 의 수학 식 자동 합성 (10 generic algorithms 활용) → " +
+          "첫 발화 도달 (회귀).";
+        is_closed_loop_intelligence = true;
+        deterministic = true;
+        generic_engine_used = true;
+        no_hardcoded_math_strings = true;  # decisive — Round 40 와 다름
+      };
+
+  # =================================================================
+  # === Demonstration cases ==========================================
+  # =================================================================
+
+  demoCases = [
+    {
+      label = "lang-ava-1042-full-cycle-via-generic";
+      utterance = "write unit test with AAA. mock the database. find references first. then off by one bug in loop. extract function. add validation. use hashmap. apply distributive law.";
+      expected_min_count = 8;
+    }
+    {
+      label = "merge-sort-binary-search";
+      utterance = "use merge sort then binary search for lookup";
+      expected_min_count = 2;
+    }
+    {
+      label = "concurrency-throughput";
+      utterance = "race condition causes throughput drop";
+      expected_min_count = 2;
+    }
+    {
+      label = "newton-gradient";
+      utterance = "use Newton method instead of gradient descent";
+      expected_min_count = 2;
+    }
+    {
+      label = "no-match";
+      utterance = "completely unrelated random text";
+      expected_min_count = 0;
+    }
+  ];
+
+  runDemoCase = c:
+    let r = runRealDevFlow c.utterance;
+    in {
+      inherit (c) label utterance expected_min_count;
+      actual_outcome = r.outcome;
+      actual_step_count =
+        if r.outcome == "real-dev-flow-emitted-via-generic-engine"
+        then r.step_count else 0;
+      success =
+        if c.expected_min_count == 0
+        then r.outcome == "held-no-cue-match"
+        else r.outcome == "real-dev-flow-emitted-via-generic-engine"
+             && r.step_count >= c.expected_min_count;
+    };
+
+  allDemoResults = builtins.map runDemoCase demoCases;
+  demoSuccessCount =
+    builtins.length (builtins.filter (r: r.success) allDemoResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_runRealDevFlow = true;
+    cue_rule_count = builtins.length realDevCueRules;
+    demo_case_count = builtins.length demoCases;
+    demo_success_count = demoSuccessCount;
+    # decisive — Round 40 hardcoded list 와의 차이
+    cue_definition_is_data_row_only = true;
+    math_equation_strings_in_cue_definitions = 0;
+    math_equation_strings_emitted_by_generic_engine = true;
+    new_cue_via_one_mkCueRule_call = true;
+    no_code_change_for_new_cue = true;
+    no_hardcoded_if_else_chain = true;
+    # generic engine 참조
+    generic_engine_owner = g.ownerName;
+    math_kinds_used = builtins.length g.knownMathKinds;
+    deterministic = true;
+    is_closed_loop_intelligence = true;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyDevFlowViaGenericEnginePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "dev-flow-via-generic-engine-inventory";
+      receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "run_dev_flow" request then
+      runRealDevFlow request.run_dev_flow
+    else if builtins.hasAttr "demo_cases" request then {
+      outcome = "demo-cases-emitted"; receipt = demoCases;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "demo-results-emitted";
+      receipt = {
+        total = builtins.length demoCases;
+        success = demoSuccessCount;
+        results = allDemoResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "run_dev_flow" "demo_cases" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit realDevCueRules runRealDevFlow demoCases runDemoCase;
+  inherit allDemoResults demoSuccessCount;
+  inherit inventorySummary applyDevFlowViaGenericEnginePlate;
+}

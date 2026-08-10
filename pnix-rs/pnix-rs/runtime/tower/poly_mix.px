@@ -1,0 +1,692 @@
+# tower m6c: the POLYVARIANT specializer expressed IN px.
+#
+# Strict adaptation of pnix-hy's POLY_MIX_IN_PNIX: every step threads
+# st = { specs; ctr }. Applying a closure/recclo to a DYNAMIC argument does
+# not unfold — it creates (or reuses) a SPECIALIZATION POINT keyed by
+# { body; s = sig(env) }: a pending spec is seeded BEFORE the body is mixed,
+# so recursive self-applications hit the memo and emit `apply(var __sN, arg)`
+# instead of re-unfolding. This is what breaks the exponential wall measured
+# by `second-projection-experiment` on the monovariant mix.
+#
+# Static-ish arguments (data / closures / recclos / attrs nodes) inline
+# exactly like the monovariant mix (mix.px), so parity holds where the
+# monovariant specializer terminates. etaBody unwraps closure-valued spec
+# bodies into fresh-parameter lambdas (curried functions residualize).
+#
+# The caller supplies the initial state and assembles the final residual:
+# result = pmix ast senv st0 -> { n; st }; nonempty st.specs become a
+# recursive `let __sK = <param>: <body>; ... in <n>` (our let IS recursive,
+# so mutually referencing specs need no extra machinery).
+#
+# m6d (frame identity): st gains a FRAMES registry. An all-lambda `let`
+# builds its recursive frame ONCE, registers it under a fresh gid, and its
+# recclos carry ONLY the gid — the strict knot is closed by indirection
+# through the registry (no per-apply recFrame rebuild, no binds/outer copies).
+# A recclo spec key is just { lid; gid } — frame identity replaces the whole
+# env signature on the hot path; plain closures keep the sig-based key.
+#
+# The whole file evaluates to `pmix`: ast: senv: st: { n; st }.
+let
+  fold = op: a: b:
+    if op == "+" then a + b
+    else if op == "-" then a - b
+    else if op == "*" then a * b
+    else if op == "/" then a / b
+    else if op == "==" then a == b
+    else if op == "!=" then a != b
+    else if op == "<" then a < b
+    else if op == "<=" then a <= b
+    else if op == ">" then a > b
+    else a >= b;
+
+  encode = v:
+    if builtins.isInt v then { kind = "int"; value = v; }
+    else if builtins.isBool v then { kind = "bool"; value = v; }
+    else if builtins.isString v then { kind = "str"; parts = [ { kind = "lit"; text = v; } ]; }
+    else if builtins.isList v then { kind = "clist"; items = builtins.map encode v; }
+    else { kind = "cattrs";
+           fields = builtins.map
+             (k: { name = k; value = encode (builtins.getAttr k v); })
+             (builtins.attrNames v); };
+
+  decode = n:
+    if n.kind == "int" then n.value
+    else if n.kind == "bool" then n.value
+    else if n.kind == "str" then strText n
+    else if n.kind == "clist" then builtins.map decode n.items
+    else builtins.listToAttrs
+      (builtins.map (f: { name = f.name; value = decode f.value; }) n.fields);
+
+  isLitStr = n:
+    if n.kind == "str"
+    then (if builtins.length n.parts == 0
+          then true
+          else (if builtins.length n.parts == 1
+                then (builtins.head n.parts).kind == "lit"
+                else false))
+    else false;
+
+  strText = n:
+    if builtins.length n.parts == 0 then "" else (builtins.head n.parts).text;
+
+  isData = n:
+    if n.kind == "int" then true
+    else if n.kind == "bool" then true
+    else if n.kind == "cattrs" then true
+    else if n.kind == "clist" then true
+    else isLitStr n;
+
+  isFn = n: if n.kind == "closure" then true else n.kind == "recclo";
+
+  inlineable = n:
+    if isData n then true
+    else if isFn n then true
+    else isAttrsNode n;
+
+  allData = ns:
+    if builtins.length ns == 0 then true
+    else if isData (builtins.head ns) then allData (builtins.tail ns)
+    else false;
+
+  mkList = items:
+    if allData items then { kind = "clist"; items = items; }
+    else { kind = "list"; items = items; };
+
+  dataFold = op: l: r:
+    if op == "==" then { kind = "bool"; value = strText l == strText r; }
+    else if op == "!=" then { kind = "bool"; value = strText l != strText r; }
+    else { kind = "unsupported"; };
+
+  bind1 = env: name: node:
+    env // builtins.listToAttrs [ { name = name; value = node; } ];
+
+  inBinds = n: bs:
+    if builtins.length bs == 0 then false
+    else if (builtins.head bs).name == n then true
+    else inBinds n (builtins.tail bs);
+
+  removeNames = senv: bs:
+    builtins.listToAttrs
+      (builtins.map (n: { name = n; value = builtins.getAttr n senv; })
+        (builtins.filter (n: if inBinds n bs then false else true)
+          (builtins.attrNames senv)));
+
+  allLambdas = bs:
+    if builtins.length bs == 0 then true
+    else if (builtins.head bs).value.kind == "lambda"
+    then allLambdas (builtins.tail bs)
+    else false;
+
+  framesGet = frames: g:
+    if (builtins.head frames).gid == g
+    then (builtins.head frames).frame
+    else framesGet (builtins.tail frames) g;
+
+  cattrsGet = fields: n:
+    builtins.getAttr n
+      (builtins.listToAttrs
+        (builtins.map (fld: { name = fld.name; value = fld.value; }) fields));
+
+  findField = fields: n:
+    if builtins.length fields == 0 then { found = false; }
+    else if (builtins.head fields).name == n
+    then { found = true; node = (builtins.head fields).value; }
+    else findField (builtins.tail fields) n;
+
+  isSeq = n: if n.kind == "clist" then true else n.kind == "list";
+  isAttrsNode = n: if n.kind == "cattrs" then true else n.kind == "attrs";
+
+  listConcat = l: r: rb:
+    if isSeq l
+    then (if isSeq r then mkList (l.items ++ r.items) else rb)
+    else rb;
+
+  attrsMerge = l: r: rb:
+    if l.kind == "cattrs"
+    then (if r.kind == "cattrs"
+          then { kind = "cattrs";
+                 fields =
+                   (builtins.filter
+                     (f: if (findField r.fields f.name).found then false else true)
+                     l.fields)
+                   ++ r.fields; }
+          else rb)
+    else rb;
+
+  arity = n:
+    if n == "getAttr" then 2
+    else if n == "hasAttr" then 2
+    else if n == "map" then 2
+    else if n == "filter" then 2
+    else if n == "elem" then 2
+    else if n == "elemAt" then 2
+    else if n == "sort" then 2
+    else if n == "concatStringsSep" then 2
+    else if n == "foldl'" then 3
+    else if n == "substring" then 3
+    else 1;
+
+  entryName = e:
+    if isAttrsNode e then
+      (let hit = findField e.fields "name";
+       in if hit.found
+          then (if isLitStr hit.node
+                then { ok = true; v = strText hit.node; }
+                else { ok = false; v = ""; })
+          else { ok = false; v = ""; })
+    else { ok = false; v = ""; };
+
+  namesOk = items:
+    if builtins.length items == 0 then true
+    else if (entryName (builtins.head items)).ok then namesOk (builtins.tail items)
+    else false;
+
+  entryField = e:
+    { name = (entryName e).v;
+      value = (findField e.fields "value").node; };
+
+  allBools = ns:
+    if builtins.length ns == 0 then true
+    else if (builtins.head ns).kind == "bool" then allBools (builtins.tail ns)
+    else false;
+
+  pickTrue = items: flags:
+    if builtins.length items == 0 then [ ]
+    else (let rest = pickTrue (builtins.tail items) (builtins.tail flags);
+          in if (builtins.head flags).value
+             then [ (builtins.head items) ] ++ rest
+             else rest);
+
+  # ---- polyvariance machinery ----------------------------------------------
+
+  fresh = st: prefix:
+    { name = "${prefix}${builtins.toString st.ctr}";
+      st = { specs = st.specs; ctr = st.ctr + 1; frames = st.frames;
+             fuel = st.fuel; fvs = st.fvs; }; };
+
+  # Signature of a static frame: functions by O(1) lid label (pnix-hy M8),
+  # data by its toJSON STRING (m6d — verbatim node trees made every spec
+  # lookup a deep comparison over encoding-sized cattrs; a JSON summary turns
+  # key equality into fast string compares), else "D".
+  sig = env:
+    builtins.map
+      (k: (let n = builtins.getAttr k env;
+           in { name = k;
+                v = if isData n then builtins.toJSON (decode n)
+                    else if isFn n then { c = n.lid; }
+                    else "D"; }))
+      (builtins.attrNames env);
+
+  findSpec = specs: key:
+    if builtins.length specs == 0 then { found = false; }
+    else if (builtins.head specs).key == key
+    then { found = true; spec = builtins.head specs; }
+    else findSpec (builtins.tail specs) key;
+
+  addUnique = xs: n:
+    if inNames n xs then xs else xs ++ [ n ];
+
+  inNames = n: xs:
+    if builtins.length xs == 0 then false
+    else if builtins.head xs == n then true
+    else inNames n (builtins.tail xs);
+
+  fvList = nodes: bound: acc:
+    if builtins.length nodes == 0 then acc
+    else fvList (builtins.tail nodes) bound (fvNode (builtins.head nodes) bound acc);
+
+  # Free variables of an ENCODED node (m7): deterministic traversal order.
+  fvNode = node: bound: acc:
+    if node.kind == "int" then acc
+    else if node.kind == "bool" then acc
+    else if node.kind == "var" then
+      (if node.name == "builtins" then acc
+       else if inNames node.name bound then acc
+       else addUnique acc node.name)
+    else if node.kind == "str" then
+      fvList (builtins.map (p: if p.kind == "lit" then { kind = "int"; value = 0; } else p.node) node.parts) bound acc
+    else if node.kind == "list" then fvList node.items bound acc
+    else if node.kind == "attrs" then
+      fvList (builtins.map (f: f.value) node.fields) bound acc
+    else if node.kind == "select" then fvNode node.base bound acc
+    else if node.kind == "lambda" then fvNode node.body (bound ++ [ node.param ]) acc
+    else if node.kind == "apply" then fvNode node.arg bound (fvNode node.func bound acc)
+    else if node.kind == "if" then
+      fvNode node.else_e bound (fvNode node.then_e bound (fvNode node.cond bound acc))
+    else if node.kind == "binary" then fvNode node.rhs bound (fvNode node.lhs bound acc)
+    else if node.kind == "let" then
+      (let bound2 = bound ++ builtins.map (b: b.name) node.bindings;
+       in fvNode node.body bound2
+            (fvList (builtins.map (b: b.value) node.bindings) bound2 acc))
+    else acc;
+
+  fvsGet = fvs: l:
+    if builtins.length fvs == 0 then { found = false; }
+    else if (builtins.head fvs).lid == l
+    then { found = true; names = (builtins.head fvs).names; }
+    else fvsGet (builtins.tail fvs) l;
+
+  # fv of a lambda's BODY given its param, cached per lid.
+  fvOf = f: st:
+    (let hit = fvsGet st.fvs f.lid;
+     in if hit.found
+        then { names = hit.names; st = st; }
+        else (let names = fvNode f.body [ f.param ] [ ];
+                  st2 = { specs = st.specs; ctr = st.ctr; frames = st.frames;
+                          fuel = st.fuel;
+                          fvs = st.fvs ++ [ { lid = f.lid; names = names; } ]; };
+              in { names = names; st = st2; }));
+
+  # Signature restricted to the body's free variables (m7 coarsening — sound:
+  # entries the body cannot reference cannot influence specialization).
+  sigOf = frame: names:
+    builtins.map
+      (k: if builtins.hasAttr k frame
+          then (let n = builtins.getAttr k frame;
+                in { name = k;
+                     v = if isData n then builtins.toJSON (decode n)
+                         else if isFn n then { c = n.lid; }
+                         else "D"; })
+          else { name = k; v = "U"; })
+      names;
+
+  # Curried functions: a closure-valued spec body becomes a fresh-parameter
+  # lambda whose body is the closure body mixed one level deeper.
+  etaBody = nb: stx:
+    if isFn nb
+    then (let pn = fresh stx "__a";
+              frame = if nb.kind == "closure" then nb.senv
+                      else framesGet stx.frames nb.gid;
+              inner = pmix nb.body
+                        (bind1 frame nb.param { kind = "var"; name = pn.name; })
+                        pn.st;
+              rest = etaBody inner.n inner.st;
+          in { n = { kind = "lambda"; param = pn.name; body = rest.n; };
+               st = rest.st; })
+    else { n = nb; st = stx; };
+
+  papp = f: a: st:
+    if isFn f
+    then
+      (let frame = if f.kind == "closure" then f.senv else framesGet st.frames f.gid;
+       in if inlineable a
+          then pmix f.body (bind1 frame f.param a) st
+          else
+            (let fvr = if f.kind == "recclo"
+                       then { names = [ ]; st = st; }
+                       else fvOf f st;
+                 key = if f.kind == "recclo"
+                       then { lid = f.lid; gid = f.gid; }
+                       else { lid = f.lid; s = sigOf frame fvr.names; };
+                 st0 = fvr.st;
+                 hit = findSpec st0.specs key;
+             in if hit.found
+                then { n = { kind = "apply";
+                             func = { kind = "var"; name = hit.spec.name; };
+                             arg = a; };
+                       st = st0; }
+                else
+                  (let nm = fresh st0 "__s";
+                       pn = fresh nm.st "__a";
+                       seeded = { specs = pn.st.specs ++ [ { key = key; name = nm.name;
+                                                             param = pn.name;
+                                                             body = { kind = "pending"; }; } ];
+                                  ctr = pn.st.ctr;
+                                  frames = pn.st.frames;
+                                  fuel = pn.st.fuel;
+                                  fvs = pn.st.fvs; };
+                       sb = pmix f.body
+                              (bind1 frame f.param { kind = "var"; name = pn.name; })
+                              seeded;
+                       sbE = etaBody sb.n sb.st;
+                       fin = { specs = builtins.map
+                                 (s: if s.key == key
+                                     then { key = s.key; name = s.name;
+                                            param = s.param; body = sbE.n; }
+                                     else s)
+                                 sbE.st.specs;
+                               ctr = sbE.st.ctr;
+                               frames = sbE.st.frames;
+                               fuel = sbE.st.fuel;
+                               fvs = sbE.st.fvs; };
+                   in { n = { kind = "apply";
+                              func = { kind = "var"; name = nm.name; };
+                              arg = a; };
+                        st = fin; })))
+    else if f.kind == "bfn"
+    then
+      (let args2 = f.args ++ [ a ];
+       in if builtins.length args2 == arity f.name
+          then bfold f.name args2 st
+          else { n = { kind = "bfn"; name = f.name; args = args2; }; st = st; })
+    else { n = { kind = "apply"; func = f; arg = a; }; st = st; };
+
+  mapNodes = f: items: st:
+    if builtins.length items == 0 then { nodes = [ ]; st = st; }
+    else (let h = papp f (builtins.head items) st;
+              r = mapNodes f (builtins.tail items) h.st;
+          in { nodes = [ h.n ] ++ r.nodes; st = r.st; });
+
+  bfold = name: args: st:
+    (let a0 = builtins.head args;
+         resid = { n = { kind = "bapp"; name = name; args = args; }; st = st; };
+         pure = n: { n = n; st = st; };
+     in
+     if name == "length" then
+       (if isSeq a0 then pure { kind = "int"; value = builtins.length a0.items; } else resid)
+     else if name == "head" then
+       (if isSeq a0 then pure (builtins.head a0.items) else resid)
+     else if name == "tail" then
+       (if isSeq a0 then pure (mkList (builtins.tail a0.items)) else resid)
+     else if name == "isInt" then
+       (if isData a0 then pure { kind = "bool"; value = a0.kind == "int"; }
+        else if isSeq a0 then pure { kind = "bool"; value = false; }
+        else if isAttrsNode a0 then pure { kind = "bool"; value = false; }
+        else resid)
+     else if name == "isBool" then
+       (if isData a0 then pure { kind = "bool"; value = a0.kind == "bool"; }
+        else if isSeq a0 then pure { kind = "bool"; value = false; }
+        else if isAttrsNode a0 then pure { kind = "bool"; value = false; }
+        else resid)
+     else if name == "isString" then
+       (if a0.kind == "str" then pure { kind = "bool"; value = true; }
+        else if isData a0 then pure { kind = "bool"; value = false; }
+        else if isSeq a0 then pure { kind = "bool"; value = false; }
+        else if isAttrsNode a0 then pure { kind = "bool"; value = false; }
+        else resid)
+     else if name == "isList" then
+       (if isSeq a0 then pure { kind = "bool"; value = true; }
+        else if isData a0 then pure { kind = "bool"; value = false; }
+        else if isAttrsNode a0 then pure { kind = "bool"; value = false; }
+        else resid)
+     else if name == "isAttrs" then
+       (if isAttrsNode a0 then pure { kind = "bool"; value = true; }
+        else if isData a0 then pure { kind = "bool"; value = false; }
+        else if isSeq a0 then pure { kind = "bool"; value = false; }
+        else resid)
+     else if name == "toString" then
+       (if a0.kind == "int" then pure (encode (builtins.toString a0.value))
+        else if isLitStr a0 then pure a0
+        else resid)
+     else if name == "attrNames" then
+       (if a0.kind == "cattrs" then pure (encode (builtins.attrNames (decode a0)))
+        else resid)
+     else if name == "listToAttrs" then
+       (if a0.kind == "clist" then pure (encode (builtins.listToAttrs (decode a0)))
+        else if a0.kind == "list" then
+          (if namesOk a0.items
+           then pure { kind = "attrs"; fields = builtins.map entryField a0.items; }
+           else resid)
+        else resid)
+     else if name == "getAttr" then
+       (let s = builtins.head (builtins.tail args);
+        in if isLitStr a0
+           then (if s.kind == "cattrs" then pure (cattrsGet s.fields (strText a0))
+                 else if s.kind == "attrs" then
+                   (let hit = findField s.fields (strText a0);
+                    in if hit.found then pure hit.node else resid)
+                 else resid)
+           else resid)
+     else if name == "hasAttr" then
+       (let s = builtins.head (builtins.tail args);
+        in if isLitStr a0
+           then (if isAttrsNode s
+                 then pure { kind = "bool"; value = (findField s.fields (strText a0)).found; }
+                 else resid)
+           else resid)
+     else if name == "map" then
+       (let f = a0; xs = builtins.head (builtins.tail args);
+        in if isSeq xs
+           then (let r = mapNodes f xs.items st;
+                 in { n = mkList r.nodes; st = r.st; })
+           else resid)
+     else if name == "filter" then
+       (let f = a0; xs = builtins.head (builtins.tail args);
+        in if isSeq xs
+           then (let r = mapNodes f xs.items st;
+                 in if allBools r.nodes
+                    then { n = mkList (pickTrue xs.items r.nodes); st = r.st; }
+                    else resid)
+           else resid)
+     else resid);
+
+  fold2 = op: l: r: rb:
+    if l.kind == "int"
+    then (if r.kind == "int" then encode (fold op l.value r.value) else rb)
+    else if l.kind == "bool"
+    then (if r.kind == "bool" then encode (fold op l.value r.value) else rb)
+    else rb;
+
+  pmixList = items: senv: st:
+    if builtins.length items == 0 then { nodes = [ ]; st = st; }
+    else (let h = pmix (builtins.head items) senv st;
+              r = pmixList (builtins.tail items) senv h.st;
+          in { nodes = [ h.n ] ++ r.nodes; st = r.st; });
+
+  pmixParts = ps: senv: st:
+    if builtins.length ps == 0 then { parts = [ ]; st = st; }
+    else (let p0 = builtins.head ps;
+              h = if p0.kind == "lit"
+                  then { n = p0; st = st; }
+                  else (let r = pmix p0.node senv st;
+                        in { n = { kind = "sub"; node = r.n; }; st = r.st; });
+              r = pmixParts (builtins.tail ps) senv h.st;
+          in { parts = [ h.n ] ++ r.parts; st = r.st; });
+
+  allLitParts = ps:
+    if builtins.length ps == 0 then true
+    else if (builtins.head ps).kind == "lit" then allLitParts (builtins.tail ps)
+    else false;
+
+  pmixFields = fs: senv: st:
+    if builtins.length fs == 0 then { fields = [ ]; st = st; }
+    else (let f0 = builtins.head fs;
+              h = pmix f0.value senv st;
+              r = pmixFields (builtins.tail fs) senv h.st;
+          in { fields = [ { name = f0.name; value = h.n; } ] ++ r.fields;
+               st = r.st; });
+
+  pmixBinds = bs: senv: st:
+    if builtins.length bs == 0 then { binds = [ ]; st = st; }
+    else (let b0 = builtins.head bs;
+              h = pmix b0.value senv st;
+              r = pmixBinds (builtins.tail bs) senv h.st;
+          in { binds = [ { name = b0.name; value = h.n; } ] ++ r.binds;
+               st = r.st; });
+
+  # m6f instrumentation: st carries `fuel`. Every pmix step decrements it;
+  # at exhaustion a `fuel-exhausted` node returns immediately and parents
+  # unwind fast — partial state (specs/ctr) becomes OBSERVABLE at any budget.
+  # fuel = -1 means unbounded (decrements never reach 0).
+  pmix = ast: senv: st:
+    if st.fuel == 0
+    then { n = { kind = "fuel-exhausted"; }; st = st; }
+    else pmixIn ast senv
+           { specs = st.specs; ctr = st.ctr; frames = st.frames;
+             fuel = st.fuel - 1; fvs = st.fvs; };
+
+  pmixIn = ast: senv: st:
+    if ast.kind == "int" then { n = ast; st = st; }
+    else if ast.kind == "bool" then { n = ast; st = st; }
+    else if ast.kind == "str" then
+      (if allLitParts ast.parts then { n = ast; st = st; }
+       else (let r = pmixParts ast.parts senv st;
+             in { n = { kind = "str"; parts = r.parts; }; st = r.st; }))
+    else if ast.kind == "cattrs" then { n = ast; st = st; }
+    else if ast.kind == "clist" then { n = ast; st = st; }
+    else if ast.kind == "closure" then { n = ast; st = st; }
+    else if ast.kind == "recclo" then { n = ast; st = st; }
+    else if ast.kind == "var" then
+      { n = if ast.name == "builtins" then { kind = "gbuiltins"; }
+            else if builtins.hasAttr ast.name senv
+            then builtins.getAttr ast.name senv
+            else ast;
+        st = st; }
+    else if ast.kind == "binary" then
+      (let l = pmix ast.lhs senv st;
+           r = pmix ast.rhs senv l.st;
+           rb = { kind = "binary"; op = ast.op; lhs = l.n; rhs = r.n; };
+       in if ast.op == "++" then { n = listConcat l.n r.n rb; st = r.st; }
+          else if ast.op == "//" then { n = attrsMerge l.n r.n rb; st = r.st; }
+          else if isData l.n
+          then (if isData r.n
+                then (if isLitStr l.n
+                      then { n = dataFold ast.op l.n r.n; st = r.st; }
+                      else { n = fold2 ast.op l.n r.n rb; st = r.st; })
+                else { n = rb; st = r.st; })
+          else { n = rb; st = r.st; })
+    else if ast.kind == "if" then
+      (let c = pmix ast.cond senv st;
+       in if c.n.kind == "bool"
+          then (if c.n.value then pmix ast.then_e senv c.st else pmix ast.else_e senv c.st)
+          else (let tb = pmix ast.then_e senv c.st;
+                    eb = pmix ast.else_e senv tb.st;
+                in { n = { kind = "if"; cond = c.n; then_e = tb.n; else_e = eb.n; };
+                     st = eb.st; }))
+    else if ast.kind == "lambda" then
+      { n = { kind = "closure"; param = ast.param; body = ast.body;
+              lid = ast.lid; senv = senv; };
+        st = st; }
+    else if ast.kind == "apply" then
+      (let f = pmix ast.func senv st;
+           a = pmix ast.arg senv f.st;
+       in papp f.n a.n a.st)
+    else if ast.kind == "select" then
+      (let b = pmix ast.base senv st;
+       in if b.n.kind == "cattrs" then { n = cattrsGet b.n.fields ast.name; st = b.st; }
+          else if b.n.kind == "attrs" then
+            (let hit = findField b.n.fields ast.name;
+             in if hit.found then { n = hit.node; st = b.st; }
+                else { n = { kind = "select"; base = b.n; name = ast.name; }; st = b.st; })
+          else if b.n.kind == "gbuiltins"
+          then { n = { kind = "bfn"; name = ast.name; args = [ ]; }; st = b.st; }
+          else { n = { kind = "select"; base = b.n; name = ast.name; }; st = b.st; })
+    else if ast.kind == "list" then
+      (let r = pmixList ast.items senv st;
+       in { n = mkList r.nodes; st = r.st; })
+    else if ast.kind == "attrs" then
+      (let r = pmixFields ast.fields senv st;
+       in if allData (builtins.map (f: f.value) r.fields)
+          then { n = { kind = "cattrs"; fields = r.fields; }; st = r.st; }
+          else { n = { kind = "attrs"; fields = r.fields; }; st = r.st; })
+    else if ast.kind == "let" then
+      (let masked = removeNames senv ast.bindings;
+       in if allLambdas ast.bindings
+          then
+            (let g = st.ctr;
+                 frame = masked // builtins.listToAttrs
+                   (builtins.map
+                     (b: { name = b.name;
+                           value = { kind = "recclo";
+                                     param = b.value.param;
+                                     body = b.value.body;
+                                     lid = b.value.lid;
+                                     gid = g; }; })
+                     ast.bindings);
+                 st2 = { specs = st.specs;
+                         ctr = st.ctr + 1;
+                         frames = st.frames ++ [ { gid = g; frame = frame; } ];
+                         fuel = st.fuel;
+                         fvs = st.fvs; };
+             in pmix ast.body frame st2)
+          else (let r = pmixBinds ast.bindings masked st;
+                    b = pmix ast.body masked r.st;
+                in { n = { kind = "let"; bindings = r.binds; body = b.n; };
+                     st = b.st; }))
+    else { n = { kind = "unsupported"; }; st = st; };
+  # ---- m6f closure conversion at extraction ---------------------------------
+  # Residuals may still embed closure/recclo VALUES (functions that never met
+  # a dynamic argument). finalize eta-expands every one of them back into
+  # lambda SYNTAX (walking all residual shapes), and finSpecs runs the same
+  # pass over every spec body — including specs created DURING finalization
+  # (the length is re-read each step). This is the pnix-hy M8 "closure
+  # conversion" rung in our strict setting.
+
+  finList = items: st:
+    if builtins.length items == 0 then { nodes = [ ]; st = st; }
+    else (let h = finalize (builtins.head items) st;
+              r = finList (builtins.tail items) h.st;
+          in { nodes = [ h.n ] ++ r.nodes; st = r.st; });
+
+  finFields = fs: st:
+    if builtins.length fs == 0 then { fields = [ ]; st = st; }
+    else (let f0 = builtins.head fs;
+              h = finalize f0.value st;
+              r = finFields (builtins.tail fs) h.st;
+          in { fields = [ { name = f0.name; value = h.n; } ] ++ r.fields;
+               st = r.st; });
+
+  finParts = ps: st:
+    if builtins.length ps == 0 then { parts = [ ]; st = st; }
+    else (let p0 = builtins.head ps;
+              h = if p0.kind == "lit"
+                  then { n = p0; st = st; }
+                  else (let r = finalize p0.node st;
+                        in { n = { kind = "sub"; node = r.n; }; st = r.st; });
+              r = finParts (builtins.tail ps) h.st;
+          in { parts = [ h.n ] ++ r.parts; st = r.st; });
+
+  finalize = node: st:
+    if isFn node then
+      (let e = etaBody node st; in finalize e.n e.st)
+    else if node.kind == "lambda" then
+      (let b = finalize node.body st;
+       in { n = { kind = "lambda"; param = node.param; body = b.n; }; st = b.st; })
+    else if node.kind == "binary" then
+      (let l = finalize node.lhs st; r = finalize node.rhs l.st;
+       in { n = { kind = "binary"; op = node.op; lhs = l.n; rhs = r.n; }; st = r.st; })
+    else if node.kind == "if" then
+      (let c = finalize node.cond st;
+           tb = finalize node.then_e c.st;
+           eb = finalize node.else_e tb.st;
+       in { n = { kind = "if"; cond = c.n; then_e = tb.n; else_e = eb.n; }; st = eb.st; })
+    else if node.kind == "apply" then
+      (let f = finalize node.func st; a = finalize node.arg f.st;
+       in { n = { kind = "apply"; func = f.n; arg = a.n; }; st = a.st; })
+    else if node.kind == "select" then
+      (let b = finalize node.base st;
+       in { n = { kind = "select"; base = b.n; name = node.name; }; st = b.st; })
+    else if node.kind == "list" then
+      (let r = finList node.items st;
+       in { n = { kind = "list"; items = r.nodes; }; st = r.st; })
+    else if node.kind == "attrs" then
+      (let r = finFields node.fields st;
+       in { n = { kind = "attrs"; fields = r.fields; }; st = r.st; })
+    else if node.kind == "str" then
+      (let r = finParts node.parts st;
+       in { n = { kind = "str"; parts = r.parts; }; st = r.st; })
+    else if node.kind == "let" then
+      (let r = finFields node.bindings st;
+           b = finalize node.body r.st;
+       in { n = { kind = "let"; bindings = r.fields; body = b.n; }; st = b.st; })
+    else if node.kind == "bapp" then
+      (let r = finList node.args st;
+       in { n = { kind = "bapp"; name = node.name; args = r.nodes; }; st = r.st; })
+    else if node.kind == "bfn" then
+      (let r = finList node.args st;
+       in { n = { kind = "bfn"; name = node.name; args = r.nodes; }; st = r.st; })
+    else { n = node; st = st; };
+
+  replaceAt = xs: i: v:
+    if i == 0 then [ v ] ++ builtins.tail xs
+    else [ (builtins.head xs) ] ++ replaceAt (builtins.tail xs) (i - 1) v;
+
+  finSpecs = i: st:
+    if i >= builtins.length st.specs then st
+    else (let sp = builtins.elemAt st.specs i;
+              fb = finalize sp.body st;
+              st2 = { specs = replaceAt fb.st.specs i
+                        { key = sp.key; name = sp.name;
+                          param = sp.param; body = fb.n; };
+                      ctr = fb.st.ctr;
+                      frames = fb.st.frames;
+                      fuel = fb.st.fuel;
+                      fvs = fb.st.fvs; };
+          in finSpecs (i + 1) st2);
+
+  run = ast: senv: st0:
+    (let r = pmix ast senv st0;
+         f = finalize r.n r.st;
+         s2 = finSpecs 0 f.st;
+     in { n = f.n; st = s2; });
+in run

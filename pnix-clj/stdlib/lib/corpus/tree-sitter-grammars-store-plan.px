@@ -1,0 +1,40 @@
+# Tree-sitter grammar node-types redb store-plan. 구조 데이터만 적재, graph/mirror/math 연결 없음.
+let
+  B = builtins;
+  genPath = ./tree-sitter-grammars.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "code.tree_sitter.grammars.v1";
+    source = { project = "Tree-sitter official grammar node-types"; };
+    grammars = [ ]; skipped = [ ]; counts = { grammars = 0; skipped = 0; node_types = 0; total_node_types = 0; };
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "code-tree-sitter-grammars-load-v0";
+      source_lens = "stdlib/lib/corpus/tree-sitter-grammars-store-plan.px";
+      source_verdict = "materialize-code-tree-sitter-grammars";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "code.tree_sitter.grammars.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "code-tree-sitter-grammars-query-v0";
+      source_lens = "stdlib/lib/corpus/tree-sitter-grammars-store-plan.px";
+      source_verdict = "query-code-tree-sitter-grammars";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "code.tree_sitter.grammars.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

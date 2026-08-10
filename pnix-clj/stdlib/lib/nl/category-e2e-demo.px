@@ -1,0 +1,210 @@
+let
+  ownerName = "stdlib.nl.category-e2e-demo";
+
+  cat = import nl/nl-flow-category-substrate.px;
+  monoidal = import nl/category-monoidal-product.px;
+  monad = import nl/category-monad.px;
+  coeq = import nl/category-coequalizer.px;
+
+  # === End-to-End Categorical Demo (agent-NL-137) ==================
+  #
+  # 한 호출로 전체 categorical stack 발동:
+  #   utterance + language
+  #     ↓ functor (factorize)
+  #   morphism chain
+  #     ↓ monoidal product (parallelize)
+  #   parallel blocks
+  #     ↓ Maybe monad (missing slot wrap)
+  #   effect-tracked chain
+  #     ↓ codomain functor
+  #   language-specific code emit
+  #     ↓ 사용자에게 표시 가능한 envelope
+
+  stepKind = "categorical-e2e-demo";
+  framework_step =
+    "전체 categorical stack 한 호출 — factorize ⊗ parallelize ⊗ Maybe ⊗ emit";
+
+  # === Annotate morphisms with read/write metadata =================
+  #
+  # The factorizer doesn't emit read/write info; we infer simple
+  # defaults so monoidal parallelization can run.
+
+  annotateReadWrite = morphisms:
+    let
+      annotate = idx: m:
+        m // {
+          params = m.params // {
+            reads =
+              if m.action == "locate-definition" then [ "code-files" ]
+              else if m.action == "locate-references" then [ "code-files" ]
+              else if m.action == "select-region" then [ "code-files" ]
+              else if m.action == "reproduce-bug" then [ "test-env" ]
+              else if m.action == "identify-test-target" then [ "code-files" ]
+              else if m.action == "design-input-output" then [ "spec" ]
+              else [];
+            writes =
+              if m.action == "replace-identifier-text" then [ "code-files" ]
+              else if m.action == "create-new-definition" then [ "code-files" ]
+              else if m.action == "replace-with-call" then [ "code-files" ]
+              else if m.action == "design-patch" then [ "patch" ]
+              else if m.action == "verify-fix" then [ "test-results" ]
+              else if m.action == "regression-test" then [ "test-results" ]
+              else if m.action == "verify-references-resolve" then [ "test-results" ]
+              else if m.action == "update-test-references" then [ "test-files" ]
+              else if m.action == "verify-equivalent-behavior" then [ "test-results" ]
+              else if m.action == "write-assertion" then [ "test-files" ]
+              else if m.action == "run-and-verify" then [ "test-results" ]
+              else [];
+          };
+        };
+      indexed = builtins.genList (i: i) (builtins.length morphisms);
+    in
+      builtins.map (i: annotate i (builtins.elemAt morphisms i)) indexed;
+
+  # === Full demo entry ============================================
+
+  runFullDemo = utterance: language:
+    let
+      # Stage 1: functor (factorize)
+      factored = cat.factorizeIntent utterance;
+      morphisms = factored.factored_morphisms;
+
+      # Stage 2: annotate read/write
+      annotated = annotateReadWrite morphisms;
+
+      # Stage 3: monoidal parallelization
+      parallelized = monoidal.parallelizeChain annotated;
+
+      # Stage 4: Maybe-wrap each morphism (capturing missing slots)
+      maybeWrapped = builtins.map monad.toMaybeMorphism morphisms;
+      resolvedCount = builtins.length (
+        builtins.filter (m: m.tag == "Just") maybeWrapped
+      );
+      blockedCount = builtins.length (
+        builtins.filter (m: m.tag == "Nothing") maybeWrapped
+      );
+
+      # Stage 5: codomain functor (emit per language)
+      emitted = cat.emitFactoredIntent factored language;
+
+      # Stage 6: substrate question (한국어 + 영어)
+      question_en =
+        if factored.universal_missing.unknown_count == 0 then
+          "Plan fully determined: "
+          + builtins.toString (builtins.length morphisms)
+          + " step(s), "
+          + builtins.toString parallelized.block_count
+          + " sequential block(s) after parallelization. Ready to run."
+        else
+          "Need " + builtins.toString factored.universal_missing.unknown_count
+          + " slot(s) before run: "
+          + builtins.concatStringsSep ", "
+              factored.universal_missing.unknown_slots;
+      question_ko =
+        if factored.universal_missing.unknown_count == 0 then
+          "계획 완전 결정: "
+          + builtins.toString (builtins.length morphisms)
+          + " step, 병렬화 후 "
+          + builtins.toString parallelized.block_count
+          + " 순차 블록. 실행 가능."
+        else
+          builtins.toString factored.universal_missing.unknown_count
+          + " 개 슬롯 입력 후 실행: "
+          + builtins.concatStringsSep ", "
+              factored.universal_missing.unknown_slots;
+    in {
+      outcome = "e2e-demo-complete";
+      public = {
+        utterance = utterance;
+        language = language;
+        # Stage 1
+        step_count = builtins.length morphisms;
+        steps = builtins.map (m: m.action) morphisms;
+        # Stage 2/3 (monoidal)
+        parallel_block_count = parallelized.block_count;
+        parallel_speedup_bp = parallelized.speedup_factor;
+        # Stage 4 (Maybe)
+        resolved_count = resolvedCount;
+        blocked_count = blockedCount;
+        # Stage 5 (codomain emit)
+        emitted_code = emitted;
+        # Universal property
+        unknown_slot_count = factored.universal_missing.unknown_count;
+        unknown_slots = factored.universal_missing.unknown_slots;
+        # Stage 6 (substrate question)
+        substrate_question_en = question_en;
+        substrate_question_ko = question_ko;
+      };
+      carry = {
+        factored = factored;
+        annotated_morphisms = annotated;
+        parallelization = parallelized;
+        maybe_wrapped = maybeWrapped;
+        composed_substrates = [
+          "stdlib/lib/nl/nl-flow-category-substrate.px (#133)"
+          "stdlib/lib/nl/category-monoidal-product.px (#134)"
+          "stdlib/lib/nl/category-monad.px (#135)"
+        ];
+        axiom_origin =
+          "axiom-123-nl-category-e2e-demo "
+          + "(integrates 119/120/121 categorical primitives)";
+      };
+    };
+
+  # === Run demo across multiple languages =========================
+
+  runDemoMultiLang = utterance: languages:
+    let
+      runOne = lang: {
+        language = lang;
+        result = runFullDemo utterance lang;
+      };
+    in
+      builtins.map runOne languages;
+
+  # === Plate entry =================================================
+
+  applyE2EDemoPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if (builtins.hasAttr "utterance" request)
+         && (builtins.hasAttr "language" request) then
+      runFullDemo request.utterance request.language
+    else if (builtins.hasAttr "utterance" request)
+         && (builtins.hasAttr "languages" request) then {
+      outcome = "multi-lang-demo-complete";
+      results = runDemoMultiLang request.utterance request.languages;
+    }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-category-e2e-demo-axiom-123";
+    composes = "axiom-119 + axiom-120 + axiom-121";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = true;
+    stages = [
+      "1. functor factorize"
+      "2. annotate read/write"
+      "3. monoidal parallelize"
+      "4. Maybe wrap (slot tracking)"
+      "5. codomain emit (per language)"
+      "6. substrate question (en/ko)"
+    ];
+    supported_languages = [ "python" "rust" "typescript" ];
+    primary_outcomes = [
+      "e2e-demo-complete"
+      "multi-lang-demo-complete"
+    ];
+  };
+
+in {
+  inherit ownerName
+    annotateReadWrite runFullDemo runDemoMultiLang
+    applyE2EDemoPlate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL category e2e demo (agent-NL-137)";
+    owner = ownerName;
+  };
+}

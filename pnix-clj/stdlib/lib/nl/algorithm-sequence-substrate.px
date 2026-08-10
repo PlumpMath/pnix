@@ -1,0 +1,538 @@
+let
+  ownerName = "stdlib.nl.algorithm-sequence-substrate";
+
+  instanceMemory =
+    import nl/sentence-instance-memory.px;
+  branchTree =
+    import nl/branch-tree-substrate.px;
+  chainOwner =
+    import nl/sentence-substrate-mapping.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Algorithm Sequence Substrate (agent-NL-113) =================
+  #
+  # 사용자 정정 directive (2026-05-29, 세 번째 정정):
+  # > "도메인 tree 가 session memory 의 named OOP 가 아니라, 어떤
+  # >  사용자의 의도문장이 oop name 처럼 저장이 되겠지. 그 문장은
+  # >  분해전이다. 매칭되던가 extract (분해)되면 여하튼 의미를 가진
+  # >  문장들(삼각형 합동 3가지같은) 문장들로 분해가 되고 그것은 +
+  # >  최종목표문장 그 사이 문장 즉, 알고리즘의 일부라는뜻. 그것들
+  # >  즉 알고리즘 마디마디 문장들이며, 그것들은 세션의기억인 name
+  # >  이라는것. 그 네임은 도메인tree 들을 +목표문장이 주어질때마다.
+  # >  도메인트리를 가질수도있고 안갖고 있을수도 있다."
+  #
+  # # Corrected layered model
+  #
+  #   사용자 의도 문장 (분해 전)      ← OOP name (sent-001)
+  #          ↓ decompose
+  #   ┌────┬────┬────┬────┐
+  #   ↓    ↓    ↓    ↓    ↓
+  #  step1 step2 ... stepN 최종목표  ← 각각 OOP name (sent-002..N)
+  #   각각이 알고리즘 마디
+  #   각각이 4-piece 의미 vector
+  #   각각이 optional bound_tree (axiom tree, 있을 수도 없을 수도)
+  #
+  # # OOP name 의 대상 = 문장 만
+  # # tree = instance 의 attribute (binding), 따로 이름 없음
+  #
+  # # 계산 시점 (2 cases only)
+  #   1. 사용자 utterance 들어올 때 — root instance + decompose
+  #   2. pnix 내부 lookup 필요할 때 — bound_tree, bound_substrate 사용
+  #
+  # 평소엔 static data, trigger 시에만 walk.
+
+  stepKind = "algorithm-sentence-sequence-walk";
+  framework_step =
+    "layered — root intent → decomposed algorithm steps → final goal";
+
+  # === Enriched instance row =======================================
+  #
+  # extends #109 sentence_instance row with optional bindings:
+  #
+  #   {
+  #     instance_id            — "sent-NNN"  (from #109)
+  #     original_utterance     — sentence text
+  #     meaning_vector         — 4-piece
+  #     algorithm_step_index   — position in algorithm
+  #     reference_count        — recurrence count
+  #     ─ NEW ADDITIONS ────────────────────────────────────────────
+  #     role                   — "root-intent" | "algorithm-step" | "final-goal"
+  #     decomposed_from        — null | parent instance_id
+  #     decomposed_into        — list of child instance_ids
+  #     bound_tree             — null | { tree; bound_at_turn; ... }
+  #     bound_substrate        — null | "stdlib/lib/math/..." owner ref
+  #   }
+
+  enrichInstance = baseInstance: extra:
+    baseInstance // {
+      role = extra.role or "algorithm-step";
+      decomposed_from = extra.decomposed_from or null;
+      decomposed_into = extra.decomposed_into or [];
+      bound_tree = extra.bound_tree or null;
+      bound_substrate = extra.bound_substrate or null;
+    };
+
+  # === Decompose: root utterance → algorithm step sentences =========
+  #
+  # v0 decomposition rule: split on common sentence boundaries
+  # (period / "그리고" / "and" / "다음" / "후") and the final
+  # fragment is the goal. More sophisticated decomposition defers
+  # to dedicated lifters (#101 sentence-decomposition-substrate).
+
+  decomposeRootUtterance = utterance:
+    if !(builtins.isString utterance) then null
+    else
+      # Reuse #101's decomposeUtterance. The #101 envelope shape:
+      #   public.sentences = [ { text; mode_en; mode_ko; } ... ]
+      #   carry.sentence_atoms = [ "string" ... ]
+      #
+      # #117 (2026-05-29): math-sentence protection. #101 splits on
+      # period, so "forall n : Nat. 0 + n = n" becomes
+      # ["forall n : Nat.", "0 + n = n"]. That's two fragments for
+      # one mathematical claim. Post-process to merge fragments where
+      # the left ends with a math quantifier-binding pattern
+      # ("forall X : T." or "exists X : T.") and the right is the
+      # predicate body. Conservative — only merges when the pattern
+      # is unmistakable.
+      let
+        decResult = decomposer.decomposeUtterance utterance;
+        rawAtoms =
+          if builtins.isAttrs decResult
+             && builtins.hasAttr "carry" decResult
+             && builtins.hasAttr "sentence_atoms" decResult.carry
+          then decResult.carry.sentence_atoms
+          else [];
+
+        # === math fragment merge =================================
+        #
+        # Trim a string of leading/trailing whitespace by walking
+        # char-by-char. pnixc-meta substring is char-boundary safe.
+        trimStr = s:
+          let
+            isSpace = c: c == " " || c == "\t" || c == "\n";
+            len = builtins.stringLength s;
+            findStart = i:
+              if i >= len then len
+              else if isSpace (builtins.substring i 1 s)
+                then findStart (i + 1)
+              else i;
+            findEnd = i:
+              if i <= 0 then 0
+              else if isSpace (builtins.substring (i - 1) 1 s)
+                then findEnd (i - 1)
+              else i;
+            start = findStart 0;
+            stop = findEnd len;
+          in
+            if start >= stop then ""
+            else builtins.substring start (stop - start) s;
+
+        # Detect math quantifier-binding fragment:
+        # ends with ": <Type>." or ": <Type>"
+        # contains "forall" or "exists" (any case) AND a colon
+        # AND ends with a period after a short type identifier.
+        isMathBindingHead = s:
+          let
+            t = trimStr s;
+            tl = builtins.stringLength t;
+            hasForall = decomposer.containsAny t [
+              "forall " "Forall " "FORALL "
+              "exists " "Exists " "EXISTS "
+              "∀" "∃"
+            ];
+            hasColon = decomposer.containsAny t [ ":" ];
+            endsPeriod = tl > 0
+              && (builtins.substring (tl - 1) 1 t) == ".";
+          in
+            hasForall && hasColon && endsPeriod;
+
+        # Predicate body looks math-ish: contains "=", "<", ">", "+",
+        # or single-token relation operators. Conservative.
+        looksMathBody = s:
+          decomposer.containsAny s [ " = " "==" " < " " > "
+                                      " <= " " >= " " + " " * "
+                                      " - " " mod " " divides " ];
+
+        mergeMathPairs = atoms:
+          if builtins.length atoms < 2 then atoms
+          else
+            let
+              first = builtins.head atoms;
+              rest = builtins.tail atoms;
+              second = builtins.head rest;
+              shouldMerge =
+                isMathBindingHead first && looksMathBody second;
+            in
+              if shouldMerge then
+                let merged = first + " " + second; in
+                mergeMathPairs ([ merged ] ++ builtins.tail rest)
+              else
+                [ first ] ++ mergeMathPairs rest;
+
+        atoms = mergeMathPairs rawAtoms;
+      in
+        if atoms == [] then [utterance]
+        else atoms;
+
+  # === Build sequence from root utterance =========================
+  #
+  # Returns:
+  #   {
+  #     root_instance_id;
+  #     algorithm_step_ids = [ ... ];
+  #     final_goal_instance_id;
+  #     updated_memory;
+  #   }
+
+  buildAlgorithmSequence = memory: rootUtterance:
+    if !(builtins.isString rootUtterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if rootUtterance == "" then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let
+        # === NEW (사용자 정정 — fast-map check first) ============
+        # If the same root-intent already exists in memory (same
+        # meaning_vector), reuse it. Bump reference_count + alias,
+        # reuse decomposed_into chain. This is the OOP name
+        # fast-map at the algorithm-sequence layer.
+        rootMv = instanceMemory.extractMeaningVector rootUtterance;
+        existingRoot =
+          let
+            matches = builtins.filter (i:
+              let r = if builtins.hasAttr "role" i then i.role else ""; in
+              r == "root-intent"
+              && i.original_utterance == rootUtterance
+            ) memory.instances;
+          in
+            if matches == [] then null else builtins.head matches;
+      in
+        if existingRoot != null then
+          # Fast-map path — reuse existing root and its decomposed
+          # children. Bump reference_count + record alias.
+          let
+            bumpedMemory = memory // {
+              instances = builtins.map (i:
+                if i.instance_id == existingRoot.instance_id then
+                  i // {
+                    reference_count = i.reference_count + 1;
+                    aliases_seen =
+                      i.aliases_seen ++ [ rootUtterance ];
+                  }
+                else i
+              ) memory.instances;
+              turn_count = memory.turn_count + 1;
+            };
+            childIds = existingRoot.decomposed_into;
+            finalId =
+              if childIds == [] then existingRoot.instance_id
+              else
+                let
+                  finals = builtins.filter (i:
+                    let r = if builtins.hasAttr "role" i then i.role else ""; in
+                    r == "final-goal"
+                    && (i.decomposed_from == existingRoot.instance_id)
+                  ) memory.instances;
+                in
+                  if finals == [] then
+                    builtins.elemAt childIds
+                      (builtins.length childIds - 1)
+                  else (builtins.head finals).instance_id;
+          in {
+            outcome = "algorithm-sequence-built";
+            public = {
+              root_instance_id = existingRoot.instance_id;
+              algorithm_step_count = builtins.length childIds;
+              final_goal_instance_id = finalId;
+              algorithm_step_ids = childIds;
+              reused_from_fast_map = true;
+            };
+            carry = {
+              updated_memory = bumpedMemory;
+              root_row = existingRoot;
+              step_texts = [];
+              axiom_origin =
+                "axiom-100-nl-algorithm-sequence "
+                + "(fast-map reuse via axiom-97-instance)";
+            };
+          }
+        else
+          # No existing match — original "create new root + decompose"
+          # path.
+          let
+            rootId = instanceMemory.nextInstanceId memory;
+        rootRow = enrichInstance {
+          instance_id = rootId;
+          original_utterance = rootUtterance;
+          meaning_vector = rootMv;
+          algorithm_step_index = builtins.length memory.instances + 1;
+          reference_count = 1;
+          aliases_seen = [];
+          first_seen_at_turn = memory.turn_count + 1;
+        } {
+          role = "root-intent";
+          decomposed_from = null;
+        };
+        memoryWithRoot = memory // {
+          instances = memory.instances ++ [ rootRow ];
+          turn_count = memory.turn_count + 1;
+        };
+
+        # Step B: decompose into algorithm-step sentences
+        decomposedTexts = decomposeRootUtterance rootUtterance;
+        stepTexts =
+          # If decomposition produced only one sentence == root, no
+          # algorithm-step subdivision happened. The root instance
+          # *is* the algorithm; no children. Otherwise, the last
+          # decomposed text is the final-goal candidate.
+          if builtins.length decomposedTexts <= 1 then []
+          else decomposedTexts;
+
+        # Step C: create algorithm-step instances + final-goal
+        buildStep = state: text:
+          let
+            isLast = (builtins.length state.collected
+                      == builtins.length stepTexts - 1);
+            stepId = instanceMemory.nextInstanceId state.memory;
+            stepMv = instanceMemory.extractMeaningVector text;
+            stepRow = enrichInstance {
+              instance_id = stepId;
+              original_utterance = text;
+              meaning_vector = stepMv;
+              algorithm_step_index =
+                builtins.length state.memory.instances + 1;
+              reference_count = 1;
+              aliases_seen = [];
+              first_seen_at_turn = state.memory.turn_count + 1;
+            } {
+              role = if isLast then "final-goal" else "algorithm-step";
+              decomposed_from = rootId;
+            };
+            newMemory = state.memory // {
+              instances = state.memory.instances ++ [ stepRow ];
+              turn_count = state.memory.turn_count + 1;
+            };
+          in {
+            memory = newMemory;
+            collected = state.collected ++ [ stepId ];
+            final_id = if isLast then stepId else state.final_id;
+          };
+
+        buildResult = builtins.foldl' buildStep {
+          memory = memoryWithRoot;
+          collected = [];
+          final_id = null;
+        } stepTexts;
+
+        # Step D: update root's decomposed_into
+        finalMemory =
+          if buildResult.collected == [] then buildResult.memory
+          else
+            buildResult.memory // {
+              instances = builtins.map (i:
+                if i.instance_id == rootId then
+                  i // { decomposed_into = buildResult.collected; }
+                else i
+              ) buildResult.memory.instances;
+            };
+      in {
+        outcome = "algorithm-sequence-built";
+        public = {
+          root_instance_id = rootId;
+          algorithm_step_count = builtins.length buildResult.collected;
+          final_goal_instance_id = buildResult.final_id;
+          algorithm_step_ids = buildResult.collected;
+        };
+        carry = {
+          updated_memory = finalMemory;
+          root_row = rootRow;
+          step_texts = stepTexts;
+          axiom_origin =
+            "axiom-100-nl-algorithm-sequence "
+            + "(composes axiom-97-instance + axiom-90-decomposition)";
+        };
+      };
+
+  # === Bind a tree to an instance ==================================
+  #
+  # User or internal pnix calculation decides: "this algorithm step
+  # has these branching options". Bind a tree to the instance.
+
+  bindTreeToInstance = memory: instanceId: tree:
+    let
+      updated = builtins.map (i:
+        if i.instance_id == instanceId then
+          i // {
+            bound_tree = {
+              tree = tree;
+              bound_at_turn = memory.turn_count + 1;
+            };
+          }
+        else i
+      ) memory.instances;
+    in memory // {
+      instances = updated;
+      turn_count = memory.turn_count + 1;
+    };
+
+  # Same for substrate binding (math kernel, patch-IR, ...)
+  bindSubstrateToInstance = memory: instanceId: substrateOwner:
+    let
+      updated = builtins.map (i:
+        if i.instance_id == instanceId then
+          i // { bound_substrate = substrateOwner; }
+        else i
+      ) memory.instances;
+    in memory // { instances = updated; };
+
+  # === Lookup (pnix-internal calculation needs this) ===============
+  #
+  # 두 번째 계산 시점 — pnix 가 *필요* 에 의해서 instance 의 binding
+  # 을 lookup. 평소엔 호출 안 됨 — static data 그대로.
+
+  lookupInstance = memory: instanceId:
+    let
+      hits = builtins.filter
+        (i: i.instance_id == instanceId) memory.instances;
+    in if hits == [] then null else builtins.head hits;
+
+  lookupBoundTree = memory: instanceId:
+    let inst = lookupInstance memory instanceId; in
+    if inst == null then null
+    else inst.bound_tree;
+
+  lookupBoundSubstrate = memory: instanceId:
+    let inst = lookupInstance memory instanceId; in
+    if inst == null then null
+    else inst.bound_substrate;
+
+  # === Walk algorithm sequence ====================================
+  #
+  # Return ordered list of step instances (excluding root).
+
+  walkSequence = memory: rootInstanceId:
+    let
+      root = lookupInstance memory rootInstanceId;
+    in
+      if root == null then null
+      else
+        let
+          ids = root.decomposed_into or [];
+          steps = builtins.map (id: lookupInstance memory id) ids;
+        in builtins.filter (s: s != null) steps;
+
+  # === Plate entry =================================================
+
+  applyAlgorithmSequencePlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "build_sequence" request then
+      buildAlgorithmSequence
+        (request.memory or instanceMemory.emptyMemory)
+        request.build_sequence
+    else if (builtins.hasAttr "bind_tree" request)
+         && (builtins.hasAttr "instance_id" request)
+         && (builtins.hasAttr "memory" request) then
+      let
+        newMemory = bindTreeToInstance request.memory
+          request.instance_id request.bind_tree;
+      in {
+        outcome = "tree-bound";
+        public = {
+          instance_id = request.instance_id;
+        };
+        carry = {
+          updated_memory = newMemory;
+          axiom_origin =
+            "axiom-100-nl-algorithm-sequence "
+            + "(composes axiom-97-instance + axiom-90-decomposition)";
+        };
+      }
+    else if (builtins.hasAttr "lookup_instance" request)
+         && (builtins.hasAttr "memory" request) then
+      let inst = lookupInstance request.memory request.lookup_instance; in
+      if inst == null then { outcome = "held-instance-not-found"; }
+      else { outcome = "instance-found"; instance = inst; }
+    else if (builtins.hasAttr "walk_root" request)
+         && (builtins.hasAttr "memory" request) then
+      let steps = walkSequence request.memory request.walk_root; in
+      if steps == null then { outcome = "held-root-not-found"; }
+      else {
+        outcome = "sequence-walked";
+        public = { step_count = builtins.length steps; };
+        carry = { steps = steps; };
+      }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { build_sequence, memory? } or "
+        + "{ bind_tree, instance_id, memory } or "
+        + "{ lookup_instance, memory } or "
+        + "{ walk_root, memory }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-algorithm-sequence-axiom-100";
+    composes = "axiom-97-instance + axiom-90-decomposition + axiom-98-tree";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    layered_model = {
+      named_oop = "sentences (root + algorithm steps + final goal)";
+      tree_position =
+        "tree is an instance attribute (bound_tree), NOT a named OOP";
+      compute_triggers = [
+        "user utterance arrives (decompose + bind)"
+        "pnix internal lookup needed (lookupBoundTree / lookupBoundSubstrate)"
+      ];
+    };
+    role_kinds = [ "root-intent" "algorithm-step" "final-goal" ];
+    primary_outcomes = [
+      "algorithm-sequence-built"
+      "tree-bound"
+      "instance-found"
+      "sequence-walked"
+    ];
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-instance-not-found"
+      "held-root-not-found"
+      "held-non-attrs-request"
+      "held-missing-input-field"
+    ];
+  };
+
+in {
+  inherit
+    ownerName
+    enrichInstance decomposeRootUtterance
+    buildAlgorithmSequence
+    bindTreeToInstance bindSubstrateToInstance
+    lookupInstance lookupBoundTree lookupBoundSubstrate
+    walkSequence
+    applyAlgorithmSequencePlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL algorithm sequence substrate (agent-NL-113)";
+    owner = ownerName;
+    base = "nl-algorithm-sequence-v0";
+    rev_note = "agent-NL-113 (2026-05-29): 사용자 세 번째 정정 반영 — "
+      + "tree 가 named instance 가 아니라 instance attribute (bound_tree). "
+      + "OOP name 의 대상은 *문장 만*. layered shape: root intent → "
+      + "decomposed algorithm steps → final goal. 각 step 이 own tree 가질 "
+      + "수도, 안 가질 수도. 계산은 (1) utterance 들어올 때 (2) pnix 내부 "
+      + "필요 시. 평소엔 static data. DO NOT REBUILD — #109 instance "
+      + "memory 와 #101 decomposer 위에 layered structure.";
+    supersedes_partial = "agent-NL-112 의 tree_memory 모델 (tree-NNN named "
+      + "store) 는 사용자 정정에 의해 demoted to legacy/parallel surface. "
+      + "tree 는 instance attribute 이지 별도 named instance 가 아니다.";
+  };
+}

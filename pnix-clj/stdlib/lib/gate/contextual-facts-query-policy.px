@@ -1,0 +1,202 @@
+# stdlib.lib.gate.contextual-facts-query-policy
+#
+# OWNER-LAW (vpl-gate.md 10.7 헌법, 2026-06-01):
+# contextual-facts query (status filter + sort) 의 통합 .px 정본 owner.
+#
+# 이전: doghouse-core::store 의 2 helper Rust fn
+#   - contextual_facts_for_subject_filtered
+#   - contextual_facts_for_object_and_predicate
+#
+# zzzze-4 의 facts-query (raw records) 위에 layer:
+#   1. raw records → ContextualFact extract
+#   2. status filter (Accepted / Candidate include flag)
+#   3. sort by status_rank DESC, pred ASC, confidence DESC, obj ASC
+#
+# # 의미 결정 (lens)
+#
+# - status filter taxonomy:
+#     "accepted-only" — Accepted 만
+#     "accepted-or-candidate" — Accepted + Candidate (include_candidate=true)
+# - sort policy = closed deterministic 4-stage
+#
+# # Inputs
+#   request_kind = "list-status-filter-modes" | "build-plan"
+#   query_kind = "facts-by-subject-filtered" | "facts-by-object-and-predicate"
+#   <input slots per query_kind>
+
+let
+  ownerName = "stdlib/lib/gate/contextual-facts-query-policy.px";
+
+  sortPolicy = {
+    stage_1 = "status_rank DESC (Accepted > Candidate > others)";
+    stage_2 = "pred ASC (alphabetical)";
+    stage_3 = "confidence DESC (highest confidence first within same pred)";
+    stage_4 = "obj ASC (alphabetical tie-break)";
+    rationale =
+      "Accepted facts surface first; within Accepted, lexical pred grouping; within same pred, high-confidence first; obj tie-break for full determinism.";
+  };
+
+  statusFilterModes = [
+    "accepted-only"
+    "accepted-or-candidate"
+  ];
+
+  mkRow = id: factsQueryKind: slots: comment:
+    { query_id = id; underlying_facts_query = factsQueryKind;
+      slot_names = slots; semantic = comment; };
+
+  knownQueries = [
+    (mkRow "contextual-facts-by-subject-filtered"
+      "facts-by-subject"
+      [ "subject" "allowed_predicates" "include_candidate" ]
+      "subject + predicate allowlist + status filter")
+    (mkRow "contextual-facts-by-object-and-predicate"
+      "facts-by-object-and-predicate"
+      [ "object" "predicate" "include_candidate" ]
+      "object + predicate exact match + status filter")
+  ];
+
+  validRequestKinds = [
+    "list-status-filter-modes"
+    "list-query-kinds"
+    "build-plan"
+  ];
+
+  validVerdicts = [
+    "status-filter-modes-listed"
+    "query-kinds-listed"
+    "query-plan-built"
+    "held-unknown-query-kind"
+    "held-missing-input-slot"
+    "held-unknown-request-kind"
+  ];
+
+  asString = v: if builtins.isString v then v else "";
+
+  lookupQuery = id:
+    builtins.foldl'
+      (acc: r: if acc != null then acc
+        else if r.query_id == id then r else null)
+      null
+      knownQueries;
+
+  checkSlots = req: names:
+    builtins.foldl'
+      (acc: n:
+        if !(builtins.hasAttr n req)
+        then acc ++ [ n ]
+        else acc)
+      []
+      names;
+
+  applyContextualFactsQueryPolicy = request:
+    let
+      reqKind = asString (request.request_kind or "");
+    in
+      if reqKind == "list-status-filter-modes" then {
+        verdict = "status-filter-modes-listed";
+        modes = statusFilterModes;
+        sort_policy = sortPolicy;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "list-query-kinds" then {
+        verdict = "query-kinds-listed";
+        query_kinds = knownQueries;
+        total_count = builtins.length knownQueries;
+        composed_with =
+          "stdlib/lib/gate/facts-query-policy.px (zzzze-4) — raw records → ContextualFact + status filter + sort layer 추가.";
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "build-plan" then
+        let
+          qid = asString (request.query_kind or "");
+          hit = lookupQuery qid;
+        in
+          if hit == null then {
+            verdict = "held-unknown-query-kind";
+            query_kind = qid;
+            valid_query_kinds =
+              builtins.map (q: q.query_id) knownQueries;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+          else
+            let
+              missing = checkSlots request hit.slot_names;
+            in
+              if missing != [] then {
+                verdict = "held-missing-input-slot";
+                query_kind = qid;
+                missing_slots = missing;
+                required_slots = hit.slot_names;
+                lens_owner = ownerName;
+                candidate_only = true;
+              }
+              else
+                let
+                  includeCandidate =
+                    builtins.getAttr "include_candidate" request;
+                  statusMode =
+                    if includeCandidate then "accepted-or-candidate"
+                    else "accepted-only";
+                  # underlying facts query (zzzze-4 referenced) — same plan
+                  # body, plus this lens 's followup semantics
+                  table =
+                    if qid == "contextual-facts-by-subject-filtered" then
+                      "facts_by_subject"
+                    else if qid == "contextual-facts-by-object-and-predicate" then
+                      "facts_by_object_pred"
+                    else "";
+                  key =
+                    if qid == "contextual-facts-by-subject-filtered" then
+                      asString (builtins.getAttr "subject" request)
+                    else if qid == "contextual-facts-by-object-and-predicate" then
+                      let
+                        obj = asString (builtins.getAttr "object" request);
+                        pred = asString (builtins.getAttr "predicate" request);
+                      in obj + "" + pred
+                    else "";
+                in {
+                  verdict = "query-plan-built";
+                  query_kind = qid;
+                  status_filter_mode = statusMode;
+                  inherit table;
+                  composed_lens_ref =
+                    "stdlib/lib/gate/facts-query-policy.px (underlying raw scan)";
+                  plan = {
+                    plan_id = "contextual-facts-plan::" + qid + "::" + key;
+                    source_lens = ownerName;
+                    source_verdict = "query-plan-built";
+                    receipt_owner = "pnixc-meta::store::contextual-facts::" + qid;
+                    plan_built_at_ms = 0;
+                    operations = [
+                      {
+                        op_kind = "scan-prefix";
+                        table = table;
+                        key = "";
+                        key_prefix = key;
+                      }
+                    ];
+                    primary_only = true;
+                    followup_kind =
+                      "lookup-via-secondary-index-then-extract-contextual-fact-then-status-filter-then-deterministic-sort";
+                    sort_policy = sortPolicy;
+                  };
+                  lens_owner = ownerName;
+                  candidate_only = true;
+                }
+      else {
+        verdict = "held-unknown-request-kind";
+        request_kind = reqKind;
+        valid_request_kinds = validRequestKinds;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName knownQueries statusFilterModes sortPolicy
+          validRequestKinds validVerdicts
+          applyContextualFactsQueryPolicy;
+}

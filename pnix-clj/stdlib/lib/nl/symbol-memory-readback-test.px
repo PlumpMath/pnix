@@ -1,0 +1,60 @@
+# stdlib/lib/nl/symbol-memory-readback-test.px
+#
+# read-back recognition lock: 같은 proposeSymbols/storeKeyOfSymbol로 판정(drift 0)·동의어 collapse 인식·
+#   recognition≠truth. "철수가 사과를 먹었다" → 철수·먹은 memory에 있어 recognized, 사과는 missing.
+let
+  rb = import ./symbol-memory-readback.px;
+  prop = import ./symbol-memory-propose.px;
+  sp = import ./symbol-memory-store-plan.px;
+  B = builtins;
+
+  sampleProp = { roles = [ { role = "agent"; entity = "철수"; } { role = "object"; entity = "사과"; } ]; action = "먹"; };
+  syms = (prop.proposeSymbols sampleProp).symbols;     # 철수·사과·먹(ingest)
+  keyOf = name: sp.storeKeyOfSymbol (B.head (B.filter (s: s.name == name) syms));
+  # memory에 철수·먹만 저장돼 있다고 가정(사과는 없음)
+  memKeys = [ (keyOf "철수") (keyOf "먹") ];
+  r = rb.recognizeSymbols { symbols = syms; memory_keys = memKeys; };
+  statusOf = name: (B.head (B.filter (x: x.name == name) r.results)).status;
+
+  # 동의어: 잡수시 술어는 먹과 같은 store_key → 먹이 memory에 있으면 잡수시도 recognized
+  synProp = { roles = [ { role = "agent"; entity = "영희"; } { role = "object"; entity = "사과"; } ]; action = "잡수시"; };
+  synSyms = (prop.proposeSymbols synProp).symbols;
+  synR = rb.recognizeSymbols { symbols = synSyms; memory_keys = memKeys; };
+  jabPredStatus = (B.head (B.filter (x: x.ref_kind == "symbol") synR.results)).status;
+  meokKey = keyOf "먹";
+  jabPredKey = (B.head (B.filter (x: x.ref_kind == "symbol") synR.results)).store_key;
+
+  # ★회수(recover): memory_entries를 주면 recognized symbol의 prior record(concept/alias) 회수
+  memEntries = [ { store_key = keyOf "철수"; concept = null; stable_alias = "@thing:철수"; }
+                 { store_key = keyOf "먹"; concept = "ingest"; stable_alias = "@symbol:먹"; } ];
+  rE = rb.recognizeSymbols { symbols = syms; memory_entries = memEntries; };
+  meokRec = (B.head (B.filter (x: x.name == "먹") rE.results)).recovered;
+  sagwaRec = (B.head (B.filter (x: x.name == "사과") rE.results)).recovered;
+in {
+  recognized_count = r.recognized_count;
+  missing_count = r.missing_count;
+  cheolsu = statusOf "철수";
+  sagwa = statusOf "사과";
+  meok = statusOf "먹";
+  syn_collapse_key = meokKey == jabPredKey;
+  jab_pred_status = jabPredStatus;
+  durable_truth = r.durable_truth;
+  meok_recovered_concept = if meokRec == null then null else meokRec.concept;
+  sagwa_recovered_null = sagwaRec == null;
+  all_ok =
+       (r.total == 3)
+    && (statusOf "철수" == "recognized")          # memory에 있음
+    && (statusOf "먹" == "recognized")            # ingest concept-key, memory에 있음
+    && (statusOf "사과" == "missing")             # memory에 없음 = propose candidate
+    && (r.recognized_count == 2) && (r.missing_count == 1)
+    && (meokKey == jabPredKey)                     # ★먹/잡수시 같은 store_key(개념-key)
+    && (jabPredStatus == "recognized")            # 잡수시도 먹으로 recognized = 기억이 재인식
+    && (r.proposer_only == true)
+    && (r.durable_truth == false)                 # ★recognition≠truth
+    && (r.accepted_as_truth == false)
+    && (r.ontology_assert_allowed == false)
+    && (rb.mkReadbackQuery { built_at_ms = 0; }).expected_schema == "nl.symbol-memory.v0"  # query 재사용
+    # ★회수: recognized 먹의 prior concept="ingest" 회수, missing 사과는 recovered=null
+    && (meokRec != null) && (meokRec.concept == "ingest") && (meokRec.stable_alias == "@symbol:먹")
+    && (sagwaRec == null);
+}

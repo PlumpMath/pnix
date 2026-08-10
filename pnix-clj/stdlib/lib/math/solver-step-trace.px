@@ -1,0 +1,465 @@
+# stdlib.math.solver-step-trace
+#
+# **풀이 trajectory → displayable step bead (idea.md P0+P1) + why-router (P3).**
+#
+# equation-solving-procedure.px 가 내부적으로 *이미* 만드는 ordered turn /
+# discriminant verdict 를 화면에 보여줄 수 있는 step bead 시퀀스로 *낮춘다*.
+# = idea.md §0 "내부 풀이 trajectory 를 displayable step 으로 lowering".
+#
+# 비충돌 규율 (self-driving-narration-mirror 와 동일): equation-solving-procedure
+# 를 *수정하지 않는다*. 그 결과(데이터)를 입력으로 받아 step bead 로 낮춘다.
+#
+# P3 (idea.md §12): step bead 는 *재참조 가능한 구조* — relation(어떤 edge/rule
+# 인가) + why(그 edge 가 *왜* 성립하나, receipt) 슬롯을 carry 한다. 그래야 시스템
+# 이 자기 step 을 introspect 하고("왜?") 다시 표현할 수 있다 = self-confirmation.
+#
+# step bead shape (idea.md §3, §12):
+#   { step_id; role; before; after; operation; relation; why; render_ko; }
+#   role ∈ { parse | transform | identify | compute | check | final | domain-switch }
+#
+# 따라오는 연산(P3):
+#   whyOf trace stepId        — 자기 step 의 이유를 읽음 (introspection)
+#   answerFollowup trace q     — "왜?" → why 재표현 / "복소수로는?" → domain-switch
+let
+  esp = import ./equation-solving-procedure.px;
+  knl = import ../nl/korean-nl-mirror.px;
+
+  len = builtins.length;
+  map = builtins.map;
+  ts  = builtins.toString;
+
+  hasField = a: k: (builtins.isAttrs a) && (builtins.hasAttr k a);
+  getOr = a: k: d: if hasField a k then builtins.getAttr k a else d;
+
+  # 결정론 정수 sqrt (floor; Newton). perfect-square 검사에 사용.
+  isqrt = m:
+    if m <= 0 then 0
+    else
+      let step = x:
+            let y = (x + (m / x)) / 2;
+            in if y >= x then x else step y;
+      in step m;
+
+  # 정수 gcd + 근호 정리 (surd simplifier): √n = coeff·√radicand (square-free).
+  intGcd = a: b:
+    let aa = if a < 0 then 0 - a else a; bb = if b < 0 then 0 - b else b;
+        go = x: y: if y == 0 then x else go y (x - ((x / y) * y));
+    in go aa bb;
+  simplifySurd = n:
+    let s = isqrt n;
+        go = k: if k < 2 then { coeff = 1; radicand = n; }
+               else if (n - ((n / (k * k)) * (k * k))) == 0
+               then { coeff = k; radicand = n / (k * k); }
+               else go (k - 1);
+    in go s;
+
+  containsSubstring = needle: haystack:
+    let
+      nl = builtins.stringLength needle;
+      hl = builtins.stringLength haystack;
+      scan = i:
+        if (i + nl) > hl then false
+        else if (builtins.substring i nl haystack) == needle then true
+        else scan (i + 1);
+    in if nl == 0 then true else scan 0;
+
+  mkStep = id: role: before: after: operation: relation: why: renderKo: {
+    step_id = id;
+    role = role;
+    before = before;
+    after = after;
+    operation = operation;
+    relation = relation;   # P3: 이 step 이 잇는 edge/rule 의 id (재참조 가능)
+    why = why;             # P3: 그 edge 가 *왜* 성립하나 (receipt reason)
+    render_ko = renderKo;
+  };
+
+  # rule_applied → 한국어 표면 + why (equation-solving-procedure 의 의미 보존 receipt)
+  ruleKo = ruleId:
+    let r = esp.findRule ruleId;
+    in if r == null then ruleId else r.step_description;
+
+  ruleWhy = ruleId:
+    if ruleId == "subtract-from-both-sides" || ruleId == "add-to-both-sides"
+    then "양변에 같은 상수를 더하거나 빼도 등식과 해집합이 보존되기 때문입니다."
+    else if ruleId == "divide-both-sides"
+    then "양변을 0이 아닌 같은 수로 나눠도 해집합이 보존되기 때문입니다."
+    else if ruleId == "multiply-both-sides"
+    then "양변에 0이 아닌 같은 수를 곱해도 해집합이 보존되기 때문입니다."
+    else "이 변환은 방정식의 해집합을 보존하기 때문입니다.";
+
+  # --- linear: 이미 있는 turn_sequence 를 step bead 로 lowering ---------------
+
+  lowerLinearTurn = idx: turn:
+    let
+      ruleId = turn.rule_applied;
+      pre  = turn.ankh_pre;
+      post = turn.ankh_post;
+      ko =
+        if ruleId == "subtract-from-both-sides"
+        then "양변에서 상수를 빼면 " + post + " 입니다."
+        else if ruleId == "add-to-both-sides"
+        then "양변에 상수를 더하면 " + post + " 입니다."
+        else if ruleId == "divide-both-sides"
+        then "양변을 미지수의 계수로 나누면 " + post + " 입니다."
+        else if ruleId == "multiply-both-sides"
+        then "양변에 같은 수를 곱하면 " + post + " 입니다."
+        else (ruleKo ruleId) + ": " + pre + " → " + post;
+    in mkStep ("s" + (ts (idx + 2))) "transform" pre post ruleId ruleId (ruleWhy ruleId) ko;
+
+  traceLinear = result:
+    let
+      problem = getOr result "input" "?";
+      var = getOr result "variable" "x";
+      lsteps = getOr result "linear_steps" { };
+      turns = getOr lsteps "turn_sequence" [ ];
+      terminal = getOr lsteps "terminal_state" { };
+      terminalText = getOr terminal "text" "?";
+      solution = getOr lsteps "solution_value" "?";
+
+      parseBead = mkStep "s1" "parse" "" problem "parse-equation" "classify-equation"
+        "등호(=)가 있어 방정식으로 분류되기 때문입니다."
+        ("문제를 방정식 " + problem + " 으로 읽습니다.");
+
+      turnBeads = builtins.genList
+        (i: lowerLinearTurn i (builtins.elemAt turns i))
+        (len turns);
+
+      finalBead = mkStep ("s" + (ts ((len turns) + 2))) "final"
+        terminalText terminalText "state-answer" "isolate-unknown"
+        ("좌변에 미지수만 남아 " + var + " 의 값이 하나로 결정되기 때문입니다.")
+        ("따라서 " + var + " = " + (ts solution) + " 입니다.");
+
+      steps = [ parseBead ] ++ turnBeads ++ [ finalBead ];
+    in {
+      outcome = "trace-ready";
+      problem = problem;
+      variable = var;
+      solution_kind = "linear";
+      steps = steps;
+      step_count = len steps;
+      render_lines = map (s: s.render_ko) steps;
+      final_render_ko = finalBead.render_ko;
+    };
+
+  # --- quadratic: 판별식 verdict 만 있음 → 유도 step 을 *구성* -----------------
+
+  traceQuadratic = result:
+    let
+      problem = getOr result "input" "?";
+      var = getOr result "variable" "x";
+      a = getOr result "a" 0;
+      b = getOr result "b" 0;
+      c = getOr result "c" 0;
+      quad = getOr result "quadratic" { };
+      disc = getOr quad "discriminant" (b * b - (4 * a * c));
+      qoutcome = getOr quad "outcome" "?";
+
+      coeffText = "a=" + (ts a) + ", b=" + (ts b) + ", c=" + (ts c);
+      discText = "D = b²-4ac = " + (ts (b * b)) + " - " + (ts (4 * a * c))
+        + " = " + (ts disc);
+
+      # 실근 표현은 *솔버가 이미 계산*해서 envelope 에 담아 줌 (root_plus/minus_text=유리근쌍,
+      # root_text=중근, closed_form=무리근). 재계산·outcome 문자열 enumeration 금지 — 필드
+      # presence 로만 읽는다(데이터-주도). 없으면(복소) null.
+      realRootDisplay =
+        if (hasField quad "root_plus_text") && (hasField quad "root_minus_text")
+        then var + " = " + quad.root_plus_text + " 또는 " + var + " = " + quad.root_minus_text
+        else if hasField quad "root_text"
+        then var + " = " + quad.root_text + " (중근)"
+        else if hasField quad "closed_form"
+        then var + " = " + quad.closed_form
+        else null;
+
+      # check/why 는 판별식 *부호*(실제 수학 불변량)로만 — 솔버 outcome 문자열 분기 아님.
+      signCheckKo =
+        if disc < 0 then "판별식이 0보다 작습니다 (D=" + (ts disc) + " < 0)."
+        else if disc == 0 then "판별식이 0입니다 (D=0)."
+        else "판별식이 0보다 큽니다 (D=" + (ts disc) + " > 0).";
+      rootWhy =
+        if disc < 0 then "실수는 제곱하면 음수가 될 수 없어, 판별식이 음수면 실근이 존재하지 않기 때문입니다."
+        else if disc == 0 then "판별식이 0이면 근의 공식의 ±√D 항이 사라져 근이 하나로 겹치기 때문입니다."
+        else "판별식이 양수면 ±√D 가 서로 다른 두 실수값을 주기 때문입니다.";
+
+      baseSteps = [
+        (mkStep "s1" "parse" "" problem "parse-equation" "classify-quadratic"
+          "이차항(x²)이 있어 이차방정식으로 분류되기 때문입니다."
+          ("문제를 이차방정식 " + problem + " 으로 읽습니다."))
+        (mkStep "s2" "identify" problem coeffText "identify-coefficients" "read-standard-form"
+          "표준형 ax²+bx+c=0 의 계수를 읽어야 판별식을 계산할 수 있기 때문입니다."
+          ("이차방정식 ax²+bx+c=0 꼴에서 " + coeffText + " 입니다."))
+        (mkStep "s3" "compute" coeffText discText "compute-discriminant" "discriminant-formula"
+          "판별식 D=b²-4ac 가 실근의 개수를 결정하는 불변량이기 때문입니다."
+          ("판별식을 계산하면 " + discText + " 입니다."))
+        (mkStep "s4" "check" discText (ts disc) "check-discriminant-sign" "sign-of-discriminant"
+          "판별식의 부호가 실근 존재 여부를 가르는 분기점이기 때문입니다."
+          signCheckKo)
+      ];
+
+      # tail: 솔버가 실근 표현을 *주면*(presence) 읽어서 두 step, 안 주면(복소) no-real-root.
+      tail =
+        if realRootDisplay != null then [
+          (mkStep "s5" "compute" (ts disc) realRootDisplay "read-solver-roots" "quadratic-roots"
+            rootWhy ("근을 구하면 " + realRootDisplay + " 입니다."))
+          (mkStep "s6" "final" realRootDisplay realRootDisplay "state-roots" "root-existence"
+            rootWhy ("따라서 " + realRootDisplay + " 입니다."))
+        ]
+        else [
+          (mkStep "s5" "final" (ts disc) "no-real-root" "state-root-kind" "root-existence"
+            rootWhy
+            ("판별식이 0보다 작으므로 (D=" + (ts disc) + " < 0) 실수 해가 없습니다."))
+        ];
+
+      steps = baseSteps ++ tail;
+      lastFinalKo = (builtins.elemAt steps ((len steps) - 1)).render_ko;
+    in {
+      outcome = "trace-ready";
+      problem = problem;
+      variable = var;
+      solution_kind = "quadratic";
+      a = a; b = b; c = c;
+      discriminant = disc;
+      quadratic_outcome = qoutcome;
+      steps = steps;
+      step_count = len steps;
+      render_lines = map (s: s.render_ko) steps;
+      final_render_ko = lastFinalKo;
+    };
+
+  # --- entry: solve 결과를 step trace 로 낮춤 --------------------------------
+
+  traceFromSolve = result:
+    if !(builtins.isAttrs result) then {
+      outcome = "held-non-attrs-result";
+    }
+    else if (getOr result "outcome" "?") != "solved" then {
+      outcome = "held-not-solved";
+      solver_outcome = getOr result "outcome" "?";
+      reason = getOr result "reason" "풀이가 완료되지 않아 step 으로 낮출 수 없습니다.";
+      input = getOr result "input" "?";
+    }
+    else
+      let kind = getOr result "solution_kind" "?";
+      in
+        if kind == "linear" then traceLinear result
+        else if kind == "quadratic" then traceQuadratic result
+        else {
+          outcome = "held-unknown-solution-kind";
+          solution_kind = kind;
+        };
+
+  traceUtterance = utterance:
+    traceFromSolve (esp.beginSolveProcedure utterance);
+
+  # === P3: introspection — 자기 step 의 이유를 읽음 ===========================
+
+  whyOf = trace: stepId:
+    let
+      steps = getOr trace "steps" [ ];
+      matches = builtins.filter (s: s.step_id == stepId) steps;
+    in
+      if matches == [ ] then {
+        outcome = "held-no-such-step";
+        step_id = stepId;
+      }
+      else
+        let s = builtins.head matches;
+        in {
+          outcome = "why";
+          step_id = stepId;
+          operation = s.operation;
+          relation = s.relation;
+          why = s.why;
+          render_ko = s.render_ko + " — " + s.why;
+        };
+
+  # === P3: domain-switch — 같은 thing-it 을 복소수 이름공간으로 re-alias ======
+  #   b=0 이고 magnitude 가 완전제곱일 때만 정확히 (x²+4=0 류). 그 외 honest held.
+
+  domainSwitchComplex = trace:
+    if (getOr trace "solution_kind" "?") != "quadratic" then {
+      outcome = "held-not-quadratic";
+    }
+    else if (getOr trace "quadratic_outcome" "?") != "complex-roots" then {
+      outcome = "held-has-real-roots";
+      reason = "실수 해가 이미 있어 복소수 확장이 불필요합니다.";
+    }
+    else
+      # ★ surd 통일 복소근: x = (-b ± √(-D)·i)/(2a), D=b²-4ac<0. √(-D)=coeff·√radicand 정리 + gcd 약분.
+      #   b=0/b≠0, 무리수 크기(±√3·i), 비정수부(분수형) 전부 한 공식. Tier-0 라이브러리 primitive.
+      let
+        a = getOr trace "a" 0;
+        b = getOr trace "b" 0;
+        c = getOr trace "c" 0;
+        var = getOr trace "variable" "x";
+        problem = getOr trace "problem" "?";
+        disc = b * b - (4 * a * c);     # < 0 (complex-roots guard 상단)
+        negDisc = 0 - disc;             # = 4ac - b² > 0
+        twoA = 2 * a;
+        negB = 0 - b;
+        surd = simplifySurd negDisc;    # √negDisc = surd.coeff·√surd.radicand
+        g0 = intGcd (intGcd negB surd.coeff) twoA;
+        g = if g0 == 0 then 1 else g0;
+        rp = negB / g;                  # 약분된 실수부 분자
+        cf = surd.coeff / g;            # 약분된 허수 계수
+        rad = surd.radicand;            # square-free 근호 안
+        dnRaw = twoA / g;
+        dn = if dnRaw < 0 then 0 - dnRaw else dnRaw;
+        rpN = if dnRaw < 0 then 0 - rp else rp;
+        coefPart = if cf == 1 then "" else ts cf;
+        # 허수 단위 텍스트: rad=1 → 유리 계수·i, else coeff√radicand·i
+        imText =
+          if rad == 1 then (coefPart + "i")              # i, 2i
+          else (coefPart + "√" + (ts rad) + "i");        # √3i, 2√2i
+        # 값 텍스트 (분모 1 이면 a±bi, 아니면 (a±bi)/dn)
+        valText =
+          if dn == 1 then
+            (if rpN == 0 then "±" + imText else (ts rpN) + " ± " + imText)
+          else
+            "(" + (ts rpN) + " ± " + imText + ") / " + (ts dn);
+        rootText = var + " = " + valText;
+        steps = [
+          (mkStep "d1" "domain-switch" "real" "complex" "extend-domain"
+            "extend-real-to-complex"
+            "판별식이 음수라 실수 해는 없지만, 복소수로 넓히면 두 켤레근이 있기 때문입니다."
+            "실수 범위에는 해가 없지만, 복소수 범위로 넓히면 해가 있습니다.")
+          (mkStep "d2" "compute" problem ("판별식 D = " + (ts disc))
+            "compute-discriminant" "discriminant-formula"
+            "판별식 D=b²-4ac 의 부호로 복소근을 판정하기 때문입니다."
+            ("판별식 D = " + (ts disc) + " < 0 입니다."))
+          (mkStep "d3" "compute" ("D = " + (ts disc)) rootText
+            "quadratic-formula-complex" "quadratic-formula"
+            "근의 공식 x=(-b±√D)/(2a) 에서 D<0 이면 √D=√(-D)·i 이고, 근호를 정리하기 때문입니다."
+            ("근의 공식과 근호 정리로 " + rootText + " 입니다."))
+          (mkStep "d4" "final" rootText rootText
+            "state-complex-answer" "complex-roots-stated"
+            "두 켤레근이 복소수 범위에서 결정되기 때문입니다."
+            ("따라서 복소수 해는 " + rootText + " 입니다."))
+        ];
+      in {
+        outcome = "domain-switched";
+        from = "real";
+        to = "complex";
+        variable = var;
+        complex_roots = valText;
+        surd_radicand = rad;
+        steps = steps;
+        step_count = len steps;
+        render_lines = map (s: s.render_ko) steps;
+        final_render_ko = "따라서 복소수 해는 " + rootText + " 입니다.";
+      };
+
+  # === P3: follow-up router (학생 후속 질문 → 자기 trace introspect) ==========
+
+  answerFollowup = trace: question:
+    if !(builtins.isAttrs trace) then {
+      outcome = "held-non-attrs-trace";
+    }
+    else if containsSubstring "복소" question then
+      domainSwitchComplex trace
+    else if containsSubstring "왜" question then
+      let
+        steps = getOr trace "steps" [ ];
+      in
+        if steps == [ ] then {
+          outcome = "held-no-steps";
+        }
+        else
+          let final = builtins.elemAt steps ((len steps) - 1);
+          in {
+            outcome = "why";
+            step_id = final.step_id;
+            relation = final.relation;
+            why = final.why;
+            render_ko = final.why;
+          }
+    else {
+      outcome = "held-no-followup-route";
+      question = question;
+      known_followups = [ "왜 (이유)" "복소수 (domain-switch)" ];
+    };
+
+  # 흡수(2026-06-14): nl/domain-switch-table.px 의 보존계약.
+  # step bead 의 role=domain-switch 정본 owner 가 이 파일이므로 switch invariant 도 여기 둔다.
+  domainSwitches = [
+    { from = "nl"; to = "ontology-proposition"; invariant_id = "roles-preserved"; verifiable = true; }
+    { from = "ontology-proposition"; to = "math-object"; invariant_id = "relation-constraint-dim-preserved"; verifiable = false; }
+    { from = "math-object"; to = "code-atom"; invariant_id = "io-invariant-preserved"; verifiable = false; }
+    { from = "code-atom"; to = "executable-test"; invariant_id = "expected-failure-specified"; verifiable = false; }
+    { from = "executable-test"; to = "evidence"; invariant_id = "result-to-typed-evidence"; verifiable = false; }
+    { from = "evidence"; to = "mirror-receipt"; invariant_id = "evidence-in-receipt-chain"; verifiable = false; }
+  ];
+
+  domainSwitchBetween = from: to:
+    let hits = builtins.filter (s: s.from == from && s.to == to) domainSwitches;
+    in if hits == [ ] then null else builtins.head hits;
+
+  verifyDomainSwitch = from: to: before: after:
+    let s = domainSwitchBetween from to;
+    in if s == null then { verdict = "held-unknown-switch"; }
+       else if s.invariant_id == "roles-preserved" then
+         let ok = knl.propEq before after;
+         in { switch = from + "→" + to; invariant_id = s.invariant_id;
+              holds = ok; verdict = if ok then "invariant-holds" else "held-invariant-broken"; }
+       else { switch = from + "→" + to; invariant_id = s.invariant_id;
+              holds = null; verdict = "held-manual-invariant"; };
+
+  domainSwitchChain = _:
+    let go = from: acc: bound:
+          if from == null || bound <= 0 then acc
+          else let nexts = builtins.filter (s: s.from == from) domainSwitches;
+               in if nexts == [ ] then acc ++ [ from ]
+                  else go (builtins.head nexts).to (acc ++ [ from ]) (bound - 1);
+    in go "nl" [ ] 12;
+
+  # === Mirror plate lens entry ======================================
+  applySolverStepTracePlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if request ? utterance then
+      traceUtterance request.utterance
+    else if request ? solve_result then
+      traceFromSolve request.solve_result
+    else if (request ? trace) && (request ? followup) then
+      answerFollowup request.trace request.followup
+    else {
+      outcome = "held-missing-input";
+      reason = "utterance / solve_result / (trace+followup) 중 하나가 필요합니다.";
+    };
+
+  inventorySummary = _: {
+    owner = "stdlib.math.solver-step-trace";
+    consumes = "equation-solving-procedure.beginSolveProcedure result (data-only; owner not modified)";
+    handles = [ "linear (turn_sequence lowering)" "quadratic (discriminant derivation 구성)" ];
+    step_roles = [ "parse" "transform" "identify" "compute" "check" "final" "domain-switch" ];
+    bead_introspection_slots = [ "relation" "why" ];
+    followups = [ "왜 (why introspection)" "복소수 (domain-switch)" ];
+    absorbed_from = [ "nl/domain-switch-table.px" ];
+    note = "idea.md P0+P1+P3: 내부 풀이 trajectory → displayable step bead (relation/why 재참조 가능). render_lines=한 줄씩 풀이. answerFollowup=자기 step introspect.";
+  };
+
+in {
+  inherit
+    mkStep
+    traceLinear
+    traceQuadratic
+    traceFromSolve
+    traceUtterance
+    whyOf
+    domainSwitchComplex
+    domainSwitches
+    domainSwitchBetween
+    verifyDomainSwitch
+    domainSwitchChain
+    answerFollowup
+    applySolverStepTracePlate
+    inventorySummary;
+  ownerName = "stdlib.math.solver-step-trace";
+  meta = {
+    source = "stdlib math solver step trace (lowering + why-router)";
+    owner = "stdlib.math.solver-step-trace";
+    base = "solver-step-trace-v1";
+    rev_note = "idea.md (2026-06-14) P0+P1+P3. P0/P1: equation-solving-procedure 의 ordered turn / 판별식 verdict 를 displayable step bead 로 낮춤 (owner 비수정). P3 (§12): step bead 에 relation+why 슬롯 (재참조 가능 = self-confirmation). whyOf=자기 step 이유 introspect, domainSwitchComplex=복소수 이름공간 re-alias (b=0 perfect-square), answerFollowup='왜?'/'복소수로는?' 라우팅.";
+  };
+}

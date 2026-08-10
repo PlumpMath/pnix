@@ -1,0 +1,39 @@
+# stdlib/lib/nl/dictionary-stdict-original-language-store-plan-test.px
+#
+# stdict original_language_info rec{} store-plan structure test.
+# Generated data may be absent in a clean clone; the plan must still be evaluable and
+# must preserve proposer-only / non-durable locks.
+let
+  sp = import ./dictionary-stdict-original-language-store-plan.px;
+  B = builtins;
+  p = sp.mkPlan { built_at_ms = 0; };
+  op = B.head p.plan.operations;
+  vb = op.value_bytes;
+  q = sp.mkQuery { built_at_ms = 0; };
+  qop = B.head q.plan.operations;
+in {
+  schema = p.schema;
+  table = op.table;
+  op_kind = op.op_kind;
+  shard_count = p.shard_count;
+  operation_count = p.operation_count;
+  value_starts_brace = (B.substring 0 1 vb) == "{";
+  hash_len = B.stringLength p.content_hash;
+  query_op = qop.op_kind;
+  query_table = qop.table;
+  proposer_only = p.proposer_only;
+  durable_truth = p.durable_truth;
+  ontology_assert_allowed = p.ontology_assert_allowed;
+  all_ok = (p.schema == "dictionary.stdict-original-language-facts.v1")
+           && (op.table == "dictionary_facts")
+           && (op.op_kind == "append")
+           && (p.shard_count >= 1)
+           && (p.operation_count == (p.shard_count + 1))
+           && ((B.substring 0 1 vb) == "{")
+           && (B.stringLength p.content_hash == 64)
+           && (qop.op_kind == "scan-prefix")
+           && (qop.table == "dictionary_facts")
+           && p.proposer_only
+           && (p.durable_truth == false)
+           && (p.ontology_assert_allowed == false);
+}

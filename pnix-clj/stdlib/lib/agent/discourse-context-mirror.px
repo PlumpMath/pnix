@@ -1,0 +1,111 @@
+# stdlib.agent.discourse-context-mirror
+#
+# **다중문장 NL — "그것" = 보존 graph 노드 (first.md ②, DRT).**
+#
+# first.md: 다중문장 NL + 문장간 context-DSL — *문장 = morphism, 문맥 = 합성,
+# "그것" = 보존 graph 노드*. 여러 문장이 오면 각 문장이 entity(discourse referent)를
+# 도입하고, 다음 문장의 지시어("그것"/"it")가 *앞서 도입된 같은 노드*로 resolve된다.
+# 같은 entity = 같은 노드(② 보존), 문장→문장 = 합성(② 변형).
+#
+# 헌법 정합: 지시어(그것/it/this)는 *문법 기능어 closed class*이지 content 어휘가
+# 아니다 — resolution은 discourse referent accessibility(DRT)라는 *구조*이지 어휘
+# 날조가 아니다(word-guess 금지와 무관). entity *추출*은 decompose(별 lane)의 일;
+# 이 owner는 추출된 entity 위에서 *resolution(보존 그래프)*을 닫는다.
+let
+  # 지시어 = 닫힌 문법 function-word 집합 (한/영). 도메인 vocab 아님.
+  # ★닫힌 지시어 집합 (이/그/저-계열 전체; 국립국어원·wiktionary 검색 완전집합). open vocab 아닌 문법 class라
+  #   완전 list 가 옳은 표현(사전-generic 은 content word 용; 지시대명사는 pos=대명사라도 1·2인칭과 안 갈림).
+  #   바레 '이'/'저' 는 과트리거(이=둘/치아·저=저(겸양))라 제외; 다자 지시어만(불명확성 0). '그'는 legacy 유지.
+  placeTokens = [ "여기" "거기" "저기" "이곳" "그곳" "저곳" "이쪽" "그쪽" "저쪽" "here" "there" ];  # 처소/방향 → location
+  timeTokens = [ "이때" "그때" "저때" "이날" "그날" "저날" "then" ];  # 시간 지시어 → temporal
+  referenceTokens =
+    [ "이것" "그것" "저것" "이거" "그거" "저거"          # 사물
+      "그것을" "그거를" "그것이" "그걸"                  # 사물 굴절형(조사 strip 보강)
+      "이분" "그분" "저분" "얘" "걔" "쟤"                # 사람
+      "그"                                              # legacy 바레(기존)
+      "it" "this" "that" "these" "those" "them" "they" "its" ]
+    ++ placeTokens ++ timeTokens;
+in
+rec {
+  name = "stdlib.agent.discourse-context-mirror";
+
+  inherit referenceTokens placeTokens timeTokens;
+  isReference = tok: builtins.elem tok referenceTokens;
+  # 지시어 → *강제* 의미 kind: 처소/방향 지시어는 location (거기가=주격이라도 장소를 가리킴). 사물/사람 지시어는
+  #   null → 구문 역할(refKinds=role)을 그대로 사용(그것을=object·그분이=agent 처럼 역할 가변). liftDiscourse 가 소비.
+  referenceKind = tok:
+    if builtins.elem tok placeTokens then "location"
+    else if builtins.elem tok timeTokens then "temporal"
+    else null;
+
+  # entity = discourse referent (graph node). name + kind + at(도입 시점).
+  mkEntity = a:
+    ({ name = a.name or null; kind = a.kind or "thing"; at = a.at or 0; }
+     // (if a ? deictic then { deictic = a.deictic; } else { }));
+
+  # context = entity 리스트 (recency 순, 마지막이 가장 최근). accessibility = recency.
+  # 지시어 → 가장 최근 접근가능 entity (DRT). 빈 context면 null(Held — 가리킬 게 없음).
+  resolveReference = context:
+    if context == [ ] then null
+    else builtins.elemAt context ((builtins.length context) - 1);
+
+  # kind 힌트 있는 지시 ("그 함수" → 가장 최근 *함수*). 같은 노드 보존을 kind로 좁힘.
+  resolveByKind = context: kind:
+    let matching = builtins.filter (e: e.kind == kind) context;
+    in if matching == [ ] then null
+       else builtins.elemAt matching ((builtins.length matching) - 1);
+  deicticFallback = ref: kind:
+    if kind == "location" then mkEntity { name = ref; kind = "location"; at = -1; deictic = true; }
+    else if kind == "temporal" then mkEntity { name = ref; kind = "temporal"; at = -1; deictic = true; }   # 처소(거기)와 대칭: 시간 지시어(그때)도 발화현장 exophoric 좌표로 — 단문 dangling 비대칭 해소
+    else null;
+  # 지시 reference 용 kind 해소 — *이름 다른* exophoric fallback(at=-1)은 후보에서 제외(여기≠거기, 이때≠그때 붕괴 방지).
+  #   실제 도입 entity(at≥0, 학교/내일 등)와 *같은 이름* fallback 은 후보 유지. 코덱 H3.
+  resolveByKindForRef = context: ref: kind:
+    let matching = builtins.filter (e: (e.kind == kind) && (((e.at or 0) >= 0) || (e.name == ref))) context;
+    in if matching == [ ] then null
+       else builtins.elemAt matching ((builtins.length matching) - 1);
+  resolveReferenceWithKind = context: ref: kind:
+    let e = if kind == null then resolveReference context else resolveByKindForRef context ref kind;
+    in if e != null then e else deicticFallback ref kind;
+
+  # === 담화 처리 — entity 스레딩 + 지시어 resolution (보존 그래프 구축) ==========
+  # steps = [ { introduces ? [entity]; references ? [refTok]; refKinds ? {refTok:kind};
+  #            droppedSlots ? [kind] } ]
+  # 각 step의 지시어(references)·생략슬롯(droppedSlots, pro-drop=零형 지시)은 *그 step 이전까지의*
+  # context로 resolve(자기 도입 전: references→resolved, droppedSlots→recovered), 그 다음 자기 entity 추가.
+  # 결과 = 각 step의 (resolved 명시지시 · recovered 생략복원 · 도입 entity).
+  processDiscourse = steps:
+    let
+      n = builtins.length steps;
+      go = i: ctx: acc:
+        if i >= n then acc
+        else
+          let
+            step = builtins.elemAt steps i;
+            refs = step.references or [ ];
+            # ★refKinds(설계됐으나 미사용이던 필드) 완성: 지시어에 kind 힌트 있으면 resolveByKind
+            #   (그가→agent→가장 최근 agent=철수, 사과 아님). 없으면 평면 recency(기존).
+            rk = step.refKinds or { };
+            resolved = builtins.map (r:
+              let k = if (builtins.hasAttr r rk) then (builtins.getAttr r rk) else null;
+              in { ref = r; entity = resolveReferenceWithKind ctx r k; }) refs;
+            inContext = e: builtins.any (c: (c.name == e.name) && (c.kind == e.kind) && (c.at == e.at)) ctx;
+            deicticIntro = builtins.map (x: x.entity)
+              (builtins.filter (x:
+                (x.entity != null) && (x.entity ? deictic) && x.entity.deictic && ((inContext x.entity) == false)
+              ) resolved);
+            # ★pro-drop(零형 지시): 생략된 canonical slot 을 kind 로 context 에서 복원(가장 최근 동종 entity).
+            #   가리킬 게 없으면 null=Held(dangling). 단문 term 엔 미주입 — 복원은 담화 층 binding 일 뿐(코덱 단방향).
+            ds = step.droppedSlots or [ ];
+            recovered = builtins.map (k: { slot = k; entity = resolveByKind ctx k; }) ds;
+            intro = builtins.map (e: mkEntity (e // { at = i; })) (step.introduces or [ ]);
+            newCtx = ctx ++ deicticIntro ++ intro;
+          in go (i + 1) newCtx (acc ++ [ { step = i; introduced = deicticIntro ++ intro; resolved = resolved; recovered = recovered; } ]);
+    in go 0 [ ] [ ];
+
+  # 한 담화의 모든 지시어 바인딩을 평탄하게 (그것 → 어느 노드인가). null = dangling
+  # reference (가리킬 게 없음 → Held, 사용자에게 "무엇을 말하나요?" 물을 근거).
+  referenceBindings = steps:
+    let processed = processDiscourse steps;
+    in builtins.concatMap (s: s.resolved) processed;
+}

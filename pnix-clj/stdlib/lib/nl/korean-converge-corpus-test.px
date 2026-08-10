@@ -1,0 +1,328 @@
+# stdlib/lib/nl/korean-converge-corpus-test.px — converge 게이트 *독립표본* verify (회의 ③ 첫 단계)
+#
+# ★회의 결론(2026-06-17): 자기확장의 운명 = verifyReflection 적대강도. 그 첫 요건 = *표본 독립성*
+#   (거울이 표본까지 생성하면 순환검증=자기오염). 이 코퍼스는 *손-저작 ground-truth* — 문장의 조사/어미에서
+#   기대 역할/시제/서법을 사람이 적고, convergeGate 가 그걸 내는지 검증. 거울이 drift 하면 (틀린 역할/시제)
+#   여기서 잡힌다(self-round-trip 으론 못 잡는 것). math-keep 코퍼스 + 일상NL(held-nl) 코퍼스 둘 다.
+let
+  knl = import ./korean-nl-mirror.px;
+  srd = import ./nl-service-route-disposer.px;
+  soe = import ./dictionary-stdict-original-language-evidence.px;
+  tl = import ./korean-taxonomy-lift.px;
+  B = builtins;
+  # 기대: math-keep + 역할집합 + 시제/서법 (조사/어미에서 독립적으로 author)
+  mk = s: roles: tense: mood:
+    let p = knl.liftToProposition s; g = knl.convergeGate s;
+        got = B.map (r: r.role) p.roles;
+        roleOk = (B.length got == B.length roles) && (B.all (r: B.elem r got) roles);
+    in { s = s; ok = (g.verdict == "math-keep") && roleOk && (p.tense == tense) && (p.mood == mood);
+         verdict = g.verdict; got_roles = got; tense = p.tense; mood = p.mood; };
+  nl = s: let g = knl.convergeGate s; in { s = s; ok = (g.verdict == "held-nl") || (g.verdict == "held-empty"); verdict = g.verdict; };
+  # action 까지 검사(역복원 drift lock: 쌌→싸≠쓰, 많이→먹 등)
+  mkA = s: roles: tense: mood: action:
+    let p = knl.liftToProposition s; g = knl.convergeGate s;
+        got = B.map (r: r.role) p.roles;
+        roleOk = (B.length got == B.length roles) && (B.all (r: B.elem r got) roles);
+    in { s = s; ok = (g.verdict == "math-keep") && roleOk && (p.tense == tense) && (p.mood == mood) && (p.action == action);
+         verdict = g.verdict; got_roles = got; tense = p.tense; mood = p.mood; action = p.action; };
+
+  mathCases = [
+    (mk "철수가 사과를 먹었다"        [ "agent" "object" ]            "past"    "declarative")
+    (mk "철수가 영희에게 책을 주었다" [ "agent" "recipient" "object" ] "past"   "declarative")
+    (mk "학생이 책을 읽는다"          [ "agent" "object" ]            "present" "declarative")
+    (mk "철수가 문을 열어라"          [ "agent" "object" ]            "present" "imperative")
+    (mk "철수는 사과를 먹는다"        [ "topic" "object" ]            "present" "declarative")
+  ];
+  nlCases = [ (nl "안녕") (nl "고마워") ];
+  stdictOriginSample = [
+    { lemma = "브레이크"; target_code = 1001; word_type = "외래어"; origin_surface = "brake"; origin_language_type = "영어"; origin_index = 0;
+      evidence_kind = "stdict.original_language_info"; proposer_only = true; durable_truth = false; ontology_assert_allowed = false; }
+  ];
+
+  # ★P3 확장: 경계지도 ground-truth — 조사/어미·작용소에서 *기대 verdict 를 사람이 독립 author* (거울 round-trip 이
+  #   못 잡는 drift 를 잡는다). 어순=math-keep, 작용소(상/양상/부정)=held-nl/operator-not-pure, 중복역할=held-nl/ill-formed.
+  heldOp = s: let g = knl.convergeGate s; hr = if (g ? held_reason) then g.held_reason else "";
+    in { s = s; ok = (g.verdict == "held-nl") && (hr == "operator-not-pure"); verdict = g.verdict; reason = hr; };
+  heldIll = s: let g = knl.convergeGate s; hr = if (g ? held_reason) then g.held_reason else "";
+    in { s = s; ok = (g.verdict == "held-nl") && (hr == "ill-formed"); verdict = g.verdict; reason = hr; };
+  heldDangling = s: let g = knl.convergeGate s; hr = if (g ? held_reason) then g.held_reason else "";
+    in { s = s; ok = (g.verdict == "held-nl") && (hr == "dangling-reference"); verdict = g.verdict; reason = hr; };
+  heldScope = s: let g = knl.convergeGate s; hr = if (g ? held_reason) then g.held_reason else "";
+    in { s = s; ok = (g.verdict == "held-nl") && (hr == "scope-out-of-codec"); verdict = g.verdict; reason = hr; };
+  heldScopeKind = s: scope: let g = knl.convergeGate s; hr = if (g ? held_reason) then g.held_reason else ""; sgr = if (g ? scope_gap_reason) then g.scope_gap_reason else "";
+    in { s = s; ok = (g.verdict == "held-nl") && (hr == "scope-out-of-codec") && (sgr == scope); verdict = g.verdict; reason = hr; scope = sgr; };
+  surf = name: got: expected: { inherit name got expected; ok = got == expected; };
+  boundaryCases = [
+    (mk "사과를 철수가 먹었다"          [ "agent" "object" ]            "past"    "declarative")  # 어순 변이 → 등가 math-keep
+    (heldOp "철수가 사과를 먹고있었다")    # aspect(진행) → operator-not-pure
+    (heldOp "철수가 사과를 먹어야한다")    # modality(당위) → operator-not-pure
+    (heldOp "철수가 사과를 먹지않았다")    # negation → operator-not-pure
+    (heldIll "철수가 영희가 먹었다")       # 중복 agent → ill-formed
+    # ★리뷰 회귀 lock (df69501d7..HEAD 적대리뷰 H1/H2/H4 — blind spot 보강):
+    (mk "사과를 먹었다"             [ "object" ]                    "past" "declarative")  # H1: 주어 생략(pro-drop) → math-keep
+    (mk "철수가 먹었다"             [ "agent" ]                     "past" "declarative")  # H1: 목적어 생략 → math-keep
+    (mk "철수가 학교에 책을 샀다"   [ "agent" "location" "object" ] "past" "declarative")  # H2: buy+장소+목적어 → 사(목적어 우선, ≠살았다 fail-open)
+    (mk "철수가 그때 사과를 먹었다" [ "adjunct" "agent" "object" ]  "past" "declarative")  # H4: 시간 지시어 부가어 → math-keep(처소와 대칭)
+    (heldDangling "그것을 먹었다")           # 명시 지시어 antecedent 없음 → held/dangling (게이트 유지 lock)
+    # ★리뷰 2차(M1/M2):
+    (mkA "철수가 사과를 많이 먹었다" [ "adjunct" "agent" "object" ] "past" "declarative" "먹")  # M2: '많이'=많+이 주격 오분해 방지(부사 종성)
+    (mkA "그만 먹어"                 [ "adjunct" ]                  "present" "declarative" "먹")  # over-fire 회귀: 그만=닫힌 정도부사, 역할 0 ill-formed로 떨구지 않음
+    (mkA "제일 좋아"                 [ "adjunct" ]                  "present" "declarative" "좋")  # over-fire 회귀: 제일=닫힌 정도부사
+    (mkA "값이 쌌다"                 [ "agent" ]                     "past" "declarative" "싸")  # M1: ㅡ역복원 단음절 ㅏ는 쓰(ㅡ)로 오복원 금지(양성 선행시만)
+    # ★단문 codec scope boundary: 구조 보존 전에는 복문/내포/수량구/보조사/보조용언을 durable math 로 승격 금지.
+    (heldScope "철수가 밥을 먹어 보았다")
+    (heldScope "철수가 밥을 먹어서 잔다")
+    (heldScope "철수가 간다고 했다")
+    (heldScope "철수가 먹는 사과를 샀다")
+    (heldScope "철수가 먹기 싫다")
+    (heldScope "학생 두 명이 왔다")
+    # ★Part D P0: 보조사/접속조사 silent drop → math-keep fail-open 차단. 구조보존 전에는 최소 held.
+    (heldScopeKind "철수도 사과를 먹었다" "unsupported-particle")
+    (heldScopeKind "철수하고 영희가 갔다" "coordination")
+    (heldScopeKind "사과랑 배를 먹었다" "coordination")
+    (heldScopeKind "책과 공책을 샀다" "coordination")
+    # ★조사생략 목적어 복원(P0 해결): 정상 명사+타동사 = bare object 복원 → math-keep(전엔 bare drop→ill-formed/over-fire).
+    (mkA "포도 샀다"       [ "object" ] "past" "declarative" "사")
+    (mkA "태도 보였다"     [ "object" ] "past" "declarative" "보이")  # 태도를 보이다(show)=object 정확
+    (mkA "별이 보였다"     [ "agent" ]  "past" "declarative" "보이")  # 보이다(passive/intransitive)=명시 주격 유지
+    (mkA "제도 만들었다"   [ "object" ] "past" "declarative" "만들")
+    (mkA "광고 냈다"       [ "object" ] "past" "declarative" "내")
+    (mkA "사고 봤다"       [ "object" ] "past" "declarative" "보")
+    (mkA "중고 샀다"       [ "object" ] "past" "declarative" "사")
+    (mkA "친구가 영화표를 예매했대" [ "agent" "object" ] "past" "declarative" "예매하")
+    (mkA "딸기 먹었다"     [ "object" ] "past" "declarative" "먹")
+    (mkA "마음 졸였다"     [ "object" ] "past" "declarative" "졸이")
+    (mkA "철수가 포도 샀다" [ "agent" "object" ] "past" "declarative" "사")   # agent+조사생략 object 공존
+    (mkA "철수가 영희와 갔다" [ "agent" "comitative" ] "past" "declarative" "가") # comitative 와/과는 보존(뒤 core arg 있을 때만 coordination held)
+    # ★조사생략 주어 복원(P0 해결): 자동사 + 단일 bare 체언 = agent. 다중 bare/보조사 의심은 held.
+    (mkA "철수 왔다"       [ "agent" ] "past" "declarative" "오")
+    (mkA "비 왔다"         [ "agent" ] "past" "declarative" "오")
+    (mkA "아이 울었다"     [ "agent" ] "past" "declarative" "울")
+    (mkA "꽃 피었다"       [ "agent" ] "past" "declarative" "피")
+    (heldScopeKind "철수도 왔다" "unsupported-particle")
+    (heldIll "철수 영희 왔다")
+    # ★도-말음절 명사 seed 보강: 명사 전체가 entity면 보조사 게이트 exempt → 조사생략 object 복원.
+    (mkA "고속도 만들었다" [ "object" ] "past" "declarative" "만들")
+    (mkA "설계도 만들었다" [ "object" ] "past" "declarative" "만들")
+    # ★분리 표기 명사+하다: 허용된 행위명사만 compound predicate 로 결합. 미등록 bare+하다 는 action=하 math-keep 금지.
+    (mkA "철수가 공부 했다"   [ "agent" ] "past" "declarative" "공부하")
+    (mkA "철수가 운동 했다"   [ "agent" ] "past" "declarative" "운동하")
+    (mkA "철수가 숙제 했다"   [ "agent" ] "past" "declarative" "숙제하")
+    (mkA "철수가 주문 했다"   [ "agent" ] "past" "declarative" "주문하")
+    (mkA "철수가 디버깅 했다" [ "agent" ] "past" "declarative" "디버깅하")
+    (heldScopeKind "철수가 밥 했다" "hada-compound-unknown")
+    (heldScopeKind "밥 했다" "hada-compound-unknown")
+    (heldIll "공부 했다") # action=공부하라도 명시 논항 0이면 아직 held(역할 없는 명제 금지)
+    # 잔여(미해결, dict 필요): 하다류 valency 전수·도/만 말음절 명사 전수·무표지 passive subject는 Part D P1(dict valency/coverage) 선결.
+    # ★단문 활용 lock: ㄹ탈락 reverse, -였다 사동/피동, 해요체 물음표, bare ㅡ탈락, 거라/너라.
+    (mkA "철수가 답을 압니다"       [ "agent" "object" ] "present" "declarative" "알")
+    (mkA "철수가 장난감을 만듭니다" [ "agent" "object" ] "present" "declarative" "만들")
+    (mkA "철수가 문을 엽니다"       [ "agent" "object" ] "present" "declarative" "열")
+    (mkA "아기가 밥을 먹였다"       [ "agent" "object" ] "past"    "declarative" "먹이")
+    (mkA "철수가 가요?"             [ "agent" ]          "present" "interrogative" "가")
+    (mkA "철수가 바빠"              [ "agent" ]          "present" "declarative" "바쁘")
+    (mkA "불을 꺼"                  [ "object" ]         "present" "declarative" "끄")
+    (mkA "꽃이 예뻐"                [ "agent" ]          "present" "declarative" "예쁘")
+    (mkA "철수가 가거라"            [ "agent" ]          "present" "imperative" "가")
+    (mkA "사과를 다오"              [ "object" ]         "present" "imperative" "달")    # 오불규칙 parse-only: 표면 다오→달. 단독 "다오"는 역할 0이라 gate held가 맞음
+    (mkA "할아버지가 밥을 드신다"   [ "agent" "object" ] "present" "declarative" "먹")
+    (mkA "할아버지가 주무신다"       [ "agent" ]          "present" "declarative" "자")
+    # ★A1/A2 roulette 결정론화 lock (사전 우연성 제거):
+    (mkA "아이가 웁니다"            [ "agent" ]          "present" "declarative" "울")    # A1: 웁니다→울(ㄹ복원, dict무관). 높임 주무신다(시-어간)는 ㄹ복원 제외
+    (mkA "범인이 경찰을 속였다"     [ "agent" "object" ] "past"    "declarative" "속이")  # A2: copula+목적어→사동 속이(구조신호, dict무관). 의사였다(목적어無)는 copula 유지
+  ];
+  surfaceCases = [
+    (surf "hon-ga-haeyo"   (knl.realizeVerbLevelKindHonorific "가" "present" "declarative" "haeyo" "subject" "verb") "가세요")
+    (surf "hon-meok-haeyo" (knl.realizeVerbLevelKindHonorific "먹" "present" "declarative" "haeyo" "subject" "verb") "드세요")
+    (surf "hon-ja-haeyo"   (knl.realizeVerbLevelKindHonorific "자" "present" "declarative" "haeyo" "subject" "verb") "주무세요")
+    (surf "hon-dop-haeyo"  (knl.realizeVerbLevelKindHonorific "돕" "present" "declarative" "haeyo" "subject" "verb") "도우세요")
+    (surf "rieul-sal-ni"   (knl.realizeVerbLevelKind "살" "present" "interrogative" "haera" "verb") "사니")
+    (surf "rieul-al-ni"    (knl.realizeVerbLevelKind "알" "present" "interrogative" "haera" "verb") "아니")
+    (surf "rieul-meol-ni"  (knl.realizeVerbLevelKind "멀" "present" "interrogative" "haera" "adjective") "머니")
+    (surf "existential-compound" (knl.realizeVerbLevelKind "맛있" "present" "declarative" "haera" "verb") "맛있다")
+    # ★높임 명령 + suppletion lock (F4 계시십시오 중복·C1-1 명령 suppletion 누락):
+    (surf "hon-itda-imp-hsp" (knl.realizeVerbLevelKindHonorific "있" "present" "imperative" "hasipsio" "subject" "verb") "계십시오")
+    (surf "hon-meok-imp-hy"  (knl.realizeVerbLevelKindHonorific "먹" "present" "imperative" "haeyo" "subject" "verb") "드세요")
+    (surf "hon-itda-dec-hy"  (knl.realizeVerbLevelKindHonorific "있" "present" "declarative" "haeyo" "subject" "verb") "계세요")
+    (surf "oh-dao-parse-action" (tl.analyzeVerb "다오").action "달")
+    (surf "oh-dao-parse-mood"   (tl.analyzeVerb "다오").mood "imperative")
+    (surf "spoken-moket-dae-action" (tl.analyzeVerb "먹었대").action "먹")
+    (surf "spoken-moket-dae-tense"  (tl.analyzeVerb "먹었대").tense "past")
+    (surf "spoken-woe-ta-da-action" (tl.analyzeVerb "먹었다더라").action "먹")
+    (surf "spoken-woe-ta-da-tense"  (tl.analyzeVerb "먹었다더라").tense "past")
+    (surf "spoken-gat-da-la"        (tl.analyzeVerb "갔다더라").action "가")
+    (surf "spoken-gat-da-la-tense"  (tl.analyzeVerb "갔다더라").tense "past")
+    (surf "spoken-yemae-hae-dae-action" (tl.analyzeVerb "예매했대").action "예매하")
+    (surf "spoken-yemae-hae-dae-tense"  (tl.analyzeVerb "예매했대").tense "past")
+    (surf "dal-haera-imperative-default" (knl.realizeVerbLevelKind "달" "present" "imperative" "haera" "verb") "달아라") # 생성 전역 다오 치환 금지: 달(hang/sweet) 동음충돌 보호
+    # ★Part E: 무대본 대화 응답기(chatRespond) — proposition 파생 답변(구조분석+재생성)·held 정직·echo/대본 금지.
+    (surf "chat-understood-mk" (knl.chatRespond "철수가 사과를 먹었다").understood true)
+    (surf "chat-route"         (knl.chatRespond "철수가 사과를 먹었다").route "korean_sentence_codec")
+    (surf "chat-held-op"       (knl.chatRespond "철수가 먹지않았다").understood false)
+    # ★중첩 관형절(철수가 먹는 사과)=이제 *완전 이해*(과거 held-scope). liftRelativeClauseSentence+relative_clause role+convergeRelativeGate.
+    #   held 정직성은 chat-held-op(먹지않았다)가 계속 커버. regen 글자정확 가드로 오발화 차단(fail-closed=틀리면 round-trip 깨져 held).
+    (surf "chat-rel-understood" (knl.chatRespond "철수가 먹는 사과를 샀다").understood true)
+    (surf "chat-rel-regen"      (knl.chatRespond "철수가 먹는 사과를 샀다").regenerated "철수가 먹는 사과를 샀다")
+    (surf "chat-rel-flag"       ((knl.chatRespond "철수가 먹는 사과를 샀다") ? relative) true)
+    (surf "chat-nonecho"       ((knl.chatRespond "철수가 사과를 먹었다").answer == "철수가 사과를 먹었다") false) # 답변≠입력(앵무새 금지)
+    (surf "chat-capture-gen"   (knl.chatRespond "포도 샀다").regenerated "포도를 샀다") # 조사생략 이해→재생성서 조사 복원
+    # ★§25 judgment layer(judgeUtterance) — convergeGate 다음 "그래서 뭘" 판정, speech_act/next_move 전부 *구조파생*(하드코딩 0).
+    (surf "judge-request"      (knl.judgeUtterance "사과를 다오").speech_act "request")           # mood=imperative→요청
+    (surf "judge-statement"    (knl.judgeUtterance "철수가 사과를 먹었다").speech_act "statement") # declarative→서술
+    (surf "judge-question"     (knl.judgeUtterance "철수가 가니").speech_act "question")           # interrogative→질문
+    (surf "judge-q-kind"       (knl.judgeUtterance "철수가 가니").response_kind "answer")
+    (surf "judge-clarify"      (knl.judgeUtterance "그것을 먹었다").speech_act "clarify-reference") # held/dangling→지시어 확인질문
+    (surf "judge-clarify-move" (knl.judgeUtterance "그것을 먹었다").next_move "ask-referent")
+    (surf "judge-scope"        (knl.judgeUtterance "철수가 밥을 먹어서 잔다").speech_act "out-of-scope-structure") # 복문→범위밖
+    (surf "judge-neg"          (knl.judgeUtterance "철수가 사과를 먹지않았다").speech_act "out-of-scope-operator")  # 부정 작용소→범위밖
+    # ★§25 judgment→한국어 응답 realize(realizeJudgment) — 닫힌 move 집합 grammar+명제 파생, 입력별 하드코딩 0.
+    (surf "rj-clarify"   (knl.realizeJudgment "그것을 먹었다").response "지시 대상이 무엇을 가리키는지 알려 주세요.")
+    (surf "rj-scope"     (knl.realizeJudgment "철수가 밥을 먹어서 잔다").response "복문·내포 구조가 섞여 있습니다. 핵심 절부터 단문으로 나눠 주시겠어요?")
+    (surf "rj-req-nonecho"  (((knl.realizeJudgment "사과를 다오").response == "사과를 다오") == false) true) # 응답≠입력(앵무새 금지)
+    (surf "rj-req-act"   (knl.realizeJudgment "사과를 다오").speech_act "request")
+    # ★chatRespond.answer 자동 업그레이드(route ferry 대상이 judgment 반영) — held는 clarification, understood는 판단+분석.
+    (surf "chat-judge-held"  (knl.chatRespond "그것을 먹었다").answer "지시 대상이 무엇을 가리키는지 알려 주세요.")
+    (surf "chat-judge-speechact" (knl.chatRespond "철수가 가니").speech_act "question")
+    # ★route_eligible: 거울이 "이 발화가 codec-routable인가" 판정(Rust 게이트가 읽음). math-keep+구조적held=routable, 코딩요청/인사=fall-through.
+    (surf "route-ok-mk"      (knl.chatRespond "철수가 사과를 먹었다").route_eligible true)
+    (surf "route-ok-dangling"(knl.chatRespond "그것을 먹었다").route_eligible true)
+    (surf "route-ok-scope"   (knl.chatRespond "철수가 밥을 먹어서 잔다").route_eligible true)
+    (surf "route-no-code"    (knl.chatRespond "함수 만들어줘").route_eligible false)   # 코딩요청=fall-through(code route)
+    (surf "route-no-greet"   (knl.chatRespond "안녕하세요").route_eligible false)      # 인사=fall-through
+    # ★domain noun explanation: action cue 로 승격하지 않고 concept-question move 로 닫는다.
+    #   definition 은 grounding/redb 쪽 책임이라 여기서 날조하지 않는다.
+    (surf "concept-q-code"    (knl.chatRespond "code가 무엇인지 설명해줘").verdict "concept-question")
+    (surf "concept-q-code-no-route" (knl.chatRespond "code가 무엇인지 설명해줘").service_route_proposed false)
+    (surf "concept-q-program" (knl.chatRespond "program metadata catalog를 설명해줘").route "concept_question")
+    (surf "concept-q-emit"    (knl.chatRespond "emit 이벤트가 무엇인지 설명해줘").understood true)
+    (surf "concept-q-eval"    (knl.chatRespond "eval 의미를 설명해줘").next_move "answer-grounded")
+    (surf "concept-q-pnix-sample" (knl.chatRespond "pnix sample input이 무엇인지 설명해줘").route "concept_question")
+    (surf "concept-q-pnix-sample-no-route" (knl.chatRespond "pnix sample input이 무엇인지 설명해줘").service_route_proposed false)
+    # ★live factual weather: "무엇인지/what is" 표면이어도 시간/장소가 붙으면 개념정의가 아니라 live-tool Held.
+    #   반대로 "날씨가 무엇인지" 자체는 개념 질문으로 유지한다.
+    (surf "concept-q-weather-term" (knl.chatRespond "날씨가 무엇인지 설명해줘").route "concept_question")
+    (surf "live-weather-ko-route"  (knl.chatRespond "오늘 서울 날씨가 무엇인지 알려줘").route "weather_tool_needed")
+    (surf "live-weather-ko-held"   (knl.chatRespond "오늘 서울 날씨 알려줘").held_kind "weather-tool-needed")
+    (surf "live-weather-rain-question" (knl.chatRespond "내일 비 온대?").route "weather_tool_needed")
+    (surf "live-weather-rain-declarative-not-tool" (knl.chatRespond "비가 갑자기 쏟아진다").route "korean_sentence_codec")
+    (surf "live-weather-en-route"  (knl.chatRespond "what is the weather in Seoul today?").route "weather_tool_needed")
+    (surf "live-weather-no-forecast" ((knl.chatRespond "오늘 서울 날씨 알려줘").answer == "내일 서울 날씨는 비, 기온은 18도예요.") false)
+    # ★context/deictic question: 이/그 지시어 질문은 개념정의나 ill-formed 가 아니라 referent 확인으로 닫는다.
+    (surf "context-ref-this-what" (knl.chatRespond "이게 뭐야?").route "context_reference_needed")
+    (surf "context-ref-that-price" (knl.chatRespond "그거 얼마야?").held_kind "context-reference-needed")
+    (surf "context-ref-file-where" (knl.chatRespond "그 파일 어디 있어?").route "context_reference_needed")
+    (surf "context-ref-request-fix-this" (knl.chatRespond "이거 좀 고쳐줘").held_kind "context-reference-needed")
+    (surf "context-ref-fragment-other-one" (knl.chatRespond "그거 말고 딴 거").route "context_reference_needed")
+    (surf "context-ref-implicit-failing-thing" (knl.chatRespond "왜 자꾸 안 되는 거야").route "context_reference_needed")
+    (surf "context-ref-implicit-end-time" (knl.chatRespond "언제 끝나는데?").held_kind "context-reference-needed")
+    (surf "context-ref-implicit-shorten" (knl.chatRespond "좀 더 짧게 줄여줘").route "context_reference_needed")
+    (surf "context-ref-implicit-sort-list" (knl.chatRespond "이름 순서대로 정렬해줄래?").held_kind "context-reference-needed")
+    (surf "conversation-control-quiet" (knl.chatRespond "조용히 좀 해줄래").route "conversation_control")
+    (surf "conversation-control-slow" (knl.chatRespond "천천히 말해 무슨 소린지 모르겠어").next_move "adjust-response-style")
+    # ★live factual finance: stock/crypto price 는 현재값이라 live finance provenance 없이는 답하지 않는다.
+    (surf "concept-q-stock-term" (knl.chatRespond "주가가 무엇인지 설명해줘").route "concept_question")
+    (surf "live-finance-ko-route" (knl.chatRespond "오늘 애플 주가가 무엇인지 알려줘").route "finance_tool_needed")
+    (surf "live-finance-ko-held"  (knl.chatRespond "비트코인 가격 알려줘").held_kind "finance-tool-needed")
+    (surf "live-finance-en-route" (knl.chatRespond "what is AAPL stock price today?").route "finance_tool_needed")
+    # ★live factual sports: score/schedule/standings 는 live sports provenance 없이는 답하지 않는다.
+    (surf "concept-q-score-term" (knl.chatRespond "점수가 무엇인지 설명해줘").route "concept_question")
+    (surf "live-sports-ko-score" (knl.chatRespond "오늘 야구 경기 결과가 뭐야").route "sports_tool_needed")
+    (surf "live-sports-ko-schedule" (knl.chatRespond "내일 축구 경기 일정 알려줘").held_kind "sports-tool-needed")
+    (surf "live-sports-en-score" (knl.chatRespond "what is the Lakers score today?").route "sports_tool_needed")
+    # ★live factual time: current clock/timezone 은 live time provenance 없이는 답하지 않는다.
+    (surf "concept-q-time-term" (knl.chatRespond "시간이 무엇인지 설명해줘").route "concept_question")
+    (surf "live-time-ko-now" (knl.chatRespond "지금 서울 몇 시야").route "time_tool_needed")
+    (surf "live-time-ko-current" (knl.chatRespond "현재 시간이 무엇인지 알려줘").held_kind "time-tool-needed")
+    (surf "live-time-en-now" (knl.chatRespond "what time is it in Seoul now?").route "time_tool_needed")
+    # ★calendar/logistics/secure-memory: 개인/외부 상태는 live owner evidence 없이는 답하지 않는다.
+    (surf "concept-q-schedule-term" (knl.chatRespond "일정이 무엇인지 설명해줘").route "concept_question")
+    (surf "live-calendar-meeting-time" (knl.chatRespond "오늘 회의 몇 시였더라").route "calendar_tool_needed")
+    (surf "live-calendar-plan-request" (knl.chatRespond "내일 일정 좀 정리해줘").held_kind "calendar-tool-needed")
+    (surf "live-logistics-package" (knl.chatRespond "택배 언제 와?").route "logistics_tool_needed")
+    (surf "logistics-declarative-not-tool" (knl.chatRespond "택배가 오늘 도착했어").route "korean_sentence_codec")
+    (surf "concept-q-tracking-number" (knl.chatRespond "tracking number가 무엇인지 설명해줘").route "concept_question")
+    (surf "concept-q-tracking-status-en" (knl.chatRespond "what is tracking status?").route "concept_question")
+    (surf "live-logistics-status" (knl.chatRespond "배송 상태 알려줘").held_kind "logistics-tool-needed")
+    (surf "secure-memory-password" (knl.chatRespond "비밀번호 뭐였지").held_kind "secure-memory-needed")
+    # ★§25 B의 대화 정책(respondToMove) — generic adjacency-pair 표(하드코딩 분기 0). A move→B 응답 move.
+    (surf "resp-statement" (knl.respondToMove (knl.judgeUtterance "철수가 사과를 먹었다")).response_move "acknowledge")
+    (surf "resp-question"  (knl.respondToMove (knl.judgeUtterance "철수가 가니")).response_move "answer-grounded")  # 근거 없으면 정직히 unknown
+    (surf "resp-request"   (knl.respondToMove (knl.judgeUtterance "사과를 다오")).response_move "assess-capability")
+    (surf "resp-clarify"   (knl.respondToMove (knl.judgeUtterance "그것을 먹었다")).response_move "referent-unknown")
+    (surf "resp-wrapper"   (knl.respondToUtterance "철수가 가니").response_move "answer-grounded")    # 1-hop 편의 wrapper
+    (surf "resp-antiparrot"(((knl.respondToMove (knl.judgeUtterance "철수가 사과를 먹었다")).response_move == "statement") == false) true) # 응답move≠incoming(구조 anti-parrot)
+    # ★§24 ②연결 multi-turn fold(dialogueFold) — 지시어가 단문선 dangling이나 *앞 턴 entity*가 context에 있으면 결속(DRT).
+    (surf "fold-t0-act"  (B.elemAt (knl.dialogueFold [ "철수가 사과를 먹었다" "그것을 먹었다" ]) 0).speech_act "statement")
+    (surf "fold-bind"    (B.elemAt (knl.dialogueFold [ "철수가 사과를 먹었다" "그것을 먹었다" ]) 1).bound_reference "사과")  # 그것→사과(앞 턴 목적어, recency)
+    (surf "fold-resolved"(B.elemAt (knl.dialogueFold [ "철수가 사과를 먹었다" "그것을 먹었다" ]) 1).response_move "reference-resolved")
+    (surf "fold-no-ctx-bind" (B.elemAt (knl.dialogueFold [ "그것을 먹었다" ]) 0).bound_reference null)  # 앞 context 없으면 결속 X(held 유지)
+    # ★대화 불안정턴(문맥 미정 + 지시어)에서 fold가 죽지 않고 held-policy 유지되는지 확인.
+    (surf "fold-uncertain-prefix-0" (B.elemAt (knl.dialogueFold [ "오늘 회의 몇 시였더라" "그거 바로 알려줘" ]) 0).speech_act "question")
+    (surf "fold-uncertain-prefix-1" (B.elemAt (knl.dialogueFold [ "오늘 회의 몇 시였더라" "그거 바로 알려줘" ]) 1).speech_act "clarify-reference")
+    (surf "fold-uncertain-prefix-2" (B.elemAt (knl.dialogueFold [ "그거 바로 알려줘" "그걸 취소해줘" ]) 1).speech_act "unparsed")
+    (surf "fold-uncertain-prefix-2-bound" (B.elemAt (knl.dialogueFold [ "그거 바로 알려줘" "그걸 취소해줘" ]) 1).bound_reference null)
+    (surf "fold-ref-chain" (B.elemAt (knl.dialogueFold [ "철수가 사과를 샀다" "그것을 먹었다" "그것을 버렸다" ]) 2).bound_reference "사과")
+    (surf "fold-uncertain-chain" (B.elemAt (knl.dialogueFold [ "오늘 회의 몇 시였더라" "그거 바로 알려줘" "그걸 취소해줘" ]) 2).speech_act "unparsed")
+    # ★ServiceRouteProposed projection — classifier는 durable modality tag가 아니라 typed route proposal만 emit.
+    (surf "svc-route-math" (knl.judgeUtterance "(a 더하기 b)").proposed_service_route "math")          # 수도코드/수식 face → math proposal
+    (surf "svc-route-propose-only" (knl.judgeUtterance "(a 더하기 b)").service_route_decision "propose-only")
+    (surf "svc-route-nondurable" ((knl.judgeUtterance "(a 더하기 b)").service_route_durable_truth == false) true)
+    (surf "svc-route-no-exec" ((knl.judgeUtterance "(a 더하기 b)").service_route_execute_allowed == false) true)
+    (surf "svc-route-speech-stable" (knl.judgeUtterance "(a 더하기 b)").speech_act "out-of-scope-structure") # NL judgment 오염 금지
+    (surf "svc-route-nl-none" (knl.judgeUtterance "철수가 사과를 먹었다").service_route_proposed false)
+    (surf "svc-route-code" (knl.chatRespond "이 함수 이름 바꿔").proposed_service_route "code")
+    # ★ServiceRoute dispose P0/P1 — proposal evidence를 math owner가 닫을 수 있을 때만 답. 비route는 Held.
+    (surf "svc-dispose-arith" (srd.disposeServiceRoute {
+      utterance = "1 더하기 1 계산해줘";
+      proposal = { proposed = true; target = "math"; decision = "propose-only"; dispose_required = true; };
+    }).response "산술 결과: 1 + 1 = 2")
+    (surf "svc-dispose-symbolic-canonical" (srd.disposeServiceRoute {
+      utterance = "(a 더하기 b)";
+      proposal = { proposed = true; target = "math"; decision = "propose-only"; dispose_required = true; };
+    }).response "수식 구조: (a 더하기 b)")
+    (surf "svc-dispose-diff" (srd.disposeServiceRoute {
+      utterance = "x 제곱 미분";
+      proposal = { proposed = true; target = "math"; decision = "propose-only"; dispose_required = true; };
+    }).response "미분 결과: x² -> 2x")
+    (surf "svc-dispose-factor" (srd.disposeServiceRoute {
+      utterance = "x 제곱 빼기 일 인수분해";
+      proposal = { proposed = true; target = "math"; decision = "propose-only"; dispose_required = true; };
+    }).response "인수분해 결과: x² - 1 = (x - 1)(x + 1)")
+    # ★ServiceRoute dispose P2(code) — code proposal은 selected coding owner(rename-symbol-candidate)로 candidate/clarify만. 실행 X.
+    (surf "svc-dispose-code-rename" (srd.disposeServiceRoute {
+      utterance = "이름 바꿔줘 oldName newName";
+      proposal = { proposed = true; target = "code"; decision = "propose-only"; dispose_required = true; };
+    }).response "코드 변경 후보: oldName -> newName 이름 변경")
+    (surf "svc-dispose-code-owner" (srd.disposeServiceRoute {
+      utterance = "이름 바꿔줘 oldName newName";
+      proposal = { proposed = true; target = "code"; decision = "propose-only"; dispose_required = true; };
+    }).disposed_by "rename-symbol-candidate")
+    (surf "svc-dispose-code-clarify" (srd.disposeServiceRoute {
+      utterance = "함수 만들어줘";
+      proposal = { proposed = true; target = "code"; decision = "propose-only"; dispose_required = true; };
+    }).operation_kind "code-transform-candidate-held")
+    (surf "svc-dispose-no-route-held" (srd.disposeServiceRoute {
+      utterance = "철수가 사과를 먹었다";
+      proposal = { proposed = false; };
+    }).outcome "held")
+    # ★P3 stdict original_language_info — 다국어 원어 clue 는 typed evidence 일 뿐 번역 truth/ontology assertion 아님.
+    (surf "stdict-origin-ready" (soe.lookupByLemmaIn stdictOriginSample { lemma = "브레이크"; }).outcome "evidence-ready")
+    (surf "stdict-origin-surface" (B.head (soe.lookupByLemmaIn stdictOriginSample { lemma = "브레이크"; }).evidence).origin_surface "brake")
+    (surf "stdict-origin-proposer-only" (B.head (soe.lookupByLemmaIn stdictOriginSample { lemma = "브레이크"; }).evidence).proposer_only true)
+    (surf "stdict-origin-nondurable" (B.head (soe.lookupByLemmaIn stdictOriginSample { lemma = "브레이크"; }).evidence).durable_truth false)
+    (surf "stdict-origin-no-ontology" (B.head (soe.lookupByLemmaIn stdictOriginSample { lemma = "브레이크"; }).evidence).ontology_assert_allowed false)
+    (surf "stdict-origin-not-translation-truth" (B.head (soe.lookupByLemmaIn stdictOriginSample { lemma = "브레이크"; }).evidence).translation_truth false)
+    (surf "stdict-origin-utterance" (soe.evidenceForUtteranceIn stdictOriginSample "브레이크 점검해줘").evidence_count 1)
+    (surf "stdict-origin-miss-held" (soe.lookupByLemmaIn stdictOriginSample { lemma = "사과"; }).outcome "held-no-stdict-origin-clue")
+  ];
+in {
+  math_all_ok = B.all (c: c.ok) mathCases;
+  nl_all_ok   = B.all (c: c.ok) nlCases;
+  boundary_all_ok = B.all (c: c.ok) boundaryCases;
+  surface_all_ok = B.all (c: c.ok) surfaceCases;
+  math_fails  = B.map (c: { s = c.s; verdict = c.verdict; got = c.got_roles; tense = c.tense; mood = c.mood; }) (B.filter (c: c.ok == false) mathCases);
+  nl_fails    = B.map (c: { s = c.s; verdict = c.verdict; }) (B.filter (c: c.ok == false) nlCases);
+  boundary_fails = B.map (c: { s = c.s; verdict = c.verdict; }) (B.filter (c: c.ok == false) boundaryCases);
+  surface_fails = B.filter (c: c.ok == false) surfaceCases;
+  all_ok = (B.all (c: c.ok) mathCases) && (B.all (c: c.ok) nlCases) && (B.all (c: c.ok) boundaryCases) && (B.all (c: c.ok) surfaceCases);
+}

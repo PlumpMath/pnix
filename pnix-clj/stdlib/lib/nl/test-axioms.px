@@ -1,0 +1,511 @@
+let
+  ownerName = "stdlib.nl.test-axioms";
+
+  containsAny = haystack: needles:
+    let hl = builtins.stringLength haystack;
+    in builtins.any (n:
+      let nl = builtins.stringLength n;
+          scan = pos:
+            if pos + nl > hl then false
+            else if (builtins.substring pos nl haystack) == n then true
+            else scan (pos + 1);
+      in if nl == 0 then false else scan 0
+    ) needles;
+
+  # === Test Axioms (agent-NL-125) ==================================
+  #
+  # 검증의 손/도구. 코드 작성 후 *어떻게 정당성 확인*.
+  #
+  # 5 family:
+  #   1. unit-test (단일 isolated)
+  #   2. integration-test (여러 컴포넌트)
+  #   3. property-test (invariant + generator + shrinking)
+  #   4. mocking-stubbing (test doubles)
+  #   5. coverage-assertion (커버리지 + 단언 스타일)
+
+  stepKind = "test-tool-axiom";
+  framework_step =
+    "axiom content — 테스트 작성 + 실행 + 검증 도구";
+
+  # === 1. Unit Test ============================================
+
+  unitTestSpecs = [
+    {
+      name = "arrange-act-assert";
+      cues = [ "AAA" "arrange act assert" "arrange-act-assert" "준비-실행-검증" ];
+      sub_specs = [
+        { name = "setup-phase"; cues = [ "setup" "준비" "fixture" ]; terminal = true; }
+        { name = "exercise-phase"; cues = [ "exercise" "execute" "실행" ]; terminal = true; }
+        { name = "verify-phase"; cues = [ "verify" "assert" "검증" ]; terminal = true; }
+        { name = "teardown-phase"; cues = [ "teardown" "cleanup" "정리" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "given-when-then";
+      cues = [ "given when then" "BDD" "behavior driven" "행동 주도" ];
+      sub_specs = [
+        { name = "given-state"; cues = [ "given" "주어진" ]; terminal = true; }
+        { name = "when-event"; cues = [ "when" "이벤트" ]; terminal = true; }
+        { name = "then-outcome"; cues = [ "then" "결과" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "test-isolation";
+      cues = [ "test isolation" "isolated test" "고립" "독립" ];
+      sub_specs = [
+        { name = "no-side-effects"; cues = [ "no side effect" "부작용 없음" ]; terminal = true; }
+        { name = "stateless"; cues = [ "stateless" "상태 없음" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "parametrized-test";
+      cues = [ "parametrized" "parameterized" "table test" "테이블 테스트" "매개변수화" ];
+      sub_specs = [
+        { name = "single-param"; cues = []; terminal = true; }
+        { name = "matrix-param"; cues = [ "matrix" "조합" ]; terminal = true; }
+        { name = "data-driven"; cues = [ "data driven" "데이터 주도" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Integration Test =====================================
+
+  integrationSpecs = [
+    {
+      name = "multi-component";
+      cues = [ "multi component" "multiple modules" "여러 컴포넌트" "여러 모듈" ];
+      sub_specs = [
+        { name = "two-component"; cues = []; terminal = true; }
+        { name = "subsystem"; cues = [ "subsystem" "하위 시스템" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "database-integration";
+      cues = [ "database" "db integration" "DB 통합" "데이터베이스" ];
+      sub_specs = [
+        { name = "in-memory-db"; cues = [ "in memory" "메모리" "sqlite" ]; terminal = true; }
+        { name = "test-container"; cues = [ "container" "docker" "테스트 컨테이너" ]; terminal = true; }
+        { name = "test-fixtures"; cues = [ "fixture" "seed data" "시드" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "api-integration";
+      cues = [ "api integration" "API 통합" "rest api test" "endpoint test" ];
+      sub_specs = [
+        { name = "http-client"; cues = [ "http" "client" ]; terminal = true; }
+        { name = "mock-server"; cues = [ "mock server" "wiremock" ]; terminal = true; }
+        { name = "schema-validation"; cues = [ "schema" "openapi" "스키마" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "e2e-test";
+      cues = [ "e2e" "end to end" "system test" "엔드 투 엔드" "시스템 테스트" ];
+      sub_specs = [
+        { name = "browser-test"; cues = [ "browser" "playwright" "selenium" "브라우저" ]; terminal = true; }
+        { name = "cli-test"; cues = [ "cli" "command line" ]; terminal = true; }
+        { name = "full-stack"; cues = [ "full stack" "풀스택" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "contract-testing";
+      cues = [ "contract test" "consumer driven" "계약 테스트" "pact" ];
+      sub_specs = [
+        { name = "consumer-side"; cues = []; terminal = true; }
+        { name = "provider-side"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Property-Based Test ==================================
+
+  propertySpecs = [
+    {
+      name = "invariant-property";
+      cues = [ "invariant" "property" "불변" "속성" "always holds" ];
+      sub_specs = [
+        { name = "round-trip"; cues = [ "round trip" "왕복" "encode decode" ]; terminal = true; }
+        { name = "idempotency"; cues = [ "idempotent" "멱등" ]; terminal = true; }
+        { name = "commutativity"; cues = [ "commutative" "교환" ]; terminal = true; }
+        { name = "associativity"; cues = [ "associative" "결합" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "generator";
+      cues = [ "generator" "arbitrary" "generated input" "생성기" "임의" ];
+      sub_specs = [
+        { name = "random-input"; cues = [ "random" "랜덤" ]; terminal = true; }
+        { name = "structured-generator"; cues = [ "structured" "구조" ]; terminal = true; }
+        { name = "weighted-generator"; cues = [ "weighted" "가중치" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "shrinking";
+      cues = [ "shrink" "shrinking" "minimal example" "minimal counterexample" "축소" "최소 반례" ];
+      sub_specs = [
+        { name = "automatic-shrinking"; cues = []; terminal = true; }
+        { name = "custom-shrinker"; cues = [ "custom" "맞춤" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "model-based";
+      cues = [ "model based" "stateful test" "모델 기반" "상태 기반" ];
+      sub_specs = [
+        { name = "state-machine"; cues = [ "state machine" "상태 기계" ]; terminal = true; }
+        { name = "linearizability"; cues = [ "linearizable" "선형성" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "fuzz-testing";
+      cues = [ "fuzz" "fuzzing" "퍼지" ];
+      sub_specs = [
+        { name = "coverage-guided"; cues = [ "coverage guided" "afl" "libfuzzer" ]; terminal = true; }
+        { name = "structured-fuzz"; cues = [ "structured fuzz" "grammar" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Mocking / Stubbing ===================================
+
+  mockingSpecs = [
+    {
+      name = "mock";
+      cues = [ "mock" "행동 검증" "behavior verification" ];
+      sub_specs = [
+        { name = "verify-call"; cues = [ "verify call" "호출 확인" ]; terminal = true; }
+        { name = "verify-times"; cues = [ "verify times" "called n times" "n 번 호출" ]; terminal = true; }
+        { name = "verify-args"; cues = [ "verify args" "인자 확인" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "stub";
+      cues = [ "stub" "canned response" "고정 응답" ];
+      sub_specs = [
+        { name = "return-value"; cues = [ "return value" "반환 값" ]; terminal = true; }
+        { name = "throw-exception"; cues = [ "throw" "예외" ]; terminal = true; }
+        { name = "delay-response"; cues = [ "delay" "지연" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "fake";
+      cues = [ "fake" "lightweight" "가짜" "경량" ];
+      sub_specs = [
+        { name = "in-memory-fake"; cues = [ "in memory" "메모리" ]; terminal = true; }
+        { name = "simplified-impl"; cues = [ "simplified" "단순화" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "spy";
+      cues = [ "spy" "call recording" "호출 기록" ];
+      sub_specs = [
+        { name = "record-calls"; cues = []; terminal = true; }
+        { name = "passthrough-spy"; cues = [ "passthrough" "통과" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "dependency-injection";
+      cues = [ "dependency injection" "DI" "inject" "의존성 주입" "주입" ];
+      sub_specs = [
+        { name = "constructor-injection"; cues = [ "constructor" "생성자" ]; terminal = true; }
+        { name = "method-injection"; cues = [ "method" "메소드" ]; terminal = true; }
+        { name = "field-injection"; cues = [ "field" "필드" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Coverage / Assertion Style ===========================
+
+  coverageSpecs = [
+    {
+      name = "line-coverage";
+      cues = [ "line coverage" "라인 커버리지" ];
+      sub_specs = [
+        { name = "percentage"; cues = [ "percent" "퍼센트" ]; terminal = true; }
+        { name = "uncovered-lines"; cues = [ "uncovered" "미커버" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "branch-coverage";
+      cues = [ "branch coverage" "분기 커버리지" ];
+      sub_specs = [
+        { name = "true-branch"; cues = []; terminal = true; }
+        { name = "false-branch"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "path-coverage";
+      cues = [ "path coverage" "경로 커버리지" ];
+      sub_specs = [
+        { name = "all-paths"; cues = []; terminal = true; }
+        { name = "critical-paths"; cues = [ "critical" "중요 경로" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "assertion-style";
+      cues = [ "assertion" "assert" "expect" "should" "단언" ];
+      sub_specs = [
+        { name = "fluent-assert"; cues = [ "fluent" "should" "expect" ]; terminal = true; }
+        { name = "hamcrest-matchers"; cues = [ "matcher" "hamcrest" "매처" ]; terminal = true; }
+        { name = "custom-assertion"; cues = [ "custom" "맞춤" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "snapshot-testing";
+      cues = [ "snapshot" "golden test" "스냅샷" "골든" ];
+      sub_specs = [
+        { name = "inline-snapshot"; cues = []; terminal = true; }
+        { name = "file-snapshot"; cues = []; terminal = true; }
+        { name = "snapshot-update"; cues = [ "update" "갱신" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "regression-test";
+      cues = [ "regression" "regression test" "회귀 테스트" ];
+      sub_specs = [
+        { name = "bug-reproducer"; cues = [ "reproduce" "재현" ]; terminal = true; }
+        { name = "characterization"; cues = [ "characterization" "특성화" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#153) ─────────────────────────────────
+    {
+      name = "chaos-and-shadow-testing";
+      cues = [ "chaos" "chaos engineering" "shadow test" "카오스" ];
+      sub_specs = [
+        { name = "kill-instances"; cues = [ "chaos monkey" "kill instance" ]; terminal = true; }
+        { name = "network-faults"; cues = [ "network fault" "network chaos" ]; terminal = true; }
+        { name = "shadow-traffic"; cues = [ "shadow traffic" "다크 카나리" ]; terminal = true; }
+        { name = "dark-launch"; cues = [ "dark launch" "feature flag" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry ===================================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-test-001";
+      name = "unit-test";
+      domain = "test";
+      activation_cues = [
+        "unit test" "AAA" "given when then" "test isolation" "parametrized"
+        "단위 테스트" "고립 테스트" "매개변수화"
+      ];
+      tree_key = "unitTest";
+      sub_count = 4;
+      tool_role = "검증 — 단일 함수/모듈";
+    }
+    {
+      axiom_id = "axiom-test-002";
+      name = "integration-test";
+      domain = "test";
+      activation_cues = [
+        "integration test" "e2e" "end to end" "database test" "api test"
+        "contract test"
+        "통합 테스트" "엔드 투 엔드" "DB 테스트" "API 테스트"
+      ];
+      tree_key = "integration";
+      sub_count = 5;
+      tool_role = "검증 — 다중 컴포넌트";
+    }
+    {
+      axiom_id = "axiom-test-003";
+      name = "property-test";
+      domain = "test";
+      activation_cues = [
+        "property test" "property-based" "invariant" "fuzz" "quickcheck"
+        "model based" "shrinking"
+        "속성 테스트" "퍼지" "불변량" "최소 반례"
+      ];
+      tree_key = "property";
+      sub_count = 5;
+      tool_role = "검증 — invariant 기반";
+    }
+    {
+      axiom_id = "axiom-test-004";
+      name = "mocking";
+      domain = "test";
+      activation_cues = [
+        "mock" "stub" "fake" "spy" "test double" "dependency injection"
+        "DI" "inject"
+        "목" "스텁" "가짜" "스파이" "의존성 주입"
+      ];
+      tree_key = "mocking";
+      sub_count = 5;
+      tool_role = "검증 — test double";
+    }
+    {
+      axiom_id = "axiom-test-005";
+      name = "coverage-assertion";
+      domain = "test";
+      activation_cues = [
+        "coverage" "line coverage" "branch coverage" "snapshot" "golden"
+        "regression" "assertion" "assert"
+        "커버리지" "스냅샷" "회귀 테스트" "단언"
+      ];
+      tree_key = "coverage";
+      sub_count = 7;
+      tool_role = "검증 — 커버리지 + 단언";
+    }
+  ];
+
+  # === Activation ==================================================
+
+  treeForKey = key:
+    let bt = import ./branch-tree-substrate.px;
+    in
+      if key == "unitTest" then bt.composeBranchTree "unit-test axiom" unitTestSpecs
+      else if key == "integration" then bt.composeBranchTree "integration-test axiom" integrationSpecs
+      else if key == "property" then bt.composeBranchTree "property-test axiom" propertySpecs
+      else if key == "mocking" then bt.composeBranchTree "mocking axiom" mockingSpecs
+      else if key == "coverage" then bt.composeBranchTree "coverage and assertion axiom" coverageSpecs
+      else null;
+
+  withTrees = activations:
+    builtins.map (ax:
+      ax // { tree = treeForKey ax.tree_key; }
+    ) activations;
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else
+      let enriched = withTrees activations;
+      in if builtins.length enriched == 1 then
+        (builtins.head enriched).tree
+      else
+        let bt = import ./branch-tree-substrate.px;
+        in bt.mkTree {
+          node_label = "multiple test axioms activated";
+          branches = builtins.map (ax: bt.mkBranch {
+            name = ax.name;
+            hypothesis = "use " + ax.name + " testing approach";
+            cues = ax.activation_cues;
+            sub_branches = ax.tree.branches;
+          }) enriched;
+        };
+
+  applyTestAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-111-nl-test "
+            + "(composes axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+              tool_role = ax.tool_role;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms } | { activate_for } | { describe }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-test-axiom-111";
+    composes = "axiom-98-tree (data on generic substrate)";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "unit-test (AAA / BDD / isolation / parametrized)"
+      "integration-test (multi-component / DB / API / e2e / contract)"
+      "property-test (invariant / generator / shrinking / model / fuzz)"
+      "mocking (mock / stub / fake / spy / DI)"
+      "coverage-assertion (line / branch / path / snapshot / regression)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    tool_metaphor =
+      "검증의 손. 코드 작성 후 정당성 확인 도구. test-failure (#123) "
+      + "와 결합 — 테스트 실패 → 어떤 테스트 종류로 더 좁힐지.";
+  };
+
+in {
+  inherit
+    ownerName
+    knownAxioms
+    treeForKey
+    axiomsActivatedBy compositeTreeFromActivations
+    applyTestAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL test axioms (agent-NL-125)";
+    owner = ownerName;
+    base = "nl-test-axioms-v0";
+    rev_note = "agent-NL-125 (2026-05-29): 검증의 손. 5 family "
+      + "(unit/integration/property/mocking/coverage). DO NOT REBUILD "
+      + "— branch-tree generic constructor.";
+  };
+}

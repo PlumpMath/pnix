@@ -1,0 +1,44 @@
+# CFPB Consumer Complaint taxonomy buckets -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No complaint rows/narratives/company ranking.
+let
+  B = builtins;
+  genPath = ./cfpb-complaint-taxonomy.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "finance.cfpb_complaint_taxonomy.v1";
+    source = "CFPB Consumer Complaint Database API aggregations";
+    license = "US-PD";
+    source_digest_sha256 = "";
+    summary = { total_hits = 0; products = 0; issues = 0; enum_fields = 0; };
+    products = [ ]; issues = [ ]; enum_fields = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "cfpb-complaint-taxonomy-load-v0";
+      source_lens = "stdlib/lib/corpus/cfpb-complaint-taxonomy-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "finance.cfpb_complaint_taxonomy.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "cfpb-complaint-taxonomy-query-v0";
+      source_lens = "stdlib/lib/corpus/cfpb-complaint-taxonomy-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "finance.cfpb_complaint_taxonomy.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

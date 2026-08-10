@@ -1,0 +1,653 @@
+# stdlib.nl.receipt-discourse-composer
+#
+# Execution receipt/result -> discourse plan -> NL realization.
+#
+# This is the response-side service gate behind the front-door dispatcher. The
+# adapter should not hand-build explanatory strings for every substrate. It asks
+# this owner to turn execution receipts into a discourse plan, then renders the
+# realized rows into the Freecat API contract.
+let
+  ownerName = "stdlib.nl.receipt-discourse-composer";
+  universal = import nl/universal-nl-reverse-composer.px;
+  vocabContract =
+    import agent/internal-vocab-translation-contract.px;
+
+  hasField = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.elem key (builtins.attrNames attrs));
+
+  getOr = attrs: key: dflt:
+    if (hasField attrs key) && ((builtins.getAttr key attrs) != null)
+    then builtins.getAttr key attrs else dflt;
+
+  para = t: { kind = "paragraph"; text = t; };
+  formula = domain: t: {
+    kind = "formula";
+    rendered_mathml = "";
+    rendered_latex = t;
+    domain = domain;
+    proposed_name = "";
+  };
+
+  mkStep = role: relation: slots: {
+    role = role;
+    relation = relation;
+    slots = slots;
+  };
+
+  absInt = n: if n < 0 then (0 - n) else n;
+
+  realizeStepKo = step:
+    let s = step.slots;
+    in
+      if step.role == "factor" then
+        "먼저 " + s.normalized_expression + "을 인수분해하면 " + s.factorization + "입니다."
+      else if step.role == "zero-product" then
+        "따라서 " + s.factorized_equation + " 이고,"
+      else if step.role == "conclude-roots" then
+        s.roots_text + "입니다."
+      else if step.role == "factor-only" then
+        s.normalized_expression + " = " + s.factorization
+      else if step.role == "differentiate" then
+        s.expression_text + "을 " + s.variable + "에 대해 미분합니다."
+      else if step.role == "apply-power-rule" then
+        "다항식 미분 규칙을 적용하면 " + s.derivative_text + "입니다."
+      else if step.role == "evaluate-derivative" then
+        s.variable + " = " + builtins.toString s.at + "일 때 값은 " + builtins.toString s.value + "입니다."
+      else if step.role == "equation-normalized" then
+        "`" + s.input + "`을 " + s.degree_text + " 방정식으로 해석했습니다."
+      else if step.role == "linear-roots" then
+        s.roots_text
+      else if step.role == "quadratic-discriminant" then
+        "판별식 D = " + builtins.toString s.discriminant + "입니다."
+      else if step.role == "quadratic-roots" then
+        s.roots_text
+      else
+        getOr s "text" "";
+
+  realizeStepEn = step:
+    let s = step.slots;
+    in
+      if step.role == "factor" then
+        "First, factoring " + s.normalized_expression + " gives " + s.factorization + "."
+      else if step.role == "zero-product" then
+        "Therefore " + s.factorized_equation + "."
+      else if step.role == "conclude-roots" then
+        "So " + s.roots_text + "."
+      else if step.role == "factor-only" then
+        s.normalized_expression + " = " + s.factorization
+      else if step.role == "differentiate" then
+        "Differentiate " + s.expression_text + " with respect to " + s.variable + "."
+      else if step.role == "apply-power-rule" then
+        "Applying the polynomial power rule gives " + s.derivative_text + "."
+      else if step.role == "evaluate-derivative" then
+        "At " + s.variable + " = " + builtins.toString s.at + ", the value is " + builtins.toString s.value + "."
+      else if step.role == "equation-normalized" then
+        "`" + s.input + "` was interpreted as a " + s.degree_text + " equation."
+      else if step.role == "linear-roots" then
+        s.roots_text
+      else if step.role == "quadratic-discriminant" then
+        "The discriminant is D = " + builtins.toString s.discriminant + "."
+      else if step.role == "quadratic-roots" then
+        s.roots_text
+      else
+        getOr s "text" "";
+
+  composeFactorPlan = factorResult:
+    let
+      factorReceipt = getOr factorResult "receipt" { };
+      normal = getOr factorResult "normalized_expression" (getOr factorReceipt "normalized_expression" "");
+      fact = getOr factorResult "factorization" (getOr factorReceipt "factorization" "");
+      factEq = getOr factorResult "factorized_equation" (getOr factorReceipt "factorized_equation" "");
+      roots = getOr factorResult "roots_text" (getOr factorReceipt "roots_text" "");
+      step = mkStep "factor-only" "result" {
+        normalized_expression = normal;
+        factorization = fact;
+        factorized_equation = factEq;
+        roots_text = roots;
+      };
+      summary = normal + " = " + fact;
+    in {
+      plan_kind = "math-factor-discourse";
+      summary = summary;
+      source_receipts = [ factorReceipt ];
+      steps = [ step ];
+      formula_domain = "factor";
+      formula_text = summary;
+      receipt = {
+        kind = "discourse-plan-receipt";
+        source_kind = getOr factorReceipt "kind" "math-factor-receipt";
+        composer = ownerName;
+        step_count = 1;
+      };
+    };
+
+  composeFactorSolvePlan = result:
+    let
+      factorResult = getOr result "factor" { };
+      factorReceipt = getOr factorResult "receipt" { };
+      chainReceipt = getOr result "receipt" { };
+      normal = getOr factorResult "normalized_expression" (getOr factorReceipt "normalized_expression" "");
+      fact = getOr factorResult "factorization" (getOr factorReceipt "factorization" "");
+      factEq = getOr factorResult "factorized_equation" (getOr chainReceipt "factorized_equation" "");
+      roots = getOr result "summary" (getOr factorResult "roots_text" (getOr chainReceipt "roots_text" ""));
+      steps = [
+        (mkStep "factor" "first" {
+          normalized_expression = normal;
+          factorization = fact;
+        })
+        (mkStep "zero-product" "therefore" {
+          factorized_equation = factEq;
+        })
+        (mkStep "conclude-roots" "conclusion" {
+          roots_text = roots;
+        })
+      ];
+    in {
+      plan_kind = "math-factor-solve-discourse";
+      summary = roots;
+      source_receipts = [ factorReceipt chainReceipt ];
+      steps = steps;
+      formula_domain = "factor-solve";
+      formula_text = factEq;
+      receipt = {
+        kind = "discourse-plan-receipt";
+        source_kind = getOr chainReceipt "kind" "math-factor-solve-chain-receipt";
+        composer = ownerName;
+        step_count = builtins.length steps;
+      };
+    };
+
+  composeDerivativePlan = result:
+    let
+      receipt = getOr result "receipt" { };
+      expr = getOr result "expression_text" (getOr receipt "expression_text" "");
+      deriv = getOr result "derivative_text" (getOr receipt "derivative_text" "");
+      variable = getOr result "variable" (getOr receipt "variable" "x");
+      steps = [
+        (mkStep "differentiate" "input" {
+          expression_text = expr;
+          variable = variable;
+        })
+        (mkStep "apply-power-rule" "result" {
+          derivative_text = deriv;
+        })
+      ];
+    in {
+      plan_kind = "math-derivative-discourse";
+      summary = deriv;
+      source_receipts = [ receipt ];
+      steps = steps;
+      formula_domain = "derivative";
+      formula_text = deriv;
+      receipt = {
+        kind = "discourse-plan-receipt";
+        source_kind = getOr receipt "kind" "math-derivative-receipt";
+        composer = ownerName;
+        step_count = builtins.length steps;
+      };
+    };
+
+  composeDerivativeEvalPlan = result:
+    let
+      receipt = getOr result "receipt" { };
+      d = getOr result "derivative" { };
+      dReceipt = getOr d "receipt" { };
+      expr = getOr d "expression_text" (getOr dReceipt "expression_text" "");
+      deriv = getOr d "derivative_text" (getOr dReceipt "derivative_text" "");
+      variable = getOr result "variable" (getOr d "variable" "x");
+      at = getOr result "at" 0;
+      value = getOr result "value" 0;
+      steps = [
+        (mkStep "differentiate" "input" {
+          expression_text = expr;
+          variable = variable;
+        })
+        (mkStep "apply-power-rule" "result" {
+          derivative_text = deriv;
+        })
+        (mkStep "evaluate-derivative" "then" {
+          variable = variable;
+          at = at;
+          value = value;
+        })
+      ];
+    in {
+      plan_kind = "math-derivative-eval-discourse";
+      summary = builtins.toString value;
+      source_receipts = [ dReceipt receipt ];
+      steps = steps;
+      formula_domain = "derivative-eval";
+      formula_text = deriv + " ; " + variable + "=" + builtins.toString at + " => " + builtins.toString value;
+      receipt = {
+        kind = "discourse-plan-receipt";
+        source_kind = getOr receipt "kind" "math-derivative-eval-receipt";
+        composer = ownerName;
+        step_count = builtins.length steps;
+      };
+    };
+
+  linearRootsText = result:
+    let
+      lin = getOr result "linear_exact" { };
+      variable = getOr result "variable" "x";
+      outcome = getOr lin "outcome" "";
+    in
+      if outcome == "unique-solution" then
+        variable + " = " + (getOr lin "solution_text" "")
+      else if outcome == "infinitely-many-solutions" then
+        "항등식이므로 모든 " + variable + " 값이 해입니다."
+      else if outcome == "no-solution" then
+        "모순식이므로 해가 없습니다."
+      else
+        "1차 방정식 결과를 해석하지 못했습니다.";
+
+  quadraticRootsText = result:
+    let
+      q = getOr result "quadratic" { };
+      variable = getOr result "variable" "x";
+      outcome = getOr q "outcome" "";
+      a = getOr q "a" (getOr result "a" 0);
+      b = getOr q "b" (getOr result "b" 0);
+      disc = getOr q "discriminant" 0;
+      twoA = 2 * a;
+    in
+      if outcome == "complex-roots" then
+        "실수해는 없습니다. 복소수 범위에서는 "
+        + variable + " = (" + builtins.toString (0 - b)
+        + " ± sqrt(" + builtins.toString (absInt disc) + ") i) / "
+        + builtins.toString twoA + " 입니다."
+      else if outcome == "one-double-root" then
+        variable + " = " + (getOr q "root_text" "") + " (중근)"
+      else if outcome == "two-rational-roots" then
+        variable + " = " + (getOr q "root_plus_text" "")
+        + " 또는 " + variable + " = " + (getOr q "root_minus_text" "")
+      else if outcome == "two-irrational-roots" then
+        variable + " = " + (getOr q "closed_form" "")
+      else
+        "2차 방정식 결과를 해석하지 못했습니다.";
+
+  composeEquationPlan = result:
+    let
+      kind = getOr result "solution_kind" "";
+      input = getOr result "input" "";
+      degree = getOr result "degree" 0;
+      degreeText =
+        if kind == "quadratic" then "2차"
+        else if kind == "linear" then "1차"
+        else builtins.toString degree + "차";
+      q = getOr result "quadratic" { };
+      roots =
+        if kind == "quadratic" then quadraticRootsText result
+        else if kind == "linear" then linearRootsText result
+        else "방정식 결과를 해석하지 못했습니다.";
+      sourceReceipt = {
+        kind = "math-equation-solve-result";
+        outcome = getOr result "outcome" "";
+        solution_kind = kind;
+        input = input;
+        degree = degree;
+      };
+      steps =
+        [ (mkStep "equation-normalized" "input" {
+            input = input;
+            degree_text = degreeText;
+            solution_kind = kind;
+          }) ]
+        ++ (if kind == "quadratic" then [
+          (mkStep "quadratic-discriminant" "compute" {
+            discriminant = getOr q "discriminant" 0;
+          })
+        ] else [ ])
+        ++ [ (mkStep (if kind == "quadratic" then "quadratic-roots" else "linear-roots") "result" {
+          roots_text = roots;
+        }) ];
+    in {
+      plan_kind = "math-equation-discourse";
+      summary = roots;
+      source_receipts = [ sourceReceipt ];
+      steps = steps;
+      formula_domain = "equation";
+      formula_text = input;
+      receipt = {
+        kind = "discourse-plan-receipt";
+        source_kind = "math-equation-solve-result";
+        composer = ownerName;
+        step_count = builtins.length steps;
+      };
+    };
+
+  realizePlan = plan: language:
+    let
+      rows =
+        if language == "en"
+        then builtins.map realizeStepEn plan.steps
+        else builtins.map realizeStepKo plan.steps;
+    in {
+      outcome = "discourse-realized";
+      language = language;
+      text_rows = rows;
+      text = builtins.concatStringsSep "\n" rows;
+    };
+
+  freecatBodyFrom = plan: realization:
+    (builtins.map para realization.text_rows)
+    ++ (if (getOr plan "formula_text" "") == "" then [ ] else [
+      (formula plan.formula_domain plan.formula_text)
+    ]);
+
+  # === Wave 10-E — meta bead → meta-discourse-plan rows =================
+  #
+  # W9 meta_judgement + self_expression_receipt (+ optional placement /
+  # challenge_request stub) → deterministic { role; vocab_key; } rows.
+  # vocab_key = closed iv.* references only (Round 73 map); no free prose.
+
+  knownMetaPlanRoles = [ "known" "held" "slow-attribution" ];
+
+  slowAttributionVocabKeys = {
+    "via-px-fallback" = "iv.constraint.under-time-budget";
+    "corpus-miss" = "iv.modality.held-for-context";
+    "cold-start" = "iv.constraint.under-time-budget";
+    "import-graph" = "iv.constraint.full-verification";
+    "held-unknown" = "iv.outcome.held";
+  };
+
+  challengeRequestVocabKeys = {
+    "why-search-challenge-request" = "iv.intent.query";
+    "why-lean-proof-obligation-request" = "iv.constraint.full-verification";
+    "why-compile-test-challenge-request" = "iv.constraint.full-verification";
+  };
+
+  placementOutcomeVocabKeys = {
+    "placement-scheduled" = "iv.constraint.full-verification";
+    "held-missing-slot" = "iv.outcome.held";
+    "held-ambiguous-slot" = "iv.outcome.held";
+  };
+
+  isNonEmptyAttrs = attrs:
+    builtins.isAttrs attrs && (builtins.attrNames attrs) != [ ];
+
+  tokenList = attrs: key:
+    let v = getOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  stringField = attrs: key: fallback:
+    let v = getOr attrs key fallback;
+    in if builtins.isString v && v != "" then v else fallback;
+
+  mkMetaPlanRow = role: vocab_key: { role = role; vocab_key = vocab_key; };
+
+  isClosedIvVocabKey = tok:
+    vocabContract.isInternalToken tok
+    && builtins.elem tok vocabContract.internalVocabTokens;
+
+  filterIvTokens = tokens:
+    builtins.filter isClosedIvVocabKey tokens;
+
+  tokensFromPublicBeads = beads:
+    if !(builtins.isList beads) then [ ]
+    else filterIvTokens (
+      builtins.filter (t: t != "") (
+        builtins.map (b:
+          if builtins.isAttrs b
+          then stringField b "internal_token" ""
+          else ""
+        ) beads
+      )
+    );
+
+  lookupRegistryVocabKey = registry: key:
+    if hasField registry key then builtins.getAttr key registry else null;
+
+  rowsFromIvTokens = role: tokens:
+    builtins.map (t: mkMetaPlanRow role t) tokens;
+
+  selfModelSlowAttribution = meta:
+    let sm = getOr meta "self_model" { };
+    in stringField sm "slow_attribution" "none";
+
+  composeMetaDiscoursePlanFromW9Receipts = request:
+    let
+      meta = getOr request "meta_judgement" { };
+      expr = getOr request "self_expression_receipt" { };
+      placement = getOr request "placement_envelope" { };
+      challenge = getOr request "challenge_request" { };
+
+      metaPresent = isNonEmptyAttrs meta;
+      exprPresent = isNonEmptyAttrs expr;
+      placementPresent = isNonEmptyAttrs placement;
+      challengePresent = isNonEmptyAttrs challenge;
+
+      metaAudited =
+        metaPresent
+        && hasField meta "outcome"
+        && meta.outcome == "meta-audited";
+      selfExpressed =
+        exprPresent
+        && hasField expr "outcome"
+        && expr.outcome == "self-expressed";
+
+      knownFromExpr =
+        if selfExpressed
+        then rowsFromIvTokens "known" (
+          tokensFromPublicBeads (getOr expr "public_beads" [ ])
+        )
+        else [ ];
+
+      knownFromMeta =
+        if metaAudited
+        then rowsFromIvTokens "known" (
+          filterIvTokens (tokenList meta "expressible_surface")
+        )
+        else [ ];
+
+      heldFromExpr =
+        rowsFromIvTokens "held" (
+          filterIvTokens (tokenList expr "withheld_beads")
+        );
+
+      heldFromMeta =
+        rowsFromIvTokens "held" (
+          filterIvTokens (tokenList meta "expressible_held")
+        );
+
+      heldFromExprOutcome =
+        if exprPresent && !selfExpressed
+        then [ (mkMetaPlanRow "held" "iv.outcome.held") ]
+        else [ ];
+
+      heldFromMetaOutcome =
+        if metaPresent && !metaAudited
+        then [ (mkMetaPlanRow "held" "iv.outcome.held") ]
+        else [ ];
+
+      placementOutcome = stringField placement "outcome" "";
+      placementVocab =
+        lookupRegistryVocabKey placementOutcomeVocabKeys placementOutcome;
+      placementRows =
+        if placementPresent && placementVocab != null
+        then [
+          (mkMetaPlanRow
+            (if placementOutcome == "placement-scheduled" then "known" else "held")
+            placementVocab)
+        ]
+        else [ ];
+
+      challengeKind = stringField challenge "challenge_request_kind" "";
+      challengeVocab =
+        lookupRegistryVocabKey challengeRequestVocabKeys challengeKind;
+      challengeRows =
+        if challengePresent && challengeVocab != null
+        then [ (mkMetaPlanRow "held" challengeVocab) ]
+        else [ ];
+
+      slowAttr = selfModelSlowAttribution meta;
+      slowVocab = lookupRegistryVocabKey slowAttributionVocabKeys slowAttr;
+      slowRows =
+        if metaPresent && slowAttr != "none" && slowVocab != null
+        then [ (mkMetaPlanRow "slow-attribution" slowVocab) ]
+        else [ ];
+
+      rows =
+        knownFromExpr ++ knownFromMeta ++ slowRows ++ placementRows
+        ++ heldFromExpr ++ heldFromMeta ++ heldFromExprOutcome
+        ++ heldFromMetaOutcome ++ challengeRows;
+
+    in
+      if metaPresent && exprPresent then
+        let
+          sourceReceipts =
+            [ { kind = "meta-judgement-envelope"; outcome = meta.outcome; }
+              { kind = "self-expression-emit-envelope"; outcome = expr.outcome; } ]
+            ++ (if placementPresent
+              then [ { kind = "placement-schedule-envelope"; outcome = placementOutcome; } ]
+              else [ ])
+            ++ (if challengePresent
+              then [ { kind = "challenge-request-stub"; outcome = challengeKind; } ]
+              else [ ]);
+        in {
+          outcome = "meta-discourse-plan-composed";
+          plan_kind = "meta-w9-discourse";
+          meta_discourse_rows = rows;
+          row_count = builtins.length rows;
+          meta_judgement_outcome = meta.outcome;
+          self_expression_outcome = expr.outcome;
+          discourse_plan = {
+            plan_kind = "meta-w9-discourse";
+            meta_discourse_rows = rows;
+            summary = "meta-w9-discourse";
+            source_receipts = sourceReceipts;
+            steps = rows;
+            formula_domain = "meta-w9";
+            formula_text = "";
+            receipt = {
+              kind = "meta-discourse-plan-receipt";
+              composer = ownerName;
+              row_count = builtins.length rows;
+            };
+          };
+          receipt = {
+            kind = "receipt-discourse-composer-receipt";
+            composer = ownerName;
+            plan_kind = "meta-w9-discourse";
+            source_receipts = sourceReceipts;
+          };
+          global_speedup_claimed = false;
+        }
+      else {
+        outcome = "held-no-meta-discourse-plan";
+        reason = "meta_judgement and self_expression_receipt required";
+        meta_judgement_present = metaPresent;
+        self_expression_present = exprPresent;
+        global_speedup_claimed = false;
+      };
+
+in
+rec {
+  name = ownerName;
+
+  composeExecutionToDiscourse = request:
+    let
+      kind = getOr request "operation_kind" "";
+      result = getOr request "result" { };
+      language = getOr request "language" "ko";
+      plan =
+        if kind == "route-chain" && (getOr result "outcome" "") == "factor-solve-composed"
+        then composeFactorSolvePlan result
+        else if kind == "math-factor" && (getOr result "outcome" "") == "factored"
+        then composeFactorPlan result
+        else if kind == "math-diff" && (getOr result "outcome" "") == "differentiated"
+        then composeDerivativePlan result
+        else if kind == "math-diff-eval" && (getOr result "outcome" "") == "derivative-evaluated"
+        then composeDerivativeEvalPlan result
+        else if kind == "equation" && (getOr result "outcome" "") == "solved"
+        then composeEquationPlan result
+        else null;
+    in
+      if plan != null then
+        let realized = realizePlan plan language;
+        in {
+          outcome = "receipt-discourse-composed";
+          language = language;
+          discourse_plan = plan;
+          realization = realized;
+          summary = plan.summary;
+          body = freecatBodyFrom plan realized;
+          receipt = {
+            kind = "receipt-discourse-composer-receipt";
+            composer = ownerName;
+            plan_kind = plan.plan_kind;
+            source_receipts = plan.source_receipts;
+          };
+        }
+      else if (builtins.isAttrs result) && (getOr result "public_text_normal" "") != "" then
+        let text = getOr result "public_text_normal" "";
+        in {
+          outcome = "receipt-discourse-held";
+          language = language;
+          discourse_plan = {
+            plan_kind = "held-public-text";
+            summary = text;
+            source_receipts = [ result ];
+            steps = [ (mkStep "held" "public-text" { text = text; }) ];
+            formula_domain = "nl";
+            formula_text = "";
+          };
+          realization = {
+            outcome = "held";
+            language = language;
+            text_rows = [ text ];
+            text = text;
+          };
+          summary = text;
+          body = [ (para text) ];
+          receipt = {
+            kind = "receipt-discourse-composer-receipt";
+            composer = ownerName;
+            plan_kind = "held-public-text";
+          };
+        }
+      else if (builtins.isAttrs result) && (result ? receipt) then
+        # Fallback to the older axiom-origin reverse composer when a substrate
+        # carries that shape. This keeps the new composer layered, not isolated.
+        let composed = universal.composeReceiptToNl result.receipt language;
+        in {
+          outcome = "receipt-discourse-fallback";
+          language = language;
+          discourse_plan = {
+            plan_kind = "universal-reverse-template";
+            summary = getOr composed "text" "";
+            source_receipts = [ result.receipt ];
+            steps = [ (mkStep "universal-template" "fallback" { text = getOr composed "text" ""; }) ];
+            formula_domain = "nl";
+            formula_text = "";
+          };
+          realization = {
+            outcome = getOr composed "outcome" "held";
+            language = language;
+            text_rows = [ (getOr composed "text" "") ];
+            text = getOr composed "text" "";
+          };
+          summary = getOr composed "text" "";
+          body = [ (para (getOr composed "text" "")) ];
+          receipt = {
+            kind = "receipt-discourse-composer-receipt";
+            composer = ownerName;
+            plan_kind = "universal-reverse-template";
+          };
+        }
+      else {
+        outcome = "held-no-discourse-plan";
+        reason = "지원되는 execution receipt/result shape가 아닙니다.";
+        operation_kind = kind;
+      };
+
+  inherit composeFactorPlan composeFactorSolvePlan composeDerivativePlan composeDerivativeEvalPlan composeEquationPlan realizePlan freecatBodyFrom;
+  inherit composeMetaDiscoursePlanFromW9Receipts knownMetaPlanRoles;
+
+  meta = {
+    source = "stdlib NL receipt discourse composer";
+    owner = ownerName;
+    base = "receipt-to-discourse-plan-v0";
+    rev_note = "2026-06-09 W10-E: composeMetaDiscoursePlanFromW9Receipts — meta_judgement + self_expression_receipt (+ optional placement_envelope, challenge_request stub) → closed { role; vocab_key; } meta-discourse rows via Round 73 iv.* only. 2026-06-03: response-side service gate. Turns execution receipts/results into discourse_plan -> KO/EN realization -> Freecat body. First concrete route: math factor and factor->solve receipts. Falls back to universal-nl-reverse-composer for axiom-origin receipt templates. Adapter should consume this owner instead of hand-building explanatory strings.";
+  };
+}

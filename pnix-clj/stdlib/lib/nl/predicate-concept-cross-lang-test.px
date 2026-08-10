@@ -1,0 +1,59 @@
+# stdlib/lib/nl/predicate-concept-cross-lang-test.px — cross-language 단서(clue) 데이터 회귀
+#
+# ★주의(회의 결론): 이 파일은 개념 레지스트리의 *번역 단서* 데이터를 검증할 뿐, pure 교집합 주장이 아니다.
+#   술어 약분(먹·잡수시→ingest)은 intra-Korean 높임/동의어라 pure term에 들어가지만, cross-language(eat/consume)
+#   와 ★개체(사과↔apple)는 word-sense/번역이라 단서일 뿐 — korean-nl-mirror의 pure term엔 미주입(개체는 한글
+#   surface 격리). 아래 *_meet 는 "단서 데이터가 일관됨"을 보이는 합성 검사지, 실문장이 언어 가로질러 만난다는
+#   주장이 아니다(co-reference·동음이의 미해결). diverge 는 언어별 대표.
+let
+  pc = import ./predicate-concepts.px;
+  td = import lisp/term-dag.px;
+  B = builtins;
+
+  # ① 세 언어 술어 → 같은 개념 (converge/약분)
+  c_ko = pc.conceptOf "먹"; c_en = pc.conceptOf "eat"; c_code = pc.conceptOf "consume";
+  same_concept = (c_ko == "ingest") && (c_en == "ingest") && (c_code == "ingest");
+
+  # ② per-language diverge: 개념 → 언어별 canonical
+  diverge_ok = (pc.surfaceOf "ingest" "ko" == "먹")
+            && (pc.surfaceOf "ingest" "en" == "eat")
+            && (pc.surfaceOf "ingest" "code" == "consume");
+
+  # ③ 같은 개념 + 같은 논항 → 같은 term_key (언어 무관 meeting). 논항 placeholder x/y 로 술어 만남 격리.
+  mkTerm = verbLex:
+    [ { sym = pc.conceptOf verbLex; } [ { sym = "agent"; } { sym = "x"; } ] [ { sym = "object"; } { sym = "y"; } ] ];
+  key_ko = td.key (mkTerm "먹"); key_en = td.key (mkTerm "eat"); key_code = td.key (mkTerm "consume");
+  cross_lang_meet = (key_ko == key_en) && (key_en == key_code);
+
+  # ④ 동의어/높임도 같은 개념 (give: 주/드리(높임)/grant(en)/put(code))
+  give_meet = (pc.conceptOf "주") == (pc.conceptOf "드리")
+           && (pc.conceptOf "드리") == (pc.conceptOf "grant")
+           && (pc.conceptOf "grant") == (pc.conceptOf "put")
+           && (pc.conceptOf "주" == "give");
+
+  # ⑤ 개체(보통명사) 개념화: 사과(ko)·apple(en) → 같은 개념 apple (논항도 언어중립 수로 약분)
+  entity_meet = (pc.conceptOf "사과") == "apple" && (pc.conceptOf "apple") == "apple"
+             && (pc.conceptOf "책") == "book" && (pc.conceptOf "book") == "book";
+  entity_diverge = (pc.surfaceOf "apple" "ko" == "사과") && (pc.surfaceOf "apple" "en" == "apple");
+
+  # ⑥ 전체 문장 골격이 언어 가로질러 만남: 술어+개체개념+역할 모두 약분.
+  #   고유명사(철수/Cheolsu)는 *공유 ref* (p1) 로 둠 = co-reference 가정. 그러면 ko-문장과 en-문장의
+  #   term-DAG 골격이 *동일 수*. (실제 co-reference 해결은 다음 frontier; 여기선 공유 ref 로 격리 실증.)
+  mkSentence = verbLex: objLex:
+    [ { sym = pc.conceptOf verbLex; }
+      [ { sym = "agent"; }  { sym = "p1"; } ]                                   # 공유 고유명사 ref
+      [ { sym = "object"; } { sym = (let c = pc.conceptOf objLex; in if c == null then objLex else c); } ] ];
+  full_ko = td.key (mkSentence "먹" "사과");      # "철수(p1)가 사과를 먹는다"
+  full_en = td.key (mkSentence "eat" "apple");    # "Cheolsu(p1) eats an apple"
+  full_sentence_meet = full_ko == full_en;        # 술어+목적어개념까지 한 수에서 만남
+in {
+  concept_ko = c_ko; concept_en = c_en; concept_code = c_code;
+  meeting_key = key_ko;            # 세 언어가 만나는 그 수(술어만)
+  full_meeting_key = full_ko;      # 전체 문장 골격이 만나는 수(술어+개체개념)
+  same_concept = same_concept; diverge_ok = diverge_ok;
+  cross_lang_meet = cross_lang_meet; give_meet = give_meet;
+  entity_meet = entity_meet; entity_diverge = entity_diverge;
+  full_sentence_meet = full_sentence_meet;
+  all_ok = same_concept && diverge_ok && cross_lang_meet && give_meet
+        && entity_meet && entity_diverge && full_sentence_meet;
+}

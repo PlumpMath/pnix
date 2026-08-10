@@ -1,0 +1,509 @@
+let
+  ownerName = "stdlib.nl.sentence-instance-memory";
+
+  chainOwner =
+    import nl/sentence-substrate-mapping.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Sentence Instance Memory (agent-NL-109) =====================
+  #
+  # 사용자 directive 정정 (2026-05-29):
+  # > "Y/N 는 원래의미가 (지나가는 갈림길에서 (멈출거냐 계속 갈거냐)
+  # >  라는 멈출지 계속할지에 대한 의미만 갖는다. 왜 그러냐면 내부적
+  # >  으로 전부 참인경우에 묻기때문이지. 인간이 내리는 어떤 문장자체는
+  # >  알고리즘의 일부이고, 목표같은것을 함의한다. 시간의 의미도 있을수
+  # >  있으니 순서대로 extract 해야한다. 문장은 '인스턴스' 즉 객체
+  # >  (oop 에서 이야기하는 이름)을 가질수있고, prompt 세션의 메모리들로
+  # >  남는다. 4 peace 가 문장을 의미로 결정짓는것처럼 그것 의미는
+  # >  이름(객체)를 갖는다. prompt loop 상에서 사용자가 과거에 비슷
+  # >  하거나 문장을 입력하면, 그것들은 과거 저장된 의미 그 oop 이름에
+  # >  빠르게 매핑되어 가리킨다. session 의 context 는 그렇게 집중
+  # >  유지된다."
+  #
+  # mental model:
+  #   - 문장 = OOP instance (named object) with 4-piece meaning vector
+  #   - session memory = list of named instances accumulating turn-by-turn
+  #   - new utterance → 4-piece extract → fast-map to existing instance
+  #     OR create fresh instance if no match
+  #   - Y/N = flow decision (continue/stop), NOT truth verdict
+  #   - substrate already verified the meaning; Y/N picks path forward
+  #
+  # # OOP instance shape
+  #
+  #   {
+  #     instance_id            — "sent-NNN"
+  #     meaning_vector         — 4-piece signature
+  #                              { ambient; morphism; invariant; meta }
+  #     original_utterance     — first occurrence text
+  #     aliases_seen           — list of later utterances that matched
+  #     first_seen_at_turn     — Nix-level data only
+  #     reference_count        — int (how many times this meaning recurred)
+  #     algorithm_step_index   — position in the unfolding algorithm
+  #   }
+  #
+  # # 4-piece similarity rule (v0)
+  #
+  #   Two utterances map to the SAME instance iff their 4-piece tuples
+  #   match on (ambient, invariant_route_target). morphism + meta may
+  #   differ (they often carry surface phrasing). This is the substrate
+  #   equivalent of "same meaning, different words".
+  #
+  # # Flow Y/N
+  #
+  #   substrate has already determined truth of the algorithm step
+  #   represented by the current instance. Y/N now asks:
+  #     - Y (continue) — proceed to next algorithm step
+  #     - N (stop)     — terminate; flow stays at current instance
+  #
+  # This is a FORK shape: substrate is at instance #K, two paths exit.
+  # Y/N is the substrate-internal decision *or* the user's flow input
+  # *after* the substrate has staged the choice.
+
+  stepKind = "session-memory-and-flow-decision";
+  framework_step =
+    "interactive — 문장이 OOP instance 로 명명, Y/N 이 다음 step 갈림길";
+
+  # === Meaning vector extraction (uses #105 chain) =================
+
+  extractMeaningVector = utterance:
+    let
+      chain = chainOwner.resolveChain utterance;
+    in
+      if !(builtins.isAttrs chain) then null
+      else if !(builtins.hasAttr "carry" chain) then null
+      else
+        let
+          # #105 chain carry surface (verified live):
+          #   - inferred_intent_kind ∈ {refactor, math, conversation, ...}
+          #   - primary_invariant_id ∈ {ambient-invariant, math-truth-value-chain, ...}
+          #   - primary_substrate_owner = path to downstream owner
+          #   - routing_rule           = "R-1" ... "R-7"
+          c = chain.carry;
+          intentKind = c.inferred_intent_kind or "unknown";
+          invariantId = c.primary_invariant_id or "none";
+          substrateOwner = c.primary_substrate_owner or "none";
+          routingRule = c.routing_rule or "none";
+        in {
+          # 4-piece signature: intent + invariant + substrate route +
+          # routing rule. ambient + invariant_route_target is the
+          # equality key for fast-map; other fields carry forensic
+          # context for self-awareness queries.
+          ambient = intentKind;
+          invariant_route_target = substrateOwner;
+          invariant_id = invariantId;
+          routing_rule = routingRule;
+          chain_outcome = chain.outcome or "unknown";
+        };
+
+  # === Instance equality (4-piece similarity, v0) ==================
+
+  meaningVectorsMatch = a: b:
+    if a == null || b == null then false
+    else
+      (a.ambient == b.ambient)
+      && (a.invariant_route_target == b.invariant_route_target);
+
+  # === Session memory primitives ===================================
+
+  emptyMemory = {
+    instances = [];
+    turn_count = 0;
+  };
+
+  nextInstanceId = memory:
+    let
+      n = builtins.length memory.instances;
+      pad = i:
+        if i < 10 then "00" + builtins.toString i
+        else if i < 100 then "0" + builtins.toString i
+        else builtins.toString i;
+    in "sent-" + pad (n + 1);
+
+  findMatchingInstance = memory: meaningVector:
+    if meaningVector == null then null
+    else
+      let
+        hits = builtins.filter
+          (i: meaningVectorsMatch i.meaning_vector meaningVector)
+          memory.instances;
+      in
+        if hits == [] then null else builtins.head hits;
+
+  # Update an existing instance's reference_count + aliases_seen.
+  bumpReference = memory: instanceId: utterance:
+    let
+      updated = builtins.map (i:
+        if i.instance_id == instanceId then
+          i // {
+            reference_count = i.reference_count + 1;
+            aliases_seen = i.aliases_seen ++ [ utterance ];
+          }
+        else i
+      ) memory.instances;
+    in memory // {
+      instances = updated;
+      turn_count = memory.turn_count + 1;
+    };
+
+  # Append a brand-new instance.
+  appendInstance = memory: utterance: meaningVector:
+    let
+      newId = nextInstanceId memory;
+      row = {
+        instance_id = newId;
+        meaning_vector = meaningVector;
+        original_utterance = utterance;
+        aliases_seen = [];
+        first_seen_at_turn = memory.turn_count + 1;
+        reference_count = 1;
+        algorithm_step_index = builtins.length memory.instances + 1;
+      };
+    in memory // {
+      instances = memory.instances ++ [ row ];
+      turn_count = memory.turn_count + 1;
+    };
+
+  # === Identify utterance: match or create =========================
+
+  identifyUtterance = utterance: memory:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+      memory = memory;
+    }
+    else if utterance == "" then {
+      outcome = "held-empty-utterance";
+      memory = memory;
+    }
+    else
+      let
+        mv = extractMeaningVector utterance;
+      in
+        if mv == null then {
+          outcome = "held-meaning-vector-not-extracted";
+          memory = memory;
+        }
+        else
+          let
+            existing = findMatchingInstance memory mv;
+          in
+            if existing != null then
+              let
+                updatedMemory = bumpReference memory existing.instance_id utterance;
+                updatedInstance =
+                  builtins.head (
+                    builtins.filter
+                      (i: i.instance_id == existing.instance_id)
+                      updatedMemory.instances
+                  );
+              in {
+                outcome = "matched-existing-instance";
+                instance_id = existing.instance_id;
+                public = {
+                  instance_id = existing.instance_id;
+                  reference_count = updatedInstance.reference_count;
+                  message_en =
+                    "Utterance maps to existing meaning instance "
+                    + existing.instance_id + ".";
+                  message_ko =
+                    "발화가 기존 의미 instance "
+                    + existing.instance_id + " 로 매핑됨.";
+                };
+                carry = {
+                  updated_memory = updatedMemory;
+                  instance_row = updatedInstance;
+                  meaning_vector = mv;
+                  matched = true;
+                  axiom_origin =
+                    "axiom-97-nl-sentence-instance-memory "
+                    + "(composes axiom-94-nl-chain)";
+                };
+              }
+            else
+              let
+                updatedMemory = appendInstance memory utterance mv;
+                newInstance = builtins.head (
+                  builtins.filter
+                    (i: i.original_utterance == utterance)
+                    updatedMemory.instances
+                );
+              in {
+                outcome = "fresh-instance-created";
+                instance_id = newInstance.instance_id;
+                public = {
+                  instance_id = newInstance.instance_id;
+                  algorithm_step_index = newInstance.algorithm_step_index;
+                  message_en =
+                    "Fresh meaning instance "
+                    + newInstance.instance_id
+                    + " recorded at algorithm step "
+                    + builtins.toString newInstance.algorithm_step_index + ".";
+                  message_ko =
+                    "새 의미 instance "
+                    + newInstance.instance_id
+                    + " 가 algorithm step "
+                    + builtins.toString newInstance.algorithm_step_index
+                    + " 에 기록됨.";
+                };
+                carry = {
+                  updated_memory = updatedMemory;
+                  instance_row = newInstance;
+                  meaning_vector = mv;
+                  matched = false;
+                  axiom_origin =
+                    "axiom-97-nl-sentence-instance-memory "
+                    + "(composes axiom-94-nl-chain)";
+                };
+              };
+
+  # === Flow Y/N decision ===========================================
+  #
+  # Substrate has already accepted instance at step K. Flow Y/N now
+  # picks one of:
+  #   - Y (continue) → next algorithm step staged
+  #   - N (stop)     → flow holds at current instance; user must
+  #                     provide a new direction
+  #
+  # IMPORTANT (사용자 directive): Y/N does NOT validate truth. The
+  # instance was already accepted via the substrate's internal verify
+  # path. Y/N is FLOW CONTROL only.
+
+  yesContinueTokens = [
+    "yes" "Yes" "YES" "go" "Go" "continue" "Continue" "next" "Next"
+    "proceed" "Proceed" "keep going" "Keep going"
+    "네" "예" "맞아" "맞다" "계속" "다음" "진행" "가자"
+  ];
+  noStopTokens = [
+    "no" "No" "NO" "stop" "Stop" "halt" "Halt" "wait" "Wait"
+    "pause" "Pause" "hold" "Hold"
+    "아니" "멈춰" "정지" "대기" "잠시"
+  ];
+
+  containsAny = decomposer.containsAny;
+
+  classifyFlowAnswer = answer:
+    if !(builtins.isString answer) then "non-string"
+    else
+      let trimmed = decomposer.trim answer; in
+      if trimmed == "" then "empty"
+      else if containsAny trimmed yesContinueTokens then "continue"
+      else if containsAny trimmed noStopTokens then "stop"
+      else "ambiguous";
+
+  flowDecision = memory: instanceId: answer:
+    let
+      class = classifyFlowAnswer answer;
+      instance =
+        let
+          hits = builtins.filter
+            (i: i.instance_id == instanceId) memory.instances;
+        in
+          if hits == [] then null else builtins.head hits;
+    in
+      if instance == null then {
+        outcome = "held-unknown-instance";
+        instance_id = instanceId;
+      }
+      else if class == "non-string" then {
+        outcome = "held-non-string-flow-answer";
+        instance_id = instanceId;
+      }
+      else if class == "empty" then {
+        outcome = "held-empty-flow-answer";
+        instance_id = instanceId;
+      }
+      else if class == "ambiguous" then {
+        outcome = "held-ambiguous-flow-answer";
+        instance_id = instanceId;
+        public = {
+          message_en =
+            "Flow answer was neither continue nor stop — please use "
+            + "yes/no, continue/stop, or 계속/멈춰.";
+          message_ko =
+            "흐름 답이 계속/멈춤 어느 쪽도 아님 — yes/no, "
+            + "continue/stop, 또는 계속/멈춰 를 사용.";
+        };
+        carry = {
+          memory = memory;
+          received_answer = answer;
+          axiom_origin =
+            "axiom-97-nl-sentence-instance-memory "
+            + "(composes axiom-94-nl-chain)";
+        };
+      }
+      else if class == "continue" then {
+        outcome = "flow-continue";
+        instance_id = instanceId;
+        public = {
+          flow = "continue";
+          from_step = instance.algorithm_step_index;
+          to_step = instance.algorithm_step_index + 1;
+          message_en =
+            "Continuing from instance " + instanceId
+            + " to next algorithm step.";
+          message_ko =
+            "instance " + instanceId
+            + " 에서 다음 algorithm step 으로 진행.";
+        };
+        carry = {
+          memory = memory;
+          decision = "continue";
+          current_instance = instance;
+          axiom_origin =
+            "axiom-97-nl-sentence-instance-memory "
+            + "(composes axiom-94-nl-chain)";
+        };
+      }
+      else {
+        # class == "stop"
+        outcome = "flow-stop";
+        instance_id = instanceId;
+        public = {
+          flow = "stop";
+          held_at_step = instance.algorithm_step_index;
+          message_en =
+            "Flow stopped at instance " + instanceId
+            + " (algorithm step "
+            + builtins.toString instance.algorithm_step_index + ").";
+          message_ko =
+            "흐름이 instance " + instanceId
+            + " (algorithm step "
+            + builtins.toString instance.algorithm_step_index
+            + ") 에서 멈춤.";
+        };
+        carry = {
+          memory = memory;
+          decision = "stop";
+          current_instance = instance;
+          axiom_origin =
+            "axiom-97-nl-sentence-instance-memory "
+            + "(composes axiom-94-nl-chain)";
+        };
+      };
+
+  # === Self-awareness query ========================================
+  #
+  # "자신이 뭘하고있는지 기억하는게 문장이고 문장의 의미" — session
+  # memory 의 most recent instance + 그 algorithm_step_index 를 묻는다.
+
+  currentFocus = memory:
+    if memory.instances == [] then {
+      outcome = "held-no-instances";
+      message_en = "No instances in session memory yet.";
+      message_ko = "session memory 에 instance 아직 없음.";
+    }
+    else
+      let
+        last = builtins.elemAt memory.instances
+          (builtins.length memory.instances - 1);
+      in {
+        outcome = "current-focus";
+        instance_id = last.instance_id;
+        public = {
+          instance_id = last.instance_id;
+          algorithm_step_index = last.algorithm_step_index;
+          original_utterance = last.original_utterance;
+          message_en =
+            "Currently focused on " + last.instance_id
+            + " at algorithm step "
+            + builtins.toString last.algorithm_step_index + ".";
+          message_ko =
+            "현재 " + last.instance_id
+            + " (algorithm step "
+            + builtins.toString last.algorithm_step_index
+            + ") 에 집중 중.";
+        };
+        carry = {
+          instance_row = last;
+          total_instances = builtins.length memory.instances;
+          total_turns = memory.turn_count;
+        };
+      };
+
+  # === Plate entry =================================================
+
+  applySentenceInstanceMemoryPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "identify_utterance" request then
+      identifyUtterance request.identify_utterance
+        (request.memory or emptyMemory)
+    else if (builtins.hasAttr "flow_answer" request)
+         && (builtins.hasAttr "instance_id" request)
+         && (builtins.hasAttr "memory" request) then
+      flowDecision request.memory request.instance_id request.flow_answer
+    else if (builtins.hasAttr "query_focus" request)
+         && (builtins.hasAttr "memory" request) then
+      currentFocus request.memory
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { identify_utterance, memory? } or "
+        + "{ flow_answer, instance_id, memory } or "
+        + "{ query_focus = true, memory }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-sentence-instance-memory-axiom-97";
+    yes_continue_token_count = builtins.length yesContinueTokens;
+    no_stop_token_count = builtins.length noStopTokens;
+    composes = "axiom-94-nl-chain + axiom-90 to axiom-93";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    primary_outcomes = [
+      "matched-existing-instance"
+      "fresh-instance-created"
+      "flow-continue"
+      "flow-stop"
+      "current-focus"
+    ];
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-meaning-vector-not-extracted"
+      "held-unknown-instance"
+      "held-non-string-flow-answer"
+      "held-empty-flow-answer"
+      "held-ambiguous-flow-answer"
+      "held-no-instances"
+      "held-non-attrs-request"
+      "held-missing-input-field"
+    ];
+    yn_meaning =
+      "FLOW decision (continue/stop), NOT truth verdict — substrate "
+      + "already verified before asking.";
+    instance_as_oop =
+      "Sentence = named object. 4-piece (ambient + invariant route) "
+      + "is the equality key. New utterance with same key fast-maps "
+      + "to existing instance.";
+  };
+
+in {
+  inherit
+    ownerName
+    extractMeaningVector meaningVectorsMatch
+    emptyMemory nextInstanceId findMatchingInstance
+    bumpReference appendInstance
+    identifyUtterance
+    yesContinueTokens noStopTokens classifyFlowAnswer
+    flowDecision currentFocus
+    applySentenceInstanceMemoryPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL sentence instance memory (agent-NL-109)";
+    owner = ownerName;
+    base = "nl-sentence-instance-memory-v0";
+    rev_note = "agent-NL-109 (2026-05-29): 사용자 정정 — Y/N 가 truth "
+      + "verdict 가 아니라 *flow decision* (continue/stop). 문장은 "
+      + "OOP instance, prompt session memory 에 명명되어 남음. 4-piece "
+      + "(ambient + invariant route) 가 equality key — 같은 의미의 "
+      + "새 utterance 가 같은 instance id 로 fast-map. self-awareness = "
+      + "currentFocus query. DO NOT REBUILD — chain (#105) + decomposer "
+      + "containsAny 재사용.";
+  };
+}

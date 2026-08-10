@@ -1,0 +1,230 @@
+let
+  ownerName = "stdlib.nl.code-transform-nl-lifter";
+
+  # === Code transform NL lifter (Axiom #42) ========================
+  #
+  # 사용자 directive (2026-05-28): NL super-set bidirectional + AI coding
+  # agent 의 핵심 진입점.
+  #
+  # Axiom #22 (code-transform-registry, 14 transform × 9 category) 의
+  # NL surface. AI coding agent 가 자연어 명령을 transform plate 로 routing.
+  #
+  # # 14 transforms 모두 cover (en + ko 양어)
+  #
+  # symbol-level: rename-symbol / rename-node / move-symbol
+  # graph-level:  add-node / remove-node / add-edge / remove-edge
+  # import-management: add-import / remove-unused-import
+  # test-scaffold: add-test-stub
+  # refactor-block: extract-function / inline-function
+  # signature-level: change-signature
+  # ffi-binding: add-extern-decl
+  #
+  # # 발화 예
+  #
+  # "foo 를 bar 로 이름 바꿔" → rename-symbol
+  # "src/main.rs unused import 제거" → remove-unused-import
+  # "test stub 추가" → add-test-stub
+  # "function 시그니처 변경" → change-signature
+  #
+  # # Held-honest 헌법 보존
+  #
+  # 키워드 0 match → held-no-transform-matched.
+  # multiple match → held-multi-transform-candidates.
+
+  knownTransformNLPatterns = [
+    {
+      transform_id = "rename-symbol";
+      category = "symbol-level";
+      en_keywords = [ "rename symbol" "rename function" "rename variable" "rename identifier" ];
+      ko_keywords = [ "이름 바꾸" "이름 바꿔" "심볼 이름" "심볼 변경" "이름 변경해" "이름 변경해줘" ];
+      production_owner = "stdlib/lib/gate/code-transform/rename-symbol.px";
+    }
+    {
+      transform_id = "rename-node";
+      category = "symbol-level";
+      en_keywords = [ "rename node" "rename graph node" ];
+      ko_keywords = [ "노드 이름" "노드 rename" ];
+      production_owner = "stdlib/lib/gate/code-transform/rename-node.px";
+    }
+    {
+      transform_id = "move-symbol";
+      category = "symbol-relocation";
+      en_keywords = [ "move function" "move symbol" "move to file" "relocate" ];
+      ko_keywords = [ "함수 이동" "심볼 이동" "파일로 옮기" ];
+      production_owner = "stdlib/lib/gate/code-transform/move-symbol.px";
+    }
+    {
+      transform_id = "add-node";
+      category = "graph-level";
+      en_keywords = [ "add node" "add graph node" ];
+      ko_keywords = [ "노드 추가" ];
+      production_owner = "stdlib/lib/gate/code-transform/add-node.px";
+    }
+    {
+      transform_id = "remove-node";
+      category = "graph-level";
+      en_keywords = [ "remove node" "delete node" ];
+      ko_keywords = [ "노드 삭제" "노드 제거" ];
+      production_owner = "stdlib/lib/gate/code-transform/remove-node.px";
+    }
+    {
+      transform_id = "add-edge";
+      category = "graph-level";
+      en_keywords = [ "add edge" "add connection" ];
+      ko_keywords = [ "엣지 추가" "연결 추가" ];
+      production_owner = "stdlib/lib/gate/code-transform/add-edge.px";
+    }
+    {
+      transform_id = "remove-edge";
+      category = "graph-level";
+      en_keywords = [ "remove edge" "delete edge" "disconnect" ];
+      ko_keywords = [ "엣지 삭제" "연결 제거" ];
+      production_owner = "stdlib/lib/gate/code-transform/remove-edge.px";
+    }
+    {
+      transform_id = "add-import";
+      category = "import-management";
+      en_keywords = [ "add import" "import statement" "include this" ];
+      ko_keywords = [ "import 추가" "임포트 추가" ];
+      production_owner = "stdlib/lib/gate/code-transform/add-import.px";
+    }
+    {
+      transform_id = "remove-unused-import";
+      category = "import-cleanup";
+      en_keywords = [ "remove unused import" "unused import" "cleanup imports" "delete unused import" "purge imports" ];
+      ko_keywords = [ "미사용 import 제거" "unused import 정리" "임포트 정리" "안쓰는 import 제거" "쓰지 않는 import" "사용 안하는 import" ];
+      production_owner = "stdlib/lib/gate/code-transform/remove-unused-import.px";
+    }
+    {
+      transform_id = "add-test-stub";
+      category = "test-scaffold";
+      en_keywords = [ "add test" "test stub" "scaffold test" "create test" "write test" "test case" ];
+      ko_keywords = [ "테스트 추가" "테스트 stub" "테스트 생성" "테스트 케이스" "테스트 작성" "test 추가" "테스트 추가해" "테스트 만들" ];
+      production_owner = "stdlib/lib/gate/code-transform/add-test-stub.px";
+    }
+    {
+      transform_id = "extract-function";
+      category = "refactor-block";
+      en_keywords = [ "extract function" "extract method" "refactor into function" "split into function" ];
+      ko_keywords = [ "함수 추출" "메서드 추출" "함수로 분리" "함수로 빼" "리팩토링 함수" ];
+      production_owner = "stdlib/lib/gate/code-transform/extract-function.px";
+    }
+    {
+      transform_id = "inline-function";
+      category = "refactor-block";
+      en_keywords = [ "inline function" "inline method" "expand function" ];
+      ko_keywords = [ "함수 인라인" "인라인화" ];
+      production_owner = "stdlib/lib/gate/code-transform/inline-function.px";
+    }
+    {
+      transform_id = "change-signature";
+      category = "signature-level";
+      en_keywords = [ "change signature" "modify signature" "add parameter" "remove parameter" "function signature" ];
+      ko_keywords = [ "시그니처 변경" "파라미터 추가" "파라미터 제거" "인자 추가" "인자 제거" "함수 시그니처" "매개변수 변경" ];
+      production_owner = "stdlib/lib/gate/code-transform/change-signature.px";
+    }
+    {
+      transform_id = "add-extern-decl";
+      category = "ffi-binding";
+      en_keywords = [ "add extern" "FFI binding" "extern declaration" ];
+      ko_keywords = [ "extern 추가" "FFI 바인딩" ];
+      production_owner = "stdlib/lib/gate/code-transform/add-extern-decl.px";
+    }
+  ];
+
+  transformPatternCount = builtins.length knownTransformNLPatterns;
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  matchTransform = utterance:
+    builtins.filter (p:
+      (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords))
+      knownTransformNLPatterns;
+
+  liftToTransform = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let matches = matchTransform utterance;
+      in
+        if matches == [] then {
+          outcome = "held-no-transform-matched";
+          known_transform_count = transformPatternCount;
+          known_transforms = builtins.map (p: p.transform_id) knownTransformNLPatterns;
+        }
+        else if (builtins.length matches) > 1 then {
+          outcome = "held-multi-transform-candidates";
+          candidate_count = builtins.length matches;
+          candidates = builtins.map (m: m.transform_id) matches;
+        }
+        else
+          let m = builtins.head matches;
+          in {
+            outcome = "code-transform-lifted";
+            utterance = utterance;
+            transform_id = m.transform_id;
+            category = m.category;
+            production_owner = m.production_owner;
+            substrate_action =
+              "production_owner plate 가 specific transform candidate emit. "
+              + "5-gate firewall (Axiom #21 의 stage 4 patch-candidate) 통과 후 "
+              + "stage 5-6 apply + verify.";
+            axiom_origin = "axiom-22-code-transform-registry";
+          };
+
+  applyCodeTransformNlLifterPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else liftToTransform request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-42";
+    transform_pattern_count = transformPatternCount;
+    category_count = 9;
+    routed_substrate = "stdlib/lib/integration/code-transform-registry.px (Axiom #22) — 14 transforms";
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-transform-matched"
+      "held-multi-transform-candidates"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownTransformNLPatterns transformPatternCount
+    containsAny matchTransform
+    liftToTransform applyCodeTransformNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL code transform lifter (Axiom #42)";
+    owner = ownerName;
+    base = "code-transform-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-28). Axiom #22 code-transform "
+      + "(14 transform × 9 category) 의 NL surface. AI coding agent 의 "
+      + "발화 → transform plate routing 핵심 진입점. en + ko bilingual. "
+      + "DO NOT REBUILD — 14 transform plate 기존 owner 재사용.";
+  };
+}

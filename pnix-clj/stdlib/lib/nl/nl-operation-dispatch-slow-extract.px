@@ -1,0 +1,71 @@
+# stdlib.nl.nl-operation-dispatch-slow-extract — symbolic extract + keyword fallback (O-008-slow P3).
+let
+  mkResult = kind: to: classification: result: {
+    operation_kind = kind;
+    outcome = "dispatched";
+    dispatched_to = to;
+    classification = classification;
+    result = result;
+  };
+  arithmeticResultFromExpression = utterance: via: expr:
+    let
+      num = import ../math/numeric-evaluator.px;
+      evaluated = num.evaluateNumericExpression expr { };
+      rational =
+        if evaluated.ok then null
+        else num.evaluateRationalExpression expr { };
+    in
+      if evaluated.ok
+      then mkResult "arithmetic" "numeric-evaluator"
+             { via = via; expression = expr; }
+             { outcome = "evaluated"; value = evaluated.value; input = utterance; }
+      else if rational != null && rational.ok
+      then mkResult "arithmetic" "numeric-evaluator"
+             { via = via; expression = expr; exact = "rational"; }
+             {
+               outcome = "evaluated";
+               value = if rational.is_integer then rational.value else rational.text;
+               value_text = rational.text;
+               exact_rational = rational.rational;
+	               input = utterance;
+	             }
+	      else null;
+
+  slen = s: builtins.stringLength s;
+  sub = start: len: s: builtins.substring start len s;
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+  containsAny = utterance: cues:
+    builtins.any (cue: hasInfix cue utterance) cues;
+  weatherCues = [ "날씨" "weather" "forecast" "기상" ];
+  policyArtifactCues = [
+    "docs/puck" "freecat" "policy" "artifact" "evaluation"
+    "counterfactual" "autofix" "propose_patch" "PolicyApprovalPacket"
+    "AutoFixPatchBundleResult"
+  ];
+  pnixSampleInputCues = [
+    "docs/pnix-sample-inputs.md" "pnix sample" "pnix 샘플" "이 입력"
+    "평가 불가" "eval-input" "let " "; in" "{ " "; }" "[ " " ]"
+  ];
+in {
+  name = "stdlib.nl.nl-operation-dispatch-slow-extract";
+
+  tryExtractOrKeyword = utterance:
+    let
+      keywordOwner = import ./nl-operation-dispatch-slow-keyword.px;
+      ext = import ../math/nl-symbolic-extractor.px;
+      lifted = ext.extractExpression utterance;
+      arithmetic = arithmeticResultFromExpression utterance "slow-symbolic-extract" lifted.expression;
+    in
+	      if arithmetic != null
+	      then arithmetic
+	      else if containsAny utterance weatherCues
+	      then null
+	      else if containsAny utterance policyArtifactCues
+	      then null
+	      else if containsAny utterance pnixSampleInputCues
+	      then null
+	      else keywordOwner.dispatchByKeyword utterance;
+}

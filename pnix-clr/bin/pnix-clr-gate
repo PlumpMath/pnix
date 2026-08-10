@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+"$root/bin/build-clr"
+"$root/bin/pnix-clr-identity-gate"
+"$root/clr-meta/scripts/clr-meta-gate" --no-build
+"$root/bin/build-pnix-clr-artifact" >/dev/null
+"$root/bin/pnix-clr-artifact-gate" --no-build
+
+export CLOJURE_LOAD_PATH="$root/pnix-clr/src:$root/pnix-clr/test"
+"$root/bin/clojure-clr-bootstrap" -m pnix-clr.test-runner "$root"
+"$root/bin/pnix-clr-production-outcome-gate"
+
+echo "pnix-clr gate: PASS"

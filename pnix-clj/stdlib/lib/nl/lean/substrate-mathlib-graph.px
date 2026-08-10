@@ -1,0 +1,254 @@
+let
+  ownerName = "stdlib.nl.lean.substrate-mathlib-graph";
+
+  lookup = import nl/lean/lookup-aggregate.px;
+
+  # === Substrate ↔ Mathlib reference graph (agent-NL-197) ============
+  #
+  # Round 8 사용자 vision 확장:
+  # > "1:1 paired 아니라 1:N reference graph"
+  #
+  # 한 substrate concept 이 여러 Mathlib 정리들의 *합집합* 으로
+  # external verification proxy 확보. 즉 substrate concept X 가
+  # 의존하는 Mathlib 정리 set 박힘.
+  #
+  # 구조:
+  #   substrate concept
+  #     → [Mathlib entry 1, Mathlib entry 2, ...]  (related theorems)
+  #     → 각 entry 가 lookup table 안에 *실제 존재* mechanical 확인
+  #     → coverage_ratio = verified_count / total_referenced_count
+
+  stepKind = "substrate-mathlib-graph";
+  framework_step =
+    "substrate concept 1:N Mathlib reference graph + coverage receipts";
+
+  # =================================================================
+  # === Substrate concept ↔ N Mathlib references =====================
+  # =================================================================
+
+  substrateReferenceGraph = [
+    # ----- Sheaf cohomology (substrate sheaf primitive) -----
+    {
+      substrate_concept = "Sheaf on a Grothendieck site";
+      substrate_file = "category-sheaf-cohomology-substrate.px";
+      mathlib_references = [
+        { name = "CategoryTheory.Presheaf.IsSheaf"; reason = "core sheaf condition"; }
+        { name = "CategoryTheory.Sheafify"; reason = "sheafification operation"; }
+        { name = "CategoryTheory.Site"; reason = "Grothendieck site structure"; }
+      ];
+    }
+
+    # ----- Galois theory (substrate G_pnix) -----
+    {
+      substrate_concept = "Galois extension and group";
+      substrate_file = "category-galois-substrate.px";
+      mathlib_references = [
+        { name = "IsGalois"; reason = "core Galois extension predicate"; }
+        { name = "isGalois_iff"; reason = "characterization (separable + normal)"; }
+        { name = "IsGalois.self"; reason = "self is Galois (instance)"; }
+      ];
+    }
+
+    # ----- Group cohomology (substrate Hochschild-Serre) -----
+    {
+      substrate_concept = "Group cohomology H^n";
+      substrate_file = "category-hochschild-serre-substrate.px";
+      mathlib_references = [
+        { name = "groupCohomology"; reason = "core definition"; }
+        { name = "groupCohomology.H0"; reason = "degree 0 = invariants"; }
+        { name = "groupCohomology.H1"; reason = "degree 1"; }
+        { name = "groupCohomology.H2"; reason = "degree 2 (transgression target)"; }
+      ];
+    }
+
+    # ----- Derived / triangulated (substrate etale-derived) -----
+    {
+      substrate_concept = "Triangulated derived category foundation";
+      substrate_file = "category-etale-cohomology-and-derived-substrate.px";
+      mathlib_references = [
+        { name = "CategoryTheory.Pretriangulated"; reason = "pretriangulated structure"; }
+      ];
+    }
+
+    # ----- Homological complex (substrate spectral sequences) -----
+    {
+      substrate_concept = "Chain complex + spectral sequence foundation";
+      substrate_file = "category-spectral-sequences-substrate.px";
+      mathlib_references = [
+        { name = "HomologicalComplex"; reason = "chain complex"; }
+      ];
+    }
+
+    # ----- Monoidal (substrate motivic Tate twist) -----
+    {
+      substrate_concept = "Monoidal + Rigid foundation (Tannakian)";
+      substrate_file = "category-motivic-galois-substrate.px";
+      mathlib_references = [
+        { name = "CategoryTheory.MonoidalCategory"; reason = "monoidal core"; }
+        { name = "CategoryTheory.Monoidal.Rigid"; reason = "rigid monoidal"; }
+        { name = "FDRep"; reason = "finite-dim representations"; }
+        { name = "TannakaDuality.FiniteGroup.forget"; reason = "Tannaka duality fiber functor"; }
+      ];
+    }
+
+    # ----- p-adic (substrate crystalline + Fontaine) -----
+    {
+      substrate_concept = "p-adic foundation (Fontaine prerequisite)";
+      substrate_file = "category-crystalline-and-period-rings-substrate.px";
+      mathlib_references = [
+        { name = "Padic"; reason = "p-adic numbers"; }
+      ];
+    }
+
+    # ----- Zeta (substrate MZV) -----
+    {
+      substrate_concept = "Single Riemann zeta (MZV foundation)";
+      substrate_file = "category-mixed-tate-motives-and-mzv-substrate.px";
+      mathlib_references = [
+        { name = "riemannZeta"; reason = "Riemann zeta function"; }
+      ];
+    }
+
+    # ----- Finite-dimensional (substrate K-theory) -----
+    {
+      substrate_concept = "Finite-dimensional vector bundle (K_0 foundation)";
+      substrate_file = "category-substrate-k-theory.px";
+      mathlib_references = [
+        { name = "FiniteDimensional"; reason = "finite-dim module"; }
+      ];
+    }
+
+    # ----- Round 20: Algebraic foundation (Group/Ring/Module) ------
+    {
+      substrate_concept = "Group + Ring + Module algebraic foundation";
+      substrate_file = "category-substrate-k-theory.px";
+      mathlib_references = [
+        { name = "Group"; reason = "group structure (G_pnix foundation)"; }
+        { name = "Ring"; reason = "ring structure (K-theory foundation)"; }
+        { name = "Module"; reason = "module structure (vector bundle foundation)"; }
+      ];
+    }
+
+    # ----- Round 20: NumberField + Topology -----
+    {
+      substrate_concept = "Number field + topology (Galois p-adic foundation)";
+      substrate_file = "category-galois-substrate.px";
+      mathlib_references = [
+        { name = "NumberField"; reason = "number field arithmetic"; }
+        { name = "TopologicalSpace"; reason = "topology foundation"; }
+        { name = "IsCompact"; reason = "compactness"; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === Coverage verification ========================================
+  # =================================================================
+  #
+  # 각 substrate concept 의 mathlib_references 중 *몇 개가 lookup table 에
+  # 실제 존재* 하는지 mechanical 측정.
+
+  verifyConceptCoverage = entry:
+    let
+      references = entry.mathlib_references;
+      verifyOne = ref:
+        let leanEntry = lookup.lookupByName ref.name;
+        in {
+          inherit (ref) name reason;
+          exists_in_lookup = leanEntry != null;
+          lean_file =
+            if leanEntry == null then null
+            else leanEntry.file_path;
+        };
+      verifications = builtins.map verifyOne references;
+      verifiedCount =
+        builtins.length (builtins.filter (v: v.exists_in_lookup) verifications);
+      totalCount = builtins.length references;
+    in {
+      substrate_concept = entry.substrate_concept;
+      substrate_file = entry.substrate_file;
+      total_references = totalCount;
+      verified_references = verifiedCount;
+      coverage_percent =
+        if totalCount == 0 then 0
+        else (verifiedCount * 100) / totalCount;
+      verifications = verifications;
+    };
+
+  allCoverages = builtins.map verifyConceptCoverage substrateReferenceGraph;
+
+  # =================================================================
+  # === Aggregate stats ===============================================
+  # =================================================================
+
+  totalConcepts = builtins.length substrateReferenceGraph;
+  totalReferences =
+    builtins.foldl' (acc: e: acc + builtins.length e.mathlib_references)
+      0 substrateReferenceGraph;
+  totalVerifiedReferences =
+    builtins.foldl' (acc: c: acc + c.verified_references)
+      0 allCoverages;
+  overallCoveragePercent =
+    if totalReferences == 0 then 0
+    else (totalVerifiedReferences * 100) / totalReferences;
+
+  fullyCoveredConceptCount =
+    builtins.length
+      (builtins.filter (c: c.coverage_percent == 100) allCoverages);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_referenceGraph = true;
+    has_verifyConceptCoverage = true;
+    has_allCoverages = true;
+    total_substrate_concepts = totalConcepts;
+    total_mathlib_references = totalReferences;
+    total_verified_references = totalVerifiedReferences;
+    overall_coverage_percent = overallCoveragePercent;
+    fully_covered_concept_count = fullyCoveredConceptCount;
+    lookup_owner_inherited = lookup.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applySubstrateMathlibGraphPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "substrate-mathlib-graph-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "graph" request then {
+      outcome = "reference-graph-emitted"; receipt = substrateReferenceGraph;
+    }
+    else if builtins.hasAttr "coverages" request then {
+      outcome = "all-coverages-emitted"; receipt = allCoverages;
+    }
+    else if builtins.hasAttr "verify_concept" request then
+      let
+        target = request.verify_concept;
+        matches = builtins.filter (e: e.substrate_concept == target) substrateReferenceGraph;
+      in
+        if matches == []
+        then { outcome = "held-no-such-substrate-concept"; receipt = { queried = target; }; }
+        else {
+          outcome = "single-concept-coverage-emitted";
+          receipt = verifyConceptCoverage (builtins.head matches);
+        }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "graph" "coverages" "verify_concept"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit substrateReferenceGraph verifyConceptCoverage allCoverages;
+  inherit totalConcepts totalReferences totalVerifiedReferences;
+  inherit overallCoveragePercent fullyCoveredConceptCount;
+  inherit inventorySummary applySubstrateMathlibGraphPlate;
+}

@@ -1,0 +1,316 @@
+let
+  ownerName = "stdlib.nl.performance-deep-axioms";
+  bt = import nl/branch-tree-substrate.px;
+  decomposer = import nl/sentence-decomposition-substrate.px;
+
+  cacheAxiomTree = bt.composeBranchTree "cache hierarchy axiom" [
+    {
+      name = "cpu-cache-levels";
+      cues = [ "L1 cache" "L2 cache" "L3 cache" "cpu cache" "CPU 캐시" ];
+      sub_specs = [
+        { name = "L1-data-instruction"; cues = []; terminal = true; }
+        { name = "L2-unified"; cues = []; terminal = true; }
+        { name = "LLC-shared"; cues = [ "LLC" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "cache-line";
+      cues = [ "cache line" "cacheline" "false sharing" "캐시 라인" "거짓 공유" ];
+      sub_specs = [
+        { name = "alignment"; cues = [ "alignment" "정렬" ]; terminal = true; }
+        { name = "padding-to-line"; cues = [ "padding" "패딩" ]; terminal = true; }
+        { name = "avoid-false-sharing"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "cache-miss-pattern";
+      cues = [ "cache miss" "cold miss" "capacity miss" "conflict miss" "캐시 미스" ];
+      sub_specs = [
+        { name = "cold-compulsory"; cues = []; terminal = true; }
+        { name = "capacity-miss"; cues = []; terminal = true; }
+        { name = "conflict-miss"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "prefetching";
+      cues = [ "prefetch" "prefetcher" "프리페치" ];
+      sub_specs = [
+        { name = "hardware-prefetch"; cues = []; terminal = true; }
+        { name = "software-prefetch"; cues = [ "__builtin_prefetch" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "tlb";
+      cues = [ "TLB" "translation lookaside" "huge page" "큰 페이지" ];
+      sub_specs = [
+        { name = "tlb-miss"; cues = []; terminal = true; }
+        { name = "huge-pages"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  memoryLayoutAxiomTree = bt.composeBranchTree "memory layout axiom" [
+    {
+      name = "data-locality";
+      cues = [ "data locality" "locality of reference" "지역성" ];
+      sub_specs = [
+        { name = "spatial-locality"; cues = [ "spatial" "공간" ]; terminal = true; }
+        { name = "temporal-locality"; cues = [ "temporal" "시간" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "soa-vs-aos";
+      cues = [ "SoA" "AoS" "structure of arrays" "array of structures" "배열의 구조체" ];
+      sub_specs = [
+        { name = "soa"; cues = [ "structure of arrays" ]; terminal = true; }
+        { name = "aos"; cues = [ "array of structures" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "struct-packing";
+      cues = [ "struct packing" "padding" "alignment" "구조체 패킹" ];
+      sub_specs = [
+        { name = "size-reduction"; cues = []; terminal = true; }
+        { name = "field-reorder"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "arena-pool";
+      cues = [ "arena" "pool allocator" "bump allocator" "아레나" "풀 할당자" ];
+      sub_specs = [
+        { name = "arena-alloc"; cues = []; terminal = true; }
+        { name = "pool-alloc"; cues = []; terminal = true; }
+        { name = "bump-alloc"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "stack-vs-heap";
+      cues = [ "stack vs heap" "stack alloc" "heap alloc" "스택 vs 힙" ];
+      sub_specs = [
+        { name = "stack-preferred"; cues = []; terminal = true; }
+        { name = "heap-when-large"; cues = []; terminal = true; }
+        { name = "escape-analysis"; cues = [ "escape analysis" "이스케이프 분석" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  simdAxiomTree = bt.composeBranchTree "SIMD vectorization axiom" [
+    {
+      name = "auto-vectorization";
+      cues = [ "auto vectorize" "vectorize loop" "자동 벡터화" ];
+      sub_specs = [
+        { name = "loop-friendly"; cues = []; terminal = true; }
+        { name = "no-dependency"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "intrinsics";
+      cues = [ "intrinsics" "SSE" "AVX" "NEON" "인트린식" ];
+      sub_specs = [
+        { name = "x86-sse-avx"; cues = [ "SSE" "AVX" ]; terminal = true; }
+        { name = "arm-neon"; cues = [ "NEON" ]; terminal = true; }
+        { name = "wasm-simd"; cues = [ "wasm simd" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "portable-simd";
+      cues = [ "portable simd" "std::simd" "포터블 SIMD" ];
+      sub_specs = [ { name = "abstract-simd"; cues = []; terminal = true; } ];
+    }
+    {
+      name = "alignment-for-simd";
+      cues = [ "simd alignment" "aligned load" "정렬된 로드" ];
+      sub_specs = [
+        { name = "aligned-vs-unaligned"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  gcTuningAxiomTree = bt.composeBranchTree "GC tuning axiom" [
+    {
+      name = "generational";
+      cues = [ "generational gc" "young gen" "old gen" "세대 gc" ];
+      sub_specs = [
+        { name = "young-gen-sizing"; cues = []; terminal = true; }
+        { name = "promotion-threshold"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "concurrent-gc";
+      cues = [ "concurrent gc" "low pause gc" "동시 gc" ];
+      sub_specs = [
+        { name = "g1"; cues = [ "G1" ]; terminal = true; }
+        { name = "zgc"; cues = [ "ZGC" ]; terminal = true; }
+        { name = "shenandoah"; cues = [ "shenandoah" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "pause-time-target";
+      cues = [ "pause time" "max gc pause" "GC 일시 정지" ];
+      sub_specs = [
+        { name = "sub-10ms"; cues = []; terminal = true; }
+        { name = "sub-100ms"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "allocation-rate";
+      cues = [ "allocation rate" "alloc rate" "할당률" ];
+      sub_specs = [
+        { name = "reduce-alloc"; cues = []; terminal = true; }
+        { name = "object-pooling"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "non-gc-language";
+      cues = [ "rust" "C++" "manual memory" "non-gc" "수동 메모리" ];
+      sub_specs = [
+        { name = "raii"; cues = [ "RAII" ]; terminal = true; }
+        { name = "borrow-checker"; cues = [ "borrow" "차용 검사기" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  ioPatternAxiomTree = bt.composeBranchTree "IO pattern axiom" [
+    {
+      name = "blocking-vs-nonblocking";
+      cues = [ "blocking io" "non-blocking io" "블로킹 IO" ];
+      sub_specs = [
+        { name = "blocking-thread-per-conn"; cues = []; terminal = true; }
+        { name = "non-blocking-poll"; cues = [ "epoll" "kqueue" "io_uring" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "batching";
+      cues = [ "batch io" "io batching" "배치" ];
+      sub_specs = [
+        { name = "syscall-batching"; cues = [ "syscall batch" ]; terminal = true; }
+        { name = "write-coalescing"; cues = [ "coalesce" "통합" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "zero-copy";
+      cues = [ "zero copy" "sendfile" "splice" "제로 카피" ];
+      sub_specs = [
+        { name = "sendfile-syscall"; cues = []; terminal = true; }
+        { name = "mmap-vs-read"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "buffering-strategy";
+      cues = [ "buffer" "buffering" "버퍼링" ];
+      sub_specs = [
+        { name = "line-buffered"; cues = []; terminal = true; }
+        { name = "block-buffered"; cues = []; terminal = true; }
+        { name = "unbuffered"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "async-io-runtime";
+      cues = [ "tokio" "async runtime" "io_uring" "비동기 런타임" ];
+      sub_specs = [
+        { name = "tokio"; cues = []; terminal = true; }
+        { name = "io_uring"; cues = []; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "jit-and-aot-compilation";
+      cues = [ "JIT" "AOT" "just-in-time" "ahead-of-time" "partial evaluation" "특수화" ];
+      sub_specs = [
+        { name = "jit-warmup"; cues = [ "JIT warmup" ]; terminal = true; }
+        { name = "aot-precompute"; cues = [ "AOT" ]; terminal = true; }
+        { name = "inline-cache"; cues = [ "inline cache" "polymorphic inline" ]; terminal = true; }
+        { name = "partial-eval"; cues = [ "partial evaluation" "특수화" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  knownAxioms = [
+    { axiom_id = "axiom-perf-001"; name = "cache-hierarchy"; domain = "performance-deep";
+      activation_cues = [ "cache" "cache miss" "L1" "L2" "L3" "cache line" "false sharing" "prefetch" "TLB" "캐시" "캐시 라인" "프리페치" "캐시 미스" ];
+      tree = cacheAxiomTree; sub_count = builtins.length cacheAxiomTree.branches;
+      tool_role = "성능 — 캐시 계층"; }
+    { axiom_id = "axiom-perf-002"; name = "memory-layout"; domain = "performance-deep";
+      activation_cues = [ "data locality" "SoA" "AoS" "struct packing" "arena" "pool allocator" "stack vs heap" "지역성" "구조체 패킹" "스택 vs 힙" ];
+      tree = memoryLayoutAxiomTree; sub_count = builtins.length memoryLayoutAxiomTree.branches;
+      tool_role = "성능 — 메모리 레이아웃"; }
+    { axiom_id = "axiom-perf-003"; name = "simd-vector"; domain = "performance-deep";
+      activation_cues = [ "SIMD" "vectorize" "SSE" "AVX" "NEON" "intrinsics" "auto vectorize" "벡터화" "인트린식" ];
+      tree = simdAxiomTree; sub_count = builtins.length simdAxiomTree.branches;
+      tool_role = "성능 — SIMD"; }
+    { axiom_id = "axiom-perf-004"; name = "gc-tuning"; domain = "performance-deep";
+      activation_cues = [ "gc" "garbage collection" "generational" "concurrent gc" "pause time" "G1" "ZGC" "shenandoah" "세대 gc" "GC 튜닝" "가비지 컬렉션" ];
+      tree = gcTuningAxiomTree; sub_count = builtins.length gcTuningAxiomTree.branches;
+      tool_role = "성능 — GC 튜닝"; }
+    { axiom_id = "axiom-perf-005"; name = "io-pattern"; domain = "performance-deep";
+      activation_cues = [ "blocking io" "non-blocking io" "epoll" "io_uring" "zero copy" "sendfile" "buffer" "tokio" "JIT" "AOT" "just-in-time" "ahead-of-time" "partial evaluation" "inline cache" "비동기 런타임" "제로 카피" "특수화" ];
+      tree = ioPatternAxiomTree; sub_count = builtins.length ioPatternAxiomTree.branches;
+      tool_role = "성능 — IO 패턴"; }
+  ];
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else builtins.filter (ax: decomposer.containsAny utterance ax.activation_cues) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then (builtins.head activations).tree
+    else bt.mkTree {
+      node_label = "multiple performance-deep axioms activated";
+      branches = builtins.map (ax: bt.mkBranch {
+        name = ax.name; hypothesis = "tune " + ax.name;
+        cues = ax.activation_cues; sub_branches = ax.tree.branches;
+      }) activations;
+    };
+
+  applyPerformanceDeepAxiomPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax: acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome = if activations == [] then "no-axiom-activated"
+                  else if builtins.length activations == 1 then "single-axiom-activated"
+                  else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names = builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations; composite_tree = composite;
+          axiom_origin = "axiom-116-nl-performance-deep (composes axiom-98-tree)";
+        };
+      }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-performance-deep-axiom-116";
+    composes = "axiom-98-tree";
+    framework_step = "axiom content — 깊은 성능 도구 (cache/memory/SIMD/GC/IO)";
+    step_kind = "performance-deep-tool-axiom";
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax: acc + ax.sub_count) 0 knownAxioms;
+  };
+
+in {
+  inherit ownerName cacheAxiomTree memoryLayoutAxiomTree simdAxiomTree
+    gcTuningAxiomTree ioPatternAxiomTree
+    knownAxioms axiomsActivatedBy compositeTreeFromActivations
+    applyPerformanceDeepAxiomPlate inventorySummary;
+  meta = { source = "stdlib NL performance-deep axioms (agent-NL-130)"; owner = ownerName; };
+}

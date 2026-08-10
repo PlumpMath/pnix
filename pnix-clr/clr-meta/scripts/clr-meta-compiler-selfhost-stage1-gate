@@ -1,0 +1,714 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+runtime_root="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish"
+main_dll="$runtime_root/Clojure.Main.dll"
+family_root="$clr_meta_root/compiler-selfhost"
+canonical_source="$family_root/compiler_kernel.clj"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage1 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+assert_rejection_json() {
+  local path="$1"
+  local phase="$2"
+  local class="$3"
+  [[ "$(wc -l <"$path" | tr -d ' ')" == 1 ]] || fail rejection-line-count
+  jq -e --arg phase "$phase" --arg class "$class" '
+    (keys == ["class","message","phase","schema"]) and
+    .schema == "pnix.clr-meta.compiler-selfhost-error.v1" and
+    .phase == $phase and .class == $class and
+    (.message | type == "string" and length > 0)
+  ' "$path" >/dev/null || fail "rejection-$phase-$class"
+}
+
+for command in dotnet jq rg strings; do
+  command -v "$command" >/dev/null 2>&1 || fail "$command-missing"
+done
+[[ -f "$main_dll" && ! -L "$main_dll" ]] || fail pinned-runtime-missing
+for input in \
+  "$canonical_source" \
+  "$family_root/contract.edn" \
+  "$family_root/profile.edn" \
+  "$family_root/plan.edn" \
+  "$family_root/executable-contract.edn"; do
+  [[ -f "$input" && ! -L "$input" ]] || fail canonical-input-missing
+done
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage1.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/home" "$tmp/process-tmp" "$tmp/dotnet-home" "$tmp/poison"
+
+export CLOJURE_LOAD_PATH="$clr_meta_root/src:$clr_meta_root/test"
+(
+  cd "$runtime_root"
+  dotnet "$main_dll" -m pnix.clr-meta.compiler-selfhost-stage1-test
+) >"$tmp/focused-test.stdout" 2>"$tmp/focused-test.stderr" || {
+  sed -n '1,200p' "$tmp/focused-test.stdout" >&2
+  sed -n '1,200p' "$tmp/focused-test.stderr" >&2
+  fail focused-tests
+}
+
+bundle="$tmp/bundle"
+"$root/bin/clr-meta" --build-compiler-selfhost-stage1 "$bundle" \
+  >"$tmp/builder.stdout" 2>"$tmp/builder.stderr" || {
+  sed -n '1,200p' "$tmp/builder.stderr" >&2
+  fail public-builder
+}
+cmp "$tmp/builder.stdout" "$bundle/manifest.json" >/dev/null || \
+  fail public-builder-stdout
+[[ ! -s "$tmp/builder.stderr" ]] || fail public-builder-stderr
+
+printf '%s\n' \
+  compiler/CompilerStage1.dll \
+  manifest.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  | LC_ALL=C sort >"$tmp/expected-bundle-files"
+(
+  cd "$bundle"
+  find . -mindepth 1 -type f -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$tmp/actual-bundle-files"
+cmp "$tmp/expected-bundle-files" "$tmp/actual-bundle-files" >/dev/null || \
+  fail bundle-file-set
+
+manifest="$bundle/manifest.json"
+jq -e '
+  (keys == ["admission","bootstrap","boundaries","bundle_closure_sha256","bundle_files",
+            "checkpoint","claims","compiler","execution","family",
+            "input_closure_sha256","inputs","schema","stage","toolchain"]) and
+  .schema == "pnix.clr-meta.compiler-selfhost-stage1-artifact.v1" and
+  .checkpoint == "c2-executable-compiler-stage1" and
+  .family == "pnix.clr-meta.compiler-kernel.v1" and .stage == 1 and
+  .admission.checkpoint == "c1-source-admission" and
+  .admission.ready == true and
+  (.admission.receipt_sha256 | test("^[0-9a-f]{64}$")) and
+  .bootstrap == {
+    "host_compiler_use":"seed-only",
+    "host_source_load_use":"exact-canonical-source-seed-only",
+    "id":"bootstrap-b0",
+    "implementation":"pinned-host-clojureclr"
+  } and
+  .execution == {
+    "command":["dotnet","runtime/Pnix.ClrMeta.CompilerSupport.dll","compile",
+               "compiler/CompilerStage1.dll","SOURCE","OUTPUT"],
+    "host":"runtime/Pnix.ClrMeta.CompilerSupport.dll"
+  } and
+  .boundaries == {
+    "compiler_source_packaged":false,
+    "embedded_artifact_payload":false,
+    "generated_artifact_clojureclr_reference":false,
+    "generated_artifact_host_compiler_use":false,
+    "generated_artifact_host_source_load_use":false,
+    "source_replay_fallback":false
+  } and
+  .claims == {
+    "clojureclr_replacement":false,
+    "compiler_executable":true,
+    "compiler_stage1_artifact":true,
+    "compiler_stage2":false,
+    "fixed_point":false,
+    "raw_artifact_reproducibility":false,
+    "self_reproduction":false
+  } and
+  .compiler.path == "compiler/CompilerStage1.dll" and
+  (.compiler.sha256 | test("^[0-9a-f]{64}$")) and
+  .compiler.prepared_methods == 27 and
+  .compiler.description.schema == "pnix.clr-meta.compiler-selfhost-description.v1" and
+  .compiler.description.assembly == "Pnix.ClrMeta.Generated.CompilerKernel" and
+  .compiler.description.type == "Pnix.ClrMeta.Generated.CompilerKernel" and
+  .compiler.description.fields == 9 and
+  .compiler.description.methods == [
+    "bind-parameters/3","bind-support-call/3","binding-arity-is?/2",
+    "binding-kind?/2","callable-binding?/1","collect-definitions/3",
+    "compile-source/2","count-at-least?/2","count-is?/2",
+    "declare-definitions/3","fn-initializer?/1","initialize-constants/4",
+    "literal-kind/1","literal?/1","lower-definition/3",
+    "lower-definitions/4","lower-node/5","lower-program/3",
+    "resolve-required/3","seed-intrinsics/1","seed-support-calls/1",
+    "select-intrinsic-opcode/2","symbol-named?/2","validate-definition/2",
+    "validate-definitions/3","validate-node/4","validate-program/1"
+  ] and
+  .compiler.description.references == [
+    "Pnix.ClrMeta.CompilerSupport","System.Private.CoreLib"
+  ] and
+  .compiler.description.resources == [] and
+  .compiler.description.metadata == {
+    "GeneratedBy":"pnix.clr-meta.compiler-kernel.v1",
+    "KernelEntry":"compile-source",
+    "KernelIdentity":"pnix.clr-meta.compiler-kernel.v1",
+    "KernelNamespace":"pnix.clr-meta.compiler-kernel.v1",
+    "SourceProfileId":"pnix.clr-meta.compiler-kernel-source.v1",
+    "SupportAbiId":"pnix.clr-meta.compiler-support.v1"
+  } and
+  ([.bundle_files[].path] == [
+    "compiler/CompilerStage1.dll",
+    "runtime/Pnix.ClrMeta.CompilerSupport.deps.json",
+    "runtime/Pnix.ClrMeta.CompilerSupport.dll",
+    "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"
+  ]) and
+  (all(.bundle_files[];
+    (keys == ["path","sha256"]) and (.sha256 | test("^[0-9a-f]{64}$")))) and
+  (all(.inputs[];
+    (keys == ["path","sha256"]) and (.sha256 | test("^[0-9a-f]{64}$")))) and
+  (.input_closure_sha256 | test("^[0-9a-f]{64}$")) and
+  (.bundle_closure_sha256 | test("^[0-9a-f]{64}$")) and
+  (.toolchain.clojure_main_sha256 | test("^[0-9a-f]{64}$")) and
+  (.toolchain.clojure_runtime_sha256 | test("^[0-9a-f]{64}$")) and
+  (.toolchain.dotnet_host_sha256 | test("^[0-9a-f]{64}$")) and
+  (.toolchain.dotnet_version | type == "string" and length > 0) and
+  (.toolchain.bootstrap_runtime | keys == [
+    "closure_sha256","file_count","files","unchanged_after_seed"
+  ]) and
+  .toolchain.bootstrap_runtime.unchanged_after_seed == true and
+  .toolchain.bootstrap_runtime.file_count ==
+    (.toolchain.bootstrap_runtime.files | length) and
+  .toolchain.bootstrap_runtime.file_count > 0 and
+  (.toolchain.bootstrap_runtime.closure_sha256 | test("^[0-9a-f]{64}$")) and
+  (all(.toolchain.bootstrap_runtime.files[];
+    (keys == ["path","sha256"]) and
+    (.path | type == "string" and length > 0 and
+             (startswith("/") | not) and
+             (split("/") | all(. != "" and . != "." and . != ".."))) and
+    (.sha256 | test("^[0-9a-f]{64}$"))))
+' "$manifest" >/dev/null || fail manifest-contract
+
+while IFS=$'\t' read -r relative expected_hash; do
+  [[ "$(sha256_file "$clr_meta_root/$relative")" == "$expected_hash" ]] || \
+    fail input-live-hash
+done < <(jq -r '.inputs[] | [.path,.sha256] | @tsv' "$manifest")
+input_closure_sha256="$({
+  jq -r '.inputs[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$input_closure_sha256" == "$(jq -r '.input_closure_sha256' "$manifest")" ]] || \
+  fail input-closure
+
+while IFS=$'\t' read -r relative expected_hash; do
+  [[ "$(sha256_file "$bundle/$relative")" == "$expected_hash" ]] || \
+    fail bundle-live-hash
+done < <(jq -r '.bundle_files[] | [.path,.sha256] | @tsv' "$manifest")
+bundle_closure_sha256="$({
+  jq -r '.bundle_files[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$bundle_closure_sha256" == "$(jq -r '.bundle_closure_sha256' "$manifest")" ]] || \
+  fail bundle-closure
+[[ "$(sha256_file "$bundle/compiler/CompilerStage1.dll")" == \
+   "$(jq -r '.compiler.sha256' "$manifest")" ]] || fail compiler-hash
+
+while IFS=$'\t' read -r relative expected_hash; do
+  [[ "$(sha256_file "$runtime_root/$relative")" == "$expected_hash" ]] || \
+    fail bootstrap-runtime-live-hash
+done < <(jq -r '.toolchain.bootstrap_runtime.files[] | [.path,.sha256] | @tsv' "$manifest")
+bootstrap_runtime_closure_sha256="$({
+  jq -r '.toolchain.bootstrap_runtime.files[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$bootstrap_runtime_closure_sha256" == \
+   "$(jq -r '.toolchain.bootstrap_runtime.closure_sha256' "$manifest")" ]] || \
+  fail bootstrap-runtime-closure
+jq -r '.toolchain.bootstrap_runtime.files[].path' "$manifest" \
+  >"$tmp/manifest-bootstrap-runtime-paths"
+(
+  cd "$runtime_root"
+  find . -type f -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$tmp/live-bootstrap-runtime-paths"
+cmp "$tmp/manifest-bootstrap-runtime-paths" "$tmp/live-bootstrap-runtime-paths" >/dev/null || \
+  fail bootstrap-runtime-file-set
+
+support="$bundle/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+compiler="$bundle/compiler/CompilerStage1.dll"
+[[ "$(dotnet "$support" prepare "$compiler")" == 27 ]] || fail prepare-all-methods
+
+assert_builder_preserves_existing() {
+  local label="$1"
+  local output="$2"
+  set +e
+  "$root/bin/clr-meta" --build-compiler-selfhost-stage1 "$output" \
+    >"$tmp/builder-$label.stdout" 2>"$tmp/builder-$label.stderr"
+  local status=$?
+  set -e
+  [[ "$status" == 1 && ! -s "$tmp/builder-$label.stdout" ]] || \
+    fail "builder-$label-status"
+  rg -F 'output-exists' "$tmp/builder-$label.stderr" >/dev/null || \
+    fail "builder-$label-error"
+}
+
+printf 'file-sentinel\n' >"$tmp/builder-existing-file"
+builder_file_hash="$(sha256_file "$tmp/builder-existing-file")"
+assert_builder_preserves_existing file "$tmp/builder-existing-file"
+[[ "$builder_file_hash" == "$(sha256_file "$tmp/builder-existing-file")" ]] || \
+  fail builder-file-preservation
+
+mkdir "$tmp/builder-existing-directory"
+printf 'directory-sentinel\n' >"$tmp/builder-existing-directory/sentinel"
+builder_directory_hash="$(sha256_file "$tmp/builder-existing-directory/sentinel")"
+assert_builder_preserves_existing directory "$tmp/builder-existing-directory"
+[[ "$builder_directory_hash" == \
+   "$(sha256_file "$tmp/builder-existing-directory/sentinel")" &&
+   ! -e "$tmp/builder-existing-directory/bundle" ]] || fail builder-directory-preservation
+
+ln -s "$tmp/builder-missing-target" "$tmp/builder-existing-link"
+assert_builder_preserves_existing symlink "$tmp/builder-existing-link"
+[[ -L "$tmp/builder-existing-link" &&
+   "$(readlink "$tmp/builder-existing-link")" == "$tmp/builder-missing-target" ]] || \
+  fail builder-symlink-preservation
+
+mkdir "$tmp/publication-staging" "$tmp/publication-race-output"
+printf 'staging\n' >"$tmp/publication-staging/sentinel"
+printf 'race-winner\n' >"$tmp/publication-race-output/sentinel"
+set +e
+dotnet "$support" publish-directory "$tmp/publication-staging" "$tmp/publication-race-output" \
+  >"$tmp/publication-race.stdout" 2>"$tmp/publication-race.stderr"
+publication_status=$?
+set -e
+[[ "$publication_status" == 2 && ! -s "$tmp/publication-race.stdout" ]] || \
+  fail publication-race-status
+assert_rejection_json "$tmp/publication-race.stderr" host output-exists
+[[ -f "$tmp/publication-staging/sentinel" &&
+   "$(cat "$tmp/publication-race-output/sentinel")" == race-winner &&
+   ! -e "$tmp/publication-race-output/publication-staging" ]] || \
+  fail publication-race-preservation
+
+if rg -n \
+  'System\.Diagnostics\.Process|ProcessStartInfo|clojure\.lang\.Compiler|Clojure\.Compiler|Convert\.FromBase64String|compiler_kernel\.clj' \
+  "$clr_meta_root/compiler-selfhost-runtime/Forms.cs" \
+  "$clr_meta_root/compiler-selfhost-runtime/PeSink.cs" \
+  "$clr_meta_root/compiler-selfhost-runtime/Program.cs" \
+  >"$tmp/forbidden-runtime-source"; then
+  fail forbidden-runtime-source
+fi
+if strings "$compiler" | rg -n \
+  'Clojure\.Main|clojure\.lang\.Compiler|compiler_kernel\.clj|compiler-selfhost-stage1' \
+  >"$tmp/forbidden-compiler-strings"; then
+  fail forbidden-compiler-payload
+fi
+
+isolated="$tmp/isolated"
+mkdir -p "$isolated"
+for name in \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  cp "$bundle/runtime/$name" "$isolated/$name"
+done
+cp "$compiler" "$isolated/CompilerStage1.dll"
+for fixture in unseen_add.clj unseen_subtract.clj unseen_equal.clj unseen_truthy.clj; do
+  cp "$family_root/$fixture" "$isolated/$fixture"
+done
+[[ ! -e "$isolated/compiler_kernel.clj" && ! -e "$isolated/Clojure.Main.dll" && \
+   ! -e "$isolated/Clojure.dll" && ! -e "$isolated/pnix" ]] || fail source-hidden-layout
+
+clean_environment=(
+  env -i
+  "PATH=$PATH"
+  "HOME=$tmp/home"
+  "TMPDIR=$tmp/process-tmp"
+  "DOTNET_CLI_HOME=$tmp/dotnet-home"
+  "DOTNET_CLI_TELEMETRY_OPTOUT=1"
+  "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1"
+  "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1"
+  "DOTNET_NOLOGO=1"
+  "CLOJURE_LOAD_PATH=$tmp/poison"
+  "CLR_META_SOURCE_ROOT=$tmp/poison"
+)
+if [[ -n "${DOTNET_ROOT:-}" ]]; then
+  clean_environment+=("DOTNET_ROOT=$DOTNET_ROOT")
+fi
+
+isolated_host() {
+  (
+    cd "$isolated"
+    "${clean_environment[@]}" dotnet \
+      "$isolated/Pnix.ClrMeta.CompilerSupport.dll" "$@"
+  )
+}
+
+compile_target() {
+  local label="$1"
+  isolated_host compile \
+    "$isolated/CompilerStage1.dll" \
+    "$isolated/unseen_$label.clj" \
+    "$isolated/$label.dll" >"$tmp/$label-descriptor.json"
+  jq -e --arg path "$isolated/$label.dll" --arg sha256 "$(sha256_file "$isolated/$label.dll")" '
+    (keys == ["kernel_entry","kernel_identity","kernel_namespace","path",
+              "schema","sha256","source_profile_id"]) and
+    .schema == "pnix.clr-meta.compiler-selfhost-artifact-descriptor.v1" and
+    .kernel_entry == "compile-source" and
+    .kernel_identity == "pnix.clr-meta.compiler-kernel.v1" and
+    .kernel_namespace == "pnix.clr-meta.compiler-kernel.v1" and
+    .source_profile_id == "pnix.clr-meta.compiler-kernel-source.v1" and
+    .path == $path and .sha256 == $sha256
+  ' "$tmp/$label-descriptor.json" >/dev/null || fail "$label-descriptor"
+  isolated_host describe "$isolated/$label.dll" >"$tmp/$label-description.json"
+  jq -e '
+    .schema == "pnix.clr-meta.compiler-selfhost-description.v1" and
+    .assembly == "Pnix.ClrMeta.Generated.CompilerKernel" and
+    .type == "Pnix.ClrMeta.Generated.CompilerKernel" and
+    .fields == 0 and .methods == ["compile-source/2"] and
+    .resources == [] and
+    .metadata.KernelEntry == "compile-source" and
+    .metadata.KernelIdentity == "pnix.clr-meta.compiler-kernel.v1"
+  ' "$tmp/$label-description.json" >/dev/null || fail "$label-description"
+}
+
+for label in add subtract equal truthy; do
+  compile_target "$label"
+done
+jq -e '.references == ["System.Private.CoreLib"]' "$tmp/add-description.json" >/dev/null || \
+  fail add-reference-closure
+jq -e '.references == ["System.Private.CoreLib"]' "$tmp/subtract-description.json" >/dev/null || \
+  fail subtract-reference-closure
+for label in equal truthy; do
+  jq -e '.references == ["Pnix.ClrMeta.CompilerSupport","System.Private.CoreLib"]' \
+    "$tmp/$label-description.json" >/dev/null || fail "$label-reference-closure"
+done
+
+[[ "$(isolated_host invoke-i64 "$isolated/add.dll" 20 22)" == 42 ]] || fail unseen-add
+[[ "$(isolated_host invoke-i64 "$isolated/subtract.dll" 20 22)" == -2 ]] || \
+  fail unseen-subtract
+[[ "$(isolated_host invoke-i64 "$isolated/equal.dll" 42 42)" == true ]] || \
+  fail unseen-equal-true
+[[ "$(isolated_host invoke-i64 "$isolated/equal.dll" 42 41)" == false ]] || \
+  fail unseen-equal-false
+[[ "$(isolated_host invoke-i64 "$isolated/truthy.dll" 0 9)" == 9 ]] || \
+  fail clojure-truthiness-zero
+[[ "$(isolated_host invoke-values "$isolated/truthy.dll" true i64:9)" == 9 ]] || \
+  fail clojure-truthiness-true
+[[ "$(isolated_host invoke-values "$isolated/truthy.dll" false i64:9)" == 0 ]] || \
+  fail clojure-truthiness-false
+[[ "$(isolated_host invoke-values "$isolated/truthy.dll" nil i64:9)" == 0 ]] || \
+  fail clojure-truthiness-nil
+
+stage1_sha256="$(sha256_file "$isolated/CompilerStage1.dll")"
+nonce="post-stage1-$(dd if=/dev/urandom bs=32 count=1 2>/dev/null | sha256_stdin)"
+[[ "$(isolated_host contains-text "$isolated/CompilerStage1.dll" "$nonce")" == false ]] || \
+  fail nonce-present-in-stage1
+[[ "$(isolated_host contains-text "$isolated/Pnix.ClrMeta.CompilerSupport.dll" "$nonce")" == false ]] || \
+  fail nonce-present-in-support
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  "(def post-stage1-nonce \"$nonce\")" \
+  '(def compile-source (fn* compile-source [left right] post-stage1-nonce))' \
+  >"$isolated/fresh_nonce.clj"
+isolated_host compile "$isolated/CompilerStage1.dll" "$isolated/fresh_nonce.clj" \
+  "$isolated/fresh-nonce.dll" >"$tmp/fresh-nonce-descriptor.json"
+isolated_host describe "$isolated/fresh-nonce.dll" >"$tmp/fresh-nonce-description.json"
+jq -e '
+  .fields == 1 and .methods == ["compile-source/2"] and
+  .references == ["System.Private.CoreLib"] and .resources == []
+' "$tmp/fresh-nonce-description.json" >/dev/null || fail fresh-nonce-description
+[[ "$(isolated_host contains-text "$isolated/fresh-nonce.dll" "$nonce")" == true ]] || \
+  fail nonce-absent-from-target
+[[ "$(isolated_host invoke-values "$isolated/fresh-nonce.dll" nil false)" == "$nonce" ]] || \
+  fail fresh-nonce-execution
+[[ "$stage1_sha256" == "$(sha256_file "$isolated/CompilerStage1.dll")" ]] || \
+  fail stage1-changed-after-fresh-source
+
+{
+  printf '%s\n' '(ns pnix.clr-meta.compiler-kernel.v1)'
+  printf '%s' '(def compile-source (fn* compile-source [left right] (do '
+  for ((index = 0; index < 7900; index++)); do
+    printf '0 '
+  done
+  printf '%s\n' '7)))'
+} >"$isolated/near-node-budget.clj"
+isolated_host compile "$isolated/CompilerStage1.dll" "$isolated/near-node-budget.clj" \
+  "$isolated/near-node-budget.dll" >"$tmp/near-node-budget-descriptor.json"
+[[ "$(isolated_host invoke-values "$isolated/near-node-budget.dll" nil false)" == 7 ]] || \
+  fail near-node-budget-execution
+
+set +e
+isolated_host invoke-i64 "$isolated/add.dll" 9223372036854775807 1 \
+  >"$tmp/add-overflow.stdout" 2>"$tmp/add-overflow.stderr"
+overflow_status=$?
+set -e
+[[ "$overflow_status" == 2 && ! -s "$tmp/add-overflow.stdout" ]] || fail add-overflow-status
+jq -e '
+  .schema == "pnix.clr-meta.compiler-selfhost-error.v1" and
+  .phase == "host" and .class == "infrastructure-failure" and
+  .type == "System.OverflowException"
+' "$tmp/add-overflow.stderr" >/dev/null || fail add-overflow-semantics
+
+run_compile_rejection() {
+  local label="$1"
+  local compiler_path="$2"
+  local source_path="$3"
+  local output_path="$4"
+  local phase="$5"
+  local class="$6"
+  set +e
+  dotnet "$support" compile "$compiler_path" "$source_path" "$output_path" \
+    >"$tmp/$label.stdout" 2>"$tmp/$label.stderr"
+  local status=$?
+  set -e
+  [[ "$status" == 2 && ! -s "$tmp/$label.stdout" ]] || fail "$label-status"
+  [[ ! -e "$output_path" && ! -L "$output_path" ]] || fail "$label-output"
+  if compgen -G "$output_path.tmp.*" >/dev/null; then
+    fail "$label-temporary-output"
+  fi
+  assert_rejection_json "$tmp/$label.stderr" "$phase" "$class"
+}
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def compile-source (fn* compile-source [left right] (do '\''left right)))' \
+  >"$tmp/reader-sugar.clj"
+run_compile_rejection reader-sugar "$compiler" "$tmp/reader-sugar.clj" \
+  "$tmp/reader-sugar.dll" reader reader-sugar-not-admitted
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def :rogue 1)' \
+  '(def compile-source (fn* compile-source [left right] (+ left right)))' \
+  >"$tmp/keyword.clj"
+run_compile_rejection keyword "$compiler" "$tmp/keyword.clj" \
+  "$tmp/keyword.dll" reader keyword-not-admitted
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def compile-source (fn* compile-source [left ns/right] (+ left ns/right)))' \
+  >"$tmp/qualified-parameter.clj"
+run_compile_rejection qualified-parameter "$compiler" "$tmp/qualified-parameter.clj" \
+  "$tmp/qualified-parameter.dll" validate invalid-parameter
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def compile-source (fn* compile-source [left left] left))' \
+  >"$tmp/duplicate-parameter.clj"
+run_compile_rejection duplicate-parameter "$compiler" "$tmp/duplicate-parameter.clj" \
+  "$tmp/duplicate-parameter.dll" validate duplicate-parameter
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def compile-source (fn* compile-source [left right] (let* [ns/x left] ns/x)))' \
+  >"$tmp/qualified-binding.clj"
+run_compile_rejection qualified-binding "$compiler" "$tmp/qualified-binding.clj" \
+  "$tmp/qualified-binding.dll" validate invalid-binding-name
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def compile-source (fn* compile-source [left right] (let* [x 1 x 2] x)))' \
+  >"$tmp/duplicate-binding.clj"
+run_compile_rejection duplicate-binding "$compiler" "$tmp/duplicate-binding.clj" \
+  "$tmp/duplicate-binding.dll" validate duplicate-local-binding
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def 1x 1)' \
+  '(def compile-source (fn* compile-source [left right] (+ left right)))' \
+  >"$tmp/invalid-numeric-token.clj"
+run_compile_rejection invalid-numeric-token "$compiler" "$tmp/invalid-numeric-token.clj" \
+  "$tmp/invalid-numeric-token.dll" reader invalid-numeric-token
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def compile-source (fn* compile-source [a b c d e f] a))' \
+  >"$tmp/parameter-budget.clj"
+run_compile_rejection parameter-budget "$compiler" "$tmp/parameter-budget.clj" \
+  "$tmp/parameter-budget.dll" reader parameter-budget
+
+{
+  printf '%s\n' '(ns pnix.clr-meta.compiler-kernel.v1)'
+  printf '%s' '(def compile-source (fn* compile-source [left right] (let* ['
+  for ((index = 0; index <= 64; index++)); do
+    printf 'x%s %s ' "$index" "$index"
+  done
+  printf '%s\n' '] x64)))'
+} >"$tmp/binding-budget.clj"
+run_compile_rejection binding-budget "$compiler" "$tmp/binding-budget.clj" \
+  "$tmp/binding-budget.dll" reader binding-budget
+
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  '(def compile-source (fn* compile-source [left right] (missing left right)))' \
+  >"$tmp/unresolved.clj"
+run_compile_rejection unresolved "$compiler" "$tmp/unresolved.clj" \
+  "$tmp/unresolved.dll" validate unresolved-symbol
+
+dd if=/dev/zero bs=65537 count=1 2>/dev/null | tr '\000' x >"$tmp/oversized.clj"
+run_compile_rejection oversized "$compiler" "$tmp/oversized.clj" \
+  "$tmp/oversized.dll" reader source-byte-budget
+
+ln -s "$family_root/unseen_add.clj" "$tmp/source-link.clj"
+run_compile_rejection source-link "$compiler" "$tmp/source-link.clj" \
+  "$tmp/source-link.dll" reader source-file-reparse-point
+
+ln -s "$compiler" "$tmp/compiler-link.dll"
+run_compile_rejection compiler-link "$tmp/compiler-link.dll" "$family_root/unseen_add.clj" \
+  "$tmp/compiler-link-output.dll" host artifact-reparse-point
+
+run_compile_rejection strict-compiler-metadata "$support" "$family_root/unseen_add.clj" \
+  "$tmp/strict-compiler-metadata.dll" host generated-assembly-name
+
+mkdir "$tmp/existing-output-parent"
+printf 'preserve-me\n' >"$tmp/existing-output-parent/existing.dll"
+existing_hash="$(sha256_file "$tmp/existing-output-parent/existing.dll")"
+set +e
+dotnet "$support" compile "$compiler" "$family_root/unseen_add.clj" \
+  "$tmp/existing-output-parent/existing.dll" \
+  >"$tmp/existing-output.stdout" 2>"$tmp/existing-output.stderr"
+existing_status=$?
+set -e
+[[ "$existing_status" == 2 && ! -s "$tmp/existing-output.stdout" ]] || \
+  fail existing-output-status
+assert_rejection_json "$tmp/existing-output.stderr" pesink output-exists
+[[ "$existing_hash" == "$(sha256_file "$tmp/existing-output-parent/existing.dll")" ]] || \
+  fail existing-output-preservation
+
+run_compile_rejection missing-parent "$compiler" "$family_root/unseen_add.clj" \
+  "$tmp/missing-parent/output.dll" pesink output-parent-missing
+
+seed_stage1() {
+  local source_path="$1"
+  local output_path="$2"
+  (
+    cd "$runtime_root"
+    "${clean_environment[@]}" \
+      "CLOJURE_LOAD_PATH=$clr_meta_root/src" \
+      CLOJURE_COMPILE_PATH= \
+      CLR_META_SOURCE_ROOT= \
+      dotnet "$main_dll" \
+        -m pnix.clr-meta.compiler-selfhost-stage1 \
+        "$support" "$source_path" "$output_path"
+  ) >"$output_path.bootstrap.stdout" 2>"$output_path.bootstrap.stderr" || {
+    sed -n '1,160p' "$output_path.bootstrap.stderr" >&2
+    fail mutation-bootstrap
+  }
+  [[ -s "$output_path" ]] || fail mutation-stage1-missing
+  [[ "$(dotnet "$support" prepare "$output_path")" == 27 ]] || \
+    fail mutation-prepare
+}
+
+[[ "$(rg -F -o '(def kernel-identity "pnix.clr-meta.compiler-kernel.v1")' \
+  "$canonical_source" | wc -l | tr -d ' ')" == 1 ]] || fail identity-anchor
+[[ "$(rg -F -o '(def add-opcode "add.ovf")' "$canonical_source" \
+  | wc -l | tr -d ' ')" == 1 ]] || fail add-anchor
+[[ "$(rg -F -o '(def subtract-opcode "sub.ovf")' "$canonical_source" \
+  | wc -l | tr -d ' ')" == 1 ]] || fail subtract-anchor
+
+sed 's#(def kernel-identity "pnix.clr-meta.compiler-kernel.v1")#(def kernel-identity "pnix.clr-meta.compiler-kernel.mutated")#' \
+  "$canonical_source" >"$tmp/identity-mutated.clj"
+sed 's#(def add-opcode "add.ovf")#(def add-opcode "sub.ovf")#' \
+  "$canonical_source" >"$tmp/add-mutated.clj"
+sed 's#(def subtract-opcode "sub.ovf")#(def subtract-opcode "add.ovf")#' \
+  "$canonical_source" >"$tmp/subtract-mutated.clj"
+for mutation in identity add subtract; do
+  [[ "$(sha256_file "$tmp/$mutation-mutated.clj")" != \
+     "$(sha256_file "$canonical_source")" ]] || fail "$mutation-mutation-noop"
+done
+
+seed_stage1 "$tmp/identity-mutated.clj" "$tmp/identity-stage1.dll"
+dotnet "$support" compile "$tmp/identity-stage1.dll" "$family_root/unseen_add.clj" \
+  "$tmp/identity-target.dll" >"$tmp/identity-target-descriptor.json"
+dotnet "$support" describe "$tmp/identity-target.dll" >"$tmp/identity-target-description.json"
+jq -e '
+  .metadata.KernelIdentity == "pnix.clr-meta.compiler-kernel.mutated" and
+  .metadata.KernelNamespace == "pnix.clr-meta.compiler-kernel.v1" and
+  .methods == ["compile-source/2"]
+' "$tmp/identity-target-description.json" >/dev/null || fail identity-mutation-metadata
+[[ "$(dotnet "$support" invoke-i64 "$tmp/identity-target.dll" 20 22)" == 42 ]] || \
+  fail identity-mutation-target
+
+seed_stage1 "$tmp/add-mutated.clj" "$tmp/add-stage1.dll"
+run_compile_rejection add-mutation "$tmp/add-stage1.dll" "$family_root/unseen_add.clj" \
+  "$tmp/add-mutation-target.dll" validate bad-def-arity
+
+seed_stage1 "$tmp/subtract-mutated.clj" "$tmp/subtract-stage1.dll"
+run_compile_rejection subtract-mutation "$tmp/subtract-stage1.dll" \
+  "$family_root/unseen_subtract.clj" "$tmp/subtract-mutation-target.dll" \
+  validate call-arity
+
+if find "$tmp" -type f -name '*.tmp.*' -print -quit | grep -q .; then
+  fail leaked-transaction-temporary
+fi
+
+jq -cn \
+  --arg canonical_source_sha256 "$(sha256_file "$canonical_source")" \
+  --arg compiler_sha256 "$(sha256_file "$compiler")" \
+  --arg manifest_sha256 "$(sha256_file "$manifest")" \
+  '{
+    schema:"pnix.clr-meta.compiler-selfhost-stage1-gate-receipt.v1",
+    checkpoint:"c2-executable-compiler-stage1",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    canonical_source_sha256:$canonical_source_sha256,
+    manifest_sha256:$manifest_sha256,
+    compiler_sha256:$compiler_sha256,
+    compiler_stage1_artifact:true,
+    compiler_executable:true,
+    prepared_methods:27,
+    admission_before_bootstrap:true,
+    bootstrap_runtime_closure_verified:true,
+    builder_no_replace_publication:true,
+    stack_verified_emission:true,
+    source_hidden_process:true,
+    conformance_targets:{
+      add:42,
+      subtract:-2,
+      equal_true:true,
+      equal_false:false,
+      truthy_zero:9,
+      truthy_true:9,
+      false_is_falsey:0,
+      nil_is_falsey:0
+    },
+    fresh_post_stage1_nonce_target:true,
+    nonce_absent_from_stage1_and_support:true,
+    near_node_budget_sequence_executed:true,
+    checked_int64_overflow:true,
+    mutation_propagation:true,
+    mutations:{
+      identity:{
+        propagated:true,
+        observation:"generated-artifact-metadata-change",
+        target_kernel_identity:"pnix.clr-meta.compiler-kernel.mutated"
+      },
+      add:{
+        propagated:true,
+        observation:"compiler-control-arithmetic-changed",
+        phase:"validate",
+        class:"bad-def-arity",
+        requested_output_absent:true
+      },
+      subtract:{
+        propagated:true,
+        observation:"compiler-control-arity-arithmetic-changed",
+        phase:"validate",
+        class:"call-arity",
+        requested_output_absent:true
+      }
+    },
+    negative_cases:16,
+    builder_preservation_cases:4,
+    support_runtime_clojureclr_reference:false,
+    generated_compiler_clojureclr_reference:false,
+    embedded_artifact_payload:false,
+    source_replay_fallback:false,
+    same_source_recompile_executed:false,
+    compiler_stage2:false,
+    self_reproduction:false,
+    fixed_point:false,
+    raw_artifact_reproducibility:false,
+    clojureclr_replacement:false,
+    ready:true
+  }'

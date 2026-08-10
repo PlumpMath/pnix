@@ -1,0 +1,44 @@
+# stdlib/lib/nl/korean-verb-rules-store-plan.px — 용언 데이터 마디를 redb morph_rules 에 materialize
+#
+# ★(b): korean-verb-rules.px(데이터 마디)를 redb `morph_rules` 테이블에 pnix attrset 으로 올림.
+#   josa-rules-store-plan 과 동일 패턴(공유 serializer + content-hash 키). morph_rules 가 josa·verb 둘 다 보유
+#   (schema 가 키 접두사로 구분). 거울 헌법: 이 .px=plan 정본, Rust executor=byte ferry.
+let
+  rules = import ./korean-verb-rules.px;
+  ser = import ./pnix-value-literal.px;
+  B = builtins;
+  valueSrc = ser.toPnixSource rules;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = rules.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "morph-verb-rules-load-v0";
+      source_lens = "stdlib/lib/nl/korean-verb-rules-store-plan.px";
+      source_verdict = "materialize-morph-rules";
+      operations = [
+        { op_kind = "append"; table = "morph_rules"; key = key; value_bytes = valueSrc; }
+      ];
+      receipt_owner = "morph.verb.rules.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = rules.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+
+  mkQuery = args: {
+    plan = {
+      plan_id = "morph-verb-rules-query-v0";
+      source_lens = "stdlib/lib/nl/korean-verb-rules-store-plan.px";
+      source_verdict = "query-morph-rules";
+      operations = [
+        { op_kind = "scan-prefix"; table = "morph_rules"; key = ""; key_prefix = rules.schema + "/"; }
+      ];
+      receipt_owner = "morph.verb.rules.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

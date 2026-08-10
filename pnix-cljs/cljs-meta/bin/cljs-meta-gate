@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Primary gate for cljs-meta: fixed-point compiler (stage2==stage3 byte identity).
+# Rebuild with --rebuild if dist/ is missing. Aggregate host gate is ../bin/pnix-cljs-gate.
+set -euo pipefail
+META_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$META_DIR/.." && pwd)"
+cd "$ROOT"
+export PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
+
+if [[ "${1:-}" == "--rebuild" ]] || [[ ! -f cljs-meta/dist/fixed-point/receipt.json ]]; then
+  ./bin/build-cljs
+fi
+
+node cljs-meta/test/self_test.js
+node cljs-meta/test/fixed_point_test.js
+echo "cljs-meta-gate: PASS"

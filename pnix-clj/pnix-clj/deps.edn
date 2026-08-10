@@ -1,0 +1,126 @@
+{:paths ["src" "resources"]
+ :deps {pnix/clj-meta {:local/root "../clj-meta"}
+        nrepl/nrepl {:mvn/version "1.7.0"}
+        org.clojure/data.json {:mvn/version "2.5.2"}
+        org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}
+        org.ow2.asm/asm-util {:mvn/version "9.10.1"}
+        org.clojure/test.check {:mvn/version "1.1.3"}}
+ :aliases
+ {:smoke {:main-opts ["-m" "pnix-clj.smoke"]}
+  :io-probe {:main-opts ["-m" "pnix-clj.io-probe"]}
+  :machine-outcome-check {:main-opts ["-m" "pnix-clj.machine-outcome"]}
+  :benchmark {:main-opts ["-m" "pnix-clj.benchmark"]}
+  :mirror-pair {:main-opts ["-m" "pnix-clj.mirror-pair"]}
+  :mirror-error {:main-opts ["-m" "pnix-clj.mirror-error"]}
+  :forward-reference {:main-opts ["-m" "pnix-clj.forward-reference"]}
+  :clojure-projection {:main-opts ["-m" "pnix-clj.clojure-projection"]}
+  :clojure-form {:main-opts ["-m" "pnix-clj.clojure-form"]}
+  :runtime-plan {:main-opts ["-m" "pnix-clj.runtime-plan"]}
+  :rust-batch {:main-opts ["-m" "pnix-clj.rust-batch"]}
+  :stage7-core {:main-opts ["-m" "pnix-clj.stage7-core"]}
+  :report-smoke {:main-opts ["-m" "pnix-clj.report-artifact" "smoke"]}
+  :report-mirror-pair {:main-opts ["-m" "pnix-clj.report-artifact" "mirror-pair"]}
+  :report-mirror-error {:main-opts ["-m" "pnix-clj.report-artifact" "mirror-error"]}
+  :report-forward-reference {:main-opts ["-m" "pnix-clj.report-artifact" "forward-reference"]}
+  :report-clojure-projection {:main-opts ["-m" "pnix-clj.report-artifact" "clojure-projection"]}
+  :report-clojure-form {:main-opts ["-m" "pnix-clj.report-artifact" "clojure-form"]}
+  :report-rust-batch {:main-opts ["-m" "pnix-clj.report-artifact" "rust-batch"]}
+  :report-stage7-core {:main-opts ["-m" "pnix-clj.report-artifact" "stage7-core"]}
+  :specialize {:main-opts ["-m" "pnix-clj.specialize"]}
+  :futamura {:main-opts ["-m" "pnix-clj.futamura"]}
+  :weval {:main-opts ["-m" "pnix-clj.weval"]}
+  :machine {:main-opts ["-m" "pnix-clj.machine"]}
+  :form-analysis {:main-opts ["-m" "pnix-clj.form-analysis"]}
+  :arith-proof {:main-opts ["-m" "pnix-clj.arith-proof"]}
+  :bool-proof {:main-opts ["-m" "pnix-clj.bool-proof"]}
+  :cas {:main-opts ["-m" "pnix-clj.cas"]}
+  :repl-pnix {:main-opts ["-m" "pnix-clj.repl"]}
+  :repl-pnix-server {:main-opts ["-m" "pnix-clj.repl" "--server" "7888"]}
+  :nrepl {:main-opts ["-m" "nrepl.cmdline" "--port" "7888"]}
+  :nrepl-pnix {:main-opts ["-m" "pnix-clj.nrepl" "7890"]}
+  :store {:main-opts ["-m" "pnix-clj.store"]}
+  :reflect {:main-opts ["-m" "pnix-clj.reflect"]}
+  :snapshot {:main-opts ["-m" "pnix-clj.snapshot"]}
+  :purity {:main-opts ["-m" "pnix-clj.purity"]}
+  :search {:main-opts ["-m" "pnix-clj.search"]}
+  :mirror-chain {:main-opts ["-m" "pnix-clj.mirror-chain"]}
+  :witness {:main-opts ["-m" "pnix-clj.witness"]}
+  :witnessed-run {:main-opts ["-m" "pnix-clj.witnessed-run"]}
+  :self-mod-gate {:main-opts ["-m" "pnix-clj.self-mod-gate"]}
+  :self-improve {:main-opts ["-m" "pnix-clj.self-improve"]}
+  :generate {:main-opts ["-m" "pnix-clj.generate"]}
+  :cegis {:main-opts ["-m" "pnix-clj.cegis"]}
+  :persist {:main-opts ["-m" "pnix-clj.persist"]}
+  :replay {:main-opts ["-m" "pnix-clj.replay"]}
+  :property-fuzzer {:main-opts ["-m" "pnix-clj.property-fuzzer"]}
+  :tower {:main-opts ["-m" "pnix-clj.tower"]}
+  :safe-eval {:main-opts ["-m" "pnix-clj.safe-eval"]}
+  :synthesize {:main-opts ["-m" "pnix-clj.synthesize"]}
+  :cached-eval {:main-opts ["-m" "pnix-clj.cached-eval"]}
+  :report-cached-eval {:main-opts ["-m" "pnix-clj.report-artifact" "cached-eval"]}
+  :report-synthesize {:main-opts ["-m" "pnix-clj.report-artifact" "synthesize"]}
+  :report-safe-eval {:main-opts ["-m" "pnix-clj.report-artifact" "safe-eval"]}
+  :capabilities {:main-opts ["-m" "pnix-clj.capabilities"]}
+  :capabilities-check {:main-opts ["-m" "pnix-clj.capabilities" "check"]}
+  :lane-registry {:main-opts ["-m" "pnix-clj.lane-registry"]}
+  :lane-registry-check {:main-opts ["-m" "pnix-clj.lane-registry" "check"]}
+  :wiki {:main-opts ["-m" "pnix-clj.wiki"]}
+  :wiki-check {:main-opts ["-m" "pnix-clj.wiki" "check"]}
+  :report-tower {:main-opts ["-m" "pnix-clj.report-artifact" "tower"]}
+  :report-specialize {:main-opts ["-m" "pnix-clj.report-artifact" "specialize"]}
+  :report-futamura {:main-opts ["-m" "pnix-clj.report-artifact" "futamura"]}
+  :report-weval {:main-opts ["-m" "pnix-clj.report-artifact" "weval"]}
+  :report-machine {:main-opts ["-m" "pnix-clj.report-artifact" "machine"]}
+  ;; gate-speed: every gate report kind in ONE JVM -- 12 fewer cold starts
+  ;; and the later kinds render on a WARM JIT (the report cache stays
+  ;; per-kind; the honest saving is JVM starts + shared warmup)
+  :report-batch {:main-opts ["-m" "pnix-clj.report-artifact" "batch"
+                             "smoke" "mirror-pair" "mirror-error"
+                             "clojure-projection" "clojure-form" "rust-batch"
+                             "stage7-core" "specialize" "machine" "tower"
+                             "safe-eval" "synthesize" "cached-eval"]}
+  :report-form-analysis {:main-opts ["-m" "pnix-clj.report-artifact" "form-analysis"]}
+  :report-arith-proof {:main-opts ["-m" "pnix-clj.report-artifact" "arith-proof"]}
+  :report-bool-proof {:main-opts ["-m" "pnix-clj.report-artifact" "bool-proof"]}
+  :report-cas {:main-opts ["-m" "pnix-clj.report-artifact" "cas"]}
+  :report-store {:main-opts ["-m" "pnix-clj.report-artifact" "store"]}
+  :report-reflect {:main-opts ["-m" "pnix-clj.report-artifact" "reflect"]}
+  :report-snapshot {:main-opts ["-m" "pnix-clj.report-artifact" "snapshot"]}
+  :report-witnessed-run {:main-opts ["-m" "pnix-clj.report-artifact" "witnessed-run"]}
+  :report-self-mod-gate {:main-opts ["-m" "pnix-clj.report-artifact" "self-mod-gate"]}
+  :report-self-improve {:main-opts ["-m" "pnix-clj.report-artifact" "self-improve"]}
+  :report-generate {:main-opts ["-m" "pnix-clj.report-artifact" "generate"]}
+  :report-cegis {:main-opts ["-m" "pnix-clj.report-artifact" "cegis"]}
+  :report-persist {:main-opts ["-m" "pnix-clj.report-artifact" "persist"]}
+  :report-replay {:main-opts ["-m" "pnix-clj.report-artifact" "replay"]}
+  :report-purity {:main-opts ["-m" "pnix-clj.report-artifact" "purity"]}
+  :report-search {:main-opts ["-m" "pnix-clj.report-artifact" "search"]}
+  :report-mirror-chain {:main-opts ["-m" "pnix-clj.report-artifact" "mirror-chain"]}
+  :report-witness {:main-opts ["-m" "pnix-clj.report-artifact" "witness"]}
+  :report-property-fuzzer {:main-opts ["-m" "pnix-clj.report-artifact" "property-fuzzer"]}
+  :strict-audit {:main-opts ["-m" "pnix-clj.strict-audit"]}
+  :strict-gate {:main-opts ["-m" "pnix-clj.strict-audit" "gate"]}
+  :report-strict-audit {:main-opts ["-m" "pnix-clj.report-artifact" "strict-audit"]}
+  :determinism {:main-opts ["-m" "pnix-clj.determinism"]}
+  :report-determinism {:main-opts ["-m" "pnix-clj.report-artifact" "determinism"]}
+  :coverage {:main-opts ["-m" "pnix-clj.coverage"]}
+  :report-coverage {:main-opts ["-m" "pnix-clj.report-artifact" "coverage"]}
+  :grammar-fuzzer {:main-opts ["-m" "pnix-clj.grammar-fuzzer"]}
+  :report-grammar-fuzzer {:main-opts ["-m" "pnix-clj.report-artifact" "grammar-fuzzer"]}
+  :live-oracle {:main-opts ["-m" "pnix-clj.live-oracle"]}
+  :report-live-oracle {:main-opts ["-m" "pnix-clj.report-artifact" "live-oracle"]}
+  :classfile-receipt {:main-opts ["-m" "pnix-clj.classfile-receipt"]}
+  :report-classfile-receipt {:main-opts ["-m" "pnix-clj.report-artifact" "classfile-receipt"]}
+  :trust {:main-opts ["-m" "pnix-clj.trust"]}
+  :report-trust {:main-opts ["-m" "pnix-clj.report-artifact" "trust"]}
+  :stage15-plan {:main-opts ["-m" "pnix-clj.stage15-plan"]}
+  :stage15-exec {:main-opts ["-m" "pnix-clj.stage15-execute"]}
+  :report-stage15-exec {:main-opts ["-m" "pnix-clj.report-artifact" "stage15-exec"]}
+  :translation-validation {:main-opts ["-m" "pnix-clj.translation-validation"]}
+  :report-translation-validation {:main-opts ["-m" "pnix-clj.report-artifact" "translation-validation"]}
+  :emit-form-roundtrip {:main-opts ["-m" "pnix-clj.emit-form-roundtrip"]}
+  :report-emit-form-roundtrip {:main-opts ["-m" "pnix-clj.report-artifact" "emit-form-roundtrip"]}
+  :value-roundtrip {:main-opts ["-m" "pnix-clj.value-roundtrip"]}
+  :report-value-roundtrip {:main-opts ["-m" "pnix-clj.report-artifact" "value-roundtrip"]}
+  :test {:extra-paths ["test"]
+         :main-opts ["-m" "pnix-clj.test-runner"]}}}

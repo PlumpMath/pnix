@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Primary gate for clj-meta: bytecode compiler + conformance + selfhost receipt.
+# Receipt paths are relative to pnix-clj root (clj-meta/proof/...).
+set -euo pipefail
+META_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$META_DIR/.." && pwd)"
+cd "$ROOT"
+export PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
+
+MODE="${1:-primary}"
+case "$MODE" in
+  primary|gate)
+    # Project deps.edn lives under clj-meta/; paths and aliases are re-based here.
+    exec clojure -Srepro -Sdeps '{:paths ["clj-meta/src"]
+                                  :aliases
+                                  {:gate
+                                   {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}
+                                                 org.ow2.asm/asm-util {:mvn/version "9.10.1"}}
+                                    :main-opts ["-m" "pnix.clj-meta.gate"]}}}' \
+      -M:gate
+    ;;
+  selfhost)
+    exec clojure -Srepro -Sdeps '{:paths ["clj-meta/src"]
+                                  :aliases
+                                  {:selfhost-check
+                                   {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                                    :main-opts ["-m" "pnix.clj-meta.selfhost"]}}}' \
+      -M:selfhost-check
+    ;;
+  *)
+    echo "usage: clj-meta-gate [primary|gate|selfhost]" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,99 @@
+# stdlib/lib/corpus/catalog-readback-test.px
+#
+# A단계 lock: 통합 exact-key read-back facade. 네 spec 6-case + guard 전수.
+let
+  cr = import ./catalog-readback.px;
+  B = builtins;
+  # 1. units/quantity exact key → recognized
+  t1 = cr.readbackByExactKey { source_schema = "physics.standard_quantities"; key = "속도"; key_kind = "quantity_ko"; };
+  # 2. QUDT dimension_code exact key → recognized
+  t2 = cr.readbackByExactKey { source_schema = "qudt.dimension_code"; key = "A0E0L1I0M0H0T-1D0"; key_kind = "dimension_code"; };
+  # 3. 단일 카탈로그 인식 = candidate(truth 아님)
+  t3 = cr.readbackMultiSchema { key = "에너지"; key_kind = "quantity_ko";
+         schemas = [ "physics.standard_quantities" "qudt.dimension_code" ]; };
+  # 3b. shared key 일치(2 카탈로그 같은 의미) → candidate_link(truth 아님)
+  evA = cr.mkEvidence { source_schema = "cat.a"; key = "Y"; key_kind = "shared_key"; exact_match = true;
+          source_supported = true; status = "recognized"; payload = { dimension = "L"; }; };
+  evB = cr.mkEvidence { source_schema = "cat.b"; key = "Y"; key_kind = "shared_key"; exact_match = true;
+          source_supported = true; status = "recognized"; payload = { dimension = "L"; }; };
+  t3b = cr.readbackMultiSchema { key = "Y"; key_kind = "shared_key"; evidences = [ evA evB ]; };
+  # 4. label-only fuzzy 입력 → held/missing
+  t4 = cr.readbackByExactKey { source_schema = "physics.standard_quantities"; key = "speedish"; key_kind = "label"; };
+  # 5. duplicate/conflict catalog key → conflict-held (2 불일치 주입)
+  evC = cr.mkEvidence { source_schema = "cat.a"; key = "X"; key_kind = "shared_key"; exact_match = true;
+          source_supported = true; status = "recognized"; payload = { dimension = "L"; }; };
+  evD = cr.mkEvidence { source_schema = "cat.b"; key = "X"; key_kind = "shared_key"; exact_match = true;
+          source_supported = true; status = "recognized"; payload = { dimension = "T"; }; };
+  t5 = cr.readbackMultiSchema { key = "X"; key_kind = "shared_key"; evidences = [ evC evD ]; };
+  # 6. depth>1 → stale-held(recursive provenance Held)
+  t6 = cr.readbackByExactKey { source_schema = "physics.standard_quantities"; key = "속도"; key_kind = "quantity_ko"; depth = 2; };
+  # 7. unknown source schema → missing
+  t7 = cr.readbackByExactKey { source_schema = "nope.unknown"; key = "x"; key_kind = "canonical_key"; };
+  # 8. publicProjection: payload/internal leak 0
+  proj = cr.publicProjection t1;
+  projKeys = B.attrNames proj;
+
+  # ── A-2: 대표 catalog 어댑터(fixtures=실 shape 모사, 환경독립) ──
+  # SPDX: licenses/exceptions [{id}]
+  a_spdx = cr.spdxLookupIn [ { id = "MIT"; name = "MIT License"; is_osi_approved = true; }
+                            { id = "0BSD"; name = "BSD Zero Clause License"; } ] "MIT" "spdx_id";
+  # ChEBI: records [{id="CHEBI:nnn"}]
+  a_chebi = cr.chebiLookupIn [ { id = "CHEBI:15377"; name = "water"; } ] "CHEBI:15377" "chebi_id";
+  # eCFR hazmat: rows [{identification_number="UNnnnn"}]
+  a_ecfr = cr.ecfrHazmatLookupIn [ { identification_number = "UN3100"; proper_shipping_name = "Oxidizing solid";
+                                    hazard_class_or_division = "5.1"; } ] "UN3100" "un_id";
+  # KR authority: field_catalogs [{source_id}]
+  a_kr = cr.krAuthorityLookupIn [ { source_id = "kr_molit_legal_dong"; label = "법정동코드"; domain = "admin_code"; } ]
+           "kr_molit_legal_dong" "catalog_id";
+  # missing(미등록 exact key)
+  a_miss = cr.spdxLookupIn [ { id = "MIT"; name = "x"; } ] "NOPE-LICENSE" "spdx_id";
+  # ★intra-catalog ambiguous(같은 name 상이 레코드) → conflict-held(over-merge 방어)
+  a_amb = cr.ocsfLookupIn [ { name = "version"; entity = "agent"; } { name = "version"; entity = "package"; } ]
+            "version" "ocsf_attr";
+  # fuzzy via dispatch(어댑터 전 가드서 차단)
+  a_fuzzy = cr.readbackByExactKey { source_schema = "license.spdx"; key = "mitish"; key_kind = "label"; };
+  # ★Fix #5(적대검증): malformed dimension_code(garbage)는 recognized 금지 → missing(가짜 출처-attribution 차단)
+  a_garbage = cr.readbackByExactKey { source_schema = "qudt.dimension_code"; key = "123"; key_kind = "dimension_code"; };
+  a_dimreal = cr.readbackByExactKey { source_schema = "qudt.dimension_code"; key = "A0E0L1I0M0H0T-1D0"; key_kind = "dimension_code"; };
+  # ★Fix(empty-key guard): 빈 키는 빈-field 레코드 ghost-match 차단 → missing
+  a_empty = cr.readbackByExactKey { source_schema = "license.spdx"; key = ""; key_kind = "spdx_id"; };
+in {
+  t1_status = t1.status; t2_status = t2.status; t3_status = t3.status;
+  t3b_link = if t3b ? candidate_link then t3b.candidate_link else false;
+  t4_status = t4.status; t5_status = t5.status; t6_status = t6.status; t7_status = t7.status;
+  a_spdx_status = a_spdx.status; a_chebi_status = a_chebi.status; a_amb_status = a_amb.status;
+  all_ok =
+    # ★exact key → recognized
+       (t1.status == "recognized") && (t1.exact_match == true) && (t1.source_supported == true)
+    && (t2.status == "recognized")
+    # ★단일 인식 = candidate(truth 아님)
+    && (t3.status == "recognized") && (t3.candidate_link == false) && (t3.durable_truth == false)
+    # ★shared key 일치 = candidate_link(truth 아님)
+    && (t3b.status == "recognized") && (t3b.candidate_link == true) && (t3b.durable_truth == false)
+    # ★fuzzy → held
+    && (t4.status == "missing") && ((B.head t4.held_reasons).kind == "fuzzy-key-not-exact")
+    # ★cross-catalog 불일치 → conflict-held(over-merge 방어)
+    && (t5.status == "conflict-held") && ((B.head t5.held_reasons).kind == "cross-catalog-conflict")
+    # ★depth>1 → stale-held(recursive provenance)
+    && (t6.status == "stale-held") && ((B.head t6.held_reasons).kind == "provenance-depth-exceeded")
+    # ★unknown schema → missing
+    && (t7.status == "missing") && ((B.head t7.held_reasons).kind == "unknown-source-schema")
+    # ★publicProjection: payload 누출 0, status 노출 O
+    && (B.elem "payload" projKeys == false) && (B.elem "status" projKeys == true)
+    # ★row≠truth 전수(durable_truth 전부 false)
+    && (t1.durable_truth == false) && (t2.durable_truth == false) && (t5.durable_truth == false)
+    # ── A-2: 대표 catalog 어댑터(이질 shape, exact-key) ──
+    && (a_spdx.status == "recognized") && (a_spdx.exact_match == true) && (a_spdx.durable_truth == false)
+    && (a_chebi.status == "recognized")
+    && (a_ecfr.status == "recognized")
+    && (a_kr.status == "recognized")
+    && (a_miss.status == "missing") && ((B.head a_miss.held_reasons).kind == "no-exact-match")
+    # ★intra-catalog ambiguous → conflict-held(over-merge 방어)
+    && (a_amb.status == "conflict-held") && ((B.head a_amb.held_reasons).kind == "intra-catalog-ambiguous")
+    # ★fuzzy → held(어댑터 전 가드)
+    && (a_fuzzy.status == "missing") && ((B.head a_fuzzy.held_reasons).kind == "fuzzy-key-not-exact")
+    # ★Fix #5: malformed dim code → missing · 유효 dim code → recognized(유효 코드 보존)
+    && (a_garbage.status == "missing") && (a_dimreal.status == "recognized")
+    # ★Fix(empty-key guard): 빈 키 → missing(ghost-match 차단)
+    && (a_empty.status == "missing");
+}

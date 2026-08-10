@@ -1,0 +1,323 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+runtime_root="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish"
+main_dll="$runtime_root/Clojure.Main.dll"
+clojure_dll="$runtime_root/Clojure.dll"
+support_project="$clr_meta_root/compiler-selfhost-runtime/Pnix.ClrMeta.CompilerSupport.csproj"
+source="$clr_meta_root/compiler-selfhost/compiler_kernel.clj"
+dotnet_bin="$(command -v dotnet)"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage1 builder: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+snapshot_runtime() {
+  local output="$1"
+  local rows="$output.rows"
+  if find "$runtime_root" -type l -print -quit | grep -q .; then
+    fail pinned-runtime-symlink
+  fi
+  (
+    cd "$runtime_root"
+    find . -type f -print | sed 's#^\./##' | LC_ALL=C sort
+  ) >"$output.paths"
+  : >"$rows"
+  while IFS= read -r relative; do
+    jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$runtime_root/$relative")" \
+      '{path:$path,sha256:$sha256}' >>"$rows"
+  done <"$output.paths"
+  jq -s '.' "$rows" >"$output"
+}
+
+if [[ "$#" -ne 1 ]]; then
+  echo "usage: clr-meta-build-compiler-selfhost-stage1 OUTPUT" >&2
+  exit 2
+fi
+
+command -v jq >/dev/null 2>&1 || fail jq-missing
+[[ -f "$main_dll" && ! -L "$main_dll" ]] || fail pinned-clojure-main-missing
+[[ -f "$clojure_dll" && ! -L "$clojure_dll" ]] || fail pinned-clojure-runtime-missing
+[[ -f "$support_project" && ! -L "$support_project" ]] || fail support-project-missing
+[[ -f "$source" && ! -L "$source" ]] || fail canonical-source-missing
+
+if [[ -e "$runtime_root/pnix" || -L "$runtime_root/pnix" ]] || \
+   find "$runtime_root" -maxdepth 1 \
+     \( -name 'pnix.clr_meta.*.cljr.dll' \
+        -o -name 'pnix.clr_meta.*.cljc.dll' \
+        -o -name 'pnix.clr_meta.*.clj.dll' \) -print -quit | grep -q .; then
+  fail pinned-runtime-product-shadow
+fi
+
+case "$1" in
+  /*) requested_output="$1" ;;
+  *) requested_output="$PWD/$1" ;;
+esac
+output_parent="$(dirname "$requested_output")"
+[[ -d "$output_parent" ]] || fail output-parent-missing
+output_parent="$(cd "$output_parent" && pwd -P)"
+output="$output_parent/$(basename "$requested_output")"
+if [[ -e "$output" || -L "$output" ]]; then
+  fail output-exists
+fi
+
+temporary="$(mktemp -d "$output_parent/.compiler-selfhost-stage1.XXXXXX")"
+cleanup() {
+  rm -rf "$temporary"
+}
+trap cleanup EXIT
+
+publish="$temporary/publish"
+bundle="$temporary/bundle"
+mkdir -p \
+  "$publish" "$bundle/runtime" "$bundle/compiler" \
+  "$temporary/home" "$temporary/process-tmp" "$temporary/dotnet-home" \
+  "$temporary/nuget-packages"
+
+clean_environment=(
+  env -i
+  "PATH=$PATH"
+  "HOME=$temporary/home"
+  "TMPDIR=$temporary/process-tmp"
+  "DOTNET_CLI_HOME=$temporary/dotnet-home"
+  "DOTNET_CLI_TELEMETRY_OPTOUT=1"
+  "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1"
+  "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1"
+  "DOTNET_NOLOGO=1"
+  "NUGET_PACKAGES=$temporary/nuget-packages"
+)
+if [[ -n "${DOTNET_ROOT:-}" ]]; then
+  clean_environment+=("DOTNET_ROOT=$DOTNET_ROOT")
+fi
+
+snapshot_runtime "$temporary/bootstrap-runtime-before.json"
+bootstrap_runtime_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/bootstrap-runtime-before.json"
+} | sha256_stdin)"
+
+"${clean_environment[@]}" \
+  "$clr_meta_root/scripts/clr-meta-compiler-selfhost-admission-gate" \
+  >"$temporary/c1-admission-receipt.json" 2>"$temporary/c1-admission.stderr" || {
+  sed -n '1,200p' "$temporary/c1-admission.stderr" >&2
+  fail c1-admission
+}
+jq -e '
+  .schema == "pnix.clr-meta.compiler-selfhost-admission-gate-receipt.v1" and
+  .checkpoint == "c1-source-admission" and .ready == true and
+  .executable_stage1 == false and .compiler_stage2 == false
+' "$temporary/c1-admission-receipt.json" >/dev/null || fail c1-admission-receipt
+c1_admission_receipt_sha256="$(sha256_file "$temporary/c1-admission-receipt.json")"
+
+"${clean_environment[@]}" "$dotnet_bin" publish "$support_project" \
+  -c Release --nologo -p:RestoreIgnoreFailedSources=true -o "$publish" \
+  >"$temporary/dotnet-publish.stdout" 2>"$temporary/dotnet-publish.stderr" || {
+  sed -n '1,200p' "$temporary/dotnet-publish.stdout" >&2
+  sed -n '1,200p' "$temporary/dotnet-publish.stderr" >&2
+  fail support-publish
+}
+
+printf '%s\n' \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  | LC_ALL=C sort >"$temporary/expected-publish-files"
+find "$publish" -maxdepth 1 -type f -print \
+  | sed 's#^.*/##' | LC_ALL=C sort >"$temporary/actual-publish-files"
+cmp "$temporary/expected-publish-files" "$temporary/actual-publish-files" >/dev/null || \
+  fail support-publish-file-set
+
+for name in \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  cp "$publish/$name" "$bundle/runtime/$name"
+done
+
+(
+  cd "$runtime_root"
+  "${clean_environment[@]}" \
+    "CLOJURE_LOAD_PATH=$clr_meta_root/src" \
+    CLOJURE_COMPILE_PATH= \
+    CLR_META_SOURCE_ROOT= \
+    "$dotnet_bin" "$main_dll" \
+      -m pnix.clr-meta.compiler-selfhost-stage1 \
+      "$bundle/runtime/Pnix.ClrMeta.CompilerSupport.dll" \
+      "$source" \
+      "$bundle/compiler/CompilerStage1.dll"
+) >"$temporary/bootstrap.stdout" 2>"$temporary/bootstrap.stderr" || {
+  sed -n '1,160p' "$temporary/bootstrap.stdout" >&2
+  sed -n '1,160p' "$temporary/bootstrap.stderr" >&2
+  fail bootstrap-b0
+}
+[[ -s "$bundle/compiler/CompilerStage1.dll" ]] || fail compiler-stage1-missing
+
+snapshot_runtime "$temporary/bootstrap-runtime-after.json"
+cmp "$temporary/bootstrap-runtime-before.json" "$temporary/bootstrap-runtime-after.json" >/dev/null || \
+  fail bootstrap-runtime-mutated
+
+"$dotnet_bin" "$bundle/runtime/Pnix.ClrMeta.CompilerSupport.dll" \
+  describe "$bundle/compiler/CompilerStage1.dll" \
+  >"$temporary/compiler-description.json"
+prepared_methods="$("$dotnet_bin" "$bundle/runtime/Pnix.ClrMeta.CompilerSupport.dll" \
+  prepare "$bundle/compiler/CompilerStage1.dll")"
+[[ "$prepared_methods" == 27 ]] || fail compiler-stage1-prepare-count
+
+jq -e '
+  .schema == "pnix.clr-meta.compiler-selfhost-description.v1" and
+  .assembly == "Pnix.ClrMeta.Generated.CompilerKernel" and
+  .type == "Pnix.ClrMeta.Generated.CompilerKernel" and
+  .fields == 9 and
+  (.methods | length) == 27 and
+  .references == ["Pnix.ClrMeta.CompilerSupport","System.Private.CoreLib"] and
+  .resources == [] and
+  .metadata.GeneratedBy == "pnix.clr-meta.compiler-kernel.v1" and
+  .metadata.KernelEntry == "compile-source" and
+  .metadata.KernelIdentity == "pnix.clr-meta.compiler-kernel.v1" and
+  .metadata.KernelNamespace == "pnix.clr-meta.compiler-kernel.v1" and
+  .metadata.SourceProfileId == "pnix.clr-meta.compiler-kernel-source.v1" and
+  .metadata.SupportAbiId == "pnix.clr-meta.compiler-support.v1"
+' "$temporary/compiler-description.json" >/dev/null || fail compiler-stage1-description
+
+input_paths=(
+  compiler-selfhost-runtime/Forms.cs
+  compiler-selfhost-runtime/PeSink.cs
+  compiler-selfhost-runtime/Pnix.ClrMeta.CompilerSupport.csproj
+  compiler-selfhost-runtime/Program.cs
+  compiler-selfhost/compiler_kernel.clj
+  compiler-selfhost/contract.edn
+  compiler-selfhost/executable-contract.edn
+  compiler-selfhost/plan.edn
+  compiler-selfhost/profile.edn
+  scripts/clr-meta-build-compiler-selfhost-stage1
+  scripts/clr-meta-compiler-selfhost-admission-gate
+  src/pnix/clr_meta/compiler_selfhost_admission.clj
+  src/pnix/clr_meta/compiler_selfhost_contract.clj
+  src/pnix/clr_meta/compiler_selfhost_source.clj
+  src/pnix/clr_meta/runtime_artifact.clj
+  src/pnix/clr_meta/compiler_selfhost_stage1.clj
+  test/pnix/clr_meta/compiler_selfhost_admission_test.clj
+)
+: >"$temporary/input-rows.jsonl"
+for relative in "${input_paths[@]}"; do
+  live="$clr_meta_root/$relative"
+  [[ -f "$live" && ! -L "$live" ]] || fail canonical-input-file-set
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$live")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/input-rows.jsonl"
+done
+jq -s '.' "$temporary/input-rows.jsonl" >"$temporary/inputs.json"
+input_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/inputs.json"
+} | sha256_stdin)"
+
+: >"$temporary/bundle-rows.jsonl"
+for relative in \
+  compiler/CompilerStage1.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$bundle/$relative")" \
+    '{path:$path,sha256:$sha256}' >>"$temporary/bundle-rows.jsonl"
+done
+jq -s '.' "$temporary/bundle-rows.jsonl" >"$temporary/bundle-files.json"
+bundle_closure_sha256="$({
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$temporary/bundle-files.json"
+} | sha256_stdin)"
+
+jq -S -n \
+  --arg bundle_closure_sha256 "$bundle_closure_sha256" \
+  --arg bootstrap_runtime_closure_sha256 "$bootstrap_runtime_closure_sha256" \
+  --arg c1_admission_receipt_sha256 "$c1_admission_receipt_sha256" \
+  --arg compiler_sha256 "$(sha256_file "$bundle/compiler/CompilerStage1.dll")" \
+  --arg clojure_main_sha256 "$(sha256_file "$main_dll")" \
+  --arg clojure_runtime_sha256 "$(sha256_file "$clojure_dll")" \
+  --arg dotnet_host_sha256 "$(sha256_file "$dotnet_bin")" \
+  --arg dotnet_version "$("${clean_environment[@]}" "$dotnet_bin" --version)" \
+  --arg input_closure_sha256 "$input_closure_sha256" \
+  --argjson bundle_files "$(cat "$temporary/bundle-files.json")" \
+  --argjson compiler_description "$(cat "$temporary/compiler-description.json")" \
+  --argjson inputs "$(cat "$temporary/inputs.json")" \
+  --argjson bootstrap_runtime_files "$(cat "$temporary/bootstrap-runtime-before.json")" \
+  '{
+    schema:"pnix.clr-meta.compiler-selfhost-stage1-artifact.v1",
+    checkpoint:"c2-executable-compiler-stage1",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    stage:1,
+    admission:{
+      checkpoint:"c1-source-admission",
+      receipt_sha256:$c1_admission_receipt_sha256,
+      ready:true
+    },
+    bootstrap:{
+      id:"bootstrap-b0",
+      implementation:"pinned-host-clojureclr",
+      host_compiler_use:"seed-only",
+      host_source_load_use:"exact-canonical-source-seed-only"
+    },
+    compiler:{
+      path:"compiler/CompilerStage1.dll",
+      sha256:$compiler_sha256,
+      prepared_methods:27,
+      description:$compiler_description
+    },
+    execution:{
+      host:"runtime/Pnix.ClrMeta.CompilerSupport.dll",
+      command:["dotnet","runtime/Pnix.ClrMeta.CompilerSupport.dll","compile",
+               "compiler/CompilerStage1.dll","SOURCE","OUTPUT"]
+    },
+    inputs:$inputs,
+    input_closure_sha256:$input_closure_sha256,
+    bundle_files:$bundle_files,
+    bundle_closure_sha256:$bundle_closure_sha256,
+    toolchain:{
+      clojure_main_sha256:$clojure_main_sha256,
+      clojure_runtime_sha256:$clojure_runtime_sha256,
+      dotnet_host_sha256:$dotnet_host_sha256,
+      dotnet_version:$dotnet_version,
+      bootstrap_runtime:{
+        closure_sha256:$bootstrap_runtime_closure_sha256,
+        file_count:($bootstrap_runtime_files | length),
+        files:$bootstrap_runtime_files,
+        unchanged_after_seed:true
+      }
+    },
+    boundaries:{
+      generated_artifact_clojureclr_reference:false,
+      generated_artifact_host_compiler_use:false,
+      generated_artifact_host_source_load_use:false,
+      compiler_source_packaged:false,
+      embedded_artifact_payload:false,
+      source_replay_fallback:false
+    },
+    claims:{
+      compiler_stage1_artifact:true,
+      compiler_executable:true,
+      compiler_stage2:false,
+      self_reproduction:false,
+      fixed_point:false,
+      raw_artifact_reproducibility:false,
+      clojureclr_replacement:false
+    }
+  }' >"$bundle/manifest.json"
+
+"$dotnet_bin" "$publish/Pnix.ClrMeta.CompilerSupport.dll" \
+  publish-directory "$bundle" "$output"
+cat "$output/manifest.json"

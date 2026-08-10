@@ -1,0 +1,92 @@
+{:paths ["src"]
+ :deps {}
+ :aliases
+ {;; 메타순환 인터프리터 커널 smoke
+  :kernel-smoke   {:main-opts ["-m" "pnix.clj-meta.kernel"]}
+  ;; pnix-agnostic, capability-gated read-only host I/O substrate
+  :io-check       {:main-opts ["-m" "pnix.clj-meta.io"]}
+  ;; self-host stage1~7 체인 (deterministic self-compile 고정점)
+  :selfhost-check {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                   :main-opts ["-m" "pnix.clj-meta.selfhost"]}
+  ;; host ≡ compiler (≡ kernel) 등가 검증
+  :conformance    {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                   :main-opts ["-m" "pnix.clj-meta.conformance"]}
+  ;; U8 fuzz/PBT-style differential conformance (default 10k host≡compiler comparisons)
+  :fuzz-conformance {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                     :main-opts ["-m" "pnix.clj-meta.fuzz-conformance"]}
+  ;; U6 tiny self-owned reader/analyzer/direct emitter witness
+  :frontend-selfhost {:main-opts ["-m" "pnix.clj-meta.frontend-selfhost"]}
+  ;; U7 small runtime helpers direct-emitted by clj-meta with runtime frontier held
+  :runtime-selfhost {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                     :main-opts ["-m" "pnix.clj-meta.runtime-selfhost"]}
+  ;; JVM 바이트코드 컴파일러 smoke (프론트엔드: tools.analyzer.jvm, 백엔드: 자작 clojure.asm)
+  :compiler-smoke {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                   :main-opts ["-m" "pnix.clj-meta.compiler"]}
+  ;; 프로덕션 동시성 스트레스 lane: ns 격리, per-call diagnostics, fallback 동시성 회귀 고정
+  :concurrency-smoke {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                      :main-opts ["-m" "pnix.clj-meta.compiler" "concurrency"]}
+  ;; 통합 게이트: compiler + conformance + self-host 를 한 receipt 로
+  :gate {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}
+                      org.ow2.asm/asm-util {:mvn/version "9.10.1"}}
+         :main-opts ["-m" "pnix.clj-meta.gate"]}
+  ;; clj-meta as an independent meta-circular Clojure REPL/runner
+  :repl {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}
+                      org.ow2.asm/asm-util {:mvn/version "9.10.1"}}
+         :main-opts ["-m" "pnix.clj-meta.repl"]}
+  :nrepl {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}
+                       org.ow2.asm/asm-util {:mvn/version "9.10.1"}
+                       nrepl/nrepl {:mvn/version "1.7.0"}}
+          :main-opts ["-m" "pnix.clj-meta.nrepl" "7889"]}
+  ;; primitive bytecode witness: typed let/loop/recur class bytes 를 ASM 으로 정규화
+  :bytecode-witness {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                     :main-opts ["-m" "pnix.clj-meta.bytecode-witness"]}
+  ;; M9 abstract-interpretation interval lattice/transfer/fixpoint witness
+  :abstract-interval {:main-opts ["-m" "pnix.clj-meta.abstract-interval"]}
+  ;; M9a minimal octagon relation domain witness
+  :abstract-octagon {:main-opts ["-m" "pnix.clj-meta.abstract-octagon"]}
+  ;; M9b linear ranking-function synthesis witness
+  :linear-ranking {:main-opts ["-m" "pnix.clj-meta.linear-ranking"]}
+  ;; M9b/M6aj absorption witness through octagon + ranking substrates + compiler admission
+  :m6aj-framework {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                   :main-opts ["-m" "pnix.clj-meta.m6aj-framework"]}
+  ;; M9 migration: replay old checked-long range ledger through abstract interval
+  :range-migration {:main-opts ["-m" "pnix.clj-meta.range-migration"]}
+  ;; M10 translation validation: overflow VC + independent validator
+  :translation-validation {:main-opts ["-m" "pnix.clj-meta.translation-validation"]}
+  ;; M10/M6w admission cross-witness: VC digests tied to bytecode evidence
+  :lowering-admission {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                       :main-opts ["-m" "pnix.clj-meta.lowering-admission"]}
+  ;; M13 bytecode verifier/loadability witness
+  :bytecode-verifier {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}
+                                   org.ow2.asm/asm-util {:mvn/version "9.10.1"}}
+                      :main-opts ["-m" "pnix.clj-meta.bytecode-verifier"]}
+  ;; M13 compiler artifact API: verifier reject hard-fails before publication
+  :verified-compile {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}
+                                  org.ow2.asm/asm-util {:mvn/version "9.10.1"}}
+                     :main-opts ["-m" "pnix.clj-meta.verified-compile"]}
+  ;; Generated-name and byte digest determinism policy witness
+  :determinism-policy {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                       :main-opts ["-m" "pnix.clj-meta.determinism-policy"]}
+  ;; M11 DDC trust witness: host reference vs clj-meta backend behavior
+  :diverse-double-compile {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                           :main-opts ["-m" "pnix.clj-meta.diverse-double-compile"]}
+  ;; M11e: stock Clojure reproducible-build lane as independent DDC evidence
+  :reproducible-ddc {:main-opts ["-m" "pnix.clj-meta.reproducible-ddc"]}
+  ;; M11 cross-host DDC: backend bit-identical target emit under two Clojure versions
+  :cross-host-ddc {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                   :main-opts ["-m" "pnix.clj-meta.cross-host-ddc"]}
+  ;; M12 language surface boundary: protocol invoke direct, definitions/ns side effects held
+  :language-surface {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                     :main-opts ["-m" "pnix.clj-meta.language-surface"]}
+  ;; 성능 벤치: 우리 직접 emit vs host (성능 정책 §13/§14)
+  :bench {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+          :main-opts ["-m" "pnix.clj-meta.benchmark"]}
+  ;; mirror IR smoke: analyzer AST 를 canonical mirror data 로 노출
+  :mirror-smoke {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                 :main-opts ["-m" "pnix.clj-meta.mirror"]}
+  ;; compiler.clj self-source analyzer op census + policy ledger
+  :audit-self-source {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                      :main-opts ["-m" "pnix.clj-meta.selfaudit"]}
+  ;; full-source genuine stage1 boundary over selfaudit output
+  :full-source-stage1 {:extra-deps {org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}}
+                       :main-opts ["-m" "pnix.clj-meta.full-source-stage1"]}}}

@@ -1,0 +1,219 @@
+# stdlib.math.solver-blackboard
+#
+# **idea.md P4 + §14: 두 store — per-problem blackboard + resident edge store(캐시).**
+#
+# §14 결정: receipt 는 두 층.
+#   instance(이 문제 trace) = step 에서 runtime 생성, ephemeral → blackboard 에 누적,
+#     풀이 끝나면 *검증된 일반 edge 만* 승격하고 instance 는 버린다.
+#   general edge(rule-level 관계) = resident store 에 누적, canonical-key + owner digest.
+#     결정론이라 same key → same receipt → cache hit == recompute (안전).
+#
+# 비충돌 규율: solver-step-trace / equation-solving-procedure 를 *수정하지 않는다*.
+# 그 결과(데이터)만 소비한다.
+#
+# 데모하는 것 (pnixc-meta 순수 함수로):
+#   1. blackboard 누적 (append-only, immutable update)
+#   2. promote: instance step → general edge (relation-id = canonical key)
+#   3. resident store 성장 + 캐시 (dedup by key; 재학습 시 new_edges=0)
+#   4. coverage 예측: 새 문제의 shape edge 가 store 에 다 있나?
+#        다 있음 → predictable (§14 미세구조 예측)
+#        일부 없음 → novel edges = self-gap (§12.1 "어디에 무엇이 빠졌나")
+let
+  sst = import ./solver-step-trace.px;
+
+  len = builtins.length;
+  map = builtins.map;
+  filter = builtins.filter;
+  foldl' = builtins.foldl';
+  elem = builtins.elem;
+  head = builtins.head;
+
+  hasField = a: k: (builtins.isAttrs a) && (builtins.hasAttr k a);
+  getOr = a: k: d: if hasField a k then builtins.getAttr k a else d;
+
+  sortUniq = xs:
+    builtins.sort (a: b: a < b)
+      (foldl' (acc: x: if elem x acc then acc else acc ++ [ x ]) [ ] xs);
+
+  # owner version digest — edge 의미가 바뀌면 bump → 옛 캐시 stale 표시 (§14 무효화).
+  ownerVersion = "solver-edge-store-v0";
+
+  # === per-problem blackboard (immutable, append-only) =====================
+
+  mkBlackboard = problem: {
+    kind = "solver.blackboard.v0";
+    problem = problem;
+    steps = [ ];
+    accepted_edges = [ ];   # [{ relation; why; step_id; }]
+    status = "in-progress";
+  };
+
+  appendStep = bb: step:
+    bb // {
+      steps = bb.steps ++ [ step ];
+      accepted_edges = bb.accepted_edges ++ [ {
+        relation = step.relation;
+        why = step.why;
+        step_id = step.step_id;
+      } ];
+    };
+
+  ingestTrace = bb: trace:
+    if (getOr trace "outcome" "?") != "trace-ready" then
+      bb // {
+        status = "held";
+        held_reason = getOr trace "outcome" "?";
+      }
+    else
+      let
+        steps = getOr trace "steps" [ ];
+        bb2 = foldl' appendStep bb steps;
+      in bb2 // {
+        status = "solved";
+        solution_kind = getOr trace "solution_kind" "?";
+      };
+
+  # === general edge 승격 (instance 버리고 일반 edge 만) =====================
+  # canonical_key = relation id — 이미 일반(모든 같은 종류 문제에서 동일).
+
+  edgeRecordOf = e: {
+    kind = "general-edge.v0";
+    edge_id = e.relation;
+    canonical_key = e.relation;
+    why = e.why;
+    owner_version = ownerVersion;
+  };
+
+  promoteEdges = bb:
+    let
+      raw = map edgeRecordOf bb.accepted_edges;
+      dedup = foldl'
+        (acc: r:
+          if elem r.canonical_key (map (x: x.canonical_key) acc)
+          then acc else acc ++ [ r ])
+        [ ] raw;
+    in dedup;
+
+  # === resident edge store + 결정론 캐시 ===================================
+
+  emptyStore = { kind = "edge-store.v0"; edges = [ ]; owner_version = ownerVersion; };
+
+  storeKeys = store: map (e: e.canonical_key) store.edges;
+
+  ingestEdges = store: edges:
+    let
+      existing = storeKeys store;
+      fresh = filter (e: !(elem e.canonical_key existing)) edges;
+    in store // { edges = store.edges ++ fresh; };
+
+  lookup = store: key:
+    let m = filter (e: e.canonical_key == key) store.edges;
+    in if m == [ ] then { hit = false; key = key; }
+       else { hit = true; key = key; edge = head m; };
+
+  # === 학습 한 턴: solve → blackboard → promote → store 갱신 ==============
+
+  learnFromUtterance = store: utterance:
+    let
+      trace = sst.traceUtterance utterance;
+      bb = ingestTrace (mkBlackboard utterance) trace;
+      edges = if bb.status == "solved" then promoteEdges bb else [ ];
+      store2 = ingestEdges store edges;
+      before = len store.edges;
+      after = len store2.edges;
+    in {
+      outcome = if bb.status == "solved" then "learned" else "held";
+      utterance = utterance;
+      status = bb.status;
+      blackboard = bb;
+      promoted_edges = edges;
+      store = store2;
+      new_edges = after - before;
+      cache_hits = (len edges) - (after - before);   # 이미 store 에 있던 edge 수
+      render_lines = getOr trace "render_lines" [ ];
+    };
+
+  # === coverage 예측 (§14 미세구조 예측 + §12.1 self-gap) =================
+  # 새 문제의 shape edge 가 store 에 다 있나? → 예측 가능 / novel(=빠진 것) 지목.
+
+  coverageOf = store: utterance:
+    let trace = sst.traceUtterance utterance;
+    in
+      if (getOr trace "outcome" "?") != "trace-ready" then {
+        outcome = "held-not-solved";
+        solver_outcome = getOr trace "outcome" "?";
+        problem = utterance;
+      }
+      else
+        let
+          rels = map (s: s.relation) (getOr trace "steps" [ ]);
+          sig = sortUniq rels;
+          existing = storeKeys store;
+          resident = filter (k: elem k existing) sig;
+          novel = filter (k: !(elem k existing)) sig;
+        in {
+          outcome = "coverage";
+          problem = utterance;
+          solution_kind = getOr trace "solution_kind" "?";
+          shape_signature = sig;
+          resident = resident;
+          novel = novel;
+          resident_count = len resident;
+          novel_count = len novel;
+          fully_covered = novel == [ ];
+          prediction =
+            if novel == [ ]
+            then "predictable-known-shape"
+            else "novel-edges-needed";
+          self_gap = novel;   # §12.1: 어디에 무엇이 빠졌나 (이름으로 지목)
+        };
+
+  # === Mirror plate lens entry ======================================
+  applySolverBlackboardPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if (request ? operation) && (request.operation == "learn")
+         && (request ? utterance) then
+      learnFromUtterance (if request ? store then request.store else emptyStore)
+        request.utterance
+    else if (request ? operation) && (request.operation == "coverage")
+         && (request ? utterance) && (request ? store) then
+      coverageOf request.store request.utterance
+    else {
+      outcome = "held-missing-input";
+      reason = "operation(learn|coverage) + utterance (+ store) 가 필요합니다.";
+    };
+
+  inventorySummary = _: {
+    owner = "stdlib.math.solver-blackboard";
+    consumes = "solver-step-trace.traceUtterance result (data-only; owner not modified)";
+    stores = [
+      "per-problem blackboard (append-only, immutable; instance receipt)"
+      "resident edge store (general edge; canonical-key + owner_version digest; 결정론 캐시)"
+    ];
+    operations = [ "mkBlackboard" "ingestTrace" "promoteEdges" "learnFromUtterance" "coverageOf" ];
+    note = "idea.md P4 + §14: instance(ephemeral)/general-edge(resident) 두 store. coverageOf=캐시 예측 + self-gap(§12.1).";
+  };
+
+in {
+  inherit
+    mkBlackboard
+    appendStep
+    ingestTrace
+    promoteEdges
+    emptyStore
+    ingestEdges
+    lookup
+    learnFromUtterance
+    coverageOf
+    applySolverBlackboardPlate
+    inventorySummary;
+  ownerName = "stdlib.math.solver-blackboard";
+  meta = {
+    source = "stdlib math solver blackboard (two-store: instance + resident edge cache)";
+    owner = "stdlib.math.solver-blackboard";
+    base = "solver-blackboard-v0";
+    rev_note = "idea.md (2026-06-14) P4 + §14. 두 store: per-problem blackboard(instance receipt, append-only immutable, 풀이 후 검증된 일반 edge 만 승격) + resident edge store(general edge, canonical-key=relation-id + owner_version digest, 결정론 캐시). coverageOf = 새 문제 shape edge 의 store 커버리지 예측(§14 미세구조 예측) + novel=self-gap(§12.1). solver-step-trace data-only consume.";
+  };
+}

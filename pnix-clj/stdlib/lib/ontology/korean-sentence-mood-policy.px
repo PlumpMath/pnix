@@ -1,0 +1,106 @@
+# stdlib.lib.ontology.korean-sentence-mood-policy
+#
+# OWNER-LAW (2026-05-31): Korean sentence mood enum mapping policy.
+#
+# # What this is for
+#
+# pnix_core::lang::KoreanSentenceMood enum (5 closed variant) ↔ string
+# key 의 mapping owner. retrieval.rs / intent.rs 등 morphology label
+# lookup 의 enum 차원 source.
+#
+# 한글 문장의 종결법 (mood) 은 의미 처리의 중요한 axis 다 — declarative
+# vs interrogative vs imperative vs propositive (청유법) vs unknown.
+# 종결법에 따라 의도 분류와 응답 형태가 갈린다.
+#
+# # Design discipline — declarative enum row registry
+#
+# 이전 doghouse-core::retrieval::sentence_mood_label 의 match arm 5 줄.
+# 이 owner-law 는 declarative mood row registry + foldl' lookup. 새
+# mood variant = 한 row.
+#
+# # 5 closed mood
+#
+#   Declarative   → "declarative"   — 평서법 (단호한 진술)
+#   Interrogative → "interrogative" — 의문법 (질문)
+#   Imperative    → "imperative"    — 명령법 (지시)
+#   Propositive   → "propositive"   — 청유법 ("~하자")
+#   Unknown       → "unknown"       — 미분류
+#
+# # Inputs
+#
+#   mood : string — KoreanSentenceMood variant name
+#                   ("Declarative" / "Interrogative" / "Imperative" /
+#                    "Propositive" / "Unknown")
+#
+# # Output
+#
+#   verdict   : "mood-key-resolved" | "held-unknown-mood-variant"
+#   mood_key  : string | null   — lookup key (lowercase)
+#   matched_rule : "explicit" | null
+#   variant   : echo input
+
+let
+  ownerName = "stdlib/lib/ontology/korean-sentence-mood-policy.px";
+
+  # ─── declarative mood row registry ─────────────────────────────────────
+  #
+  # 각 row: (variant_name, lookup_key, semantic_comment).
+  # 새 mood variant = 한 row.
+
+  mkMoodRow = variant: key: comment:
+    { variant = variant; mood_key = key; semantic = comment; };
+
+  moodRows = [
+    (mkMoodRow "Declarative"   "declarative"   "평서법 — 단호한 진술")
+    (mkMoodRow "Interrogative" "interrogative" "의문법 — 질문")
+    (mkMoodRow "Imperative"    "imperative"    "명령법 — 지시")
+    (mkMoodRow "Propositive"   "propositive"   "청유법 — '~하자' 권유")
+    (mkMoodRow "Unknown"       "unknown"       "미분류")
+  ];
+
+  validVerdicts = [
+    "mood-key-resolved"
+    "held-unknown-mood-variant"
+  ];
+
+  # ─── helpers ────────────────────────────────────────────────────────────
+
+  asString = v: if builtins.isString v then v else "";
+
+  lookupMood = variant:
+    builtins.foldl'
+      (acc: r: if acc != null then acc
+        else if r.variant == variant then r else null)
+      null
+      moodRows;
+
+  # ─── lens entry function ────────────────────────────────────────────────
+
+  applyKoreanSentenceMoodPolicy = request:
+    let
+      variant = asString (request.mood or "");
+      hit = lookupMood variant;
+    in
+      if hit == null then {
+        verdict = "held-unknown-mood-variant";
+        mood_key = null;
+        matched_rule = null;
+        variant = variant;
+        held_reason = "mood variant not in registry";
+        valid_variants = builtins.map (r: r.variant) moodRows;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else {
+        verdict = "mood-key-resolved";
+        mood_key = hit.mood_key;
+        matched_rule = "explicit";
+        variant = variant;
+        semantic = hit.semantic;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName moodRows validVerdicts applyKoreanSentenceMoodPolicy;
+}

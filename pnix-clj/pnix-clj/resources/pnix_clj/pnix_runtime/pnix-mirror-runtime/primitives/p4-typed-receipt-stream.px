@@ -1,0 +1,177 @@
+# P4 — typed-receipt-stream
+#
+# OWNER-LAW (2026-05-13): every event from P1/P2/P3 (and future
+# fold/force/despawn events) emits a typed receipt. Receipts chain
+# linearly via parent_receipt_id. The receipt stream is the
+# substrate's universal audit channel — the self-audit axiom's
+# physical form.
+#
+# Why: without P4 the other 3 primitives can produce structural
+# correctness but no auditable history. The 3 axes (in-mirror vs
+# out / depth / sibling) all surface as receipt sequences — without
+# P4 they're invisible.
+#
+# Pnix is RT — no stateful queue. P4 is a *receipt builder*. The
+# caller chains receipts by passing prev_receipt_id from the
+# previous call. The "stream" is the chain emerged from repeated
+# applications, not a stateful collection.
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p4-typed-receipt-stream.px";
+
+  # All receipt kinds. Each primitive event maps to one kind.
+  validReceiptKinds = [
+    "mirror-spawn"        # from P1
+    "ontology-extend"     # from P2
+    "boundary-project"    # from P3
+    "thunk-force"         # future: lazy → forced event
+    "thunk-gc"            # future: no longer reachable
+    "mirror-despawn"      # future: mirror destroyed
+    "fold-step"           # future: one 6-layer fold step
+    "held"                # any primitive's Held verdict
+    "nl-transduction"     # P6: NL utterance → spawn-request audit
+    "learning-delta"      # `.px first` measurement: before/after
+                          # substrate-modification verdict comparison.
+                          # Same input + different overlay snapshot →
+                          # typed delta receipt (Held count delta, top
+                          # intent change, learning_signal class).
+  ];
+
+  # Required fields on every receipt build request.
+  requiredRequestFields = [
+    "receipt_kind"
+    "emitted_at_ms"
+  ];
+
+  # Build the replay-stable receipt id. Same algorithm as P1/P2/P3
+  # fingerprints — pipe-separated canonical fields. Fourth use of
+  # the pattern triggers stdlib helper extraction.
+  buildReceiptId = req:
+    let
+      parent =
+        if req ? parent_receipt_id && req.parent_receipt_id != null
+        then req.parent_receipt_id else "genesis";
+      mirror =
+        if req ? related_mirror_id && req.related_mirror_id != null
+        then req.related_mirror_id else "no-mirror";
+      ontology =
+        if req ? related_ontology_id && req.related_ontology_id != null
+        then req.related_ontology_id else "no-ontology";
+      ankh =
+        if req ? related_ankh_id && req.related_ankh_id != null
+        then req.related_ankh_id else "no-ankh";
+      parts = [
+        "receipt"
+        req.receipt_kind
+        parent
+        mirror
+        ontology
+        ankh
+        (builtins.toString req.emitted_at_ms)
+      ];
+    in builtins.concatStringsSep "|" parts;
+
+  validateRequest = req:
+    let
+      hasField = field:
+        req ? "${field}" && (
+          let v = req."${field}"; in
+          if builtins.isString v then builtins.stringLength v > 0
+          else if builtins.isInt v then true
+          else v != null
+        );
+      missing = builtins.filter (f: !(hasField f)) requiredRequestFields;
+      kindValid =
+        req ? receipt_kind && builtins.elem req.receipt_kind validReceiptKinds;
+    in {
+      missing_fields = missing;
+      kind_valid = kindValid;
+      ready = builtins.length missing == 0 && kindValid;
+    };
+
+  buildReceipt = req:
+    let
+      validation = validateRequest req;
+    in
+      if !validation.ready then {
+        verdict = "receipt-build-held";
+        held_kind =
+          if !validation.kind_valid then "invalid-receipt-kind"
+          else "missing-required-fields";
+        missing_fields = validation.missing_fields;
+        receipt = null;
+      } else {
+        verdict = "receipt-build-ready";
+        held_kind = null;
+        receipt = {
+          id = buildReceiptId req;
+          receipt_kind = req.receipt_kind;
+          emitted_at_ms = req.emitted_at_ms;
+          parent_receipt_id =
+            if req ? parent_receipt_id then req.parent_receipt_id else null;
+          related_mirror_id =
+            if req ? related_mirror_id then req.related_mirror_id else null;
+          related_ontology_id =
+            if req ? related_ontology_id then req.related_ontology_id else null;
+          related_ankh_id =
+            if req ? related_ankh_id then req.related_ankh_id else null;
+          evidence =
+            if req ? evidence then req.evidence else {};
+        };
+      };
+
+  # Build a chain from a list of event-build-requests. Each request's
+  # `parent_receipt_id` is auto-populated from the prior receipt's id.
+  # First receipt has parent_receipt_id = null (genesis).
+  #
+  # Returns a list of receipt records in chain order. Caller can
+  # inspect the chain to audit the sequence.
+  buildChain = events:
+    let
+      step = state: event:
+        let
+          chained = event // {
+            parent_receipt_id = state.last_id;
+          };
+          out = buildReceipt chained;
+          newReceipts =
+            if out.verdict == "receipt-build-ready"
+            then state.receipts ++ [ out.receipt ]
+            else state.receipts ++ [ { verdict = out.verdict;
+                                       held_kind = out.held_kind;
+                                       missing_fields = out.missing_fields; } ];
+          newLastId =
+            if out.verdict == "receipt-build-ready"
+            then out.receipt.id
+            else state.last_id;
+        in {
+          last_id = newLastId;
+          receipts = newReceipts;
+        };
+    in
+      (builtins.foldl' step { last_id = null; receipts = []; } events).receipts;
+
+  # Audit invariants — declarative; substrate enforces.
+  auditInvariants = {
+    append_only = "receipts are never mutated; supersession adds a new receipt with parent reference";
+    every_primitive_event_emits = "P1/P2/P3 events MUST produce a receipt or the self-audit axiom is violated";
+    chain_anchor_required = "every non-genesis receipt MUST reference a parent";
+  };
+in {
+  inherit
+    ownerName
+    validReceiptKinds
+    requiredRequestFields
+    validateRequest
+    buildReceiptId
+    buildReceipt
+    buildChain
+    auditInvariants;
+  meta = {
+    source = "pnix-mirror-runtime primitive P4";
+    owner = ownerName;
+    role = "emit typed receipts for every primitive event, chained linearly";
+    consumes = [ "P1-mirror-identity" "P2-ontology-extension" "P3-boundary-projection" ];
+    consumed_by = [ "operator-cockpit" "audit-log" "viz-renderer" "test-runner-detector" ];
+  };
+}

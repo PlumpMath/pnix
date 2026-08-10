@@ -1,0 +1,730 @@
+# AUTO-GENERATED — sheaf
+# Entries: 103
+let
+  ownerName = "stdlib.nl.lean.lookup-sheaf";
+  category = "sheaf";
+  entries = [
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 70;
+      code_preview = "@[stacks 00VR] def IsSheaf (P : Cᵒᵖ ⥤ A) : Prop :=   ∀ E : A, Presieve.IsSheaf J (P ⋙ coyoneda.obj (op E))";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSeparated";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 76;
+      code_preview = "def IsSeparated (P : Cᵒᵖ ⥤ A) {FA : A → A → Type*} {CA : A → Type*}     [∀ X Y, FunLike (FA X Y) (CA X) (CA Y)] [ConcreteCategory A FA] : Prop :=   ∀ (X : C) (S : Sieve X) (_ : S ∈ J X) (x y : ToType (P.obj (op X))),     (∀ (Y : C) (f : Y ⟶ X) (_ : S f), P.map f.op x = P.map f.op y) → x = y";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.conesEquivSieveCompatibleFamily";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 89;
+      code_preview = "def conesEquivSieveCompatibleFamily :     (S.arrows.diagram.op ⋙ P).cones.obj E ≃       { x : FamilyOfElements (P ⋙ coyoneda.obj E) (S : Presieve X) // x.SieveCompatible } where   toFun π :=     ⟨fun _ f h => π.app (op ⟨Over.mk f, h⟩), fun X Y f g hf => by       apply (id_comp _).symm.trans       ds";
+    }
+    {
+      full_name = "CategoryTheory.Presieve.FamilyOfElements.SieveCompatible.cone";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 115;
+      code_preview = "@[simp] def _root_.CategoryTheory.Presieve.FamilyOfElements.SieveCompatible.cone :     Cone (S.arrows.diagram.op ⋙ P) where   pt := E.unop   π := (conesEquivSieveCompatibleFamily P S E).invFun ⟨x, hx⟩";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.homEquivAmalgamation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 122;
+      code_preview = "def homEquivAmalgamation :     (hx.cone ⟶ P.mapCone S.arrows.cocone.op) ≃ { t // x.IsAmalgamation t } where   toFun l := ⟨l.hom, fun _ f hf => l.w (op ⟨Over.mk f, hf⟩)⟩   invFun t := ⟨t.1, fun f => t.2 f.unop.1.hom f.unop.2⟩   left_inv _ := rfl   right_inv _ := rfl";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isLimit_iff_isSheafFor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 134;
+      code_preview = "theorem isLimit_iff_isSheafFor :     Nonempty (IsLimit (P.mapCone S.arrows.cocone.op)) ↔       ∀ E : Aᵒᵖ, IsSheafFor (P ⋙ coyoneda.obj E) S.arrows";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.subsingleton_iff_isSeparatedFor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 153;
+      code_preview = "theorem subsingleton_iff_isSeparatedFor :     (∀ c, Subsingleton (c ⟶ P.mapCone S.arrows.cocone.op)) ↔       ∀ E : Aᵒᵖ, IsSeparatedFor (P ⋙ coyoneda.obj E) S.arrows";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_iff_isLimit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 177;
+      code_preview = "theorem isSheaf_iff_isLimit :     IsSheaf J P ↔       ∀ ⦃X : C⦄ (S : Sieve X), S ∈ J X → Nonempty (IsLimit (P.mapCone S.arrows.cocone.op))";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSeparated_iff_subsingleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 185;
+      code_preview = "theorem isSeparated_iff_subsingleton :     (∀ E : A, Presieve.IsSeparated J (P ⋙ coyoneda.obj (op E))) ↔       ∀ ⦃X : C⦄ (S : Sieve X), S ∈ J X → ∀ c, Subsingleton (c ⟶ P.mapCone S.arrows.cocone.op)";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isLimit_iff_isSheafFor_presieve";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 194;
+      code_preview = "theorem isLimit_iff_isSheafFor_presieve :     Nonempty (IsLimit (P.mapCone (generate R).arrows.cocone.op)) ↔       ∀ E : Aᵒᵖ, IsSheafFor (P ⋙ coyoneda.obj E) R";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_iff_isLimit_pretopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 202;
+      code_preview = "theorem isSheaf_iff_isLimit_pretopology [HasPullbacks C] (K : Pretopology C) :     IsSheaf (K.toGrothendieck C) P ↔       ∀ ⦃X : C⦄ (R : Presieve X),         R ∈ K X → Nonempty (IsLimit (P.mapCone (generate R).arrows.cocone.op))";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.amalgamate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 219;
+      code_preview = "def IsSheaf.amalgamate {A : Type u₂} [Category.{v₂} A] {E : A} {X : C} {P : Cᵒᵖ ⥤ A}     (hP : Presheaf.IsSheaf J P) (S : J.Cover X) (x : ∀ I : S.Arrow, E ⟶ P.obj (op I.Y))     (hx : ∀ ⦃I₁ I₂ : S.Arrow⦄ (r : I₁.Relation I₂),        x I₁ ≫ P.map r.g₁.op = x I₂ ≫ P.map r.g₂.op) : E ⟶ P.obj (op X) :=  ";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.amalgamate_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 230;
+      code_preview = "@[reassoc (attr := simp)] theorem IsSheaf.amalgamate_map {A : Type u₂} [Category.{v₂} A] {E : A} {X : C} {P : Cᵒᵖ ⥤ A}     (hP : Presheaf.IsSheaf J P) (S : J.Cover X) (x : ∀ I : S.Arrow, E ⟶ P.obj (op I.Y))     (hx : ∀ ⦃I₁ I₂ : S.Arrow⦄ (r : I₁.Relation I₂),        x I₁ ≫ P.map r.g₁.op = x I₂ ≫ P.ma";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.hom_ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 239;
+      code_preview = "theorem IsSheaf.hom_ext {A : Type u₂} [Category.{v₂} A] {E : A} {X : C} {P : Cᵒᵖ ⥤ A}     (hP : Presheaf.IsSheaf J P) (S : J.Cover X) (e₁ e₂ : E ⟶ P.obj (op X))     (h : ∀ I : S.Arrow, e₁ ≫ P.map I.f.op = e₂ ≫ P.map I.f.op) : e₁ = e₂";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.hom_ext_ofArrows";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 244;
+      code_preview = "lemma IsSheaf.hom_ext_ofArrows     {P : Cᵒᵖ ⥤ A} (hP : Presheaf.IsSheaf J P) {I : Type*} {S : C} {X : I → C}     (f : ∀ i, X i ⟶ S) (hf : Sieve.ofArrows _ f ∈ J S) {E : A}     {x y : E ⟶ P.obj (op S)} (h : ∀ i, x ≫ P.map (f i).op = y ≫ P.map (f i).op) :     x = y := by   apply hP.hom_ext ⟨_, hf⟩   r";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.existsUnique_amalgamation_ofArrows";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 263;
+      code_preview = "lemma IsSheaf.existsUnique_amalgamation_ofArrows :     ∃! (g : E ⟶ P.obj (op S)), ∀ (i : I), g ≫ P.map (f i).op = x i :=   (Presieve.isSheafFor_arrows_iff _ _).1     ((Presieve.isSheafFor_iff_generate _).2 (hP E _ hf)) x (fun _ _ _ _ _ w => hx _ _ w)";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.amalgamateOfArrows";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 271;
+      code_preview = "def IsSheaf.amalgamateOfArrows : E ⟶ P.obj (op S) :=   (hP.existsUnique_amalgamation_ofArrows f hf x hx).choose";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.amalgamateOfArrows_map";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 277;
+      code_preview = "@[reassoc (attr := simp)] lemma IsSheaf.amalgamateOfArrows_map (i : I) :     hP.amalgamateOfArrows f hf x hx ≫ P.map (f i).op = x i :=   (hP.existsUnique_amalgamation_ofArrows f hf x hx).choose_spec.1 i";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_of_iso_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 284;
+      code_preview = "theorem isSheaf_of_iso_iff {P P' : Cᵒᵖ ⥤ A} (e : P ≅ P') : IsSheaf J P ↔ IsSheaf J P'";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_of_isTerminal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 291;
+      code_preview = "theorem isSheaf_of_isTerminal {X : A} (hX : IsTerminal X) :     Presheaf.IsSheaf J ((CategoryTheory.Functor.const _).obj X)";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 301;
+      code_preview = "structure Sheaf where      val : Cᵒᵖ ⥤ A      cond : Presheaf.IsSheaf J val";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.Hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 312;
+      code_preview = "@[ext] structure Hom (X Y : Sheaf J A) where      val : X.val ⟶ Y.val";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.instCategorySheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 318;
+      code_preview = "@[simps id_val comp_val] instance instCategorySheaf : Category (Sheaf J A) where   Hom := Hom   id _ := ⟨𝟙 _⟩   comp f g := ⟨f.val ≫ g.val⟩   id_comp _ := Hom.ext <| id_comp _   comp_id _ := Hom.ext <| comp_id _   assoc _ _ _ := Hom.ext <| assoc _ _ _";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.hom_ext";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 331;
+      code_preview = "@[ext] lemma hom_ext {X Y : Sheaf J A} (x y : X ⟶ Y) (h : x.val = y.val) : x = y :=   Sheaf.Hom.ext h";
+    }
+    {
+      full_name = "CategoryTheory.sheafToPresheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 337;
+      code_preview = "@[simps] def sheafToPresheaf : Sheaf J A ⥤ Cᵒᵖ ⥤ A where   obj := Sheaf.val   map f := f.val   map_id _ := rfl   map_comp _ _ := rfl";
+    }
+    {
+      full_name = "CategoryTheory.sheafSections";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 345;
+      code_preview = "abbrev sheafSections : Cᵒᵖ ⥤ Sheaf J A ⥤ A := (sheafToPresheaf J A).flip";
+    }
+    {
+      full_name = "CategoryTheory.sheafSectionsNatIsoEvaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 348;
+      code_preview = "@[simps!] def sheafSectionsNatIsoEvaluation {X : C} :     (sheafSections J A).obj (op X) ≅ sheafToPresheaf J A ⋙ (evaluation _ _).obj (op X) :=   NatIso.ofComponents (fun _ ↦ Iso.refl _)";
+    }
+    {
+      full_name = "CategoryTheory.fullyFaithfulSheafToPresheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 354;
+      code_preview = "@[simps] def fullyFaithfulSheafToPresheaf : (sheafToPresheaf J A).FullyFaithful where   preimage f := ⟨f⟩";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.homEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 360;
+      code_preview = "abbrev Sheaf.homEquiv {X Y : Sheaf J A} : (X ⟶ Y) ≃ (X.val ⟶ Y.val) :=   (fullyFaithfulSheafToPresheaf J A).homEquiv";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.Hom.mono_of_presheaf_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 373;
+      code_preview = "theorem Sheaf.Hom.mono_of_presheaf_mono {F G : Sheaf J A} (f : F ⟶ G) [h : Mono f.1] : Mono f";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.Hom.epi_of_presheaf_epi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 378;
+      code_preview = "instance Sheaf.Hom.epi_of_presheaf_epi {F G : Sheaf J A} (f : F ⟶ G) [h : Epi f.1] : Epi f :=   (sheafToPresheaf J A).epi_of_epi_map h";
+    }
+    {
+      full_name = "CategoryTheory.isSheaf_iff_isSheaf_of_type";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 381;
+      code_preview = "theorem isSheaf_iff_isSheaf_of_type (P : Cᵒᵖ ⥤ Type w) :     Presheaf.IsSheaf J P ↔ Presieve.IsSheaf J P";
+    }
+    {
+      full_name = "CategoryTheory.sheafOver";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 401;
+      code_preview = "@[simps] def sheafOver {A : Type u₂} [Category.{v₂} A] {J : GrothendieckTopology C} (ℱ : Sheaf J A) (E : A) :     Sheaf J (Type _) where   val := ℱ.val ⋙ coyoneda.obj (op E)   cond := by     rw [isSheaf_iff_isSheaf_of_type]     exact ℱ.cond E";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.isSheafFor";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 411;
+      code_preview = "lemma Presheaf.IsSheaf.isSheafFor {P : Cᵒᵖ ⥤ Type w} (hP : Presheaf.IsSheaf J P)     {X : C} (S : Sieve X) (hS : S ∈ J X) : Presieve.IsSheafFor P S.arrows := by   rw [isSheaf_iff_isSheaf_of_type] at hP   exact hP S hS";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_bot";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 417;
+      code_preview = "lemma Presheaf.isSheaf_bot (P : Cᵒᵖ ⥤ A) : IsSheaf ⊥ P := fun _ ↦ Presieve.isSheaf_bot";
+    }
+    {
+      full_name = "CategoryTheory.sheafBotEquivalence";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 419;
+      code_preview = "@[simps] def sheafBotEquivalence : Sheaf (⊥ : GrothendieckTopology C) A ≌ Cᵒᵖ ⥤ A where   functor := sheafToPresheaf _ _   inverse :=     { obj := fun P => ⟨P, Presheaf.isSheaf_bot P⟩       map := fun f => ⟨f⟩ }   unitIso := Iso.refl _   counitIso := Iso.refl _";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.isTerminalOfBotCover";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 437;
+      code_preview = "def Sheaf.isTerminalOfBotCover (F : Sheaf J A) (X : C) (H : ⊥ ∈ J X) :     IsTerminal (F.1.obj (op X)) := by   refine @IsTerminal.ofUnique _ _ _ ?_   intro Y   choose t h using F.2 Y _ H (by tauto) (by tauto)   exact ⟨⟨t⟩, fun a => h.2 a (by tauto)⟩";
+    }
+    {
+      full_name = "CategoryTheory.sheafHomHasZSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 451;
+      code_preview = "instance sheafHomHasZSMul : SMul ℤ (P ⟶ Q) where   smul n f :=     Sheaf.Hom.mk       { app := fun U => n • f.1.app U         naturality := fun U V i => by           induction' n with n ih n ih           · simp only [zero_smul, comp_zero, zero_comp]           · simpa only [add_zsmul, one_zsmul, comp";
+    }
+    {
+      full_name = "CategoryTheory.sheafHomHasNSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 467;
+      code_preview = "instance sheafHomHasNSMul : SMul ℕ (P ⟶ Q) where   smul n f :=     Sheaf.Hom.mk       { app := fun U => n • f.1.app U         naturality := fun U V i => by           induction n with           | zero => simp only [zero_smul, comp_zero, zero_comp]           | succ n ih => simp only [Nat.succ_eq_add_o";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.Hom.add_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 481;
+      code_preview = "@[simp] theorem Sheaf.Hom.add_app (f g : P ⟶ Q) (U) : (f + g).1.app U = f.1.app U + g.1.app U";
+    }
+    {
+      full_name = "CategoryTheory.Sheaf.Hom.addCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 485;
+      code_preview = "instance Sheaf.Hom.addCommGroup : AddCommGroup (P ⟶ Q) :=   Function.Injective.addCommGroup (fun f : Sheaf.Hom P Q => f.1)     (fun _ _ h => Sheaf.Hom.ext h) rfl (fun _ _ => rfl) (fun _ => rfl) (fun _ _ => rfl)     (fun _ _ => by aesop_cat) (fun _ _ => by aesop_cat)";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isLimitOfIsSheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 523;
+      code_preview = "def isLimitOfIsSheaf {X : C} (S : J.Cover X) (hP : IsSheaf J P) : IsLimit (S.multifork P) where   lift := fun E : Multifork _ => hP.amalgamate S (fun _ => E.ι _)     (fun _ _ r => E.condition ⟨r⟩)   fac := by     rintro (E : Multifork _) (a | b)     · apply hP.amalgamate_map     · rw [← E.w (Walking";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_iff_multifork";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 542;
+      code_preview = "theorem isSheaf_iff_multifork :     IsSheaf J P ↔ ∀ (X : C) (S : J.Cover X), Nonempty (IsLimit (S.multifork P))";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf.isLimitMultifork";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 564;
+      code_preview = "def IsSheaf.isLimitMultifork     (hP : Presheaf.IsSheaf J P) {X : C} (S : J.Cover X) : IsLimit (S.multifork P) := by   rw [Presheaf.isSheaf_iff_multifork] at hP   exact (hP X S).some";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_iff_multiequalizer";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 571;
+      code_preview = "theorem isSheaf_iff_multiequalizer [∀ (X : C) (S : J.Cover X), HasMultiequalizer (S.index P)] :     IsSheaf J P ↔ ∀ (X : C) (S : J.Cover X), IsIso (S.toMultiequalizer P)";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.firstObj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 593;
+      code_preview = "@[stacks 00VM \"The middle object of the fork diagram there.\"] def firstObj : A :=   ∏ᶜ fun f : ΣV, { f : V ⟶ U // R f } => P.obj (op f.1)";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.forkMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 599;
+      code_preview = "@[stacks 00VM \"The left morphism the fork diagram there.\"] def forkMap : P.obj (op U) ⟶ firstObj R P :=   Pi.lift fun f => P.map f.2.1.op";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.secondObj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 607;
+      code_preview = "@[stacks 00VM \"The rightmost object of the fork diagram there.\"] def secondObj : A :=   ∏ᶜ fun fg : (ΣV, { f : V ⟶ U // R f }) × ΣW, { g : W ⟶ U // R g } =>     P.obj (op (pullback fg.1.2.1 fg.2.2.1))";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.firstMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 615;
+      code_preview = "@[stacks 00VM \"The map `pr₀*` there.\"] def firstMap : firstObj R P ⟶ secondObj R P :=   Pi.lift fun _ => Pi.π _ _ ≫ P.map (pullback.fst _ _).op";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.secondMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 620;
+      code_preview = "@[stacks 00VM \"The map `pr₁*` there.\"] def secondMap : firstObj R P ⟶ secondObj R P :=   Pi.lift fun _ => Pi.π _ _ ≫ P.map (pullback.snd _ _).op";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.w";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 625;
+      code_preview = "theorem w : forkMap R P ≫ firstMap R P = forkMap R P ≫ secondMap R P";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.IsSheaf'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 633;
+      code_preview = "def IsSheaf' (P : Cᵒᵖ ⥤ A) : Prop :=   ∀ (U : C) (R : Presieve U) (_ : generate R ∈ J U), Nonempty (IsLimit (Fork.ofι _ (w R P)))";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheafForIsSheafFor'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 641;
+      code_preview = "def isSheafForIsSheafFor' (P : Cᵒᵖ ⥤ A) (s : A ⥤ Type max v₁ u₁)     [∀ J, PreservesLimitsOfShape (Discrete.{max v₁ u₁} J) s] (U : C) (R : Presieve U) :     IsLimit (s.mapCone (Fork.ofι _ (w R P))) ≃       IsLimit (Fork.ofι _ (Equalizer.Presieve.w (P ⋙ s) R)) := by   let e : parallelPair (s.map (fir";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_iff_isSheaf'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 665;
+      code_preview = "theorem isSheaf_iff_isSheaf' : IsSheaf J P' ↔ IsSheaf' J P'";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_of_isSheaf_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 690;
+      code_preview = "theorem isSheaf_of_isSheaf_comp (s : A ⥤ B) [ReflectsLimitsOfSize.{v₁, max v₁ u₁} s]     (h : IsSheaf J (P ⋙ s)) : IsSheaf J P";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_comp_of_isSheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 695;
+      code_preview = "theorem isSheaf_comp_of_isSheaf (s : A ⥤ B) [PreservesLimitsOfSize.{v₁, max v₁ u₁} s]     (h : IsSheaf J P) : IsSheaf J (P ⋙ s)";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_iff_isSheaf_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 700;
+      code_preview = "theorem isSheaf_iff_isSheaf_comp (s : A ⥤ B) [HasLimitsOfSize.{v₁, max v₁ u₁} A]     [PreservesLimitsOfSize.{v₁, max v₁ u₁} s] [s.ReflectsIsomorphisms] :     IsSheaf J P ↔ IsSheaf J (P ⋙ s)";
+    }
+    {
+      full_name = "CategoryTheory.Presheaf.isSheaf_iff_isSheaf_forget";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheaf.lean";
+      start_line = 706;
+      code_preview = "theorem isSheaf_iff_isSheaf_forget (s : A' ⥤ Type max v₁ u₁) [HasLimits A'] [PreservesLimits s]     [s.ReflectsIsomorphisms] : IsSheaf J P' ↔ IsSheaf J (P' ⋙ s)";
+    }
+    {
+      full_name = "CategoryTheory.HasWeakSheafify";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 30;
+      code_preview = "abbrev HasWeakSheafify : Prop := (sheafToPresheaf J A).IsRightAdjoint";
+    }
+    {
+      full_name = "CategoryTheory.HasSheafify";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 35;
+      code_preview = "class HasSheafify : Prop where   isRightAdjoint : HasWeakSheafify J A   isLeftExact : PreservesFiniteLimits ((sheafToPresheaf J A).leftAdjoint)";
+    }
+    {
+      full_name = "CategoryTheory.HasSheafify.mk'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 53;
+      code_preview = "theorem HasSheafify.mk' {F : (Cᵒᵖ ⥤ A) ⥤ Sheaf J A} (adj : F ⊣ sheafToPresheaf J A)     [PreservesFiniteLimits F] : HasSheafify J A where";
+    }
+    {
+      full_name = "CategoryTheory.presheafToSheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 61;
+      code_preview = "def presheafToSheaf [HasWeakSheafify J A] : (Cᵒᵖ ⥤ A) ⥤ Sheaf J A :=   (sheafToPresheaf J A).leftAdjoint";
+    }
+    {
+      full_name = "CategoryTheory.sheafificationAdjunction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 68;
+      code_preview = "def sheafificationAdjunction [HasWeakSheafify J A] :     presheafToSheaf J A ⊣ sheafToPresheaf J A := Adjunction.ofIsRightAdjoint _";
+    }
+    {
+      full_name = "CategoryTheory.sheafify";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 86;
+      code_preview = "noncomputable abbrev sheafify (P : Cᵒᵖ ⥤ D) : Cᵒᵖ ⥤ D :=   presheafToSheaf J D |>.obj P |>.val";
+    }
+    {
+      full_name = "CategoryTheory.toSheafify";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 90;
+      code_preview = "noncomputable abbrev toSheafify (P : Cᵒᵖ ⥤ D) : P ⟶ sheafify J P :=   sheafificationAdjunction J D |>.unit.app P";
+    }
+    {
+      full_name = "CategoryTheory.sheafificationAdjunction_unit_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 94;
+      code_preview = "@[simp] theorem sheafificationAdjunction_unit_app (P : Cᵒᵖ ⥤ D) :     (sheafificationAdjunction J D).unit.app P = toSheafify J P";
+    }
+    {
+      full_name = "CategoryTheory.sheafifyMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 98;
+      code_preview = "noncomputable abbrev sheafifyMap {P Q : Cᵒᵖ ⥤ D} (η : P ⟶ Q) : sheafify J P ⟶ sheafify J Q :=   presheafToSheaf J D |>.map η |>.val";
+    }
+    {
+      full_name = "CategoryTheory.sheafifyMap_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 102;
+      code_preview = "@[simp] theorem sheafifyMap_id (P : Cᵒᵖ ⥤ D) : sheafifyMap J (𝟙 P) = 𝟙 (sheafify J P)";
+    }
+    {
+      full_name = "CategoryTheory.sheafifyMap_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 106;
+      code_preview = "@[simp] theorem sheafifyMap_comp {P Q R : Cᵒᵖ ⥤ D} (η : P ⟶ Q) (γ : Q ⟶ R) :     sheafifyMap J (η ≫ γ) = sheafifyMap J η ≫ sheafifyMap J γ";
+    }
+    {
+      full_name = "CategoryTheory.toSheafify_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 111;
+      code_preview = "@[reassoc (attr := simp)] theorem toSheafify_naturality {P Q : Cᵒᵖ ⥤ D} (η : P ⟶ Q) :     η ≫ toSheafify J _ = toSheafify J _ ≫ sheafifyMap J η";
+    }
+    {
+      full_name = "CategoryTheory.sheafification";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 118;
+      code_preview = "noncomputable abbrev sheafification : (Cᵒᵖ ⥤ D) ⥤ Cᵒᵖ ⥤ D :=   presheafToSheaf J D ⋙ sheafToPresheaf J D";
+    }
+    {
+      full_name = "CategoryTheory.sheafification_obj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 122;
+      code_preview = "theorem sheafification_obj (P : Cᵒᵖ ⥤ D) : (sheafification J D).obj P = sheafify J P";
+    }
+    {
+      full_name = "CategoryTheory.sheafification_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 125;
+      code_preview = "theorem sheafification_map {P Q : Cᵒᵖ ⥤ D} (η : P ⟶ Q) :     (sheafification J D).map η = sheafifyMap J η";
+    }
+    {
+      full_name = "CategoryTheory.toSheafification";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 129;
+      code_preview = "noncomputable abbrev toSheafification : 𝟭 _ ⟶ sheafification J D :=   sheafificationAdjunction J D |>.unit";
+    }
+    {
+      full_name = "CategoryTheory.toSheafification_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 133;
+      code_preview = "theorem toSheafification_app (P : Cᵒᵖ ⥤ D) : (toSheafification J D).app P = toSheafify J P";
+    }
+    {
+      full_name = "CategoryTheory.isIso_toSheafify";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 138;
+      code_preview = "theorem isIso_toSheafify {P : Cᵒᵖ ⥤ D} (hP : Presheaf.IsSheaf J P) : IsIso (toSheafify J P)";
+    }
+    {
+      full_name = "CategoryTheory.isoSheafify";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 148;
+      code_preview = "noncomputable def isoSheafify {P : Cᵒᵖ ⥤ D} (hP : Presheaf.IsSheaf J P) : P ≅ sheafify J P :=   letI := isIso_toSheafify J hP   asIso (toSheafify J P)";
+    }
+    {
+      full_name = "CategoryTheory.isoSheafify_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 153;
+      code_preview = "@[simp] theorem isoSheafify_hom {P : Cᵒᵖ ⥤ D} (hP : Presheaf.IsSheaf J P) :     (isoSheafify J hP).hom = toSheafify J P";
+    }
+    {
+      full_name = "CategoryTheory.sheafifyLift";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 158;
+      code_preview = "noncomputable def sheafifyLift {P Q : Cᵒᵖ ⥤ D} (η : P ⟶ Q) (hQ : Presheaf.IsSheaf J Q) :     sheafify J P ⟶ Q :=   (sheafificationAdjunction J D).homEquiv P ⟨Q, hQ⟩ |>.symm η |>.val";
+    }
+    {
+      full_name = "CategoryTheory.sheafificationAdjunction_counit_app_val";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 163;
+      code_preview = "@[simp] theorem sheafificationAdjunction_counit_app_val (P : Sheaf J D) :     ((sheafificationAdjunction J D).counit.app P).val = sheafifyLift J (𝟙 P.val) P.cond";
+    }
+    {
+      full_name = "CategoryTheory.toSheafify_sheafifyLift";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 170;
+      code_preview = "@[reassoc (attr := simp)] theorem toSheafify_sheafifyLift {P Q : Cᵒᵖ ⥤ D} (η : P ⟶ Q) (hQ : Presheaf.IsSheaf J Q) :     toSheafify J P ≫ sheafifyLift J η hQ = η";
+    }
+    {
+      full_name = "CategoryTheory.sheafifyLift_unique";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 181;
+      code_preview = "theorem sheafifyLift_unique {P Q : Cᵒᵖ ⥤ D} (η : P ⟶ Q) (hQ : Presheaf.IsSheaf J Q)     (γ : sheafify J P ⟶ Q) : toSheafify J P ≫ γ = η → γ = sheafifyLift J η hQ";
+    }
+    {
+      full_name = "CategoryTheory.isoSheafify_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 191;
+      code_preview = "@[simp] theorem isoSheafify_inv {P : Cᵒᵖ ⥤ D} (hP : Presheaf.IsSheaf J P) :     (isoSheafify J hP).inv = sheafifyLift J (𝟙 _) hP";
+    }
+    {
+      full_name = "CategoryTheory.sheafify_hom_ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 197;
+      code_preview = "theorem sheafify_hom_ext {P Q : Cᵒᵖ ⥤ D} (η γ : sheafify J P ⟶ Q) (hQ : Presheaf.IsSheaf J Q)     (h : toSheafify J P ≫ η = toSheafify J P ≫ γ) : η = γ";
+    }
+    {
+      full_name = "CategoryTheory.sheafifyMap_sheafifyLift";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 202;
+      code_preview = "@[reassoc (attr := simp)] theorem sheafifyMap_sheafifyLift {P Q R : Cᵒᵖ ⥤ D} (η : P ⟶ Q) (γ : Q ⟶ R)     (hR : Presheaf.IsSheaf J R) :     sheafifyMap J η ≫ sheafifyLift J γ hR = sheafifyLift J (η ≫ γ) hR";
+    }
+    {
+      full_name = "CategoryTheory.sheafificationIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 211;
+      code_preview = "@[simps] noncomputable def sheafificationIso (P : Sheaf J D) : P ≅ (presheafToSheaf J D).obj P.val where   hom := ⟨(isoSheafify J P.2).hom⟩   inv := ⟨(isoSheafify J P.2).inv⟩   hom_inv_id := by     ext1     apply (isoSheafify J P.2).hom_inv_id   inv_hom_id := by     ext1     apply (isoSheafify J P.2";
+    }
+    {
+      full_name = "CategoryTheory.isIso_sheafificationAdjunction_counit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 223;
+      code_preview = "instance isIso_sheafificationAdjunction_counit (P : Sheaf J D) :     IsIso ((sheafificationAdjunction J D).counit.app P) :=   isIso_of_fully_faithful (sheafToPresheaf J D) _";
+    }
+    {
+      full_name = "CategoryTheory.sheafification_reflective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 227;
+      code_preview = "instance sheafification_reflective : IsIso (sheafificationAdjunction J D).counit :=   NatIso.isIso_of_isIso_app _";
+    }
+    {
+      full_name = "CategoryTheory.sheafificationNatIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Sites/Sheafification.lean";
+      start_line = 232;
+      code_preview = "@[simps!] noncomputable def sheafificationNatIso :     𝟭 (Sheaf J D) ≅ sheafToPresheaf J D ⋙ presheafToSheaf J D :=   NatIso.ofComponents (fun P => sheafificationIso P) (by aesop_cat)";
+    }
+    {
+      full_name = "TopCat.Presheaf.IsSheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 42;
+      code_preview = "nonrec def IsSheaf (F : Presheaf.{w, v, u} C X) : Prop :=   Presheaf.IsSheaf (Opens.grothendieckTopology X) F";
+    }
+    {
+      full_name = "TopCat.Presheaf.isSheaf_unit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 84;
+      code_preview = "theorem isSheaf_unit (F : Presheaf (CategoryTheory.Discrete Unit) X) : F.IsSheaf";
+    }
+    {
+      full_name = "TopCat.Presheaf.isSheaf_iso_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 89;
+      code_preview = "theorem isSheaf_iso_iff {F G : Presheaf C X} (α : F ≅ G) : F.IsSheaf ↔ G.IsSheaf";
+    }
+    {
+      full_name = "TopCat.Presheaf.isSheaf_of_iso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 92;
+      code_preview = "theorem isSheaf_of_iso {F G : Presheaf C X} (α : F ≅ G) (h : F.IsSheaf) : G.IsSheaf";
+    }
+    {
+      full_name = "TopCat.Sheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 101;
+      code_preview = "nonrec def Sheaf : Type max u v w :=   Sheaf (Opens.grothendieckTopology X) C";
+    }
+    {
+      full_name = "TopCat.SheafCat";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 109;
+      code_preview = "instance SheafCat : Category (Sheaf C X) :=   show Category (CategoryTheory.Sheaf (Opens.grothendieckTopology X) C) from inferInstance";
+    }
+    {
+      full_name = "TopCat.Sheaf.presheaf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 114;
+      code_preview = "abbrev Sheaf.presheaf (F : X.Sheaf C) : TopCat.Presheaf C X :=   F.1";
+    }
+    {
+      full_name = "TopCat.sheafInhabited";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 121;
+      code_preview = "instance sheafInhabited : Inhabited (Sheaf (CategoryTheory.Discrete PUnit) X) :=   ⟨⟨Functor.star _, Presheaf.isSheaf_unit _⟩⟩";
+    }
+    {
+      full_name = "TopCat.Sheaf.forget";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 126;
+      code_preview = "def forget : TopCat.Sheaf C X ⥤ TopCat.Presheaf C X :=   sheafToPresheaf _ _";
+    }
+    {
+      full_name = "TopCat.Sheaf.forget_full";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 134;
+      code_preview = "instance forget_full : (forget C X).Full where   map_surjective f := ⟨Sheaf.Hom.mk f, rfl⟩";
+    }
+    {
+      full_name = "TopCat.Sheaf.forgetFaithful";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 137;
+      code_preview = "instance forgetFaithful : (forget C X).Faithful where   map_injective := Sheaf.Hom.ext";
+    }
+    {
+      full_name = "TopCat.Sheaf.id_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 141;
+      code_preview = "theorem id_app (F : Sheaf C X) (t) : (𝟙 F : F ⟶ F).1.app t = 𝟙 _";
+    }
+    {
+      full_name = "TopCat.Sheaf.comp_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 144;
+      code_preview = "theorem comp_app {F G H : Sheaf C X} (f : F ⟶ G) (g : G ⟶ H) (t) :     (f ≫ g).1.app t = f.1.app t ≫ g.1.app t";
+    }
+    {
+      full_name = "TopCat.Presheaf.IsSheaf.section_ext";
+      kind = "lemma";
+      file_path = "Mathlib/Topology/Sheaves/Sheaf.lean";
+      start_line = 150;
+      code_preview = "lemma Presheaf.IsSheaf.section_ext {X : TopCat.{u}}     {A : Type*} [Category.{u} A] {FC : A → A → Type*} {CC : A → Type u}     [∀ X Y : A, FunLike (FC X Y) (CC X) (CC Y)] [ConcreteCategory.{u} A FC]     [HasLimits A] [PreservesLimits (forget A)] [(forget A).ReflectsIsomorphisms]     {F : TopCat.Pre";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

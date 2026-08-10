@@ -1,0 +1,26 @@
+# stdlib/lib/nl/korean-haeyo-interrogative-test.px
+#
+# F7/I3 lock (audit afae2e07): haeyo 의문문 생성이 "?" 누락 → 평서와 동일 표면(먹어요) → mood silent 소실.
+#   수정: haeyo 의문 → "먹어요?"(평서 "먹어요"와 구별). lift이 "?"로 mood 복원 = 이해↔생성 round-trip 닫힘.
+#   (haera 니·hasipsio 습니까는 형태론적으로 의문이라 "?" 불요 — haeyo만 표면 ambiguous.)
+let
+  knm = import ./korean-nl-mirror.px;
+  rv = knm.realizeVerbLevel;
+  qMeok = rv "먹" "present" "interrogative" "haeyo";   # ★먹어요?
+  dMeok = rv "먹" "present" "declarative" "haeyo";       # 먹어요
+  qGa = rv "가" "present" "interrogative" "haeyo";       # 가요?
+  qPast = rv "먹" "past" "interrogative" "haeyo";        # 먹었어요?
+  # ★lift이 "?"로 haeyo mood 복원 = round-trip 닫힘
+  liftQ = knm.liftToProposition "철수가 사과를 먹어요?";
+  liftD = knm.liftToProposition "철수가 사과를 먹어요";
+in {
+  q = qMeok; d = dMeok;
+  liftQ_mood = liftQ.mood;
+  liftD_mood = liftD.mood;
+  all_ok =
+    # ★haeyo 의문 "?" 부착, 평서와 구별
+       (qMeok == "먹어요?") && (dMeok == "먹어요") && (qMeok != dMeok)
+    && (qGa == "가요?") && (qPast == "먹었어요?")
+    # ★round-trip: lift이 "?"로 mood 복원(의문≠평서)
+    && (liftQ.mood == "interrogative") && (liftD.mood == "declarative");
+}

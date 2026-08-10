@@ -1,0 +1,259 @@
+# stdlib.lib.math.number-theory
+#
+# OWNER-LAW (v0.12-KK, div-math, 2026-05-21): deterministic
+# elementary number-theory primitives over the Nat literals.
+#
+# The math lane already has a symbolic arithmetic evaluator
+# (numeric-evaluator.px: `+ - * / % ^`, finite-domain universal
+# checking) and a theorem/axiom/proof registry (axiom-plate.px,
+# proof-plate.px, theorem-store.px). What it did NOT have is a
+# *computational number-theory* owner: primality, gcd/lcm, the
+# divisor structure of an integer, prime factorisation.
+#
+# This owner is standalone -- it imports nothing. Every result is
+# a pure, deterministic function of its integer inputs. There is
+# no host effect, no sampling, no probabilistic primality test.
+# `isPrime` is exact trial division; `primeFactorsOf` is exact
+# repeated division. Same input -> same receipt, always.
+#
+# # Why this is its own owner
+#
+# numeric-evaluator answers "what does this expression evaluate
+# to" and "does this universal claim hold over a finite domain".
+# It does NOT answer "is 91 prime" or "what are the prime factors
+# of 360" -- those are structural questions about a single integer,
+# not expression evaluation. Keeping them separate keeps each
+# owner's grammar small.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a probabilistic primality test (no Miller-Rabin). Trial
+#     division only -- exact but O(sqrt n).
+#   - NOT a big-integer library. Bounded by the host int range.
+#   - NOT a registered mirror-plate lens yet. `applyNumberTheory`
+#     is the plate-shaped entry; wiring it into
+#     `mirrorPlateLensRegistry` is a separate coordinated slice
+#     (the registry owner lives outside stdlib/lib/math/**).
+#
+# # Plate-shaped entry
+#
+# `applyNumberTheory request` takes `{ operation; n; (m); }` and
+# returns a typed envelope `{ outcome; ... }`. The same six
+# operations are also exported as bare functions for direct use.
+
+let
+  ownerName = "stdlib/lib/math/number-theory.px";
+
+  # Integer modulo. Nix `/` is integer division for ints, so
+  # `a - b * (a / b)` is the remainder (truncation toward zero,
+  # matching numeric-evaluator.px's v0.11-I `%`).
+  intMod = a: b: a - b * (a / b);
+
+  # Inclusive integer range [lo .. hi] as a list. Recursive --
+  # pnixc-meta's builtin subset has no `genList`.
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  intAbs = n: if n < 0 then 0 - n else n;
+
+  # --- gcd / lcm -------------------------------------------------
+
+  # Euclidean algorithm. gcd is taken on absolute values so it is
+  # well-defined for the v0.11 negative literals too. gcd a 0 = |a|.
+  gcd = a: b:
+    let go = x: y: if y == 0 then x else go y (intMod x y);
+    in go (intAbs a) (intAbs b);
+
+  # lcm a b = |a*b| / gcd a b, with lcm _ 0 = 0.
+  lcm = a: b:
+    if a == 0 || b == 0 then 0
+    else (intAbs (a * b)) / (gcd a b);
+
+  # --- primality -------------------------------------------------
+
+  # Exact trial division. `n` is prime iff n >= 2 and no integer d
+  # with 2 <= d*d <= n divides it. Stopping at sqrt(n) (via the
+  # `d * d > n` test) keeps it O(sqrt n).
+  isPrime = n:
+    if n < 2 then false
+    else
+      let
+        hasDivisor = d:
+          if d * d > n then false
+          else if intMod n d == 0 then true
+          else hasDivisor (d + 1);
+      in !(hasDivisor 2);
+
+  # --- divisor structure ----------------------------------------
+
+  # Sorted list of every positive divisor of n (n >= 1).
+  divisorsOf = n:
+    if n < 1 then []
+    else builtins.filter (d: intMod n d == 0) (rangeList 1 n);
+
+  # Sum of the proper divisors (every positive divisor except n).
+  properDivisorSum = n:
+    builtins.foldl' (acc: d: acc + d) 0
+      (builtins.filter (d: d != n) (divisorsOf n));
+
+  # A perfect number equals the sum of its proper divisors
+  # (6 = 1+2+3, 28 = 1+2+4+7+14).
+  isPerfect = n: n > 0 && properDivisorSum n == n;
+
+  # An abundant / deficient classification falls out of the same
+  # proper-divisor sum.
+  perfectnessClass = n:
+    if n < 1 then "undefined"
+    else
+      let s = properDivisorSum n;
+      in if s == n then "perfect"
+         else if s > n then "abundant"
+         else "deficient";
+
+  # --- prime factorisation --------------------------------------
+
+  # Prime factors WITH multiplicity, ascending. 360 -> [2 2 2 3 3 5].
+  # Repeated division: pull out the smallest factor `d`, recurse on
+  # the quotient; once d*d exceeds the remaining m, m itself is the
+  # last prime factor.
+  primeFactorsOf = n:
+    if n < 2 then []
+    else
+      let
+        factor = m: d:
+          if m < 2 then []
+          else if d * d > m then [ m ]
+          else if intMod m d == 0 then [ d ] ++ factor (m / d) d
+          else factor m (d + 1);
+      in factor n 2;
+
+  # Distinct prime factors (no multiplicity). 360 -> [2 3 5].
+  distinctPrimeFactorsOf = n:
+    let
+      dedup = seen: rest:
+        if rest == [] then seen
+        else
+          let h = builtins.head rest;
+          in if builtins.elem h seen
+             then dedup seen (builtins.tail rest)
+             else dedup (seen ++ [ h ]) (builtins.tail rest);
+    in dedup [] (primeFactorsOf n);
+
+  # --- parity ----------------------------------------------------
+
+  isEven = n: intMod n 2 == 0;
+  isOdd  = n: intMod n 2 != 0;
+
+  # --- coprimality ----------------------------------------------
+
+  areCoprime = a: b: gcd a b == 1;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  # `applyNumberTheory request` -> typed envelope. `operation` is a
+  # closed vocabulary; an unknown operation is Held (the substrate
+  # never fabricates an answer).
+  knownOperations = [
+    "is-prime"
+    "gcd"
+    "lcm"
+    "divisors"
+    "prime-factors"
+    "perfectness"
+    "parity"
+    "coprime"
+  ];
+
+  applyNumberTheory = request:
+    let
+      op = request.operation;
+      n  = request.n;
+      m  = if request ? m then request.m else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "is-prime" then {
+        outcome = "number-theory-computed";
+        operation = op;
+        n = n;
+        is_prime = isPrime n;
+      }
+      else if op == "gcd" then {
+        outcome = "number-theory-computed";
+        operation = op;
+        n = n; m = m;
+        gcd = gcd n m;
+      }
+      else if op == "lcm" then {
+        outcome = "number-theory-computed";
+        operation = op;
+        n = n; m = m;
+        lcm = lcm n m;
+      }
+      else if op == "divisors" then {
+        outcome = "number-theory-computed";
+        operation = op;
+        n = n;
+        divisors = divisorsOf n;
+        divisor_count = builtins.length (divisorsOf n);
+      }
+      else if op == "prime-factors" then {
+        outcome = "number-theory-computed";
+        operation = op;
+        n = n;
+        prime_factors = primeFactorsOf n;
+        distinct_prime_factors = distinctPrimeFactorsOf n;
+      }
+      else if op == "perfectness" then {
+        outcome = "number-theory-computed";
+        operation = op;
+        n = n;
+        proper_divisor_sum = properDivisorSum n;
+        perfectness_class = perfectnessClass n;
+      }
+      else if op == "parity" then {
+        outcome = "number-theory-computed";
+        operation = op;
+        n = n;
+        is_even = isEven n;
+        is_odd = isOdd n;
+      }
+      else {
+        # op == "coprime"
+        outcome = "number-theory-computed";
+        operation = op;
+        n = n; m = m;
+        coprime = areCoprime n m;
+        gcd = gcd n m;
+      };
+
+in {
+  inherit
+    ownerName
+    intMod
+    rangeList
+    intAbs
+    gcd
+    lcm
+    isPrime
+    divisorsOf
+    properDivisorSum
+    isPerfect
+    perfectnessClass
+    primeFactorsOf
+    distinctPrimeFactorsOf
+    isEven
+    isOdd
+    areCoprime
+    knownOperations
+    applyNumberTheory;
+  meta = {
+    source = "stdlib math number theory";
+    owner = ownerName;
+    base = "parametric-math-number-theory-v0";
+    rev_note = "v0.12-KK (div-math): elementary number-theory owner. Exact deterministic trial-division primality, Euclidean gcd/lcm, full divisor list, prime factorisation with and without multiplicity, perfect/abundant/deficient classification, parity, coprimality. Standalone -- imports nothing. NOT probabilistic, NOT a big-int library, NOT yet a registered mirror-plate lens.";
+  };
+}

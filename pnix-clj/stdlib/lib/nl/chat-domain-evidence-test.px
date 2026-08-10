@@ -1,0 +1,50 @@
+# stdlib/lib/nl/chat-domain-evidence-test.px
+#
+# C단계 lock: catalog evidence + math derivation 병치. distinct kinds·fail-closed·truth 승급 0.
+let
+  de = import ./chat-domain-evidence.px;
+  B = builtins;
+  # 1. catalog_terms(물리량) + math_query(속도 더하기 시간) 병치
+  d1 = de.mkDomainEvidence {
+    catalog_terms = [ { source_schema = "physics.standard_quantities"; key = "속도"; key_kind = "quantity_ko"; }
+                      { source_schema = "physics.standard_quantities"; key = "시간"; key_kind = "quantity_ko"; } ];
+    math_query = { a = "속도"; op = "더하기"; b = "시간"; };
+  };
+  # 2. 빈 args → 빈 evidence(비파괴)
+  d2 = de.mkDomainEvidence { };
+  # 3. math_query만(힘 곱하기 길이 = energy 차원)
+  d3 = de.mkDomainEvidence { math_query = { a = "힘"; op = "곱하기"; b = "길이"; }; };
+  # 4. 미등록 catalog term → held entry
+  d4 = de.mkDomainEvidence { catalog_terms = [ { source_schema = "physics.standard_quantities"; key = "엔트로피"; key_kind = "quantity_ko"; } ]; };
+  cat1 = d1.catalog_readback_evidence;
+  ent1 = B.head cat1.entries;
+  math1 = d1.math_evidence;
+  cat4 = d4.catalog_readback_evidence;
+  ent4 = B.head cat4.entries;
+in {
+  cat_kind = cat1.evidence_kind;
+  math_kind = if math1 == null then "null" else math1.evidence_kind;
+  ent1_status = ent1.status;
+  math1_verdict = math1.verdict;
+  d2_count = d2.catalog_readback_evidence.entry_count;
+  d3_verdict = d3.math_evidence.verdict;
+  ent4_status = ent4.status;
+  all_ok =
+    # ★병치: distinct evidence_kind(섞지 않음, anti-post-rationalization)
+       (cat1.evidence_kind == "catalog.readback.bundle")
+    && (math1.evidence_kind == "math.derivation")
+    # ★catalog evidence(출처-attributed): 속도 recognized + owner_version 보유
+    && (ent1.status == "recognized") && (ent1.source_schema == "physics.standard_quantities")
+    && (ent1.owner_version != "")
+    # ★math derivation: 속도 더하기 시간 = 차원 불일치(도출, 회상 아님)
+    && (math1.verdict == "invalid-candidate")
+    # ★fail-closed: 빈 args → entry_count 0 · math_evidence null(비파괴)
+    && (d2.catalog_readback_evidence.entry_count == 0) && (d2.math_evidence == null)
+    # ★math_query만(힘 곱하기 길이) = energy 차원 consistent
+    && (d3.math_evidence.verdict == "dimension-consistent-candidate")
+    # ★미등록 catalog term → held(missing, 추측 0)
+    && (ent4.status == "missing")
+    # ★truth 승급 0 전수
+    && (cat1.durable_truth == false) && (math1.durable_truth == false)
+    && (ent1.durable_truth == false) && (ent1.accepted_as_truth == false);
+}

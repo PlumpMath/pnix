@@ -1,0 +1,304 @@
+# stdlib.lib.gate.substrate-store-execution-plan-shape-policy
+#
+# OWNER-LAW (vpl-gate.md 10.7 헌법, 2026-06-01):
+# pnixc-meta Rust store executor 가 byte I/O 만 실행하기 위한 plan
+# envelope shape 정본.
+#
+# # What this is for
+#
+# .px lens (cc-v2 / dd / hh / ii / nn / oo / tt / uu / lll / llll / nnnn /
+# qqqq 등) 가 verdict 를 emit 한 후, 그 verdict 가 *byte I/O 어떤 sequence*
+# 로 lowering 되는지의 *plan envelope shape*. Rust executor 는 이 plan
+# 만 읽어서 redb byte I/O 실행 (semantic decision 0).
+#
+# # Plan envelope shape (Rust executor 입력)
+#
+#   plan_id           : string  — plan 식별자
+#   source_lens       : string  — verdict 를 emit 한 정본 lens
+#   source_verdict    : string  — verdict name (audit trail)
+#   operations        : [ operation ]
+#   receipt_owner     : string  — receipt 적힐 owner identifier
+#   plan_built_at_ms  : u64
+#
+# # 4 closed operation kinds (Rust executor 가 알아들을 closed set)
+#
+#   "append"         : append (table, key, value_bytes)
+#                      (redb table.insert)
+#   "remove"         : remove (table, key)
+#                      (redb table.remove)
+#   "scan-prefix"    : scan_prefix (table, key_prefix) → returns rows
+#                      (Rust executor 가 결과를 다음 .px lens 의 facts
+#                       slot 으로 호환 가능한 envelope 으로 emit)
+#   "get"            : get (table, key) → returns Option<bytes>
+#
+# # Closed invariants (Rust executor enforced)
+#
+#   - operations 의 모든 entry 는 op_kind ∈ valid_op_kinds
+#   - append/remove/get/scan-prefix 의 table 은 known_tables 안
+#   - key / value_bytes 는 *.px 가 미리 typed serialised 한 결과
+#     (Rust 가 다시 serialise 안 함, byte 그대로 redb 에 ferry)
+#   - plan_built_at_ms 는 caller-supplied (replay-stable)
+#   - 의미 결정은 .px lens 안에서 끝났음 — Rust 는 byte I/O 만
+#
+# # Inputs
+#
+#   request_kind = "list-op-kinds" | "list-known-tables" |
+#                   "validate-plan"
+
+let
+  ownerName = "stdlib/lib/gate/substrate-store-execution-plan-shape-policy.px";
+
+  # ─── declarative operation kind registry ────────────────────────────────
+  #
+  # Rust executor 가 알아들을 *closed set* — 새 op kind 추가는 substrate
+  # axiom 변경 (헌법 review 필요).
+
+  mkOpKind = id: bytePrimitive: returnsBytes: comment:
+    { op_kind_id = id; byte_primitive = bytePrimitive;
+      returns_bytes = returnsBytes; semantic = comment; };
+
+  validOpKinds = [
+    # zzzzb-2 (Codex audit, 2026-06-01): append 의 정직한 의미.
+    # 이전엔 "append/overwrite" 였으나 audit trail 보존을 위해
+    # *append-if-absent + idempotent* 로 정정. same bytes 두 번 = ok,
+    # different bytes = AppendConflict. overwrite 가 필요하면 별도
+    # `put` op 가 future round 에서 추가될 자리.
+    (mkOpKind "append"      "table.get + (insert if absent | check same bytes)" false
+      "append-if-absent; idempotent on same bytes; AppendConflict on different bytes")
+    (mkOpKind "remove"      "table.remove(key)"                    false
+      "remove single row by key")
+    (mkOpKind "scan-prefix" "table.range(prefix..)"                true
+      "scan rows whose key starts with prefix; returns [(key,value)]")
+    (mkOpKind "get"         "table.get(key)"                       true
+      "single key lookup; returns Option<value>")
+  ];
+
+  # ─── declarative table registry (lll lens 와 cross-link) ───────────────
+  #
+  # 모든 known_tables 는 lll lens (fact-store-index-policy) + llll
+  # (artifact shape) 의 정본 안.
+
+  knownTables = [
+    "coding_artifacts"
+    "coding_artifacts_by_family"
+    "coding_artifacts_by_repo_snapshot"
+    "coding_artifacts_by_target_path"
+    "facts_by_context"
+    "facts_by_layer"
+    "facts_by_subject"
+    "facts_by_predicate"
+    "facts_by_object"
+    "facts_by_canonical"
+    "facts_by_subject_pred"
+    "facts_by_object_pred"
+    "records_by_episode"
+    "knowledge_by_episode"
+    "coding_chain_runs"
+    "mirror_receipts"
+    "mirror_session_heads"
+    "corpus_allowlist"
+    "corpus_allowlist_by_phase"
+    "corpus_allowlist_by_cluster"
+    "corpus_source_records"
+    "corpus_gate_graph_nodes"
+    "corpus_gate_graph_by_canon"
+    "corpus_symbol_memory_by_canonical_key"
+    "morph_rules"
+    "session_events"
+  ];
+
+  # ─── plan envelope required fields ──────────────────────────────────────
+
+  mkPlanField = name: kind: required: comment:
+    { field_name = name; field_kind = kind; required = required;
+      semantic = comment; };
+
+  planFields = [
+    (mkPlanField "plan_id"          "string" true  "plan identifier")
+    (mkPlanField "source_lens"      "string" true  "정본 lens path that built this plan")
+    (mkPlanField "source_verdict"   "string" true  "verdict name from source lens")
+    (mkPlanField "operations"       "list-of-operation" true
+      "byte I/O operations; ordered (Rust executor 가 그대로 실행)")
+    (mkPlanField "receipt_owner"    "string" true  "receipt owner identifier")
+    (mkPlanField "plan_built_at_ms" "u64"    true  "replay-stable timestamp")
+  ];
+
+  operationFields = [
+    (mkPlanField "op_kind"     "enum:OpKind" true  "closed op kind (4 set)")
+    (mkPlanField "table"       "string"      true  "table name (must be in known_tables)")
+    (mkPlanField "key"         "bytes"       true  ".px-serialised key bytes")
+    (mkPlanField "value_bytes" "optional-bytes" false
+      "value bytes (required for append, omitted for remove/get/scan)")
+    (mkPlanField "key_prefix"  "optional-bytes" false
+      "prefix bytes (only for scan-prefix)")
+  ];
+
+  validRequestKinds = [
+    "list-op-kinds"
+    "list-known-tables"
+    "list-plan-fields"
+    "list-operation-fields"
+    "validate-plan"
+  ];
+
+  validVerdicts = [
+    "op-kinds-listed"
+    "known-tables-listed"
+    "plan-fields-listed"
+    "operation-fields-listed"
+    "plan-valid"
+    "plan-invalid"
+    "held-unknown-request-kind"
+  ];
+
+  asAttrs = v: if builtins.isAttrs v then v else {};
+  asList = v: if builtins.isList v then v else [];
+  asString = v: if builtins.isString v then v else "";
+
+  isValidOpKind = id:
+    builtins.foldl' (acc: o: acc || (o.op_kind_id == id)) false validOpKinds;
+
+  isKnownTable = name: builtins.elem name knownTables;
+
+  # yyyy-hardening (Codex audit, 2026-06-01): field presence 검사뿐
+  # 아니라 *타입* 검사도 한다. .px 에 native byte primitive 가 없으므로
+  # key / value_bytes / key_prefix 는 string (UTF-8 bytes ferry) 또는
+  # list of int (byte array) 만 허용. 그 외 type 은 거부.
+  #
+  # zzzza-hardening (Codex audit 2번째, 2026-06-01): list case 에서
+  # int 여부만 보지 말고 *u8 range (0..255)* 까지 검사. Rust executor
+  # 의 Vec<u8> 와 1:1 align — 음수 / 256 이상이 plan-invalid 되어야
+  # caller 가 ferry 단계에서 정직히 거부.
+  isByteShape = v:
+    if builtins.isString v then true
+    else if builtins.isList v then
+      builtins.foldl'
+        (acc: x:
+          acc && (builtins.isInt x) && (x >= 0) && (x <= 255))
+        true
+        v
+    else false;
+
+  validateOperation = op:
+    let
+      a = asAttrs op;
+      opKind = asString (a.op_kind or "");
+      table = asString (a.table or "");
+      hasKey = builtins.hasAttr "key" a;
+      hasValue = builtins.hasAttr "value_bytes" a;
+      hasPrefix = builtins.hasAttr "key_prefix" a;
+      keyTypeOk = if hasKey
+                  then isByteShape (builtins.getAttr "key" a)
+                  else true;
+      valueTypeOk = if hasValue
+                    then isByteShape (builtins.getAttr "value_bytes" a)
+                    else true;
+      prefixTypeOk = if hasPrefix
+                     then isByteShape (builtins.getAttr "key_prefix" a)
+                     else true;
+      kindValid = isValidOpKind opKind;
+      tableValid = isKnownTable table;
+      shapeOk =
+        if opKind == "append" then hasKey && hasValue
+        else if opKind == "remove" then hasKey
+        else if opKind == "get" then hasKey
+        else if opKind == "scan-prefix" then hasPrefix
+        else false;
+    in
+      kindValid && tableValid && shapeOk
+        && keyTypeOk && valueTypeOk && prefixTypeOk;
+
+  applySubstrateStoreExecutionPlanShapePolicy = request:
+    let
+      reqKind = asString (request.request_kind or "");
+    in
+      if reqKind == "list-op-kinds" then {
+        verdict = "op-kinds-listed";
+        op_kinds = validOpKinds;
+        total_op_kind_count = builtins.length validOpKinds;
+        rust_executor_axiom =
+          "executor 는 closed op kind 만 알아들음 — semantic decision 0";
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "list-known-tables" then {
+        verdict = "known-tables-listed";
+        tables = knownTables;
+        total_table_count = builtins.length knownTables;
+        composed_lens_refs = [
+          "stdlib/lib/gate/fact-store-index-policy.px (lll)"
+          "stdlib/lib/gate/coding-memory-artifact-shape-policy.px (llll)"
+        ];
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "list-plan-fields" then {
+        verdict = "plan-fields-listed";
+        fields = planFields;
+        total_field_count = builtins.length planFields;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "list-operation-fields" then {
+        verdict = "operation-fields-listed";
+        fields = operationFields;
+        total_field_count = builtins.length operationFields;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if reqKind == "validate-plan" then
+        let
+          plan = asAttrs (request.plan or {});
+          missingPlanFields = builtins.foldl'
+            (acc: f:
+              if f.required && !(builtins.hasAttr f.field_name plan)
+              then acc ++ [ f.field_name ]
+              else acc)
+            []
+            planFields;
+          ops = asList (plan.operations or []);
+          allOpsValid = builtins.foldl'
+            (acc: op: acc && (validateOperation op))
+            true
+            ops;
+          invalidOpIndices = builtins.foldl'
+            (acc: i:
+              let op = builtins.elemAt ops i; in
+              if !(validateOperation op) then acc ++ [ i ] else acc)
+            []
+            (builtins.genList (i: i) (builtins.length ops));
+        in
+          if missingPlanFields != [] then {
+            verdict = "plan-invalid";
+            valid = false;
+            missing_required_fields = missingPlanFields;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+          else if !allOpsValid then {
+            verdict = "plan-invalid";
+            valid = false;
+            invalid_operation_indices = invalidOpIndices;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+          else {
+            verdict = "plan-valid";
+            valid = true;
+            operation_count = builtins.length ops;
+            lens_owner = ownerName;
+            candidate_only = true;
+          }
+      else {
+        verdict = "held-unknown-request-kind";
+        request_kind = reqKind;
+        valid_request_kinds = validRequestKinds;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName validOpKinds knownTables planFields operationFields
+          validRequestKinds validVerdicts
+          applySubstrateStoreExecutionPlanShapePolicy;
+}

@@ -1,0 +1,91 @@
+# MR39 -- fact promotion gate: an experience-fact CANDIDATE becomes a
+# promoted fact only through the scoped operator gate (same owner-law
+# family as the plan approval gate MR15 and the effect grant MR20).
+# Promotion is consequence-bearing -- a promoted fact may later inform
+# decisions -- so it never happens automatically. The fact_id is a CONTENT
+# hash (exp/<sha256(fact)>), so approving an id IS approving the exact
+# fact content: the TOCTOU binding is the address itself.
+# Privacy is NOT widened here: a promoted fact stays operator-only;
+# public projection is a separate future gate.
+# Outcomes:
+#   held-missing-fact          -- no stored fact row supplied
+#   held-not-candidate         -- only status=candidate rows promote
+#                                 (promoted/rejected are terminal in v0)
+#   held-awaiting-approval     -- no operator packet; NEVER auto-promote
+#   held-invalid-approval-identity -- non-operator/ principal
+#   held-stale-approval        -- approval names a DIFFERENT fact_id
+#   held-expired-approval      -- TTL passed (caller-supplied time only)
+#   fact-rejected              -- reason preserved (supersede material)
+#   held-for-more-evidence     -- operator hold
+#   fact-promoted
+{
+  judgeFactPromotion = request:
+    let
+      fact_row = if request ? fact_row then request.fact_row else null;
+      approval = if request ? approval then request.approval else null;
+      now = if request ? current_time_ms then request.current_time_ms else null;
+      held = outcome: reason: {
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/fact-promotion-gate.px";
+      };
+      actorOk = a:
+        builtins.isString a
+        && builtins.stringLength a > 9
+        && builtins.substring 0 9 a == "operator/";
+      status =
+        if fact_row != null && fact_row ? status then fact_row.status
+        else "candidate";
+    in
+    if fact_row == null || !(fact_row ? fact_id) then
+      held "held-missing-fact" "a stored experience-fact row is required input"
+    else if status != "candidate" then
+      held "held-not-candidate"
+        ("only candidate rows promote; this row is " + status)
+    else if approval == null then
+      held "held-awaiting-approval"
+        "no operator promotion packet; surface the fact to the operator (never auto-promote)"
+    else if !(approval ? actor) || !(actorOk approval.actor) then
+      held "held-invalid-approval-identity"
+        "promotion actor must be an operator/ principal"
+    else if !(approval ? fact_id) || approval.fact_id != fact_row.fact_id then
+      held "held-stale-approval"
+        "approval names a different fact (the content-hash id IS the TOCTOU binding)"
+    else if approval ? ttl_ms && approval.ttl_ms != null
+            && approval ? granted_at_ms && approval.granted_at_ms != null
+            && now != null
+            && now > approval.granted_at_ms + approval.ttl_ms then
+      held "held-expired-approval" "promotion approval TTL passed; re-approve"
+    else if approval ? decision && approval.decision == "reject" then {
+      outcome = "fact-rejected";
+      fact_id = fact_row.fact_id;
+      reason =
+        if approval ? reason && approval.reason != null then approval.reason
+        else "operator rejected";
+      supersede = { kind = "experience-fact-rejection"; by = approval.actor; };
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/fact-promotion-gate.px";
+    }
+    else if approval ? decision && approval.decision == "hold" then
+      held "held-for-more-evidence"
+        "operator requested more evidence before promotion"
+    else if !(approval ? decision) || approval.decision != "accept" then
+      held "held-awaiting-approval"
+        "promotion decisions are accept | reject | hold"
+    else {
+      outcome = "fact-promoted";
+      fact_id = fact_row.fact_id;
+      promoted_by = approval.actor;
+      # Privacy is NOT widened by promotion.
+      privacy = fact_row.privacy;
+      receipt = {
+        gate = "fact-promotion-gate";
+        next = "promoted facts may inform assembly as evidence refs (never as reply prose)";
+      };
+      candidate_only = false;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/fact-promotion-gate.px";
+    };
+}

@@ -1,0 +1,291 @@
+# stdlib.agent.witness-template-mirror
+#
+# **canonical-meaning-keyed BIDIRECTIONAL template — one row drives emit AND
+# witness (a real lens). atom KIND is now DATA too (kind-spec), not code.**
+#
+# 자동화의 엔진은 *공유 canonical 의미*다. 세 morphism이 같은 의미 노드를 향한다:
+#   NL surface ("만약~이면" / "if~then")   ──scan──▶ ┐
+#                                                     ├─▶ canonical 의미 (atom kind)
+#   code surface (rust "if{}" / py "if:")  ◀─emit─── ┤      ↑ 단 하나의 노드
+#                                          ──witness─▶┘
+# emit = 의미→코드surface, witness = 코드surface→의미(그 역). 둘이 *같은 의미를
+# pivot*하므로 "surface row 한 줄 추가 = emit+witness 자동" (first.md ② 보존/변형).
+#
+# 두 축이 다 DATA가 되어야 노가다가 죽는다:
+#   (1) 언어축  = `langTemplates.<lang>.<kind>` per-language 리터럴 (이미 데이터)
+#   (2) atom kind축 = `kindSpecs` — 각 kind의 *shape*(pattern + hole + guard +
+#       priority)를 데이터로. 새 kind = kindSpecs 1줄 + 각 언어 리터럴. 엔진(parse/
+#       emit/sigToHoles/oracle) 코드는 *0줄* 추가. 이전엔 kind마다 parseLine/
+#       emitLineFor/sigToHoles 분기를 손코딩했다 — 그게 남은 treadmill이었다.
+#
+# pattern (닫힌 소집합 — 거의 모든 statement-kind를 덮음):
+#   delimited : pre + HOLE + post        (print/print-line/if/comment/exit/return…)
+#   sepBind   : [typePrefix] var SEP val post  (bind — pre-agnostic, typed map 지원)
+# 새 shape가 생기면 pattern 하나 추가(드묾); 그 외 새 kind는 전부 데이터.
+#
+# NOTE (정직): KEY는 atom kind(의미)다. NL 어휘("만약")는 다의어라 이 owner가
+# 안 다룬다 — NL 경계의 type-fit/4-piece resolution(①-b), word-guess/번역 금지
+# 헌법. CODE surface("if {")는 무모호하므로 여기서 데이터로 둔다.
+let
+  sub  = builtins.substring;
+  slen = builtins.stringLength;
+
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+
+  indexFrom = needle: hay: from:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then (-1) else if (sub i n hay) == needle then i else go (i + 1);
+    in if n == 0 then from else go from;
+
+  trimL = s: let n = slen s; go = i: if (i < n) && ((sub i 1 s) == " ") then go (i + 1) else sub i (n - i) s; in go 0;
+  trimR = s: let go = i: if (i > 0) && ((sub (i - 1) 1 s) == " ") then go (i - 1) else sub 0 i s; in go (slen s);
+  trim  = s: trimR (trimL s);
+
+  splitLines = s: builtins.filter builtins.isString (builtins.split "\n" s);
+
+  firstChar = s: if (slen s) == 0 then "" else sub 0 1 s;
+
+  lastIndexOf = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: best: if i + n > h then best else go (i + 1) (if (sub i n hay) == needle then i else best);
+    in if n == 0 then (-1) else go 0 (-1);
+
+  # last whitespace-separated token ("int count"→"count", "let total"→"total").
+  # makes bind witness pre-agnostic so typed (int X = V) and inference (let X = V)
+  # share one path.
+  lastToken = s:
+    let t = trimR (trimL s); i = lastIndexOf " " t;
+    in if i < 0 then t else trimL (sub (i + 1) ((slen t) - (i + 1)) t);
+
+  # infer value kind from the literal (typed-language emit picks the keyword).
+  inferKind = val:
+    if (val == "true") || (val == "false") then "bool"
+    else if (firstChar val) == "\"" then "string"
+    else if hasInfix "." val then "float"
+    else "int";
+
+  # extract after `pre` up to `stop` (stop=="" → to end). null if absent.
+  slice = pre: stop: line:
+    let pi = indexFrom pre line 0; in
+    if pi < 0 then null
+    else
+      let start = pi + (slen pre); in
+      if stop == "" then trim (sub start ((slen line) - start) line)
+      else let qi = indexFrom stop line start;
+           in if qi < 0 then null else trim (sub start (qi - start) line);
+
+  firstNonNull = f: list: builtins.foldl' (acc: x: if acc != null then acc else f x) null list;
+
+  # === (2) atom KIND축 — kind shape as DATA. priority = list order. ============
+  # delimited: { sig; tkey; pattern="delimited"; hole; guardNotContain;
+  #              [guardNotSep]; probe; }
+  # sepBind  : { sig; tkey; pattern="sepBind"; guardNotContain; probe; }
+  # 새 kind = 여기 1줄 + langTemplates 각 언어 리터럴. 엔진 코드 0줄.
+  kindSpecs = [
+    # comment first: a leading `// ` / `# ` strongly signals a comment line.
+    { sig = "comment";    tkey = "comment";   pattern = "delimited"; hole = "text"; guardNotContain = [];     probe = { text = "zq"; }; }
+    # print-line before print-variable: guard out rust's `{}` format marker.
+    { sig = "print-line"; tkey = "printLine"; pattern = "delimited"; hole = "text"; guardNotContain = [ "{}" ]; probe = { text = "zq"; }; }
+    { sig = "print";      tkey = "print";     pattern = "delimited"; hole = "var";  guardNotContain = [];     probe = { var = "zq"; }; }
+    { sig = "exit";       tkey = "exit";      pattern = "delimited"; hole = "code"; guardNotContain = [];     probe = { code = "0"; }; }
+    { sig = "if";         tkey = "iff";       pattern = "delimited"; hole = "cond"; guardNotContain = [ "main" ]; guardNotSep = true; probe = { cond = "zq"; }; }
+    { sig = "bind";       tkey = "bind";      pattern = "sepBind";   holes = [ "var" "val" ]; guardNotContain = [ "==" ]; probe = { var = "zq"; val = "42"; }; }
+  ];
+
+  findSpec = kind: firstNonNull (s: if s.sig == kind then s else null) kindSpecs;
+
+  # === (1) 언어축 — per-language literals (DATA — 새 언어 = 새 row) ===========
+  # 한 row가 모든 kind의 emit+witness를 구동. typed 언어는 bind.types map.
+  langTemplates = {
+    rust       = { bind = { pre = "let ";   sep = " = ";  post = ";"; };
+                   print = { pre = "println!(\"{}\", "; post = ");"; };
+                   printLine = { pre = "println!(\""; post = "\");"; };
+                   exit  = { pre = "std::process::exit("; post = ")"; };
+                   comment = { pre = "// "; post = ""; };
+                   iff   = { pre = "if ";           post = " {"; }; };
+    python     = { bind = { pre = "";       sep = " = ";  post = ""; };
+                   print = { pre = "print(";        post = ")"; };
+                   printLine = { pre = "print(\"";   post = "\")"; };
+                   exit  = { pre = "sys.exit(";      post = ")"; };
+                   comment = { pre = "# "; post = ""; };
+                   iff   = { pre = "if ";           post = ":"; }; };
+    go         = { bind = { pre = "";       sep = " := "; post = ""; };
+                   print = { pre = "fmt.Println(";  post = ")"; };
+                   printLine = { pre = "fmt.Println(\""; post = "\")"; };
+                   exit  = { pre = "os.Exit(";       post = ")"; };
+                   comment = { pre = "// "; post = ""; };
+                   iff   = { pre = "if ";           post = " {"; }; };
+    javascript = { bind = { pre = "const "; sep = " = ";  post = ";"; };
+                   print = { pre = "console.log(";  post = ");"; };
+                   printLine = { pre = "console.log(\""; post = "\");"; };
+                   exit  = { pre = "process.exit(";  post = ")"; };
+                   comment = { pre = "// "; post = ""; };
+                   iff   = { pre = "if (";          post = ") {"; }; };
+    typescript = { bind = { pre = "const "; sep = " = ";  post = ";"; };
+                   print = { pre = "console.log(";  post = ");"; };
+                   printLine = { pre = "console.log(\""; post = "\");"; };
+                   exit  = { pre = "process.exit(";  post = ")"; };
+                   comment = { pre = "// "; post = ""; };
+                   iff   = { pre = "if (";          post = ") {"; }; };
+    # TYPED 언어: bind가 value_kind별 타입키워드 — `types` map(추론으로 선택).
+    java       = { bind = { sep = " = "; post = ";";
+                            types = { int = "int"; string = "String"; bool = "boolean"; float = "double"; }; };
+                   print = { pre = "System.out.println(";  post = ");"; };
+                   printLine = { pre = "System.out.println(\""; post = "\");"; };
+                   exit  = { pre = "System.exit(";  post = ")"; };
+                   comment = { pre = "// "; post = ""; };
+                   iff   = { pre = "if (";          post = ") {"; }; };
+    swift      = { bind = { pre = "let ";   sep = " = ";  post = ""; };
+                   print = { pre = "print(";        post = ")"; };
+                   printLine = { pre = "print(\"";   post = "\")"; };
+                   exit  = { pre = "exit(";          post = ")"; };
+                   comment = { pre = "// "; post = ""; };
+                   iff   = { pre = "if ";           post = " {"; }; };
+    kotlin     = { bind = { pre = "val ";   sep = " = ";  post = ""; };
+                   print = { pre = "println(";      post = ")"; };
+                   printLine = { pre = "println(\""; post = "\")"; };
+                   exit  = { pre = "exitProcess(";   post = ")"; };
+                   comment = { pre = "// "; post = ""; };
+                   iff   = { pre = "if (";          post = ") {"; }; };
+    csharp     = { bind = { sep = " = "; post = ";";
+                            types = { int = "int"; string = "string"; bool = "bool"; float = "double"; }; };
+                   print = { pre = "Console.WriteLine(";  post = ");"; };
+                   printLine = { pre = "Console.WriteLine(\""; post = "\");"; };
+                   exit  = { pre = "Environment.Exit("; post = ")"; };
+                   comment = { pre = "// "; post = ""; };
+                   iff   = { pre = "if (";          post = ") {"; }; };
+  };
+
+  templatesFor = lang:
+    if builtins.hasAttr lang langTemplates
+    then builtins.getAttr lang langTemplates
+    else langTemplates.rust;
+
+  # WITNESS engine (backward): generic over kindSpecs — NO per-kind branch.
+  # try each kind in priority order; first match wins. a language that lacks a
+  # kind's template simply can't match it (hasAttr guard).
+  tryKind = t: line: spec:
+    if !(builtins.hasAttr spec.tkey t) then null
+    else
+      let litset = builtins.getAttr spec.tkey t;
+          guardsOk = (builtins.all (g: !(hasInfix g line)) spec.guardNotContain)
+                     && ((!(builtins.hasAttr "guardNotSep" spec)) || (!(hasInfix t.bind.sep line)));
+      in if !guardsOk then null
+         else if spec.pattern == "delimited" then
+           let pre = litset.pre; stop = firstChar litset.post; in
+           if (hasInfix pre line) && ((stop == "") || (hasInfix stop line))
+           then let v = slice pre stop line; in if v == null then null else spec.sig + ":" + v
+           else null
+         else  # sepBind
+           if (hasInfix litset.sep line)
+           then let beforeSep = sub 0 (indexFrom litset.sep line 0) line;
+                    var = lastToken beforeSep;
+                    val = slice litset.sep (firstChar litset.post) line; in
+                if (var == "") || (val == null) then null else spec.sig + ":" + var + "=" + val
+           else null;
+
+  parseLine = t: rawLine: let line = trim rawLine; in firstNonNull (tryKind t line) kindSpecs;
+
+  # EMIT engine (forward): generic over kindSpecs — the dual of tryKind.
+  emitLine = lang: kind: holes:
+    let spec = findSpec kind; t = templatesFor lang; litset = builtins.getAttr spec.tkey t; in
+    if spec.pattern == "delimited"
+    then litset.pre + (builtins.getAttr spec.hole holes) + litset.post
+    else  # sepBind
+      let pre = if builtins.hasAttr "types" litset
+                then (builtins.getAttr (inferKind holes.val) litset.types) + " " else litset.pre;
+      in pre + holes.var + litset.sep + holes.val + litset.post;
+
+  # sig ("kind:h0=h1=…") → { kind; holes; }, generic over the spec's holes.
+  sigToHolesG = sig:
+    let ci = indexFrom ":" sig 0;
+        kind = sub 0 ci sig;
+        rest = sub (ci + 1) ((slen sig) - (ci + 1)) sig;
+        spec = findSpec kind; in
+    if spec.pattern == "sepBind"
+    then let ei = indexFrom "=" rest 0;
+         in { kind = kind; holes = { var = sub 0 ei rest; val = sub (ei + 1) ((slen rest) - (ei + 1)) rest; }; }
+    else { kind = kind; holes = builtins.listToAttrs [ { name = spec.hole; value = rest; } ]; };
+
+  # expected signature a probe atom should round-trip to (derived from the spec).
+  probeSig = spec:
+    if spec.pattern == "sepBind"
+    then spec.sig + ":" + spec.probe.var + "=" + spec.probe.val
+    else spec.sig + ":" + (builtins.getAttr spec.hole spec.probe);
+in
+rec {
+  name = "stdlib.agent.witness-template-mirror";
+
+  inherit langTemplates kindSpecs;
+  supportedKinds = builtins.map (s: s.sig) kindSpecs;
+
+  # WITNESS (backward): code → recovered atom signatures, data-driven (lang × kind).
+  witnessByLang = lang: code:
+    let t = templatesFor lang;
+    in builtins.filter (x: x != null) (builtins.map (parseLine t) (splitLines code));
+
+  # EMIT (forward): one atom → its code line, from the SAME template (the dual).
+  #   holes per kind spec: bind {var;val} · print {var} · print-line/comment {text}
+  #   · exit {code} · if {cond}
+  emitLineFor = lang: atomKind: holes: emitLine lang atomKind holes;
+
+  # LENS LAW: emit then witness recovers the same atom (round-trip identity).
+  roundTripAtom = lang: atomKind: holes:
+    let line = emitLine lang atomKind holes;
+    in { line = line; recovered = parseLine (templatesFor lang) line; };
+
+  # --- SELF-GENERATING conformance oracle (no hand-written fixtures) ----------
+  # probe atoms DERIVED from kindSpecs — adding a kind auto-extends the oracle.
+  # the test asserts the invariant `conformanceClean`, never a hand-bumped count.
+  probeAtoms = builtins.map (s: { kind = s.sig; holes = s.probe; sig = probeSig s; }) kindSpecs;
+  conformanceForLang = lang:
+    let t = templatesFor lang; in
+    builtins.filter (x: x != null) (builtins.map (a:
+      let spec = findSpec a.kind; in
+      if !(builtins.hasAttr spec.tkey t) then null   # lang lacks this kind → skip
+      else let r = roundTripAtom lang a.kind a.holes;
+           in { language = lang; kind = a.kind; line = r.line; recovered = r.recovered; ok = r.recovered == a.sig; }
+    ) probeAtoms);
+  selfConformanceAll = builtins.concatMap conformanceForLang supportedLanguages;
+  conformanceClean = builtins.all (r: r.ok) selfConformanceAll;
+  conformanceCovered = builtins.length selfConformanceAll;  # (lang × kind) covered, derived
+
+  # --- FREE from the lens: cross-language transpilation via canonical meaning --
+  # code(A) ──witness──▶ canonical atom ──emit──▶ code(B). Pure (no brain).
+  sigToHoles = sig: sigToHolesG sig;
+
+  translateLine = fromLang: toLang: line:
+    let sig = parseLine (templatesFor fromLang) (trim line); in
+    if sig == null then null
+    else let a = sigToHolesG sig; in emitLine toLang a.kind a.holes;
+
+  translateCode = fromLang: toLang: code:
+    builtins.concatStringsSep "\n"
+      (builtins.filter (x: x != null)
+        (builtins.map (translateLine fromLang toLang) (splitLines code)));
+
+  supportedLanguages = builtins.attrNames langTemplates;
+
+  # --- MIRROR PLATE entry (B): single-arg dispatch so the meta-circular mirror
+  # can reach this lens via `applyMirrorPlateWithLensDispatch`. The lens result
+  # IS this return value; the plate wraps it with construction_trace/receipt.
+  # req = the parsed `parameters` slot: { op; lang?; code?; from?; to?; kind?; holes?; }
+  #   op="witness"   → { atoms = code→canonical sigs }
+  #   op="transpile" → { code = code(from)→canonical→code(to) }
+  #   op="emit"      → { line = canonical atom→code(lang) }
+  # 거울이 NL을 풀 때 이 lens를 *도구(route)*로 dispatch (ontology-examples 루프).
+  mirrorDispatch = req:
+    let op = if req ? op then req.op else "witness"; in
+    if op == "transpile" then
+      { op = "transpile"; from = req.from; to = req.to;
+        code = translateCode req.from req.to req.code; }
+    else if op == "emit" then
+      { op = "emit"; language = req.lang; kind = req.kind;
+        line = emitLineFor req.lang req.kind req.holes; }
+    else
+      { op = "witness"; language = req.lang;
+        atoms = witnessByLang req.lang req.code; };
+}

@@ -1,0 +1,481 @@
+let
+  ownerName = "stdlib.nl.code-edit-refactor-axioms";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Code Edit / Refactor Axioms (agent-NL-122) ==================
+  #
+  # 사용자 vision (2026-05-29 정정):
+  # > "어떤 코드나 수학, 문장 등을 읽고 분석할때 스스로 판단하기위한
+  # >  손/도구 같은것과 같다. 예를들면, 에러를 찾아내 어떻게 패치하고
+  # >  코드를 바꾸는데 필요한 손발/도구 로서 한칸 한칸 이동할때, 무슨
+  # >  짓을 어떻게처리 할지, 지능과도 같기때문이다."
+  #
+  # 박힌 #118-#121 = *알고리즘 generation* 차원의 axiom.
+  # 이 #122 = *코드 작업 손/도구* 차원의 axiom (한 칸 한 칸 이동).
+  #
+  # 박힌 자산: stdlib/lib/nl/patch-ir-nl-lifter.px (axiom #89, 12 patch
+  # kinds). 그것이 *substrate side*. 이 #122 는 *NL layer + sub-tree*.
+  #
+  # 5 family (refactor 의 Fowler taxonomy 와 매핑):
+  #   1. rename (식별자 변경)
+  #   2. extract (분리: function / variable / constant / interface)
+  #   3. inline (병합: 역방향 extract)
+  #   4. replace (대체: conditional → polymorphism, magic → constant, ...)
+  #   5. structural-move (이동: pull-up / push-down / move-file / encapsulate)
+
+  stepKind = "code-edit-tool-axiom";
+  framework_step =
+    "axiom content — 코드 한 칸 이동 시 무엇을 어떻게 처리할지 (손/도구)";
+
+  # defer_to patch-IR substrate
+  defer_patch_ir = "stdlib/lib/nl/patch-ir-nl-lifter.px";
+  defer_axiom_13 = "stdlib/lib/axioms/axiom-13-patch-ir-plate.px";
+
+  # === 1. Rename ===============================================
+
+  renameAxiomTree = bt.composeBranchTree "rename axiom" [
+    {
+      name = "rename-variable";
+      cues = [ "rename variable" "변수 이름" "rename local" "variable" "변수" ];
+      sub_specs = [
+        { name = "local-variable"; cues = [ "local" "scope" "지역" ]; terminal = true; }
+        { name = "parameter"; cues = [ "parameter" "argument" "매개변수" ]; terminal = true; }
+        { name = "field"; cues = [ "field" "member" "필드" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "rename-function";
+      cues = [ "rename function" "rename method" "함수 이름" "메소드" ];
+      sub_specs = [
+        { name = "free-function"; cues = [ "free" "standalone" "독립" ]; terminal = true; }
+        { name = "method"; cues = [ "method" "member" "메소드" ]; terminal = true; }
+        { name = "constructor"; cues = [ "constructor" "생성자" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "rename-type";
+      cues = [ "rename type" "rename class" "rename struct" "타입 이름" ];
+      sub_specs = [
+        { name = "class"; cues = [ "class" "클래스" ]; terminal = true; }
+        { name = "struct"; cues = [ "struct" "구조체" ]; terminal = true; }
+        { name = "enum"; cues = [ "enum" "열거" ]; terminal = true; }
+        { name = "type-alias"; cues = [ "alias" "type alias" "타입 별칭" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "rename-module";
+      cues = [ "rename module" "rename package" "rename namespace" "모듈" ];
+      sub_specs = [
+        { name = "module"; cues = []; terminal = true; }
+        { name = "package"; cues = []; terminal = true; }
+        { name = "file"; cues = [ "file" "파일" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Extract ==============================================
+
+  extractAxiomTree = bt.composeBranchTree "extract axiom" [
+    {
+      name = "extract-function";
+      cues = [ "extract function" "extract method" "함수 추출" "메소드 추출" ];
+      sub_specs = [
+        { name = "pure-extract"; cues = [ "pure" "no side effect" "순수" ]; terminal = true; }
+        { name = "extract-with-params"; cues = [ "with parameter" "매개변수" ]; terminal = true; }
+        { name = "extract-with-return"; cues = [ "with return" "반환" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "extract-variable";
+      cues = [ "extract variable" "extract local" "변수 추출" "introduce variable" ];
+      sub_specs = [
+        { name = "extract-expression"; cues = [ "expression" "표현식" ]; terminal = true; }
+        { name = "extract-constant"; cues = [ "constant" "상수" "magic number" "magic string" ]; terminal = true; }
+        { name = "extract-temp"; cues = [ "temp" "temporary" "임시" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "extract-interface";
+      cues = [ "extract interface" "extract protocol" "extract trait" "인터페이스 추출" ];
+      sub_specs = [
+        { name = "extract-method-set"; cues = []; terminal = true; }
+        { name = "extract-abstract-base"; cues = [ "abstract base" "추상 클래스" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "extract-class";
+      cues = [ "extract class" "extract module" "클래스 추출" "모듈 추출" ];
+      sub_specs = [
+        { name = "extract-helper-class"; cues = []; terminal = true; }
+        { name = "extract-value-object"; cues = [ "value object" "값 객체" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Inline ===============================================
+
+  inlineAxiomTree = bt.composeBranchTree "inline axiom" [
+    {
+      name = "inline-function";
+      cues = [ "inline function" "inline method" "함수 인라인" ];
+      sub_specs = [
+        { name = "single-call-site"; cues = [ "single call" "한 곳" ]; terminal = true; }
+        { name = "all-call-sites"; cues = [ "all calls" "모든 호출" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "inline-variable";
+      cues = [ "inline variable" "inline local" "변수 인라인" "inline temp" ];
+      sub_specs = [
+        { name = "single-use"; cues = []; terminal = true; }
+        { name = "constant-fold"; cues = [ "constant" "상수" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "inline-class";
+      cues = [ "inline class" "merge class" "클래스 인라인" "클래스 병합" ];
+      sub_specs = [
+        { name = "merge-into-parent"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Replace ==============================================
+
+  replaceAxiomTree = bt.composeBranchTree "replace axiom" [
+    {
+      name = "replace-conditional";
+      cues = [ "replace conditional" "replace if" "polymorphism" "다형성" ];
+      sub_specs = [
+        { name = "conditional-to-polymorphism"; cues = [ "polymorphism" "subtype" ]; terminal = true; }
+        { name = "conditional-to-strategy"; cues = [ "strategy" "전략" ]; terminal = true; }
+        { name = "conditional-to-lookup"; cues = [ "table" "map" "lookup" "테이블" ]; terminal = true; }
+        { name = "guard-clauses"; cues = [ "guard" "early return" "조기 반환" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "replace-magic";
+      cues = [ "magic number" "magic string" "매직 넘버" "매직 문자열" "named constant" ];
+      sub_specs = [
+        { name = "magic-number-to-constant"; cues = [ "number" "숫자" ]; terminal = true; }
+        { name = "magic-string-to-enum"; cues = [ "enum" "열거" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "replace-loop";
+      cues = [ "replace loop" "loop to pipeline" "for to map" "함수형으로" ];
+      sub_specs = [
+        { name = "for-to-map"; cues = [ "map" ]; terminal = true; }
+        { name = "for-to-filter"; cues = [ "filter" ]; terminal = true; }
+        { name = "for-to-reduce"; cues = [ "reduce" "fold" "foldl" ]; terminal = true; }
+        { name = "for-to-pipeline"; cues = [ "pipeline" "chain" "파이프라인" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "replace-error-style";
+      cues = [ "replace error" "exception to result" "result to exception" "에러 처리 변경" ];
+      sub_specs = [
+        { name = "exception-to-result"; cues = [ "to result" "Result type" ]; terminal = true; }
+        { name = "result-to-exception"; cues = [ "to exception" ]; terminal = true; }
+        { name = "nullable-to-option"; cues = [ "nullable to option" "null to Option" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "replace-data-structure";
+      cues = [ "replace data structure" "replace collection" "자료구조 변경" ];
+      sub_specs = [
+        { name = "array-to-hashmap"; cues = [ "array to hash" "list to map" ]; terminal = true; }
+        { name = "list-to-set"; cues = [ "to set" ]; terminal = true; }
+        { name = "mutable-to-immutable"; cues = [ "immutable" "불변" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Structural Move ======================================
+
+  structuralMoveAxiomTree = bt.composeBranchTree "structural move axiom" [
+    {
+      name = "pull-up";
+      cues = [ "pull up" "pull-up" "move to parent" "상위로" "부모 클래스로" ];
+      sub_specs = [
+        { name = "pull-up-method"; cues = [ "method" "메소드" ]; terminal = true; }
+        { name = "pull-up-field"; cues = [ "field" "필드" ]; terminal = true; }
+        { name = "pull-up-constructor"; cues = [ "constructor" "생성자" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "push-down";
+      cues = [ "push down" "push-down" "move to subclass" "하위로" "자식 클래스로" ];
+      sub_specs = [
+        { name = "push-down-method"; cues = []; terminal = true; }
+        { name = "push-down-field"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "move-function";
+      cues = [ "move function" "move method" "함수 이동" "메소드 이동" ];
+      sub_specs = [
+        { name = "to-different-class"; cues = [ "different class" "다른 클래스" ]; terminal = true; }
+        { name = "to-different-module"; cues = [ "module" "package" "모듈" ]; terminal = true; }
+        { name = "to-different-file"; cues = [ "file" "파일" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "encapsulate";
+      cues = [ "encapsulate" "make private" "hide" "캡슐화" "은닉" ];
+      sub_specs = [
+        { name = "field-encapsulation"; cues = [ "field" "private field" ]; terminal = true; }
+        { name = "getter-setter"; cues = [ "getter" "setter" "접근자" ]; terminal = true; }
+        { name = "expose-via-method"; cues = [ "expose method" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "reorganize-parameters";
+      cues = [ "reorder parameters" "parameter object" "매개변수 재정렬" "매개변수 객체" ];
+      sub_specs = [
+        { name = "reorder"; cues = [ "reorder" "재정렬" ]; terminal = true; }
+        { name = "introduce-parameter-object"; cues = [ "parameter object" "매개변수 객체" ]; terminal = true; }
+        { name = "remove-parameter"; cues = [ "remove" "제거" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#153) ─────────────────────────────────
+    {
+      name = "convert-shape";
+      cues = [ "convert to" "transform to" "변환" ];
+      sub_specs = [
+        { name = "imperative-to-functional"; cues = [ "imperative to functional" "함수형으로" ]; terminal = true; }
+        { name = "callbacks-to-promises"; cues = [ "callback to promise" "promise" "약속" ]; terminal = true; }
+        { name = "monolith-to-modules"; cues = [ "monolith to modules" "모듈화" ]; terminal = true; }
+        { name = "class-to-record"; cues = [ "class to record" "record type" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry of all 5 families ==================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-edit-001";
+      name = "rename";
+      domain = "code-edit";
+      activation_cues = [
+        "rename " "이름 변경해" "이름 변경해줘" "이름 바꾸"
+        "변수 이름 " "함수 이름 " "타입 이름 " "모듈 이름"
+      ];
+      tree = renameAxiomTree;
+      sub_count = builtins.length renameAxiomTree.branches;
+      defer_to = defer_patch_ir;
+      tool_role = "한 칸 이동 — 식별자 단위";
+    }
+    {
+      axiom_id = "axiom-edit-002";
+      name = "extract";
+      domain = "code-edit";
+      activation_cues = [
+        "extract" "추출" "분리" "introduce"
+        "extract function" "extract variable" "extract method"
+        "함수 추출" "변수 추출" "상수 추출"
+      ];
+      tree = extractAxiomTree;
+      sub_count = builtins.length extractAxiomTree.branches;
+      defer_to = defer_patch_ir;
+      tool_role = "한 칸 이동 — 분리 단위";
+    }
+    {
+      axiom_id = "axiom-edit-003";
+      name = "inline";
+      domain = "code-edit";
+      activation_cues = [
+        "inline" "인라인" "병합"
+        "inline function" "inline variable" "inline method"
+      ];
+      tree = inlineAxiomTree;
+      sub_count = builtins.length inlineAxiomTree.branches;
+      defer_to = defer_patch_ir;
+      tool_role = "한 칸 이동 — 병합 단위";
+    }
+    {
+      axiom_id = "axiom-edit-004";
+      name = "replace";
+      domain = "code-edit";
+      activation_cues = [
+        "replace" "대체" "교체" "swap"
+        "replace conditional" "replace loop" "replace magic" "polymorphism"
+        "magic number" "다형성"
+      ];
+      tree = replaceAxiomTree;
+      sub_count = builtins.length replaceAxiomTree.branches;
+      defer_to = defer_patch_ir;
+      tool_role = "한 칸 이동 — 대체 단위";
+    }
+    {
+      axiom_id = "axiom-edit-005";
+      name = "structural-move";
+      domain = "code-edit";
+      activation_cues = [
+        "pull up" "push down" "move" "encapsulate"
+        "상위로" "하위로" "이동" "캡슐화"
+        "move function" "move method" "move class"
+      ];
+      tree = structuralMoveAxiomTree;
+      sub_count = builtins.length structuralMoveAxiomTree.branches;
+      defer_to = defer_patch_ir;
+      tool_role = "한 칸 이동 — 구조 단위";
+    }
+  ];
+
+  # === Activation logic ===========================================
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple edit axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "apply " + ax.name + " edit";
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  # === Plate entry =================================================
+
+  applyCodeEditAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-108-nl-code-edit-refactor "
+            + "(composes axiom-98-tree + axiom-89-patch-ir)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+              defer_to = ax.defer_to;
+              tool_role = ax.tool_role;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms } | { activate_for } | { describe }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-code-edit-refactor-axiom-108";
+    composes = "axiom-98-tree + axiom-89-patch-ir";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "rename (식별자 단위)"
+      "extract (분리 단위 — function/variable/interface/class)"
+      "inline (병합 단위 — extract 역방향)"
+      "replace (대체 단위 — conditional/magic/loop/error/data)"
+      "structural-move (구조 단위 — pull-up/push-down/move/encapsulate)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    defer_to = defer_patch_ir;
+    tool_metaphor =
+      "사용자 vision 의 '손/발/도구' 직접 매핑. 코드 한 칸 한 칸 이동 "
+      + "시 무엇을 어떻게 처리할지. Fowler refactor taxonomy 위에 NL "
+      + "bridge.";
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+  };
+
+in {
+  inherit
+    ownerName
+    renameAxiomTree extractAxiomTree inlineAxiomTree
+    replaceAxiomTree structuralMoveAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    applyCodeEditAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL code edit/refactor axioms (agent-NL-122)";
+    owner = ownerName;
+    base = "nl-code-edit-refactor-axioms-v0";
+    rev_note = "agent-NL-122 (2026-05-29): 사용자 vision 의 '손/발/도구' "
+      + "차원의 첫 family. 코드 한 칸 한 칸 이동 시 무엇을 어떻게 처리. "
+      + "5 refactor family (Fowler taxonomy 매핑). 박힌 #89 patch-IR "
+      + "(12 patch kinds) 의 NL layer. DO NOT REBUILD — branch-tree "
+      + "generic constructor 위 데이터 + patch-ir-nl-lifter defer.";
+  };
+}

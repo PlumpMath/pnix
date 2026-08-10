@@ -1,0 +1,41 @@
+# stdlib/lib/nl/predicate-concept-relation-probe.px
+#
+# S99-6: predicate-concepts + term-dag relation hint probe for MSV metadata.
+# Ephemeral lemma/keys in; flat JSON out (term_key hashed by host, not raw prose store).
+let
+  pc = import ./predicate-concepts.px;
+  td = import ../lisp/term-dag.px;
+  B = builtins;
+
+  symOf = lex:
+    let c = pc.conceptOf lex;
+    in if c == null then lex else c;
+
+  mkPropTerm = args:
+    let pred = if args ? predicate_lemma then args.predicate_lemma else "";
+        agent = if args ? agent_key then args.agent_key else "";
+        obj = if args ? object_key then args.object_key else "";
+    in if pred == "" then null
+       else [ { sym = symOf pred; }
+              [ { sym = "agent"; } { sym = symOf agent; } ]
+              [ { sym = "object"; } { sym = symOf obj; } ] ];
+
+  runProbe = args:
+    let pred = if args ? predicate_lemma then args.predicate_lemma else "";
+        term = mkPropTerm args;
+        concept = pc.conceptOf pred;
+        kind = if concept == null then "" else (pc.conceptKindOf concept or "");
+        tk = if term == null then "" else td.key term;
+    in {
+      status = "ok";
+      predicate_concept = if concept == null then "" else concept;
+      predicate_kind = kind;
+      term_key = tk;
+      has_relation_hint = concept != null;
+    };
+
+  probeSelfTest = _:
+    let r = runProbe { predicate_lemma = "먹"; agent_key = "철수"; object_key = "사과"; };
+    in (r.status == "ok") && r.has_relation_hint && (r.predicate_concept == "ingest");
+
+in { inherit runProbe probeSelfTest; }

@@ -1,0 +1,382 @@
+# stdlib.nl.symbolic-context-graph
+#
+# Multi-sentence symbolic context graph.
+#
+# This owner is the service gate behind `symbolic-interpretation-frame`: it does
+# not treat an utterance as one command. It threads sentence-level symbolic
+# facts/morphisms into a context graph, then exposes the final requested
+# operation as a route manifest for the dispatcher.
+#
+# Scope v0 (small, service-critical proof):
+#   x는 3이야. y는 x 더하기 2야. y는 얼마야?  -> y = 5
+#   원뿔 하나 추가해. 반지름은 2야. 높이는 3이야. 부피 계산해.
+#      -> cone context + exact volume expression
+#   x² - 1 = 0 인수분해해서 풀어.
+#      -> compatible sequential route: factor -> solve
+let
+  sub  = builtins.substring;
+  slen = builtins.stringLength;
+
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+
+  containsAny = utterance: cues:
+    builtins.any (cue: hasInfix cue utterance) cues;
+
+  trimL = s: let n = slen s; go = i: if (i < n) && ((sub i 1 s) == " ") then go (i + 1) else sub i (n - i) s; in go 0;
+  trimR = s: let go = i: if (i > 0) && ((sub (i - 1) 1 s) == " ") then go (i - 1) else sub 0 i s; in go (slen s);
+  trim = s: trimR (trimL s);
+
+  normalizeMathSurface = s:
+    builtins.replaceStrings
+      [
+        "." "?" "!" "," "²" "³" "⁴"
+        "엑스는" "엑스은" "엑스가" "와이는" "와이은" "와이가" "제트는" "제트은" "제트가"
+        "x는" "x은" "x가" "y는" "y은" "y가" "z는" "z은" "z가" "n은" "n는" "m은" "m는"
+        "반지름은" "반지름는" "높이는" "높이은"
+        "이야" "야" "입니다" "이다" "이고"
+      ]
+      [
+        "" "" "" "" "^2" "^3" "^4"
+        "엑스 는" "엑스 은" "엑스 =" "와이 는" "와이 은" "와이 =" "제트 는" "제트 은" "제트 ="
+        "x 는" "x 은" "x =" "y 는" "y 은" "y =" "z 는" "z 은" "z =" "n 은" "n 는" "m 은" "m 는"
+        "반지름 은" "반지름 는" "높이 는" "높이 은"
+        "" "" "" "" ""
+      ]
+      s;
+
+  exprFromSentence = sentence:
+    let
+      extractor = import ../math/nl-symbolic-extractor.px;
+      ext = extractor.extractExpression (normalizeMathSurface sentence);
+    in ext.expression;
+
+  indexOfEq = s:
+    let n = slen s;
+        go = i: if i >= n then -1 else if (sub i 1 s) == "=" then i else go (i + 1);
+    in go 0;
+
+  splitEq = expr:
+    let i = indexOfEq expr; n = slen expr;
+    in if i < 0 then null else {
+      lhs = trim (sub 0 i expr);
+      rhs = trim (sub (i + 1) (n - i - 1) expr);
+    };
+
+  vars = [ "x" "y" "z" "n" "m" ];
+  isVar = s: builtins.elem (trim s) vars;
+
+  evalExpr = expr: env:
+    let numeric = import ../math/numeric-evaluator.px;
+    in numeric.evaluateNumericExpression (trim expr) env;
+
+  bindFromSentence = sentence: env:
+    let
+      expr = exprFromSentence sentence;
+      parts = splitEq expr;
+    in
+      if parts == null || !(isVar parts.lhs) || parts.rhs == "" then null
+      else
+        let ev = evalExpr parts.rhs env;
+        in if ev.ok then {
+          kind = "symbolic-bind";
+          variable = parts.lhs;
+          rhs_expression = parts.rhs;
+          value = ev.value;
+          expression = parts.lhs + " = " + parts.rhs;
+          surface = sentence;
+          receipt = {
+            kind = "context-bind-receipt";
+            variable = parts.lhs;
+            rhs_expression = parts.rhs;
+            value = ev.value;
+          };
+        } else null;
+
+  queryVarFromSentence = sentence:
+    let
+      s = normalizeMathSurface sentence;
+      hasQuestion = containsAny sentence [ "얼마" "뭐" "무엇" "what" "값" ];
+      firstHit = builtins.filter (v: hasInfix v s) vars;
+    in if hasQuestion && firstHit != [ ] then builtins.head firstHit else null;
+
+  numberValueFromSentence = sentence:
+    let
+      extractor = import ../math/nl-symbolic-extractor.px;
+      cleaned = builtins.replaceStrings
+        [ "반지름" "높이" "radius" "height" "은" "는" "=" ]
+        [ "" "" "" "" "" "" "" ]
+        (normalizeMathSurface sentence);
+      expr = (extractor.extractExpression cleaned).expression;
+      ev = evalExpr expr { };
+    in if ev.ok then ev.value else null;
+
+  worldAddCues = [ "추가" "만들" "add" "create" ];
+  coneCues = [ "원뿔" "cone" ];
+  radiusCues = [ "반지름" "radius" ];
+  heightCues = [ "높이" "height" ];
+  volumeCues = [ "부피" "volume" ];
+  # Bare `factor` is often a domain noun (two-factor auth, risk factor). Context
+  # graph factoring is an operation, so require an explicit math/action surface.
+  factorCues = [ "인수분해" "factorize" "factorise" "factor x" "factor y" "factor polynomial" "factor expression" ];
+  solveCues = [ "풀" "solve" "해를 구" ];
+  contextClearScopeCues = [ "세션" "기억" "맥락" "문맥" "context" "session" "memory" "새 문제" ];
+  contextClearActionCues = [ "지워" "삭제" "비워" "초기화" "잊어" "clear" "reset" "forget" "새 문제로" ];
+
+  updateLatestProp = world: prop: value:
+    if world.latest == null then world
+    else
+      let updated = world.latest // { properties = world.latest.properties // { "${prop}" = value; }; };
+      in world // {
+        latest = updated;
+        entities = world.entities ++ [ updated ];
+      };
+
+  coneVolume = entity:
+    let
+      p = entity.properties;
+      r = p.radius;
+      h = p.height;
+      n = r * r * h;
+      coeff = if (n % 3) == 0 then builtins.toString (n / 3) else (builtins.toString n) + "/3";
+    in {
+      value_text = coeff + "π";
+      formula = "V = πr²h/3";
+      substituted = "V = π*" + (builtins.toString r) + "²*" + (builtins.toString h) + "/3";
+      entity = entity;
+    };
+
+  mkStep = i: sentence: op: payload: {
+    sentence_index = i;
+    surface = sentence;
+    operation = op;
+  } // payload;
+
+  emitContextCode = lang: bindings:
+    let
+      rowsPy = builtins.map (b: b.variable + " = " + b.rhs_expression) bindings;
+      rowsJs = builtins.map (b: "const " + b.variable + " = " + b.rhs_expression + ";") bindings;
+      last = if bindings == [ ] then null else builtins.elemAt bindings ((builtins.length bindings) - 1);
+    in
+      if lang == "javascript" then
+        builtins.concatStringsSep "\n" (rowsJs ++ (if last == null then [ ] else [ "console.log(" + last.variable + ");" ]))
+      else
+        builtins.concatStringsSep "\n" (rowsPy ++ (if last == null then [ ] else [ "print(" + last.variable + ")" ]));
+
+  stepSentence = i: state: sentence:
+    let
+      symCode = import ../math/symbolic-code-witness.px;
+      qv = queryVarFromSentence sentence;
+      b = bindFromSentence sentence state.env;
+      wantsCode = symCode.wantsCode sentence;
+      lang = symCode.detectLanguage sentence;
+      isConeAdd = containsAny sentence coneCues && containsAny sentence worldAddCues;
+      isRadius = containsAny sentence radiusCues;
+      isHeight = containsAny sentence heightCues;
+      isVolume = containsAny sentence volumeCues;
+      isFactorSolve = containsAny sentence factorCues && containsAny sentence solveCues;
+      isContextClear = containsAny sentence contextClearScopeCues && containsAny sentence contextClearActionCues;
+      expr = exprFromSentence sentence;
+      hasEquation = (indexOfEq expr) >= 0;
+      val = numberValueFromSentence sentence;
+    in
+      if isContextClear then
+        let out = {
+          operation_kind = "context-clear";
+          canonical_meaning = "context.session.clear";
+          summary = "symbolic session context cleared";
+          expected_receipt_kind = "symbolic-session-context-clear-receipt";
+        };
+        in {
+          env = { };
+          bindings = [ ];
+          facts = [ ];
+          world = { latest = null; entities = [ ]; };
+          steps = state.steps ++ [ (mkStep i sentence "context-clear" out) ];
+          final = out;
+        }
+      else if qv != null && (state.env ? "${qv}") then
+        let out = {
+          operation_kind = "context-query";
+          canonical_meaning = "context.symbolic.query";
+          variable = qv;
+          value = state.env."${qv}";
+          summary = qv + " = " + (builtins.toString state.env."${qv}");
+          expected_receipt_kind = "context-query-receipt";
+        };
+        in state // {
+          steps = state.steps ++ [ (mkStep i sentence "context-query" out) ];
+          final = out;
+        }
+      else if wantsCode && lang != null && state.bindings != [ ] then
+        let
+          out = {
+            operation_kind = "context-code";
+            canonical_meaning = "code.emit.from-symbolic-context";
+            language = lang;
+            source_text = emitContextCode lang state.bindings;
+            summary = lang + " context code";
+            expected_receipt_kind = "context-code-receipt";
+          };
+        in state // {
+          steps = state.steps ++ [ (mkStep i sentence "context-code" out) ];
+          final = out;
+        }
+      else if isFactorSolve && hasEquation then
+        let out = {
+          operation_kind = "route-chain";
+          canonical_meaning = "math.factor.then.solve";
+          route_relation = "sequential";
+          extracted_symbolic = expr;
+          route_chain = [
+            { canonical_meaning = "math.expression.factor"; operation_kind = "math-factor"; route = "stdlib/lib/math/factor-executor-bridge.px::factorEquation"; executable = true; }
+            { canonical_meaning = "math.equation.solve"; operation_kind = "equation"; route = "stdlib/lib/math/equation-solving-procedure.px::beginSolveProcedure"; executable = true; }
+          ];
+          summary = "factor → solve route chain";
+          expected_receipt_kind = "route-chain-receipt";
+        };
+        in state // {
+          steps = state.steps ++ [ (mkStep i sentence "route-chain" out) ];
+          final = out;
+        }
+      else if isConeAdd then
+        let
+          entity = { id = "world3d-cone-" + builtins.toString i; kind = "cone"; properties = { }; introduced_at = i; };
+        in state // {
+          world = {
+            latest = entity;
+            entities = state.world.entities ++ [ entity ];
+          };
+          steps = state.steps ++ [ (mkStep i sentence "world3d-add" {
+            operation_kind = "world3d-command";
+            canonical_meaning = "world3d.command.live-mutation";
+            entity = entity;
+          }) ];
+        }
+      else if (isRadius || isHeight) && val != null && state.world.latest != null then
+        let
+          prop = if isRadius then "radius" else "height";
+          newWorld = updateLatestProp state.world prop val;
+        in state // {
+          world = newWorld;
+          steps = state.steps ++ [ (mkStep i sentence "world3d-property-bind" {
+            operation_kind = "context-update";
+            canonical_meaning = "world3d.context.bind-property";
+            entity_id = state.world.latest.id;
+            property = prop;
+            value = val;
+          }) ];
+        }
+      else if isVolume && state.world.latest != null
+        && (state.world.latest.properties ? radius)
+        && (state.world.latest.properties ? height) then
+        let vol = coneVolume state.world.latest;
+            out = {
+              operation_kind = "world3d-volume";
+              canonical_meaning = "world3d.math.volume.cone";
+              summary = "원뿔 부피 = " + vol.value_text;
+              volume = vol;
+              expected_receipt_kind = "world3d-volume-receipt";
+            };
+        in state // {
+          steps = state.steps ++ [ (mkStep i sentence "world3d-volume" out) ];
+          final = out;
+        }
+      else if b != null then
+        state // {
+          env = state.env // { "${b.variable}" = b.value; };
+          bindings = state.bindings ++ [ b ];
+          facts = state.facts ++ [ b ];
+          steps = state.steps ++ [ (mkStep i sentence "symbolic-bind" {
+            operation_kind = "context-update";
+            canonical_meaning = "context.symbolic.bind";
+            fact = b;
+          }) ];
+        }
+      else
+        let
+          frame = import ./symbolic-interpretation-frame.px;
+          sf = frame.interpret sentence;
+          chosen = sf.chosen;
+        in state // {
+          steps = state.steps ++ [ (mkStep i sentence "sentence-frame" {
+            operation_kind = if chosen == null then "general" else chosen.operation_kind;
+            frame = sf;
+          }) ];
+        };
+
+  initialState = seedContext: {
+    env = seedContext.env or { };
+    bindings = seedContext.bindings or [ ];
+    facts = seedContext.facts or [ ];
+    world = seedContext.world or { latest = null; entities = [ ]; };
+    steps = [ ];
+    final = null;
+  };
+
+  runSentences = sentences: seedContext:
+    let
+      n = builtins.length sentences;
+      go = i: state:
+        if i >= n then state
+        else go (i + 1) (stepSentence i state (builtins.elemAt sentences i));
+    in go 0 (initialState seedContext);
+in
+rec {
+  name = "stdlib.nl.symbolic-context-graph";
+
+  inherit normalizeMathSurface exprFromSentence bindFromSentence queryVarFromSentence runSentences;
+
+  interpret = req:
+    let
+      frame = import ./symbolic-interpretation-frame.px;
+      utterance =
+        if builtins.isString req then req
+        else if (builtins.isAttrs req) && (req ? utterance) && builtins.isString req.utterance then req.utterance
+        else "";
+      context =
+        if (builtins.isAttrs req) && (req ? context) && builtins.isAttrs req.context then req.context else { };
+      sentences = frame.splitSentences utterance;
+      state = runSentences sentences context;
+      hasMulti = (builtins.length sentences) > 1;
+      routeEq =
+        if state.final != null && (state.final ? route_relation) && state.final.route_relation == "sequential"
+        then import ../agent/route-equivalence-mirror.px
+        else null;
+    in {
+      kind = "symbolic-context-graph";
+      owner = name;
+      outcome =
+        if utterance == "" then "held-empty-utterance"
+        else if hasMulti then "context-graph-interpreted"
+        else "single-sentence-not-graph";
+      utterance = utterance;
+      surfaces = sentences;
+      sentence_count = builtins.length sentences;
+      steps = state.steps;
+      facts = state.facts;
+      bindings = state.bindings;
+      env = state.env;
+      world = state.world;
+      final = state.final;
+      has_final = state.final != null;
+      morphism_trace = {
+        stage = [ "surface" "sentence-split" "per-sentence-symbolic-step" "context-thread" "final-route-manifest" ];
+        owner = name;
+      };
+      route_equivalence_checked =
+        if routeEq != null
+        then routeEq.checkRouteChain {
+          utterance = utterance;
+          route_chain = state.final.route_chain;
+          extracted_symbolic = state.final.extracted_symbolic;
+        }
+        else {
+          verdict = "context-threaded";
+          reason = "sentence facts were threaded through env/world context before final route selection";
+        };
+      preservation_invariant = "sentence facts remain explicit graph nodes; final route consumes graph context, not surface keywords";
+    };
+}

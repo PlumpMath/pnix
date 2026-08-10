@@ -1,0 +1,77 @@
+# MR44 -- rule arena gate v0: a rule candidate earns promotion eligibility
+# ONLY by beating the baseline head-to-head on a HELD-OUT corpus it has
+# never seen -- never by self-claim. This is the fake-concept blocker: a
+# candidate that helps nothing is held (no-improvement), and a candidate
+# that breaks existing understanding is held with the broken rows
+# preserved (regressions are never silently absorbed).
+# The gate judges RESULT rows computed outside (one run per bundle over
+# the same held-out corpus); it never reads the corpus itself.
+# Outcomes:
+#   held-missing-results   -- baseline+candidate result rows required
+#   held-corpus-mismatch   -- the two runs must cover the SAME rows in
+#                             the same order (paired by utterance)
+#   held-arena-regressions -- candidate broke rows baseline got right
+#   held-no-improvement    -- nothing new became correct (self-claim is
+#                             not evidence; an idle rule earns nothing)
+#   arena-passed           -- >=1 new correct row, 0 regressions ->
+#                             promotion ELIGIBILITY (still candidate_only;
+#                             the owner-law promotion gate is downstream)
+{
+  judgeArena = request:
+    let
+      baseline = if request ? baseline then request.baseline else null;
+      candidate = if request ? candidate then request.candidate else null;
+      held = outcome: reason: extra: extra // {
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/rule-arena-gate.px";
+      };
+      paired =
+        if baseline == null || candidate == null then []
+        else builtins.genList
+          (i: {
+            b = builtins.elemAt baseline i;
+            c = builtins.elemAt candidate i;
+          })
+          (builtins.length baseline);
+      mismatched =
+        builtins.filter (p: p.b.utterance != p.c.utterance) paired;
+      newCorrect =
+        builtins.filter (p: p.c.correct && !p.b.correct) paired;
+      regressions =
+        builtins.filter (p: !p.c.correct && p.b.correct) paired;
+      stillCorrect =
+        builtins.filter (p: p.c.correct && p.b.correct) paired;
+    in
+    if baseline == null || candidate == null then
+      held "held-missing-results"
+        "baseline AND candidate held-out result rows are required input" {}
+    else if builtins.length baseline != builtins.length candidate
+            || builtins.length mismatched > 0 then
+      held "held-corpus-mismatch"
+        "both runs must cover the same held-out rows in the same order" {}
+    else if builtins.length regressions > 0 then
+      held "held-arena-regressions"
+        "the candidate broke rows the baseline got right (never absorbed silently)"
+        { regressions = builtins.map (p: p.c) regressions;
+          regression_count = builtins.length regressions; }
+    else if builtins.length newCorrect == 0 then
+      held "held-no-improvement"
+        "no held-out row became correct; self-claim is not promotion evidence" {}
+    else {
+      outcome = "arena-passed";
+      new_correct_count = builtins.length newCorrect;
+      new_correct = builtins.map (p: p.c.utterance) newCorrect;
+      still_correct_count = builtins.length stillCorrect;
+      total_rows = builtins.length paired;
+      receipt = {
+        gate = "rule-arena-gate";
+        meaning = "promotion ELIGIBILITY by held-out head-to-head, not self-claim";
+        next_gate = "owner-law promotion (operator)";
+      };
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/rule-arena-gate.px";
+    };
+}

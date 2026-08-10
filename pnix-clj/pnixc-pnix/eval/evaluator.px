@@ -1,0 +1,514 @@
+# pnixc-pnix.eval.evaluator
+#
+# OWNER-LAW (2026-05-14): the first `.px`-written evaluator for the
+# pnix subset. This is the meta-circular substrate's *Stage 2* —
+# Stage 1 (host eval, currently `pnix-eval`) boots this file, which
+# then evaluates user `.px` source via `runtime.parse_expr`.
+#
+# Until this owner landed, every "live-eval" claim in the
+# constitution was bridge-debt: a Rust evaluator pretending to be
+# the substrate's interpreter. With this evaluator + the matching
+# `pnixc-meta` thin shim, *.px* user code is evaluated by *.px*
+# evaluator code.
+#
+# # Calling shape
+#
+# Caller supplies `runtime` (= `pnixc-pnix/exec/runtime.px` attrset)
+# so this file does not rely on pnix-eval's cwd-anchored
+# relative-import resolution:
+#
+#   runtime = import .../pnixc-pnix/exec/runtime.px;
+#   ev      = (import .../pnixc-pnix/eval/evaluator.px) runtime;
+#   ev.run "1 + 1"        # → 2
+#
+# # AST shape this evaluator consumes
+#
+# The shapes match `runtime.parse_expr` output (parser-level
+# `mk_*` AST), NOT the unified `u_*` lowering shape. Concretely:
+#
+#   Int      { tag; value }
+#   Float    { tag; value }
+#   Bool     { tag; value }
+#   Null     { tag }
+#   String   { tag; value }
+#   Var      { tag; name }
+#   Lambda   { tag; param = { tag = "Ident"; name }; body }
+#   Let      { tag; bindings = [Assign...]; body }
+#   Assign   { tag; key_path = [string]; value }       (only in Let/AttrSet)
+#   If       { tag; cond; "then"; "else" }
+#   Apply    { tag; func; arg }
+#   Binary   { tag; op; lhs; rhs }
+#   Unary    { tag; op; arg }
+#   Select   { tag; base; attr }
+#   Index    { tag; base; index }
+#   HasAttr  { tag; base; attr }
+#   List     { tag; items }
+#   AttrSet  { tag; items = [Assign...]; recursive = bool }
+#
+# # Bounded subset (v0)
+#
+# Unsupported (return `mk_error`):
+#   recursive attrsets (`rec { ... }`), `with`, `assert`, `import`,
+#   dynamic select / dynamic hasattr, function-argument patterns
+#   with defaults, attribute paths in `let` (multi-segment
+#   key_path), `inherit`, `${...}` string interpolation,
+#   `builtins.*` lookup.
+
+{ runtime, inputDir ? "/" }:
+
+let
+  ownerName = "pnixc-pnix/eval/evaluator.px";
+  schema = "pnixc-meta-evaluator-v0";
+
+  supportedTags = [
+    "Int" "Float" "Bool" "Null" "String"
+    "Var" "List" "AttrSet"
+    "Lambda" "Apply"
+    "If" "Let"
+    "Binary" "Unary"
+    "Select" "HasAttr" "Index"
+  ];
+
+  supportedBinaryOps = [
+    "+" "-" "*" "/" "%"
+    "==" "!=" "<" "<=" ">" ">="
+    "&&" "||"
+    "++" "//"
+  ];
+
+  supportedUnaryOps = [ "-" "!" ];
+
+  mk_error_as = errorClass: msg: {
+    status = "error";
+    error = msg;
+    failure = {
+      __pnix_model_schema = "pnix.machine.eval-error-model.v1";
+      __pnix_model_domain = "pnix.machine.eval-error-model.v1";
+      phase = "eval";
+      class = errorClass;
+      evidence = { };
+    };
+  };
+  mk_error = mk_error_as "unsupported-expression";
+  is_error = v: builtins.isAttrs v && v ? status && v.status == "error";
+
+  mk_closure = paramName: body: env:
+    { __pnixc_meta_tag = "Closure"; param = paramName; body = body; env = env; };
+
+  is_closure = v:
+    builtins.isAttrs v
+    && v ? __pnixc_meta_tag
+    && v.__pnixc_meta_tag == "Closure";
+
+  # v0.1 (2026-05-14): native builtins. The evaluator's initial
+  # environment is pre-populated with `builtins.X` as host functions.
+  # When user code says `builtins.foldl' f init xs`, parser produces
+  # `Apply (Apply (Apply (Select (Var "builtins") "foldl'") f) init) xs`
+  # — evaluator's Var lookup hits `nativeBuiltins`, Select gets the
+  # host function, Apply dispatches via the `builtins.isFunction`
+  # branch below. Trampoline through host: my evaluator decides
+  # *that* a builtin runs; the host runs it. That's still
+  # meta-circular — the dispatch trace is `.px`, the primitive
+  # operation is host (same role as CPU instructions for Scheme).
+  # Some host builtins (`concatStringsSep`, `foldl'`, `getAttr`,
+  # `hasAttr`, `elem`, `elemAt`, `map`, `filter`, ...) require all
+  # their args at the same call site in pnix-eval — they don't
+  # curry naturally on the host side. Wrap them as `.px` curried
+  # closures so my Apply path stages args correctly and only hands
+  # the full N-tuple to the host. Single-arg builtins
+  # (`attrNames`, `isAttrs`, `length`, etc.) pass through unwrapped.
+  nativeBuiltins = {
+    # ── single-arg passthrough ──
+    inherit (builtins)
+      attrNames
+      isAttrs isList isString isFunction isFloat isBool isNull isInt
+      length typeOf
+      baseNameOf pathExists stringLength toString
+      toJSON fromJSON
+      head tail listToAttrs
+      pnixMounts;
+    pnixMount = name: builtins.pnixMount name;
+    pnixUmount = name: builtins.pnixUmount name;
+    pnixRun = name: args: builtins.pnixRun name args;
+    # ── curried wrappers for N-arg host builtins ──
+    concatStringsSep = sep: xs: builtins.concatStringsSep sep xs;
+    elem = x: xs: builtins.elem x xs;
+    elemAt = xs: i: builtins.elemAt xs i;
+    filter = f: xs: builtins.filter f xs;
+    foldl' = op: init: xs: builtins.foldl' op init xs;
+    map = f: xs: builtins.map f xs;
+    getAttr = name: set: builtins.getAttr name set;
+    hasAttr = name: set: builtins.hasAttr name set;
+    all = f: xs: builtins.all f xs;
+    any = f: xs: builtins.any f xs;
+    sort = cmp: xs: builtins.sort cmp xs;
+    replaceStrings = from: to: s: builtins.replaceStrings from to s;
+    split = re: s: builtins.split re s;
+    substring = start: len: s: builtins.substring start len s;
+    # v0.6.3.3: `match` returns null or a list of capture groups.
+    # POSIX ERE; anchored to the full string by Nix.
+    match = re: s: builtins.match re s;
+  };
+
+  initialEnv = {
+    builtins = nativeBuiltins;
+    # `throw` / `abort` are syntactic in real Nix but the pnix
+    # parser produces `Apply (Var "throw") msg`. Bound as host
+    # functions in initialEnv.
+    throw = builtins.throw;
+    abort = builtins.abort;
+    # D14 (host-D13 parity): real Nix binds a fixed subset of builtins
+    # UNPREFIXED at the top level; env is checked before with-scopes, so
+    # `let` shadows these while `with` does not.
+    map = nativeBuiltins.map;
+    toString = nativeBuiltins.toString;
+    isNull = nativeBuiltins.isNull;
+    baseNameOf = nativeBuiltins.baseNameOf;
+    dirOf = p: builtins.dirOf p;
+    removeAttrs = set: names: builtins.removeAttrs set names;
+    # v0.1: `import` for user `.px` source. Wrap host's `import`
+    # in a `.px` closure so my Apply path can dispatch it. Imported
+    # files are evaluated by the *host* pnix-eval, not by this `.px`
+    # evaluator. Full meta-circular import (imported source also
+    # walked by my evaluator) is a future slice. For v0.1 this is
+    # enough to let plate primitive's `lensOwner = import ...`
+    # resolve to a usable attrset.
+    "import" = p: import p;
+    null = null;
+    "true" = true;
+    "false" = false;
+  };
+
+  # Extract the parameter *name* from a Lambda's `param` node.
+  # Parser wraps as `{ tag = "Ident"; name = "x"; }`. Patterns with
+  # defaults (`{x ? 0}`) are deferred.
+  lambdaParamName = paramNode:
+    if builtins.isAttrs paramNode
+      && paramNode ? tag
+      && paramNode.tag == "Ident"
+      && paramNode ? name
+    then paramNode.name
+    else null;
+
+  # ── eval ────────────────────────────────────────────────────────
+  # S8-lite perf slice (2026-06-11): tag arms reordered hot-first
+  # (Var/Apply/Binary/Select/If lead; literals follow; Path/Unary/
+  # HasAttr/Index trail). Each `else if` costs the HOST interpreter a
+  # full Binary("==") evaluation, and the recursion-carrying tags sat
+  # 12th-15th in the chain. Reordering is semantics-identical (tags
+  # are mutually exclusive; missing-tag error unchanged) and measured
+  # ~3% on a Stage-2 fold workload. The S8 attrset-dispatch design
+  # from the perf map was probed and REJECTED: `builtins.getAttr t
+  # tagDispatch` pays a whole-table deep clone per dispatch under the
+  # host's by-value Var lookup — measured 26% SLOWER (see perf map
+  # 2026-06-11 S8 verdict).
+  eval = ast: env:
+    if !(builtins.isAttrs ast) || !(ast ? tag) then
+      mk_error "eval: input is not a parser AST node (missing `tag`)"
+    else
+      let t = ast.tag; in
+      if t == "Var" then
+        if builtins.hasAttr ast.name env then builtins.getAttr ast.name env
+        else mk_error_as "unknown-variable" ("eval: unknown variable `" + ast.name + "`")
+      else if t == "Apply" then evalApply ast env
+      else if t == "Binary" then evalBinary ast env
+      else if t == "Select" then evalSelect ast env
+      else if t == "If" then evalIf ast env
+      else if t == "Int" then ast.value
+      else if t == "String" then ast.value
+      else if t == "Let" then evalLet ast env
+      else if t == "Lambda" then evalLambda ast env
+      else if t == "List" then
+        builtins.map (item: eval item env) ast.items
+      else if t == "AttrSet" then evalAttrSet ast env
+      else if t == "Bool" then ast.value
+      else if t == "Float" then ast.value
+      else if t == "Null" then null
+      else if t == "Path" then
+        # v0.1 path literal. Builds a host path from the literal
+        # source. Relative paths (`./foo`, `../foo`) are resolved
+        # against `inputDir` supplied by the caller (pnixc-meta
+        # binary passes the input `.px` file's parent dir).
+        let
+          s = ast.value;
+          # Strip leading `./` for cleaner composition.
+          rel =
+            if builtins.substring 0 2 s == "./" then builtins.substring 2 (-1) s
+            else s;
+          abs =
+            if builtins.substring 0 1 s == "/" then s
+            else inputDir + "/" + rel;
+        in /. + abs
+      else if t == "Unary" then evalUnary ast env
+      else if t == "HasAttr" then evalHasAttr ast env
+      else if t == "Index" then evalIndex ast env
+      else mk_error ("eval: unsupported AST tag `" + t + "`");
+
+  evalAttrSet = ast: env:
+    if ast ? recursive && ast.recursive == true then
+      mk_error "eval: recursive attrset (`rec { ... }`) not supported in v0"
+    else
+      let
+        items = if ast ? items then ast.items else [];
+        pairs = builtins.map (assignToPair env) items;
+      in
+        builtins.foldl'
+          (acc: p:
+            if is_error p then p
+            else if is_error acc then acc
+            else acc // { "${p.name}" = p.value; })
+          {}
+          pairs;
+
+  # Attrset uses `Assign` (key_path); Let uses `Binding` (pattern).
+  assignToPair = env: assign:
+    if !(builtins.isAttrs assign) || !(assign ? tag) then
+      mk_error "eval: attrset binding missing `tag`"
+    else if assign.tag != "Assign" then
+      mk_error ("eval: attrset binding has unexpected tag `" + assign.tag + "`")
+    else if !(assign ? key_path) || builtins.length assign.key_path != 1 then
+      mk_error "eval: multi-segment attribute paths not supported in v0"
+    else
+      let v = eval assign.value env; in
+      if is_error v then v
+      else { name = builtins.elemAt assign.key_path 0; value = v; };
+
+  bindingToPair = env: binding:
+    if !(builtins.isAttrs binding) || !(binding ? tag) then
+      mk_error "eval: let binding missing `tag`"
+    else if binding.tag != "Binding" then
+      mk_error ("eval: let binding has unexpected tag `" + binding.tag + "`")
+    else if !(binding ? pattern)
+      || !(builtins.isAttrs binding.pattern)
+      || !(binding.pattern ? tag)
+      || binding.pattern.tag != "Ident"
+    then
+      mk_error "eval: let binding pattern must be a simple identifier in v0"
+    else
+      let v = eval binding.value env; in
+      if is_error v then v
+      else { name = binding.pattern.name; value = v; };
+
+  evalIf = ast: env:
+    let c = eval ast.cond env; in
+    if is_error c then c
+    else if c == true then eval ast."then" env
+    else if c == false then eval ast."else" env
+    else mk_error_as "non-boolean-condition" "eval: If condition is not a boolean";
+
+  # v0.1 (2026-05-14): `let` is now recursive. Each binding sees
+  # all siblings via mutual reference. Implemented by leaning on
+  # the host's own lazy recursive attrset semantics: `rec_env`
+  # references itself; each entry is a thunk that, when forced,
+  # evaluates its AST value against the fully-bound `rec_env`.
+  # Plate primitive uses forward references (`instantiate` calls
+  # `bindSlot` defined later in the let block), so this is
+  # required for plate-first evaluation on pnixc-meta.
+  evalLet = ast: env:
+    let
+      bindings = if ast ? bindings then ast.bindings else [];
+      validBinding = b:
+        builtins.isAttrs b
+        && b ? tag && b.tag == "Binding"
+        && b ? pattern
+        && builtins.isAttrs b.pattern
+        && b.pattern ? tag
+        && b.pattern.tag == "Ident";
+      invalid = builtins.filter (b: !(validBinding b)) bindings;
+    in
+      if builtins.length invalid > 0 then
+        mk_error "eval: let binding has unsupported pattern in v0"
+      else
+        let
+          rec_env = env // (
+            builtins.listToAttrs (
+              builtins.map (b: {
+                name = b.pattern.name;
+                value = eval b.value rec_env;
+              }) bindings
+            )
+          );
+        in eval ast.body rec_env;
+
+  evalLambda = ast: env:
+    let name = lambdaParamName ast.param; in
+    if name == null then
+      mk_error "eval: lambda parameter pattern not supported in v0"
+    else mk_closure name ast.body env;
+
+  # v0.1: convert a `.px` closure to a host-callable function. Host
+  # builtins like `builtins.foldl'` expect their arg to be applicable
+  # at the host level. When user code passes a `.px`-defined lambda
+  # to such a builtin, we wrap it: the host receives a host fn that
+  # re-enters this evaluator's `eval` for each call. This is the
+  # bridge that lets `.px`-defined transforms feed `.px`-evaluator-
+  # native primitives, all in the same meta-circular pass.
+  # Convert a `.px` closure into a host-callable function that
+  # re-enters this evaluator's `eval` on each invocation. The
+  # returned value is itself recursively marshalled — so a
+  # curried `.px` lambda passed to `builtins.foldl'` returns a
+  # *host* function on each partial-apply step, which `foldl'`
+  # can then apply natively.
+  closure_to_host = closure:
+    a:
+      let r = eval closure.body (closure.env // { "${closure.param}" = a; });
+      in marshal_to_host r;
+
+  marshal_to_host = v:
+    if is_closure v then closure_to_host v
+    else v;
+
+  evalApply = ast: env:
+    let
+      func = eval ast.func env;
+      arg = eval ast.arg env;
+    in
+    if is_error func then func
+    else if is_error arg then arg
+    else if is_closure func then
+      eval func.body (func.env // { "${func.param}" = arg; })
+    else if builtins.isFunction func then
+      # Host (native) function — e.g., `builtins.attrNames`. The
+      # evaluator's dispatch trace is in `.px`; the primitive op
+      # runs in the host. Closures handed to host fns are wrapped
+      # so the host can call them.
+      func (marshal_to_host arg)
+    else mk_error_as "not-callable" "eval: Apply target is not a function (closure or host)";
+
+  evalBinary = ast: env:
+    let op = ast.op; in
+    # D18: && || require BOOLEAN operands like real Nix (evalIf pattern);
+    # checked when (and only when) evaluated, so short-circuits stay lazy.
+    if op == "&&" then
+      let l = eval ast.lhs env; in
+      if is_error l then l
+      else if l == false then false
+      else if l == true then
+        let r = eval ast.rhs env; in
+        if is_error r then r
+        else if r == true then true
+        else if r == false then false
+        else mk_error_as "non-boolean-condition" "eval: && operand is not a boolean"
+      else mk_error_as "non-boolean-condition" "eval: && operand is not a boolean"
+    else if op == "||" then
+      let l = eval ast.lhs env; in
+      if is_error l then l
+      else if l == true then true
+      else if l == false then
+        let r = eval ast.rhs env; in
+        if is_error r then r
+        else if r == true then true
+        else if r == false then false
+        else mk_error_as "non-boolean-condition" "eval: || operand is not a boolean"
+      else mk_error_as "non-boolean-condition" "eval: || operand is not a boolean"
+    else
+      let
+        l = eval ast.lhs env;
+        r = eval ast.rhs env;
+      in
+      if is_error l then l
+      else if is_error r then r
+      else
+        if op == "+" then l + r
+        else if op == "-" then l - r
+        else if op == "*" then l * r
+        else if op == "/" then
+          if r == 0 then mk_error_as "division-by-zero" "eval: division by zero"
+          else l / r
+        else if op == "%" then
+          if r == 0 then mk_error_as "division-by-zero" "eval: division by zero"
+          else l - (l / r) * r
+        else if op == "==" then l == r
+        else if op == "!=" then l != r
+        else if op == "<" then l < r
+        else if op == "<=" then l <= r
+        else if op == ">" then l > r
+        else if op == ">=" then l >= r
+        else if op == "++" then l ++ r
+        else if op == "//" then l // r
+        else mk_error ("eval: unsupported binary op `" + op + "`");
+
+  evalUnary = ast: env:
+    let a = eval ast.arg env; in
+    if is_error a then a
+    else if ast.op == "-" then 0 - a
+    else if ast.op == "!" then !a
+    else mk_error ("eval: unsupported unary op `" + ast.op + "`");
+
+  evalSelect = ast: env:
+    let base = eval ast.base env; in
+    if is_error base then base
+    else if builtins.isAttrs base && builtins.hasAttr ast.attr base
+      then builtins.getAttr ast.attr base
+    else mk_error_as "attribute-missing" ("eval: Select missing attr `" + ast.attr + "`");
+
+  evalHasAttr = ast: env:
+    let base = eval ast.base env; in
+    if is_error base then base
+    else builtins.isAttrs base && builtins.hasAttr ast.attr base;
+
+  evalIndex = ast: env:
+    let
+      base = eval ast.base env;
+      idx = eval ast.index env;
+    in
+    if is_error base then base
+    else if is_error idx then idx
+    else if builtins.isList base then builtins.elemAt base idx
+    else if builtins.isAttrs base && builtins.isString idx
+      then builtins.getAttr idx base
+    else mk_error "eval: Index target unsupported";
+
+  # ── public entry ────────────────────────────────────────────────
+  run = source:
+    let parsed = runtime.parse_expr source; in
+    if is_error parsed then parsed
+    else if !(builtins.isAttrs parsed) || !(parsed ? tag) then
+      mk_error "run: parser returned non-AST shape"
+    else eval parsed initialEnv;
+
+  evaluatorInvariants = {
+    bounded_subset =
+      "v0 evaluator covers `supportedTags` only. Unsupported tags emit "
+      + "`{status=\"error\"; error=...}` — never silent default behaviour.";
+    parser_shape_native =
+      "Evaluator consumes the parser-level AST (mk_* shapes) directly, "
+      + "not the unified u_* lowering shape. Attrsets use `items`+`Assign` "
+      + "rather than `pairs`+`{key;value}`.";
+    non_recursive_attrset =
+      "`rec` attrsets emit an error in v0. Non-rec attrsets evaluate each "
+      + "binding in the outer environment.";
+    short_circuit_bool =
+      "`&&` / `||` evaluate the right-hand side only when needed.";
+    closure_environment =
+      "Lambda captures the env at definition time; Apply extends that env "
+      + "with the parameter binding, then evaluates the body.";
+    parser_is_runtime_px =
+      "`run` delegates parsing to `runtime.parse_expr` so AST shapes stay "
+      + "in lockstep with the existing parser.";
+  };
+in {
+  inherit
+    ownerName
+    schema
+    supportedTags
+    supportedBinaryOps
+    supportedUnaryOps
+    eval
+    run
+    mk_closure
+    is_closure
+    is_error
+    evaluatorInvariants;
+  meta = {
+    source = "pnixc-pnix evaluator";
+    owner = ownerName;
+    base = "pnixc-meta-evaluator-v0";
+    rev_note =
+      "First `.px`-written evaluator over the parser-level AST. Stage 2 "
+      + "of the meta-circular substrate: host (pnix-eval) loads this file; "
+      + "this file evaluates user `.px` source via `runtime.parse_expr` "
+      + "+ a tag-dispatch eval. Takes runtime as a parameter to avoid "
+      + "cwd-anchored relative imports.";
+  };
+}

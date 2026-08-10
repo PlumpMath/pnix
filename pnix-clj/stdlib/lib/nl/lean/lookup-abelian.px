@@ -1,0 +1,415 @@
+# AUTO-GENERATED — abelian
+# Entries: 58
+let
+  ownerName = "stdlib.nl.lean.lookup-abelian";
+  category = "abelian";
+  entries = [
+    {
+      full_name = "CategoryTheory.Abelian";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 99;
+      code_preview = "class Abelian extends Preadditive C, IsNormalMonoCategory C, IsNormalEpiCategory C where   [has_finite_products : HasFiniteProducts C]   [has_kernels : HasKernels C]   [has_cokernels : HasCokernels C]";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.OfCoimageImageComparisonIsIso.imageMonoFactorisation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 134;
+      code_preview = "@[simps] def imageMonoFactorisation {X Y : C} (f : X ⟶ Y) : MonoFactorisation f where   I := Abelian.image f   m := kernel.ι _   m_mono := inferInstance   e := kernel.lift _ f (cokernel.condition _)   fac := kernel.lift_ι _ _ _";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.OfCoimageImageComparisonIsIso.imageMonoFactorisation_e'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 143;
+      code_preview = "theorem imageMonoFactorisation_e' {X Y : C} (f : X ⟶ Y) :     (imageMonoFactorisation f).e = cokernel.π _ ≫ Abelian.coimageImageComparison f";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.OfCoimageImageComparisonIsIso.imageFactorisation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 150;
+      code_preview = "def imageFactorisation {X Y : C} (f : X ⟶ Y) [IsIso (Abelian.coimageImageComparison f)] :     ImageFactorisation f where   F := imageMonoFactorisation f   isImage :=     { lift := fun F => inv (Abelian.coimageImageComparison f) ≫ cokernel.desc _ F.e F.kernel_ι_comp       lift_fac := fun F => by     ";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.OfCoimageImageComparisonIsIso.hasImages";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 175;
+      code_preview = "theorem hasImages : HasImages C";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.OfCoimageImageComparisonIsIso.isNormalMonoCategory";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 183;
+      code_preview = "lemma isNormalMonoCategory : IsNormalMonoCategory C where   normalMonoOfMono f m := ⟨{       Z := _       g := cokernel.π f       w := by simp       isLimit := by         haveI : Limits.HasImages C := hasImages         haveI : HasEqualizers C := Preadditive.hasEqualizers_of_hasKernels         haveI ";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.OfCoimageImageComparisonIsIso.isNormalEpiCategory";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 208;
+      code_preview = "lemma isNormalEpiCategory : IsNormalEpiCategory C where   normalEpiOfEpi f m := ⟨{       W := kernel f       g := kernel.ι _       w := kernel.condition _       isColimit := by         haveI : Limits.HasImages C := hasImages         haveI : HasEqualizers C := Preadditive.hasEqualizers_of_hasKernels ";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.ofCoimageImageComparisonIsIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 243;
+      code_preview = "@[stacks 0109 \"The Stacks project uses this characterisation at the definition of an abelian category.\"] def ofCoimageImageComparisonIsIso : Abelian C where";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasFiniteBiproducts";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 262;
+      code_preview = "theorem hasFiniteBiproducts : HasFiniteBiproducts C";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasBinaryBiproducts";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 268;
+      code_preview = "instance (priority := 100) hasBinaryBiproducts : HasBinaryBiproducts C :=   Limits.hasBinaryBiproducts_of_finite_biproducts _";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasZeroObject";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 271;
+      code_preview = "instance (priority := 100) hasZeroObject : HasZeroObject C :=   hasZeroObject_of_hasInitial_object";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.nonPreadditiveAbelian";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 276;
+      code_preview = "def nonPreadditiveAbelian : NonPreadditiveAbelian C :=   { ‹Abelian C› with }";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.isIso_factorThruImage";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 294;
+      code_preview = "instance isIso_factorThruImage [Mono f] : IsIso (Abelian.factorThruImage f) := by infer_instance";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.isIso_factorThruCoimage";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 299;
+      code_preview = "instance isIso_factorThruCoimage [Epi f] : IsIso (Abelian.factorThruCoimage f) := by infer_instance";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.mono_of_kernel_ι_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 311;
+      code_preview = "theorem mono_of_kernel_ι_eq_zero (h : kernel.ι f = 0) : Mono f";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.epi_of_cokernel_π_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 314;
+      code_preview = "theorem epi_of_cokernel_π_eq_zero (h : cokernel.π f = 0) : Epi f";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.image_ι_comp_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 325;
+      code_preview = "theorem image_ι_comp_eq_zero {R : C} {g : Q ⟶ R} (h : f ≫ g = 0) : Abelian.image.ι f ≫ g = 0";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.comp_coimage_π_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 328;
+      code_preview = "theorem comp_coimage_π_eq_zero {R : C} {g : Q ⟶ R} (h : f ≫ g = 0) : f ≫ Abelian.coimage.π g = 0";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.imageStrongEpiMonoFactorisation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 333;
+      code_preview = "@[simps] def imageStrongEpiMonoFactorisation : StrongEpiMonoFactorisation f where   I := Abelian.image f   m := image.ι f   m_mono := by infer_instance   e := Abelian.factorThruImage f   e_strong_epi := strongEpi_of_epi _";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.coimageStrongEpiMonoFactorisation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 342;
+      code_preview = "@[simps] def coimageStrongEpiMonoFactorisation : StrongEpiMonoFactorisation f where   I := Abelian.coimage f   m := Abelian.factorThruCoimage f   m_mono := by infer_instance   e := coimage.π f   e_strong_epi := strongEpi_of_epi _";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.coimageIsoImage";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 382;
+      code_preview = "abbrev coimageIsoImage : Abelian.coimage f ≅ Abelian.image f :=   asIso (coimageImageComparison f)";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.coimageIsoImage'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 387;
+      code_preview = "abbrev coimageIsoImage' : Abelian.coimage f ≅ image f :=   IsImage.isoExt (coimageStrongEpiMonoFactorisation f).toMonoIsImage (Image.isImage f)";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.coimageIsoImage'_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 392;
+      code_preview = "theorem coimageIsoImage'_hom :     (coimageIsoImage' f).hom =       cokernel.desc _ (factorThruImage f) (by simp [← cancel_mono (Limits.image.ι f)])";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.factorThruImage_comp_coimageIsoImage'_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 400;
+      code_preview = "theorem factorThruImage_comp_coimageIsoImage'_inv :     factorThruImage f ≫ (coimageIsoImage' f).inv = cokernel.π _";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.imageIsoImage";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 405;
+      code_preview = "abbrev imageIsoImage : Abelian.image f ≅ image f :=   IsImage.isoExt (imageStrongEpiMonoFactorisation f).toMonoIsImage (Image.isImage f)";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.imageIsoImage_hom_comp_image_ι";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 410;
+      code_preview = "theorem imageIsoImage_hom_comp_image_ι : (imageIsoImage f).hom ≫ Limits.image.ι _ = kernel.ι _";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.imageIsoImage_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 413;
+      code_preview = "theorem imageIsoImage_inv :     (imageIsoImage f).inv =       kernel.lift _ (Limits.image.ι f) (by simp [← cancel_epi (factorThruImage f)])";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.epiIsCokernelOfKernel";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 429;
+      code_preview = "def epiIsCokernelOfKernel [Epi f] (s : Fork f 0) (h : IsLimit s) :     IsColimit (CokernelCofork.ofπ f (KernelFork.condition s)) :=   NonPreadditiveAbelian.epiIsCokernelOfKernel s h";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.monoIsKernelOfCokernel";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 436;
+      code_preview = "def monoIsKernelOfCokernel [Mono f] (s : Cofork f 0) (h : IsColimit s) :     IsLimit (KernelFork.ofι f (CokernelCofork.condition s)) :=   NonPreadditiveAbelian.monoIsKernelOfCokernel s h";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.epiDesc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 445;
+      code_preview = "def epiDesc [Epi f] {T : C} (g : X ⟶ T) (hg : kernel.ι f ≫ g = 0) : Y ⟶ T :=   (epiIsCokernelOfKernel _ (limit.isLimit _)).desc (CokernelCofork.ofπ _ hg)";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.comp_epiDesc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 450;
+      code_preview = "@[reassoc (attr := simp)] theorem comp_epiDesc [Epi f] {T : C} (g : X ⟶ T) (hg : kernel.ι f ≫ g = 0) :     f ≫ epiDesc f g hg = g";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.monoLift";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 455;
+      code_preview = "def monoLift [Mono f] {T : C} (g : T ⟶ Y) (hg : g ≫ cokernel.π f = 0) : T ⟶ X :=   (monoIsKernelOfCokernel _ (colimit.isColimit _)).lift (KernelFork.ofι _ hg)";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.monoLift_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 460;
+      code_preview = "@[reassoc (attr := simp)] theorem monoLift_comp [Mono f] {T : C} (g : T ⟶ Y) (hg : g ≫ cokernel.π f = 0) :     monoLift f g hg ≫ f = g";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.isLimitMapConeOfKernelForkOfι";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 470;
+      code_preview = "noncomputable def isLimitMapConeOfKernelForkOfι     {X Y : D} (i : X ⟶ Y) [HasCokernel i] (F : D ⥤ C)     [F.PreservesZeroMorphisms] [Mono (F.map i)]     [PreservesColimit (parallelPair i 0) F] :     IsLimit (F.mapCone (KernelFork.ofι i (cokernel.condition i))) := by   let e : parallelPair (cokernel";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.isColimitMapCoconeOfCokernelCoforkOfπ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 486;
+      code_preview = "noncomputable def isColimitMapCoconeOfCokernelCoforkOfπ     {X Y : D} (p : X ⟶ Y) [HasKernel p] (F : D ⥤ C)     [F.PreservesZeroMorphisms] [Epi (F.map p)]     [PreservesLimit (parallelPair p 0) F] :     IsColimit (F.mapCocone (CokernelCofork.ofπ p (kernel.condition p))) := by   let e : parallelPair ";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasEqualizers";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 508;
+      code_preview = "instance (priority := 100) hasEqualizers : HasEqualizers C :=   Preadditive.hasEqualizers_of_hasKernels";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasPullbacks";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 511;
+      code_preview = "instance (priority := 100) hasPullbacks : HasPullbacks C :=   hasPullbacks_of_hasBinaryProducts_of_hasEqualizers C";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasCoequalizers";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 519;
+      code_preview = "instance (priority := 100) hasCoequalizers : HasCoequalizers C :=   Preadditive.hasCoequalizers_of_hasCokernels";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasPushouts";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 522;
+      code_preview = "instance (priority := 100) hasPushouts : HasPushouts C :=   hasPushouts_of_hasBinaryCoproducts_of_hasCoequalizers C";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasFiniteLimits";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 526;
+      code_preview = "instance (priority := 100) hasFiniteLimits : HasFiniteLimits C :=   Limits.hasFiniteLimits_of_hasEqualizers_and_finite_products";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.hasFiniteColimits";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 529;
+      code_preview = "instance (priority := 100) hasFiniteColimits : HasFiniteColimits C :=   Limits.hasFiniteColimits_of_hasCoequalizers_and_finite_coproducts";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.PullbackToBiproductIsKernel.pullbackToBiproduct";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 542;
+      code_preview = "abbrev pullbackToBiproduct : pullback f g ⟶ X ⊞ Y :=   biprod.lift (pullback.fst f g) (pullback.snd f g)";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.PullbackToBiproductIsKernel.pullbackToBiproductFork";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 546;
+      code_preview = "abbrev pullbackToBiproductFork : KernelFork (biprod.desc f (-g)) :=   KernelFork.ofι (pullbackToBiproduct f g) <| by     rw [biprod.lift_desc, comp_neg, pullback.condition, add_neg_cancel]";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.PullbackToBiproductIsKernel.isLimitPullbackToBiproduct";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 554;
+      code_preview = "def isLimitPullbackToBiproduct : IsLimit (pullbackToBiproductFork f g) :=   Fork.IsLimit.mk _     (fun s =>       pullback.lift (Fork.ι s ≫ biprod.fst) (Fork.ι s ≫ biprod.snd) <|         sub_eq_zero.1 <| by           rw [Category.assoc, Category.assoc, ← comp_sub, sub_eq_add_neg, ← comp_neg, ←      ";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.BiproductToPushoutIsCokernel.biproductToPushout";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 575;
+      code_preview = "abbrev biproductToPushout : Y ⊞ Z ⟶ pushout f g :=   biprod.desc (pushout.inl _ _) (pushout.inr _ _)";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.BiproductToPushoutIsCokernel.biproductToPushoutCofork";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 579;
+      code_preview = "abbrev biproductToPushoutCofork : CokernelCofork (biprod.lift f (-g)) :=   CokernelCofork.ofπ (biproductToPushout f g) <| by     rw [biprod.lift_desc, neg_comp, pushout.condition, add_neg_cancel]";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.BiproductToPushoutIsCokernel.isColimitBiproductToPushout";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 585;
+      code_preview = "def isColimitBiproductToPushout : IsColimit (biproductToPushoutCofork f g) :=   Cofork.IsColimit.mk _     (fun s =>       pushout.desc (biprod.inl ≫ Cofork.π s) (biprod.inr ≫ Cofork.π s) <|         sub_eq_zero.1 <| by           rw [← Category.assoc, ← Category.assoc, ← sub_comp, sub_eq_add_neg, ← ne";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.epi_pullback_of_epi_f";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 603;
+      code_preview = "instance epi_pullback_of_epi_f [Epi f] : Epi (pullback.snd f g) :=   epi_of_cancel_zero _ fun {R} e h => by     let u := biprod.desc (0 : X ⟶ R) e     have hu : PullbackToBiproductIsKernel.pullbackToBiproduct f g ≫ u = 0 := by simpa [u]     have :=       epiIsCokernelOfKernel _         (PullbackToBi";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.epi_pullback_of_epi_g";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 636;
+      code_preview = "instance epi_pullback_of_epi_g [Epi g] : Epi (pullback.fst f g) :=   epi_of_cancel_zero _ fun {R} e h => by     let u := biprod.desc e (0 : Y ⟶ R)     have hu : PullbackToBiproductIsKernel.pullbackToBiproduct f g ≫ u = 0 := by simpa [u]     have :=       epiIsCokernelOfKernel _         (PullbackToBi";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.epi_snd_of_isLimit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 668;
+      code_preview = "theorem epi_snd_of_isLimit [Epi f] {s : PullbackCone f g} (hs : IsLimit s) : Epi s.snd";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.epi_fst_of_isLimit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 673;
+      code_preview = "theorem epi_fst_of_isLimit [Epi g] {s : PullbackCone f g} (hs : IsLimit s) : Epi s.fst";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.epi_fst_of_factor_thru_epi_mono_factorization";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 678;
+      code_preview = "theorem epi_fst_of_factor_thru_epi_mono_factorization (g₁ : Y ⟶ W) [Epi g₁] (g₂ : W ⟶ Z) [Mono g₂]     (hg : g₁ ≫ g₂ = g) (f' : X ⟶ W) (hf : f' ≫ g₂ = f) (t : PullbackCone f g) (ht : IsLimit t) :     Epi t.fst";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.mono_pushout_of_mono_f";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 692;
+      code_preview = "instance mono_pushout_of_mono_f [Mono f] : Mono (pushout.inr _ _ : Z ⟶ pushout f g) :=   mono_of_cancel_zero _ fun {R} e h => by     let u := biprod.lift (0 : R ⟶ Y) e     have hu : u ≫ BiproductToPushoutIsCokernel.biproductToPushout f g = 0 := by simpa [u]     have :=       monoIsKernelOfCokernel _";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.mono_pushout_of_mono_g";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 714;
+      code_preview = "instance mono_pushout_of_mono_g [Mono g] : Mono (pushout.inl f g) :=   mono_of_cancel_zero _ fun {R} e h => by     let u := biprod.lift e (0 : R ⟶ Z)     have hu : u ≫ BiproductToPushoutIsCokernel.biproductToPushout f g = 0 := by simpa [u]     have :=       monoIsKernelOfCokernel _         (Biproduc";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.mono_inr_of_isColimit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 736;
+      code_preview = "theorem mono_inr_of_isColimit [Mono f] {s : PushoutCocone f g} (hs : IsColimit s) : Mono s.inr";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.mono_inl_of_isColimit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 742;
+      code_preview = "theorem mono_inl_of_isColimit [Mono g] {s : PushoutCocone f g} (hs : IsColimit s) : Mono s.inl";
+    }
+    {
+      full_name = "CategoryTheory.Abelian.mono_inl_of_factor_thru_epi_mono_factorization";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 748;
+      code_preview = "theorem mono_inl_of_factor_thru_epi_mono_factorization (f : X ⟶ Y) (g : X ⟶ Z) (g₁ : X ⟶ W) [Epi g₁]     (g₂ : W ⟶ Z) [Mono g₂] (hg : g₁ ≫ g₂ = g) (f' : W ⟶ Y) (hf : g₁ ≫ f' = f)     (t : PushoutCocone f g) (ht : IsColimit t) : Mono t.inl";
+    }
+    {
+      full_name = "CategoryTheory.NonPreadditiveAbelian.abelian";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Abelian/Basic.lean";
+      start_line = 764;
+      code_preview = "def abelian : Abelian C where   toPreadditive := NonPreadditiveAbelian.preadditive   normalMonoOfMono := fun f _ ↦ ⟨normalMonoOfMono f⟩   normalEpiOfEpi := fun f _ ↦ ⟨normalEpiOfEpi f⟩";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

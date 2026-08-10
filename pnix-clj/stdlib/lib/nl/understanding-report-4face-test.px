@@ -1,0 +1,70 @@
+# stdlib/lib/nl/understanding-report-4face-test.px
+#
+# D단계 lock: understanding_report 4-face(기억/증거/도출/보류). 종류 분리(안 섞음)·render only·truth 0·leak 0.
+let
+  ur = import ./understanding-report.px;
+  B = builtins;
+  hasLine = sub: lines: (B.length (B.filter (l: (B.match (".*" + sub + ".*") l) != null) lines)) > 0;
+
+  me = { evidence_kind = "symbol-memory.recognition"; recognized_count = 2; missing_count = 0; total = 2;
+    symbols_status = [ { name = "속도"; ref_kind = "thing"; status = "recognized"; }
+                       { name = "시간"; ref_kind = "thing"; status = "recognized"; } ]; };
+  catFull = { evidence_kind = "catalog.readback.bundle"; entry_count = 2; durable_truth = false;
+    entries = [ { key = "속도"; source_schema = "physics.standard_quantities"; owner_version = "v1"; status = "recognized"; }
+                { key = "시간"; source_schema = "physics.standard_quantities"; owner_version = "v1"; status = "recognized"; } ]; };
+  mathInv = { evidence_kind = "math.derivation"; verdict = "invalid-candidate"; held_reasons = [ ]; durable_truth = false; };
+  # 1. 속도+시간 = 4-face 전부(기억 2·증거 2·도출 invalid·보류 0)
+  rep1 = ur.mkUnderstandingReport { memory_evidence = me; catalog_readback_evidence = catFull; math_evidence = mathInv; };
+  f1 = rep1.report_faces;
+
+  # 2. Hz/Bq = math held(도출:차원같음 + 보류:의미동등 불가)
+  mathHeld = { evidence_kind = "math.derivation"; verdict = "held";
+    held_reasons = [ { kind = "dimension-equal-not-semantic-equivalent"; } ]; durable_truth = false; };
+  rep2 = ur.mkUnderstandingReport { memory_evidence = me; math_evidence = mathHeld; };
+  f2 = rep2.report_faces;
+
+  # 3. 미등록 catalog → 증거 face 비고 보류 face에
+  catMiss = { evidence_kind = "catalog.readback.bundle"; entry_count = 1;
+    entries = [ { key = "엔트로피"; source_schema = "physics.standard_quantities"; status = "missing"; } ]; };
+  rep3 = ur.mkUnderstandingReport { catalog_readback_evidence = catMiss; };
+  f3 = rep3.report_faces;
+  # 4. ★Fix(evidence_kind assert): wrong-kind 블록이 face 권위 빌리기 차단
+  catWrong = { evidence_kind = "typed-symbol.link"; entry_count = 1;
+    entries = [ { key = "x"; source_schema = "recall.memory"; status = "recognized"; } ]; };
+  mathWrong = { evidence_kind = "typed-symbol.link"; verdict = "consistent"; held_reasons = [ ]; };
+  rep4 = ur.mkUnderstandingReport { catalog_readback_evidence = catWrong; math_evidence = mathWrong; };
+  f4 = rep4.report_faces;
+in {
+  d1_verdict = f1.derivation.verdict;
+  d1_mem_n = B.length f1.memory.recognized;
+  d1_src_n = B.length f1.source_evidence.lines;
+  all_ok =
+    # ★①기억 face: 속도,시간 (2)
+       (B.length f1.memory.recognized == 2)
+    && (hasLine "속도" f1.memory.lines)
+    # ★②증거 face: 출처-attributed(source_schema 명시), 2줄
+    && (B.length f1.source_evidence.lines == 2)
+    && (hasLine "physics.standard_quantities" f1.source_evidence.lines)
+    && (hasLine "카탈로그 증거" f1.source_evidence.lines)
+    # ★③도출 face: invalid-candidate → "차원이 일치하지 않아"(derivation, 회상/증거 아님)
+    && (f1.derivation.verdict == "invalid-candidate")
+    && (hasLine "차원이 일치하지 않아" f1.derivation.lines)
+    # ★④보류 face: 이 경우 비어있음(전부 인식·도출됨)
+    && (f1.held.lines == [ ])
+    # ★종류 안 섞음: 도출 라인이 기억/증거 face에 누출 0
+    && ((hasLine "도출" f1.memory.lines) == false)
+    && ((hasLine "도출" f1.source_evidence.lines) == false)
+    # ★Hz/Bq: 도출=차원같음 ⟂ 보류=의미동등 불가(같은 math 결과의 두 face 분리)
+    && (hasLine "차원은 같습니다" f2.derivation.lines)
+    && (hasLine "의미 동등은 도출할 수 없습니다" f2.held.lines)
+    # ★미등록 catalog: 증거 face 비고(추측 0), 보류 face에 명시
+    && (f3.source_evidence.lines == [ ])
+    && (hasLine "아직 확인하지 못함" f3.held.lines)
+    # ★render only: truth 승급 0
+    && (rep1.durable_truth == false) && (rep1.accepted_as_truth == false)
+    && (rep1.ontology_assert_allowed == false) && (rep1.proposer_only == true)
+    # ★backward compat 필드 유지
+    && (rep1.report_kind == "understanding-report")
+    # ★Fix(evidence_kind assert): wrong-kind → 증거/도출 face 비움(권위 차용 차단)
+    && (f4.source_evidence.lines == [ ]) && (f4.derivation.verdict == "");
+}

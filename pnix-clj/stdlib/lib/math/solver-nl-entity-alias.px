@@ -1,0 +1,115 @@
+# stdlib.math.solver-nl-entity-alias
+#
+# **idea.md §15 (號): NL subject/object → OOP alias → 명시적·투명 reference (Jarvis 조각).**
+#
+# 운영자: NL subject/object(품사)를 전부 transparently reference 하게 *전부 OOP alias* 해줘서
+# 명시적으로 가리킬 수 있어야 — 그래야 Jarvis. AI 가 자기 정체성(자기 구조)까지 *이름으로 지목*.
+#
+# 기존: 역할 추출은 있음(coding/atom-slot-semantic-roles=semantic role, coding/korean-case-marker
+# -lens=조사→subject/object). 없던 것: 각 entity 에 *가리킬 수 있는 OOP 핸들(alias)* 부여.
+# 이 owner = 그 연결 조각: entity(+self) → @ref:name#idx alias → 양방향 투명 reference.
+#
+# ref_kind(§13 universal thing-it): thing / symbol(symbolic engine) / code(ripgrep 범위) /
+# placeholder(${...}) / window(XML 인스턴스) / api-object(타언어 object) / self(자기 정체성).
+# = mirror 가 임의의 디지털 thing 을 *이름으로 명시적으로* 가리킴(§12 inner-OOP / 4-piece OOP 이름).
+#
+# 비수정 data-only. self 이름은 self-expression-mirror 와 동일("삼족오ai").
+let
+  ts = builtins.toString;
+  len = builtins.length;
+  map = builtins.map;
+  filter = builtins.filter;
+  elem = builtins.elem;
+
+  hasField = a: k: (builtins.isAttrs a) && (builtins.hasAttr k a);
+  getOr = a: k: d: if hasField a k then builtins.getAttr k a else d;
+
+  knownRefKinds = [
+    "thing" "symbol" "code" "placeholder" "window" "api-object" "self"
+    "step" "edge"
+    # typed-layer 號 (가리키는 기호의 *층*): universal symbol = typed symbolic address.
+    # 값/함수/morphism/gate(합성 gate-graph)/functor/rewrite-rule/law/term(재작성 항식) + analyzer 층(file/module/type/effect/flow/span).
+    "value" "function" "morphism" "gate" "functor" "rewrite-rule" "law" "term"
+    "file" "module" "type" "effect" "flow" "span"
+  ];
+
+  # entity { name; role?; ref_kind? } → OOP alias (명시적으로 가리키는 핸들)
+  aliasEntity = idx: e:
+    let
+      name = getOr e "name" "?";
+      role = getOr e "role" "entity";       # subject/object/predicate/...
+      refKind =
+        let rk = getOr e "ref_kind" "thing";
+        in if elem rk knownRefKinds then rk else "thing";
+      alias = "@" + refKind + ":" + name + "#" + (ts idx);
+    in {
+      idx = idx;
+      name = name;
+      role = role;
+      ref_kind = refKind;
+      alias = alias;                         # ← OOP 핸들 (명시적·투명 reference)
+      pointable = true;
+      transparent_ref = "'" + alias + "' 로 '" + name + "' 을(를) 명시적·투명하게 가리킴";
+    };
+
+  # NL entities + self 전부 alias (모든 품사 + 자기 정체성 referenceable)
+  aliasAll = entities:
+    let
+      ents = builtins.genList
+        (i: aliasEntity i (builtins.elemAt entities i)) (len entities);
+      # self = referenceable entity (AI 자기 정체성; mirror가 자기 구조 앎 — self-expression-mirror)
+      selfRow = {
+        idx = len entities;
+        name = "삼족오ai";
+        role = "self";
+        ref_kind = "self";
+        alias = "@self:삼족오ai#" + (ts (len entities));
+        pointable = true;
+        transparent_ref = "AI 자기 자신(자기 구조/정체성)을 명시적으로 가리킴";
+      };
+      all = ents ++ [ selfRow ];
+    in {
+      total = len all;
+      entities = all;
+      # alias → name 역참조표 (양방향 투명)
+      reference_table = map (r: { alias = r.alias; name = r.name; role = r.role; ref_kind = r.ref_kind; }) all;
+      self_alias = selfRow.alias;
+      note = "모든 NL subject/object + self 가 OOP alias 로 transparent reference 가능 = Jarvis 연결 조각. mirror가 이름으로 임의 thing 지목(§12/§13).";
+    };
+
+  # alias 로 entity 역참조 (투명 양방향 reference)
+  resolveAlias = table: alias:
+    let m = filter (r: r.alias == alias) table;
+    in if m == [ ] then { outcome = "held-unknown-alias"; alias = alias; }
+       else (builtins.head m) // { outcome = "resolved"; };
+
+  applySolverNlEntityAliasPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if request ? entities then aliasAll request.entities
+    else if (request ? table) && (request ? alias) then resolveAlias request.table request.alias
+    else { outcome = "held-missing-input"; reason = "entities 또는 (table+alias) 필요."; };
+
+  inventorySummary = _: {
+    owner = "stdlib.math.solver-nl-entity-alias";
+    role = "§15 (號): NL subject/object(+self) → OOP alias → 명시적·투명 reference (Jarvis 조각)";
+    ref_kinds = knownRefKinds;
+    self_referenceable = "@self:삼족오ai — AI 자기 정체성도 이름으로 지목";
+    note = "idea.md §15 (號). 각 entity 에 가리킬 수 있는 OOP 핸들 부여. 역할추출(atom-slot-semantic-roles/korean-case-marker)과 짝. §12 inner-OOP / 4-piece OOP 이름 / §13 universal thing-it 의 연결 조각.";
+  };
+
+in {
+  inherit
+    knownRefKinds
+    aliasEntity
+    aliasAll
+    resolveAlias
+    applySolverNlEntityAliasPlate
+    inventorySummary;
+  ownerName = "stdlib.math.solver-nl-entity-alias";
+  meta = {
+    source = "stdlib math solver nl entity alias (subject/object -> OOP alias -> transparent reference)";
+    owner = "stdlib.math.solver-nl-entity-alias";
+    base = "solver-nl-entity-alias-v0";
+    rev_note = "idea.md (2026-06-14) §15 (號). NL subject/object(품사)+self 전부에 OOP alias(@ref_kind:name#idx) 부여 → 명시적·투명 reference (양방향 역참조). ref_kind=thing/symbol/code/placeholder/window/api-object/self(§13 universal thing-it). self=@self:삼족오ai(AI 자기 정체성, mirror가 자기구조 앎). 역할추출(atom-slot-semantic-roles/korean-case-marker-lens)과 짝 = Jarvis 연결 조각. §12 inner-OOP / 4-piece OOP 이름 / §13 universal target. 비수정.";
+  };
+}

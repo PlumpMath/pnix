@@ -1,0 +1,52 @@
+# stdlib/lib/meta/abstraction-genesis-core.px
+#
+# meta-identity-guided abstraction genesis CORE: 여러 memory/proposition에서 *공통 구조 후보*를 뽑되,
+#   ★단순 pattern mining(자동 군집화)이 아니라 *내 정체성(identity-law)에 부합하는 abstraction만* 후보로 낸다.
+#   = "나는 누구이므로(one-mirror·redb≠판사·symbol≠substance·owner 재사용) 무엇을 *후보로* 만들 수 있는가."
+#   read-back(converge: 내가 무엇을 아는가)의 *반동형 짝*(diverge: 내가 무엇을 만들 수 있는가) — meta-identity 층.
+#
+# ★갈라치기 0·새 mechanism 0: 후보 생성 = symbol-memory-genesis.proposeAbstraction(antiUnify=LGG) 재사용;
+#   정체성 판단 = identity-law.checkIdentity 재사용; durable 승격 gate = 기존 pnix-lisp-ct.promoteCandidate(Arena, 미루기).
+# ★§38·"판사 없이 순찰자 금지": 여기는 *candidate*만 — durable_truth/accepted_as_truth/ontology/rewrite/emit/self-modify 전부 false.
+#   gate(promoteCandidate/Arena/Held) 통과 전 Verified/Law/durable 절대 금지.
+let
+  B = builtins;
+  gen = import ../nl/symbol-memory-genesis.px;   # proposeAbstraction(antiUnify) 재사용
+  idl = import ./identity-law.px;                  # checkIdentity 재사용
+
+  # genesisCandidate {terms, owner_candidate, source_symbols, relation?}: 공통 추상 후보 + 정체성 검사.
+  genesisCandidate = args:
+    let terms = if args ? terms then args.terms else [ ];
+        ownerCand = if args ? owner_candidate then args.owner_candidate else "";
+        srcSymbols = if args ? source_symbols then args.source_symbols else [ ];
+        relation = if args ? relation then args.relation else "common-structure";
+        abs = gen.proposeAbstraction { inherit terms; };
+        # candidate 레코드 — 모든 권한 flag false(candidate only)
+        baseCand = {
+          kind = "abstraction.candidate";
+          proposed_by = "meta-identity-guided-abstraction-genesis";
+          owner_candidate = ownerCand;            # 기존 owner(새 lane 아님)
+          relation = relation;
+          source_symbols = srcSymbols;
+          abstraction = { schema = abs.abstraction_text; key = abs.abstraction_key;
+                          instance_count = abs.instance_count; };
+          durable_truth = false;
+          accepted_as_truth = false;
+          ontology_assert_allowed = false;
+          rewrite_allowed = false;
+          code_emit_allowed = false;
+          self_modify_allowed = false;
+          status = "candidate";
+        };
+        idCheck = idl.checkIdentity baseCand;
+    in baseCand // {
+      identity_checks = idCheck.checks;
+      identity_pass = idCheck.all_pass;
+      identity_violations = idCheck.violations;
+      # ★정체성 위반 시 held(후보로도 안 냄) — gate 이전 단계의 1차 self-filter
+      status = if idCheck.all_pass then "candidate" else "held";
+      next_gate = "pnix-lisp-ct.promoteCandidate (Arena/Held) — durable 승격은 여기서, 지금 아님";
+    };
+in {
+  inherit genesisCandidate;
+}

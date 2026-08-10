@@ -1,0 +1,381 @@
+let
+  ownerName = "stdlib.nl.category-derived-etale-and-l-adic-substrate";
+
+  etale = import nl/category-etale-cohomology-and-derived-substrate.px;
+  galois = import nl/category-galois-substrate.px;
+  hs = import nl/category-hochschild-serre-substrate.px;
+
+  # === Derived Étale + l-adic Completion (agent-NL-184) =============
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Derived étale cohomology / l-adic completion"
+  #
+  # 표준 정의:
+  #   - 유도 étale cohomology: D^b(Sh_ét(C, Z/l^n))
+  #   - l-adic completion: H^*_ét(C, Z_l) = lim H^*_ét(C, Z/l^n)
+  #
+  # substrate 해석:
+  #   - 각 정밀도 수준 n 마다 mod-l^n receipt 부분이 있다
+  #   - l-adic completion = 무한히 정밀화된 receipt 의 inverse limit
+  #   - 실용적으로: receipt 의 verification depth n 을 늘려가며 stable
+  #     한 cohomology 클래스만 보존
+
+  stepKind = "derived-etale-l-adic-completion";
+  framework_step =
+    "유도 étale + l-adic completion — 정밀도 inverse limit 위의 cohomology";
+
+  # =================================================================
+  # === Substrate 의 l (primary verification scale) =================
+  # =================================================================
+  #
+  # 표준 정수론에서 l 은 prime. substrate 에서는 l 을 *검증 정밀도
+  # 스케일* 로 해석. 자연 후보:
+  #   - l = 2 → Boolean verification (Mode 14 의 Ω)
+  #   - l = 16 → mode count (full chain verification)
+  #   - l = 36 → language codomain count (다언어 검증)
+
+  primaryScales = [
+    {
+      scale_id = "l-2-boolean";
+      l = 2;
+      description_en = "Boolean truth scale — Mode 14's Ω classifier";
+      ring_at_scale = "Z/2 = {0, 1} ≅ truth values";
+      meaning_en = "received vs held";
+    }
+    {
+      scale_id = "l-16-mode-chain";
+      l = 16;
+      description_en = "16-mode chain depth — full pipeline verification";
+      ring_at_scale = "Z/16 = mode-level granularity";
+      meaning_en = "verification at each chain depth";
+    }
+    {
+      scale_id = "l-36-language";
+      l = 36;
+      description_en = "Language codomain count — cross-language verification";
+      ring_at_scale = "Z/36 = per-language verification ring";
+      meaning_en = "cross-language consistency";
+    }
+  ];
+
+  # =================================================================
+  # === Mod-l^n filtration on receipts ==============================
+  # =================================================================
+  #
+  # mod-l^n receipt: receipt verified to depth l^n
+  #   l = 2, n = 1: receipt at boolean depth (가/부)
+  #   l = 2, n = 2: receipt at 2-depth (가/부 + reason)
+  #   l = 2, n = ∞: complete l-adic receipt (모든 정밀도 통합)
+
+  modLnReceipt = l: n: {
+    scale_id = "mod-" + builtins.toString l + "-power-" + builtins.toString n;
+    l = l;
+    n = n;
+    truncation_modulus = l;  # ring Z/l^n (operationally trust depth)
+    depth_at_n_en = "receipt verified to power " + builtins.toString n + " of l=" + builtins.toString l;
+    inverse_limit_target = "l-adic completion at l = " + builtins.toString l;
+  };
+
+  # =================================================================
+  # === L-adic completion (inverse limit) ===========================
+  # =================================================================
+
+  ladicCompletion = l: {
+    completion_id = "Zl-completion-at-" + builtins.toString l;
+    l = l;
+    construction_en = ''
+      Z_l := lim_n Z/l^n  (inverse limit over n)
+
+      Substrate-side:
+        H^*_ét(C, Z_l) := lim_n H^*_ét(C, Z/l^n)
+
+      Receipts that are stable in the inverse limit are
+      "l-adically complete" — they survive arbitrarily deep
+      verification refinement.
+    '';
+    operational_en = ''
+      Operationally: start with mod-l receipt (depth 1), refine to
+      mod-l^2, l^3, ..., and check stability. l-adically complete
+      receipts converge in the limit.
+
+      In substrate: receipts whose verification class stabilizes
+      under increasing depth → l-adically complete cohomology classes.
+    '';
+    canonical_short_exact_sequence_en = ''
+      0 → Z_l → Q_l → Q_l/Z_l → 0
+        Z_l    = integer l-adic completion
+        Q_l    = rational l-adic numbers (Frac(Z_l))
+        Q_l/Z_l = torsion part
+
+      Substrate meaning:
+        Z_l: stable receipt classes (verification-complete)
+        Q_l: rational-valued cohomology (verification with rational tolerance)
+        Q_l/Z_l: torsion = receipts that vanish at some finite depth
+                 but persist below
+    '';
+  };
+
+  # =================================================================
+  # === Derived étale category D^b(Sh_ét) ============================
+  # =================================================================
+
+  derivedEtaleCategory = {
+    category_id = "D-bounded-Sh-etale";
+    description_en = ''
+      D^b(Sh_ét(Site_coding, Z/l^n)) — bounded derived category of
+      étale sheaves of Z/l^n-modules.
+
+      Objects: bounded chain complexes (finitely many non-zero terms)
+      Morphisms: chain maps modulo homotopy, localize at quasi-iso
+      Triangulated structure: distinguished triangles
+
+      Substrate use: receipt chain complexes at each verification
+      depth n, related by truncation maps as n decreases.
+    '';
+    truncation_functor = "tau_<=n : D^b → D^{<=n}";
+    perfect_complexes_subcategory = "Perfect complexes — receipts admitting finite resolution";
+    six_functor_formalism = [
+      "f_*  : pushforward (compose receipts forward)"
+      "f^*  : pullback (restrict receipts)"
+      "f_!  : pushforward with compact support"
+      "f^!  : exceptional inverse image"
+      "tensor : tensor product (combine independent receipts)"
+      "RHom : derived Hom (receipt morphism space)"
+    ];
+  };
+
+  # =================================================================
+  # === Verdier duality =============================================
+  # =================================================================
+  #
+  # In sufficiently good derived étale settings, there's a duality
+  # functor D : D^b(Sh_ét) → D^b(Sh_ét)^op satisfying D^2 = id.
+
+  verdierDuality = {
+    duality_id = "Verdier-duality-on-D-b-Sh-etale";
+    description_en = ''
+      Verdier duality: D : D^b(Sh_ét) → D^b(Sh_ét)^op with D^2 ≅ id
+
+      Computed as D(F) = RHom(F, ω) where ω is the dualizing complex
+      of Site_coding (substrate-internal dualizing sheaf).
+
+      Substrate substrate-meaning: receipts and their "dual receipts"
+      (cohomological invariants) are in symmetric correspondence.
+    '';
+    dualizing_complex = "omega_Site_coding (substrate-internal dualizing sheaf)";
+    involution_property = "D^2 ≅ id (up to natural isomorphism)";
+    relates_to_galois_invariants = ''
+      Galois H^0 (substrate canonical receipts) are SELF-DUAL under
+      Verdier duality: D(canonical-receipt) = canonical-receipt.
+      Non-canonical receipts have non-trivial Verdier dual.
+    '';
+  };
+
+  # =================================================================
+  # === Operational l-adic computation ==============================
+  # =================================================================
+  #
+  # Given a receipt sequence (r_1, r_2, r_3, ...) at depths n=1,2,3,...,
+  # detect if they form an l-adically convergent sequence.
+
+  detectLAdicConvergence = receiptSequence: l:
+    let
+      lengths = builtins.length receiptSequence;
+      # Heuristic stability: check if last 3 receipts agree on
+      # their truth class.
+      lastThree =
+        if lengths < 3 then receiptSequence
+        else [
+          (builtins.elemAt receiptSequence (lengths - 3))
+          (builtins.elemAt receiptSequence (lengths - 2))
+          (builtins.elemAt receiptSequence (lengths - 1))
+        ];
+      stableAtLastThree = lengths >= 3
+        && (builtins.elemAt lastThree 0).truth_class
+           == (builtins.elemAt lastThree 1).truth_class
+        && (builtins.elemAt lastThree 1).truth_class
+           == (builtins.elemAt lastThree 2).truth_class;
+    in {
+      l = l;
+      sequence_length = lengths;
+      stable_at_last_three = stableAtLastThree;
+      l_adically_convergent = stableAtLastThree && lengths >= 3;
+      stable_truth_class = if stableAtLastThree
+                          then (builtins.elemAt lastThree 0).truth_class
+                          else null;
+      completion_class = if stableAtLastThree && lengths >= 3
+                        then "Z-l-stable-receipt"
+                        else "not-yet-stable-or-l-adically-divergent";
+    };
+
+  # =================================================================
+  # === Tate twist (cohomological shift by l-adic character) ========
+  # =================================================================
+  #
+  # Tate twist: Z_l(n) = Z_l with twisted Galois action
+  #   H^*_ét(C, Z_l(n)) = H^*_ét(C, Z_l) ⊗ chi^n
+  # where chi is the cyclotomic character.
+
+  tateTwist = n: {
+    twist_id = "Tate-twist-" + builtins.toString n;
+    n = n;
+    description_en = ''
+      Tate twist by n: Z_l(n) is Z_l with Galois action twisted by
+      chi^n, where chi : G_pnix → Z_l^x is the cyclotomic character.
+
+      In substrate: chi(σ_rename) = 1, chi(σ_lang) = 1, chi(σ_axiom) = -1
+      (axiom-fiber permutation flips orientation).
+
+      Effect on cohomology: H^*_ét(C, Z_l(n)) = H^*_ét(C, Z_l) but with
+      twisted G_pnix-action — cohomology classes "rotate" under
+      Galois action by chi^n.
+    '';
+    relates_to_galois = "Tate twist tracks G_pnix-action on l-adic cohomology";
+  };
+
+  # =================================================================
+  # === Comparison theorems =========================================
+  # =================================================================
+  #
+  # Standard derived étale theorems (substrate analogs):
+  #   1. Smooth base change
+  #   2. Proper base change
+  #   3. Comparison with classical cohomology
+
+  comparisonTheorems = [
+    {
+      theorem_id = "smooth-base-change-substrate";
+      classical_statement = "For smooth f : X → Y and étale sheaf F, f^* commutes with R^i étale cohomology";
+      substrate_meaning_en = "Mode transitions commute with l-adic cohomology — refining verification depth is independent of mode chain position";
+    }
+    {
+      theorem_id = "proper-base-change-substrate";
+      classical_statement = "For proper f : X → Y, f_! commutes with R^i étale cohomology";
+      substrate_meaning_en = "Bounded receipt chains (modes 1-16 form a proper morphism — no unbounded continuation) preserve cohomology under restriction";
+    }
+    {
+      theorem_id = "comparison-with-classical-cohomology";
+      classical_statement = "H^*_ét(X_C, Z/l^n) = H^*_sing(X(C), Z/l^n) for varieties over C";
+      substrate_meaning_en = "Substrate's l-adic étale cohomology agrees with its 'classical' sheaf cohomology at finite depth (both compute the same obstructions)";
+    }
+  ];
+
+  # =================================================================
+  # === Substrate-internal l-adic instances =========================
+  # =================================================================
+
+  substrateInstances = [
+    {
+      instance_id = "boolean-2-adic-mode-14";
+      description_en = ''
+        Mode 14 (held-honest-gate) operationalizes 2-adic
+        verification: at each gate decision, check if the receipt
+        survives to next depth. 2-adically complete receipts are
+        those that pass all gate refinements.
+      '';
+      uses_scale = "l = 2 (Boolean Ω)";
+    }
+    {
+      instance_id = "mode-chain-16-adic";
+      description_en = ''
+        The 16-mode chain itself is a 16-adic verification: each
+        mode 1, 2, ..., 16 is a depth in the verification chain.
+        Receipts surviving all 16 modes are 16-adically complete.
+      '';
+      uses_scale = "l = 16 (mode count)";
+    }
+    {
+      instance_id = "language-36-adic-cross-validation";
+      description_en = ''
+        Cross-language verification across 36+ languages is a
+        36-adic depth: a receipt is 36-adically stable iff
+        all 36 language emissions converge to the same meaning class.
+      '';
+      uses_scale = "l = 36 (language codomain)";
+    }
+    {
+      instance_id = "AC3-as-l-adic-completion";
+      description_en = ''
+        AC3 closure (#174) can be viewed as l-adic completion at
+        l = 36: the missing reverse functor F' is the limit of
+        partial language-emission inverses, l-adically completed.
+        Kan extension is the universal l-adic completion functor.
+      '';
+      uses_scale = "l = 36";
+    }
+  ];
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _: {
+    owner = ownerName;
+    primary_scale_count = builtins.length primaryScales;
+    has_modLn_filtration = true;
+    has_l_adic_completion = true;
+    has_derived_etale_category = true;
+    derived_six_functor_formalism = builtins.length derivedEtaleCategory.six_functor_formalism;
+    has_verdier_duality = true;
+    has_l_adic_convergence_detection = true;
+    has_tate_twist = true;
+    comparison_theorem_count = builtins.length comparisonTheorems;
+    substrate_instance_count = builtins.length substrateInstances;
+    etale_owner_inherited = etale.ownerName;
+    galois_owner_inherited = galois.ownerName;
+    hochschild_serre_owner_inherited = hs.ownerName;
+    relates_AC3_to_l_adic_completion = true;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyDerivedEtaleLAdicPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "derived-etale-l-adic-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "scales" request then {
+      outcome = "primary-scales-emitted"; receipt = primaryScales;
+    }
+    else if builtins.hasAttr "modLn" request then
+      let r = request.modLn;
+      in { outcome = "modLn-receipt-emitted"; receipt = modLnReceipt r.l r.n; }
+    else if builtins.hasAttr "ladic_completion" request then
+      let r = request.ladic_completion;
+      in { outcome = "ladic-completion-emitted"; receipt = ladicCompletion r.l; }
+    else if builtins.hasAttr "derived_etale" request then {
+      outcome = "derived-etale-category-emitted"; receipt = derivedEtaleCategory;
+    }
+    else if builtins.hasAttr "verdier" request then {
+      outcome = "verdier-duality-emitted"; receipt = verdierDuality;
+    }
+    else if builtins.hasAttr "ladic_convergence" request then
+      let r = request.ladic_convergence;
+      in { outcome = "ladic-convergence-detected";
+           receipt = detectLAdicConvergence r.sequence r.l; }
+    else if builtins.hasAttr "tate_twist" request then
+      let r = request.tate_twist;
+      in { outcome = "tate-twist-emitted"; receipt = tateTwist r.n; }
+    else if builtins.hasAttr "comparison_theorems" request then {
+      outcome = "comparison-theorems-emitted"; receipt = comparisonTheorems;
+    }
+    else if builtins.hasAttr "substrate_instances" request then {
+      outcome = "substrate-instances-emitted"; receipt = substrateInstances;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "scales" "modLn" "ladic_completion"
+             "derived_etale" "verdier" "ladic_convergence" "tate_twist"
+             "comparison_theorems" "substrate_instances"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit primaryScales modLnReceipt ladicCompletion;
+  inherit derivedEtaleCategory verdierDuality detectLAdicConvergence;
+  inherit tateTwist comparisonTheorems substrateInstances;
+  inherit inventorySummary applyDerivedEtaleLAdicPlate;
+}

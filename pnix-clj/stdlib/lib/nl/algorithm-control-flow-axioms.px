@@ -1,0 +1,413 @@
+let
+  ownerName = "stdlib.nl.algorithm-control-flow-axioms";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Algorithm Control-Flow Axiom Registry (agent-NL-118) ========
+  #
+  # 사용자 vision (2026-05-29):
+  # > "혈관을 만들었다면, 이제 피를 만드는거임 ... 수학 생성, 알고리즘
+  # >  생성에 대한 axiom 들을 빼곡히 박고, 스스로 그곳으로 찾아가기위한
+  # >  좀더 세세한 물길만들고 물 흐르듯 흘러가는걸 만든다. (LLM 없이)
+  # >  ... 각 행동 pin 포인트들은 직선으로 갈수도 혹은 돌아갈수도 ...
+  # >  변수들이 워낙 많기 때문임."
+  #
+  # # 박힌 혈관 (지금까지 13 substrate) → 피 (axiom content) 의 첫 방울.
+  #
+  # 첫 family: control flow (5 axiom). 각 axiom 의 sub-axiom tree 가
+  # 사용자 발화의 다음 분기 (직선 / 우회) 를 제공.
+  #
+  # data only (mechanism=generic, policy=data 패턴):
+  #   - branch-tree-substrate 가 mechanism (walker / activation)
+  #   - 이 owner 는 *data* (cue + sub-tree topology)
+  #   - 사용자 발화의 instance 가 매칭되면 bound_tree 로 활성화
+
+  stepKind = "control-flow-axiom-data";
+  framework_step =
+    "axiom content — 알고리즘 흐름 5 family 의 sub-tree topology";
+
+  # === 5 control flow axioms ======================================
+
+  # 1. sequence — 순차 실행 (A then B then C)
+  sequenceAxiomTree = bt.composeBranchTree "sequence axiom" [
+    {
+      name = "sequence-linear";
+      cues = [ "then" "after" "next" "그리고" "다음" "이후" "후에" ];
+      sub_specs = [
+        { name = "do-then-do"; cues = [ "do" "execute" "실행" ]; terminal = true; }
+        { name = "chain-of-calls"; cues = [ "call" "호출" "invoke" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "sequence-with-result-passing";
+      cues = [ "result" "결과" "output" "result of" "그 결과" ];
+      sub_specs = [
+        { name = "pipe"; cues = [ "pipe" "pipeline" "파이프" ]; terminal = true; }
+        { name = "compose"; cues = [ "compose" "combine" "결합" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # 2. conditional — 조건 분기 (if / else / match)
+  conditionalAxiomTree = bt.composeBranchTree "conditional axiom" [
+    {
+      name = "if-then";
+      cues = [ "if" "when" "만약" "만일" "경우" ];
+      sub_specs = [
+        { name = "simple-if"; cues = [ "if X" ]; terminal = true; }
+        { name = "if-else"; cues = [ "else" "otherwise" "아니면" "그렇지 않으면" ]; terminal = true; }
+        {
+          name = "if-elif-chain";
+          cues = [ "else if" "elif" "또는" ];
+          sub_specs = [
+            { name = "linear-chain"; cues = []; terminal = true; }
+            { name = "guard-clauses"; cues = [ "guard" "early return" "조기 종료" ]; terminal = true; }
+          ];
+        }
+      ];
+    }
+    {
+      name = "pattern-match";
+      cues = [ "match" "switch" "case" "패턴" "구분" ];
+      sub_specs = [
+        { name = "exhaustive-match"; cues = [ "all cases" "모든 경우" ]; terminal = true; }
+        { name = "default-fallback"; cues = [ "default" "fallback" "기본" "_" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "boolean-short-circuit";
+      cues = [ "and" "or" "그리고" "또는" "&&" "||" ];
+      sub_specs = [
+        { name = "short-circuit-and"; cues = []; terminal = true; }
+        { name = "short-circuit-or"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # 3. loop — 반복 (for / while / foreach / recursion-loop)
+  loopAxiomTree = bt.composeBranchTree "loop axiom" [
+    {
+      name = "bounded-loop";
+      cues = [ "for" "for each" "각각" "for i in" ];
+      sub_specs = [
+        { name = "for-range"; cues = [ "range" "0 to" "from to" ]; terminal = true; }
+        { name = "for-each"; cues = [ "each" "all elements" "모든 요소" "list" ]; terminal = true; }
+        { name = "indexed-for"; cues = [ "index" "i = 0" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "conditional-loop";
+      cues = [ "while" "until" "repeat" "동안" "반복" ];
+      sub_specs = [
+        { name = "while-condition"; cues = [ "while X" ]; terminal = true; }
+        { name = "do-while"; cues = [ "do while" "at least once" "최소 한 번" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "early-exit";
+      cues = [ "break" "continue" "return" "조기" "중단" ];
+      sub_specs = [
+        { name = "break-out"; cues = [ "break" "stop" "멈춤" ]; terminal = true; }
+        { name = "skip-iteration"; cues = [ "continue" "skip" "건너" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # 4. recursion — 재귀 (자기 호출)
+  recursionAxiomTree = bt.composeBranchTree "recursion axiom" [
+    {
+      name = "direct-recursion";
+      cues = [ "recurse" "recursion" "self-call" "재귀" "스스로" ];
+      sub_specs = [
+        {
+          name = "tail-recursion";
+          cues = [ "tail" "loop equivalent" "끝" ];
+          terminal = true;
+        }
+        {
+          name = "tree-recursion";
+          cues = [ "tree" "fibonacci" "binary" "트리" ];
+          terminal = true;
+        }
+        {
+          name = "linear-recursion";
+          cues = [ "linear" "list" "factorial" ];
+          terminal = true;
+        }
+      ];
+    }
+    {
+      name = "mutual-recursion";
+      cues = [ "mutual" "co-recursive" "상호" "서로" ];
+      sub_specs = [
+        { name = "two-mutual"; cues = []; terminal = true; }
+        { name = "n-mutual"; cues = [ "n functions" "여러" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "base-case-required";
+      cues = [ "base case" "termination" "종료" "기저" ];
+      sub_specs = [
+        { name = "single-base"; cues = []; terminal = true; }
+        { name = "multiple-bases"; cues = [ "multiple" "여러" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # 5. error handling — 예외/오류 처리
+  errorAxiomTree = bt.composeBranchTree "error handling axiom" [
+    {
+      name = "try-catch";
+      cues = [ "try" "catch" "except" "예외" ];
+      sub_specs = [
+        { name = "specific-exception"; cues = [ "specific" "특정" ]; terminal = true; }
+        { name = "generic-catch"; cues = [ "all" "generic" "모두" ]; terminal = true; }
+        { name = "finally-cleanup"; cues = [ "finally" "always" "항상" "정리" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "result-type";
+      cues = [ "Result" "Either" "Option" "Maybe" "결과 타입" ];
+      sub_specs = [
+        { name = "ok-or-err"; cues = [ "Ok" "Err" ]; terminal = true; }
+        { name = "some-or-none"; cues = [ "Some" "None" "Just" "Nothing" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "panic-or-abort";
+      cues = [ "panic" "abort" "crash" "중단" "심각" ];
+      sub_specs = [
+        { name = "unrecoverable"; cues = [ "unrecoverable" "복구 불가" ]; terminal = true; }
+        { name = "fast-fail"; cues = [ "fail fast" "즉시 실패" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "validation";
+      cues = [ "validate" "check" "verify" "검증" "확인" ];
+      sub_specs = [
+        { name = "precondition"; cues = [ "before" "전제" "사전" ]; terminal = true; }
+        { name = "postcondition"; cues = [ "after" "사후" ]; terminal = true; }
+        { name = "invariant"; cues = [ "invariant" "불변" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "error-recovery";
+      cues = [ "error recovery" "graceful degradation" "fallback" "회복" ];
+      sub_specs = [
+        { name = "try-rescue-fallback"; cues = [ "fallback" "rescue" ]; terminal = true; }
+        { name = "circuit-pattern"; cues = [ "circuit breaker pattern" ]; terminal = true; }
+        { name = "retry-with-budget"; cues = [ "retry budget" "재시도 예산" ]; terminal = true; }
+        { name = "bulkhead-isolation-flow"; cues = [ "bulkhead flow" "격벽" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry of all 5 axiom families ============================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-cf-001";
+      name = "sequence";
+      domain = "control-flow";
+      activation_cues = [ "then" "next" "after" "그리고" "다음" "순차" ];
+      tree = sequenceAxiomTree;
+      sub_count = builtins.length sequenceAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-cf-002";
+      name = "conditional";
+      domain = "control-flow";
+      activation_cues = [ "if" "when" "match" "case" "만약" "조건" "분기" ];
+      tree = conditionalAxiomTree;
+      sub_count = builtins.length conditionalAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-cf-003";
+      name = "loop";
+      domain = "control-flow";
+      activation_cues = [ "for" "while" "loop" "iterate" "each" "반복" "동안" ];
+      tree = loopAxiomTree;
+      sub_count = builtins.length loopAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-cf-004";
+      name = "recursion";
+      domain = "control-flow";
+      activation_cues = [ "recurse" "recursion" "recursive" "recursively" "self-call" "재귀" "스스로" "재귀적" ];
+      tree = recursionAxiomTree;
+      sub_count = builtins.length recursionAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-cf-005";
+      name = "error-handling";
+      domain = "control-flow";
+      activation_cues = [ "try" "catch" "error" "exception" "Result" "예외" "오류" "검증" "validate" "validation" "verify" "확인" ];
+      tree = errorAxiomTree;
+      sub_count = builtins.length errorAxiomTree.branches;
+    }
+  ];
+
+  # === Axiom selection from utterance =============================
+  #
+  # Given an utterance, return list of activated axioms with their
+  # trees. Multi-axiom utterance ("loop with error handling") may
+  # activate 2+ axioms.
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  # === Build a composite tree from multiple activated axioms ======
+  #
+  # When 2+ axioms activate, present them as top-level multi-choice.
+  # User picks one, then walks its sub-tree.
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple control-flow axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "use " + ax.name + " control flow";
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  # === Plate entry =================================================
+
+  applyControlFlowAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-104-nl-control-flow-axiom "
+            + "(composes axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms = true } or { activate_for = \"<NL>\" } "
+        + "or { describe = \"<axiom name>\" }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-algorithm-control-flow-axiom-104";
+    composes = "axiom-98-tree (data on generic substrate)";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "sequence (순차)"
+      "conditional (조건)"
+      "loop (반복)"
+      "recursion (재귀)"
+      "error-handling (예외/검증)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    metaphor =
+      "혈관(substrate) 위의 피(axiom content) 첫 방울. control flow "
+      + "5 family 가 데이터로만 — generic constructor 위에 박힘.";
+  };
+
+in {
+  inherit
+    ownerName
+    sequenceAxiomTree conditionalAxiomTree loopAxiomTree
+    recursionAxiomTree errorAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    applyControlFlowAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL algorithm control-flow axioms (agent-NL-118)";
+    owner = ownerName;
+    base = "nl-algorithm-control-flow-axioms-v0";
+    rev_note = "agent-NL-118 (2026-05-29): 사용자 비유 - 혈관 → 피. "
+      + "13 substrate 위의 첫 axiom content 데이터. 5 control flow "
+      + "family (sequence/conditional/loop/recursion/error-handling). "
+      + "각 family 가 sub-axiom tree 보유 - branch-tree-substrate "
+      + "generic constructor 위에 데이터로만. NL 발화 → cue 매칭 → "
+      + "axiom 활성화 → bound_tree 로 instance 에 부착. LLM 없이 "
+      + "deterministic. DO NOT REBUILD - #110 branch-tree 의 "
+      + "composeBranchTree 만 사용.";
+  };
+}

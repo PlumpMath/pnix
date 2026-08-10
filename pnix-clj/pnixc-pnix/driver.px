@@ -1,0 +1,28 @@
+{
+  name = "pnixc.driver";
+  schema = "pnixc-driver-v1";
+  description = "data-only CLI model for pnixc";
+
+  modes = [ "expr" "module" ];
+  emits = [ "ir" "ssa" "aot" ];
+
+  defaults = {
+    mode = "module";
+    emit = "ir";
+    opt_level = 2;
+  };
+
+  flags = [
+    { name = "--emit"; kind = "enum"; values = [ "ir" "ssa" "llvm" "aot" ]; }
+    { name = "--expr"; kind = "bool"; }
+    { name = "--module"; kind = "bool"; }
+    { name = "--out"; kind = "path"; }
+    { name = "--target"; kind = "string"; }
+    { name = "--opt-level"; kind = "int"; min = 0; max = 3; }
+  ];
+
+  pipeline_map = {
+    expr = "pipelines.expr";
+    module = "pipelines.module";
+  };
+}

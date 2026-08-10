@@ -1,0 +1,797 @@
+rec {
+  name = "pnixc.clojure.projection";
+  schema = "pnix-clj.clojure-projection.v0";
+  host = "clojure";
+  cross_host_parity = false;
+  semantic_owner = "pnix-clj";
+
+  termTags = [
+    "Scalar"
+    "Symbol"
+    "Keyword"
+    "List"
+    "Vector"
+    "Map"
+    "Set"
+    "Var"
+    "Namespace"
+    "Exception"
+    "JavaClass"
+    "JavaObject"
+    "ControlFlowReceipt"
+    "MacroexpandReceipt"
+    "DynamicBindingReceipt"
+    "JavaInteropReceipt"
+    "ReflectionReceipt"
+    "ClassloaderReceipt"
+    "NamespaceResolutionReceipt"
+    "HostObjectConstructionReceipt"
+    "PolymorphismDispatchReceipt"
+    "MetadataReceipt"
+    "StateEffectReceipt"
+    "LazyEvaluationReceipt"
+    "ConcurrencyReceipt"
+    "CoordinationReceipt"
+  ];
+  scalarKinds = [ "nil" "bool" "int" "float" "string" "char" "ratio" "bigint" "bigdec" ];
+
+  ok = path: term: {
+    status = "ok";
+    reason = "clojure-projection-term-valid";
+    schema = schema;
+    path = path;
+    tag = term.tag;
+  };
+
+  held = reason: path: {
+    status = "failed";
+    reason = reason;
+    schema = schema;
+    path = path;
+  };
+
+  hasString = term: key:
+    builtins.isAttrs term && builtins.hasAttr key term && builtins.isString (builtins.getAttr key term);
+
+  hasList = term: key:
+    builtins.isAttrs term && builtins.hasAttr key term && builtins.isList (builtins.getAttr key term);
+
+  hasBool = term: key:
+    builtins.isAttrs term && builtins.hasAttr key term && builtins.isBool (builtins.getAttr key term);
+
+  hasInt = term: key:
+    builtins.isAttrs term && builtins.hasAttr key term && builtins.isInt (builtins.getAttr key term);
+
+  stringOrNull = value:
+    value == null || builtins.isString value;
+
+  optionalString = term: key:
+    !(builtins.hasAttr key term) || stringOrNull (builtins.getAttr key term);
+
+  validateOptionalTerm = path: term: key:
+    if !(builtins.hasAttr key term) || builtins.getAttr key term == null then { status = "ok"; }
+    else validateTermAt (path + "." + key) (builtins.getAttr key term);
+
+  validateOptionalTermList = path: term: key:
+    if !(builtins.hasAttr key term) || builtins.getAttr key term == null then { status = "ok"; }
+    else if !(builtins.isList (builtins.getAttr key term)) then held (key + "-not-list") path
+    else
+      let xs = builtins.getAttr key term;
+      in validateEach xs path (i: item: validateTermAt (path + "." + key + "[" + (builtins.toString i) + "]") item);
+
+  validateOptionalStringList = path: term: key:
+    if !(builtins.hasAttr key term) || builtins.getAttr key term == null then { status = "ok"; }
+    else if !(builtins.isList (builtins.getAttr key term)) then held (key + "-not-list") path
+    else
+      let xs = builtins.getAttr key term;
+      in validateEach xs path (i: item:
+        if item == null || builtins.isString item then { status = "ok"; }
+        else held (key + "-item-not-string-or-null") (path + "." + key + "[" + (builtins.toString i) + "]"));
+
+  validateEach = xs: path: f:
+    let
+      step = acc: item:
+        if acc.status != "ok" then acc
+        else
+          let res = f acc.index item;
+          in if res.status != "ok" then res else { status = "ok"; index = acc.index + 1; };
+    in (builtins.foldl' step { status = "ok"; index = 0; } xs);
+
+  validateTerm = term:
+    validateTermAt "$" term;
+
+  validateTermAt = path: term:
+    if !(builtins.isAttrs term) then held "term-not-attrs" path
+    else if !(hasString term "tag") then held "missing-string-tag" path
+    else if !(builtins.elem term.tag termTags) then held "unknown-term-tag" path
+    else if !(hasString term "host") || term.host != host then held "host-not-clojure" path
+    else
+      if term.tag == "Scalar" then validateScalar path term
+      else if term.tag == "Symbol" then validateNamed path term "symbol"
+      else if term.tag == "Keyword" then validateNamed path term "keyword"
+      else if term.tag == "List" then validateSequence path term "items" true
+      else if term.tag == "Vector" then validateSequence path term "items" false
+      else if term.tag == "Map" then validateMap path term
+      else if term.tag == "Set" then validateSequence path term "items" false
+      else if term.tag == "Var" then validateVar path term
+      else if term.tag == "Namespace" then validateNamespace path term
+      else if term.tag == "Exception" then validateException path term
+      else if term.tag == "JavaClass" then validateJavaClass path term
+      else if term.tag == "JavaObject" then validateJavaObject path term
+      else if term.tag == "ControlFlowReceipt" then validateControlFlowReceipt path term
+      else if term.tag == "MacroexpandReceipt" then validateMacroexpandReceipt path term
+      else if term.tag == "DynamicBindingReceipt" then validateDynamicBindingReceipt path term
+      else if term.tag == "JavaInteropReceipt" then validateJavaInteropReceipt path term
+      else if term.tag == "ReflectionReceipt" then validateReflectionReceipt path term
+      else if term.tag == "ClassloaderReceipt" then validateClassloaderReceipt path term
+      else if term.tag == "NamespaceResolutionReceipt" then validateNamespaceResolutionReceipt path term
+      else if term.tag == "HostObjectConstructionReceipt" then validateHostObjectConstructionReceipt path term
+      else if term.tag == "PolymorphismDispatchReceipt" then validatePolymorphismDispatchReceipt path term
+      else if term.tag == "MetadataReceipt" then validateMetadataReceipt path term
+      else if term.tag == "StateEffectReceipt" then validateStateEffectReceipt path term
+      else if term.tag == "LazyEvaluationReceipt" then validateLazyEvaluationReceipt path term
+      else if term.tag == "ConcurrencyReceipt" then validateConcurrencyReceipt path term
+      else if term.tag == "CoordinationReceipt" then validateCoordinationReceipt path term
+      else held "unknown-term-tag" path;
+
+  validateScalar = path: term:
+    if !(hasString term "kind") then held "scalar-kind-missing" path
+    else if !(builtins.elem term.kind scalarKinds) then held "scalar-kind-unknown" path
+    else ok path term;
+
+  validateNamed = path: term: kind:
+    if !(term ? ns) then held (kind + "-ns-missing") path
+    else if term.ns != null && !(builtins.isString term.ns) then held (kind + "-ns-not-string-or-null") path
+    else if !(hasString term "name") then held (kind + "-name-missing") path
+    else ok path term;
+
+  validateSequence = path: term: field: formRequired:
+    if !(hasList term field) then held "sequence-items-missing" path
+    else if formRequired && !(hasBool term "form") then held "list-form-flag-missing" path
+    else
+      let
+        items = builtins.getAttr field term;
+        res = validateEach items path (i: item: validateTermAt (path + ".items[" + (builtins.toString i) + "]") item);
+      in if res.status == "ok" then ok path term else res;
+
+  validatePair = path: pair:
+    if !(builtins.isAttrs pair) then held "map-pair-not-attrs" path
+    else if !(pair ? key) then held "map-pair-key-missing" path
+    else if !(pair ? value) then held "map-pair-value-missing" path
+    else
+      let keyRes = validateTermAt (path + ".key") pair.key;
+      in if keyRes.status != "ok" then keyRes
+         else validateTermAt (path + ".value") pair.value;
+
+  validateMap = path: term:
+    if !(hasList term "pairs") then held "map-pairs-missing" path
+    else
+      let
+        res = validateEach term.pairs path (i: pair: validatePair (path + ".pairs[" + (builtins.toString i) + "]") pair);
+      in if res.status == "ok" then ok path term else res;
+
+  validateVar = path: term:
+    if !(hasString term "ns") then held "var-ns-missing" path
+    else if !(hasString term "name") then held "var-name-missing" path
+    else if builtins.hasAttr "dynamic" term && !(builtins.isBool term.dynamic) then held "var-dynamic-not-bool" path
+    else ok path term;
+
+  validateNamespace = path: term:
+    if !(hasString term "name") then held "namespace-name-missing" path
+    else ok path term;
+
+  validateException = path: term:
+    if !(hasString term "class") then held "exception-class-missing" path
+    else if !(optionalString term "message") then held "exception-message-not-string-or-null" path
+    else if !(optionalString term "cause_class") then held "exception-cause-class-not-string-or-null" path
+    else
+      let dataRes = validateOptionalTerm path term "data";
+      in if dataRes.status == "ok" then ok path term else dataRes;
+
+  validateJavaClass = path: term:
+    if !(hasString term "name") then held "java-class-name-missing" path
+    else if !(hasString term "simple_name") then held "java-class-simple-name-missing" path
+    else if !(optionalString term "package") then held "java-class-package-not-string-or-null" path
+    else if !(hasBool term "primitive") then held "java-class-primitive-missing" path
+    else if !(hasBool term "array") then held "java-class-array-missing" path
+    else if !(hasBool term "interface") then held "java-class-interface-missing" path
+    else ok path term;
+
+  validateJavaObject = path: term:
+    if !(hasString term "class") then held "java-object-class-missing" path
+    else if !(optionalString term "string") then held "java-object-string-not-string-or-null" path
+    else if !(optionalString term "projection_note") then held "java-object-note-not-string-or-null" path
+    else ok path term;
+
+  validateControlFlowReceipt = path: term:
+    if !(hasString term "status") then held "control-flow-status-missing" path
+    else if !(hasString term "form_kind") then held "control-flow-form-kind-missing" path
+    else if !(optionalString term "source_hash") then held "control-flow-source-hash-not-string-or-null" path
+    else
+      let resultRes = validateOptionalTerm path term "result";
+      in if resultRes.status != "ok" then resultRes
+         else
+           let exceptionRes = validateOptionalTerm path term "exception";
+           in if exceptionRes.status != "ok" then exceptionRes
+              else
+                let effectsRes = validateOptionalTermList path term "effects";
+                in if effectsRes.status == "ok" then ok path term else effectsRes;
+
+  validateMacroexpandReceipt = path: term:
+    if !(hasString term "status") then held "macroexpand-status-missing" path
+    else if !(hasString term "phase") then held "macroexpand-phase-missing" path
+    else if !(optionalString term "source_hash") then held "macroexpand-source-hash-not-string-or-null" path
+    else
+      let sourceRes = validateOptionalTerm path term "source_term";
+      in if sourceRes.status != "ok" then sourceRes
+         else
+           let expandedRes = validateOptionalTerm path term "expanded_term";
+           in if expandedRes.status != "ok" then expandedRes
+              else
+                let finalRes = validateOptionalTerm path term "final_term";
+                in if finalRes.status != "ok" then finalRes
+                   else
+                     let stepsRes = validateOptionalTermList path term "steps";
+                     in if stepsRes.status != "ok" then stepsRes
+                        else
+                          let featuresRes = validateOptionalStringList path term "features";
+                          in if featuresRes.status != "ok" then featuresRes
+                             else
+                               let exceptionRes = validateOptionalTerm path term "exception";
+                               in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateDynamicBindingReceipt = path: term:
+    if !(hasString term "status") then held "dynamic-binding-status-missing" path
+    else if !(optionalString term "source_hash") then held "dynamic-binding-source-hash-not-string-or-null" path
+    else
+      let varRes = validateOptionalTerm path term "var";
+      in if varRes.status != "ok" then varRes
+         else
+           let valueRes = validateOptionalTerm path term "binding_value";
+           in if valueRes.status != "ok" then valueRes
+              else
+                let resultRes = validateOptionalTerm path term "result";
+                in if resultRes.status != "ok" then resultRes
+                   else
+                     let exceptionRes = validateOptionalTerm path term "exception";
+                     in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateJavaInteropReceipt = path: term:
+    if !(hasString term "status") then held "java-interop-status-missing" path
+    else if !(hasString term "op") then held "java-interop-op-missing" path
+    else if !(hasString term "target") then held "java-interop-target-missing" path
+    else if !(optionalString term "member") then held "java-interop-member-not-string-or-null" path
+    else if !(hasList term "args") then held "java-interop-args-missing" path
+    else
+      let argsRes = validateEach term.args path (i: item: validateTermAt (path + ".args[" + (builtins.toString i) + "]") item);
+      in if argsRes.status != "ok" then argsRes
+         else
+           let argClassRes = validateOptionalStringList path term "arg_classes";
+           in if argClassRes.status != "ok" then argClassRes
+              else if !(optionalString term "result_class") then held "java-interop-result-class-not-string-or-null" path
+              else if !(optionalString term "exception_class") then held "java-interop-exception-class-not-string-or-null" path
+              else
+                let resultRes = validateOptionalTerm path term "result";
+                in if resultRes.status != "ok" then resultRes
+                   else
+                     let exceptionRes = validateOptionalTerm path term "exception";
+                     in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateReflectionReceipt = path: term:
+    if !(hasString term "status") then held "reflection-status-missing" path
+    else if !(hasString term "op") then held "reflection-op-missing" path
+    else if !(hasString term "target_class") then held "reflection-target-class-missing" path
+    else if !(optionalString term "member") then held "reflection-member-not-string-or-null" path
+    else if !(hasList term "args") then held "reflection-args-missing" path
+    else
+      let argsRes = validateEach term.args path (i: item: validateTermAt (path + ".args[" + (builtins.toString i) + "]") item);
+      in if argsRes.status != "ok" then argsRes
+         else
+           let argClassRes = validateOptionalStringList path term "arg_classes";
+           in if argClassRes.status != "ok" then argClassRes
+              else if !(optionalString term "result_class") then held "reflection-result-class-not-string-or-null" path
+              else if !(optionalString term "exception_class") then held "reflection-exception-class-not-string-or-null" path
+              else
+                let resultRes = validateOptionalTerm path term "result";
+                in if resultRes.status != "ok" then resultRes
+                   else
+                     let exceptionRes = validateOptionalTerm path term "exception";
+                     in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateClassloaderReceipt = path: term:
+    if !(hasString term "status") then held "classloader-status-missing" path
+    else if !(hasString term "op") then held "classloader-op-missing" path
+    else if !(hasString term "context") then held "classloader-context-missing" path
+    else if !(hasList term "args") then held "classloader-args-missing" path
+    else
+      let argsRes = validateEach term.args path (i: item: validateTermAt (path + ".args[" + (builtins.toString i) + "]") item);
+      in if argsRes.status != "ok" then argsRes
+         else
+           let argClassRes = validateOptionalStringList path term "arg_classes";
+           in if argClassRes.status != "ok" then argClassRes
+              else if !(optionalString term "result_class") then held "classloader-result-class-not-string-or-null" path
+              else if !(optionalString term "exception_class") then held "classloader-exception-class-not-string-or-null" path
+              else
+                let resultRes = validateOptionalTerm path term "result";
+                in if resultRes.status != "ok" then resultRes
+                   else
+                     let exceptionRes = validateOptionalTerm path term "exception";
+                     in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateNamespaceResolutionReceipt = path: term:
+    if !(hasString term "status") then held "namespace-resolution-status-missing" path
+    else if !(hasString term "op") then held "namespace-resolution-op-missing" path
+    else if !(hasString term "ns") then held "namespace-resolution-ns-missing" path
+    else if !(hasString term "requested") then held "namespace-resolution-requested-missing" path
+    else if !(optionalString term "alias") then held "namespace-resolution-alias-not-string-or-null" path
+    else if !(optionalString term "symbol") then held "namespace-resolution-symbol-not-string-or-null" path
+    else if !(optionalString term "result_class") then held "namespace-resolution-result-class-not-string-or-null" path
+    else if !(optionalString term "exception_class") then held "namespace-resolution-exception-class-not-string-or-null" path
+    else
+      let resultRes = validateOptionalTerm path term "result";
+      in if resultRes.status != "ok" then resultRes
+         else
+           let exceptionRes = validateOptionalTerm path term "exception";
+           in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateHostObjectConstructionReceipt = path: term:
+    if !(hasString term "status") then held "host-object-status-missing" path
+    else if !(hasString term "construction_kind") then held "host-object-construction-kind-missing" path
+    else if !(hasString term "type_name") then held "host-object-type-name-missing" path
+    else if !(optionalString term "source_hash") then held "host-object-source-hash-not-string-or-null" path
+    else if !(optionalString term "result_class") then held "host-object-result-class-not-string-or-null" path
+    else if !(hasList term "interfaces") then held "host-object-interfaces-missing" path
+    else
+      let interfaceRes = validateOptionalStringList path term "interfaces";
+      in if interfaceRes.status != "ok" then interfaceRes
+         else if !(hasBool term "record") then held "host-object-record-flag-missing" path
+         else
+           let objectRes = validateOptionalTerm path term "object";
+           in if objectRes.status != "ok" then objectRes
+              else
+                let resultRes = validateOptionalTerm path term "result";
+                in if resultRes.status != "ok" then resultRes
+                   else if !(optionalString term "exception_class") then held "host-object-exception-class-not-string-or-null" path
+                   else
+                     let exceptionRes = validateOptionalTerm path term "exception";
+                     in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validatePolymorphismDispatchReceipt = path: term:
+    if !(hasString term "status") then held "polymorphism-status-missing" path
+    else if !(hasString term "dispatch_kind") then held "polymorphism-dispatch-kind-missing" path
+    else if !(hasString term "dispatch_name") then held "polymorphism-dispatch-name-missing" path
+    else if !(optionalString term "dispatch_value") then held "polymorphism-dispatch-value-not-string-or-null" path
+    else if !(optionalString term "source_hash") then held "polymorphism-source-hash-not-string-or-null" path
+    else if !(hasList term "args") then held "polymorphism-args-missing" path
+    else
+      let argsRes = validateEach term.args path (i: item: validateTermAt (path + ".args[" + (builtins.toString i) + "]") item);
+      in if argsRes.status != "ok" then argsRes
+         else
+           let argClassRes = validateOptionalStringList path term "arg_classes";
+           in if argClassRes.status != "ok" then argClassRes
+              else if !(optionalString term "result_class") then held "polymorphism-result-class-not-string-or-null" path
+              else if !(optionalString term "exception_class") then held "polymorphism-exception-class-not-string-or-null" path
+              else
+                let resultRes = validateOptionalTerm path term "result";
+                in if resultRes.status != "ok" then resultRes
+                   else
+                     let exceptionRes = validateOptionalTerm path term "exception";
+                     in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateMetadataReceipt = path: term:
+    if !(hasString term "status") then held "metadata-status-missing" path
+    else if !(hasString term "op") then held "metadata-op-missing" path
+    else if !(optionalString term "target_kind") then held "metadata-target-kind-not-string-or-null" path
+    else if !(optionalString term "target_class") then held "metadata-target-class-not-string-or-null" path
+    else if !(optionalString term "source_hash") then held "metadata-source-hash-not-string-or-null" path
+    else if !(optionalString term "result_class") then held "metadata-result-class-not-string-or-null" path
+    else if !(optionalString term "exception_class") then held "metadata-exception-class-not-string-or-null" path
+    else
+      let targetRes = validateOptionalTerm path term "target";
+      in if targetRes.status != "ok" then targetRes
+         else
+           let metadataRes = validateOptionalTerm path term "metadata";
+           in if metadataRes.status != "ok" then metadataRes
+              else
+                let resultRes = validateOptionalTerm path term "result";
+                in if resultRes.status != "ok" then resultRes
+                   else
+                     let exceptionRes = validateOptionalTerm path term "exception";
+                     in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateStateEffectReceipt = path: term:
+    if !(hasString term "status") then held "state-effect-status-missing" path
+    else if !(hasString term "op") then held "state-effect-op-missing" path
+    else if !(optionalString term "target_kind") then held "state-effect-target-kind-not-string-or-null" path
+    else if !(optionalString term "target_class") then held "state-effect-target-class-not-string-or-null" path
+    else if !(optionalString term "source_hash") then held "state-effect-source-hash-not-string-or-null" path
+    else if !(hasList term "effects") then held "state-effect-effects-missing" path
+    else if !(optionalString term "result_class") then held "state-effect-result-class-not-string-or-null" path
+    else if !(optionalString term "exception_class") then held "state-effect-exception-class-not-string-or-null" path
+    else
+      let initialRes = validateOptionalTerm path term "initial";
+      in if initialRes.status != "ok" then initialRes
+         else
+           let finalRes = validateOptionalTerm path term "final";
+           in if finalRes.status != "ok" then finalRes
+              else
+                let effectsRes = validateEach term.effects path (i: item: validateTermAt (path + ".effects[" + (builtins.toString i) + "]") item);
+                in if effectsRes.status != "ok" then effectsRes
+                   else
+                     let resultRes = validateOptionalTerm path term "result";
+                     in if resultRes.status != "ok" then resultRes
+                        else
+                          let exceptionRes = validateOptionalTerm path term "exception";
+                          in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateLazyEvaluationReceipt = path: term:
+    if !(hasString term "status") then held "lazy-evaluation-status-missing" path
+    else if !(hasString term "op") then held "lazy-evaluation-op-missing" path
+    else if !(optionalString term "target_kind") then held "lazy-evaluation-target-kind-not-string-or-null" path
+    else if !(optionalString term "target_class") then held "lazy-evaluation-target-class-not-string-or-null" path
+    else if !(optionalString term "source_hash") then held "lazy-evaluation-source-hash-not-string-or-null" path
+    else if !(hasInt term "realized_count") then held "lazy-evaluation-realized-count-missing" path
+    else if !(hasList term "effects") then held "lazy-evaluation-effects-missing" path
+    else if !(optionalString term "result_class") then held "lazy-evaluation-result-class-not-string-or-null" path
+    else if !(optionalString term "exception_class") then held "lazy-evaluation-exception-class-not-string-or-null" path
+    else
+      let effectsRes = validateEach term.effects path (i: item: validateTermAt (path + ".effects[" + (builtins.toString i) + "]") item);
+      in if effectsRes.status != "ok" then effectsRes
+         else
+           let resultRes = validateOptionalTerm path term "result";
+           in if resultRes.status != "ok" then resultRes
+              else
+                let exceptionRes = validateOptionalTerm path term "exception";
+                in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateConcurrencyReceipt = path: term:
+    if !(hasString term "status") then held "concurrency-status-missing" path
+    else if !(hasString term "op") then held "concurrency-op-missing" path
+    else if !(optionalString term "target_kind") then held "concurrency-target-kind-not-string-or-null" path
+    else if !(optionalString term "target_class") then held "concurrency-target-class-not-string-or-null" path
+    else if !(optionalString term "source_hash") then held "concurrency-source-hash-not-string-or-null" path
+    else if !(hasBool term "completed") then held "concurrency-completed-missing" path
+    else if !(hasList term "effects") then held "concurrency-effects-missing" path
+    else if !(optionalString term "result_class") then held "concurrency-result-class-not-string-or-null" path
+    else if !(optionalString term "exception_class") then held "concurrency-exception-class-not-string-or-null" path
+    else
+      let effectsRes = validateEach term.effects path (i: item: validateTermAt (path + ".effects[" + (builtins.toString i) + "]") item);
+      in if effectsRes.status != "ok" then effectsRes
+         else
+           let resultRes = validateOptionalTerm path term "result";
+           in if resultRes.status != "ok" then resultRes
+              else
+                let exceptionRes = validateOptionalTerm path term "exception";
+                in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  validateCoordinationReceipt = path: term:
+    if !(hasString term "status") then held "coordination-status-missing" path
+    else if !(hasString term "op") then held "coordination-op-missing" path
+    else if !(optionalString term "target_kind") then held "coordination-target-kind-not-string-or-null" path
+    else if !(optionalString term "target_class") then held "coordination-target-class-not-string-or-null" path
+    else if !(optionalString term "source_hash") then held "coordination-source-hash-not-string-or-null" path
+    else if !(hasBool term "completed") then held "coordination-completed-missing" path
+    else if !(hasList term "effects") then held "coordination-effects-missing" path
+    else if !(optionalString term "result_class") then held "coordination-result-class-not-string-or-null" path
+    else if !(optionalString term "exception_class") then held "coordination-exception-class-not-string-or-null" path
+    else
+      let initialRes = validateOptionalTerm path term "initial";
+      in if initialRes.status != "ok" then initialRes
+         else
+           let finalRes = validateOptionalTerm path term "final";
+           in if finalRes.status != "ok" then finalRes
+              else
+                let effectsRes = validateEach term.effects path (i: item: validateTermAt (path + ".effects[" + (builtins.toString i) + "]") item);
+                in if effectsRes.status != "ok" then effectsRes
+                   else
+                     let resultRes = validateOptionalTerm path term "result";
+                     in if resultRes.status != "ok" then resultRes
+                        else
+                          let exceptionRes = validateOptionalTerm path term "exception";
+                          in if exceptionRes.status == "ok" then ok path term else exceptionRes;
+
+  selfTestTerms = [
+    { tag = "Scalar"; host = host; kind = "int"; value = 42; }
+    { tag = "Keyword"; host = host; ns = null; name = "answer"; }
+    { tag = "List"; host = host; form = true; items = [
+      { tag = "Symbol"; host = host; ns = "clojure.core"; name = "+"; }
+      { tag = "Scalar"; host = host; kind = "int"; value = 1; }
+      { tag = "Scalar"; host = host; kind = "int"; value = 2; }
+    ]; }
+    { tag = "Map"; host = host; pairs = [
+      {
+        key = { tag = "Keyword"; host = host; ns = null; name = "x"; };
+        value = { tag = "Vector"; host = host; items = [
+          { tag = "Scalar"; host = host; kind = "string"; value = "y"; }
+        ]; };
+      }
+    ]; }
+    { tag = "Var"; host = host; ns = "clojure.core"; name = "+"; dynamic = false; }
+    { tag = "Namespace"; host = host; name = "clojure.core"; }
+    { tag = "Exception"; host = host; class = "java.lang.ArithmeticException"; message = "/ by zero"; data = null; }
+    { tag = "JavaClass"; host = host; name = "java.lang.String"; simple_name = "String"; package = "java.lang"; primitive = false; array = false; interface = false; }
+    { tag = "JavaObject"; host = host; class = "java.lang.StringBuilder"; string = "hi"; projection_note = "jvm-object-envelope"; }
+    {
+      tag = "ControlFlowReceipt";
+      host = host;
+      status = "ok";
+      form_kind = "try/finally";
+      source_hash = "fixture";
+      result = { tag = "Scalar"; host = host; kind = "int"; value = 1; };
+      exception = null;
+      effects = [
+        { tag = "Keyword"; host = host; ns = null; name = "finally"; }
+      ];
+    }
+    {
+      tag = "MacroexpandReceipt";
+      host = host;
+      status = "ok";
+      phase = "macroexpand-1";
+      source_hash = "fixture";
+      source_term = { tag = "List"; host = host; form = true; items = []; };
+      expanded_term = { tag = "List"; host = host; form = true; items = []; };
+      exception = null;
+    }
+    {
+      tag = "DynamicBindingReceipt";
+      host = host;
+      status = "ok";
+      source_hash = "fixture";
+      var = { tag = "Var"; host = host; ns = "clojure.core"; name = "*print-length*"; dynamic = true; };
+      binding_value = { tag = "Scalar"; host = host; kind = "int"; value = 1; };
+      result = { tag = "Scalar"; host = host; kind = "int"; value = 1; };
+      exception = null;
+    }
+    {
+      tag = "JavaInteropReceipt";
+      host = host;
+      status = "ok";
+      op = "instance-call";
+      target = "java.lang.String";
+      member = "length";
+      args = [];
+      arg_classes = [];
+      result_class = "java.lang.Integer";
+      exception_class = null;
+      result = { tag = "Scalar"; host = host; kind = "int"; value = 5; };
+      exception = null;
+    }
+    {
+      tag = "ReflectionReceipt";
+      host = host;
+      status = "ok";
+      op = "declared-field-name";
+      target_class = "java.awt.Point";
+      member = "x";
+      args = [
+        { tag = "Scalar"; host = host; kind = "string"; value = "x"; }
+      ];
+      arg_classes = [ "java.lang.String" ];
+      result_class = "java.lang.String";
+      exception_class = null;
+      result = { tag = "Scalar"; host = host; kind = "string"; value = "x"; };
+      exception = null;
+    }
+    {
+      tag = "ClassloaderReceipt";
+      host = host;
+      status = "ok";
+      op = "load-class";
+      context = "system";
+      args = [
+        { tag = "Scalar"; host = host; kind = "string"; value = "java.lang.String"; }
+      ];
+      arg_classes = [ "java.lang.String" ];
+      result_class = "java.lang.Class";
+      exception_class = null;
+      result = { tag = "JavaClass"; host = host; name = "java.lang.String"; simple_name = "String"; package = "java.lang"; primitive = false; array = false; interface = false; };
+      exception = null;
+    }
+    {
+      tag = "NamespaceResolutionReceipt";
+      host = host;
+      status = "ok";
+      op = "require-alias-resolve";
+      ns = "pnix-clj.projection-namespace.fixture";
+      requested = "clojure.string";
+      alias = "str";
+      symbol = "str/join";
+      source_hash = "fixture";
+      result_class = "clojure.lang.Var";
+      exception_class = null;
+      result = { tag = "Var"; host = host; ns = "clojure.string"; name = "join"; dynamic = false; };
+      exception = null;
+    }
+    {
+      tag = "HostObjectConstructionReceipt";
+      host = host;
+      status = "ok";
+      construction_kind = "reify";
+      type_name = "java.util.concurrent.Callable";
+      source_hash = "fixture";
+      result_class = "fixture.Reify";
+      interfaces = [ "java.util.concurrent.Callable" ];
+      record = false;
+      object = { tag = "JavaObject"; host = host; class = "fixture.Reify"; string = "fixture.Reify"; projection_note = "jvm-object-envelope"; };
+      result = { tag = "JavaObject"; host = host; class = "fixture.Reify"; string = "fixture.Reify"; projection_note = "jvm-object-envelope"; };
+      exception_class = null;
+      exception = null;
+    }
+    {
+      tag = "PolymorphismDispatchReceipt";
+      host = host;
+      status = "ok";
+      dispatch_kind = "defprotocol";
+      dispatch_name = "PGreet/greet";
+      dispatch_value = "Greeter";
+      source_hash = "fixture";
+      args = [
+        { tag = "JavaObject"; host = host; class = "fixture.Greeter"; string = "fixture.Greeter"; projection_note = "jvm-object-envelope"; }
+      ];
+      arg_classes = [ "fixture.Greeter" ];
+      result_class = "java.lang.String";
+      result = { tag = "Scalar"; host = host; kind = "string"; value = "hi pnix"; };
+      exception_class = null;
+      exception = null;
+    }
+    {
+      tag = "MetadataReceipt";
+      host = host;
+      status = "ok";
+      op = "with-meta";
+      target_kind = "clojure.lang.PersistentVector";
+      target_class = "clojure.lang.PersistentVector";
+      source_hash = "fixture";
+      target = { tag = "Vector"; host = host; items = [
+        { tag = "Scalar"; host = host; kind = "int"; value = 1; }
+      ]; };
+      metadata = { tag = "Map"; host = host; pairs = [
+        {
+          key = { tag = "Keyword"; host = host; ns = null; name = "doc"; };
+          value = { tag = "Scalar"; host = host; kind = "string"; value = "v"; };
+        }
+      ]; };
+      result_class = "java.lang.String";
+      result = { tag = "Scalar"; host = host; kind = "string"; value = "v"; };
+      exception_class = null;
+      exception = null;
+    }
+    {
+      tag = "StateEffectReceipt";
+      host = host;
+      status = "ok";
+      op = "atom-swap";
+      target_kind = "clojure.lang.Atom";
+      target_class = "clojure.lang.Atom";
+      source_hash = "fixture";
+      initial = { tag = "Scalar"; host = host; kind = "int"; value = 1; };
+      final = { tag = "Scalar"; host = host; kind = "int"; value = 42; };
+      effects = [
+        { tag = "Keyword"; host = host; ns = null; name = "deref"; }
+        { tag = "Keyword"; host = host; ns = null; name = "swap!"; }
+        { tag = "Keyword"; host = host; ns = null; name = "deref"; }
+      ];
+      result_class = "java.lang.Long";
+      result = { tag = "Scalar"; host = host; kind = "int"; value = 42; };
+      exception_class = null;
+      exception = null;
+    }
+    {
+      tag = "LazyEvaluationReceipt";
+      host = host;
+      status = "ok";
+      op = "delay-force";
+      target_kind = "clojure.lang.Delay";
+      target_class = "clojure.lang.Delay";
+      source_hash = "fixture";
+      realized_count = 1;
+      effects = [
+        { tag = "Keyword"; host = host; ns = null; name = "forced"; }
+      ];
+      result_class = "java.lang.Long";
+      result = { tag = "Scalar"; host = host; kind = "int"; value = 42; };
+      exception_class = null;
+      exception = null;
+    }
+    {
+      tag = "ConcurrencyReceipt";
+      host = host;
+      status = "ok";
+      op = "future-deref";
+      target_kind = "clojure.core/future";
+      target_class = "clojure.core$future_call$reify";
+      source_hash = "fixture";
+      completed = true;
+      effects = [
+        { tag = "Keyword"; host = host; ns = null; name = "started"; }
+        { tag = "Keyword"; host = host; ns = null; name = "deref"; }
+      ];
+      result_class = "java.lang.Long";
+      result = { tag = "Scalar"; host = host; kind = "int"; value = 42; };
+      exception_class = null;
+      exception = null;
+    }
+    {
+      tag = "CoordinationReceipt";
+      host = host;
+      status = "ok";
+      op = "dosync-alter";
+      target_kind = "clojure.lang.Ref";
+      target_class = "clojure.lang.Ref";
+      source_hash = "fixture";
+      initial = { tag = "Scalar"; host = host; kind = "int"; value = 1; };
+      final = { tag = "Scalar"; host = host; kind = "int"; value = 42; };
+      completed = true;
+      effects = [
+        { tag = "Keyword"; host = host; ns = null; name = "deref"; }
+        { tag = "Keyword"; host = host; ns = null; name = "dosync"; }
+        { tag = "Keyword"; host = host; ns = null; name = "alter"; }
+      ];
+      result_class = "java.lang.Long";
+      result = { tag = "Scalar"; host = host; kind = "int"; value = 42; };
+      exception_class = null;
+      exception = null;
+    }
+  ];
+
+  selfTest = validateEach selfTestTerms "$.selfTestTerms" (i: term:
+    validateTermAt ("$.selfTestTerms[" + (builtins.toString i) + "]") term);
+
+  describe = {
+    schema = schema;
+    host = host;
+    term_tags = termTags;
+    scalar_kinds = scalarKinds;
+    cross_host_parity = cross_host_parity;
+    semantic_owner = semantic_owner;
+    supports = [
+      "reader-scalars"
+      "symbols"
+      "keywords"
+      "lists-as-forms"
+      "vectors"
+      "maps"
+      "sets"
+      "host-var-object-term"
+      "host-namespace-object-term"
+      "host-exception-object-term"
+      "java-class-term"
+      "java-object-envelope-term"
+      "control-flow-receipt-envelope"
+      "macroexpand-receipt-envelope"
+      "dynamic-binding-receipt-envelope"
+      "java-interop-receipt-envelope"
+      "reflection-receipt-envelope"
+      "classloader-receipt-envelope"
+      "namespace-resolution-receipt-envelope"
+      "host-object-construction-receipt-envelope"
+      "polymorphism-dispatch-receipt-envelope"
+      "metadata-receipt-envelope"
+      "state-effect-receipt-envelope"
+      "lazy-evaluation-receipt-envelope"
+      "concurrency-receipt-envelope"
+      "coordination-receipt-envelope"
+    ];
+    not_claimed = [
+      "macroexpand-truth-beyond-host-output"
+      "namespace-resolution-beyond-object-name"
+      "var-root-identity"
+      "dynamic-binding-semantics-beyond-receipt"
+      "java-interop-overload-proof"
+      "reflection-access-control-proof"
+      "classloader-isolation-proof"
+      "full-namespace-state"
+      "host-object-complete-state"
+      "polymorphism-method-table-proof"
+      "metadata-propagation-proof"
+      "state-atomicity-proof"
+      "full-lazy-realization-proof"
+      "thread-scheduling-proof"
+      "stm-isolation-proof"
+      "agent-scheduling-proof"
+      "java-object-complete-state"
+      "full-exception-control-flow"
+    ];
+  };
+}

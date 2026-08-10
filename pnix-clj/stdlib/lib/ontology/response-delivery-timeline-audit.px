@@ -1,0 +1,389 @@
+# stdlib.lib.ontology.response-delivery-timeline-audit
+#
+# Read-only audit for the public response delivery lane. It checks a host/runtime
+# timeline snapshot against the verified public response delivery receipt, but
+# does not write conversation state, pnix-db, memory, or wire output.
+let
+  ownerName = "stdlib.lib.ontology.response-delivery-timeline-audit";
+
+  deliveryReceiptOwner = import ./public-response-delivery-receipt.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  intAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isInt v then v else dflt;
+
+  listAttrOr = attrs: key:
+    let v = getAttrOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  deliveryReceiptFrom = req:
+    if hasAttr req "public_response_delivery_receipt" && builtins.isAttrs req.public_response_delivery_receipt then
+      req.public_response_delivery_receipt
+    else if hasAttr req "response_delivery_receipt" && builtins.isAttrs req.response_delivery_receipt then
+      req.response_delivery_receipt
+    else if hasAttr req "delivery_receipt" && builtins.isAttrs req.delivery_receipt then
+      req.delivery_receipt
+    else if hasAttr req "source" && builtins.isAttrs req.source then
+      req.source
+    else { };
+
+  timelineSnapshotFrom = req:
+    if hasAttr req "response_delivery_timeline_snapshot" && builtins.isAttrs req.response_delivery_timeline_snapshot then
+      req.response_delivery_timeline_snapshot
+    else if hasAttr req "conversation_timeline_snapshot" && builtins.isAttrs req.conversation_timeline_snapshot then
+      req.conversation_timeline_snapshot
+    else if hasAttr req "timeline_snapshot" && builtins.isAttrs req.timeline_snapshot then
+      req.timeline_snapshot
+    else { };
+
+  deliveryReceiptOk = receipt:
+    builtins.isAttrs receipt
+    && stringAttrOr receipt "schema" "" == "puncheetah.public-response-delivery-receipt.v0"
+    && stringAttrOr receipt "outcome" "" == "public-response-delivery-receipt-verified"
+    && getBool receipt "verified" false == true
+    && getBool receipt "is_held" true == false
+    && getBool receipt "source_response_assembly_verified" false == true
+    && getBool receipt "host_public_response_delivery_result_verified" false == true
+    && getBool receipt "public_response_delivered" false == true
+    && getBool receipt "response_delivery_executed" false == true
+    && getBool receipt "wire_write_executed" false == true
+    && getBool receipt "public_wire_shape_opaque" false == true
+    && getBool receipt "candidate_only" false == true
+    && stringAttrOr receipt "session_id" "" != ""
+    && stringAttrOr receipt "exchange_id" "" != ""
+    && stringAttrOr receipt "next_gate" "" == "response-delivery-timeline-audit"
+    && getBool receipt "public_response_emit_allowed" true == false
+    && getBool receipt "response_delivery_allowed" true == false
+    && getBool receipt "wire_write_allowed" true == false
+    && getBool receipt "memory_write_allowed" true == false
+    && getBool receipt "db_write_allowed" true == false
+    && getBool receipt "policy_persistence_allowed" true == false
+    && hasAttr receipt "receipt"
+    && builtins.isAttrs receipt.receipt
+    && getBool receipt.receipt "verified" false == true;
+
+  eventOk = event:
+    builtins.isAttrs event
+    && intAttrOr event "seq" (-1) >= 0
+    && stringAttrOr event "event_id" "" != ""
+    && stringAttrOr event "event_kind" "" == "receipt-observed"
+    && stringAttrOr event "payload_kind" "" == "receipt"
+    && stringAttrOr event "session_id" "" != ""
+    && stringAttrOr event "exchange_id" "" != ""
+    && stringAttrOr event "receipt_outcome" "" != ""
+    && stringAttrOr event "content_hash" "" != "";
+
+  timelineOk = snapshot:
+    let events = listAttrOr snapshot "events";
+    in
+      builtins.isAttrs snapshot
+      && stringAttrOr snapshot "kind" "" == "response-delivery-timeline-snapshot-v0"
+      && stringAttrOr snapshot "schema" "" == "puncheetah.response.delivery-timeline-snapshot.v0"
+      && getBool snapshot "verified" false == true
+      && stringAttrOr snapshot "session_id" "" != ""
+      && stringAttrOr snapshot "exchange_id" "" != ""
+      && stringAttrOr snapshot "final_status" "" == "delivered"
+      && stringAttrOr snapshot "terminal_receipt_outcome" "" == "public-response-delivery-receipt-verified"
+      && events != [ ]
+      && builtins.all eventOk events;
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "response_emit_requested" false
+    || getBool req "public_response_emit_requested" false
+    || getBool req "response_delivery_requested" false
+    || getBool req "public_response_delivery_requested" false
+    || getBool req "wire_write_requested" false
+    || getBool req "public_wire_write_requested" false
+    || getBool req "timeline_write_requested" false
+    || getBool req "conversation_state_write_requested" false
+    || getBool req "discourse_state_write_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  expectedOutcomes = [
+    "ontology-discourse-state-projection-built"
+    "ontology-response-assembly-surface-built"
+    "public-response-delivery-receipt-verified"
+  ];
+
+  eventOutcomes = events:
+    builtins.map (event: stringAttrOr event "receipt_outcome" "") events;
+
+  missingExpectedOutcomes = events:
+    let outcomes = eventOutcomes events;
+    in builtins.filter (outcome: !(builtins.elem outcome outcomes)) expectedOutcomes;
+
+  findSeqForOutcome = events: outcome:
+    builtins.foldl'
+      (acc: event:
+        if acc != null then acc
+        else if stringAttrOr event "receipt_outcome" "" == outcome then intAttrOr event "seq" (-1)
+        else null)
+      null
+      events;
+
+  strictlyOrderedEvents = events:
+    let
+      go = idx: prev:
+        if idx >= builtins.length events then true
+        else
+          let seq = intAttrOr (builtins.elemAt events idx) "seq" (-1);
+          in seq > prev && go (idx + 1) seq;
+    in go 0 (-1);
+
+  expectedOutcomeOrderOk = events:
+    let
+      projection = findSeqForOutcome events "ontology-discourse-state-projection-built";
+      assembly = findSeqForOutcome events "ontology-response-assembly-surface-built";
+      delivery = findSeqForOutcome events "public-response-delivery-receipt-verified";
+    in
+      projection != null
+      && assembly != null
+      && delivery != null
+      && projection < assembly
+      && assembly < delivery;
+
+  timelineMatchesDelivery = snapshot: receipt:
+    let events = listAttrOr snapshot "events";
+    in
+      timelineOk snapshot
+      && deliveryReceiptOk receipt
+      && stringAttrOr snapshot "session_id" "" == stringAttrOr receipt "session_id" ""
+      && stringAttrOr snapshot "exchange_id" "" == stringAttrOr receipt "exchange_id" ""
+      && stringAttrOr snapshot "terminal_receipt_outcome" "" == stringAttrOr receipt "outcome" ""
+      && builtins.any
+        (event:
+          stringAttrOr event "receipt_outcome" "" == stringAttrOr receipt "outcome" ""
+          && stringAttrOr event "session_id" "" == stringAttrOr receipt "session_id" ""
+          && stringAttrOr event "exchange_id" "" == stringAttrOr receipt "exchange_id" "")
+        events;
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.response-delivery-timeline-audit.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    response_delivery_timeline_audit_passed = false;
+    public_response_delivery_receipt_verified = false;
+    timeline_snapshot_verified = false;
+    public_response_delivered = false;
+    public_wire_shape_opaque = false;
+    candidate_only = true;
+    public_response_emit_allowed = false;
+    response_delivery_allowed = false;
+    wire_write_allowed = false;
+    timeline_write_allowed = false;
+    conversation_state_write_allowed = false;
+    discourse_state_write_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    reason = reason;
+    negative_receipt = {
+      kind = "response-delivery-timeline-audit-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "do not close response delivery timeline unless the host/runtime snapshot contains the verified delivery receipt in order with public opacity and effect locks preserved";
+    };
+    receipt = {
+      kind = "response-delivery-timeline-audit-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      response_delivery_timeline_audit_passed = false;
+      timeline_write_allowed = false;
+      conversation_state_write_allowed = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName deliveryReceiptOk timelineOk timelineMatchesDelivery;
+
+  auditResponseDeliveryTimeline = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-response-delivery-timeline-audit-non-attr-request" "Response delivery timeline audit request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-response-delivery-timeline-audit-effect-blocked" "Response delivery timeline audit is read-only; it never emits/delivers responses, writes timeline/conversation state, writes memory/DB, or persists policy." { }
+    else
+      let
+        deliveryReceipt = deliveryReceiptFrom req;
+        timelineSnapshot = timelineSnapshotFrom req;
+        events = listAttrOr timelineSnapshot "events";
+        missingExpected = missingExpectedOutcomes events;
+      in
+        if deliveryReceipt == { } then
+          mkHeld "held-response-delivery-timeline-audit-delivery-receipt-required" "Timeline audit requires a verified public response delivery receipt." { }
+        else if !deliveryReceiptOk deliveryReceipt then
+          mkHeld "held-response-delivery-timeline-audit-delivery-receipt-invalid" "Public response delivery receipt must be verified, public-opaque, effect-locked, and point at response-delivery-timeline-audit." {
+            public_response_delivery_receipt = deliveryReceipt;
+          }
+        else if timelineSnapshot == { } then
+          mkHeld "held-response-delivery-timeline-audit-snapshot-required" "Timeline audit requires a host/runtime-provided response delivery timeline snapshot." { }
+        else if !timelineOk timelineSnapshot then
+          mkHeld "held-response-delivery-timeline-audit-snapshot-invalid" "Response delivery timeline snapshot must be verified, delivered, non-empty, and carry receipt-observed events." {
+            response_delivery_timeline_snapshot = timelineSnapshot;
+          }
+        else if !timelineMatchesDelivery timelineSnapshot deliveryReceipt then
+          mkHeld "held-response-delivery-timeline-audit-terminal-event-missing" "Timeline snapshot must include the public response delivery terminal receipt for the same session/exchange." {
+            public_response_delivery_receipt = deliveryReceipt;
+            response_delivery_timeline_snapshot = timelineSnapshot;
+          }
+        else if missingExpected != [ ] then
+          mkHeld "held-response-delivery-timeline-audit-expected-events-missing" "Timeline snapshot is missing expected response delivery lane receipt outcomes." {
+            missing_expected_outcomes = missingExpected;
+            observed_outcomes = eventOutcomes events;
+          }
+        else if !(strictlyOrderedEvents events) || !(expectedOutcomeOrderOk events) then
+          mkHeld "held-response-delivery-timeline-audit-order-invalid" "Timeline receipt outcomes are not ordered by event sequence." {
+            observed_events = events;
+          }
+        else {
+          schema = "puncheetah.response-delivery-timeline-audit.v0";
+          owner = ownerName;
+          outcome = "response-delivery-timeline-audit-passed";
+          is_held = false;
+          verified = true;
+          response_delivery_timeline_audit_passed = true;
+          public_response_delivery_receipt_verified = true;
+          timeline_snapshot_verified = true;
+          public_response_delivered = true;
+          response_delivery_executed = true;
+          wire_write_executed = true;
+          public_wire_shape_opaque = true;
+          candidate_only = true;
+          session_id = stringAttrOr deliveryReceipt "session_id" "";
+          exchange_id = stringAttrOr deliveryReceipt "exchange_id" "";
+          terminal_receipt_outcome = stringAttrOr deliveryReceipt "outcome" "";
+          observed_outcomes = eventOutcomes events;
+          expected_outcomes = expectedOutcomes;
+          event_count = builtins.length events;
+          response_delivery_timeline_snapshot = timelineSnapshot;
+          public_response_delivery_receipt = deliveryReceipt;
+          source_owner_reuse = {
+            public_response_delivery_receipt_owner = deliveryReceiptOwner.ownerName;
+            public_response_delivery_receipt_replaced = false;
+            pnix_db_transaction_timeline_audit_replaced = false;
+            conversation_store_replaced = false;
+            pnix_db_append_gate_replaced = false;
+          };
+          next_gate = "response-delivery-korean-6w-audit";
+          public_response_emit_allowed = false;
+          response_delivery_allowed = false;
+          wire_write_allowed = false;
+          timeline_write_allowed = false;
+          conversation_state_write_allowed = false;
+          discourse_state_write_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "response-delivery-timeline-audit-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "response-delivery-timeline-audit-passed";
+            response_delivery_timeline_audit_passed = true;
+            session_id = stringAttrOr deliveryReceipt "session_id" "";
+            exchange_id = stringAttrOr deliveryReceipt "exchange_id" "";
+            event_count = builtins.length events;
+            next_gate = "response-delivery-korean-6w-audit";
+            invariant = "response delivery timeline audit accepts only an ordered host/runtime snapshot of verified public-opaque response delivery receipts while all .px effects remain closed";
+            timeline_write_allowed = false;
+            conversation_state_write_allowed = false;
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "response-delivery-timeline-audit-v0";
+    role = "public response delivery receipt + host/runtime timeline snapshot -> read-only timeline audit";
+    source_gate = "public-response-delivery-receipt";
+    next_gate = "response-delivery-korean-6w-audit";
+    expected_outcomes = expectedOutcomes;
+    non_replacement_boundary = "does not replace pnix-db transaction timeline audit, conversation store, discourse-state, host delivery transport, response assembly, or pnix-db append gates";
+    effect_policy = "read-only audit; no response emit/delivery, no timeline/conversation/discourse write, no ontology query/emit/promote, no accepted fact promotion, no memory/DB write, no policy persistence, no route execution, and no code write";
+  };
+}

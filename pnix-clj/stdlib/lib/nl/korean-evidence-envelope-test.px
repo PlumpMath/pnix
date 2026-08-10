@@ -1,0 +1,23 @@
+# stdlib/lib/nl/korean-evidence-envelope-test.px — receipt→evidence 재배치(H3/F11) lock.
+#
+# 헌법 §0/§1: 무게중심=의미노드(action/roles), receipt/회상/도출=그 노드에 붙는 evidence(중심 아님).
+# chatRespondWithMemory 가 evidence(memory/abstraction_status/understanding_report[+catalog/math])를 *단일 envelope*로
+# 의미노드(base 결과)에 부착. flat sibling 키(memory_evidence 등)는 Rust consumer 호환용 잠정 유지(ratchet→evidence.*).
+# status≠truth: evidence 는 전부 durable_truth=false (회상/설명일 뿐 진리 아님).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  r = knm.chatRespondWithMemory { sentence = "철수가 사과를 먹었다"; memory_keys = [ ]; abstraction_statuses = [ ]; };
+  evKeys = if r ? evidence then B.attrNames r.evidence else [ ];
+  hasK = k: B.elem k evKeys;
+in {
+  has_envelope = r ? evidence;
+  evidence_keys = evKeys;
+  understood = r.understood;
+  all_ok =
+    # ★evidence envelope 가 의미노드(결과)에 붙는다 (재배치 정본)
+       (r ? evidence)
+    && (hasK "memory") && (hasK "abstraction_status") && (hasK "understanding_report")
+    # ★compat: flat sibling 키 유지(Rust consumer 무파손 — ratchet)
+    && (r ? memory_evidence) && (r ? abstraction_status_evidence) && (r ? understanding_report)
+    # ★무게중심=의미노드: 이해 결과(action/roles)가 살아있다
+    && (r.understood == true) && (r ? action) && (r.action == "먹");
+}

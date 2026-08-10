@@ -1,0 +1,57 @@
+# stdlib/lib/nl/understanding-report-test.px
+#
+# P6 lock: 공개 evidence(memory_evidence + abstraction_status_evidence) → 한국어 이해 설명 lines.
+#   ★status 라벨 정합(held-pending-utility→"아직 검증 대기")·verified 구분·proposer(truth 아님)·빈 evidence 비파괴.
+let
+  ur = import ./understanding-report.px;
+  B = builtins;
+  # P4 memory_evidence(공개 shape): 철수·사과 recognized, 책 missing
+  me = {
+    evidence_kind = "symbol-memory.recognition";
+    recognized_count = 2; missing_count = 1; total = 3;
+    symbols_status = [
+      { name = "철수"; ref_kind = "thing"; status = "recognized"; }
+      { name = "사과"; ref_kind = "thing"; status = "recognized"; }
+      { name = "책"; ref_kind = "thing"; status = "missing"; }
+    ];
+  };
+  # P5 abstraction_status_evidence(공개 shape): ingest held-pending-utility
+  ase = {
+    evidence_kind = "abstraction.status";
+    abstraction_status_count = 1; held_count = 1;
+    items = [ { about = "s:n:ingest"; relation = "predicate-synonym-collapse"; status = "held-pending-utility"; } ];
+  };
+  rep = ur.mkUnderstandingReport { memory_evidence = me; abstraction_status_evidence = ase; };
+
+  # verified abstraction은 "아직 검증 못 한" 꼬리표 안 붙음
+  aseV = ase // { items = [ { about = "s:n:give"; relation = "x"; status = "verified"; } ]; held_count = 0; };
+  repV = ur.mkUnderstandingReport { memory_evidence = me; abstraction_status_evidence = aseV; };
+
+  # 빈 evidence = 빈 lines(비파괴)
+  repEmpty = ur.mkUnderstandingReport { };
+
+  hasLine = sub: lines: (B.length (B.filter (l: (B.match (".*" + sub + ".*") l) != null) lines)) > 0;
+in {
+  lines = rep.lines;
+  line_count = B.length rep.lines;
+  empty_lines = B.length repEmpty.lines;
+  all_ok =
+       (rep.report_kind == "understanding-report")
+    # 인식한 것 + 처음 본 것 + abstraction held = 3 라인
+    && (B.length rep.lines == 3)
+    && (hasLine "철수, 사과" rep.lines)             # recognized 나열
+    && (hasLine "책" rep.lines)                     # missing
+    && (hasLine "ingest" rep.lines)                 # concept 라벨(s:n: 제거)
+    && (hasLine "아직 검증 대기" rep.lines)          # held-pending-utility 한국어
+    && (hasLine "아직 검증 못 한 일반화 후보" rep.lines)
+    # ★held_abstraction_count = P5 held_count 정합
+    && (rep.held_abstraction_count == 1)
+    # ★설명일 뿐 truth 아님
+    && (rep.proposer_only == true) && (rep.durable_truth == false) && (rep.accepted_as_truth == false)
+    # ★verified abstraction = "아직 검증 못 한" 꼬리표 없음 + *기록된 이전 상태*로 framing(현재 발화 truth 아님 명시)
+    && (hasLine "이전에 검증된 일반화" repV.lines)
+    && (hasLine "현재 발화의 truth 아님" repV.lines)
+    && ((hasLine "아직 검증 못 한" repV.lines) == false)
+    # ★빈 evidence = 빈 lines(비파괴)
+    && (repEmpty.lines == [ ]) && (repEmpty.held_abstraction_count == 0);
+}

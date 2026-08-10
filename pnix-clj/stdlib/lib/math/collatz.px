@@ -1,0 +1,130 @@
+# stdlib.lib.math.collatz
+#
+# OWNER-LAW (v0.12-AAO, div-math, 2026-05-21): the Collatz (3n+1)
+# iteration.
+#
+# The div-math kernel computes closed-form answers everywhere
+# else. The Collatz iteration is different in character: a simple
+# rule applied repeatedly, whose *trajectory* is the interesting
+# object. This owner makes that trajectory computable.
+#
+# # The rule
+#
+#   collatzNext n = n / 2        if n is even
+#                 = 3 * n + 1    if n is odd
+#
+# Iterating from any positive integer is conjectured always to
+# reach 1. This owner does not prove that -- it computes the
+# trajectory, its length (the stopping time), and its peak for a
+# given start, all exactly and deterministically.
+#
+# # Honest about the conjecture
+#
+# `collatzSequence` recurses until it hits 1. For every integer
+# ever tested this terminates; the Collatz CONJECTURE (that it
+# always does) is famously open. The owner computes -- it does not
+# claim the conjecture.
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a proof or disproof of the Collatz conjecture.
+#   - NOT generalised `qx+1` iterations.
+#   - NOT negative or zero starts.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/collatz.px";
+
+  intMod = a: b: a - b * (a / b);
+  isEven = n: intMod n 2 == 0;
+
+  # One Collatz step.
+  collatzNext = n:
+    if isEven n then n / 2 else 3 * n + 1;
+
+  # The full trajectory from n down to 1, inclusive of both ends.
+  collatzSequence = n:
+    let
+      go = x: acc:
+        if x == 1 then acc ++ [ 1 ]
+        else go (collatzNext x) (acc ++ [ x ]);
+    in go n [];
+
+  # The stopping time: the number of steps to reach 1.
+  collatzStoppingTime = n:
+    builtins.length (collatzSequence n) - 1;
+
+  # The peak value the trajectory reaches.
+  collatzMax = n:
+    builtins.foldl'
+      (acc: x: if x > acc then x else acc)
+      0
+      (collatzSequence n);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "next"
+    "sequence"
+    "stopping-time"
+    "max-value"
+  ];
+
+  applyCollatz = request:
+    let
+      op = request.operation;
+      n  = request.n;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 1 then {
+        outcome = "held-non-positive-start";
+        operation = op;
+        n = n;
+        reason = "the Collatz iteration starts from a positive integer";
+      }
+      else if op == "next" then {
+        outcome = "collatz-computed";
+        operation = op; n = n;
+        value = collatzNext n;
+      }
+      else if op == "sequence" then {
+        outcome = "collatz-computed";
+        operation = op; n = n;
+        sequence = collatzSequence n;
+      }
+      else if op == "stopping-time" then {
+        outcome = "collatz-computed";
+        operation = op; n = n;
+        value = collatzStoppingTime n;
+      }
+      else {
+        # op == "max-value"
+        outcome = "collatz-computed";
+        operation = op; n = n;
+        value = collatzMax n;
+      };
+
+in {
+  inherit
+    ownerName
+    collatzNext
+    collatzSequence
+    collatzStoppingTime
+    collatzMax
+    knownOperations
+    applyCollatz;
+  meta = {
+    source = "stdlib math collatz";
+    owner = ownerName;
+    base = "parametric-math-collatz-v0";
+    rev_note = "v0.12-AAO (div-math): the Collatz (3n+1) iteration owner. collatzNext (one step), collatzSequence (the full trajectory to 1), collatzStoppingTime (its length), collatzMax (its peak). Computes trajectories exactly and deterministically; it does NOT claim the Collatz conjecture -- it computes, the conjecture stays open. Standalone, positive integers. NOT a proof of the conjecture, NOT generalised qx+1, NOT yet a registered lens.";
+  };
+}

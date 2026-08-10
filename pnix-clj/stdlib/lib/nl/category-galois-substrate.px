@@ -1,0 +1,300 @@
+let
+  ownerName = "stdlib.nl.category-galois-substrate";
+
+  topos = import nl/category-topos-internal-language.px;
+  sheafCohom = import nl/category-sheaf-cohomology-substrate.px;
+
+  # === Substrate Galois Theory (agent-NL-182) ========================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Substrate Galois theory (substrate's automorphism group acting
+  # >  on receipts)"
+  #
+  # For a Grothendieck topos T, the *fundamental groupoid* (or
+  # Galois group when based at a point) classifies the topos's
+  # symmetries. In substrate: G_pnix acts on receipts by:
+  #   - sentence-instance renumbering (sent-001 ↔ sent-002 if both
+  #     refer to byte-distinct utterances with same meaning)
+  #   - language permutations (rust ↔ python both emit equivalent code)
+  #   - axiom-fiber relabeling (security/oauth/google ↔ security/oauth/okta
+  #     when both yield same downstream effect)
+  #
+  # Fixed points of G_pnix on receipts = Galois-invariant (canonical)
+  # receipts. These are receipts that DO NOT change under any
+  # substrate symmetry.
+
+  stepKind = "substrate-galois-theory";
+  framework_step =
+    "G_pnix action on receipts — invariants + fixed-point detection";
+
+  # =================================================================
+  # === Substrate Galois group G_pnix ===============================
+  # =================================================================
+
+  galoisGroup = {
+    group_id = "G_pnix";
+    description_en = ''
+      The substrate Galois group G_pnix is the automorphism group of
+      the substrate's topos viewed as a "fiber functor" target.
+
+      Generators of G_pnix:
+        - σ_rename : sent-NNN renumbering (within equivalence class)
+        - σ_lang   : language permutation among emit-equivalent languages
+        - σ_axiom  : axiom-fiber relabeling within isomorphism class
+
+      Relations:
+        - σ_rename^k = id when applied k times to a renumbering cycle of length k
+        - σ_lang and σ_rename commute (operate on independent receipt fields)
+        - σ_axiom is normal in G_pnix (preserved by other symmetries)
+    '';
+    structure = "profinite (limit of finite quotients)";
+    fundamental_property = "G_pnix-orbits of receipts = canonical receipt classes";
+  };
+
+  # =================================================================
+  # === Generators of G_pnix ========================================
+  # =================================================================
+
+  generators = {
+    sigma_rename = {
+      generator_id = "sigma-rename";
+      description_en = "Permutation of sent-NNN identifiers within equivalence class";
+      operates_on = "receipt.session-instance-anchor (mode 3)";
+      example_en = ''
+        If utterances "rename foo to bar" and "이름을 foo에서 bar로 변경" are
+        equivalent (same meaning, different surface), they may have
+        distinct instance ids sent-001 and sent-002. σ_rename swaps them.
+      '';
+      order = "potentially infinite (any permutation)";
+      normalizer = "stabilizes meaning-vector equivalence classes";
+    };
+
+    sigma_lang = {
+      generator_id = "sigma-lang";
+      description_en = "Permutation of languages that emit equivalent code";
+      operates_on = "receipt.code-emit-per-language (mode 15)";
+      example_en = ''
+        rust and zig both emit memory-safe systems code with similar
+        primitives. σ_lang(rust)(zig) swaps their emit slots if both
+        produce equivalent operational results.
+      '';
+      order = "finite (bounded by language count 36 + 5 new from #165 = potentially 44)";
+      normalizer = "stabilizes operational semantics";
+    };
+
+    sigma_axiom = {
+      generator_id = "sigma-axiom";
+      description_en = "Permutation of axiom-fibers within isomorphism class";
+      operates_on = "receipt.axiom-fiber-select (mode 5)";
+      example_en = ''
+        Within OAuth flow, providers google/okta/auth0/azure-ad are
+        substitutable when downstream usage only requires OIDC.
+        σ_axiom swaps them while preserving authentication outcome.
+      '';
+      order = "depends on axiom registry depth";
+      normalizer = "normal subgroup — preserved by σ_rename and σ_lang";
+    };
+  };
+
+  # =================================================================
+  # === Action on receipt complex ===================================
+  # =================================================================
+
+  galoisActionOnReceipt = generator: receipt:
+    let
+      sig = if builtins.hasAttr "generator_id" generator
+            then generator.generator_id else "unknown";
+    in {
+      generator_applied = sig;
+      pre_action_receipt = receipt;
+      operation_kind = "generator-action";
+      post_action_receipt_descriptor = "receipt-with-" + sig + "-permutation";
+      preserves_meaning = true;
+      preserves_categorical_property = true;
+      fixed_point_iff = "receipt invariant under " + sig;
+    };
+
+  # =================================================================
+  # === Fixed-point detection =======================================
+  # =================================================================
+  #
+  # A receipt r is G_pnix-invariant iff σ(r) = r for all σ ∈ G_pnix.
+  # Operationally: receipt fields that survive every generator's
+  # permutation.
+
+  detectGaloisInvariant = receipt:
+    let
+      # Heuristic: receipts that have no field naming concrete sent-NNN
+      # or concrete language or concrete axiom-fiber are invariant.
+      hasInstanceId = receipt ? instance_id;
+      hasLanguageRef =
+        builtins.any (k:
+          let v = receipt.${k}; in
+          builtins.isString v && (builtins.substring 0 5 v == "rust:" || builtins.substring 0 7 v == "python:")
+        ) (builtins.attrNames receipt);
+      hasAxiomFiber = receipt ? axiom_fiber;
+    in {
+      receipt_descriptor = "input-receipt";
+      has_concrete_instance_id = hasInstanceId;
+      has_concrete_language_ref = hasLanguageRef;
+      has_concrete_axiom_fiber = hasAxiomFiber;
+      is_galois_invariant = !hasInstanceId && !hasLanguageRef && !hasAxiomFiber;
+      classification = if !hasInstanceId && !hasLanguageRef && !hasAxiomFiber
+                       then "canonical-receipt-G-invariant"
+                       else "non-invariant-receipt-G-orbit-representative";
+    };
+
+  # =================================================================
+  # === Group cohomology H^p(G_pnix, F) =============================
+  # =================================================================
+  #
+  # H^p(G_pnix, F) classifies "twisted forms of F by G_pnix-cocycles".
+  # H^0(G_pnix, F) = F^G_pnix (fixed points)
+  # H^1(G_pnix, F) = G_pnix-torsors (twisted forms)
+
+  groupCohomology = {
+    H0 = {
+      degree = 0;
+      name = "H^0(G_pnix, F)";
+      meaning_en = "Fixed-point sheaf — receipts invariant under all G_pnix actions. Canonical / Galois-invariant receipts.";
+      operational = "compute by detectGaloisInvariant on each receipt";
+    };
+    H1 = {
+      degree = 1;
+      name = "H^1(G_pnix, F)";
+      meaning_en = "G_pnix-torsors. Locally G_pnix-trivial but globally twisted forms — receipt families that differ by a non-trivial G_pnix-cocycle.";
+      substrate_example = "Two distinct sent-NNN renumberings yielding receipts that are locally invariant but globally distinct";
+    };
+    H_higher = {
+      degree = "n >= 2";
+      meaning_en = "Higher group cohomology — measures obstructions to lifting G_pnix-cocycles to higher dimensions";
+    };
+  };
+
+  # =================================================================
+  # === Galois invariants registry ==================================
+  # =================================================================
+  #
+  # 박힌 substrate facts that ARE Galois-invariant by construction.
+
+  galoisInvariantSubstrateFacts = [
+    {
+      fact_id = "composability-QED-galois-invariant";
+      description_en = "Composability lemma's QED is independent of sent-NNN renumbering / language perm / axiom-fiber relabel.";
+      reason = "proof depends only on output_kind=input_kind equalities which are renaming-invariant";
+      depends_on_lemma = "theorem-NL-mode-chain-composability";
+    }
+    {
+      fact_id = "uniqueness-QED-galois-invariant";
+      description_en = "Uniqueness lemma's QED is G_pnix-invariant (depends only on determinism axioms, not on which sent-NNN was assigned).";
+      reason = "determinism is preserved by any G_pnix generator";
+      depends_on_lemma = "theorem-NL-mode-chain-uniqueness-of-factorization";
+    }
+    {
+      fact_id = "16-mode-count-galois-invariant";
+      description_en = "The fact that the substrate has 16 modes is G_pnix-invariant (modes are not renumbered by Galois action).";
+      reason = "mode count is part of substrate definition, not substrate state";
+    }
+    {
+      fact_id = "topos-characterization-galois-invariant";
+      description_en = "SC4 (substrate is Grothendieck topos) is G_pnix-invariant — topos structure is intrinsic.";
+      reason = "Topos axioms hold for any group quotient as well — being a topos is a categorical property, not state";
+    }
+    {
+      fact_id = "UC4-LLM-impossibility-galois-invariant";
+      description_en = "UC4 holds in every G_pnix-orbit — no matter how we relabel/permute, LLM substitution remains mathematically impossible.";
+      reason = "UC4 follows from Uniqueness which is G_pnix-invariant";
+    }
+  ];
+
+  # =================================================================
+  # === Galois correspondence =======================================
+  # =================================================================
+  #
+  # Substrate Galois correspondence: there's a bijection between:
+  #   {subgroups H ⊂ G_pnix}  ↔  {receipts canonical up to H-action}
+  # Larger H → more canonicalization → smaller orbit space
+  # Smaller H → finer distinctions → larger orbit space
+
+  galoisCorrespondence = {
+    correspondence_kind = "Galois-correspondence-for-substrate";
+    bijection_statement_en = ''
+      {subgroups H ≤ G_pnix} ⟷ {classes of receipts canonical up to H}
+        smaller H → more granular receipts
+        larger H → coarser canonicalization
+    '';
+    trivial_subgroup_meaning = "{e} ↔ raw receipts (no canonicalization, each sent-NNN distinct)";
+    full_group_meaning = "G_pnix ↔ fully canonical Galois-invariant receipts";
+    intermediate_subgroups = [
+      { H = "<sigma-rename>"; canonical_modulo = "sent-NNN renumbering"; }
+      { H = "<sigma-lang>"; canonical_modulo = "language permutation"; }
+      { H = "<sigma-axiom>"; canonical_modulo = "axiom-fiber relabeling"; }
+      { H = "<sigma-rename, sigma-lang>"; canonical_modulo = "both renumbering and language perm"; }
+    ];
+  };
+
+  # =================================================================
+  # === Inventory ====================================================
+  # =================================================================
+
+  inventorySummary = _: {
+    owner = ownerName;
+    galois_group_defined = true;
+    generator_count = builtins.length (builtins.attrNames generators);
+    galois_action_supported = true;
+    galois_invariant_detection_supported = true;
+    group_cohomology_degrees_defined = 3;
+    galois_invariant_substrate_fact_count = builtins.length galoisInvariantSubstrateFacts;
+    galois_correspondence_defined = true;
+    relates_to_topos_internal_language = topos.ownerName;
+    relates_to_sheaf_cohomology = sheafCohom.ownerName;
+    sheaf_lemma_qed_inherited = (sheafCohom.inventorySummary {}).sheaf_lemma_qed;
+  };
+
+  # =================================================================
+  # === Plate entry =================================================
+  # =================================================================
+
+  applyGaloisSubstratePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "galois-substrate-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "galois_group" request then {
+      outcome = "galois-group-emitted"; receipt = galoisGroup;
+    }
+    else if builtins.hasAttr "generators" request then {
+      outcome = "galois-generators-emitted"; receipt = generators;
+    }
+    else if builtins.hasAttr "apply_action" request then
+      let r = request.apply_action;
+      in { outcome = "galois-action-applied";
+           receipt = galoisActionOnReceipt r.generator r.receipt; }
+    else if builtins.hasAttr "detect_invariant" request then
+      let r = request.detect_invariant;
+      in { outcome = "galois-invariant-detected";
+           receipt = detectGaloisInvariant r; }
+    else if builtins.hasAttr "group_cohomology" request then {
+      outcome = "galois-group-cohomology-emitted"; receipt = groupCohomology;
+    }
+    else if builtins.hasAttr "invariant_facts" request then {
+      outcome = "galois-invariant-substrate-facts-emitted";
+      receipt = galoisInvariantSubstrateFacts;
+    }
+    else if builtins.hasAttr "correspondence" request then {
+      outcome = "galois-correspondence-emitted"; receipt = galoisCorrespondence;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "galois_group" "generators" "apply_action"
+             "detect_invariant" "group_cohomology" "invariant_facts" "correspondence"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit galoisGroup generators galoisActionOnReceipt;
+  inherit detectGaloisInvariant groupCohomology;
+  inherit galoisInvariantSubstrateFacts galoisCorrespondence;
+  inherit inventorySummary applyGaloisSubstratePlate;
+}

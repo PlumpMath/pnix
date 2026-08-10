@@ -1,0 +1,247 @@
+let
+  ownerName = "stdlib.nl.universal-nl-master-router";
+
+  # === Universal NL Master Router (Axiom #67) ======================
+  #
+  # 사용자 directive (2026-05-28):
+  # > "NL 이 super 셋 같은 표현이기 때문에, 거기 axiom 들이 제대로 모든곳에
+  # > 스며들어 NL 표현이 사람의 의도가 기계적으로 제대로 extract 되어
+  # > 알고리즘 수학식 code 그게 양방향으로 제대로~*"
+  #
+  # 박힌 32 NL lifter attempts (#38-#66 + #76 + #79 + #100) 의
+  # *single entry point*.
+  # 한 utterance 를 받아 *모든* lifter 에 시도 → fire 된 lifter 들의
+  # union 보고서.
+  #
+  # # Owner 가 lift 하는 substrate 목록 (32 attempts)
+  #
+  # Universal pipeline (#38): math-cong/math-eq/code/api/shell
+  # Problem archetype (#39): 7 math archetypes
+  # Diagram-IR (#40): 5 views
+  # Agent-loop (#41): 9 stages
+  # Code-transform (#42): 14 transforms
+  # Math-domain (#43): 18 categories
+  # Bio (#44), ERP (#45), Benchmark (#46), Engine (#47), Freecat (#48)
+  # Diff (#49), Markup-conv (#50), Host (#51), Mirror-primitive (#52)
+  # Temporal (#53), Tool-safety (#54), Capability (#55), Quant-inv (#56),
+  # Evolution (#57)
+  # Second-order (#58), Lifecycle (#59), Replay (#60), Router (#61),
+  # Ankh-lang (#62)
+  # Gate-sub (#63), Core-utility (#64), API-cap (#65), Closed-loop (#66)
+  #
+  # # Held-honest 헌법
+  #
+  # 0 lifter 매치 → held-no-substrate-matched (utterance 모름).
+  # 여러 lifter 매치 → routed-to-multiple-substrates (각 lifter 의
+  # outcome 모두 carry, caller 가 disambiguate).
+  # 1 lifter 매치 → unambiguous-routing (lifter 명시).
+
+  lifterPathManifest = {
+    pipeline = "nl/nl-universal-pipeline.px";
+    problem_archetype = "nl/problem-archetype-nl-lifter.px";
+    diagram = "nl/diagram-nl-lifter.px";
+    agent_loop = "nl/agent-loop-nl-lifter.px";
+    code_transform = "nl/code-transform-nl-lifter.px";
+    math_domain = "nl/math-domain-nl-lifter.px";
+    multi_domain = "nl/multi-domain-nl-lifters.px";
+    system_domain = "nl/system-domain-nl-lifters.px";
+    verification_domain = "nl/verification-domain-nl-lifters.px";
+    meta_domain = "nl/meta-domain-nl-lifters.px";
+    remaining_domain = "nl/remaining-domain-nl-lifters.px";
+    substrate_introspection = "nl/substrate-introspection-nl-lifter.px";
+    x3d_scene = "nl/x3d-scene-nl-lifter.px";
+    six_tool_api = "nl/six-tool-api-nl-lifter.px";
+  };
+
+  successfulOutcomes = [
+    "domain-classified"          # #38
+    "archetype-lifted"           # #39
+    "diagram-view-lifted"        # #40
+    "agent-stage-lifted"         # #41
+    "code-transform-lifted"      # #42
+    "math-domain-lifted"         # #43
+    "bio-schema-lifted"          # #44
+    "erp-category-lifted"        # #45
+    "benchmark-kind-lifted"      # #46
+    "engine-family-lifted"       # #47
+    "freecat-surface-lifted"     # #48
+    "diff-op-lifted"             # #49
+    "markup-conversion-lifted"   # #50
+    "host-boundary-lifted"       # #51
+    "mirror-primitive-lifted"    # #52
+    "temporal-category-lifted"   # #53
+    "tool-safety-tier-lifted"    # #54
+    "capability-source-lifted"   # #55
+    "quant-invariant-lifted"     # #56
+    "evolution-stage-lifted"     # #57
+    "second-order-relation-lifted" # #58
+    "lifecycle-state-lifted"     # #59
+    "replay-concern-lifted"      # #60
+    "router-target-lifted"       # #61
+    "ankh-host-lang-lifted"      # #62
+    "gate-sub-lifted"            # #63
+    "core-utility-family-lifted" # #64
+    "api-capability-category-lifted" # #65
+    "closed-loop-scenario-lifted" # #66
+    "introspection-query-lifted"  # #76 (substrate self-knowledge NL forward)
+    "x3d-scene-lifted"            # #79 (X3D scene NL forward)
+    "hanim-query-lifted"          # #100 (HAnim joint query)
+    "blender-query-lifted"        # #100 (Blender operator query)
+    "freecad-query-lifted"        # #100 (FreeCAD API query)
+    "gltf-query-lifted"           # #100 (glTF type query)
+    "rhino-query-lifted"          # #100 (Rhino entity query)
+    "coverage-query-lifted"       # #100 (API coverage status query)
+  ];
+
+  isSuccessful = result:
+    builtins.elem result.outcome successfulOutcomes;
+
+  # === Master routing — try all 32 lifter attempts ==================
+
+  routeUtteranceToAllSubstrates = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let
+        # Route evaluation intentionally tries every lifter. Keep those imports
+        # inside the routing path so inventory/discovery can read the master
+        # router without forcing the whole NL lifter family.
+        pipeline = import nl/nl-universal-pipeline.px;
+        problemArch = import nl/problem-archetype-nl-lifter.px;
+        diagram = import nl/diagram-nl-lifter.px;
+        agentLoop = import nl/agent-loop-nl-lifter.px;
+        codeTrans = import nl/code-transform-nl-lifter.px;
+        mathDomain = import nl/math-domain-nl-lifter.px;
+        multi = import nl/multi-domain-nl-lifters.px;
+        system = import nl/system-domain-nl-lifters.px;
+        verif = import nl/verification-domain-nl-lifters.px;
+        meta = import nl/meta-domain-nl-lifters.px;
+        remaining = import nl/remaining-domain-nl-lifters.px;
+        introNL = import nl/substrate-introspection-nl-lifter.px;  # #76
+        x3dNL = import nl/x3d-scene-nl-lifter.px;  # #79
+        sixTool = import nl/six-tool-api-nl-lifter.px;  # #100
+        attempts = [
+          { lifter_id = "nl-universal-pipeline"; axiom = 38; result = pipeline.classifyDomain utterance; }
+          { lifter_id = "problem-archetype"; axiom = 39; result = problemArch.liftToArchetype utterance; }
+          { lifter_id = "diagram-view"; axiom = 40; result = diagram.liftToDiagramView utterance; }
+          { lifter_id = "agent-stage"; axiom = 41; result = agentLoop.liftToAgentStage utterance; }
+          { lifter_id = "code-transform"; axiom = 42; result = codeTrans.liftToTransform utterance; }
+          { lifter_id = "math-domain"; axiom = 43; result = mathDomain.liftToMathDomain utterance; }
+          { lifter_id = "bio-schema"; axiom = 44; result = multi.liftToBioSchema utterance; }
+          { lifter_id = "erp-category"; axiom = 45; result = multi.liftToErpCategory utterance; }
+          { lifter_id = "benchmark-kind"; axiom = 46; result = multi.liftToBenchmarkKind utterance; }
+          { lifter_id = "engine-family"; axiom = 47; result = multi.liftToEngineFamily utterance; }
+          { lifter_id = "freecat-surface"; axiom = 48; result = multi.liftToFreecatSurface utterance; }
+          { lifter_id = "diff-op"; axiom = 49; result = system.liftToDiffOperation utterance; }
+          { lifter_id = "markup-conversion"; axiom = 50; result = system.liftToMarkupConversion utterance; }
+          { lifter_id = "host-boundary"; axiom = 51; result = system.liftToHostBoundary utterance; }
+          { lifter_id = "mirror-primitive"; axiom = 52; result = system.liftToMirrorPrimitive utterance; }
+          { lifter_id = "temporal-category"; axiom = 53; result = verif.liftToTemporalCategory utterance; }
+          { lifter_id = "tool-safety"; axiom = 54; result = verif.liftToToolSafetyTier utterance; }
+          { lifter_id = "capability-source"; axiom = 55; result = verif.liftToCapabilityDiscoverySource utterance; }
+          { lifter_id = "quant-invariant"; axiom = 56; result = verif.liftToQuantInvariantKind utterance; }
+          { lifter_id = "evolution-stage"; axiom = 57; result = verif.liftToEvolutionStage utterance; }
+          { lifter_id = "second-order"; axiom = 58; result = meta.liftToSecondOrderRelation utterance; }
+          { lifter_id = "lifecycle-state"; axiom = 59; result = meta.liftToLifecycleState utterance; }
+          { lifter_id = "replay-concern"; axiom = 60; result = meta.liftToReplayConcern utterance; }
+          { lifter_id = "router-target"; axiom = 61; result = meta.liftToRouterTarget utterance; }
+          { lifter_id = "ankh-host-lang"; axiom = 62; result = meta.liftToAnkhHostLang utterance; }
+          { lifter_id = "gate-sub"; axiom = 63; result = remaining.liftToGateSub utterance; }
+          { lifter_id = "core-utility"; axiom = 64; result = remaining.liftToCoreUtilityFamily utterance; }
+          { lifter_id = "api-capability"; axiom = 65; result = remaining.liftToApiCapabilityCategory utterance; }
+          { lifter_id = "closed-loop"; axiom = 66; result = remaining.liftToClosedLoopScenario utterance; }
+          { lifter_id = "substrate-introspection"; axiom = 76; result = introNL.liftToIntrospectionQuery utterance; }
+          { lifter_id = "x3d-scene"; axiom = 79; result = x3dNL.liftToX3dScene utterance; }
+          { lifter_id = "six-tool-api"; axiom = 100; result = sixTool.liftToSixToolQuery utterance; }
+        ];
+        fired = builtins.filter (a: isSuccessful a.result) attempts;
+        firedCount = builtins.length fired;
+      in
+        if firedCount == 0 then {
+          outcome = "held-no-substrate-matched";
+          utterance = utterance;
+          total_lifters_attempted = builtins.length attempts;
+          reason = "32 NL lifter attempts 모두 미매치. utterance 가 박힌 substrate 어느 곳에도 routing 불가. 새 routing rule 또는 utterance 재구성 필요.";
+        }
+        else if firedCount == 1 then
+          let f = builtins.head fired;
+          in {
+            outcome = "unambiguous-routing";
+            utterance = utterance;
+            routed_lifter = f.lifter_id;
+            routed_axiom = f.axiom;
+            lifter_result = f.result;
+            substrate_action =
+              "단 하나의 NL lifter 매치 — substrate 가 발화 의도를 명시적으로 "
+              + "추출. caller 는 lifter_result 를 downstream substrate (axiom "
+              + (builtins.toString f.axiom) + ") 의 plate 호출로 lower.";
+          }
+        else {
+          outcome = "routed-to-multiple-substrates";
+          utterance = utterance;
+          fired_count = firedCount;
+          fired_lifters = builtins.map (a: { inherit (a) lifter_id axiom; }) fired;
+          all_results = builtins.map (a: { inherit (a) lifter_id axiom; result = a.result; }) fired;
+          reason =
+            "여러 substrate 의 NL surface 가 동시 매치. 사용자가 다중 domain "
+            + "intent 를 한 발화에 표현. caller 가 priority order 또는 follow-up "
+            + "으로 disambiguate. silent guess 절대 금지.";
+        };
+
+  # === Plate entry =================================================
+
+  applyUniversalNlMasterRouterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then { outcome = "held-missing-utterance-field"; }
+    else routeUtteranceToAllSubstrates request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-universal-master-router-axiom-67";
+    routed_lifter_count = 32;
+    routed_axiom_range = "38-66 + #76 + #79 + #100";
+    lifter_path_manifest = lifterPathManifest;
+    inventory_import_policy =
+      "path manifest only; actual universal routing still imports and tries all lifters by design";
+    successful_outcome_count = builtins.length successfulOutcomes;
+    routes_bilingual = true;
+    new_decision_count = 0;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-substrate-matched"
+    ];
+    informational_outcomes = [
+      "unambiguous-routing"
+      "routed-to-multiple-substrates"
+    ];
+    correspondence_with_user_directive =
+      "사용자 directive (2026-05-28): 'NL super-set 모든 곳에 스며들어... "
+      + "양방향으로 제대로'. 이 owner 가 NL → 박힌 32 lifter-attempt routing 의 "
+      + "single entry point. 모든 lifter 동시 시도, fire 된 모든 결과 carry. "
+      + "Held-honest: 0 match → held / N match → carry-all (silent guess "
+      + "절대 금지).";
+  };
+
+in {
+  inherit
+    ownerName lifterPathManifest successfulOutcomes isSuccessful
+    routeUtteranceToAllSubstrates
+    applyUniversalNlMasterRouterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL universal master router (Axiom #67)";
+    owner = ownerName;
+    base = "universal-nl-master-router-v0";
+    rev_note = "사용자 directive (2026-05-28). 32 NL lifter attempts (#38-#66 + #76 + #79 + #100) 의 "
+      + "single entry point. routeUtteranceToAllSubstrates: 모든 lifter "
+      + "동시 시도, fire 된 lifter 들의 union carry. 3 informational + "
+      + "5 Held outcome. DO NOT REBUILD — existing NL lifter owners 재사용.";
+  };
+}

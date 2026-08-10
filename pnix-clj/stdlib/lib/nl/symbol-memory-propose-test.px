@@ -1,0 +1,49 @@
+# stdlib/lib/nl/symbol-memory-propose-test.px
+#
+# codec proposition → symbol 후보 propose + store-plan 연결 lock. propose-only(durable 아님)·self 제외·
+# canonical_key(term-dag 수)·content-hash store 연결 확인.
+let
+  prop = import ./symbol-memory-propose.px;
+  sp = import ./symbol-memory-store-plan.px;
+  B = builtins;
+  sampleProp = { roles = [ { role = "agent"; entity = "철수"; } { role = "object"; entity = "사과"; } ]; action = "먹"; };
+  proposed = prop.proposeSymbols sampleProp;
+  syms = proposed.symbols;
+  first = B.head syms;
+  preds = B.filter (s: s.ref_kind == "symbol") syms;   # action=먹 → predicate symbol
+  plan = sp.mkPlan { symbols = syms; built_at_ms = 0; };
+  # ★§34-9(가) 개념-key: 먹/잡수시(높임 동의어)는 같은 개념 identity로 합쳐지고, 개체(철수)는 surface 유지
+  synProp = { roles = [ { role = "agent"; entity = "철수"; } { role = "object"; entity = "사과"; } ]; action = "잡수시"; };
+  jabPreds = B.filter (s: s.ref_kind == "symbol") (prop.proposeSymbols synProp).symbols;
+  meokPred = B.head preds;
+  jabPred = B.head jabPreds;
+  cheolsu = B.head (B.filter (s: s.name == "철수") syms);
+in {
+  symbol_count = proposed.symbol_count;
+  first_alias = first.alias;
+  first_canonical = first.canonical_key;
+  predicate_count = B.length preds;
+  predicate_concept = if preds == [ ] then null else (B.head preds).concept;
+  has_self = B.any (s: s.ref_kind == "self") syms;
+  proposer_only = proposed.proposer_only;
+  durable_truth = proposed.durable_truth;
+  plan_symbol_count = plan.symbol_count;
+  plan_op_count = plan.operation_count;
+  pred_canonical = meokPred.canonical_key;
+  syn_collapses = meokPred.canonical_key == jabPred.canonical_key;
+  entity_canonical = cheolsu.canonical_key;
+  all_ok = (proposed.symbol_count == 3)                 # 철수·사과·먹 (self 제외)
+           && ((B.any (s: s.ref_kind == "self") syms) == false)
+           && proposed.proposer_only
+           && (proposed.durable_truth == false)
+           && (first.alias != "")
+           && ((B.substring 0 2 first.canonical_key) == "s:")
+           && (B.length preds == 1)                     # action 1개 = predicate symbol
+           && (meokPred.canonical_key == "s:n:ingest")  # ★술어=개념-축약+n: (propToTerm leaf와 동일)
+           && (meokPred.canonical_key == jabPred.canonical_key)  # ★먹/잡수시 동의어 → 같은 identity(orphan-dispose 차단)
+           && (cheolsu.canonical_key == "s:n:철수")     # ★개체=surface 유지(약분 안 함=단서·격리)
+           && (plan.symbol_count == 3)
+           && (plan.operation_count == 4)               # manifest + 3 symbol
+           && (plan.proposer_only == true)
+           && (plan.durable_truth == false);
+}

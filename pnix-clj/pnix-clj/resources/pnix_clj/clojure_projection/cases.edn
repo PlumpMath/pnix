@@ -1,0 +1,230 @@
+{:kind :clojure-projection-fixture-set
+ :schema-version 1
+ :lineage
+ {:source "pnix-clj host-local Clojure projection first slices"
+  :captured-at "2026-06-30"
+  :note "Host Clojure reader values, selected runtime objects, and host-local receipt envelopes are projected to pnix-clj.clojure-projection.v0 terms, then validated by the internal .px projection artifact."}
+ :cases
+ [{:name "nil-scalar" :reader-source "nil" :expected-tag "Scalar" :expected-kind "nil"}
+  {:name "int-scalar" :reader-source "42" :expected-tag "Scalar" :expected-kind "int"}
+  {:name "bigdecimal-scalar" :reader-source "1.5M" :expected-tag "Scalar" :expected-kind "bigdec"}
+  {:name "string-scalar" :reader-source "\"abc\"" :expected-tag "Scalar" :expected-kind "string"}
+  {:name "symbol" :reader-source "clojure.core/+" :expected-tag "Symbol"}
+  {:name "keyword" :reader-source ":user/id" :expected-tag "Keyword"}
+  {:name "list-form" :reader-source "(+ 1 2)" :expected-tag "List"}
+  {:name "vector" :reader-source "[1 :a sym]" :expected-tag "Vector"}
+  {:name "lazy-seq" :host-form-source "(map inc [1 2 3])" :expected-tag "List"}
+  {:name "map" :reader-source "{:a 1, :b [2]}" :expected-tag "Map"}
+  {:name "set" :reader-source "#{:a :b}" :expected-tag "Set"}
+  {:name "var-ref" :host-form-source "(var clojure.core/+)" :expected-tag "Var"}
+  {:name "namespace-object" :host-form-source "(the-ns 'clojure.core)" :expected-tag "Namespace"}
+  {:name "exception-object" :host-form-source "(try (/ 1 0) (catch Throwable t t))" :expected-tag "Exception"}
+  {:name "control-flow-value" :control-flow-source "(try 1 (finally nil))" :expected-tag "ControlFlowReceipt"}
+  {:name "control-flow-finally-effect"
+   :control-flow-trace-source
+   {:form "(let [events (atom []) result (try (throw (ex-info \"boom\" {:k 1})) (catch Exception e :caught) (finally (swap! events conj :finally)))] {:result result :effects @events})"
+    :form-kind "try-catch-finally"}
+   :expected-tag "ControlFlowReceipt"}
+  {:name "macroexpand-when"
+   :macroexpand-source "(when true 1)"
+   :expected-tag "MacroexpandReceipt"}
+  {:name "macroexpand-defmacro-syntax-quote"
+   :macroexpand-source
+   {:setup "(defmacro capture-values [x & xs] `(let [v# ~x] {:first v# :rest [~@xs]}))"
+    :form "(capture-values 1 2 3)"
+    :features ["defmacro" "syntax-quote" "unquote" "unquote-splicing" "auto-gensym"]}
+   :expected-tag "MacroexpandReceipt"}
+  {:name "dynamic-binding"
+   :dynamic-binding-source
+   {:form "(binding [*print-length* 1] *print-length*)"
+    :var "clojure.core/*print-length*"
+    :binding-value 1}
+   :expected-tag "DynamicBindingReceipt"}
+  {:name "java-interop-instance"
+   :java-interop-source
+   {:form "(.length \"hello\")"
+    :op "instance-call"
+    :target "java.lang.String"
+    :member "length"
+    :args []}
+   :expected-tag "JavaInteropReceipt"}
+  {:name "java-interop-static-call"
+   :java-interop-source
+   {:form "(Math/sqrt 16.0)"
+    :op "static-call"
+    :target "java.lang.Math"
+    :member "sqrt"
+    :args [16.0]}
+   :expected-tag "JavaInteropReceipt"}
+  {:name "java-interop-static-field"
+   :java-interop-source
+   {:form "Integer/MAX_VALUE"
+    :op "static-field"
+    :target "java.lang.Integer"
+    :member "MAX_VALUE"
+    :args []}
+   :expected-tag "JavaInteropReceipt"}
+  {:name "java-interop-constructor-object"
+   :java-interop-source
+   {:form "(StringBuilder. \"hi\")"
+    :op "constructor"
+    :target "java.lang.StringBuilder"
+    :member nil
+    :args ["hi"]}
+   :expected-tag "JavaInteropReceipt"}
+  {:name "java-class-object"
+   :java-interop-source
+   {:form "(Class/forName \"java.lang.String\")"
+    :op "static-call"
+    :target "java.lang.Class"
+    :member "forName"
+    :args ["java.lang.String"]}
+   :expected-tag "JavaInteropReceipt"}
+  {:name "reflection-declared-field"
+   :reflection-source
+   {:form "(.getName (.getDeclaredField java.awt.Point \"x\"))"
+    :op "declared-field-name"
+    :target-class "java.awt.Point"
+    :member "x"
+    :args ["x"]}
+   :expected-tag "ReflectionReceipt"}
+  {:name "reflection-method-return-type"
+   :reflection-source
+   {:form "(.getName (.getReturnType (.getMethod String \"substring\" (into-array Class [Integer/TYPE Integer/TYPE]))))"
+    :op "method-return-type"
+    :target-class "java.lang.String"
+    :member "substring"
+    :args ["int" "int"]}
+   :expected-tag "ReflectionReceipt"}
+  {:name "classloader-system"
+   :classloader-source
+   {:form "(ClassLoader/getSystemClassLoader)"
+    :op "system-classloader"
+    :context "system"
+    :args []}
+   :expected-tag "ClassloaderReceipt"}
+  {:name "classloader-load-class"
+   :classloader-source
+   {:form "(.loadClass (ClassLoader/getSystemClassLoader) \"java.lang.String\")"
+    :op "load-class"
+    :context "system"
+    :args ["java.lang.String"]}
+   :expected-tag "ClassloaderReceipt"}
+  {:name "namespace-require-alias-resolve"
+   :namespace-resolution-source
+   {:form "(do (require '[clojure.string :as str]) (ns-resolve *ns* 'str/join))"
+    :op "require-alias-resolve"
+    :requested "clojure.string"
+    :alias "str"
+    :symbol "str/join"}
+   :expected-tag "NamespaceResolutionReceipt"}
+  {:name "namespace-import-class-resolve"
+   :namespace-resolution-source
+   {:form "(do (import java.util.ArrayList) ArrayList)"
+    :op "import-class-resolve"
+    :requested "java.util.ArrayList"
+    :alias "ArrayList"
+    :symbol "ArrayList"}
+   :expected-tag "NamespaceResolutionReceipt"}
+  {:name "namespace-local-var-resolve"
+   :namespace-resolution-source
+   {:form "(do (def local-v 42) (ns-resolve *ns* 'local-v))"
+    :op "local-var-resolve"
+    :requested "local-v"
+    :alias nil
+    :symbol "local-v"}
+   :expected-tag "NamespaceResolutionReceipt"}
+  {:name "host-object-deftype"
+   :host-object-construction-source
+   {:form "(do (deftype PBox [x] Object (toString [_] (str \"PBox:\" x))) (->PBox 7))"
+    :construction-kind "deftype"
+    :type-name "PBox"}
+   :expected-tag "HostObjectConstructionReceipt"}
+  {:name "host-object-defrecord"
+   :host-object-construction-source
+   {:form "(do (defrecord PRec [x y]) (->PRec 1 2))"
+    :construction-kind "defrecord"
+    :type-name "PRec"}
+   :expected-tag "HostObjectConstructionReceipt"}
+  {:name "host-object-reify-callable"
+   :host-object-construction-source
+   {:form "(reify java.util.concurrent.Callable (call [_] \"ok\"))"
+    :construction-kind "reify"
+    :type-name "java.util.concurrent.Callable"}
+   :expected-tag "HostObjectConstructionReceipt"}
+  {:name "polymorphism-protocol-deftype"
+   :polymorphism-source
+   {:form "(do (defprotocol PGreet (greet [x])) (deftype Greeter [name] PGreet (greet [_] (str \"hi \" name))) (let [g (->Greeter \"pnix\")] {:result (greet g) :args [g] :dispatch-value \"Greeter\"}))"
+    :dispatch-kind "defprotocol"
+    :dispatch-name "PGreet/greet"
+    :dispatch-value "Greeter"
+    :args []}
+   :expected-tag "PolymorphismDispatchReceipt"}
+  {:name "polymorphism-multimethod-keyword"
+   :polymorphism-source
+   {:form "(do (defmulti area :kind) (defmethod area :circle [m] (* 3 (:r m) (:r m))) (defmethod area :rect [m] (* (:w m) (:h m))) (let [m {:kind :rect :w 6 :h 7}] {:result (area m) :args [m] :dispatch-value (str (:kind m))}))"
+    :dispatch-kind "defmulti"
+    :dispatch-name "area"
+    :dispatch-value ":rect"
+    :args []}
+   :expected-tag "PolymorphismDispatchReceipt"}
+  {:name "metadata-with-meta-vector"
+   :metadata-source
+   {:form "(let [v (with-meta [1 2] {:doc \"vec\" :line 7})] {:target v :metadata (meta v) :result (:doc (meta v))})"
+    :op "with-meta"
+    :target-kind "clojure.lang.PersistentVector"}
+   :expected-tag "MetadataReceipt"}
+  {:name "metadata-var"
+   :metadata-source
+   {:form "(do (def ^{:doc \"tracked\" :pnix/stage :projection} meta-v 42) (let [v (var meta-v) m (meta v)] {:target v :metadata (select-keys m [:doc :pnix/stage :name]) :result (:pnix/stage m)}))"
+    :op "var-meta"
+    :target-kind "clojure.lang.Var"}
+   :expected-tag "MetadataReceipt"}
+  {:name "state-atom-swap"
+   :state-effect-source
+   {:form "(let [a (atom 1) before @a result (swap! a + 41) after @a] {:target a :initial before :final after :result result :effects [:deref :swap! :deref]})"
+    :op "atom-swap"
+    :target-kind "clojure.lang.Atom"}
+   :expected-tag "StateEffectReceipt"}
+  {:name "state-volatile-reset"
+   :state-effect-source
+   {:form "(let [v (volatile! 2) before @v _ (vreset! v 9) after @v] {:target v :initial before :final after :result after :effects [:deref :vreset! :deref]})"
+    :op "volatile-reset"
+    :target-kind "clojure.lang.Volatile"}
+   :expected-tag "StateEffectReceipt"}
+  {:name "lazy-delay-force"
+   :lazy-evaluation-source
+   {:form "(let [seen (atom []) d (delay (swap! seen conj :forced) 42) result @d] {:target d :result result :realized-count (count @seen) :effects @seen})"
+    :op "delay-force"
+    :target-kind "clojure.lang.Delay"}
+   :expected-tag "LazyEvaluationReceipt"}
+  {:name "lazy-seq-take"
+   :lazy-evaluation-source
+   {:form "(let [seen (atom []) step (fn step [xs] (lazy-seq (when-let [s (seq xs)] (let [x (first s)] (swap! seen conj x) (cons (* x 2) (step (rest s))))))) xs (step [1 2 3]) result (vec (take 2 xs))] {:target xs :result result :realized-count (count @seen) :effects @seen})"
+    :op "lazy-seq-take"
+    :target-kind "clojure.lang.LazySeq"}
+   :expected-tag "LazyEvaluationReceipt"}
+  {:name "concurrency-future-deref"
+   :concurrency-source
+   {:form "(let [seen (atom []) f (future (swap! seen conj :started) 42) result @f] {:target f :result result :completed (future-done? f) :effects (conj @seen :deref)})"
+    :op "future-deref"
+    :target-kind "clojure.core/future"}
+   :expected-tag "ConcurrencyReceipt"}
+  {:name "concurrency-promise-deliver"
+   :concurrency-source
+   {:form "(let [p (promise) _ (deliver p 42) result @p] {:target p :result result :completed (realized? p) :effects [:deliver :deref]})"
+    :op "promise-deliver"
+    :target-kind "clojure.core/promise"}
+   :expected-tag "ConcurrencyReceipt"}
+  {:name "coordination-stm-dosync-alter"
+   :coordination-source
+   {:form "(let [r (ref 1) before @r result (dosync (alter r + 41)) after @r] {:target r :initial before :final after :result result :completed true :effects [:deref :dosync :alter :deref]})"
+    :op "dosync-alter"
+    :target-kind "clojure.lang.Ref"}
+   :expected-tag "CoordinationReceipt"}
+  {:name "coordination-agent-send-await"
+   :coordination-source
+   {:form "(let [a (agent 1) _ (send a + 41) _ (await a) after @a] {:target a :initial 1 :final after :result after :completed true :effects [:send :await :deref]})"
+    :op "agent-send-await"
+    :target-kind "clojure.lang.Agent"}
+   :expected-tag "CoordinationReceipt"}]}

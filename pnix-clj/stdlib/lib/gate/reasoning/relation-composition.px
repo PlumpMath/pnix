@@ -1,0 +1,160 @@
+# stdlib.lib.gate.reasoning.relation-composition
+#
+# OWNER-LAW (2026-05-11): 2-hop relation composition owner.
+#
+# Walks an internal 2-hop chain `A --p1--> B --p2--> C` and decides
+# whether the chain composes into a single derived predicate
+# `A --p_composed--> C`. **Output is always Candidate/Derived, never
+# Accepted.** Acceptance requires a separate proof slice.
+#
+# Why this owner exists:
+#   `try_internal_resolution` (doghouse-core/emergent_search.rs)
+#   produces 2-hop chains from the store. Until now those chains showed
+#   up only as transcript prose. They were *visible reasoning* but not
+#   *new ontology facts*. This owner is the law that decides which
+#   chains can be lowered into a derived ContextualFact so the
+#   substrate's "internal cognition" surface emits typed facts, not
+#   only prose lines.
+#
+# # Inputs
+#
+#   subj    : 1-hop subject (A)
+#   pred1   : 1-hop predicate (p1)
+#   mid     : bridging subject/object (B)
+#   pred2   : 2-hop predicate (p2)
+#   obj2    : terminal object (C)
+#   mid_status : "Accepted" | "Candidate"  — bridging fact status
+#
+# # Output
+#
+#   verdict       : "composed" | "not-applicable" | "held"
+#   composed_pred : predicate of the derived fact (when composed)
+#   held_kind     : reason for hold (when held)
+#   status_hint   : "Candidate" always (derived facts never auto-Accepted)
+#
+# # Composition rules
+#
+#   has-mass + less-than           → mass-less-than
+#   has-mass + greater-than        → mass-greater-than
+#   has-size + greater-than        → size-greater-than
+#   has-size + less-than           → size-less-than
+#   kind-of  + property            → inherited-property
+#   is-defined-as + property       → definition-derived-property
+#   causes   + causes              → causal-chain-candidate
+#   <p>      + equal               → <p>            ; equality collapses
+#
+# Rules not in the table produce `not-applicable`. **New rules belong in
+# this `.px` first.** Carrier Rust mirrors are stale until the table
+# below is the source-of-truth.
+
+let
+  ownerName = "stdlib/lib/gate/reasoning/relation-composition.px";
+
+  # Deterministic rule table. Each entry is { pred1 = ...; pred2 = ...;
+  # composed = ...; }. Order does not matter — lookup is exact match.
+  rules = [
+    { pred1 = "has-mass";       pred2 = "less-than";    composed = "mass-less-than"; }
+    { pred1 = "has-mass";       pred2 = "greater-than"; composed = "mass-greater-than"; }
+    { pred1 = "has-size";       pred2 = "greater-than"; composed = "size-greater-than"; }
+    { pred1 = "has-size";       pred2 = "less-than";    composed = "size-less-than"; }
+    { pred1 = "kind-of";        pred2 = "property";     composed = "inherited-property"; }
+    { pred1 = "is-defined-as";  pred2 = "property";     composed = "definition-derived-property"; }
+    { pred1 = "causes";         pred2 = "causes";       composed = "causal-chain-candidate"; }
+  ];
+
+  # Look up a composition rule. Returns null when no rule matches.
+  composedFor = pred1: pred2:
+    let
+      direct = builtins.filter
+        (r: r.pred1 == pred1 && r.pred2 == pred2)
+        rules;
+      # equality collapse: <p> + equal → <p>
+      equalityCollapse =
+        if pred2 == "equal"
+        then [{ pred1 = pred1; pred2 = "equal"; composed = pred1; }]
+        else [];
+      matches = direct ++ equalityCollapse;
+    in
+      if builtins.length matches > 0
+      then (builtins.head matches).composed
+      else null;
+
+  classify = request:
+    let
+      subj = if request ? subj then request.subj else "";
+      pred1 = if request ? pred1 then request.pred1 else "";
+      mid = if request ? mid then request.mid else "";
+      pred2 = if request ? pred2 then request.pred2 else "";
+      obj2 = if request ? obj2 then request.obj2 else "";
+      midStatus = if request ? mid_status then request.mid_status else "Candidate";
+
+      missing = builtins.stringLength subj == 0
+            || builtins.stringLength pred1 == 0
+            || builtins.stringLength mid == 0
+            || builtins.stringLength pred2 == 0
+            || builtins.stringLength obj2 == 0;
+
+      composed = if missing then null else composedFor pred1 pred2;
+    in
+      if missing then {
+        verdict = "held";
+        composed_pred = null;
+        held_kind = "missing-chain-field";
+        reason = "subj/pred1/mid/pred2/obj2 are all required";
+        status_hint = null;
+      }
+      else if subj == obj2 then {
+        verdict = "held";
+        composed_pred = null;
+        held_kind = "self-cycle";
+        reason = "subj == obj2 — self-cycle composition is not a new fact";
+        status_hint = null;
+      }
+      else if composed == null then {
+        verdict = "not-applicable";
+        composed_pred = null;
+        held_kind = null;
+        reason = "no composition rule for (${pred1}, ${pred2})";
+        status_hint = null;
+      }
+      else {
+        verdict = "composed";
+        composed_pred = composed;
+        held_kind = null;
+        # Candidate-only: derived facts must go through a separate
+        # owner-law proof to be promoted. Even if mid_status is Accepted,
+        # composition does not transfer Accepted status.
+        status_hint = "Candidate";
+        reason =
+          "rule matched (${pred1}, ${pred2}) → ${composed}. Status=Candidate; "
+          + "owner-law proof required to promote.";
+      };
+
+  buildReceipt = request:
+    let v = classify request; in {
+      artifact_family =
+        if v.verdict == "composed"
+        then "coding.reasoning.composition-composed"
+        else if v.verdict == "held"
+        then "coding.reasoning.composition-held"
+        else "coding.reasoning.composition-not-applicable";
+      owner = ownerName;
+      relation = "composition";
+      verdict = v.verdict;
+      composed_pred = v.composed_pred;
+      held_kind = v.held_kind;
+      reason = v.reason;
+      request = request;
+      candidate-only = true;
+      status_hint = v.status_hint;
+      promotion-lane = "InternalOwnerLaw";
+    };
+in {
+  inherit classify buildReceipt composedFor rules ownerName;
+  meta = {
+    source = "stdlib gate reasoning";
+    owner = ownerName;
+    base = "deterministic-relation-composition-rule-table";
+    rev_note = "relation-composition owner: 2-hop chain → Candidate derived fact. Equality collapse + 7 named rules. Never auto-Accepted.";
+  };
+}

@@ -1,0 +1,1169 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+family_root="$clr_meta_root/compiler-selfhost"
+canonical_source="$family_root/compiler_kernel.clj"
+stage2_contract="$family_root/stage2-contract.edn"
+public_cli="$root/bin/clr-meta"
+dotnet_bin="$(command -v dotnet || true)"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage2 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+assert_rejection_json() {
+  local path="$1"
+  local phase="$2"
+  local class="$3"
+  [[ "$(wc -l <"$path" | tr -d ' ')" == 1 ]] || fail rejection-line-count
+  jq -e --arg phase "$phase" --arg class "$class" '
+    (keys_unsorted | sort) == (["class","message","phase","schema"] | sort) and
+    .schema == "pnix.clr-meta.compiler-selfhost-error.v1" and
+    .phase == $phase and .class == $class and
+    (.message | type == "string" and length > 0)
+  ' "$path" >/dev/null || fail "rejection-$phase-$class"
+}
+
+assert_exact_tree() {
+  local directory="$1"
+  local expected_files="$2"
+  local expected_directories="$3"
+  local label="$4"
+  if find "$directory" -type l -print -quit | grep -q .; then
+    fail "$label-symlink"
+  fi
+  if find "$directory" -mindepth 1 ! -type f ! -type d -print -quit | grep -q .; then
+    fail "$label-special-entry"
+  fi
+  (
+    cd "$directory"
+    find . -type f -print | sed 's#^\./##' | LC_ALL=C sort
+  ) >"$tmp/$label-actual-files"
+  cmp "$expected_files" "$tmp/$label-actual-files" >/dev/null || fail "$label-file-set"
+  (
+    cd "$directory"
+    find . -type d -print | sed 's#^\./##' | LC_ALL=C sort
+  ) >"$tmp/$label-actual-directories"
+  cmp "$expected_directories" "$tmp/$label-actual-directories" >/dev/null || \
+    fail "$label-directory-set"
+}
+
+snapshot_rows() {
+  local directory="$1"
+  local paths_file="$2"
+  local output="$3"
+  : >"$output.rows"
+  while IFS= read -r relative; do
+    jq -cn --arg path "$relative" --arg sha256 "$(sha256_file "$directory/$relative")" \
+      '{path:$path,sha256:$sha256}' >>"$output.rows"
+  done <"$paths_file"
+  jq -sS '.' "$output.rows" >"$output"
+}
+
+rows_closure() {
+  jq -r '.[] | "\(.sha256)  \(.path)"' "$1" | sha256_stdin
+}
+
+support_call() {
+  local cwd="$1"
+  local support="$2"
+  shift 2
+  (
+    cd "$cwd"
+    "${clean_environment[@]}" "$dotnet_bin" "$support" "$@"
+  )
+}
+
+run_builder_rejection() {
+  local label="$1"
+  local parent="$2"
+  local output="$3"
+  local marker="$4"
+  set +e
+  "$public_cli" --build-compiler-selfhost-stage2 "$parent" "$output" \
+    >"$tmp/$label.stdout" 2>"$tmp/$label.stderr"
+  local rc=$?
+  set -e
+  [[ "$rc" == 1 && ! -s "$tmp/$label.stdout" ]] || fail "$label-status"
+  rg -F "clr-meta compiler selfhost Stage2 builder: $marker" \
+    "$tmp/$label.stderr" >/dev/null || fail "$label-diagnostic"
+  [[ ! -e "$output" && ! -L "$output" ]] || fail "$label-output-created"
+}
+
+for command in jq rg strings find cmp sed awk; do
+  command -v "$command" >/dev/null 2>&1 || fail "$command-missing"
+done
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+for input in "$public_cli" "$canonical_source" "$stage2_contract" \
+  "$family_root/unseen_add.clj" "$family_root/unseen_subtract.clj" \
+  "$family_root/unseen_equal.clj" "$family_root/unseen_truthy.clj"; do
+  [[ -f "$input" && ! -L "$input" ]] || fail required-input-missing
+done
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage2.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/home" "$tmp/process-tmp" "$tmp/dotnet-home" "$tmp/poison"
+
+clean_environment=(
+  env -i
+  "PATH=/usr/bin:/bin"
+  "HOME=$tmp/home"
+  "TMPDIR=$tmp/process-tmp"
+  "DOTNET_CLI_HOME=$tmp/dotnet-home"
+  "DOTNET_CLI_TELEMETRY_OPTOUT=1"
+  "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1"
+  "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1"
+  "DOTNET_NOLOGO=1"
+  "CLOJURE_LOAD_PATH=$tmp/poison"
+  "CLOJURE_COMPILE_PATH=$tmp/poison"
+  "CLR_META_SOURCE_ROOT=$tmp/poison"
+)
+if [[ -n "${DOTNET_ROOT:-}" ]]; then
+  clean_environment+=("DOTNET_ROOT=$DOTNET_ROOT")
+fi
+
+stage1="$tmp/stage1"
+"$public_cli" --build-compiler-selfhost-stage1 "$stage1" \
+  >"$tmp/stage1-builder.stdout" 2>"$tmp/stage1-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage1-builder.stderr" >&2
+  fail public-stage1-builder
+}
+cmp "$tmp/stage1-builder.stdout" "$stage1/manifest.json" >/dev/null || \
+  fail public-stage1-builder-stdout
+[[ ! -s "$tmp/stage1-builder.stderr" ]] || fail public-stage1-builder-stderr
+
+printf '%s\n' \
+  compiler/CompilerStage1.dll \
+  manifest.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  | LC_ALL=C sort >"$tmp/expected-stage1-files"
+printf '%s\n' . compiler runtime | LC_ALL=C sort >"$tmp/expected-stage-directories"
+assert_exact_tree "$stage1" "$tmp/expected-stage1-files" \
+  "$tmp/expected-stage-directories" stage1-bundle
+
+stage1_manifest="$stage1/manifest.json"
+stage1_compiler="$stage1/compiler/CompilerStage1.dll"
+stage1_support="$stage1/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+
+jq -e '
+  (keys_unsorted | sort) == ([
+    "admission","bootstrap","boundaries","bundle_closure_sha256","bundle_files",
+    "checkpoint","claims","compiler","execution","family","input_closure_sha256",
+    "inputs","schema","stage","toolchain"
+  ] | sort) and
+  .schema == "pnix.clr-meta.compiler-selfhost-stage1-artifact.v1" and
+  .checkpoint == "c2-executable-compiler-stage1" and
+  .family == "pnix.clr-meta.compiler-kernel.v1" and .stage == 1 and
+  .admission.checkpoint == "c1-source-admission" and .admission.ready == true and
+  .claims.compiler_stage1_artifact == true and .claims.compiler_executable == true and
+  .claims.compiler_stage2 == false and .claims.self_reproduction == false and
+  .claims.fixed_point == false and .claims.raw_artifact_reproducibility == false and
+  .claims.clojureclr_replacement == false and
+  .compiler.path == "compiler/CompilerStage1.dll" and .compiler.prepared_methods == 27 and
+  [.bundle_files[].path] == [
+    "compiler/CompilerStage1.dll",
+    "runtime/Pnix.ClrMeta.CompilerSupport.deps.json",
+    "runtime/Pnix.ClrMeta.CompilerSupport.dll",
+    "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"
+  ]
+' "$stage1_manifest" >/dev/null || fail stage1-manifest
+
+printf '%s\n' \
+  compiler/CompilerStage1.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  >"$tmp/stage1-payload-paths"
+snapshot_rows "$stage1" "$tmp/stage1-payload-paths" "$tmp/stage1-payload.json"
+jq -S '.bundle_files' "$stage1_manifest" >"$tmp/stage1-manifest-payload.json"
+cmp "$tmp/stage1-payload.json" "$tmp/stage1-manifest-payload.json" >/dev/null || \
+  fail stage1-bundle-file-hashes
+[[ "$(rows_closure "$tmp/stage1-payload.json")" == \
+   "$(jq -r '.bundle_closure_sha256' "$stage1_manifest")" ]] || \
+  fail stage1-bundle-closure
+[[ "$(sha256_file "$stage1_compiler")" == \
+   "$(jq -r '.compiler.sha256' "$stage1_manifest")" ]] || fail stage1-compiler-hash
+
+support_call "$tmp" "$stage1_support" describe "$stage1_compiler" \
+  >"$tmp/stage1-description.json" 2>"$tmp/stage1-description.stderr" || \
+  fail stage1-describe
+[[ ! -s "$tmp/stage1-description.stderr" ]] || fail stage1-describe-stderr
+jq -S '.' "$tmp/stage1-description.json" >"$tmp/stage1-description.canonical.json"
+jq -S '.compiler.description' "$stage1_manifest" \
+  >"$tmp/stage1-manifest-description.canonical.json"
+cmp "$tmp/stage1-description.canonical.json" \
+  "$tmp/stage1-manifest-description.canonical.json" >/dev/null || \
+  fail stage1-description
+[[ "$(support_call "$tmp" "$stage1_support" prepare "$stage1_compiler")" == 27 ]] || \
+  fail stage1-prepare
+
+stage2="$tmp/stage2"
+"$public_cli" --build-compiler-selfhost-stage2 "$stage1" "$stage2" \
+  >"$tmp/stage2-builder.stdout" 2>"$tmp/stage2-builder.stderr" || {
+  sed -n '1,240p' "$tmp/stage2-builder.stderr" >&2
+  fail public-stage2-builder
+}
+cmp "$tmp/stage2-builder.stdout" "$stage2/manifest.json" >/dev/null || \
+  fail public-stage2-builder-stdout
+[[ ! -s "$tmp/stage2-builder.stderr" ]] || fail public-stage2-builder-stderr
+
+printf '%s\n' \
+  compiler/CompilerStage2.dll \
+  manifest.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  | LC_ALL=C sort >"$tmp/expected-stage2-files"
+assert_exact_tree "$stage2" "$tmp/expected-stage2-files" \
+  "$tmp/expected-stage-directories" stage2-bundle
+
+stage2_manifest="$stage2/manifest.json"
+stage2_compiler="$stage2/compiler/CompilerStage2.dll"
+stage2_support="$stage2/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+
+# The exact manifest contract is checked below after the live lineage values are
+# materialized. This is deliberately reflection/closure evidence; no raw PE
+# equality or inequality between Stage1 and Stage2 is a gate condition.
+
+stage1_manifest_sha256="$(sha256_file "$stage1_manifest")"
+stage1_compiler_sha256="$(sha256_file "$stage1_compiler")"
+stage1_description_sha256="$(sha256_file "$tmp/stage1-description.canonical.json")"
+stage2_compiler_sha256="$(sha256_file "$stage2_compiler")"
+canonical_source_sha256="$(sha256_file "$canonical_source")"
+stage2_contract_sha256="$(sha256_file "$stage2_contract")"
+dotnet_host_sha256="$(sha256_file "$dotnet_bin")"
+dotnet_version="$("${clean_environment[@]}" "$dotnet_bin" --version)"
+parent_source_sha256="$(jq -r '
+  .inputs[] | select(.path == "compiler-selfhost/compiler_kernel.clj") | .sha256
+' "$stage1_manifest")"
+
+jq -e \
+  --arg canonical_source_sha256 "$canonical_source_sha256" \
+  --arg contract_sha256 "$stage2_contract_sha256" \
+  --arg dotnet_host_sha256 "$dotnet_host_sha256" \
+  --arg dotnet_version "$dotnet_version" \
+  --arg parent_bundle_closure_sha256 "$(jq -r '.bundle_closure_sha256' "$stage1_manifest")" \
+  --arg parent_compiler_sha256 "$stage1_compiler_sha256" \
+  --arg parent_description_sha256 "$stage1_description_sha256" \
+  --arg parent_dotnet_host_sha256 "$(jq -r '.toolchain.dotnet_host_sha256' "$stage1_manifest")" \
+  --arg parent_dotnet_version "$(jq -r '.toolchain.dotnet_version' "$stage1_manifest")" \
+  --arg parent_input_closure_sha256 "$(jq -r '.input_closure_sha256' "$stage1_manifest")" \
+  --arg parent_manifest_sha256 "$stage1_manifest_sha256" \
+  --arg stage2_compiler_sha256 "$stage2_compiler_sha256" '
+  def exact_keys($expected):
+    (keys_unsorted | sort) == ($expected | sort);
+  def hash: type == "string" and test("^[0-9a-f]{64}$");
+  def row:
+    exact_keys(["path","sha256"]) and
+    (.path | type == "string" and length > 0) and (.sha256 | hash);
+  exact_keys([
+    "boundaries","bundle_closure_sha256","bundle_files","checkpoint","claims",
+    "compilation","compiler","contract","execution","family",
+    "input_closure_sha256","inputs","parent","schema","stage","support",
+    "toolchain"
+  ]) and
+  .schema == "pnix.clr-meta.compiler-selfhost-stage2-artifact.v1" and
+  .checkpoint == "c3-executable-compiler-stage2" and
+  .family == "pnix.clr-meta.compiler-kernel.v1" and .stage == 2 and
+  .contract == {
+    path:"compiler-selfhost/stage2-contract.edn",sha256:$contract_sha256
+  } and
+  .parent == {
+    bundle_closure_sha256:$parent_bundle_closure_sha256,
+    checkpoint:"c2-executable-compiler-stage1",
+    compiler_description_sha256:$parent_description_sha256,
+    compiler_sha256:$parent_compiler_sha256,
+    input_closure_sha256:$parent_input_closure_sha256,
+    manifest_sha256:$parent_manifest_sha256,
+    schema:"pnix.clr-meta.compiler-selfhost-stage1-artifact.v1",
+    stage:1,
+    validated:true
+  } and
+  (.compilation | exact_keys([
+      "canonical_source","canonical_source_sha256","command","compiled_language",
+      "compiler","descriptor","host","replay_source_packaged","source_hash_chain",
+      "source_language","source_language_equals_compiled_language",
+      "source_unchanged_after_compile","transition_source_present"
+    ]) and
+    .canonical_source == "compiler-selfhost/compiler_kernel.clj" and
+    .canonical_source_sha256 == $canonical_source_sha256 and
+    .source_language == "pnix.clr-meta.compiler-kernel-source.v1" and
+    .compiled_language == "pnix.clr-meta.compiler-kernel-source.v1" and
+    .source_language_equals_compiled_language == true and
+    .transition_source_present == true and .replay_source_packaged == false and
+    .source_unchanged_after_compile == true and
+    .compiler == "STAGE1_BUNDLE/compiler/CompilerStage1.dll" and
+    .host == "STAGE1_BUNDLE/runtime/Pnix.ClrMeta.CompilerSupport.dll" and
+    .command == [
+      "dotnet","STAGE1_BUNDLE/runtime/Pnix.ClrMeta.CompilerSupport.dll","compile",
+      "STAGE1_BUNDLE/compiler/CompilerStage1.dll","FROZEN_TRANSITION_SOURCE",
+      "compiler/CompilerStage2.dll"
+    ] and
+    (.source_hash_chain | exact_keys([
+      "contract_sha256","frozen_source_sha256_after","frozen_source_sha256_before",
+      "live_after_sha256","live_before_sha256","parent_c2_input_sha256"
+    ]) and all(.[]; . == $canonical_source_sha256)) and
+    (.descriptor | exact_keys([
+      "kernel_entry","kernel_identity","kernel_namespace","path","schema","sha256",
+      "source_profile_id"
+    ]) and
+      .schema == "pnix.clr-meta.compiler-selfhost-artifact-descriptor.v1" and
+      .kernel_entry == "compile-source" and
+      .kernel_identity == "pnix.clr-meta.compiler-kernel.v1" and
+      .kernel_namespace == "pnix.clr-meta.compiler-kernel.v1" and
+      .source_profile_id == "pnix.clr-meta.compiler-kernel-source.v1" and
+      .path == "compiler/CompilerStage2.dll" and
+      .sha256 == $stage2_compiler_sha256)) and
+  (.compiler | exact_keys([
+      "description","description_sha256","path","prepared_methods",
+      "sha256","structural_description_equal_to_stage1"
+    ]) and .path == "compiler/CompilerStage2.dll" and
+    .sha256 == $stage2_compiler_sha256 and .prepared_methods == 27 and
+    .structural_description_equal_to_stage1 == true and
+    (.description_sha256 | hash) and
+    (.description | exact_keys([
+      "assembly","fields","metadata","methods","references","resources","schema","type"
+    ]) and
+      .schema == "pnix.clr-meta.compiler-selfhost-description.v1" and
+      .assembly == "Pnix.ClrMeta.Generated.CompilerKernel" and
+      .type == "Pnix.ClrMeta.Generated.CompilerKernel" and .fields == 9 and
+      .methods == [
+        "bind-parameters/3","bind-support-call/3","binding-arity-is?/2",
+        "binding-kind?/2","callable-binding?/1","collect-definitions/3",
+        "compile-source/2","count-at-least?/2","count-is?/2",
+        "declare-definitions/3","fn-initializer?/1","initialize-constants/4",
+        "literal-kind/1","literal?/1","lower-definition/3",
+        "lower-definitions/4","lower-node/5","lower-program/3",
+        "resolve-required/3","seed-intrinsics/1","seed-support-calls/1",
+        "select-intrinsic-opcode/2","symbol-named?/2","validate-definition/2",
+        "validate-definitions/3","validate-node/4","validate-program/1"
+      ] and
+      .references == ["Pnix.ClrMeta.CompilerSupport","System.Private.CoreLib"] and
+      .resources == [] and
+      .metadata == {
+        GeneratedBy:"pnix.clr-meta.compiler-kernel.v1",
+        KernelEntry:"compile-source",
+        KernelIdentity:"pnix.clr-meta.compiler-kernel.v1",
+        KernelNamespace:"pnix.clr-meta.compiler-kernel.v1",
+        SourceProfileId:"pnix.clr-meta.compiler-kernel-source.v1",
+        SupportAbiId:"pnix.clr-meta.compiler-support.v1"
+      })) and
+  .execution == {
+    command:["dotnet","runtime/Pnix.ClrMeta.CompilerSupport.dll","compile",
+             "compiler/CompilerStage2.dll","SOURCE","OUTPUT"],
+    host:"runtime/Pnix.ClrMeta.CompilerSupport.dll"
+  } and
+  (.inputs | type == "array" and length == 3 and all(.[]; row) and
+    map(.path) == [
+      "compiler-selfhost/compiler_kernel.clj",
+      "compiler-selfhost/stage2-contract.edn",
+      "scripts/clr-meta-build-compiler-selfhost-stage2"
+    ]) and
+  (.input_closure_sha256 | hash) and
+  (.bundle_files | type == "array" and length == 4 and all(.[]; row) and
+    map(.path) == [
+      "compiler/CompilerStage2.dll",
+      "runtime/Pnix.ClrMeta.CompilerSupport.deps.json",
+      "runtime/Pnix.ClrMeta.CompilerSupport.dll",
+      "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"
+    ]) and
+  (.bundle_closure_sha256 | hash) and
+  (.support | exact_keys(["abi_id","closure_sha256","copied_from_parent","files"]) and
+    .abi_id == "pnix.clr-meta.compiler-support.v1" and
+    .copied_from_parent == true and (.closure_sha256 | hash) and
+    (.files | type == "array" and length == 3 and all(.[]; row) and
+      map(.path) == [
+        "runtime/Pnix.ClrMeta.CompilerSupport.deps.json",
+        "runtime/Pnix.ClrMeta.CompilerSupport.dll",
+        "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"
+      ])) and
+  .toolchain == {
+    parent_dotnet_host_sha256:$parent_dotnet_host_sha256,
+    parent_dotnet_version:$parent_dotnet_version,
+    same_toolchain_observed:(
+      $parent_dotnet_host_sha256 == $dotnet_host_sha256 and
+      $parent_dotnet_version == $dotnet_version
+    ),
+    same_toolchain_required:false,
+    transition_dotnet_host_sha256:$dotnet_host_sha256,
+    transition_dotnet_version:$dotnet_version
+  } and
+  .boundaries == {
+    clojureclr_packaged:false,
+    compiler_source_packaged:false,
+    direct_stage1_copy:false,
+    embedded_artifact_payload:false,
+    generated_artifact_clojureclr_reference:false,
+    generated_artifact_host_compiler_use:false,
+    generated_artifact_host_source_load_use:false,
+    replay_source_packaged:false,
+    source_replay_fallback:false,
+    stage1_artifact_packaged:false
+  } and
+  .claims == {
+    clojureclr_replacement:false,
+    compiler_executable:true,
+    compiler_source_free_runtime_bundle:true,
+    compiler_stage2:true,
+    cross_host_canonical_equivalence:false,
+    fixed_point:false,
+    formal_semantic_equivalence:false,
+    full_clojure_surface:false,
+    host_free_bootstrap:false,
+    os_sandbox:false,
+    parent_stage1_admitted:true,
+    pnix_semantics:false,
+    raw_artifact_reproducibility:false,
+    same_source_recompile:true,
+    self_reproduction:false,
+    stage15_n:false,
+    stage1_ancestor_validated:true,
+    stage2_fresh_target_replay:false,
+    stage3:false,
+    standalone_lineage_replay:false,
+    standalone_source_free_distribution:false
+  }
+' "$stage2_manifest" >/dev/null || fail stage2-manifest-contract
+
+[[ "$parent_source_sha256" == "$canonical_source_sha256" ]] || \
+  fail parent-c2-source-lineage
+[[ "$(jq -r '.contract.sha256' "$stage2_manifest")" == "$stage2_contract_sha256" ]] || \
+  fail stage2-contract-lineage
+
+printf '%s\n' \
+  compiler-selfhost/compiler_kernel.clj \
+  compiler-selfhost/stage2-contract.edn \
+  scripts/clr-meta-build-compiler-selfhost-stage2 \
+  >"$tmp/stage2-input-paths"
+snapshot_rows "$clr_meta_root" "$tmp/stage2-input-paths" "$tmp/stage2-live-inputs.json"
+jq -S '.inputs' "$stage2_manifest" >"$tmp/stage2-manifest-inputs.json"
+cmp "$tmp/stage2-live-inputs.json" "$tmp/stage2-manifest-inputs.json" >/dev/null || \
+  fail stage2-live-input-hashes
+[[ "$(rows_closure "$tmp/stage2-live-inputs.json")" == \
+   "$(jq -r '.input_closure_sha256' "$stage2_manifest")" ]] || \
+  fail stage2-input-closure
+
+printf '%s\n' \
+  compiler/CompilerStage2.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.deps.json \
+  runtime/Pnix.ClrMeta.CompilerSupport.dll \
+  runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+  >"$tmp/stage2-payload-paths"
+snapshot_rows "$stage2" "$tmp/stage2-payload-paths" "$tmp/stage2-payload.json"
+jq -S '.bundle_files' "$stage2_manifest" >"$tmp/stage2-manifest-payload.json"
+cmp "$tmp/stage2-payload.json" "$tmp/stage2-manifest-payload.json" >/dev/null || \
+  fail stage2-bundle-file-hashes
+[[ "$(rows_closure "$tmp/stage2-payload.json")" == \
+   "$(jq -r '.bundle_closure_sha256' "$stage2_manifest")" ]] || \
+  fail stage2-bundle-closure
+
+for name in \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  cmp "$stage1/runtime/$name" "$stage2/runtime/$name" >/dev/null || \
+    fail support-triplet-parent-copy
+done
+
+support_call "$tmp" "$stage2_support" describe "$stage2_compiler" \
+  >"$tmp/stage2-description.json" 2>"$tmp/stage2-description.stderr" || \
+  fail stage2-describe
+[[ ! -s "$tmp/stage2-description.stderr" ]] || fail stage2-describe-stderr
+jq -S '.' "$tmp/stage2-description.json" >"$tmp/stage2-description.canonical.json"
+jq -S '.compiler.description' "$stage2_manifest" \
+  >"$tmp/stage2-manifest-description.canonical.json"
+cmp "$tmp/stage2-description.canonical.json" \
+  "$tmp/stage2-manifest-description.canonical.json" >/dev/null || \
+  fail stage2-description
+cmp "$tmp/stage1-description.canonical.json" \
+  "$tmp/stage2-description.canonical.json" >/dev/null || \
+  fail stage2-structural-description
+[[ "$(support_call "$tmp" "$stage2_support" prepare "$stage2_compiler")" == 27 ]] || \
+  fail stage2-prepare
+
+jq '[.[] | select(.path | startswith("runtime/"))]' \
+  "$tmp/stage2-payload.json" >"$tmp/stage2-support-rows.json"
+jq -S '.support.files' "$stage2_manifest" >"$tmp/stage2-manifest-support-rows.json"
+cmp "$tmp/stage2-support-rows.json" "$tmp/stage2-manifest-support-rows.json" >/dev/null || \
+  fail stage2-support-file-hashes
+[[ "$(rows_closure "$tmp/stage2-support-rows.json")" == \
+   "$(jq -r '.support.closure_sha256' "$stage2_manifest")" ]] || \
+  fail stage2-support-closure
+
+stage1_manifest_sha256_before="$(sha256_file "$stage1_manifest")"
+stage1_compiler_sha256_before="$(sha256_file "$stage1_compiler")"
+canonical_source_sha256_before="$(sha256_file "$canonical_source")"
+stage2_manifest_sha256_before="$(sha256_file "$stage2_manifest")"
+stage2_compiler_sha256_before="$(sha256_file "$stage2_compiler")"
+snapshot_rows "$stage1" "$tmp/stage1-payload-paths" "$tmp/stage1-payload-before.json"
+snapshot_rows "$stage2" "$tmp/stage2-payload-paths" "$tmp/stage2-payload-before.json"
+
+copy_support_triplet() {
+  local source_runtime="$1"
+  local destination="$2"
+  mkdir -p "$destination"
+  for name in \
+    Pnix.ClrMeta.CompilerSupport.deps.json \
+    Pnix.ClrMeta.CompilerSupport.dll \
+    Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+    cp "$source_runtime/$name" "$destination/$name"
+    cmp "$source_runtime/$name" "$destination/$name" >/dev/null || \
+      fail support-runtime-copy
+  done
+}
+
+assert_flat_tree() {
+  local directory="$1"
+  local label="$2"
+  shift 2
+  printf '%s\n' "$@" | LC_ALL=C sort >"$tmp/$label-expected-files"
+  printf '%s\n' . >"$tmp/$label-expected-directories"
+  assert_exact_tree "$directory" "$tmp/$label-expected-files" \
+    "$tmp/$label-expected-directories" "$label"
+}
+
+isolated="$tmp/stage2-isolated"
+targets="$tmp/post-stage2-target-sources"
+target_artifacts="$tmp/post-stage2-target-artifacts"
+mkdir -p "$isolated" "$targets" "$target_artifacts"
+copy_support_triplet "$stage2/runtime" "$isolated"
+cp "$stage2_compiler" "$isolated/CompilerStage2.dll"
+cmp "$stage2_compiler" "$isolated/CompilerStage2.dll" >/dev/null || \
+  fail stage2-isolated-copy
+for fixture in unseen_add.clj unseen_subtract.clj unseen_equal.clj unseen_truthy.clj; do
+  cp "$family_root/$fixture" "$targets/$fixture"
+done
+
+assert_flat_tree "$isolated" stage2-isolated-initial \
+  CompilerStage2.dll \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json
+[[ ! -e "$isolated/CompilerStage1.dll" && ! -e "$isolated/compiler_kernel.clj" && \
+   ! -e "$isolated/manifest.json" && ! -e "$isolated/Clojure.Main.dll" && \
+   ! -e "$isolated/Clojure.dll" && ! -e "$isolated/pnix" ]] || \
+  fail stage2-source-hidden-layout
+if strings "$isolated/CompilerStage2.dll" | rg -n \
+  'Clojure\.Main|clojure\.lang\.Compiler|Clojure\.Compiler|compiler_kernel\.clj|compiler-selfhost-stage1|System\.Diagnostics\.Process|ProcessStartInfo|Convert\.FromBase64String' \
+  >"$tmp/stage2-forbidden-strings"; then
+  fail stage2-forbidden-bootstrap-payload
+fi
+
+isolated_support="$isolated/Pnix.ClrMeta.CompilerSupport.dll"
+isolated_compiler="$isolated/CompilerStage2.dll"
+
+compile_stage2_target() {
+  local label="$1"
+  local source_path="$2"
+  local output="$target_artifacts/$label.dll"
+  support_call "$isolated" "$isolated_support" compile \
+    "$isolated_compiler" "$source_path" "$output" \
+    >"$tmp/$label-descriptor.json" 2>"$tmp/$label-compile.stderr" || {
+    sed -n '1,160p' "$tmp/$label-compile.stderr" >&2
+    fail "$label-compile"
+  }
+  [[ ! -s "$tmp/$label-compile.stderr" ]] || fail "$label-compile-stderr"
+  [[ -f "$output" && ! -L "$output" ]] || fail "$label-output"
+  jq -e --arg path "$output" --arg sha256 "$(sha256_file "$output")" '
+    (keys_unsorted | sort) == ([
+      "kernel_entry","kernel_identity","kernel_namespace","path","schema","sha256",
+      "source_profile_id"
+    ] | sort) and
+    .schema == "pnix.clr-meta.compiler-selfhost-artifact-descriptor.v1" and
+    .kernel_entry == "compile-source" and
+    .kernel_identity == "pnix.clr-meta.compiler-kernel.v1" and
+    .kernel_namespace == "pnix.clr-meta.compiler-kernel.v1" and
+    .source_profile_id == "pnix.clr-meta.compiler-kernel-source.v1" and
+    .path == $path and .sha256 == $sha256
+  ' "$tmp/$label-descriptor.json" >/dev/null || fail "$label-descriptor"
+}
+
+execute_target() {
+  local label="$1"
+  local artifact="$2"
+  local invoke_command="$3"
+  local expected="$4"
+  shift 4
+  local execution="$tmp/execute-$label"
+  mkdir "$execution"
+  copy_support_triplet "$stage2/runtime" "$execution"
+  cp "$artifact" "$execution/Target.dll"
+  cmp "$artifact" "$execution/Target.dll" >/dev/null || fail "$label-execution-copy"
+  assert_flat_tree "$execution" "execution-$label" \
+    Pnix.ClrMeta.CompilerSupport.deps.json \
+    Pnix.ClrMeta.CompilerSupport.dll \
+    Pnix.ClrMeta.CompilerSupport.runtimeconfig.json \
+    Target.dll
+  [[ ! -e "$execution/CompilerStage1.dll" && \
+     ! -e "$execution/CompilerStage2.dll" && \
+     ! -e "$execution/compiler_kernel.clj" && \
+     ! -e "$execution/manifest.json" && \
+     ! -e "$execution/Clojure.Main.dll" && \
+     ! -e "$execution/Clojure.dll" && ! -e "$execution/pnix" ]] || \
+    fail "$label-execution-source-hidden"
+  local actual
+  actual="$(support_call "$execution" \
+    "$execution/Pnix.ClrMeta.CompilerSupport.dll" \
+    "$invoke_command" "$execution/Target.dll" "$@")"
+  [[ "$actual" == "$expected" ]] || fail "$label-execution"
+}
+
+compile_stage2_target add "$targets/unseen_add.clj"
+compile_stage2_target subtract "$targets/unseen_subtract.clj"
+compile_stage2_target equal "$targets/unseen_equal.clj"
+compile_stage2_target truthy "$targets/unseen_truthy.clj"
+
+execute_target add "$target_artifacts/add.dll" invoke-i64 42 20 22
+execute_target subtract "$target_artifacts/subtract.dll" invoke-i64 -2 20 22
+execute_target equal-true "$target_artifacts/equal.dll" invoke-i64 true 42 42
+execute_target equal-false "$target_artifacts/equal.dll" invoke-i64 false 42 41
+execute_target truthy-zero "$target_artifacts/truthy.dll" invoke-i64 9 0 9
+execute_target truthy-false "$target_artifacts/truthy.dll" invoke-values 0 false i64:9
+execute_target truthy-nil "$target_artifacts/truthy.dll" invoke-values 0 nil i64:9
+
+post_stage2_nonce="post-stage2-$(dd if=/dev/urandom bs=32 count=1 2>/dev/null | sha256_stdin)"
+[[ "$(support_call "$isolated" "$isolated_support" contains-text \
+  "$stage1_compiler" "$post_stage2_nonce")" == false ]] || \
+  fail nonce-present-in-stage1
+[[ "$(support_call "$isolated" "$isolated_support" contains-text \
+  "$isolated_compiler" "$post_stage2_nonce")" == false ]] || \
+  fail nonce-present-in-stage2
+for name in \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json; do
+  [[ "$(support_call "$isolated" "$isolated_support" contains-text \
+    "$isolated/$name" "$post_stage2_nonce")" == false ]] || \
+    fail nonce-present-in-support-triplet
+done
+printf '%s\n' \
+  '(ns pnix.clr-meta.compiler-kernel.v1)' \
+  "(def post-stage2-nonce \"$post_stage2_nonce\")" \
+  '(def compile-source (fn* compile-source [left right] post-stage2-nonce))' \
+  >"$targets/fresh_nonce.clj"
+compile_stage2_target fresh-nonce "$targets/fresh_nonce.clj"
+[[ "$(support_call "$isolated" "$isolated_support" contains-text \
+  "$target_artifacts/fresh-nonce.dll" "$post_stage2_nonce")" == true ]] || \
+  fail nonce-absent-from-fresh-target
+execute_target fresh-nonce "$target_artifacts/fresh-nonce.dll" \
+  invoke-values "$post_stage2_nonce" nil false
+
+assert_flat_tree "$isolated" stage2-isolated-final \
+  CompilerStage2.dll \
+  Pnix.ClrMeta.CompilerSupport.deps.json \
+  Pnix.ClrMeta.CompilerSupport.dll \
+  Pnix.ClrMeta.CompilerSupport.runtimeconfig.json
+
+mutation_root="$tmp/delayed-mutations"
+mkdir "$mutation_root"
+[[ "$(rg -F -o '(def kernel-identity "pnix.clr-meta.compiler-kernel.v1")' \
+  "$canonical_source" | wc -l | tr -d ' ')" == 1 ]] || fail identity-mutation-anchor
+[[ "$(rg -F -o '(def add-opcode "add.ovf")' \
+  "$canonical_source" | wc -l | tr -d ' ')" == 1 ]] || fail add-mutation-anchor
+[[ "$(rg -F -o '(def subtract-opcode "sub.ovf")' \
+  "$canonical_source" | wc -l | tr -d ' ')" == 1 ]] || fail subtract-mutation-anchor
+
+mutation_identity="c3-mutated-$(dd if=/dev/urandom bs=32 count=1 2>/dev/null | sha256_stdin)"
+[[ "$(support_call "$isolated" "$isolated_support" contains-text \
+  "$stage1_compiler" "$mutation_identity")" == false ]] || \
+  fail mutation-identity-present-in-stage1
+[[ "$(support_call "$isolated" "$isolated_support" contains-text \
+  "$stage2_compiler" "$mutation_identity")" == false ]] || \
+  fail mutation-identity-present-in-stage2
+[[ "$(support_call "$isolated" "$isolated_support" contains-text \
+  "$stage2_support" "$mutation_identity")" == false ]] || \
+  fail mutation-identity-present-in-support
+
+sed "s#(def kernel-identity \"pnix.clr-meta.compiler-kernel.v1\")#(def kernel-identity \"$mutation_identity\")#" \
+  "$canonical_source" >"$mutation_root/identity.clj"
+sed 's#(def add-opcode "add.ovf")#(def add-opcode "sub.ovf")#' \
+  "$canonical_source" >"$mutation_root/add.clj"
+sed 's#(def subtract-opcode "sub.ovf")#(def subtract-opcode "add.ovf")#' \
+  "$canonical_source" >"$mutation_root/subtract.clj"
+for mutation in identity add subtract; do
+  [[ "$(sha256_file "$mutation_root/$mutation.clj")" != "$canonical_source_sha256" ]] || \
+    fail "$mutation-mutation-noop"
+done
+[[ "$(for mutation in identity add subtract; do
+  sha256_file "$mutation_root/$mutation.clj"
+done | LC_ALL=C sort -u | wc -l | tr -d ' ')" == 3 ]] || \
+  fail mutation-source-hashes-not-distinct
+
+compile_mutated_stage2() {
+  local label="$1"
+  local source_path="$mutation_root/$label.clj"
+  local child="$mutation_root/$label-stage2.dll"
+  support_call "$tmp" "$stage1_support" compile \
+    "$stage1_compiler" "$source_path" "$child" \
+    >"$tmp/$label-mutated-stage2-descriptor.json" \
+    2>"$tmp/$label-mutated-stage2.stderr" || {
+    sed -n '1,160p' "$tmp/$label-mutated-stage2.stderr" >&2
+    fail "$label-mutated-stage2-compile"
+  }
+  [[ ! -s "$tmp/$label-mutated-stage2.stderr" ]] || \
+    fail "$label-mutated-stage2-stderr"
+  [[ -f "$child" && ! -L "$child" ]] || fail "$label-mutated-stage2-output"
+  [[ "$(support_call "$tmp" "$stage1_support" prepare "$child")" == 27 ]] || \
+    fail "$label-mutated-stage2-prepare"
+  support_call "$tmp" "$stage1_support" describe "$child" \
+    >"$tmp/$label-mutated-stage2-description.json"
+  jq -e '
+    .assembly == "Pnix.ClrMeta.Generated.CompilerKernel" and
+    .type == "Pnix.ClrMeta.Generated.CompilerKernel" and
+    .fields == 9 and (.methods | length) == 27 and
+    .references == ["Pnix.ClrMeta.CompilerSupport","System.Private.CoreLib"] and
+    .resources == []
+  ' "$tmp/$label-mutated-stage2-description.json" >/dev/null || \
+    fail "$label-mutated-stage2-description"
+}
+
+compile_mutated_stage2 identity
+compile_mutated_stage2 add
+compile_mutated_stage2 subtract
+jq -e '
+  .metadata == {
+    "GeneratedBy":"pnix.clr-meta.compiler-kernel.v1",
+    "KernelEntry":"compile-source",
+    "KernelIdentity":"pnix.clr-meta.compiler-kernel.v1",
+    "KernelNamespace":"pnix.clr-meta.compiler-kernel.v1",
+    "SourceProfileId":"pnix.clr-meta.compiler-kernel-source.v1",
+    "SupportAbiId":"pnix.clr-meta.compiler-support.v1"
+  }
+' "$tmp/identity-mutated-stage2-description.json" >/dev/null || \
+  fail identity-mutated-stage2-metadata-not-canonical
+
+compile_mutation_target() {
+  local label="$1"
+  local source_path="$2"
+  local child="$mutation_root/$label-stage2.dll"
+  local child_isolated="$mutation_root/$label-isolated"
+  local grandchild="$mutation_root/$label-target.dll"
+  mkdir "$child_isolated"
+  copy_support_triplet "$stage2/runtime" "$child_isolated"
+  cp "$child" "$child_isolated/CompilerStage2.dll"
+  assert_flat_tree "$child_isolated" "$label-mutated-isolated" \
+    CompilerStage2.dll \
+    Pnix.ClrMeta.CompilerSupport.deps.json \
+    Pnix.ClrMeta.CompilerSupport.dll \
+    Pnix.ClrMeta.CompilerSupport.runtimeconfig.json
+  [[ ! -e "$child_isolated/CompilerStage1.dll" && \
+     ! -e "$child_isolated/compiler_kernel.clj" && \
+     ! -e "$child_isolated/manifest.json" && \
+     ! -e "$child_isolated/Clojure.Main.dll" && \
+     ! -e "$child_isolated/Clojure.dll" && ! -e "$child_isolated/pnix" ]] || \
+    fail "$label-mutated-source-hidden"
+  support_call "$child_isolated" \
+    "$child_isolated/Pnix.ClrMeta.CompilerSupport.dll" compile \
+    "$child_isolated/CompilerStage2.dll" "$source_path" "$grandchild" \
+    >"$tmp/$label-grandchild-descriptor.json" \
+    2>"$tmp/$label-grandchild.stderr" || {
+    sed -n '1,160p' "$tmp/$label-grandchild.stderr" >&2
+    fail "$label-grandchild-compile"
+  }
+  [[ ! -s "$tmp/$label-grandchild.stderr" ]] || fail "$label-grandchild-stderr"
+  [[ -f "$grandchild" && ! -L "$grandchild" ]] || fail "$label-grandchild-output"
+}
+
+compile_mutation_target identity "$targets/unseen_add.clj"
+support_call "$tmp" "$stage2_support" describe "$mutation_root/identity-target.dll" \
+  >"$tmp/identity-grandchild-description.json"
+jq -e --arg identity "$mutation_identity" '
+  .fields == 0 and .methods == ["compile-source/2"] and
+  .metadata.KernelIdentity == $identity and
+  .metadata.KernelNamespace == "pnix.clr-meta.compiler-kernel.v1" and
+  .references == ["System.Private.CoreLib"] and .resources == []
+' "$tmp/identity-grandchild-description.json" >/dev/null || \
+  fail identity-grandchild-metadata
+execute_target mutation-identity "$mutation_root/identity-target.dll" invoke-i64 42 20 22
+
+compile_mutation_target add "$targets/unseen_add.clj"
+execute_target mutation-add "$mutation_root/add-target.dll" invoke-i64 -2 20 22
+
+compile_mutation_target subtract "$targets/unseen_subtract.clj"
+execute_target mutation-subtract "$mutation_root/subtract-target.dll" invoke-i64 42 20 22
+
+sed 's#(def kernel-identity "pnix.clr-meta.compiler-kernel.v1")#(def kernel-identity c3-definitely-unresolved)#' \
+  "$canonical_source" >"$tmp/invalid-compiler-source.clj"
+set +e
+support_call "$tmp" "$stage1_support" compile \
+  "$stage1_compiler" "$tmp/invalid-compiler-source.clj" \
+  "$tmp/invalid-stage2.dll" \
+  >"$tmp/invalid-stage2.stdout" 2>"$tmp/invalid-stage2.stderr"
+invalid_status=$?
+set -e
+[[ "$invalid_status" == 2 && ! -s "$tmp/invalid-stage2.stdout" ]] || \
+  fail invalid-compiler-source-status
+[[ ! -e "$tmp/invalid-stage2.dll" && ! -L "$tmp/invalid-stage2.dll" ]] || \
+  fail invalid-compiler-source-output
+if compgen -G "$tmp/invalid-stage2.dll.tmp.*" >/dev/null; then
+  fail invalid-compiler-source-temporary
+fi
+assert_rejection_json "$tmp/invalid-stage2.stderr" validate unsupported-def-initializer
+
+# Parent admission and publication negatives exercise the public C3 builder.
+# Every altered parent is a private copy; the admitted parent remains immutable.
+ln -s "$stage1" "$tmp/negative-parent-root-link"
+run_builder_rejection parent-root-symlink "$tmp/negative-parent-root-link" \
+  "$tmp/negative-parent-root-output" stage1-bundle-missing
+
+cp -R "$stage1" "$tmp/negative-parent-compiler-link"
+rm "$tmp/negative-parent-compiler-link/compiler/CompilerStage1.dll"
+ln -s "$stage1_compiler" \
+  "$tmp/negative-parent-compiler-link/compiler/CompilerStage1.dll"
+run_builder_rejection parent-compiler-symlink "$tmp/negative-parent-compiler-link" \
+  "$tmp/negative-parent-compiler-link-output" stage1-bundle-symlink
+
+cp -R "$stage1" "$tmp/negative-parent-runtime-link"
+rm "$tmp/negative-parent-runtime-link/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+ln -s "$stage1_support" \
+  "$tmp/negative-parent-runtime-link/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+run_builder_rejection parent-runtime-symlink "$tmp/negative-parent-runtime-link" \
+  "$tmp/negative-parent-runtime-link-output" stage1-bundle-symlink
+
+cp -R "$stage1" "$tmp/negative-parent-manifest-link"
+rm "$tmp/negative-parent-manifest-link/manifest.json"
+ln -s "$stage1_manifest" "$tmp/negative-parent-manifest-link/manifest.json"
+run_builder_rejection parent-manifest-symlink "$tmp/negative-parent-manifest-link" \
+  "$tmp/negative-parent-manifest-link-output" stage1-bundle-symlink
+
+cp -R "$stage1" "$tmp/negative-parent-extra"
+printf 'extra\n' >"$tmp/negative-parent-extra/rogue"
+run_builder_rejection parent-extra-file "$tmp/negative-parent-extra" \
+  "$tmp/negative-parent-extra-output" stage1-bundle-file-set
+
+cp -R "$stage1" "$tmp/negative-parent-compiler-drift"
+printf 'compiler-drift\n' \
+  >>"$tmp/negative-parent-compiler-drift/compiler/CompilerStage1.dll"
+run_builder_rejection parent-compiler-drift "$tmp/negative-parent-compiler-drift" \
+  "$tmp/negative-parent-compiler-drift-output" stage1-bundle-file-hash
+
+cp -R "$stage1" "$tmp/negative-parent-support-drift"
+printf 'support-drift\n' \
+  >>"$tmp/negative-parent-support-drift/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+run_builder_rejection parent-support-drift "$tmp/negative-parent-support-drift" \
+  "$tmp/negative-parent-support-drift-output" stage1-bundle-file-hash
+
+cp -R "$stage1" "$tmp/negative-parent-manifest-contract"
+jq '.checkpoint = "forged-c2"' \
+  "$tmp/negative-parent-manifest-contract/manifest.json" \
+  >"$tmp/negative-parent-manifest-contract/manifest.json.new"
+mv "$tmp/negative-parent-manifest-contract/manifest.json.new" \
+  "$tmp/negative-parent-manifest-contract/manifest.json"
+run_builder_rejection parent-manifest-contract "$tmp/negative-parent-manifest-contract" \
+  "$tmp/negative-parent-manifest-contract-output" stage1-manifest-contract
+
+cp -R "$stage1" "$tmp/negative-parent-live-input"
+jq '.inputs[0].sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' \
+  "$tmp/negative-parent-live-input/manifest.json" \
+  >"$tmp/negative-parent-live-input/manifest.json.new"
+mv "$tmp/negative-parent-live-input/manifest.json.new" \
+  "$tmp/negative-parent-live-input/manifest.json"
+run_builder_rejection parent-live-input "$tmp/negative-parent-live-input" \
+  "$tmp/negative-parent-live-input-output" stage1-live-input-hash
+
+run_builder_rejection output-missing-parent "$stage1" \
+  "$tmp/missing-output-parent/stage2" output-parent-missing
+
+expect_existing_output_rejection() {
+  local label="$1"
+  local output="$2"
+  set +e
+  "$public_cli" --build-compiler-selfhost-stage2 "$stage1" "$output" \
+    >"$tmp/$label.stdout" 2>"$tmp/$label.stderr"
+  local rc=$?
+  set -e
+  [[ "$rc" == 1 && ! -s "$tmp/$label.stdout" ]] || fail "$label-status"
+  rg -F 'clr-meta compiler selfhost Stage2 builder: output-exists' \
+    "$tmp/$label.stderr" >/dev/null || fail "$label-diagnostic"
+}
+
+printf 'preserve-file\n' >"$tmp/existing-output-file"
+existing_file_sha256="$(sha256_file "$tmp/existing-output-file")"
+expect_existing_output_rejection existing-output-file "$tmp/existing-output-file"
+[[ "$existing_file_sha256" == "$(sha256_file "$tmp/existing-output-file")" ]] || \
+  fail existing-output-file-preservation
+
+mkdir "$tmp/existing-output-directory"
+printf 'preserve-directory\n' >"$tmp/existing-output-directory/sentinel"
+existing_directory_sha256="$(sha256_file "$tmp/existing-output-directory/sentinel")"
+expect_existing_output_rejection existing-output-directory "$tmp/existing-output-directory"
+[[ "$existing_directory_sha256" == \
+   "$(sha256_file "$tmp/existing-output-directory/sentinel")" ]] || \
+  fail existing-output-directory-preservation
+
+ln -s "$tmp/absent-existing-output-target" "$tmp/existing-output-symlink"
+existing_symlink_target="$(readlink "$tmp/existing-output-symlink")"
+expect_existing_output_rejection existing-output-symlink "$tmp/existing-output-symlink"
+[[ -L "$tmp/existing-output-symlink" && \
+   "$(readlink "$tmp/existing-output-symlink")" == "$existing_symlink_target" ]] || \
+  fail existing-output-symlink-preservation
+
+printf 'preserve-hardlink\n' >"$tmp/existing-output-hardlink-source"
+ln "$tmp/existing-output-hardlink-source" "$tmp/existing-output-hardlink"
+existing_hardlink_sha256="$(sha256_file "$tmp/existing-output-hardlink")"
+expect_existing_output_rejection existing-output-hardlink "$tmp/existing-output-hardlink"
+[[ "$existing_hardlink_sha256" == \
+   "$(sha256_file "$tmp/existing-output-hardlink")" ]] || \
+  fail existing-output-hardlink-preservation
+cmp "$tmp/existing-output-hardlink-source" "$tmp/existing-output-hardlink" >/dev/null || \
+  fail existing-output-hardlink-source-preservation
+
+run_builder_rejection lexical-output-overlap "$stage1" \
+  "$stage1/lexical-overlap-output" lexical-output-overlaps-stage1-bundle
+
+ln -s "$tmp" "$tmp/physical-alias-root"
+run_builder_rejection physical-output-overlap "$stage1" \
+  "$tmp/physical-alias-root/stage1/physical-overlap-output" \
+  physical-output-overlaps-stage1-bundle
+
+race_output="$tmp/publication-race-output"
+set +e
+"$public_cli" --build-compiler-selfhost-stage2 "$stage1" "$race_output" \
+  >"$tmp/publication-race.stdout" 2>"$tmp/publication-race.stderr" &
+race_pid=$!
+set -e
+race_armed=false
+for ((attempt = 0; attempt < 10000; attempt++)); do
+  if find "$tmp" -maxdepth 1 -type d -name '.compiler-selfhost-stage2.*' \
+    -print -quit | grep -q .; then
+    mkdir "$race_output"
+    printf 'race-winner\n' >"$race_output/sentinel"
+    race_armed=true
+    break
+  fi
+  if ! kill -0 "$race_pid" 2>/dev/null; then
+    break
+  fi
+  sleep 0.001
+done
+[[ "$race_armed" == true ]] || {
+  wait "$race_pid" || true
+  fail publication-race-not-armed
+}
+set +e
+wait "$race_pid"
+race_status=$?
+set -e
+[[ "$race_status" == 1 && ! -s "$tmp/publication-race.stdout" ]] || \
+  fail publication-race-status
+rg -F '"class":"output-exists"' "$tmp/publication-race.stderr" >/dev/null || \
+  fail publication-race-rejection
+rg -F 'clr-meta compiler selfhost Stage2 builder: publish-directory' \
+  "$tmp/publication-race.stderr" >/dev/null || fail publication-race-diagnostic
+[[ "$(cat "$race_output/sentinel")" == race-winner ]] || \
+  fail publication-race-preservation
+[[ "$(find "$race_output" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" == 1 ]] || \
+  fail publication-race-partial-output
+
+[[ "$stage1_manifest_sha256_before" == "$(sha256_file "$stage1_manifest")" ]] || \
+  fail parent-manifest-mutated
+[[ "$stage1_compiler_sha256_before" == "$(sha256_file "$stage1_compiler")" ]] || \
+  fail parent-compiler-mutated
+[[ "$canonical_source_sha256_before" == "$(sha256_file "$canonical_source")" ]] || \
+  fail canonical-source-mutated
+[[ "$stage2_manifest_sha256_before" == "$(sha256_file "$stage2_manifest")" ]] || \
+  fail stage2-manifest-mutated
+[[ "$stage2_compiler_sha256_before" == "$(sha256_file "$stage2_compiler")" ]] || \
+  fail stage2-compiler-mutated
+
+snapshot_rows "$stage1" "$tmp/stage1-payload-paths" "$tmp/stage1-payload-after.json"
+cmp "$tmp/stage1-payload-before.json" "$tmp/stage1-payload-after.json" >/dev/null || \
+  fail parent-payload-mutated
+snapshot_rows "$stage2" "$tmp/stage2-payload-paths" "$tmp/stage2-payload-after.json"
+cmp "$tmp/stage2-payload-before.json" "$tmp/stage2-payload-after.json" >/dev/null || \
+  fail stage2-payload-mutated
+snapshot_rows "$clr_meta_root" "$tmp/stage2-input-paths" "$tmp/stage2-live-inputs-after.json"
+cmp "$tmp/stage2-live-inputs.json" "$tmp/stage2-live-inputs-after.json" >/dev/null || \
+  fail stage2-live-input-mutated
+assert_exact_tree "$stage1" "$tmp/expected-stage1-files" \
+  "$tmp/expected-stage-directories" stage1-bundle-final
+assert_exact_tree "$stage2" "$tmp/expected-stage2-files" \
+  "$tmp/expected-stage-directories" stage2-bundle-final
+
+if find "$tmp" -type f -name '*.tmp.*' -print -quit | grep -q .; then
+  fail leaked-transaction-temporary
+fi
+
+stage2_description_sha256="$(sha256_file "$tmp/stage2-description.canonical.json")"
+jq -S -n \
+  --arg canonical_source_sha256 "$canonical_source_sha256" \
+  --arg contract_sha256 "$stage2_contract_sha256" \
+  --arg parent_compiler_sha256 "$stage1_compiler_sha256_before" \
+  --arg parent_manifest_sha256 "$stage1_manifest_sha256_before" \
+  --arg stage2_compiler_sha256 "$stage2_compiler_sha256_before" \
+  --arg stage2_description_sha256 "$stage2_description_sha256" \
+  --arg stage2_manifest_sha256 "$stage2_manifest_sha256_before" \
+  --argjson source_hash_chain "$(jq -c '.compilation.source_hash_chain' "$stage2_manifest")" \
+  --argjson support "$(jq -c '.support' "$stage2_manifest")" \
+  --argjson toolchain "$(jq -c '.toolchain' "$stage2_manifest")" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage2-gate-receipt.v1",
+    checkpoint:"c3-executable-compiler-stage2",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    contract:{
+      path:"compiler-selfhost/stage2-contract.edn",
+      sha256:$contract_sha256
+    },
+    lineage:{
+      parent_stage:1,
+      parent_manifest_sha256:$parent_manifest_sha256,
+      parent_compiler_sha256:$parent_compiler_sha256,
+      parent_stage1_admitted:true,
+      stage1_ancestor_validated:true,
+      child_stage:2,
+      stage2_manifest_sha256:$stage2_manifest_sha256,
+      stage2_compiler_sha256:$stage2_compiler_sha256,
+      stage2_structural_description_sha256:$stage2_description_sha256,
+      canonical_source_sha256:$canonical_source_sha256,
+      source_hash_chain:$source_hash_chain,
+      source_language:"pnix.clr-meta.compiler-kernel-source.v1",
+      compiled_language:"pnix.clr-meta.compiler-kernel-source.v1",
+      same_source_identity:true
+    },
+    support:$support,
+    toolchain:$toolchain,
+    transition:{
+      executor:"compiler-stage1",
+      transition_source_present:true,
+      frozen_source_private_read_only:true,
+      exact_compile_descriptor:true,
+      structural_description_equal_to_stage1:true,
+      prepared_methods:27,
+      transition_b0_used:false,
+      clojureclr_used:false,
+      transition_bundle_clojureclr_present:false,
+      source_replay_fallback:false,
+      raw_stage1_stage2_equality_used_as_condition:false
+    },
+    replay:{
+      stage2_fresh_target_replay:true,
+      compile_directory_stage2_and_exact_support_only:true,
+      target_execution_directory_support_and_target_only:true,
+      target_execution_fresh_processes:true,
+      parent_stage1_present_in_replay_layout:false,
+      canonical_compiler_source_present_in_replay_layout:false,
+      stage2_present_during_target_execution:false,
+      target_source_present_during_target_execution:false,
+      manifest_present_during_target_execution:false,
+      compile_directory_clojureclr_present:false,
+      target_execution_directory_clojureclr_present:false,
+      post_stage2_random_nonce_target:true,
+      nonce_absent_from_parent_stage1_stage2_support_triplet:true
+    },
+    conformance:{
+      add:42,
+      subtract:-2,
+      equal_true:true,
+      equal_false:false,
+      truthy_zero:9,
+      false_is_falsey:0,
+      nil_is_falsey:0
+    },
+    delayed_source_mutations:{
+      identity:{
+        random_post_parent_identity:true,
+        distinct_mutated_source_hash:true,
+        stage1_compiled_mutated_source:true,
+        mutated_stage2_prepared_methods:27,
+        mutated_stage2_kernel_identity_remained_canonical:true,
+        mutated_stage2_kernel_namespace_remained_canonical:true,
+        grandchild_target_kernel_identity_matched:true,
+        target_result:42,
+        mutated_source_packaged:false
+      },
+      add_to_subtract:{
+        distinct_mutated_source_hash:true,
+        stage1_compiled_mutated_source:true,
+        mutated_stage2_prepared_methods:27,
+        grandchild_target_result:-2,
+        mutated_source_packaged:false
+      },
+      subtract_to_add:{
+        distinct_mutated_source_hash:true,
+        stage1_compiled_mutated_source:true,
+        mutated_stage2_prepared_methods:27,
+        grandchild_target_result:42,
+        mutated_source_packaged:false
+      },
+      invalid_compiler_source:{
+        structured_rejection:true,
+        phase:"validate",
+        class:"unsupported-def-initializer",
+        requested_output_absent:true
+      }
+    },
+    immutability:{
+      parent_manifest_pre_post:true,
+      parent_compiler_pre_post:true,
+      parent_bundle_pre_post:true,
+      canonical_source_pre_post:true,
+      support_triplet_pre_post:true,
+      stage2_manifest_pre_post:true,
+      stage2_compiler_pre_post:true,
+      stage2_bundle_pre_post:true
+    },
+    negative_cases:{
+      count:18,
+      ids:[
+        "parent-root-symlink","parent-compiler-symlink","parent-runtime-symlink",
+        "parent-manifest-symlink",
+        "parent-extra-file","parent-compiler-byte-drift","parent-support-byte-drift",
+        "parent-manifest-contract-drift","parent-live-input-drift",
+        "output-parent-missing","existing-output-file","existing-output-directory",
+        "existing-output-symlink","existing-output-hardlink","lexical-output-overlap",
+        "physical-output-overlap","publication-race-winner-preserved",
+        "invalid-compiler-source-no-output"
+      ],
+      no_replace_publication:true,
+      race_winner_preserved:true,
+      requested_outputs_absent_or_existing_entries_preserved:true
+    },
+    claims:{
+      parent_stage1_admitted:true,
+      stage1_ancestor_validated:true,
+      compiler_executable:true,
+      compiler_stage2:true,
+      same_source_recompile:true,
+      stage2_fresh_target_replay:true,
+      compiler_source_free_runtime_bundle:true,
+      self_reproduction:false,
+      stage3:false,
+      stage15_n:false,
+      fixed_point:false,
+      raw_artifact_reproducibility:false,
+      host_free_bootstrap:false,
+      full_clojure_surface:false,
+      pnix_semantics:false,
+      cross_host_canonical_equivalence:false,
+      os_sandbox:false,
+      formal_semantic_equivalence:false,
+      clojureclr_replacement:false,
+      standalone_lineage_replay:false,
+      standalone_source_free_distribution:false
+    },
+    ready:true
+  }
+'

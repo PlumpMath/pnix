@@ -1,0 +1,219 @@
+# pnix-mirror-runtime project.px
+#
+# Entry point declaration. `pnixc-meta` reads this attrset to build
+# the project. Host invocation = first turn = boot turn.
+#
+# Convention mirrors `pnixc-pnix/pnixc.px` (the canonical example
+# of a `.px` project that pnixc-meta builds into a self-hosting
+# artifact).
+
+{
+  # ─── project identity ──────────────────────────────────────────
+  name = "pnix-mirror-runtime";
+  schema = "pnix-project-v0";
+  version = "0.1.0";
+  subset = "pnix-subset-v1";
+
+  # ─── what this project IS ──────────────────────────────────────
+  kind = "substrate-execution-layer";
+  role = "declare the P1-P12 mirror runtime stack: identity, ontology extension, boundary projection, typed receipts, persistent sessions, deterministic NL input/output, cross-platform process sandboxing, contribution visibility (multi-user shared intelligence with per-user privacy), write batching, and mirror gc.";
+  # `canonicalCompiler` names the target interpreter for this project.
+  # Honest status (2026-05-14): v0 first-runnable, bounded subset.
+  # `crates/pnixc-meta/` builds `target/debug/pnixc-meta`, which boots
+  # the `.px`-written evaluator `pnixc-pnix/eval/evaluator.px` to
+  # evaluate user `.px` source. The evaluator covers the v0 subset
+  # listed in `evaluator.px::supportedTags` only. It does NOT yet read
+  # this `project.px` file; the substrate composition (P1-P12) is
+  # still design-only. The single source of truth for what is
+  # implemented is `CLAUDE.md::Current implementation reality`.
+  canonicalCompiler = "pnixc-meta";
+  canonicalCompilerStatus = "v0_14_w-substrate-inventory-honest-update-rust-body-handoff-count-1-to-2-remove-unused-import-classify-already-wired-since-v0_13_t-inventory-stale-corrected-2-of-3-transforms-have-plate-to-rust-bridge-add-test-stub-remaining-host-symbol-resolver-lane-still-out-of-substrate-scope-named-explicitly-in-cannot-solve-now";
+
+  # ─── entry-point contract ──────────────────────────────────────
+  #
+  # Host invocation analogue: `pnixc-meta <built-artifact>` reads
+  # this project and resolves `vm.px`. The process runtime entry is
+  # `doghouse-mirror-vm --child --store <redb> --project project.px`;
+  # that child process owns persistent receipt/session state for the
+  # duration of the host interaction.
+  #
+  # Concretely today:
+  #   $ pnixc-meta --emit project-build pnix-mirror-runtime/project.px
+  #   → returns composed .px VM data
+  #   $ doghouse-mirror-vm --child --store <redb> --project project.px
+  #   → child process alive, P1 mirror-id-registry assigns boot
+  #      mirror's identity, P2 emits ontology-extension event,
+  #      P4 emits boot receipt; P5 resumes session head; P6 maps
+  #      NL input to typed spawn requests; P7 narrates receipts.
+  entrypoint = {
+    surface = "host-call";
+    boot_action = "spawn-root-mirror";
+    on_boot = "emit-boot-receipt-through-p4";
+    # The boot turn's source ankh = this project.px itself.
+    # Its replay-stable id binds to the project's source digest.
+    bootstrap_ankh = "project.px";
+  };
+
+  # ─── primitives/contracts ──────────────────────────────────────
+  #
+  # pnixc-meta build path: each primitive .px is compiled and
+  # composed into the booted runtime. P1-P4 are executable pure
+  # value-level verbs in vm.px. P5-P12 are contracts/templates that
+  # doghouse-core enforces while hosting the VM in a child process.
+  primitives = [
+    {
+      id = "P1";
+      role = "mirror-identity-registry";
+      spec = "primitives/p1-mirror-identity-registry.px";
+      status = "written";
+      consumed_by = [ "P2" "P3" "P4" ];
+    }
+    {
+      id = "P2";
+      role = "ontology-extension-event";
+      spec = "primitives/p2-ontology-extension-event.px";
+      status = "written";
+      consumes = [ "P1" ];
+      consumed_by = [ "P3" "P4" ];
+    }
+    {
+      id = "P3";
+      role = "boundary-projection";
+      spec = "primitives/p3-boundary-projection.px";
+      status = "written+wired";
+      consumes = [ "P1" ];
+    }
+    {
+      id = "P4";
+      role = "typed-receipt-stream";
+      spec = "primitives/p4-typed-receipt-stream.px";
+      status = "written+wired";
+      consumes = [ "P1" "P2" "P3" ];
+    }
+    {
+      id = "P5";
+      role = "mirror-session-heads";
+      spec = "primitives/p5-mirror-session-contract.px";
+      status = "written+wired-via-doghouse-redb";
+      consumes = [ "P4" ];
+      consumed_by = [ "P6" "P7" ];
+    }
+    {
+      id = "P6";
+      role = "nl-to-spawn-request-transducer";
+      spec = "primitives/p6-nl-to-spawn-request.px";
+      status = "written+wired-via-doghouse-core";
+      consumes = [ "P5" ];
+      consumed_by = [ "P4" ];
+    }
+    {
+      id = "P7";
+      role = "receipt-to-nl-projector";
+      spec = "primitives/p7-nl-projection.px";
+      status = "written+wired-via-doghouse-core";
+      consumes = [ "P4" "P5" ];
+    }
+    {
+      id = "P8";
+      role = "process-sandbox-contract";
+      spec = "primitives/p8-process-sandbox-contract.px";
+      status = "written+wired-via-doghouse-core";
+      consumes = [ "P4" ];
+    }
+    {
+      id = "P9";
+      role = "contribution-visibility-axis";
+      spec = "primitives/p9-contribution-visibility.px";
+      status = "written+wired-via-doghouse-core";
+      consumes = [ "P1" ];
+    }
+    {
+      id = "P11";
+      role = "write-batching-contract (single-spawn batch, P11.a)";
+      spec = "primitives/p11-write-batching-contract.px";
+      status = "written+wired-via-doghouse-core";
+      consumes = [ "P4" ];
+    }
+    {
+      id = "P12";
+      role = "mirror-gc-contract (lazy-stub + thunk-gc, P12.a)";
+      spec = "primitives/p12-mirror-gc-contract.px";
+      status = "written+wired-via-doghouse-core";
+      consumes = [ "P3" "P4" "P5" "P9" ];
+    }
+    {
+      id = "P10";
+      role = "algorithm-synthesis ↔ mirror-world bridge (sequence step → fold-step receipt)";
+      spec = "primitives/p10-algorithm-synthesis-mirror-bridge.px";
+      status = "written+wired-via-doghouse-core";
+      consumes = [ "P1" "P4" "P5" "P9" "P11" ];
+    }
+  ];
+
+  # ─── pipelines (pnixc-meta build directives) ───────────────────
+  #
+  # Each .px in `primitives/` becomes a compiled module. The boot
+  # artifact is the composition of all four. Mirror pnixc-pnix's
+  # pattern of explicit pipeline + stages.
+  pipelines = {
+    build_module = {
+      input = "pnix";
+      stages = [
+        { id = "parse";    spec = "<pnixc-meta-internal>"; }
+        { id = "lower";    spec = "<pnixc-meta-internal>"; }
+        { id = "emit_ir";  spec = "<pnixc-meta-internal>"; }
+        { id = "emit_aot"; spec = "<pnixc-meta-internal>"; }
+      ];
+    };
+  };
+
+  # ─── what is wired ✓ / what is NOT yet wired (honest gap) ─────
+  wired_2026_05_13 = [
+    "P1-P12 all written and parse-verified via pnixc-meta/pnix-eval"
+    "vm.px composes P1-P12 into single describe surface; P1-P4 expose pure spawn/project verbs"
+    "P9 contribution-visibility wired: SpawnRequest carries optional visibility + owner_user_id; P1 fingerprint conditionally includes owner_user_id (private only). Legacy fingerprint preserved bit-for-bit when visibility absent or =public, so no data migration of mirror_ids."
+    "doghouse-core persists P4 mirror_receipts in redb with append-only collision checks"
+    "doghouse-core persists P5 mirror_session_heads in redb and enforces head_chains_to_audit"
+    "doghouse-core exposes P6 NL -> SpawnRequest and P7 receipt -> NL projection without LLM/RAG"
+    "doghouse-core enforces P11 single-spawn write batching: one spawn's receipt set commits as one redb write transaction with append-only collision rules preserved"
+    "doghouse-core exposes P12 mirror-gc: public mirrors may be marked thunk-gc/lazy-stub, private mirrors stay sticky, active P5 session chains are protected, and P4 receipts are never deleted"
+    "doghouse-mirror-vm --child hosts the runtime behind a JSONL stdin/stdout protocol in a separate OS process"
+    "doghouse-mirror-vm v1 sandbox policy is owned by P8: --allow-root path capability, inherited-env scrub, and fixed cwd are enforced on Linux/macOS/Windows; OS-specific hardening is reported through P8 fields (Linux no_new_privs, Unix rlimits, future Windows Job Object/restricted token)"
+    "pnixc-meta gained `--emit project-build` verb (crates/pnixc/src/emit.rs:emit_project_build_source). Host entry contract: `pnixc-meta --emit project-build <project.px>` reads this file, resolves sibling vm.px, evaluates the composition, returns the unified VM attrset as JSON. Single host-call entry-point achieved."
+  ];
+  honest_gaps = [
+    "doghouse-mirror-vm is process-isolated and cross-platform v1-hardened, but not yet a full kernel sandbox on every OS: Linux still needs seccomp/mount+user namespaces/cgroups/uid+gid drop policy; macOS still needs a Seatbelt/sandbox profile strategy; Windows still needs Job Object + restricted-token policy."
+    "pnixc-meta project-build still returns the composed .px data surface; the running child process is doghouse-core, not a self-hosted pnix executable image."
+    "P3 physical boundary is enforced at the Rust typestate/API boundary and by child-process hosting, but live-value isolation is not yet a formally verified VM memory model."
+  ];
+
+  # ─── verification contract (after pnixc-meta build lands) ──────
+  #
+  # Re-run the baseline experiment at /tmp/mirror-experiments/baseline/:
+  #   1. Spawn root mirror via host → sandbox boot.
+  #   2. Observe P4 receipt stream: must include
+  #      "mirror-spawn" + "ontology-extend" + "boundary-project"
+  #      receipts in linear chain.
+  #   3. Spawn second mirror as sibling. Verify distinct session
+  #      chain and P1 identity; resulting P2 ontology may be the
+  #      same for identical content (content-addressed by intent).
+  #   4. Spawn third mirror nested in root. Verify P1 parent_mirror_id
+  #      chain, P2 parent_ontology_id chain.
+  #   5. Reference an ankh from outside its mirror. Verify only
+  #      a P3 BoundaryProjection is accessible (not the live value).
+  #
+  # All five → hypothesis "mirror spawn = ontology extension"
+  # confirmed in this substrate. Any failure → design revision.
+  verification_contract = {
+    refers = "/tmp/mirror-experiments/baseline/";
+    requires = [ "pnixc-meta project-build" "doghouse-mirror-vm child runtime" ];
+    target = "hypothesis: mirror spawn = ontology extension";
+  };
+
+  meta = {
+    source = "pnix-mirror-runtime";
+    purpose = "entry-point declaration for the .px substrate-execution layer";
+    convergence_anchor = "project-wiki/maps/mirror-upgrade-experiment-routes.md (R10+R7+R8+R9 walking convergence)";
+    vocabulary = "project-wiki/maps/ankh-macro-mirror-turn-axiom.md";
+  };
+}

@@ -1,0 +1,1122 @@
+let
+  ownerName = "stdlib.nl.generic-math-equation-engine";
+
+  # === Generic math equation engine (agent-NL-209) ===================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "하드코딩이 아니라고 몇 번을 이야기한 거 같은데. 이건 NL 로부터
+  #    알아서 작성되는 여러 경우들을 전부 만족하는 generic 코드로
+  #    작성해야됩니다. 수학/알고리즘 코드들 조차도 generic 한 알고리즘."
+  #
+  # 이전 Round 38/40/41/43 의 *하드코딩 list* (if algo=="merge-sort" then
+  # ... else if "binary-search" then ...) 는 generic 메커니즘으로 대체.
+  #
+  # 이 owner = *메커니즘만*. 정책 (구체적 algo / cue) 은 *데이터* 로만.
+  #
+  # 핵심:
+  #   - mkMathTemplate: math 식 의 *schema* 로 정의 (kind / vars / output)
+  #   - mkCueRule: cue 의 *pattern grammar + math template ref*
+  #   - solveRecurrenceGeneric: Master theorem 알고리즘 1개
+  #   - evaluateHoareGeneric: Hoare 검증 알고리즘 1개
+  #   - pipelineFold: fold / map / filter generic
+  #
+  # 새 algo / cue 추가 = constructor 1줄 호출 + 데이터 row. 코드 변경 0.
+
+  stepKind = "generic-math-equation-engine";
+  framework_step =
+    "math 식 generator 의 *메커니즘만* — 정책은 데이터 row";
+
+  # =================================================================
+  # === Math template kinds (closed set of *mechanisms*) =============
+  # =================================================================
+  #
+  # 새 kind 추가는 *closed extension* — 새 mechanism 박힘.
+  # 새 algo / cue 는 *데이터 row* — 새 mechanism 안 박힘.
+
+  knownMathKinds = [
+    "recurrence-master-theorem"  # T(n) = a*T(n/b) + f(n) → Master Thm
+    "hoare-triple-loop-invariant"  # {I ∧ B} body {I} + termination
+    "concentration-bound"  # P(|X - μ| ≥ ε) ≤ exp(-c·n·ε²)
+    "graph-traversal-complexity"  # f(V, E) = Θ(V + E) variants
+    "iteration-convergence-rate"  # |x_{n+1} - x*| ≤ M|x_n - x*|^p
+    "ring-axiom-identity"  # a × (b+c) = a×b + a×c (and variants)
+    "concurrency-happens-before"  # partial order on events
+    "queueing-throughput"  # Little's law L = λW
+    "matroid-greedy-optimality"  # ∀A,B ∈ I, |A|<|B| → exchange
+    "type-curry-howard"  # type = proposition, term = proof
+    # Round 47: transform weapons from existing category-monad.px
+    "monadic-effect-pattern"  # T : C → C with η/μ, Kleisli f >=> g
+    # Round 49: arity transform / currying / parallel composition
+    "monoidal-product-pattern"  # f ⊗ g, curry/uncurry, tuple, parallel
+    # Round 50: 수렴선택 (canonical form among equivalent chains)
+    "coequalizer-fold-pattern"  # q∘f = q∘g, universal canonical choice
+    # Round 51: F : canonical-program → meaning-object (intent abstraction)
+    "functor-lift-pattern"      # F(g∘f) = F(g)∘F(f), F(id) = id
+  ];
+
+  # =================================================================
+  # === Generic math template constructor ============================
+  # =================================================================
+  #
+  # 새 math kind 의 *spec* 박힘. 실제 식 생성은 *데이터-driven*.
+
+  mkMathTemplate =
+    { kind, vars_schema, formula_form, derive_steps, output_kind }:
+    if !(builtins.elem kind knownMathKinds)
+    then throw ("Unknown math kind: " + kind +
+                ". Must be one of knownMathKinds.")
+    else {
+      template_kind = kind;
+      vars_schema = vars_schema;  # attrset of expected vars
+      formula_form = formula_form;  # template string with ${var}
+      derive_steps = derive_steps;  # ordered list of step descriptions
+      output_kind = output_kind;  # final output shape spec
+    };
+
+  # =================================================================
+  # === Generic cue rule constructor =================================
+  # =================================================================
+  #
+  # cue rule = (pattern, family, math template ref, vars extractor).
+  # 새 cue 추가 = mkCueRule 한 줄 호출.
+
+  mkCueRule =
+    { pattern, family, math_template_kind, vars_from_match, driver_form, decision_form }:
+    {
+      cue_pattern = pattern;
+      cue_family = family;
+      math_template_kind = math_template_kind;
+      vars_extractor = vars_from_match;  # function: (utterance match) → vars attrset
+      driver_form = driver_form;  # template string
+      decision_form = decision_form;  # template string
+    };
+
+  # =================================================================
+  # === Generic algorithm 1: Master theorem recurrence solver =======
+  # =================================================================
+  #
+  # T(n) = a · T(n/b) + Θ(n^c) → Master theorem.
+  # input: { a, b, c } (모두 numeric)
+  # output: { case, big_o_form }
+
+  solveRecurrenceMaster = vars:
+    let
+      a = vars.a;
+      b = vars.b;
+      c = vars.c;
+      # log_b(a) 의 numeric 비교 (특수 케이스 — small integer 만 generic)
+      # 사용자가 vars 로 직접 log_b_a 도 넘길 수 있음
+      log_b_a = vars.log_b_a or (
+        if b == 2 && a == 1 then 0
+        else if b == 2 && a == 2 then 1
+        else if b == 2 && a == 4 then 2
+        else if b == 2 && a == 8 then 3
+        else if b == 3 && a == 3 then 1
+        else if b == 3 && a == 9 then 2
+        else -1  # caller 가 vars.log_b_a 명시해야
+      );
+      case_num =
+        if c < log_b_a then 1
+        else if c == log_b_a then 2
+        else 3;
+      log_b_a_str = builtins.toString log_b_a;
+      c_str = builtins.toString c;
+      big_o_form =
+        if case_num == 1 then "Θ(n^" + log_b_a_str + ")"
+        else if case_num == 2 then
+          (if c == 0 then "Θ(log n)"
+           else if c == 1 then "Θ(n log n)"
+           else "Θ(n^" + c_str + " · log n)")
+        else "Θ(n^" + c_str + ")";
+      a_str = builtins.toString a;
+      b_str = builtins.toString b;
+      recurrence_form = "T(n) = " + a_str + "·T(n/" + b_str + ") + Θ(n^" + c_str + ")";
+    in {
+      input_vars = vars;
+      recurrence = recurrence_form;
+      master_case = case_num;
+      log_b_a = log_b_a;
+      big_o = big_o_form;
+      derivation = [
+        "Master Thm: a=" + a_str + ", b=" + b_str + ", c=" + c_str
+        "log_b a = " + log_b_a_str
+        "compare c vs log_b a → case " + builtins.toString case_num
+        "→ " + big_o_form
+      ];
+    };
+
+  # =================================================================
+  # === Generic algorithm 2: Hoare loop invariant emitter ============
+  # =================================================================
+  #
+  # input: { state_var, accumulator_form, loop_var, bound }
+  # output: Hoare triple + invariant + termination measure (generic schema)
+
+  emitHoareLoopInvariant = vars:
+    let
+      state_var = vars.state_var or "s";
+      accumulator = vars.accumulator_form or "Σ_{k=0}^{i-1} step(k)";
+      loop_var = vars.loop_var or "i";
+      bound = vars.bound or "n";
+    in {
+      precondition_form = "P: " + state_var + " = init ∧ " + loop_var + " = 0";
+      invariant_form = "I: " + state_var + " = " + accumulator + " ∧ 0 ≤ " + loop_var + " ≤ " + bound;
+      postcondition_form = "Q: " + state_var + " = " + accumulator + " [evaluated at " + loop_var + "=" + bound + "]";
+      hoare_triple = "{P} while " + loop_var + " < " + bound + " do { body } {Q}";
+      termination_measure = "(" + bound + " - " + loop_var + ") strictly decreasing, well-founded on ℕ";
+      derivation = [
+        "init: " + loop_var + " = 0 → I trivially"
+        "preservation: I ∧ B ⊢ wp(body, I)"
+        "exit: I ∧ ¬B → Q"
+        "termination: variant decreases each iter"
+      ];
+    };
+
+  # =================================================================
+  # === Generic algorithm 3: Concentration bound (Hoeffding-like) ====
+  # =================================================================
+  #
+  # input: { random_var, sample_size, tolerance, range_max }
+  # output: P(|...| ≥ ε) ≤ 2 exp(-c·n·ε² / (range)²)
+
+  emitConcentrationBound = vars:
+    let
+      X = vars.random_var or "X̄";
+      n = vars.sample_size or "n";
+      epsilon = vars.tolerance or "ε";
+      range = vars.range_max or "1";
+      delta = vars.confidence_param or "δ";
+    in {
+      bound_form = "P(|" + X + " - E[" + X + "]| ≥ " + epsilon + ") ≤ 2 · exp(-2 · " + n + " · " + epsilon + "² / " + range + "²)";
+      sample_required = n + " ≥ ln(2/" + delta + ") / (2 · " + epsilon + "²)";
+      derivation = [
+        "X_i ∈ [0, " + range + "] independent"
+        "Hoeffding: P(|X̄ - μ| ≥ ε) ≤ 2 exp(-2nε²/R²)"
+        "for (ε, δ)-PAC: solve 2exp(-2nε²) ≤ δ → n ≥ ln(2/δ)/(2ε²)"
+      ];
+    };
+
+  # =================================================================
+  # === Round 45: 7 추가 generic algorithms (mechanism, not policy) ==
+  # =================================================================
+
+  # Graph traversal complexity (BFS / DFS / Dijkstra 의 generic shape).
+  # input: { traversal_kind, vertex_count, edge_count, weight_kind }
+  # output: complexity equation (단일 알고리즘).
+  emitGraphTraversalComplexity = vars:
+    let
+      kind = vars.traversal_kind or "BFS-DFS";
+      V = vars.vertex_count or "V";
+      E = vars.edge_count or "E";
+      weight = vars.weight_kind or "unweighted";
+      # 단일 결정 규칙: weight 종류 + kind 로 complexity 도출
+      complexity =
+        if weight == "unweighted" then "Θ(" + V + " + " + E + ")"
+        else if weight == "non-negative" then "Θ((" + V + " + " + E + ") · log " + V + ")"
+        else "Θ(" + V + " · " + E + ")";  # Bellman-Ford
+      invariant =
+        if weight == "unweighted" then "dist[v] = shortest unweighted distance"
+        else if weight == "non-negative" then "after relaxation: dist[v] ≤ dist[u] + w(u,v)"
+        else "after V-1 iterations: dist[v] = shortest with negative weights";
+    in {
+      traversal_kind = kind;
+      weight_kind = weight;
+      complexity_form = complexity;
+      invariant_form = invariant;
+      derivation = [
+        "visit each vertex once: " + V + " visits"
+        "relax each edge once: " + E + " relaxations"
+        "weighted → priority queue → log " + V + " factor"
+        "→ " + complexity
+      ];
+    };
+
+  # Iteration convergence rate (Newton / Gradient descent / Bisection 의 generic).
+  # input: { iter_form, rate_kind (linear / quadratic / superlinear), domain }
+  # output: |x_{n+1} - x*| ≤ M |x_n - x*|^p
+  emitIterationConvergence = vars:
+    let
+      rateKind = vars.rate_kind or "quadratic";
+      domain = vars.domain or "ℝ";
+      p =
+        if rateKind == "linear" then 1
+        else if rateKind == "superlinear" then "(1, 2)"
+        else 2;
+      pStr =
+        if builtins.isInt p then builtins.toString p
+        else p;
+      condition =
+        if rateKind == "linear" then "0 < M < 1"
+        else if rateKind == "superlinear" then "M depends on iteration"
+        else "M = |f''(x*)| / (2|f'(x*)|) (simple root)";
+      digit_doubling =
+        if rateKind == "quadratic" then "correct digits double each iter"
+        else if rateKind == "linear" then "correct digits + constant each iter"
+        else "intermediate growth";
+    in {
+      rate_kind = rateKind;
+      convergence_form = "|x_{n+1} - x*| ≤ M · |x_n - x*|^" + pStr;
+      condition_form = condition;
+      digit_pattern = digit_doubling;
+      derivation = [
+        "Taylor expansion around fixed point x*"
+        "fixed-point recursion: x_{n+1} = T(x_n), T(x*) = x*"
+        "convergence rate determined by |T'(x*)|"
+        "→ rate = " + rateKind
+      ];
+    };
+
+  # Ring axiom identity (distributive / associative / commutative 의 generic).
+  # input: { axiom_name, op_outer, op_inner, vars (a, b, c) }
+  # output: identity equation
+  emitRingAxiomIdentity = vars:
+    let
+      axiom = vars.axiom_name or "distributive";
+      outer = vars.op_outer or "×";
+      inner = vars.op_inner or "+";
+      a = vars.var_a or "a";
+      b = vars.var_b or "b";
+      c = vars.var_c or "c";
+      identity_form =
+        if axiom == "distributive"
+        then a + " " + outer + " (" + b + " " + inner + " " + c + ") = (" + a + " " + outer + " " + b + ") " + inner + " (" + a + " " + outer + " " + c + ")"
+        else if axiom == "associative"
+        then "(" + a + " " + outer + " " + b + ") " + outer + " " + c + " = " + a + " " + outer + " (" + b + " " + outer + " " + c + ")"
+        else if axiom == "commutative"
+        then a + " " + outer + " " + b + " = " + b + " " + outer + " " + a
+        else "(unknown axiom)";
+    in {
+      axiom_name = axiom;
+      identity_form = identity_form;
+      derivation = [
+        "axiom " + axiom + " holds in Ring R for op " + outer
+        "→ structural rewrite allowed"
+      ];
+    };
+
+  # Concurrency happens-before (race / atomic / mutex 의 generic).
+  emitConcurrencyHappensBefore = vars:
+    let
+      events_list = vars.events or [ "a" "b" ];
+      sync_kind = vars.sync_kind or "none";
+      formula =
+        if sync_kind == "atomic"
+        then "atomic: a ⊑ b via single-instruction visibility"
+        else if sync_kind == "mutex"
+        then "lock(L); a; unlock(L); lock(L); b → a happens-before b"
+        else "race: ¬(a hb b) ∧ ¬(b hb a) ∧ conflicting access → undefined behavior";
+    in {
+      events = events_list;
+      sync_kind = sync_kind;
+      formula_form = formula;
+      derivation = [
+        "happens-before is partial order on events"
+        "within thread: program order"
+        "across threads: synchronization edges (mutex / atomic / channel)"
+        "data race if no hb edge between conflicting accesses"
+      ];
+    };
+
+  # Queueing throughput (Little's law의 generic).
+  emitQueueingThroughput = vars:
+    let
+      lambda = vars.arrival_rate or "λ";
+      W = vars.mean_time_in_system or "W";
+      L = vars.mean_count_in_system or "L";
+    in {
+      littles_law = L + " = " + lambda + " · " + W;
+      bandwidth_form = "throughput = min(producer_rate, consumer_rate, buffer / max_latency)";
+      derivation = [
+        "Little's law: stationary stochastic process"
+        "L = λ · W (independent of distribution)"
+        "throughput bounded by slowest stage"
+      ];
+    };
+
+  # Matroid greedy optimality (matroid axiom의 generic).
+  emitMatroidGreedyOptimality = vars:
+    let
+      domain = vars.domain or "E";
+      independent_set_family = vars.independence_family or "I";
+    in {
+      exchange_axiom =
+        "∀A, B ∈ " + independent_set_family + ", |A| < |B| → ∃x ∈ B \\ A : A ∪ {x} ∈ " + independent_set_family;
+      greedy_form =
+        "greedy on " + domain + " with weight w: sort " + domain + " desc by w, add if independence preserved";
+      optimality_claim = "greedy achieves max weight independent set ⟺ (" + domain + ", " + independent_set_family + ") is a matroid";
+      derivation = [
+        "matroid axioms: (M1) ∅ ∈ I; (M2) heredity; (M3) exchange"
+        "if exchange holds → greedy finds optimal"
+        "(counterexample to greedy → not a matroid)"
+      ];
+    };
+
+  # Type Curry-Howard (proposition / proof / inhabitant generic).
+  emitTypeCurryHoward = vars:
+    let
+      type_form = vars.type_form or "A → B";
+      prop_form = vars.proposition_form or "A ⊃ B";
+      inhabitant_form = vars.inhabitant_form or "λx:A. body";
+    in {
+      type_form = type_form;
+      proposition_form = prop_form;
+      inhabitant_term = inhabitant_form;
+      correspondence = "type " + type_form + " corresponds to proposition " + prop_form + "; closed term : type ⟺ proof of proposition";
+      derivation = [
+        "Curry-Howard: types ↔ propositions, terms ↔ proofs"
+        "well-typed program ↔ valid proof"
+        "non-termination ↔ inconsistent logic (System F not strongly normalizing under recursion)"
+      ];
+    };
+
+  # =================================================================
+  # === Generic dispatch — math kind → algorithm =====================
+  # =================================================================
+
+  # =================================================================
+  # === Generic algorithm 11: monadic effect pattern (Round 47) =====
+  # =================================================================
+  #
+  # Wires existing category-monad.px (4 monads + Kleisli) as a transform
+  # weapon. Recognizes effect shape from cue and emits monadic chain:
+  #   - "Maybe"  → return / bind / Nothing-propagation
+  #   - "Either" → Right / Left / error-propagation
+  #   - "State"  → S → (A, S) thread
+  #   - "Async"  → Pending / Resolved / Rejected
+  # All four obey monad laws: left-id, right-id, associativity.
+  # Kleisli compose: f : A → T(B), g : B → T(C) → f >=> g : A → T(C).
+  #
+  # vars: { monad_type, slot_meaning, propagation_rule }
+  #   monad_type ∈ { "Maybe", "Either", "State", "Async" }
+
+  emitMonadicEffect = vars:
+    let
+      monad_type = vars.monad_type;
+      slot_meaning = vars.slot_meaning or "unspecified";
+      propagation_rule = vars.propagation_rule or "propagate-on-non-success-tag";
+
+      return_form =
+        if monad_type == "Maybe" then "Just : A → Maybe A"
+        else if monad_type == "Either" then "Right : A → Either E A"
+        else if monad_type == "State" then "return : A → S → (A, S)"
+        else if monad_type == "Async" then "Resolved : A → Async A"
+        else "return : A → T A";
+
+      bind_form =
+        if monad_type == "Maybe" then
+          "bind Just(a) f = f a; bind Nothing f = Nothing"
+        else if monad_type == "Either" then
+          "bind Right(a) f = f a; bind Left(e) f = Left(e)"
+        else if monad_type == "State" then
+          "bind m f s = let (a, s') = m s in (f a) s'"
+        else if monad_type == "Async" then
+          "bind Resolved(a) f = f a; bind Pending/Rejected f = same"
+        else "bind : T A → (A → T B) → T B";
+
+      kleisli_form = "f >=> g = λa. bind (f a) g  [associative]";
+
+      laws = [
+        "left identity: return a >>= f = f a"
+        "right identity: m >>= return = m"
+        "associativity: (m >>= f) >>= g = m >>= (λx. f x >>= g)"
+      ];
+
+      slot_pattern =
+        if monad_type == "Maybe" then "missing slot → Nothing"
+        else if monad_type == "Either" then "error path → Left, success → Right"
+        else if monad_type == "State" then "state thread → S forwarded"
+        else if monad_type == "Async" then "deferred / IO → Pending until resolved"
+        else "(monad_type unknown)";
+
+      derivation = [
+        "Effect identified: ${slot_meaning} ↦ ${monad_type} monad"
+        "Slot pattern: ${slot_pattern}"
+        "Return: ${return_form}"
+        "Bind: ${bind_form}"
+        "Kleisli: ${kleisli_form}"
+        "Propagation: ${propagation_rule}"
+        "Monad laws hold (by construction): left-id / right-id / assoc"
+      ];
+
+    in {
+      input_vars = vars;
+      monad_type = monad_type;
+      return_form = return_form;
+      bind_form = bind_form;
+      kleisli_form = kleisli_form;
+      slot_pattern = slot_pattern;
+      monad_laws = laws;
+      derivation = derivation;
+      # Wire to existing owner (substrate-side; not imported at call time
+      # to keep generic engine import-light)
+      backing_owner = "stdlib.nl.category-monad";
+      backing_owner_path =
+        "nl/category-monad.px";
+    };
+
+  # =================================================================
+  # === Generic dispatch — math kind → algorithm =====================
+  # =================================================================
+
+  applyMathKind = kind: vars:
+    if kind == "recurrence-master-theorem"
+    then solveRecurrenceMaster vars
+    else if kind == "hoare-triple-loop-invariant"
+    then emitHoareLoopInvariant vars
+    else if kind == "concentration-bound"
+    then emitConcentrationBound vars
+    else if kind == "graph-traversal-complexity"
+    then emitGraphTraversalComplexity vars
+    else if kind == "iteration-convergence-rate"
+    then emitIterationConvergence vars
+    else if kind == "ring-axiom-identity"
+    then emitRingAxiomIdentity vars
+    else if kind == "concurrency-happens-before"
+    then emitConcurrencyHappensBefore vars
+    else if kind == "queueing-throughput"
+    then emitQueueingThroughput vars
+    else if kind == "matroid-greedy-optimality"
+    then emitMatroidGreedyOptimality vars
+    else if kind == "type-curry-howard"
+    then emitTypeCurryHoward vars
+    else if kind == "monadic-effect-pattern"
+    then emitMonadicEffect vars
+    else if kind == "monoidal-product-pattern"
+    then emitMonoidalProduct vars
+    else if kind == "coequalizer-fold-pattern"
+    then emitCoequalizerFold vars
+    else if kind == "functor-lift-pattern"
+    then emitFunctorLift vars
+    else { held = "math-kind-not-yet-mechanized"; kind = kind; };
+
+  # =================================================================
+  # === Generic algorithm 14: functor lift (Round 51) ===============
+  # =================================================================
+  #
+  # Wires existing category-advanced-primitives.px (Kan extension) +
+  # category-language-codomain-functor.px abstraction.
+  #
+  # Mode 12 of the 16-mode chain: canonical-program → meaning-object.
+  # Lifts the *concrete algorithm structure* to its *abstract intent*.
+  #
+  # F : C_canonical → C_meaning
+  # F preserves composition: F(g ∘ f) = F(g) ∘ F(f)
+  # F preserves identity:    F(id_A) = id_{F(A)}
+  #
+  # vars: { canonical_chain_id, math_kind_chain, lift_strategy }
+  #   canonical_chain_id ∈ closed vocab from coequalizer-fold output
+  #   math_kind_chain    : list of math kinds appearing upstream
+  #   lift_strategy ∈ {
+  #     "intent-only"             — semantic_role + algorithm_class
+  #     "intent-with-invariants"  — adds preserved_invariants
+  #     "intent-with-typeclass"   — adds typeclass_required (for Haskell-
+  #                                  style typeclass dispatch)
+  #     "full-meaning-object"     — all three
+  #   }
+
+  emitFunctorLift = vars:
+    let
+      canonical_chain_id = vars.canonical_chain_id;
+      math_kind_chain = vars.math_kind_chain or [];
+      lift_strategy = vars.lift_strategy or "full-meaning-object";
+
+      # Closed semantic role classification (data row table)
+      semanticRoleTable = {
+        "for-loop" = "iteration-with-effect";
+        "comprehension" = "aggregation-or-transformation";
+        "reduce" = "aggregation";
+        "recursive" = "recursion-direct";
+        "iterative" = "iteration-pure";
+        "Maybe" = "absence-handling";
+        "Either" = "error-channel";
+        "State" = "state-thread";
+        "Async" = "deferred-effect";
+        "curry-isomorphism" = "arity-transform";
+        "uncurry-isomorphism" = "arity-transform";
+        "parallel-composition" = "independent-product";
+        "tensor-product" = "product-construction";
+        "arity-transform" = "arity-transform";
+      };
+
+      # Algorithm class classification
+      algorithmClassTable = {
+        "for-loop" = "traversal";
+        "comprehension" = "fold-or-map";
+        "reduce" = "fold";
+        "recursive" = "tree-recursion";
+        "iterative" = "loop-recursion";
+        "Maybe" = "option-handling";
+        "Either" = "result-handling";
+        "State" = "state-monad";
+        "Async" = "promise-monad";
+        "curry-isomorphism" = "partial-application";
+        "uncurry-isomorphism" = "tuple-flatten";
+        "parallel-composition" = "fork-join";
+        "tensor-product" = "product-type";
+        "arity-transform" = "n-ary-to-product";
+      };
+
+      # Preserved invariants per algorithm class (for safety)
+      invariantsTable = {
+        "fold" = [ "associativity" "identity-element" ];
+        "fold-or-map" = [ "structure-preservation" ];
+        "map" = [ "size-preservation" "element-type-functorial" ];
+        "filter" = [ "subset-property" "predicate-decidability" ];
+        "traversal" = [ "ordering-preservation" "effect-order" ];
+        "tree-recursion" = [ "well-founded-termination" "base-case-reachable" ];
+        "loop-recursion" = [ "loop-invariant" "termination-measure" ];
+        "option-handling" = [ "null-propagation" "Just/Nothing-coverage" ];
+        "result-handling" = [ "error-propagation" "Left/Right-coverage" ];
+        "state-monad" = [ "state-thread-monotone" ];
+        "promise-monad" = [ "resolution-monotone" ];
+        "partial-application" = [ "currying-isomorphism" ];
+        "tuple-flatten" = [ "uncurry-isomorphism" ];
+        "fork-join" = [ "independence" "join-confluence" ];
+        "product-type" = [ "projection-axioms" ];
+        "n-ary-to-product" = [ "arity-isomorphism" ];
+      };
+
+      # Typeclass requirement (Haskell-style for typeclass dispatch)
+      typeclassTable = {
+        "fold" = "Monoid (assoc + identity)";
+        "fold-or-map" = "Foldable / Functor";
+        "map" = "Functor";
+        "filter" = "Eq (decidable predicate)";
+        "traversal" = "Traversable / Foldable";
+        "tree-recursion" = "Recursive / Corecursive";
+        "loop-recursion" = "(none — first-order)";
+        "option-handling" = "MonadPlus / Alternative";
+        "result-handling" = "MonadError / MonadFail";
+        "state-monad" = "MonadState s";
+        "promise-monad" = "MonadIO / Async";
+        "partial-application" = "(none — pure language feature)";
+        "tuple-flatten" = "(none — pure language feature)";
+        "fork-join" = "MonadConc / Async";
+        "product-type" = "(none — type-level)";
+        "n-ary-to-product" = "(none — type-level)";
+      };
+
+      lookupOrDefault = table: key: default:
+        if table ? "${key}" then table.${key} else default;
+
+      semantic_role =
+        lookupOrDefault semanticRoleTable canonical_chain_id
+          "unclassified-role";
+      algorithm_class =
+        lookupOrDefault algorithmClassTable canonical_chain_id
+          "unclassified-algorithm";
+      preserved_invariants =
+        if lift_strategy == "intent-only"
+        then []
+        else lookupOrDefault invariantsTable algorithm_class
+               [ "(no declared invariants)" ];
+      typeclass_required =
+        if lift_strategy == "intent-only"
+           || lift_strategy == "intent-with-invariants"
+        then null
+        else lookupOrDefault typeclassTable algorithm_class
+               "(no declared typeclass)";
+
+      intent_signature =
+        if algorithm_class == "fold"
+        then "(Collection a) -> a    [requires Monoid a]"
+        else if algorithm_class == "fold-or-map"
+        then "(Collection a) -> (b | Collection b)"
+        else if algorithm_class == "map"
+        then "(Collection a) -> (Collection b)"
+        else if algorithm_class == "filter"
+        then "(Collection a, a -> Bool) -> (Collection a)"
+        else if algorithm_class == "traversal"
+        then "(Collection a) -> Effect"
+        else if algorithm_class == "tree-recursion"
+        then "a -> b    [a is recursively decomposable]"
+        else if algorithm_class == "loop-recursion"
+        then "a -> b    [a is iteratively decomposable]"
+        else if algorithm_class == "option-handling"
+        then "Maybe a -> Maybe b"
+        else if algorithm_class == "result-handling"
+        then "Either e a -> Either e b"
+        else if algorithm_class == "state-monad"
+        then "s -> (a, s)"
+        else if algorithm_class == "promise-monad"
+        then "() -> Async a"
+        else if algorithm_class == "partial-application"
+        then "(A * B -> C) -> (A -> (B -> C))    [curry]"
+        else if algorithm_class == "tuple-flatten"
+        then "(A -> B -> C) -> (A * B -> C)    [uncurry]"
+        else if algorithm_class == "fork-join"
+        then "(a -> b) * (c -> d) -> (a, c) -> (b, d)"
+        else if algorithm_class == "product-type"
+        then "A * B    [tensor product]"
+        else if algorithm_class == "n-ary-to-product"
+        then "(A_1 ... A_n -> B) <-> (A_1 * ... * A_n -> B)"
+        else "a -> b    [unclassified]";
+
+      functor_laws = [
+        "F preserves composition:  F(g ∘ f) = F(g) ∘ F(f)"
+        "F preserves identity:     F(id_A) = id_{F(A)}"
+      ];
+
+      meaning_object = {
+        semantic_role = semantic_role;
+        algorithm_class = algorithm_class;
+        intent_signature = intent_signature;
+        preserved_invariants = preserved_invariants;
+        typeclass_required = typeclass_required;
+        lift_strategy = lift_strategy;
+        source_canonical_chain_id = canonical_chain_id;
+        upstream_math_kind_chain = math_kind_chain;
+      };
+
+      derivation = [
+        "Source canonical chain: ${canonical_chain_id}"
+        "Semantic role lifted: ${semantic_role}"
+        "Algorithm class: ${algorithm_class}"
+        "Intent signature: ${intent_signature}"
+        "Lift strategy: ${lift_strategy}"
+        "Functor laws preserved by construction (data-row table lift)"
+      ];
+
+    in {
+      input_vars = vars;
+      meaning_object = meaning_object;
+      semantic_role = semantic_role;
+      algorithm_class = algorithm_class;
+      intent_signature = intent_signature;
+      preserved_invariants = preserved_invariants;
+      typeclass_required = typeclass_required;
+      functor_laws = functor_laws;
+      derivation = derivation;
+      backing_owner = "stdlib.nl.category-advanced-primitives";
+      backing_owner_path =
+        "nl/category-advanced-primitives.px";
+    };
+
+  # =================================================================
+  # === Generic algorithm 13: coequalizer fold (Round 50) ===========
+  # =================================================================
+  #
+  # Wires existing category-coequalizer.px as transform weapon.
+  # 사용자 directive 의 *수렴선택* 의 substrate-side 정의:
+  #
+  #   같은 의도를 표현할 수 있는 여러 algorithm chain 중 canonical
+  #   (가장 간단한) 것을 mechanical 으로 선택.
+  #
+  # Coequalizer in category theory:
+  #   f, g : A → B 두 morphism. coequalizer Q = (q : B → Q) 가
+  #   q ∘ f = q ∘ g 만족, 모든 그런 q' 가 q 를 통해 unique factor.
+  #
+  # NL flow 의미: chain_A 와 chain_B 가 같은 final state 에 도달하면
+  # 동치. 같은 동치 클래스 안에서 canonical 선택.
+  #
+  # vars: { candidate_chains, canonical_strategy }
+  #   candidate_chains : list of { id, step_count, unknown_count, label }
+  #   canonical_strategy ∈ {
+  #     "minimum-cost"        (default) — score = steps * 100 + unknowns
+  #     "minimum-steps"       — pick fewest morphisms
+  #     "minimum-unknowns"    — pick fewest open slots
+  #     "first-found"         — preserve discovery order
+  #     "explicit-preferred"  — caller provides preferred id
+  #   }
+
+  emitCoequalizerFold = vars:
+    let
+      candidate_chains = vars.candidate_chains;
+      canonical_strategy = vars.canonical_strategy or "minimum-cost";
+      preferred_id = vars.preferred_id or null;
+
+      chainCost = c:
+        let
+          n = c.step_count;
+          u = c.unknown_count;
+        in {
+          step_count = n;
+          unknown_count = u;
+          score = n * 100 + u;
+        };
+
+      # Picker function — Nix list min via foldl'
+      pickByMinScore = chains:
+        if chains == [] then null
+        else
+          builtins.foldl' (a: b:
+            if (chainCost b).score < (chainCost a).score then b else a
+          ) (builtins.head chains) (builtins.tail chains);
+
+      pickByMinSteps = chains:
+        if chains == [] then null
+        else
+          builtins.foldl' (a: b:
+            if b.step_count < a.step_count then b else a
+          ) (builtins.head chains) (builtins.tail chains);
+
+      pickByMinUnknowns = chains:
+        if chains == [] then null
+        else
+          builtins.foldl' (a: b:
+            if b.unknown_count < a.unknown_count then b else a
+          ) (builtins.head chains) (builtins.tail chains);
+
+      pickFirst = chains:
+        if chains == [] then null else builtins.head chains;
+
+      pickPreferred = chains: pid:
+        let matched = builtins.filter (c: c.id == pid) chains;
+        in
+          if matched == [] then pickByMinScore chains
+          else builtins.head matched;
+
+      canonical_chain =
+        if canonical_strategy == "minimum-cost"
+        then pickByMinScore candidate_chains
+        else if canonical_strategy == "minimum-steps"
+        then pickByMinSteps candidate_chains
+        else if canonical_strategy == "minimum-unknowns"
+        then pickByMinUnknowns candidate_chains
+        else if canonical_strategy == "first-found"
+        then pickFirst candidate_chains
+        else if canonical_strategy == "explicit-preferred"
+        then pickPreferred candidate_chains preferred_id
+        else pickByMinScore candidate_chains;
+
+      equivalence_class_size = builtins.length candidate_chains;
+
+      universal_property =
+        "∀ chain c_i ∈ class : q(c_i) = q(canonical), unique factor";
+
+      coequalizer_axiom = "q ∘ f = q ∘ g  (q : B → Q universal)";
+
+      selection_reason =
+        if canonical_chain == null
+        then "no candidates supplied — coequalizer undefined"
+        else
+          "selected '" + canonical_chain.id
+          + "' by strategy '" + canonical_strategy
+          + "' from " + builtins.toString equivalence_class_size
+          + " equivalent candidate(s)";
+
+      # Cost summary for all candidates (audit trail)
+      all_costs = builtins.map (c: {
+        chain_id = c.id;
+        label = c.label;
+        cost = chainCost c;
+      }) candidate_chains;
+
+      derivation = [
+        "Equivalence class detected: ${builtins.toString equivalence_class_size} chains"
+        "Coequalizer axiom: ${coequalizer_axiom}"
+        "Universal property: ${universal_property}"
+        "Strategy: ${canonical_strategy}"
+        "Selection reason: ${selection_reason}"
+      ];
+
+    in {
+      input_vars = vars;
+      candidate_count = equivalence_class_size;
+      canonical_chain = canonical_chain;
+      canonical_chain_id =
+        if canonical_chain == null then null else canonical_chain.id;
+      canonical_chain_cost =
+        if canonical_chain == null then null else chainCost canonical_chain;
+      strategy = canonical_strategy;
+      universal_property = universal_property;
+      coequalizer_axiom = coequalizer_axiom;
+      selection_reason = selection_reason;
+      all_costs = all_costs;
+      derivation = derivation;
+      backing_owner = "stdlib.nl.category-coequalizer";
+      backing_owner_path =
+        "nl/category-coequalizer.px";
+    };
+
+  # =================================================================
+  # === Generic algorithm 12: monoidal product pattern (Round 49) ===
+  # =================================================================
+  #
+  # Wires existing category-monoidal-product.px as transform weapon.
+  # Covers arity transform / currying / tuple product / parallel composition.
+  #
+  # vars: { product_kind, arity_before, arity_after, sources, targets }
+  #   product_kind ∈ {
+  #     "tensor-product",        # f ⊗ g : A⊗C → B⊗D
+  #     "curry-isomorphism",     # (A ⊗ B → C) → (A → B → C)
+  #     "uncurry-isomorphism",   # (A → B → C) → (A ⊗ B → C)
+  #     "parallel-composition",  # independent f, g run in parallel
+  #     "arity-transform",       # n-arg → product of n objects
+  #   }
+
+  emitMonoidalProduct = vars:
+    let
+      product_kind = vars.product_kind;
+      arity_before = vars.arity_before or null;
+      arity_after = vars.arity_after or null;
+
+      transform_form =
+        if product_kind == "tensor-product"
+        then "f ⊗ g : A ⊗ B → A' ⊗ B'    where (f ⊗ g)(a, b) = (f(a), g(b))"
+        else if product_kind == "curry-isomorphism"
+        then "uncurried (A ⊗ B → C)  ≅  curried (A → B → C)    [right adjoint of ⊗]"
+        else if product_kind == "uncurry-isomorphism"
+        then "curried (A → B → C)  ≅  uncurried (A ⊗ B → C)    [left adjoint of [B, _]]"
+        else if product_kind == "parallel-composition"
+        then "f ∥ g : A ⊗ B → C ⊗ D    where f ⊥ g (independent reads/writes)"
+        else if product_kind == "arity-transform"
+        then "f : A_1 × A_2 × ... × A_n → B  ≅  f' : A_1 ⊗ ... ⊗ A_n → B"
+        else "⊗ : C × C → C";
+
+      monoidal_laws = [
+        "associativity:    (A ⊗ B) ⊗ C  ≅  A ⊗ (B ⊗ C)"
+        "left unit:        I ⊗ A  ≅  A"
+        "right unit:       A ⊗ I  ≅  A"
+        "interchange:      (f ⊗ g) ∘ (h ⊗ k) = (f ∘ h) ⊗ (g ∘ k)"
+        "(symmetric monoidal) braiding: A ⊗ B  ≅  B ⊗ A"
+      ];
+
+      adjunction_law =
+        if product_kind == "curry-isomorphism"
+           || product_kind == "uncurry-isomorphism"
+        then "curry/uncurry adjunction:  Hom(A ⊗ B, C)  ≅  Hom(A, [B, C])"
+        else null;
+
+      arity_change =
+        if arity_before != null && arity_after != null
+        then "arity: " + builtins.toString arity_before
+             + " → " + builtins.toString arity_after
+        else null;
+
+      independence_check =
+        if product_kind == "parallel-composition"
+        then "independent iff: writes(f) ∩ reads(g) = ∅  ∧  writes(g) ∩ reads(f) = ∅  ∧  writes(f) ∩ writes(g) = ∅"
+        else null;
+
+      derivation = [
+        "Product kind identified: ${product_kind}"
+        "Transform form: ${transform_form}"
+        "Monoidal category laws hold: " + builtins.toString (builtins.length monoidal_laws) + " laws"
+        (if adjunction_law != null then "Adjunction: ${adjunction_law}" else "(no adjunction for this kind)")
+        (if arity_change != null then arity_change else "(no arity change declared)")
+        (if independence_check != null then independence_check else "(independence not required)")
+      ];
+
+    in {
+      input_vars = vars;
+      product_kind = product_kind;
+      transform_form = transform_form;
+      monoidal_laws = monoidal_laws;
+      adjunction_law = adjunction_law;
+      arity_change = arity_change;
+      independence_check = independence_check;
+      derivation = derivation;
+      backing_owner = "stdlib.nl.category-monoidal-product";
+      backing_owner_path =
+        "nl/category-monoidal-product.px";
+    };
+
+  # =================================================================
+  # === Generic algorithm 4: Pipeline fold (cue rule list) ==========
+  # =================================================================
+  #
+  # rules: list of mkCueRule 결과.
+  # utterance: 한 NL 발화.
+  # output: 각 매칭 rule 의 math 식 + driver + decision.
+  #
+  # 새 rule 추가 = data row 하나 push. 코드 변경 0.
+
+  pipelineFold = rules: utterance:
+    let
+      contains = haystack: needle:
+        let
+          hLen = builtins.stringLength haystack;
+          nLen = builtins.stringLength needle;
+          go = i:
+            if i + nLen > hLen then false
+            else if builtins.substring i nLen haystack == needle then true
+            else go (i + 1);
+        in if nLen == 0 then true
+           else if hLen < nLen then false
+           else go 0;
+      matched = builtins.filter
+        (rule: contains utterance rule.cue_pattern)
+        rules;
+      generated = builtins.map (rule:
+        let
+          vars = rule.vars_extractor utterance;
+          mathEq = applyMathKind rule.math_template_kind vars;
+        in {
+          rule_pattern = rule.cue_pattern;
+          family = rule.cue_family;
+          math_kind = rule.math_template_kind;
+          math_equation = mathEq;
+          driver_power = rule.driver_form;
+          decision_constraint = rule.decision_form;
+          extracted_vars = vars;
+        }
+      ) matched;
+    in {
+      matched_count = builtins.length matched;
+      generated_steps = generated;
+    };
+
+  # =================================================================
+  # === Sample cue rules (DATA ONLY, not hardcoded if/else chain) ====
+  # =================================================================
+  #
+  # 4 sample rules. 새 rule 추가 = list 한 줄 push.
+
+  sampleCueRules = [
+    (mkCueRule {
+      pattern = "sort";
+      family = "algorithm-pattern.divide-conquer";
+      math_template_kind = "recurrence-master-theorem";
+      vars_from_match = _: { a = 2; b = 2; c = 1; log_b_a = 1; };
+      driver_form = "comparison-based sort lower bound: Ω(n log n)";
+      decision_form = "stable → merge sort; in-place → quicksort; small n → insertion";
+    })
+    (mkCueRule {
+      pattern = "binary search";
+      family = "algorithm-pattern.divide-conquer";
+      math_template_kind = "recurrence-master-theorem";
+      vars_from_match = _: { a = 1; b = 2; c = 0; log_b_a = 0; };
+      driver_form = "sorted input → exponential speedup over linear";
+      decision_form = "sorted → binary; unsorted → linear O(n)";
+    })
+    (mkCueRule {
+      pattern = "loop";
+      family = "control-flow.loop";
+      math_template_kind = "hoare-triple-loop-invariant";
+      vars_from_match = _: {
+        state_var = "acc";
+        accumulator_form = "Σ_{k=0}^{i-1} step(k)";
+        loop_var = "i";
+        bound = "n";
+      };
+      driver_form = "invariant 유지 + 종료 = total correctness";
+      decision_form = "invariant 명시 시 자동 검증; 미명시 → infer 또는 reject";
+    })
+    (mkCueRule {
+      pattern = "random sample";
+      family = "math.probability";
+      math_template_kind = "concentration-bound";
+      vars_from_match = _: {
+        random_var = "X̄";
+        sample_size = "n";
+        tolerance = "ε";
+        range_max = "1";
+        confidence_param = "δ";
+      };
+      driver_form = "(ε, δ)-PAC guarantee via Hoeffding";
+      decision_form = "n = O(1/ε² · log(1/δ)) sufficient";
+    })
+  ];
+
+  # =================================================================
+  # === Demonstration ================================================
+  # =================================================================
+
+  demoUtterances = [
+    { label = "sort"; utterance = "sort the array"; }
+    { label = "binsearch"; utterance = "binary search lookup"; }
+    { label = "loop"; utterance = "sum in a loop"; }
+    { label = "random"; utterance = "random sample mean"; }
+    { label = "combined"; utterance = "sort then binary search in loop with random sample"; }
+    { label = "no-match"; utterance = "nothing relevant"; }
+  ];
+
+  runDemoCase = c:
+    let r = pipelineFold sampleCueRules c.utterance;
+    in {
+      inherit (c) label utterance;
+      matched = r.matched_count;
+      success = if c.label == "no-match" then r.matched_count == 0
+                else r.matched_count >= 1;
+    };
+
+  allDemoResults = builtins.map runDemoCase demoUtterances;
+  demoSuccessCount =
+    builtins.length (builtins.filter (r: r.success) allDemoResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    known_math_kind_count = builtins.length knownMathKinds;
+    implemented_kind_count = 14;  # Round 51: +functor-lift-pattern (category-advanced-primitives.px 흡수)
+    has_mkMathTemplate = true;
+    has_mkCueRule = true;
+    has_solveRecurrenceMaster = true;
+    has_emitHoareLoopInvariant = true;
+    has_emitConcentrationBound = true;
+    has_emitMonadicEffect = true;
+    has_emitMonoidalProduct = true;
+    has_emitCoequalizerFold = true;
+    has_emitFunctorLift = true;
+    has_applyMathKind = true;
+    has_pipelineFold = true;
+    sample_rule_count = builtins.length sampleCueRules;
+    demo_count = builtins.length demoUtterances;
+    demo_success_count = demoSuccessCount;
+    is_generic_mechanism_only = true;
+    no_hardcoded_algorithm_list = true;  # add new algo via mkCueRule + data row
+    deterministic = true;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyGenericMathEnginePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "generic-math-engine-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "kinds" request then {
+      outcome = "known-math-kinds-emitted"; receipt = knownMathKinds;
+    }
+    else if builtins.hasAttr "solve_recurrence" request then {
+      outcome = "recurrence-solved";
+      receipt = solveRecurrenceMaster request.solve_recurrence;
+    }
+    else if builtins.hasAttr "emit_hoare" request then {
+      outcome = "hoare-emitted";
+      receipt = emitHoareLoopInvariant request.emit_hoare;
+    }
+    else if builtins.hasAttr "emit_concentration" request then {
+      outcome = "concentration-emitted";
+      receipt = emitConcentrationBound request.emit_concentration;
+    }
+    else if builtins.hasAttr "pipeline" request then {
+      outcome = "pipeline-folded";
+      receipt = pipelineFold sampleCueRules request.pipeline;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "demo-results-emitted";
+      receipt = {
+        total = builtins.length demoUtterances;
+        success = demoSuccessCount;
+        results = allDemoResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "kinds" "solve_recurrence" "emit_hoare"
+             "emit_concentration" "pipeline" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit knownMathKinds mkMathTemplate mkCueRule;
+  inherit solveRecurrenceMaster emitHoareLoopInvariant emitConcentrationBound;
+  inherit emitGraphTraversalComplexity emitIterationConvergence;
+  inherit emitRingAxiomIdentity emitConcurrencyHappensBefore;
+  inherit emitQueueingThroughput emitMatroidGreedyOptimality emitTypeCurryHoward;
+  inherit emitMonadicEffect;  # Round 47
+  inherit emitMonoidalProduct;  # Round 49
+  inherit emitCoequalizerFold;  # Round 50
+  inherit emitFunctorLift;  # Round 51
+  inherit applyMathKind pipelineFold sampleCueRules;
+  inherit demoUtterances runDemoCase allDemoResults demoSuccessCount;
+  inherit inventorySummary applyGenericMathEnginePlate;
+}

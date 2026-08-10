@@ -1,0 +1,18 @@
+[package]
+name = "rs-meta"
+version = "0.0.1"
+edition = "2021"
+description = "Standalone Rust-in-Rust meta-circular compiler/evaluator (stage15-N)"
+publish = false
+build = "build.rs"
+
+# rs-meta constitution: ZERO crates.io dependencies. std only.
+# The only external substrate is `rustc` itself (invoked via std::process for the
+# Evcxr-style native tier) and the host OS. Do NOT add a [dependencies] table.
+
+[[bin]]
+name = "bootstrap"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3

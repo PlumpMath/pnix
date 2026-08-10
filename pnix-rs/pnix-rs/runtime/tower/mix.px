@@ -1,0 +1,369 @@
+# tower m5+m6a+m6b: the specializer expressed IN px (S = L, growing core).
+#
+# Adaptation of the pnix-hy MIX_IN_PNIX / POLY_MIX bapply shape to this lane:
+# our kind-encoding (src/tower.rs reify), STRICT runtime, our operator set.
+#
+# m6a: const attrsets (cattrs), static-string folding, select folding, and
+# recursive closures WITHOUT a lazy env knot (recclo — the recursive frame is
+# rebuilt from binds+outer at every apply).
+#
+# m6b (self-language coverage, the gateway to the 2nd projection): const
+# lists (clist), residual list/attrs nodes, `builtins` reachable as a value
+# (gbuiltins -> bfn accumulation), and a bapply-style folding table for the
+# builtins the specializer itself uses (length/head/tail/map/filter/
+# listToAttrs/getAttr/hasAttr/attrNames/type tests/toString), with `++`/`//`
+# folding. Anything not statically decidable residualizes (bapp / bfn nodes)
+# — soundness over strength. No memoization yet: polyvariance with
+# specialization points is m6c (pnix-hy POLY_MIX's st threading).
+#
+# senv is an attrset name -> already-folded NODE. The whole file evaluates to
+# `mix`, a curried lambda: ast: senv: node.
+let
+  fold = op: a: b:
+    if op == "+" then a + b
+    else if op == "-" then a - b
+    else if op == "*" then a * b
+    else if op == "/" then a / b
+    else if op == "==" then a == b
+    else if op == "!=" then a != b
+    else if op == "<" then a < b
+    else if op == "<=" then a <= b
+    else if op == ">" then a > b
+    else a >= b;
+
+  encode = v:
+    if builtins.isInt v then { kind = "int"; value = v; }
+    else if builtins.isBool v then { kind = "bool"; value = v; }
+    else if builtins.isString v then { kind = "str"; parts = [ { kind = "lit"; text = v; } ]; }
+    else if builtins.isList v then { kind = "clist"; items = builtins.map encode v; }
+    else { kind = "cattrs";
+           fields = builtins.map
+             (k: { name = k; value = encode (builtins.getAttr k v); })
+             (builtins.attrNames v); };
+
+  decode = n:
+    if n.kind == "int" then n.value
+    else if n.kind == "bool" then n.value
+    else if n.kind == "str" then strText n
+    else if n.kind == "clist" then builtins.map decode n.items
+    else builtins.listToAttrs
+      (builtins.map (f: { name = f.name; value = decode f.value; }) n.fields);
+
+  isLitStr = n:
+    if n.kind == "str"
+    then (if builtins.length n.parts == 0
+          then true
+          else (if builtins.length n.parts == 1
+                then (builtins.head n.parts).kind == "lit"
+                else false))
+    else false;
+
+  strText = n:
+    if builtins.length n.parts == 0 then "" else (builtins.head n.parts).text;
+
+  isData = n:
+    if n.kind == "int" then true
+    else if n.kind == "bool" then true
+    else if n.kind == "cattrs" then true
+    else if n.kind == "clist" then true
+    else isLitStr n;
+
+  allData = ns:
+    if builtins.length ns == 0 then true
+    else if isData (builtins.head ns) then allData (builtins.tail ns)
+    else false;
+
+  mkList = items:
+    if allData items then { kind = "clist"; items = items; }
+    else { kind = "list"; items = items; };
+
+  dataFold = op: l: r:
+    if op == "==" then { kind = "bool"; value = strText l == strText r; }
+    else if op == "!=" then { kind = "bool"; value = strText l != strText r; }
+    else { kind = "unsupported"; };
+
+  bind1 = env: name: node:
+    env // builtins.listToAttrs [ { name = name; value = node; } ];
+
+  inBinds = n: bs:
+    if builtins.length bs == 0 then false
+    else if (builtins.head bs).name == n then true
+    else inBinds n (builtins.tail bs);
+
+  removeNames = senv: bs:
+    builtins.listToAttrs
+      (builtins.map (n: { name = n; value = builtins.getAttr n senv; })
+        (builtins.filter (n: if inBinds n bs then false else true)
+          (builtins.attrNames senv)));
+
+  mixBinds = bs: senv:
+    builtins.map (b: { name = b.name; value = mix b.value senv; }) bs;
+
+  allLambdas = bs:
+    if builtins.length bs == 0 then true
+    else if (builtins.head bs).value.kind == "lambda"
+    then allLambdas (builtins.tail bs)
+    else false;
+
+  recFrame = binds: outer:
+    outer // builtins.listToAttrs
+      (builtins.map
+        (b: { name = b.name;
+              value = { kind = "recclo";
+                        param = b.value.param;
+                        body = b.value.body;
+                        binds = binds;
+                        outer = outer; }; })
+        binds);
+
+  mixParts = ps: senv:
+    builtins.map
+      (part: if part.kind == "lit" then part
+             else { kind = "sub"; node = mix part.node senv; })
+      ps;
+
+  allLitParts = ps:
+    if builtins.length ps == 0 then true
+    else if (builtins.head ps).kind == "lit" then allLitParts (builtins.tail ps)
+    else false;
+
+  cattrsGet = fields: n:
+    builtins.getAttr n
+      (builtins.listToAttrs
+        (builtins.map (fld: { name = fld.name; value = fld.value; }) fields));
+
+  findField = fields: n:
+    if builtins.length fields == 0 then { found = false; }
+    else if (builtins.head fields).name == n
+    then { found = true; node = (builtins.head fields).value; }
+    else findField (builtins.tail fields) n;
+
+  isSeq = n: if n.kind == "clist" then true else n.kind == "list";
+  isAttrsNode = n: if n.kind == "cattrs" then true else n.kind == "attrs";
+
+  listConcat = l: r: rb:
+    if isSeq l
+    then (if isSeq r then mkList (l.items ++ r.items) else rb)
+    else rb;
+
+  attrsMerge = l: r: rb:
+    if l.kind == "cattrs"
+    then (if r.kind == "cattrs"
+          then { kind = "cattrs";
+                 fields =
+                   (builtins.filter
+                     (f: if (findField r.fields f.name).found then false else true)
+                     l.fields)
+                   ++ r.fields; }
+          else rb)
+    else rb;
+
+  arity = n:
+    if n == "getAttr" then 2
+    else if n == "hasAttr" then 2
+    else if n == "map" then 2
+    else if n == "filter" then 2
+    else if n == "elem" then 2
+    else if n == "elemAt" then 2
+    else if n == "sort" then 2
+    else if n == "concatStringsSep" then 2
+    else if n == "foldl'" then 3
+    else if n == "substring" then 3
+    else 1;
+
+  entryName = e:
+    if isAttrsNode e then
+      (let hit = findField e.fields "name";
+       in if hit.found
+          then (if isLitStr hit.node
+                then { ok = true; v = strText hit.node; }
+                else { ok = false; v = ""; })
+          else { ok = false; v = ""; })
+    else { ok = false; v = ""; };
+
+  namesOk = items:
+    if builtins.length items == 0 then true
+    else if (entryName (builtins.head items)).ok then namesOk (builtins.tail items)
+    else false;
+
+  entryField = e:
+    { name = (entryName e).v;
+      value = (findField e.fields "value").node; };
+
+  allBools = ns:
+    if builtins.length ns == 0 then true
+    else if (builtins.head ns).kind == "bool" then allBools (builtins.tail ns)
+    else false;
+
+  pickTrue = items: flags:
+    if builtins.length items == 0 then [ ]
+    else (let rest = pickTrue (builtins.tail items) (builtins.tail flags);
+          in if (builtins.head flags).value
+             then [ (builtins.head items) ] ++ rest
+             else rest);
+
+  bfold = name: args:
+    (let a0 = builtins.head args;
+         resid = { kind = "bapp"; name = name; args = args; };
+     in
+     if name == "length" then
+       (if isSeq a0 then { kind = "int"; value = builtins.length a0.items; } else resid)
+     else if name == "head" then
+       (if isSeq a0 then builtins.head a0.items else resid)
+     else if name == "tail" then
+       (if isSeq a0 then mkList (builtins.tail a0.items) else resid)
+     else if name == "isInt" then
+       (if isData a0 then { kind = "bool"; value = a0.kind == "int"; }
+        else if isSeq a0 then { kind = "bool"; value = false; }
+        else if isAttrsNode a0 then { kind = "bool"; value = false; }
+        else resid)
+     else if name == "isBool" then
+       (if isData a0 then { kind = "bool"; value = a0.kind == "bool"; }
+        else if isSeq a0 then { kind = "bool"; value = false; }
+        else if isAttrsNode a0 then { kind = "bool"; value = false; }
+        else resid)
+     else if name == "isString" then
+       (if a0.kind == "str" then { kind = "bool"; value = true; }
+        else if isData a0 then { kind = "bool"; value = false; }
+        else if isSeq a0 then { kind = "bool"; value = false; }
+        else if isAttrsNode a0 then { kind = "bool"; value = false; }
+        else resid)
+     else if name == "isList" then
+       (if isSeq a0 then { kind = "bool"; value = true; }
+        else if isData a0 then { kind = "bool"; value = false; }
+        else if isAttrsNode a0 then { kind = "bool"; value = false; }
+        else resid)
+     else if name == "isAttrs" then
+       (if isAttrsNode a0 then { kind = "bool"; value = true; }
+        else if isData a0 then { kind = "bool"; value = false; }
+        else if isSeq a0 then { kind = "bool"; value = false; }
+        else resid)
+     else if name == "toString" then
+       (if a0.kind == "int" then encode (builtins.toString a0.value)
+        else if isLitStr a0 then a0
+        else resid)
+     else if name == "attrNames" then
+       (if a0.kind == "cattrs" then encode (builtins.attrNames (decode a0))
+        else resid)
+     else if name == "listToAttrs" then
+       (if a0.kind == "clist" then encode (builtins.listToAttrs (decode a0))
+        else if a0.kind == "list" then
+          (if namesOk a0.items
+           then { kind = "attrs"; fields = builtins.map entryField a0.items; }
+           else resid)
+        else resid)
+     else if name == "getAttr" then
+       (let s = builtins.head (builtins.tail args);
+        in if isLitStr a0
+           then (if s.kind == "cattrs" then cattrsGet s.fields (strText a0)
+                 else if s.kind == "attrs" then
+                   (let hit = findField s.fields (strText a0);
+                    in if hit.found then hit.node else resid)
+                 else resid)
+           else resid)
+     else if name == "hasAttr" then
+       (let s = builtins.head (builtins.tail args);
+        in if isLitStr a0
+           then (if isAttrsNode s
+                 then { kind = "bool"; value = (findField s.fields (strText a0)).found; }
+                 else resid)
+           else resid)
+     else if name == "map" then
+       (let f = a0; xs = builtins.head (builtins.tail args);
+        in if isSeq xs
+           then mkList (builtins.map (x: papply f x) xs.items)
+           else resid)
+     else if name == "filter" then
+       (let f = a0; xs = builtins.head (builtins.tail args);
+        in if isSeq xs
+           then (let flags = builtins.map (x: papply f x) xs.items;
+                 in if allBools flags
+                    then mkList (pickTrue xs.items flags)
+                    else resid)
+           else resid)
+     else resid);
+
+  papply = f: a:
+    if f.kind == "closure" then mix f.body (bind1 f.senv f.param a)
+    else if f.kind == "recclo" then mix f.body (bind1 (recFrame f.binds f.outer) f.param a)
+    else if f.kind == "bfn" then
+      (let args2 = f.args ++ [ a ];
+       in if builtins.length args2 == arity f.name
+          then bfold f.name args2
+          else { kind = "bfn"; name = f.name; args = args2; })
+    else { kind = "apply"; func = f; arg = a; };
+
+  # Numeric fold guarded on scalar payloads (strings route to dataFold; other
+  # data shapes residualize instead of erroring).
+  fold2 = op: l: r: rb:
+    if l.kind == "int"
+    then (if r.kind == "int" then encode (fold op l.value r.value) else rb)
+    else if l.kind == "bool"
+    then (if r.kind == "bool" then encode (fold op l.value r.value) else rb)
+    else rb;
+
+  mix = ast: senv:
+    if ast.kind == "int" then ast
+    else if ast.kind == "bool" then ast
+    else if ast.kind == "str" then
+      (if allLitParts ast.parts then ast
+       else { kind = "str"; parts = mixParts ast.parts senv; })
+    else if ast.kind == "cattrs" then ast
+    else if ast.kind == "clist" then ast
+    else if ast.kind == "closure" then ast
+    else if ast.kind == "recclo" then ast
+    else if ast.kind == "var" then
+      (if ast.name == "builtins" then { kind = "gbuiltins"; }
+       else if builtins.hasAttr ast.name senv
+       then builtins.getAttr ast.name senv
+       else ast)
+    else if ast.kind == "binary" then
+      (let l = mix ast.lhs senv; r = mix ast.rhs senv;
+           rb = { kind = "binary"; op = ast.op; lhs = l; rhs = r; };
+       in if ast.op == "++" then listConcat l r rb
+          else if ast.op == "//" then attrsMerge l r rb
+          else if isData l
+          then (if isData r
+                then (if isLitStr l
+                      then dataFold ast.op l r
+                      else fold2 ast.op l r rb)
+                else rb)
+          else rb)
+    else if ast.kind == "if" then
+      (let c = mix ast.cond senv;
+       in if c.kind == "bool"
+          then (if c.value then mix ast.then_e senv else mix ast.else_e senv)
+          else { kind = "if"; cond = c;
+                 then_e = mix ast.then_e senv;
+                 else_e = mix ast.else_e senv; })
+    else if ast.kind == "lambda" then
+      { kind = "closure"; param = ast.param; body = ast.body; senv = senv; }
+    else if ast.kind == "apply" then
+      papply (mix ast.func senv) (mix ast.arg senv)
+    else if ast.kind == "select" then
+      (let b = mix ast.base senv;
+       in if b.kind == "cattrs" then cattrsGet b.fields ast.name
+          else if b.kind == "attrs" then
+            (let hit = findField b.fields ast.name;
+             in if hit.found then hit.node
+                else { kind = "select"; base = b; name = ast.name; })
+          else if b.kind == "gbuiltins"
+          then { kind = "bfn"; name = ast.name; args = [ ]; }
+          else { kind = "select"; base = b; name = ast.name; })
+    else if ast.kind == "list" then
+      mkList (builtins.map (x: mix x senv) ast.items)
+    else if ast.kind == "attrs" then
+      (let fields2 = builtins.map
+             (f: { name = f.name; value = mix f.value senv; }) ast.fields;
+       in if allData (builtins.map (f: f.value) fields2)
+          then { kind = "cattrs"; fields = fields2; }
+          else { kind = "attrs"; fields = fields2; })
+    else if ast.kind == "let" then
+      (let masked = removeNames senv ast.bindings;
+       in if allLambdas ast.bindings
+          then mix ast.body (recFrame ast.bindings masked)
+          else { kind = "let";
+                 bindings = mixBinds ast.bindings masked;
+                 body = mix ast.body masked; })
+    else { kind = "unsupported"; };
+in mix

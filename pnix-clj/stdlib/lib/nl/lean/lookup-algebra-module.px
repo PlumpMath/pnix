@@ -1,0 +1,772 @@
+# AUTO-GENERATED — algebra-module
+# Entries: 109
+let
+  ownerName = "stdlib.nl.lean.lookup-algebra-module";
+  category = "algebra-module";
+  entries = [
+    {
+      full_name = "Module";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 44;
+      code_preview = "@[ext] class Module (R : Type u) (M : Type v) [Semiring R] [AddCommMonoid M] extends   DistribMulAction R M where      protected add_smul : ∀ (r s : R) (x : M), (r + s) • x = r • x + s • x      protected zero_smul : ∀ x : M, (0 : R) • x = 0";
+    }
+    {
+      full_name = "Module.toMulActionWithZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 62;
+      code_preview = "instance (priority := 100) Module.toMulActionWithZero   {R M} {_ : Semiring R} {_ : AddCommMonoid M} [Module R M] : MulActionWithZero R M :=   { (inferInstance : MulAction R M) with     smul_zero := smul_zero     zero_smul := Module.zero_smul }";
+    }
+    {
+      full_name = "add_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 69;
+      code_preview = "theorem add_smul : (r + s) • x = r • x + s • x";
+    }
+    {
+      full_name = "Convex.combo_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 72;
+      code_preview = "theorem Convex.combo_self {a b : R} (h : a + b = 1) (x : M) : a • x + b • x = x";
+    }
+    {
+      full_name = "two_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 77;
+      code_preview = "theorem two_smul : (2 : R) • x = x + x";
+    }
+    {
+      full_name = "Function.Injective.module";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 79;
+      code_preview = "protected abbrev Function.Injective.module [AddCommMonoid M₂] [SMul R M₂] (f : M₂ →+ M)     (hf : Injective f) (smul : ∀ (c : R) (x), f (c • x) = c • f x) : Module R M₂ :=   { hf.distribMulAction f smul with     add_smul := fun c₁ c₂ x => hf <| by simp only [smul, f.map_add, add_smul]     zero_smul ";
+    }
+    {
+      full_name = "Function.Surjective.module";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 87;
+      code_preview = "protected abbrev Function.Surjective.module [AddCommMonoid M₂] [SMul R M₂] (f : M →+ M₂)     (hf : Surjective f) (smul : ∀ (c : R) (x), f (c • x) = c • f x) : Module R M₂ :=   { toDistribMulAction := hf.distribMulAction f smul     add_smul := fun c₁ c₂ x => by       rcases hf x with ⟨x, rfl⟩       s";
+    }
+    {
+      full_name = "Module.eq_zero_of_zero_eq_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 101;
+      code_preview = "theorem Module.eq_zero_of_zero_eq_one (zero_eq_one : (0 : R) = 1) : x = 0";
+    }
+    {
+      full_name = "smul_add_one_sub_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 104;
+      code_preview = "@[simp] theorem smul_add_one_sub_smul {R : Type*} [Ring R] [Module R M] {r : R} {m : M} :     r • m + (1 - r) • m = m";
+    }
+    {
+      full_name = "Convex.combo_eq_smul_sub_add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 114;
+      code_preview = "theorem Convex.combo_eq_smul_sub_add [Module R M] {x y : M} {a b : R} (h : a + b = 1) :     a • x + b • y = b • (y - x) + x";
+    }
+    {
+      full_name = "Module.ext'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 123;
+      code_preview = "theorem Module.ext' {R : Type*} [Semiring R] {M : Type*} [AddCommMonoid M] (P Q : Module R M)     (w : ∀ (r : R) (m : M), (haveI := P; r • m) = (haveI := Q; r • m)) :     P = Q";
+    }
+    {
+      full_name = "neg_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 134;
+      code_preview = "@[simp] theorem neg_smul : -r • x = -(r • x)";
+    }
+    {
+      full_name = "neg_smul_neg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 138;
+      code_preview = "theorem neg_smul_neg : -r • -x = r • x";
+    }
+    {
+      full_name = "neg_one_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 142;
+      code_preview = "theorem neg_one_smul (x : M) : (-1 : R) • x = -x";
+    }
+    {
+      full_name = "sub_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 146;
+      code_preview = "theorem sub_smul (r s : R) (y : M) : (r - s) • y = r • y - s • y";
+    }
+    {
+      full_name = "Module.subsingleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 151;
+      code_preview = "protected theorem Module.subsingleton (R M : Type*) [MonoidWithZero R] [Subsingleton R] [Zero M]     [MulActionWithZero R M] : Subsingleton M";
+    }
+    {
+      full_name = "Module.nontrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 157;
+      code_preview = "protected theorem Module.nontrivial (R M : Type*) [MonoidWithZero R] [Nontrivial M] [Zero M]     [MulActionWithZero R M] : Nontrivial R";
+    }
+    {
+      full_name = "Semiring.toModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Defs.lean";
+      start_line = 163;
+      code_preview = "instance (priority := 910) Semiring.toModule [Semiring R] : Module R R where   smul_add := mul_add   add_smul := add_mul   zero_smul := zero_mul   smul_zero := mul_zero";
+    }
+    {
+      full_name = "IsLinearMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 62;
+      code_preview = "structure IsLinearMap (R : Type u) {M : Type v} {M₂ : Type w} [Semiring R] [AddCommMonoid M]   [AddCommMonoid M₂] [Module R M] [Module R M₂] (f : M → M₂) : Prop where      map_add : ∀ x y, f (x + y) = f x + f y      map_smul : ∀ (c : R) (x), f (c • x) = c • f x";
+    }
+    {
+      full_name = "LinearMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 75;
+      code_preview = "structure LinearMap {R S : Type*} [Semiring R] [Semiring S] (σ : R →+* S) (M : Type*)     (M₂ : Type*) [AddCommMonoid M] [AddCommMonoid M₂] [Module R M] [Module S M₂] extends     AddHom M M₂, MulActionHom σ M M₂";
+    }
+    {
+      full_name = "SemilinearMapClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 97;
+      code_preview = "class SemilinearMapClass (F : Type*) {R S : outParam Type*} [Semiring R] [Semiring S]     (σ : outParam (R →+* S)) (M M₂ : outParam Type*) [AddCommMonoid M] [AddCommMonoid M₂]     [Module R M] [Module S M₂] [FunLike F M M₂] : Prop     extends AddHomClass F M M₂, MulActionSemiHomClass F σ M M₂";
+    }
+    {
+      full_name = "LinearMapClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 114;
+      code_preview = "abbrev LinearMapClass (F : Type*) (R : outParam Type*) (M M₂ : Type*)     [Semiring R] [AddCommMonoid M] [AddCommMonoid M₂] [Module R M] [Module R M₂]     [FunLike F M M₂] :=   SemilinearMapClass F (RingHom.id R) M M₂";
+    }
+    {
+      full_name = "LinearMapClass.map_smul";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 123;
+      code_preview = "protected lemma LinearMapClass.map_smul {R M M₂ : outParam Type*} [Semiring R] [AddCommMonoid M]     [AddCommMonoid M₂] [Module R M] [Module R M₂]     {F : Type*} [FunLike F M M₂] [LinearMapClass F R M M₂] (f : F) (r : R) (x : M) :     f (r • x) = r • f x := by rw [map_smul]";
+    }
+    {
+      full_name = "SemilinearMapClass.instAddMonoidHomClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 136;
+      code_preview = "instance (priority := 100) instAddMonoidHomClass [FunLike F M M₃] [SemilinearMapClass F σ M M₃] :     AddMonoidHomClass F M M₃ :=   { SemilinearMapClass.toAddHomClass with     map_zero := fun f ↦       show f 0 = 0 by         rw [← zero_smul R (0 : M), map_smulₛₗ]         simp }";
+    }
+    {
+      full_name = "SemilinearMapClass.distribMulActionSemiHomClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 144;
+      code_preview = "instance (priority := 100) distribMulActionSemiHomClass     [FunLike F M M₃] [SemilinearMapClass F σ M M₃] :     DistribMulActionSemiHomClass F σ M M₃ :=   { SemilinearMapClass.toAddHomClass with     map_smulₛₗ := fun f c x ↦ by rw [map_smulₛₗ] }";
+    }
+    {
+      full_name = "SemilinearMapClass.map_smul_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 152;
+      code_preview = "theorem map_smul_inv {σ' : S →+* R} [RingHomInvPair σ σ'] (c : S) (x : M) :     c • f x = f (σ' c • x)";
+    }
+    {
+      full_name = "SemilinearMapClass.semilinearMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 155;
+      code_preview = "@[coe] def semilinearMap : M →ₛₗ[σ] M₃ where   toFun := f   map_add' := map_add f   map_smul' := map_smulₛₗ f";
+    }
+    {
+      full_name = "SemilinearMapClass.instCoeToSemilinearMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 162;
+      code_preview = "instance instCoeToSemilinearMap : CoeHead F (M →ₛₗ[σ] M₃) where   coe f := semilinearMap f";
+    }
+    {
+      full_name = "LinearMapClass.linearMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 172;
+      code_preview = "abbrev linearMap : M₁ →ₗ[R] M₂ := SemilinearMapClass.semilinearMap f";
+    }
+    {
+      full_name = "LinearMapClass.instCoeToLinearMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 175;
+      code_preview = "instance instCoeToLinearMap : CoeHead F (M₁ →ₗ[R] M₂) where   coe f := SemilinearMapClass.semilinearMap f";
+    }
+    {
+      full_name = "LinearMap.instFunLike";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 193;
+      code_preview = "instance instFunLike : FunLike (M →ₛₗ[σ] M₃) M M₃ where   coe f := f.toFun   coe_injective' f g h := by     cases f     cases g     congr     apply DFunLike.coe_injective'     exact h";
+    }
+    {
+      full_name = "LinearMap.semilinearMapClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 202;
+      code_preview = "instance semilinearMapClass : SemilinearMapClass (M →ₛₗ[σ] M₃) σ M M₃ where   map_add f := f.map_add'   map_smulₛₗ := LinearMap.map_smul'";
+    }
+    {
+      full_name = "LinearMap.coe_coe";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 206;
+      code_preview = "@[simp, norm_cast] lemma coe_coe {F : Type*} [FunLike F M M₃] [SemilinearMapClass F σ M M₃] {f : F} :     ⇑(f : M →ₛₗ[σ] M₃) = f :=   rfl";
+    }
+    {
+      full_name = "LinearMap.toDistribMulActionHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 211;
+      code_preview = "def toDistribMulActionHom (f : M →ₛₗ[σ] M₃) : DistribMulActionHom σ.toMonoidHom M M₃ :=   { f with map_zero' := show f 0 = 0 from map_zero f }";
+    }
+    {
+      full_name = "LinearMap.coe_toAddHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 215;
+      code_preview = "@[simp] theorem coe_toAddHom (f : M →ₛₗ[σ] M₃) : ⇑f.toAddHom = f";
+    }
+    {
+      full_name = "LinearMap.toFun_eq_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 219;
+      code_preview = "theorem toFun_eq_coe {f : M →ₛₗ[σ] M₃} : f.toFun = (f : M → M₃)";
+    }
+    {
+      full_name = "LinearMap.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 221;
+      code_preview = "@[ext] theorem ext {f g : M →ₛₗ[σ] M₃} (h : ∀ x, f x = g x) : f = g";
+    }
+    {
+      full_name = "LinearMap.copy";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 225;
+      code_preview = "protected def copy (f : M →ₛₗ[σ] M₃) (f' : M → M₃) (h : f' = ⇑f) : M →ₛₗ[σ] M₃ where   toFun := f'   map_add' := h.symm ▸ f.map_add'   map_smul' := h.symm ▸ f.map_smul'";
+    }
+    {
+      full_name = "LinearMap.coe_copy";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 232;
+      code_preview = "@[simp] theorem coe_copy (f : M →ₛₗ[σ] M₃) (f' : M → M₃) (h : f' = ⇑f) : ⇑(f.copy f' h) = f'";
+    }
+    {
+      full_name = "LinearMap.copy_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 236;
+      code_preview = "theorem copy_eq (f : M →ₛₗ[σ] M₃) (f' : M → M₃) (h : f' = ⇑f) : f.copy f' h = f";
+    }
+    {
+      full_name = "LinearMap.coe_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 241;
+      code_preview = "@[simp] theorem coe_mk {σ : R →+* S} (f : AddHom M M₃) (h) :     ((LinearMap.mk f h : M →ₛₗ[σ] M₃) : M → M₃) = f";
+    }
+    {
+      full_name = "LinearMap.coe_addHom_mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 246;
+      code_preview = "@[simp] theorem coe_addHom_mk {σ : R →+* S} (f : AddHom M M₃) (h) :     ((LinearMap.mk f h : M →ₛₗ[σ] M₃) : AddHom M M₃) = f";
+    }
+    {
+      full_name = "LinearMap.coe_semilinearMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 251;
+      code_preview = "theorem coe_semilinearMap {F : Type*} [FunLike F M M₃] [SemilinearMapClass F σ M M₃] (f : F) :     ((f : M →ₛₗ[σ] M₃) : M → M₃) = f";
+    }
+    {
+      full_name = "LinearMap.toLinearMap_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 255;
+      code_preview = "theorem toLinearMap_injective {F : Type*} [FunLike F M M₃] [SemilinearMapClass F σ M M₃]     {f g : F} (h : (f : M →ₛₗ[σ] M₃) = (g : M →ₛₗ[σ] M₃)) :     f = g";
+    }
+    {
+      full_name = "LinearMap.id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 262;
+      code_preview = "def id : M →ₗ[R] M :=   { DistribMulActionHom.id R with toFun := _root_.id }";
+    }
+    {
+      full_name = "LinearMap.id_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 266;
+      code_preview = "theorem id_apply (x : M) : @id R M _ _ _ x = x";
+    }
+    {
+      full_name = "LinearMap.id_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 269;
+      code_preview = "@[simp, norm_cast] theorem id_coe : ((LinearMap.id : M →ₗ[R] M) : M → M) = _root_.id";
+    }
+    {
+      full_name = "LinearMap.id'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 273;
+      code_preview = "@[simps] def id' {σ : R →+* R} [RingHomId σ] : M →ₛₗ[σ] M where   toFun x := x   map_add' _ _ := rfl   map_smul' r x := by     have := (RingHomId.eq_id : σ = _)     subst this     rfl";
+    }
+    {
+      full_name = "LinearMap.id'_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 284;
+      code_preview = "@[simp, norm_cast] theorem id'_coe {σ : R →+* R} [RingHomId σ] : ((id' : M →ₛₗ[σ] M) : M → M) = _root_.id";
+    }
+    {
+      full_name = "LinearMap.isLinear";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 297;
+      code_preview = "theorem isLinear : IsLinearMap R fₗ";
+    }
+    {
+      full_name = "LinearMap.coe_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 302;
+      code_preview = "theorem coe_injective : Injective (DFunLike.coe : (M →ₛₗ[σ] M₃) → _)";
+    }
+    {
+      full_name = "LinearMap.congr_arg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 305;
+      code_preview = "protected theorem congr_arg {x x' : M} : x = x' → f x = f x'";
+    }
+    {
+      full_name = "LinearMap.congr_fun";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 308;
+      code_preview = "protected theorem congr_fun (h : f = g) (x : M) : f x = g x";
+    }
+    {
+      full_name = "LinearMap.mk_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 312;
+      code_preview = "@[simp] theorem mk_coe (f : M →ₛₗ[σ] M₃) (h) : (LinearMap.mk f h : M →ₛₗ[σ] M₃) = f";
+    }
+    {
+      full_name = "LinearMap.map_add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 318;
+      code_preview = "protected theorem map_add (x y : M) : f (x + y) = f x + f y";
+    }
+    {
+      full_name = "LinearMap.map_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 321;
+      code_preview = "protected theorem map_zero : f 0 = 0";
+    }
+    {
+      full_name = "LinearMap.map_smulₛₗ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 328;
+      code_preview = "@[simp] protected theorem map_smulₛₗ (c : R) (x : M) : f (c • x) = σ c • f x";
+    }
+    {
+      full_name = "LinearMap.map_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 332;
+      code_preview = "protected theorem map_smul (c : R) (x : M) : fₗ (c • x) = c • fₗ x";
+    }
+    {
+      full_name = "LinearMap.map_smul_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 335;
+      code_preview = "protected theorem map_smul_inv {σ' : S →+* R} [RingHomInvPair σ σ'] (c : S) (x : M) :     c • f x = f (σ' c • x)";
+    }
+    {
+      full_name = "LinearMap.map_eq_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 338;
+      code_preview = "@[simp] theorem map_eq_zero_iff (h : Function.Injective f) {x : M} : f x = 0 ↔ x = 0";
+    }
+    {
+      full_name = "LinearMap.CompatibleSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 344;
+      code_preview = "class CompatibleSMul (R S : Type*) [Semiring S] [SMul R M] [Module S M] [SMul R M₂]   [Module S M₂] : Prop where      map_smul : ∀ (fₗ : M →ₗ[S] M₂) (c : R) (x : M), fₗ (c • x) = c • fₗ x";
+    }
+    {
+      full_name = "LinearMap.IsScalarTower.compatibleSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 360;
+      code_preview = "instance (priority := 100) IsScalarTower.compatibleSMul [SMul R S]     [IsScalarTower R S M] [IsScalarTower R S M₂] :     CompatibleSMul M M₂ R S :=   ⟨fun fₗ c x ↦ by rw [← smul_one_smul S c x, ← smul_one_smul S c (fₗ x), map_smul]⟩";
+    }
+    {
+      full_name = "LinearMap.IsScalarTower.compatibleSMul'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 365;
+      code_preview = "instance IsScalarTower.compatibleSMul' [SMul R S] [IsScalarTower R S M] :     CompatibleSMul S M R S where   map_smul := (IsScalarTower.smulHomClass R S M (S →ₗ[S] M)).map_smulₛₗ";
+    }
+    {
+      full_name = "LinearMap.map_smul_of_tower";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 369;
+      code_preview = "@[simp] theorem map_smul_of_tower [CompatibleSMul M M₂ R S] (fₗ : M →ₗ[S] M₂) (c : R) (x : M) :     fₗ (c • x) = c • fₗ x";
+    }
+    {
+      full_name = "LinearMapClass.map_smul_of_tower";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 374;
+      code_preview = "theorem _root_.LinearMapClass.map_smul_of_tower {F : Type*} [CompatibleSMul M M₂ R S]     [FunLike F M M₂] [LinearMapClass F S M M₂] (fₗ : F) (c : R) (x : M) :     fₗ (c • x) = c • fₗ x";
+    }
+    {
+      full_name = "LinearMap.isScalarTower_of_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 380;
+      code_preview = "theorem isScalarTower_of_injective [SMul R S] [CompatibleSMul M M₂ R S] [IsScalarTower R S M₂]     (f : M →ₗ[S] M₂) (hf : Function.Injective f) : IsScalarTower R S M where";
+    }
+    {
+      full_name = "map_zsmul_unit";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 384;
+      code_preview = "@[simp] lemma _root_.map_zsmul_unit {F M N : Type*}     [AddGroup M] [AddGroup N] [FunLike F M N] [AddMonoidHomClass F M N]     (f : F) (c : ℤˣ) (m : M) :     f (c • m) = c • f m := by   simp [Units.smul_def]";
+    }
+    {
+      full_name = "LinearMap.isLinearMap_of_compatibleSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/LinearMap/Defs.lean";
+      start_line = 393;
+      code_preview = "theorem isLinearMap_of_compatibleSMul [Module S M] [Module S M₂] [CompatibleSMul M M₂ R S]     (f : M →ₗ[S] M₂) : IsLinearMap R f where";
+    }
+    {
+      full_name = "Units.neg_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 27;
+      code_preview = "@[simp] theorem Units.neg_smul [Ring R] [AddCommGroup M] [Module R M] (u : Rˣ) (x : M) :     -u • x = -(u • x)";
+    }
+    {
+      full_name = "invOf_two_smul_add_invOf_two_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 32;
+      code_preview = "@[simp] theorem invOf_two_smul_add_invOf_two_smul (R) [Semiring R] [AddCommMonoid M] [Module R M]     [Invertible (2 : R)] (x : M) :     (⅟ 2 : R) • x + (⅟ 2 : R) • x = x";
+    }
+    {
+      full_name = "map_inv_natCast_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 38;
+      code_preview = "theorem map_inv_natCast_smul [AddCommMonoid M] [AddCommMonoid M₂] {F : Type*} [FunLike F M M₂]     [AddMonoidHomClass F M M₂] (f : F) (R S : Type*)     [DivisionSemiring R] [DivisionSemiring S] [Module R M]     [Module S M₂] (n : ℕ) (x : M) : f ((n⁻¹ : R) • x) = (n⁻¹ : S) • f x";
+    }
+    {
+      full_name = "map_inv_intCast_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 55;
+      code_preview = "theorem map_inv_intCast_smul [AddCommGroup M] [AddCommGroup M₂] {F : Type*} [FunLike F M M₂]     [AddMonoidHomClass F M M₂] (f : F) (R S : Type*) [DivisionRing R] [DivisionRing S] [Module R M]     [Module S M₂] (z : ℤ) (x : M) : f ((z⁻¹ : R) • x) = (z⁻¹ : S) • f x";
+    }
+    {
+      full_name = "inv_natCast_smul_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 63;
+      code_preview = "theorem inv_natCast_smul_eq {E : Type*} (R S : Type*) [AddCommMonoid E] [DivisionSemiring R]     [DivisionSemiring S] [Module R E] [Module S E] (n : ℕ) (x : E) :     (n⁻¹ : R) • x = (n⁻¹ : S) • x";
+    }
+    {
+      full_name = "inv_intCast_smul_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 70;
+      code_preview = "theorem inv_intCast_smul_eq {E : Type*} (R S : Type*) [AddCommGroup E] [DivisionRing R]     [DivisionRing S] [Module R E] [Module S E] (n : ℤ) (x : E) : (n⁻¹ : R) • x = (n⁻¹ : S) • x";
+    }
+    {
+      full_name = "inv_natCast_smul_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 76;
+      code_preview = "theorem inv_natCast_smul_comm {α E : Type*} (R : Type*) [AddCommMonoid E] [DivisionSemiring R]     [Monoid α] [Module R E] [DistribMulAction α E] (n : ℕ) (s : α) (x : E) :     (n⁻¹ : R) • s • x = s • (n⁻¹ : R) • x";
+    }
+    {
+      full_name = "inv_intCast_smul_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 83;
+      code_preview = "theorem inv_intCast_smul_comm {α E : Type*} (R : Type*) [AddCommGroup E] [DivisionRing R]     [Monoid α] [Module R E] [DistribMulAction α E] (n : ℤ) (s : α) (x : E) :     (n⁻¹ : R) • s • x = s • (n⁻¹ : R) • x";
+    }
+    {
+      full_name = "Function.support_smul_subset_left";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 92;
+      code_preview = "lemma support_smul_subset_left [Zero R] [Zero M] [SMulWithZero R M] (f : α → R) (g : α → M) :     support (f • g) ⊆ support f := fun x hfg hf ↦   hfg <| by rw [Pi.smul_apply', hf, zero_smul]";
+    }
+    {
+      full_name = "Function.support_smul_subset_right";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 98;
+      code_preview = "lemma support_smul_subset_right [Zero M] [SMulZeroClass R M] (f : α → R) (g : α → M) :     support (f • g) ⊆ support g :=   fun x hbf hf ↦ hbf <| by rw [Pi.smul_apply', hf, smul_zero]";
+    }
+    {
+      full_name = "Function.support_const_smul_of_ne_zero";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 102;
+      code_preview = "lemma support_const_smul_of_ne_zero [Zero R] [Zero M] [SMulWithZero R M] [NoZeroSMulDivisors R M]     (c : R) (g : α → M) (hc : c ≠ 0) : support (c • g) = support g :=   ext fun x ↦ by simp only [hc, mem_support, Pi.smul_apply, Ne, smul_eq_zero, false_or]";
+    }
+    {
+      full_name = "Function.support_smul";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 106;
+      code_preview = "lemma support_smul [Zero R] [Zero M] [SMulWithZero R M] [NoZeroSMulDivisors R M] (f : α → R)     (g : α → M) : support (f • g) = support f ∩ support g :=   ext fun _ => smul_ne_zero_iff";
+    }
+    {
+      full_name = "Function.support_const_smul_subset";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 110;
+      code_preview = "lemma support_const_smul_subset [Zero M] [SMulZeroClass R M] (a : R) (f : α → M) :     support (a • f) ⊆ support f := support_smul_subset_right (fun _ ↦ a) f";
+    }
+    {
+      full_name = "Set.indicator_smul_apply";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 119;
+      code_preview = "lemma indicator_smul_apply (s : Set α) (r : α → R) (f : α → M) (a : α) :     indicator s (fun a ↦ r a • f a) a = r a • indicator s f a := by   dsimp only [indicator]   split_ifs   exacts [rfl, (smul_zero (r a)).symm]";
+    }
+    {
+      full_name = "Set.indicator_smul";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 125;
+      code_preview = "lemma indicator_smul (s : Set α) (r : α → R) (f : α → M) :     indicator s (fun a ↦ r a • f a) = fun a ↦ r a • indicator s f a :=   funext <| indicator_smul_apply s r f";
+    }
+    {
+      full_name = "Set.indicator_const_smul_apply";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 129;
+      code_preview = "lemma indicator_const_smul_apply (s : Set α) (r : R) (f : α → M) (a : α) :     indicator s (r • f ·) a = r • indicator s f a :=   indicator_smul_apply s (fun _ ↦ r) f a";
+    }
+    {
+      full_name = "Set.indicator_const_smul";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 133;
+      code_preview = "lemma indicator_const_smul (s : Set α) (r : R) (f : α → M) :     indicator s (r • f ·) = (r • indicator s f ·) :=   funext <| indicator_const_smul_apply s r f";
+    }
+    {
+      full_name = "Set.indicator_smul_apply_left";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 142;
+      code_preview = "lemma indicator_smul_apply_left (s : Set α) (r : α → R) (f : α → M) (a : α) :     indicator s (fun a ↦ r a • f a) a = indicator s r a • f a := by   dsimp only [indicator]   split_ifs   exacts [rfl, (zero_smul _ (f a)).symm]";
+    }
+    {
+      full_name = "Set.indicator_smul_left";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 148;
+      code_preview = "lemma indicator_smul_left (s : Set α) (r : α → R) (f : α → M) :     indicator s (fun a ↦ r a • f a) = fun a ↦ indicator s r a • f a :=   funext <| indicator_smul_apply_left _ _ _";
+    }
+    {
+      full_name = "Set.indicator_smul_const_apply";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 152;
+      code_preview = "lemma indicator_smul_const_apply (s : Set α) (r : α → R) (m : M) (a : α) :     indicator s (r · • m) a = indicator s r a • m := indicator_smul_apply_left _ _ _ _";
+    }
+    {
+      full_name = "Set.indicator_smul_const";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 155;
+      code_preview = "lemma indicator_smul_const (s : Set α) (r : α → R) (m : M) :     indicator s (r · • m) = (indicator s r · • m) :=   funext <| indicator_smul_const_apply _ _ _";
+    }
+    {
+      full_name = "Set.smul_indicator_one_apply";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Module/Basic.lean";
+      start_line = 165;
+      code_preview = "lemma smul_indicator_one_apply (s : Set α) (r : R) (a : α) :     r • s.indicator (1 : α → R) a = s.indicator (fun _ ↦ r) a := by   simp_rw [← indicator_const_smul_apply, Pi.one_apply, smul_eq_mul, mul_one]";
+    }
+    {
+      full_name = "Submodule.toAddSubmonoid_strictMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 36;
+      code_preview = "@[mono] theorem toAddSubmonoid_strictMono : StrictMono (toAddSubmonoid : Submodule R M → AddSubmonoid M)";
+    }
+    {
+      full_name = "Submodule.toAddSubmonoid_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 40;
+      code_preview = "theorem toAddSubmonoid_le : p.toAddSubmonoid ≤ q.toAddSubmonoid ↔ p ≤ q";
+    }
+    {
+      full_name = "Submodule.toAddSubmonoid_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 43;
+      code_preview = "@[mono] theorem toAddSubmonoid_mono : Monotone (toAddSubmonoid : Submodule R M → AddSubmonoid M)";
+    }
+    {
+      full_name = "Submodule.toSubMulAction_strictMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 47;
+      code_preview = "@[mono] theorem toSubMulAction_strictMono :     StrictMono (toSubMulAction : Submodule R M → SubMulAction R M)";
+    }
+    {
+      full_name = "Submodule.toSubMulAction_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 51;
+      code_preview = "@[mono] theorem toSubMulAction_mono : Monotone (toSubMulAction : Submodule R M → SubMulAction R M)";
+    }
+    {
+      full_name = "Submodule.sum_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 70;
+      code_preview = "protected theorem sum_mem {t : Finset ι} {f : ι → M} : (∀ c ∈ t, f c ∈ p) → (∑ i ∈ t, f i) ∈ p";
+    }
+    {
+      full_name = "Submodule.sum_smul_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 73;
+      code_preview = "theorem sum_smul_mem {t : Finset ι} {f : ι → M} (r : ι → R) (hyp : ∀ c ∈ t, f c ∈ p) :     (∑ i ∈ t, r i • f i) ∈ p";
+    }
+    {
+      full_name = "Submodule.isCentralScalar";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 77;
+      code_preview = "instance isCentralScalar [SMul S R] [SMul S M] [IsScalarTower S R M] [SMul Sᵐᵒᵖ R] [SMul Sᵐᵒᵖ M]     [IsScalarTower Sᵐᵒᵖ R M] [IsCentralScalar S M] : IsCentralScalar S p :=   p.toSubMulAction.isCentralScalar";
+    }
+    {
+      full_name = "Submodule.noZeroSMulDivisors";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 81;
+      code_preview = "instance noZeroSMulDivisors [NoZeroSMulDivisors R M] : NoZeroSMulDivisors R p :=   ⟨fun {c} {x : p} h =>     have : c = 0 ∨ (x : M) = 0 := eq_zero_or_eq_zero_of_smul_eq_zero (congr_arg Subtype.val h)     this.imp_right (@Subtype.ext_iff _ _ x 0).mpr⟩";
+    }
+    {
+      full_name = "Submodule.vaddCommClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 102;
+      code_preview = "instance vaddCommClass [VAdd M β] [VAdd α β] [VAddCommClass M α β] : VAddCommClass p α β :=   ⟨fun a => vadd_comm (a : M)⟩";
+    }
+    {
+      full_name = "Submodule.vadd_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 110;
+      code_preview = "theorem vadd_def [VAdd M α] (g : p) (m : α) : g +ᵥ m = (g : M) +ᵥ m";
+    }
+    {
+      full_name = "Submodule.toAddSubgroup_strictMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 125;
+      code_preview = "@[mono] theorem toAddSubgroup_strictMono : StrictMono (toAddSubgroup : Submodule R M → AddSubgroup M)";
+    }
+    {
+      full_name = "Submodule.toAddSubgroup_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 129;
+      code_preview = "theorem toAddSubgroup_le : p.toAddSubgroup ≤ p'.toAddSubgroup ↔ p ≤ p'";
+    }
+    {
+      full_name = "Submodule.toAddSubgroup_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 132;
+      code_preview = "@[mono] theorem toAddSubgroup_mono : Monotone (toAddSubgroup : Submodule R M → AddSubgroup M)";
+    }
+    {
+      full_name = "Submodule.neg_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 137;
+      code_preview = "theorem neg_coe : -(p : Set M) = p";
+    }
+    {
+      full_name = "Submodule.not_mem_of_ortho";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 147;
+      code_preview = "theorem not_mem_of_ortho {x : M} {N : Submodule R M}     (ortho : ∀ (c : R), ∀ y ∈ N, c • x + y = (0 : M) → c = 0) : x ∉ N";
+    }
+    {
+      full_name = "Submodule.ne_zero_of_ortho";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 152;
+      code_preview = "theorem ne_zero_of_ortho {x : M} {N : Submodule R M}     (ortho : ∀ (c : R), ∀ y ∈ N, c • x + y = (0 : M) → c = 0) : x ≠ 0";
+    }
+    {
+      full_name = "Submodule.smul_mem_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 166;
+      code_preview = "theorem smul_mem_iff (s0 : s ≠ 0) : s • x ∈ p ↔ x ∈ p";
+    }
+    {
+      full_name = "Subspace";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Module/Submodule/Basic.lean";
+      start_line = 171;
+      code_preview = "abbrev Subspace (R : Type u) (M : Type v) [DivisionRing R] [AddCommGroup M] [Module R M] :=   Submodule R M";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

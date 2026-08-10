@@ -1,0 +1,346 @@
+let
+  ownerName = "stdlib.nl.category-de-rham-hodge-substrate";
+
+  motivic = import nl/category-motivic-substrate.px;
+  Gmot = import nl/category-motivic-galois-substrate.px;
+
+  # === Substrate de Rham + Hodge Structure (agent-NL-189) ============
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Substrate de Rham cohomology + Hodge structure"
+  #
+  # 표준 정의:
+  #   - de Rham cohomology: H^*_dR(X, C) = H^*(Omega_X^*, d)
+  #     using algebraic differential forms
+  #   - Hodge structure: pure of weight n means
+  #     H^n_dR ⊗ C = ⊕_{p+q=n} H^{p,q}
+  #     with Hodge filtration F^p
+  #
+  # substrate 해석:
+  #   - de Rham complex: substrate receipt 의 *differential graded*
+  #     refinement — 각 receipt 가 derivative receipt 들의 graded class
+  #     구조를 가짐
+  #   - Hodge decomposition: receipt 의 cohomology 가 Hodge type
+  #     (p, q) — *holomorphic-like* 와 *anti-holomorphic-like* 으로
+  #     분해
+  #   - Tate Hodge structure: Z(n) Tate motif 와 Hodge filtration 결합
+
+  stepKind = "de-rham-hodge-substrate";
+  framework_step =
+    "substrate de Rham + Hodge — DG receipt + (p,q) decomposition + weight filtration";
+
+  # =================================================================
+  # === Substrate de Rham complex ====================================
+  # =================================================================
+
+  deRhamComplex = {
+    complex_id = "Omega-substrate-de-Rham";
+    description_en = ''
+      Substrate de Rham complex (Omega^*_substrate, d):
+        Omega^0 → Omega^1 → Omega^2 → ...
+      with differential d : Omega^p → Omega^{p+1}, d^2 = 0.
+
+      Substrate-side:
+        Omega^0 = receipt-valued functions on Site_coding
+        Omega^1 = 1-form receipts (derivatives w.r.t. substrate
+                  parameters: utterance length, mode position, language
+                  choice, etc.)
+        Omega^p = p-form receipts (p-fold derivatives)
+        d = exterior derivative = take partial derivative of receipt
+                w.r.t. one more substrate parameter
+
+      Substrate consequences:
+        - H^p_dR(Site_coding) = closed p-forms / exact p-forms
+        - Captures *infinitesimal* substrate symmetries
+        - Realizes motivic cohomology rationally
+    '';
+    differential_squared = "d^2 = 0 — substrate de Rham complex is well-defined";
+    Hodge_decomposition_supported = true;
+  };
+
+  # =================================================================
+  # === Hodge structure on substrate cohomology =====================
+  # =================================================================
+
+  hodgeStructure = {
+    structure_id = "substrate-Hodge-structure";
+    description_en = ''
+      For each H^n_dR(Site_coding), there's a Hodge decomposition
+        H^n_dR ⊗ C = ⊕_{p+q=n} H^{p,q}
+      where:
+        H^{p,q} = receipts with p 'holomorphic-like' and q 'anti-
+                  holomorphic-like' derivatives
+        Hodge filtration F^p = ⊕_{r ≥ p} H^{r, n-r}
+
+      Substrate consequence: receipts have a natural *type* (p, q)
+      capturing how they decompose under Hodge action.
+    '';
+    pure_of_weight = "H^n_dR is pure of weight n";
+    Hodge_filtration_definition = "F^p H^n = subspace of differentials of type >= p in first index";
+    decomposition_law = "H^n ⊗ C = F^p H^n ⊕ \\bar{F^{n-p+1}} H^n";
+  };
+
+  # =================================================================
+  # === Hodge type (p, q) at substrate level ========================
+  # =================================================================
+  #
+  # Each receipt has a Hodge type — encoding how it decomposes.
+
+  hodgeTypeAt = p: q: {
+    bi_degree = { p = p; q = q; };
+    type_name = "H^{" + builtins.toString p + "," + builtins.toString q + "}";
+    total_weight = p + q;
+    description_en = ''
+      Receipt classes of Hodge type (p, q):
+        p = holomorphic dimension (algebraic substrate parameters)
+        q = anti-holomorphic dimension (analytic substrate parameters)
+      Total weight = p + q.
+
+      Substrate examples:
+        (0, 0): canonical receipts (no parameter dependence)
+        (1, 0): linear receipts (1 algebraic parameter)
+        (0, 1): linear receipts (1 analytic parameter)
+        (1, 1): 2-parameter receipts (mixed)
+    '';
+    substrate_meaning_en =
+      if p == 0 && q == 0 then "constant / canonical receipt"
+      else if q == 0 then "purely algebraic receipt (no anti-holomorphic content)"
+      else if p == 0 then "purely analytic receipt"
+      else "mixed-type receipt with both algebraic and analytic content";
+  };
+
+  # =================================================================
+  # === Mixed Hodge structure =======================================
+  # =================================================================
+  #
+  # For singular / open substrate spaces, mixed Hodge structures
+  # generalize pure ones by adding a weight filtration W_*.
+
+  mixedHodgeStructure = {
+    structure_id = "mixed-Hodge-structure-substrate";
+    description_en = ''
+      Mixed Hodge structure on H^*_dR(Site_coding):
+        - Weight filtration W_n (increasing)
+        - Hodge filtration F^p (decreasing on graded pieces)
+        - Each Gr^W_n carries a pure Hodge structure of weight n.
+
+      Substrate-side: substrate receipts with HELD or PARTIALLY-HELD
+      classifications have *mixed* Hodge structure — they carry
+      multiple weight components.
+    '';
+    classifies_mixed_receipts = true;
+    pure_part = "Gr^W_n = pure of weight n";
+    relates_to_substrate_Held = ''
+      Held classifications break pure Hodge decomposition: a Held
+      receipt has nontrivial weight filtration with non-trivial
+      graded pieces in multiple weights.
+    '';
+  };
+
+  # =================================================================
+  # === Hodge to de Rham spectral sequence ===========================
+  # =================================================================
+  #
+  # E_1^{p,q} = H^q(X, Omega^p) ⇒ H^{p+q}_dR(X)
+  # Degenerates at E_1 for smooth projective X (Hodge theorem).
+
+  hodgeToDeRhamSpectralSequence = {
+    spectral_sequence_kind = "Hodge-to-de-Rham";
+    E_1_page = "E_1^{p,q} = H^q(Omega^p)";
+    convergence_target = "H^{p+q}_dR(Site_coding)";
+    degenerates_at_E_1_when = "Site_coding is smooth proper (Hodge degeneration)";
+    substrate_degeneration_status = ''
+      Substrate-side: Site_coding is bounded (16 modes, finite
+      language count, finite axiom registry). Substrate is 'proper'
+      in the categorical sense. Conjecturally Hodge SS degenerates
+      at E_1 for substrate.
+    '';
+    consequence_if_degenerate = "H^n_dR = ⊕_{p+q=n} H^q(Omega^p) — direct Hodge decomposition";
+  };
+
+  # =================================================================
+  # === Tate Hodge structure ========================================
+  # =================================================================
+  #
+  # The Tate Hodge structure Z(n) has:
+  #   - underlying lattice Z
+  #   - Hodge filtration: F^p Z(n) ⊗ C = C if p ≤ -n, else 0
+  #   - Pure of weight -2n
+
+  tateHodgeStructure = {
+    structure_id = "Tate-Hodge-Z-n";
+    description_en = ''
+      Tate Hodge structure Z(n):
+        - Lattice: Z
+        - Weight: -2n (Tate convention)
+        - Hodge type: (-n, -n)
+        - Realizes Tate twist in cohomology
+
+      Substrate-side: Tate Hodge classes correspond to receipts that
+      are *uniformly weighted* under all substrate Hodge actions —
+      receipts that transform by chi^n under Galois.
+    '';
+    Tate_class = "Tate class = H^{n,n}-component of H^{2n}_dR";
+    Hodge_conjecture_statement = ''
+      Hodge conjecture: every Hodge class on smooth projective
+      varieties comes from algebraic cycles.
+      Substrate analog: every Hodge-typed receipt class arises from
+      an *algebraic* substrate operation (not transcendental).
+    '';
+  };
+
+  # =================================================================
+  # === Variation of Hodge structure (VHS) ===========================
+  # =================================================================
+
+  variationOfHodgeStructure = {
+    structure_id = "variation-of-Hodge-structure-substrate";
+    description_en = ''
+      Variation of Hodge structure on a family of substrate sites:
+      Hodge structure on H^n_dR(S_t) varying as t varies (e.g., as
+      the substrate parameter family changes).
+
+      Components:
+        - Local system (parallel transport of Z-lattice)
+        - Hodge filtration varying holomorphically
+        - Griffiths transversality: d F^p ⊆ F^{p-1} ⊗ Omega^1
+
+      Substrate consequence: receipt Hodge structure CAN VARY as
+      substrate parameters change (e.g., language registry growing).
+      Variations track how cohomology evolves under substrate
+      growth.
+    '';
+    Griffiths_transversality = true;
+    monodromy_action = "VHS carries monodromy action of pi_1(parameter space) on Hodge fibers";
+  };
+
+  # =================================================================
+  # === Substrate-internal Hodge instances ==========================
+  # =================================================================
+
+  substrateHodgeInstances = [
+    {
+      instance_id = "canonical-receipts-pure-weight-0";
+      description_en = "Canonical receipts (Galois H^0) have pure Hodge weight 0, type (0, 0)";
+      Hodge_type = "(0, 0)";
+      weight = 0;
+    }
+    {
+      instance_id = "language-emit-class-weight-1";
+      description_en = "Per-language code emissions form weight-1 Hodge classes (parameter: language choice)";
+      Hodge_type = "(1, 0) or (0, 1) depending on language family";
+      weight = 1;
+    }
+    {
+      instance_id = "axiom-fiber-class-weight-2";
+      description_en = "Axiom-fiber receipts have weight-2 (depth: axiom family + sub-branch)";
+      Hodge_type = "(1, 1) — mixed type";
+      weight = 2;
+    }
+    {
+      instance_id = "UC4-as-Tate-Hodge-class";
+      description_en = ''
+        UC4 LLM-impossibility lifts to a Tate Hodge class — Tate
+        twist of canonical class. Inhabits H^{n, n}_dR (Tate class
+        component).
+      '';
+      Hodge_type = "Tate (-n, -n)";
+      weight = "uniform under chi^n";
+    }
+  ];
+
+  # =================================================================
+  # === Comparison: de Rham vs étale =================================
+  # =================================================================
+  #
+  # Hodge-de Rham comparison: H^*_dR(X) ⊗ C ≅ H^*(X(C), C) (Betti)
+  # Berthelot: H^*_dR(X) ⊗ Z_l ≅ H^*_et(X, Z_l) (l ≠ p)
+
+  comparisonTheorems = [
+    {
+      theorem_id = "Hodge-de-Rham-Betti-comparison";
+      statement = "H^*_dR(X) ⊗ C ≅ H^*_Betti(X(C), C)";
+      substrate_meaning_en = "Substrate de Rham (algebraic) coincides with substrate Betti (topological) over C";
+    }
+    {
+      theorem_id = "de-Rham-etale-comparison";
+      statement = "H^*_dR(X) ⊗ Z_l ≅ H^*_et(X, Z_l) for l != p";
+      substrate_meaning_en = "Substrate de Rham agrees with l-adic étale cohomology at all (l ≠ p) verification scales";
+    }
+  ];
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_de_Rham_complex = true;
+    has_Hodge_structure = true;
+    has_mixed_Hodge_structure = true;
+    has_Hodge_to_de_Rham_spectral_sequence = true;
+    has_Tate_Hodge_structure = true;
+    has_variation_of_Hodge_structure = true;
+    has_Griffiths_transversality = true;
+    substrate_Hodge_instance_count = 4;  # canonical / lang-emit / axiom / UC4-Tate
+    comparison_theorem_count = 2;
+    UC4_is_Tate_Hodge_class = true;
+    canonical_receipts_pure_weight_0 = true;
+    Hodge_decomposition_supported = true;
+    motivic_owner_inherited = motivic.ownerName;
+    Gmot_owner_inherited = Gmot.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyDeRhamHodgePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "de-rham-hodge-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "de_rham" request then {
+      outcome = "de-rham-complex-emitted"; receipt = deRhamComplex;
+    }
+    else if builtins.hasAttr "hodge_structure" request then {
+      outcome = "hodge-structure-emitted"; receipt = hodgeStructure;
+    }
+    else if builtins.hasAttr "hodge_type" request then
+      let r = request.hodge_type;
+      in { outcome = "hodge-type-emitted";
+           receipt = hodgeTypeAt r.p r.q; }
+    else if builtins.hasAttr "mixed_hodge" request then {
+      outcome = "mixed-hodge-emitted"; receipt = mixedHodgeStructure;
+    }
+    else if builtins.hasAttr "hodge_spectral_sequence" request then {
+      outcome = "hodge-spectral-sequence-emitted"; receipt = hodgeToDeRhamSpectralSequence;
+    }
+    else if builtins.hasAttr "tate_hodge" request then {
+      outcome = "tate-hodge-emitted"; receipt = tateHodgeStructure;
+    }
+    else if builtins.hasAttr "VHS" request then {
+      outcome = "variation-of-hodge-emitted"; receipt = variationOfHodgeStructure;
+    }
+    else if builtins.hasAttr "substrate_instances" request then {
+      outcome = "substrate-hodge-instances-emitted"; receipt = substrateHodgeInstances;
+    }
+    else if builtins.hasAttr "comparison" request then {
+      outcome = "comparison-theorems-emitted"; receipt = comparisonTheorems;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "de_rham" "hodge_structure" "hodge_type"
+             "mixed_hodge" "hodge_spectral_sequence" "tate_hodge"
+             "VHS" "substrate_instances" "comparison"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit deRhamComplex hodgeStructure hodgeTypeAt;
+  inherit mixedHodgeStructure hodgeToDeRhamSpectralSequence;
+  inherit tateHodgeStructure variationOfHodgeStructure;
+  inherit substrateHodgeInstances comparisonTheorems;
+  inherit inventorySummary applyDeRhamHodgePlate;
+}

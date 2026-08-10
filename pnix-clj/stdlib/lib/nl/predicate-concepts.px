@@ -1,0 +1,66 @@
+# stdlib/lib/nl/predicate-concepts.px — 술어 universal 개념 레지스트리 (cross-language 데이터 마디)
+#
+# ★교집합 닫기: 한글·English·code 술어를 *한 언어중립 개념*으로 약분 → 같은 개념-term(같은 수)에서 만남.
+#   개념 = ASCII label. 각 개념은 언어별 surface(ko/en/code: canonical 대표 + synonyms 변이).
+#   conceptOf(lexeme) = 어느 언어 surface든 → label (converge/약분, 多언어 多표면 → 一개념).
+#   surfaceOf(label, lang) = label → 그 언어의 canonical (diverge, 언어별 대표).
+#   "의미=수"는 term 의 td.key 가 담당; label 은 개념의 사람용 이름. 한문 0.
+#
+# ★math 불변(운영자 제약): 데이터 마디. pnix-lisp-ct/term-dag 소비만(수정0) → math 다른 lane 성장 자유. 새 거울 0.
+# ★stdict original_language_info 연결점(2026-06-19): 표준국어대사전의 원어/언어태그는 번역 truth 가 아니라
+#   cross-language lexical clue 이다. `dictionary-stdict-original-language-store-plan.px` 가 redb 에 rec{} 로
+#   materialize 하고, 이 파일/codec/retrieval 이 나중에 proposer 로 참조한다. 여기 concepts 에 자동 주입하지
+#   않는다(사과=apple|apology 류 word-sense 위험). gate/dispose 전까지 ontology assertion 금지.
+let
+  B = builtins;
+  # 개념: { label ; ko/en/code = { canonical ; syn=[변이] } }
+  concepts = [
+    { label = "ingest"; ko = { canonical = "먹"; syn = [ "잡수시" "드시" "섭취하" ]; };
+                        en = { canonical = "eat"; syn = [ "consume" "devour" ]; };
+                        code = { canonical = "consume"; syn = [ "ingest" "eat" ]; }; }
+    { label = "give";   ko = { canonical = "주"; syn = [ "드리" "주시" ]; };
+                        en = { canonical = "give"; syn = [ "grant" ]; };
+                        code = { canonical = "give"; syn = [ "put" "set" ]; }; }
+    { label = "read";   ko = { canonical = "읽"; syn = [ ]; };
+                        en = { canonical = "read"; syn = [ ]; };
+                        code = { canonical = "read"; syn = [ "load" "get" ]; }; }
+    { label = "open";   ko = { canonical = "열"; syn = [ ]; };
+                        en = { canonical = "open"; syn = [ ]; };
+                        code = { canonical = "open"; syn = [ ]; }; }
+    { label = "go";     ko = { canonical = "가"; syn = [ "가시" ]; };
+                        en = { canonical = "go"; syn = [ "move" ]; };
+                        code = { canonical = "go"; syn = [ "goto" ]; }; }
+    # ── 개체(명사) cross-language 단서(clue) 자원: 번역 힌트로만 둔다. ★pure term엔 미주입(korean-nl-mirror가
+    #    개체를 약분 안 함) — 사과=apple|apology 동음이의=word-sense라 문맥 없이 못 정함 → 교집합 밖, 단서·격리.
+    { label = "apple";    ko = { canonical = "사과"; syn = [ ]; }; en = { canonical = "apple"; syn = [ ]; }; code = { canonical = "apple"; syn = [ ]; }; }
+    { label = "book";     ko = { canonical = "책"; syn = [ "서적" ]; }; en = { canonical = "book"; syn = [ ]; }; code = { canonical = "book"; syn = [ "doc" ]; }; }
+    { label = "door";     ko = { canonical = "문"; syn = [ ]; }; en = { canonical = "door"; syn = [ ]; }; code = { canonical = "door"; syn = [ ]; }; }
+    { label = "pen";      ko = { canonical = "펜"; syn = [ ]; }; en = { canonical = "pen"; syn = [ ]; }; code = { canonical = "pen"; syn = [ ]; }; }
+    { label = "school";   ko = { canonical = "학교"; syn = [ ]; }; en = { canonical = "school"; syn = [ ]; }; code = { canonical = "school"; syn = [ ]; }; }
+    { label = "mountain"; ko = { canonical = "산"; syn = [ ]; }; en = { canonical = "mountain"; syn = [ ]; }; code = { canonical = "mountain"; syn = [ ]; }; }
+  ];
+  langs = [ "ko" "en" "code" ];
+  surfacesIn = c: lang: let l = c.${lang}; in [ l.canonical ] ++ l.syn;
+  # 어느 언어 surface든 → 개념 label. 미등록 null.
+  conceptOf = lex:
+    let m = B.filter (c: B.any (lang: B.elem lex (surfacesIn c lang)) langs) concepts;
+    in if m == [ ] then null else (B.head m).label;
+  # label → 언어별 canonical (diverge). lang ∈ {ko,en,code}.
+  surfaceOf = label: lang:
+    let m = B.filter (c: c.label == label) concepts;
+    in if m == [ ] then label else (B.head m).${lang}.canonical;
+  # korean-nl-mirror 호환: canonicalOf(label) = ko canonical (한글 생성 대표).
+  canonicalOf = label: surfaceOf label "ko";
+  isConceptLabel = s: (B.filter (c: c.label == s) concepts) != [ ];
+  # concept-kind: 술어(언어중립 spine, 진성 cross-lingual 동의어=sound) vs 개체(동음이의
+  #   word-sense 위험=unsound, line 33-34 "단서·격리"). concept-candidate-gate(fix wm9swm7wc)가
+  #   개체는 verified 금지·candidate 로만 분류하는 근거. predicateLabels = concepts 앞 5개.
+  predicateLabels = [ "ingest" "give" "read" "open" "go" ];
+  conceptKindOf = label:
+    if B.elem label predicateLabels then "predicate"
+    else if isConceptLabel label then "entity"
+    else null;
+in {
+  inherit concepts langs conceptOf surfaceOf canonicalOf isConceptLabel conceptKindOf;
+  schema = "predicate.concepts.v1";
+}

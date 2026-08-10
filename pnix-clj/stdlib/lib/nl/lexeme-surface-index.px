@@ -1,0 +1,73 @@
+# stdlib.nl.lexeme-surface-index
+#
+# **K0/K1 in .px (one-mirror 정본): 정규화 lexeme surface 색인 (kimchi df() 거울).**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): ingest 의미 매핑의 *정규화*도
+# 거울(.px)에. 이 owner 가 Rust(`nl_corpus/lexeme_sheet.rs` K0/K1)의 .px 정본.
+#
+# 무엇: corpus surface 행 위의 결정적 정규화 색인 — ① 정확 일치 ② 구두점/공백 정규화
+# 일치 ③ 후보 narrowing. 정규화는 *구두점/공백 strip + ASCII lowercase* 만(의미 문자열
+# 절대 변경 안 함 — "syntax/punctuation only").
+#
+# 경계(host): sheet digest(sha, replay-stable)·addr 발급 = host. 이 owner 는 정규형/
+# 일치만 내놓는다. (정규화=의미 매핑의 일부라 .px; hash=host.)
+let
+  map = builtins.map;
+  filter = builtins.filter;
+  elem = builtins.elem;
+  replaceStrings = builtins.replaceStrings;
+
+  # 제거할 구두점/공백 (lexeme_sheet.rs SurfaceNormalizer 와 동일 집합).
+  punctChars = [
+    "," "." "!" "?" ":" ";" "·" "ㆍ" "-" "_"
+    "\"" "'" "“" "”" "‘" "’" "(" ")" "[" "]" "{" "}"
+    " " "	" "\n"
+  ];
+  emptyFor = map (c: "") punctChars;
+  stripPunct = s: replaceStrings punctChars emptyFor s;
+
+  # ASCII lowercase (A-Z → a-z). 한글 등 non-ASCII 는 불변.
+  upperAZ = [ "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S" "T" "U" "V" "W" "X" "Y" "Z" ];
+  lowerAZ = [ "a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m" "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z" ];
+  toLowerAscii = s: replaceStrings upperAZ lowerAZ s;
+
+  # ★ 정규형: 구두점/공백 제거 + ASCII lowercase ★
+  normalizeSurface = s: toLowerAscii (stripPunct s);
+
+  # ── 색인 lookup (rows: [ { lexeme_id; surfaces; token_class; ... } ]) ──
+  lookupExact = rows: query:
+    filter (row: elem query row.surfaces) rows;
+
+  lookupNormalized = rows: query:
+    let nq = normalizeSurface query;
+    in filter (row: elem nq (map normalizeSurface row.surfaces)) rows;
+
+  # 정확 우선 → 없으면 정규화 (후보 narrowing). hits 0 이면 held 정직.
+  lookup = rows: query:
+    let exact = lookupExact rows query;
+    in
+      if exact != [ ] then { match_kind = "exact"; hits = exact; }
+      else
+        let norm = lookupNormalized rows query;
+        in if norm != [ ]
+           then { match_kind = "normalized"; hits = norm; }
+           else { match_kind = "held-no-lexeme"; hits = [ ]; };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.lexeme-surface-index";
+    consumes = "corpus surface rows (lexeme_id/surfaces); 의미 문자열 비변경";
+    role = "K0/K1 정규화 lexeme 색인: 정확/정규화 일치 + 후보 narrowing. 정규화=구두점·공백 strip + ASCII lowercase(한글 불변). ingest 정규화 .px 정본.";
+    boundary = "sheet digest(sha)·addr 발급 = host; 정규형/일치만 거울.";
+    note = "Rust nl_corpus/lexeme_sheet.rs K0/K1 = Phase 2/3 삭제 대상.";
+  };
+
+in {
+  inherit normalizeSurface lookupExact lookupNormalized lookup inventorySummary;
+  ownerName = "stdlib.nl.lexeme-surface-index";
+  meta = {
+    source = "stdlib nl lexeme-surface-index (.px K0/K1: 정규화 lexeme 색인; one-mirror 정본)";
+    owner = "stdlib.nl.lexeme-surface-index";
+    base = "lexeme-surface-index-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1: ingest K0/K1 정규화 lexeme 색인의 .px 정본. normalizeSurface(구두점/공백 strip + ASCII lowercase, 한글 불변 — lexeme_sheet.rs SurfaceNormalizer 동일 집합) + lookup(정확→정규화 후보 narrowing, hits 0=held 정직). digest/addr=host 경계. 검증: 'Hello, World!'→helloworld, '수량.'→수량. Rust lexeme_sheet.rs=Phase 2/3 삭제.";
+  };
+}

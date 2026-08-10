@@ -1,0 +1,59 @@
+# stdlib/lib/nl/symbol-memory-readback.px
+#
+# symbol-memory READ-BACK (recognition): 저장된 symbol-memory를 다시 읽어 *현재 proposition의 symbol이
+#   이미 아는(known) 것인지* 판정 = "기억이 다음 해석을 바꾸는" 첫 단계. write(propose→index)·dispose 다음 칸.
+#
+# ★갈라치기 0: solver-nl-entity-alias.resolveAlias는 *문장-내* alias 포인터(intra-utterance)지 *durable-memory 인식*이
+#   아니다 — 직교. 여기는 redb symbol index(durable, cross-utterance)에 대한 recognition. 새 key fn 0:
+#   판정은 반드시 *storeKeyOfSymbol*(저장과 byte-identical, store-plan 정본)로 — surface/alias로 판정 금지(drift).
+# ★recognition ≠ truth: redb에 있다고 참 아님(redb는 판사 아님). 결과 = recognized/missing evidence일 뿐,
+#   durable_truth/accepted_as_truth/ontology_assert_allowed = false 고정.
+let
+  B = builtins;
+  sp = import ./symbol-memory-store-plan.px;   # storeKeyOfSymbol(byte-identical) · mkQuery(scan) 재사용
+
+  # host가 scan한 durable index에 대해 proposeSymbols 결과를 인식 + ★회수(recover).
+  #   각 symbol의 store-key = storeKeyOfSymbol(저장과 동일) → membership = recognized.
+  #   memory_entries(저장 record, 각 store_key 보유)를 주면 recognized symbol의 *prior record*(concept/alias/state) 회수.
+  #   memory_keys만 주면 membership(yes/no)만. 둘 다 없으면 전부 missing.
+  recognizeSymbols = args:
+    let symbols = if args ? symbols then args.symbols else [ ];
+        memEntries = if args ? memory_entries then args.memory_entries else [ ];
+        # memory_entries가 있으면 그 store_key를, 없으면 memory_keys를 membership 집합으로
+        memKeys = if args ? memory_keys then args.memory_keys
+                  else B.map (e: e.store_key) memEntries;
+        lookupEntry = k:
+          let m = B.filter (e: (if e ? store_key then e.store_key else "") == k) memEntries;
+          in if m == [ ] then null else B.head m;
+        classify = s:
+          let k = sp.storeKeyOfSymbol s;             # ★같은 key fn = drift 0
+              known = B.elem k memKeys;
+          in {
+            name = s.name; ref_kind = s.ref_kind; canonical_key = s.canonical_key;
+            store_key = k;
+            status = if known then "recognized" else "missing";   # 첫 슬라이스: 2-state
+            memory_backed = known;
+            recovered = if known then lookupEntry k else null;     # ★회수된 prior record(concept/alias/state) or null
+          };
+        results = B.map classify symbols;
+        recognizedN = B.length (B.filter (r: r.status == "recognized") results);
+    in {
+      results = results;
+      recognized_count = recognizedN;
+      missing_count = (B.length results) - recognizedN;
+      total = B.length results;
+      # reserved states (다음 칸, 첫 슬라이스 미사용): ambiguous(같은 surface→여러 key)·stale(dispose 대상)·held(문맥위험)
+      reserved_states = [ "ambiguous" "stale" "held" ];
+      # ★recognition = evidence, NOT truth (redb는 판사 아님)
+      proposer_only = true;
+      durable_truth = false;
+      accepted_as_truth = false;
+      ontology_assert_allowed = false;
+      evidence_kind = "symbol-memory.recognition";
+    };
+
+  # host가 durable index를 scan해 memory_keys를 싣도록 — store-plan.mkQuery 재사용(새 query 0).
+  mkReadbackQuery = sp.mkQuery;
+in {
+  inherit recognizeSymbols mkReadbackQuery;
+}

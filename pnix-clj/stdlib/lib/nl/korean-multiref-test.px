@@ -1,0 +1,21 @@
+# stdlib/lib/nl/korean-multiref-test.px — Slice6++: ②-layer kind-일반성 (혼합 지시 동시 해소)
+#
+# S6(그가→철수 agent)에 이어, 한 문장의 여러 지시어가 *각자 kind 로* 해소됨을 확정: '철수가 책을 읽는다.
+# 그가 그것을 본다.' → 그(agent 지시)→철수, 그것(object 지시)→책. 같은 메커니즘(refKinds+resolveByKind)이
+# agent 뿐 아니라 모든 역할에 generic. 사전무의존·왕복무관(담화 층). live 알고리즘(저장X).
+let
+  knl = import ./korean-nl-mirror.px;
+  B = builtins;
+  nm = e: if e == null then "null" else e.name;
+  disc = knl.liftDiscourse [ "철수가 책을 읽는다" "그가 그것을 본다" ];
+  s2 = B.elemAt disc 1;
+  binds = s2.resolved;
+  findBind = ref: let m = B.filter (r: r.ref == ref) binds; in if m == [ ] then "null" else nm (B.head m).entity;
+  geu = findBind "그";        # 철수 (agent 지시)
+  geugeot = findBind "그것";  # 책 (object 지시)
+in {
+  n_binds = B.length binds;
+  geu_resolves = geu;          # "철수"
+  geugeot_resolves = geugeot;  # "책"
+  all_ok = (B.length binds == 2) && (geu == "철수") && (geugeot == "책");
+}

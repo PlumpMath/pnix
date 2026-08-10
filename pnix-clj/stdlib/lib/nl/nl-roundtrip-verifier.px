@@ -1,0 +1,159 @@
+let
+  ownerName = "stdlib.nl.nl-roundtrip-verifier";
+
+  # === NL Roundtrip Verifier (Axiom #71) ============================
+  #
+  # 사용자 directive (2026-05-28): "양방향으로 제대로~*"
+  #
+  # Axiom #12 (roundtrip-invariant-substrate) 의 NL-specific application.
+  # NL utterance → substrate receipt (#67 master) → NL utterance' (#68 reverse).
+  # 두 NL 의 의미 동등성 검증.
+  #
+  # # 4 fidelity tier (Axiom #12 와 일치)
+  #
+  # - exact-preservation: 원본과 reverse 가 동일 의미 (axiom_origin 일치)
+  # - lossy-with-held-only: reverse 가 held 였으나 가공 가능한 형태
+  # - lossy-with-contradiction: forward 와 reverse 의 axiom 다름 (substrate bug)
+  # - divergent-shape: 둘 중 하나가 완전히 Held (정상 작동의 결과)
+
+  master = import nl/universal-nl-master-router.px;
+  reverse = import nl/universal-nl-reverse-composer.px;
+  # Axiom #103 entity-aware specialization for 6-tool API outcomes
+  sixToolFidelity = import nl/six-tool-roundtrip-fidelity-verifier.px;
+
+  # 6-tool outcomes — dispatch to entity-aware verifier instead of template-based
+  sixToolOutcomes = [
+    "hanim-query-lifted"
+    "blender-query-lifted"
+    "freecad-query-lifted"
+    "gltf-query-lifted"
+    "rhino-query-lifted"
+    "coverage-query-lifted"
+  ];
+
+  isSixToolOutcome = result:
+    builtins.elem result.outcome sixToolOutcomes;
+
+  # === Roundtrip verification ======================================
+
+  verifyRoundtrip = originalUtterance: language:
+    if !(builtins.isString originalUtterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength originalUtterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else if language != "en" && language != "ko" then {
+      outcome = "held-unsupported-language";
+      requested_language = language;
+    }
+    else
+      let
+        # Forward: NL → routed receipt(s)
+        forward = master.routeUtteranceToAllSubstrates originalUtterance;
+      in
+        if forward.outcome == "held-no-substrate-matched" then {
+          outcome = "divergent-shape";
+          fidelity_tier = "divergent-shape";
+          reason = "Forward direction Held — 박힌 NL substrate 어디에도 매치 안 됨. roundtrip 불가.";
+          forward_outcome = forward.outcome;
+        }
+        else if forward.outcome == "unambiguous-routing" then
+          # Dispatch to entity-aware path for 6-tool outcomes (Axiom #103)
+          if isSixToolOutcome forward.lifter_result then
+            let entityResult = sixToolFidelity.verifyRoundtripFor6Tool originalUtterance language;
+            in entityResult // {
+              dispatch_path = "entity-aware-via-axiom-103";
+              dispatched_to = "stdlib.nl.six-tool-roundtrip-fidelity-verifier";
+              original_master_routing = forward.routed_lifter;
+            }
+          else
+          let
+            # Reverse: receipt → NL
+            reverse_result = reverse.composeReceiptToNl forward.lifter_result language;
+          in
+            if reverse_result.outcome != "nl-composed" then {
+              outcome = "lossy-with-held-only";
+              fidelity_tier = "lossy-with-held-only";
+              reason = "Forward OK but reverse Held: " + reverse_result.outcome;
+              forward = forward;
+              reverse_outcome = reverse_result.outcome;
+            }
+            else
+              let
+                # Verify axiom_origin consistency
+                fwd_axiom =
+                  if builtins.hasAttr "axiom_origin" forward.lifter_result
+                  then forward.lifter_result.axiom_origin
+                  else if builtins.hasAttr "axiom_tag" forward.lifter_result
+                  then forward.lifter_result.axiom_tag
+                  else null;
+                rev_axiom = reverse_result.axiom_origin;
+              in
+                if fwd_axiom == rev_axiom then {
+                  outcome = "exact-preservation";
+                  fidelity_tier = "exact-preservation";
+                  axiom_preserved = fwd_axiom;
+                  reverse_nl = reverse_result.text;
+                  original_utterance = originalUtterance;
+                  routed_lifter = forward.routed_lifter;
+                }
+                else {
+                  outcome = "lossy-with-contradiction";
+                  fidelity_tier = "lossy-with-contradiction";
+                  reason = "Forward 와 reverse 의 axiom_origin 불일치 (substrate bug 가능성).";
+                  forward_axiom = fwd_axiom;
+                  reverse_axiom = rev_axiom;
+                }
+        else  # routed-to-multiple-substrates
+          {
+            outcome = "lossy-with-multiple-routes";
+            fidelity_tier = "lossy-with-held-only";  # multi → reverse 가 모호함
+            multi_route_count = forward.fired_count;
+            fired_lifters = builtins.map (x: x.lifter_id) forward.fired_lifters;
+            reason = "Multi-substrate routing — reverse 단일 NL 재구성 모호. caller 가 disambiguate 후 단일 lifter result 로 reverse compose.";
+          };
+
+  applyNlRoundtripVerifierPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then { outcome = "held-missing-utterance-field"; }
+    else
+      let lang = if builtins.hasAttr "language" request then request.language else "en";
+      in verifyRoundtrip request.utterance lang;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-roundtrip-verifier-axiom-71 (with #103 entity-aware dispatch)";
+    fidelity_tiers = [
+      "exact-preservation"
+      "lossy-with-held-only"
+      "lossy-with-contradiction"
+      "divergent-shape"
+      "entity-exact"     # via #103 dispatch
+      "tool-exact"       # via #103 dispatch
+    ];
+    routed_forward = "Axiom #67 Universal NL Master Router";
+    routed_reverse = "Axiom #68 Universal NL Reverse Composer";
+    entity_aware_dispatch = "Axiom #103 (six-tool-roundtrip-fidelity-verifier)";
+    entity_aware_outcomes = sixToolOutcomes;
+    cross_referenced_axiom = 12;  # roundtrip-invariant-substrate
+    new_decision_count = 0;
+    bilingual = true;
+  };
+
+in {
+  inherit
+    ownerName verifyRoundtrip
+    applyNlRoundtripVerifierPlate
+    sixToolOutcomes isSixToolOutcome
+    inventorySummary;
+  meta = {
+    source = "stdlib NL roundtrip verifier (Axiom #71)";
+    owner = ownerName;
+    base = "nl-roundtrip-verifier-v0";
+    rev_note = "사용자 directive (2026-05-28) '양방향으로 제대로'. Axiom #12 "
+      + "(roundtrip-invariant) 의 NL-specific application. NL → substrate "
+      + "→ NL roundtrip 검증, 4 fidelity tier 분류. DO NOT REBUILD — "
+      + "#67 forward + #68 reverse 재사용.";
+  };
+}

@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# pnix-hy / hy-meta build artifacts
+#
+# The proof lanes (hy-meta/bootstrap.py stage7-check, hy-meta/smoke_test.py,
+# and the pnix_hy mirror) compile Hy/Python repeatedly. The only files they
+# leave behind in the tree are CPython bytecode caches: __pycache__/*.pyc.
+# Everything below keeps those (and the usual Python tooling output) untracked.
+# ---------------------------------------------------------------------------
+
+# Byte-compiled / optimized Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Packaging / build output
+build/
+dist/
+work/
+*.egg
+*.egg-info/
+.eggs/
+MANIFEST
+
+# Test, coverage, and type-checker caches
+.pytest_cache/
+.cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+
+# Virtual environments
+# (The proof venvs live at /tmp/pnix-hy-py311-venv and /tmp/pnix-hy-py314-venv,
+#  outside the repo; this only guards against one being created in-tree.)
+.venv/
+venv/
+env/
+ENV/
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+.*.sw?
+*~
+
+# OS cruft
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db

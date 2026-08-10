@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$clr_meta_root/.." && pwd)"
+temp="$(mktemp -d "${TMPDIR:-/tmp}/clr-meta-tool-gate.XXXXXX")"
+trap 'rm -rf "$temp"' EXIT
+
+inline="$($root/bin/clr-meta -e '(+ 20 22)')"
+compat="$($root/bin/clojure-clr -e '(+ 20 22)')"
+printf '%s\n' '(let [x 20 y (+ x 2)] (* y 2))' >"$temp/program.clj"
+file_result="$($root/bin/clojure-clr "$temp/program.clj")"
+
+for result in "$inline" "$compat"; do
+  [[ "$result" == *":schema :pnix.clr-meta.tool-eval.v1"* ]]
+  [[ "$result" == *":execution :evaluator-generation-2"* ]]
+  [[ "$result" == *":outcome-kind :done"* ]]
+  [[ "$result" == *":value 42"* ]]
+done
+[[ "$file_result" == *":value 44"* ]]
+
+reader_sentinel="$temp/reader-eval-ran"
+reader_escape="#=(do (spit \"$reader_sentinel\" \"RAN\") 42)"
+set +e
+reader_rejected="$($root/bin/clr-meta -e "$reader_escape" 2>&1)"
+reader_status=$?
+tagged_rejected="$($root/bin/clr-meta -e '#inst "2026-07-14"' 2>&1)"
+tagged_status=$?
+trailing_rejected="$($root/bin/clr-meta -e '42 43' 2>&1)"
+trailing_status=$?
+map_rejected="$($root/bin/clr-meta -e '{:x 1}' 2>&1)"
+map_status=$?
+set -e
+
+[[ "$reader_status" -eq 1 ]]
+[[ "$reader_rejected" == *":phase :tool-read"* ]]
+[[ "$reader_rejected" == *":class :reader-form-rejected"* ]]
+[[ ! -e "$reader_sentinel" ]]
+[[ "$tagged_status" -eq 1 ]]
+[[ "$tagged_rejected" == *":class :tagged-reader-disabled"* ]]
+[[ "$trailing_status" -eq 1 ]]
+[[ "$trailing_rejected" == *":class :trailing-tool-form"* ]]
+[[ "$map_status" -eq 1 ]]
+[[ "$map_rejected" == *":class :non-portable-reader-value"* ]]
+
+set +e
+rejected="$($root/bin/clojure-clr -m example.main 2>&1)"
+status=$?
+set -e
+[[ "$status" -eq 2 ]]
+[[ "$rejected" == clojure-clr\ compatibility:* ]]
+
+if rg -n '\bload-string\b' "$clr_meta_root/src/pnix/clr_meta/main.clj"; then
+  echo "clr-meta tool gate: default tool path contains host eval" >&2
+  exit 1
+fi
+
+echo "clr-meta tool gate: PASS (-e/file via evaluator generation 2; strict non-evaluating single-form reader; broader compatibility rejected)"

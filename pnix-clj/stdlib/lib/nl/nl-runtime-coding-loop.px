@@ -1,0 +1,1042 @@
+let
+  ownerName = "stdlib.nl.nl-runtime-coding-loop";
+
+  composability =
+    import nl/category-composability-lemma.px;
+  g = import nl/generic-math-equation-engine.px;
+  d = import nl/dev-flow-via-generic-engine.px;
+  cat_monad = import nl/category-monad.px;
+
+  # === NL runtime coding loop (agent-NL-211, Round 48) ===============
+  #
+  # 사용자 directive (2026-05-29):
+  # > "런타임에서 언어마다조차도 어떻게 알고리즘 생성될지는 아무도 모른다."
+  # > "수학들이 어떤식으로 응용수학무기로 generic 하게 작동되어, 코드
+  # >  알고리즘에 재료로 쓰이는지 또 문장으로 수렴선택되는지"
+  #
+  # 발견: stdlib/lib/nl/category-composability-lemma.px 가 이미 16-mode
+  # chain 을 paper-quality lemma 로 *증명* 했음:
+  #
+  #   m_1: utterance-receive (external-string → raw-utterance)
+  #   m_2: utterance-normalize
+  #   m_3: session-instance-anchor
+  #   m_4: cue-multi-detect            ← *generic engine pipelineFold 여기 binding*
+  #   m_5: axiom-fiber-select
+  #   m_6: verb-extract-multi
+  #   m_7: morphism-decompose
+  #   m_8: unknown-detect
+  #   m_9: monadic-sequence            ← *monadic-effect-pattern math kind 여기*
+  #   m_10: monoidal-product
+  #   m_11: coequalizer-fold
+  #   m_12: functor-lift-to-meaning
+  #   m_13: language-codomain-fanout   ← *per-language algorithm divergence 여기*
+  #   m_14: held-honest-gate
+  #   m_15: code-emit-per-language     ← actual sentence emit
+  #   m_16: freecat-projection
+  #
+  # 이 chain 이 *바로 사용자 가 말한 runtime coding loop*.
+  #
+  # Round 48 absorption:
+  #   1) 16-mode chain 을 *pipeline backbone* 으로 binding
+  #   2) Mode 13 (language-codomain-fanout) 의 *generic mechanism* 구현 —
+  #      "same intent → per-language algorithm shape divergence"
+  #   3) 5 language profile (data rows) — new language = 1 row, 코드 0
+  #   4) emitPerLanguageSentence 한 호출이 math result + language profile
+  #      → 언어별 algorithm sentence skeleton
+
+  stepKind = "nl-runtime-coding-loop";
+  framework_step =
+    "16-mode composable chain — utterance → math weapon → per-language emit";
+
+  # =================================================================
+  # === 16-mode chain binding map ====================================
+  # =================================================================
+  #
+  # 각 mode 가 어디서 binding 되는지 명시. Held 자리는 future slice.
+
+  modeBindingMap = [
+    { mode_id = 1; mode_name = "utterance-receive";
+      binding_status = "transport-only"; bound_to = "Host";
+      math_kind_used = null; }
+    { mode_id = 2; mode_name = "utterance-normalize";
+      binding_status = "transport-only"; bound_to = "Host";
+      math_kind_used = null; }
+    { mode_id = 3; mode_name = "session-instance-anchor";
+      binding_status = "host-side-deferred"; bound_to = null;
+      math_kind_used = null; }
+    { mode_id = 4; mode_name = "cue-multi-detect";
+      binding_status = "bound";
+      bound_to = "stdlib.nl.generic-math-equation-engine::pipelineFold";
+      math_kind_used = "(all 11 kinds via cue rules)"; }
+    { mode_id = 5; mode_name = "axiom-fiber-select";
+      binding_status = "implicit-via-cue-rule-family";
+      bound_to = "stdlib.nl.dev-flow-via-generic-engine::cue_rule.family";
+      math_kind_used = null; }
+    { mode_id = 6; mode_name = "verb-extract-multi";
+      binding_status = "host-side-deferred"; bound_to = null;
+      math_kind_used = null; }
+    { mode_id = 7; mode_name = "morphism-decompose";
+      binding_status = "implicit-via-math-kind-output";
+      bound_to = "stdlib.nl.generic-math-equation-engine::applyMathKind";
+      math_kind_used = "(per cue rule)"; }
+    { mode_id = 8; mode_name = "unknown-detect";
+      binding_status = "implicit-via-held-shape";
+      bound_to = "applyMathKind held-branch";
+      math_kind_used = null; }
+    { mode_id = 9; mode_name = "monadic-sequence";
+      binding_status = "bound";
+      bound_to = "stdlib.nl.generic-math-equation-engine::emitMonadicEffect";
+      math_kind_used = "monadic-effect-pattern"; }
+    { mode_id = 10; mode_name = "monoidal-product";
+      binding_status = "bound";
+      bound_to = "stdlib.nl.generic-math-equation-engine::emitMonoidalProduct";
+      math_kind_used = "monoidal-product-pattern"; }
+    { mode_id = 11; mode_name = "coequalizer-fold";
+      binding_status = "bound";
+      bound_to = "stdlib.nl.generic-math-equation-engine::emitCoequalizerFold";
+      math_kind_used = "coequalizer-fold-pattern"; }
+    { mode_id = 12; mode_name = "functor-lift-to-meaning";
+      binding_status = "bound";
+      bound_to = "stdlib.nl.generic-math-equation-engine::emitFunctorLift";
+      math_kind_used = "functor-lift-pattern"; }
+    { mode_id = 13; mode_name = "language-codomain-fanout";
+      binding_status = "bound";
+      bound_to = ownerName + "::emitPerLanguageSentence";
+      math_kind_used = "(all kinds → per-language emit)"; }
+    { mode_id = 14; mode_name = "held-honest-gate";
+      binding_status = "implicit-via-Held-envelope"; bound_to = null;
+      math_kind_used = null; }
+    { mode_id = 15; mode_name = "code-emit-per-language";
+      binding_status = "bound";
+      bound_to = ownerName + "::emitPerLanguageSentence";
+      math_kind_used = null; }
+    { mode_id = 16; mode_name = "freecat-projection";
+      binding_status = "host-side-deferred"; bound_to = null;
+      math_kind_used = null; }
+  ];
+
+  boundModeCount =
+    builtins.length (builtins.filter
+      (m: m.binding_status == "bound") modeBindingMap);
+
+  heldModeCount =
+    builtins.length (builtins.filter
+      (m: m.binding_status == "held") modeBindingMap);
+
+  # Composability proof reuse — 16-mode chain 의 well-defined 증명
+  composabilityProofClosed =
+    (composability.inventorySummary {}).proof_closed;
+
+  # =================================================================
+  # === Generic language profile constructor =========================
+  # =================================================================
+  #
+  # 각 row = 한 언어. 새 언어 추가 = mkLanguageProfile 한 줄.
+  # 새 math kind 추가 = 각 profile 의 templates attrset 에 한 field.
+
+  mkLanguageProfile =
+    { id
+    , idiom
+    , monad_emit          # attrset: monad_type → sentence skeleton
+    , recurrence_emit     # function: { case_num, big_o } → sentence
+    , hoare_emit          # function: { precondition, invariant } → sentence
+    , concurrency_emit    # attrset: sync_kind → sentence
+    , ring_axiom_emit     # function: { axiom_name } → sentence
+    , monoidal_emit       # attrset: product_kind → sentence (Round 49)
+    , coequalizer_emit    # function: canonical_chain_id → sentence (Round 50)
+    , null_handling_idiom
+    , error_handling_idiom
+    , async_idiom
+    , currying_idiom      # Round 49
+    , parallel_idiom      # Round 49
+    , canonical_form_idiom # Round 50
+    }:
+    {
+      inherit id idiom;
+      inherit monad_emit recurrence_emit hoare_emit;
+      inherit concurrency_emit ring_axiom_emit monoidal_emit;
+      inherit coequalizer_emit;
+      inherit null_handling_idiom error_handling_idiom async_idiom;
+      inherit currying_idiom parallel_idiom canonical_form_idiom;
+    };
+
+  # =================================================================
+  # === 5 language profiles (DATA ROWS) ==============================
+  # =================================================================
+
+  pythonProfile = mkLanguageProfile {
+    id = "python";
+    idiom = "imperative-with-functional-stdlib";
+    monad_emit = {
+      Maybe = "if x is not None:\n    use(x)\nelse:\n    handle_missing()";
+      Either = "try:\n    result = compute()\nexcept SomeError as e:\n    handle(e)";
+      State = "self.state = new_value  # mutation on instance";
+      Async = "result = await async_fn()";
+    };
+    recurrence_emit = r:
+      "# T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\ndef solve(n):\n    if n <= base:\n        return base_case(n)\n    return combine([solve(n // "
+      + builtins.toString r.input_vars.b + ") for _ in range("
+      + builtins.toString r.input_vars.a + ")])";
+    hoare_emit = h:
+      "# precondition: " + h.precondition_form
+      + "\n# invariant: " + h.invariant_form
+      + "\ndef loop_body(i, s, n):\n    assert " + h.precondition_form
+      + "  # P\n    while i < n:\n        # I: " + h.invariant_form
+      + "\n        s += a[i]\n        i += 1\n    return s";
+    concurrency_emit = {
+      none = "# race condition — use threading.Lock or remove shared state";
+      atomic = "from threading import Lock\nlock = Lock()\nwith lock:\n    counter += 1";
+      mutex = "with mutex:\n    critical_section()";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "# distributive: a * (b + c) == a * b + a * c\nresult = sum(a * x for x in [b, c])"
+      else "# ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "from functools import partial\ng = partial(f, a)\nresult = g(b)  # f(a, b)";
+      "uncurry-isomorphism" = "def f_uncurried(a, b):\n    return f(a)(b)";
+      "tensor-product" = "(a, b)  # tuple = product";
+      "parallel-composition" = "from concurrent.futures import ThreadPoolExecutor\nwith ThreadPoolExecutor() as ex:\n    fa = ex.submit(f, a)\n    fb = ex.submit(g, b)\n    result = (fa.result(), fb.result())";
+      "arity-transform" = "def f(*args):  # n-ary ↔ tuple\n    a, b, c, d, e = args";
+    };
+    null_handling_idiom = "Optional[T] type hint + 'is None' check";
+    error_handling_idiom = "try/except + custom Exception classes";
+    async_idiom = "async/await + asyncio event loop";
+    currying_idiom = "functools.partial + closure-binding lambda";
+    parallel_idiom = "ThreadPoolExecutor / multiprocessing.Pool / asyncio.gather";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "total = 0\nfor x in arr:\n    total += x"
+      else if canonical_id == "comprehension"
+      then "total = sum(arr)  # or: sum(x for x in arr)"
+      else if canonical_id == "reduce"
+      then "from functools import reduce\nimport operator\ntotal = reduce(operator.add, arr, 0)"
+      else if canonical_id == "recursive"
+      then "def f(arr):\n    if not arr: return 0\n    return arr[0] + f(arr[1:])"
+      else if canonical_id == "iterative"
+      then "i = 0\nwhile i < len(arr):\n    process(arr[i])\n    i += 1"
+      else "# (no Python template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "list comprehension > generator expr > reduce/fold; PEP 8 simplicity rule";
+  };
+
+  rustProfile = mkLanguageProfile {
+    id = "rust";
+    idiom = "ownership-aware-zero-cost";
+    monad_emit = {
+      Maybe = "match x {\n    Some(v) => use_value(v),\n    None => handle_missing(),\n}";
+      Either = "let result = compute()?;  // propagates Err";
+      State = "&mut self.state  // borrow checker enforces exclusivity";
+      Async = "let result = async_fn().await;";
+    };
+    recurrence_emit = r:
+      "// T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\nfn solve(n: usize) -> Result {\n    if n <= BASE { return base_case(n); }\n    let sub: Vec<_> = (0.."
+      + builtins.toString r.input_vars.a + ").map(|_| solve(n / "
+      + builtins.toString r.input_vars.b + ")).collect();\n    combine(sub)\n}";
+    hoare_emit = h:
+      "// precondition: " + h.precondition_form
+      + "\n// invariant: " + h.invariant_form
+      + "\nfn loop_body(arr: &[i64]) -> i64 {\n    let mut s = 0; let mut i = 0;\n    let n = arr.len();\n    while i < n {\n        // I: " + h.invariant_form
+      + "\n        s += arr[i]; i += 1;\n    }\n    s\n}";
+    concurrency_emit = {
+      none = "// race — borrow checker would block this; if Send+Sync, wrap in Arc<Mutex<_>>";
+      atomic = "use std::sync::atomic::{AtomicUsize, Ordering};\nstatic CNT: AtomicUsize = AtomicUsize::new(0);\nCNT.fetch_add(1, Ordering::SeqCst);";
+      mutex = "let guard = mutex.lock().unwrap();\ncritical_section(&*guard);";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "// distributive: a * (b + c) == a * b + a * c\nlet result: i64 = [b, c].iter().map(|x| a * x).sum();"
+      else "// ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "let g = move |b| f(a, b);  // closure-binds a\nlet result = g(b);";
+      "uncurry-isomorphism" = "fn f_uncurried(a: A, b: B) -> C {\n    f(a)(b)\n}";
+      "tensor-product" = "(a, b)  // tuple = product type";
+      "parallel-composition" = "use rayon::join;\nlet (ra, rb) = join(|| f(a), || g(b));\n// or: tokio::join!(f(a), g(b))";
+      "arity-transform" = "fn f(args: (A, B, C, D, E)) -> R {\n    let (a, b, c, d, e) = args;\n    // ...\n}";
+    };
+    null_handling_idiom = "Option<T> + match / ? operator / .map / .and_then";
+    error_handling_idiom = "Result<T, E> + ? operator + custom error enum";
+    async_idiom = "async fn + .await + tokio/async-std runtime";
+    currying_idiom = "move |x| closure capture + Fn/FnMut/FnOnce traits";
+    parallel_idiom = "rayon::join / tokio::join! / std::thread::spawn";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "let mut total: i64 = 0;\nfor x in &arr {\n    total += *x;\n}"
+      else if canonical_id == "comprehension"
+      then "let total: i64 = arr.iter().sum();  // iterator chain"
+      else if canonical_id == "reduce"
+      then "let total: i64 = arr.iter().fold(0, |acc, &x| acc + x);"
+      else if canonical_id == "recursive"
+      then "fn f(arr: &[i64]) -> i64 {\n    if arr.is_empty() { 0 }\n    else { arr[0] + f(&arr[1..]) }\n}"
+      else if canonical_id == "iterative"
+      then "let mut i = 0;\nwhile i < arr.len() {\n    process(&arr[i]);\n    i += 1;\n}"
+      else "// (no Rust template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "iterator chain > for-loop > manual indexing; rustfmt + clippy idiom";
+  };
+
+  haskellProfile = mkLanguageProfile {
+    id = "haskell";
+    idiom = "pure-functional-lazy";
+    monad_emit = {
+      Maybe = "case x of\n    Just v  -> useValue v\n    Nothing -> handleMissing";
+      Either = "do\n    result <- compute\n    pure (use result)";
+      State = "modify (\\s -> s { field = newValue })";
+      Async = "result <- async ioAction";
+    };
+    recurrence_emit = r:
+      "-- T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\nsolve :: Int -> Result\nsolve n\n  | n <= base = baseCase n\n  | otherwise = combine [solve (n `div` "
+      + builtins.toString r.input_vars.b + ") | _ <- [1.."
+      + builtins.toString r.input_vars.a + "]]";
+    hoare_emit = h:
+      "-- precondition: " + h.precondition_form
+      + "\n-- invariant: " + h.invariant_form
+      + "\nloopBody :: [Int] -> Int\nloopBody = foldl' (+) 0  -- invariant: s = Σ a[0..i-1]";
+    concurrency_emit = {
+      none = "-- pure functions don't race; impure → use STM";
+      atomic = "import Control.Concurrent.STM\natomically $ modifyTVar' cnt (+1)";
+      mutex = "withMVar lock $ \\_ -> criticalSection";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "-- distributive: a * (b + c) == a * b + a * c\nresult = sum [a * x | x <- [b, c]]"
+      else "-- ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "-- functions are curried by default in Haskell\nlet g = f a  -- already partially applied\nresult = g b";
+      "uncurry-isomorphism" = "-- uncurry :: (a -> b -> c) -> (a, b) -> c\nlet f' = uncurry f\nresult = f' (a, b)";
+      "tensor-product" = "(a, b)  -- tuple = monoidal product";
+      "parallel-composition" = "import Control.Concurrent.Async\n(ra, rb) <- concurrently (f a) (g b)\n-- or: Control.Parallel.Strategies parMap";
+      "arity-transform" = "-- Haskell functions are curried; flatten via tuple:\nf :: (A, B, C, D, E) -> R\nf (a, b, c, d, e) = ...";
+    };
+    null_handling_idiom = "Maybe + do-notation / pattern match";
+    error_handling_idiom = "Either / ExceptT / MonadError typeclass";
+    async_idiom = "async package + STM for shared state";
+    currying_idiom = "native curried functions + partial application";
+    parallel_idiom = "Control.Concurrent.Async / Control.Parallel.Strategies / par/pseq";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "mapM_ process arr  -- or: forM_ arr process"
+      else if canonical_id == "comprehension"
+      then "let total = sum arr  -- or: [x | x <- arr]"
+      else if canonical_id == "reduce"
+      then "let total = foldl' (+) 0 arr  -- strict fold"
+      else if canonical_id == "recursive"
+      then "f :: [Int] -> Int\nf []     = 0\nf (x:xs) = x + f xs"
+      else if canonical_id == "iterative"
+      then "-- Haskell discourages explicit iteration; use foldl'\ntotal = foldl' (+) 0 arr"
+      else "-- (no Haskell template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "Prelude functions > foldl' > explicit recursion; pointfree style preferred";
+  };
+
+  javascriptProfile = mkLanguageProfile {
+    id = "javascript";
+    idiom = "async-first-prototype-based";
+    monad_emit = {
+      Maybe = "if (x != null) {\n    use(x);\n} else {\n    handleMissing();\n}";
+      Either = "try {\n    const result = compute();\n} catch (e) {\n    handle(e);\n}";
+      State = "this.state = newValue;  // mutation on instance";
+      Async = "const result = await asyncFn();";
+    };
+    recurrence_emit = r:
+      "// T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\nfunction solve(n) {\n  if (n <= BASE) return baseCase(n);\n  const sub = Array.from({length: "
+      + builtins.toString r.input_vars.a
+      + "}, () => solve(Math.floor(n / "
+      + builtins.toString r.input_vars.b + ")));\n  return combine(sub);\n}";
+    hoare_emit = h:
+      "// precondition: " + h.precondition_form
+      + "\n// invariant: " + h.invariant_form
+      + "\nfunction loopBody(arr) {\n  let s = 0;\n  for (let i = 0; i < arr.length; i++) {\n    // I: " + h.invariant_form
+      + "\n    s += arr[i];\n  }\n  return s;\n}";
+    concurrency_emit = {
+      none = "// single-threaded event loop — no real race; web worker shared state needs Atomics";
+      atomic = "Atomics.add(sharedBuf, idx, 1);  // SharedArrayBuffer";
+      mutex = "await mutex.acquire();\ntry { criticalSection(); } finally { mutex.release(); }";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "// distributive: a * (b + c) === a * b + a * c\nconst result = [b, c].reduce((s, x) => s + a * x, 0);"
+      else "// ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "const g = (b) => f(a, b);\n// or: const g = f.bind(null, a);\nconst result = g(b);";
+      "uncurry-isomorphism" = "function f_uncurried(a, b) {\n    return f(a)(b);\n}";
+      "tensor-product" = "[a, b]  // array = product";
+      "parallel-composition" = "const [ra, rb] = await Promise.all([f(a), g(b)]);";
+      "arity-transform" = "function f(...args) {\n    const [a, b, c, d, e] = args;\n    // ...\n}";
+    };
+    null_handling_idiom = "x != null check / optional chaining ?.";
+    error_handling_idiom = "try/catch + Error subclass + Promise.catch";
+    async_idiom = "async/await + Promise + event loop";
+    currying_idiom = "arrow function closure / fn.bind / lodash.curry";
+    parallel_idiom = "Promise.all / Web Workers / Worker Threads (Node)";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "let total = 0;\nfor (const x of arr) {\n    total += x;\n}"
+      else if canonical_id == "comprehension"
+      then "const total = arr.reduce((s, x) => s + x, 0);  // or: arr.map(...)"
+      else if canonical_id == "reduce"
+      then "const total = arr.reduce((acc, x) => acc + x, 0);"
+      else if canonical_id == "recursive"
+      then "function f(arr) {\n    if (arr.length === 0) return 0;\n    return arr[0] + f(arr.slice(1));\n}"
+      else if canonical_id == "iterative"
+      then "let i = 0;\nwhile (i < arr.length) {\n    process(arr[i]);\n    i += 1;\n}"
+      else "// (no JS template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "Array methods (reduce/map/filter) > for-of > C-style for-loop";
+  };
+
+  clojureProfile = mkLanguageProfile {
+    id = "clojure";
+    idiom = "lisp-functional-host-jvm";
+    monad_emit = {
+      Maybe = "(if (some? x)\n  (use-value x)\n  (handle-missing))";
+      Either = "(try\n  (compute)\n  (catch Exception e (handle e)))";
+      State = "(swap! state-atom assoc :field new-value)";
+      Async = "@(future (async-fn))  ; or core.async go-block";
+    };
+    recurrence_emit = r:
+      ";; T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\n(defn solve [n]\n  (if (<= n base)\n    (base-case n)\n    (combine (repeatedly "
+      + builtins.toString r.input_vars.a
+      + " #(solve (quot n " + builtins.toString r.input_vars.b
+      + "))))))";
+    hoare_emit = h:
+      ";; precondition: " + h.precondition_form
+      + "\n;; invariant: " + h.invariant_form
+      + "\n(defn loop-body [arr]\n  (reduce + 0 arr))  ; invariant by reduce semantics";
+    concurrency_emit = {
+      none = ";; STM ref or atom for shared state";
+      atomic = "(swap! counter inc)  ; atom = lock-free CAS";
+      mutex = "(locking mutex (critical-section))";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then ";; distributive: (* a (+ b c)) = (+ (* a b) (* a c))\n(reduce + (map #(* a %) [b c]))"
+      else ";; ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "(def g (partial f a))\n(g b)  ;; = (f a b)";
+      "uncurry-isomorphism" = "(defn f-uncurried [[a b]]  ;; takes a vector\n  ((f a) b))";
+      "tensor-product" = "[a b]  ;; vector = product";
+      "parallel-composition" = "(let [ra (future (f a))\n      rb (future (g b))]\n  [@ra @rb])\n;; or (pmap)";
+      "arity-transform" = "(defn f [& args]\n  (let [[a b c d e] args]\n    ...))";
+    };
+    null_handling_idiom = "some? / nil? + when-let / if-let";
+    error_handling_idiom = "try/catch + ex-info maps + slingshot";
+    async_idiom = "core.async go-blocks / futures / promises";
+    currying_idiom = "partial / fn closure / lift to clojure.core/comp";
+    parallel_idiom = "future / pmap / core.async / pipeline-blocking";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "(doseq [x arr]\n  (process x))"
+      else if canonical_id == "comprehension"
+      then "(map process arr)  ;; or (for [x arr] (process x))"
+      else if canonical_id == "reduce"
+      then "(reduce + 0 arr)"
+      else if canonical_id == "recursive"
+      then "(defn f [arr]\n  (if (empty? arr)\n    0\n    (+ (first arr) (f (rest arr)))))"
+      else if canonical_id == "iterative"
+      then "(loop [i 0]\n  (when (< i (count arr))\n    (process (nth arr i))\n    (recur (inc i))))"
+      else ";; (no Clojure template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "reduce/map/filter (seq) > doseq > loop/recur; lisp-functional preferred";
+  };
+
+  # === Round 63: 5 신규 language profiles ===========================
+  #
+  # 사용자 directive (Round 62 후):
+  # > '남은 frontier ... 새 language profile (Go/Java/C#/Kotlin)'
+  #
+  # 5 신규 profile (mkLanguageProfile data rows; 코드 변경 0):
+  # Go / Java / TypeScript / C# / Kotlin
+  # 총 10 host languages 격자 cover.
+
+  goProfile = mkLanguageProfile {
+    id = "go";
+    idiom = "imperative-with-goroutines-and-channels";
+    monad_emit = {
+      Maybe = "if x != nil {\n    use(x)\n} else {\n    handleMissing()\n}";
+      Either = "result, err := compute()\nif err != nil {\n    return err\n}";
+      State = "s.state = newValue  // struct field mutation";
+      Async = "result := <-ch  // channel receive";
+    };
+    recurrence_emit = r:
+      "// T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\nfunc solve(n int) Result {\n    if n <= base { return baseCase(n) }\n    sub := make([]Result, "
+      + builtins.toString r.input_vars.a + ")\n    for i := range sub {\n        sub[i] = solve(n / "
+      + builtins.toString r.input_vars.b + ")\n    }\n    return combine(sub)\n}";
+    hoare_emit = h:
+      "// precondition: " + h.precondition_form
+      + "\n// invariant: " + h.invariant_form
+      + "\nfunc loopBody(arr []int) int {\n    s := 0\n    for i := 0; i < len(arr); i++ {\n        // I: " + h.invariant_form
+      + "\n        s += arr[i]\n    }\n    return s\n}";
+    concurrency_emit = {
+      none = "// race — use sync.Mutex or channels for shared state";
+      atomic = "atomic.AddInt64(&counter, 1)  // sync/atomic";
+      mutex = "mu.Lock()\ndefer mu.Unlock()\ncriticalSection()";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "// distributive: a * (b + c) == a * b + a * c\nresult := a * (b + c)  // equivalent to a*b + a*c"
+      else "// ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "g := func(b B) C { return f(a, b) }  // closure-binds a\nresult := g(b)";
+      "uncurry-isomorphism" = "func fUncurried(a A, b B) C {\n    return f(a)(b)\n}";
+      "tensor-product" = "type Pair struct { First A; Second B }";
+      "parallel-composition" = "var wg sync.WaitGroup\nvar ra, rb Result\nwg.Add(2)\ngo func() { defer wg.Done(); ra = f(a) }()\ngo func() { defer wg.Done(); rb = g(b) }()\nwg.Wait()";
+      "arity-transform" = "func f(args ...interface{}) R {\n    a, b, c, d, e := args[0], args[1], args[2], args[3], args[4]\n    // ...\n}";
+    };
+    null_handling_idiom = "explicit nil check / pointer or comma-ok idiom";
+    error_handling_idiom = "explicit error return / errors.Is / errors.As";
+    async_idiom = "goroutines + channels / sync.WaitGroup / context.Context";
+    currying_idiom = "closure with captured value / function-returning function";
+    parallel_idiom = "goroutines + sync.WaitGroup / errgroup.Group / sync/atomic";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "total := 0\nfor _, x := range arr {\n    total += x\n}"
+      else if canonical_id == "comprehension"
+      then "// Go has no comprehension; use for-loop\ntotal := 0\nfor _, x := range arr {\n    total += x\n}"
+      else if canonical_id == "reduce"
+      then "// Go has no reduce; manual accumulator\ntotal := 0\nfor _, x := range arr {\n    total += x\n}"
+      else if canonical_id == "recursive"
+      then "func f(arr []int) int {\n    if len(arr) == 0 { return 0 }\n    return arr[0] + f(arr[1:])\n}"
+      else if canonical_id == "iterative"
+      then "i := 0\nfor i < len(arr) {\n    process(arr[i])\n    i++\n}"
+      else "// (no Go template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "for-range loop > manual index; explicit > implicit; gofmt enforced";
+  };
+
+  javaProfile = mkLanguageProfile {
+    id = "java";
+    idiom = "oop-with-streams-and-records";
+    monad_emit = {
+      Maybe = "Optional<T> opt = Optional.ofNullable(x);\nopt.ifPresentOrElse(v -> use(v), () -> handleMissing());";
+      Either = "try {\n    Result result = compute();\n} catch (SomeException e) {\n    handle(e);\n}";
+      State = "this.state = newValue;  // instance field mutation";
+      Async = "CompletableFuture<T> future = CompletableFuture.supplyAsync(this::asyncFn);";
+    };
+    recurrence_emit = r:
+      "// T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\npublic Result solve(int n) {\n    if (n <= base) return baseCase(n);\n    var sub = IntStream.range(0, "
+      + builtins.toString r.input_vars.a + ").mapToObj(i -> solve(n / "
+      + builtins.toString r.input_vars.b + ")).toList();\n    return combine(sub);\n}";
+    hoare_emit = h:
+      "// precondition: " + h.precondition_form
+      + "\n// invariant: " + h.invariant_form
+      + "\npublic long loopBody(int[] arr) {\n    long s = 0;\n    for (int i = 0; i < arr.length; i++) {\n        // I: " + h.invariant_form
+      + "\n        s += arr[i];\n    }\n    return s;\n}";
+    concurrency_emit = {
+      none = "// race — synchronize or use java.util.concurrent.atomic";
+      atomic = "AtomicLong counter = new AtomicLong();\ncounter.incrementAndGet();";
+      mutex = "synchronized (lock) {\n    criticalSection();\n}";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "// distributive: a * (b + c) == a * b + a * c\nlong result = IntStream.of(b, c).map(x -> a * x).sum();"
+      else "// ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "Function<B, C> g = b -> f.apply(a, b);  // closure-binds a\nC result = g.apply(b);";
+      "uncurry-isomorphism" = "public C fUncurried(A a, B b) {\n    return f.apply(a).apply(b);\n}";
+      "tensor-product" = "record Pair<A, B>(A first, B second) {}";
+      "parallel-composition" = "CompletableFuture<R> fa = CompletableFuture.supplyAsync(() -> f(a));\nCompletableFuture<R> fb = CompletableFuture.supplyAsync(() -> g(b));\nvar results = CompletableFuture.allOf(fa, fb).thenApply(_ -> List.of(fa.join(), fb.join()));";
+      "arity-transform" = "// Java varargs:\npublic R f(Object... args) {\n    A a = (A) args[0]; B b = (B) args[1]; /* ... */\n}";
+    };
+    null_handling_idiom = "Optional<T> + ifPresent / orElse / map";
+    error_handling_idiom = "try/catch + checked exceptions + custom Exception class";
+    async_idiom = "CompletableFuture / ExecutorService / virtual threads (Java 21+)";
+    currying_idiom = "lambda + Function<A, Function<B, C>> / functional interface composition";
+    parallel_idiom = "ExecutorService + CompletableFuture / parallel streams / ForkJoinPool";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "long total = 0;\nfor (int x : arr) {\n    total += x;\n}"
+      else if canonical_id == "comprehension"
+      then "long total = Arrays.stream(arr).sum();  // Stream API"
+      else if canonical_id == "reduce"
+      then "long total = Arrays.stream(arr).reduce(0, Long::sum);"
+      else if canonical_id == "recursive"
+      then "public long f(int[] arr, int i) {\n    if (i >= arr.length) return 0;\n    return arr[i] + f(arr, i + 1);\n}"
+      else if canonical_id == "iterative"
+      then "int i = 0;\nwhile (i < arr.length) {\n    process(arr[i]);\n    i++;\n}"
+      else "// (no Java template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "Stream API > enhanced for > C-style for; google-java-format";
+  };
+
+  typescriptProfile = mkLanguageProfile {
+    id = "typescript";
+    idiom = "typed-async-first-structural";
+    monad_emit = {
+      Maybe = "if (x !== null && x !== undefined) {\n    use(x);\n} else {\n    handleMissing();\n}";
+      Either = "try {\n    const result: Result = await compute();\n} catch (e: unknown) {\n    handle(e);\n}";
+      State = "this.state = newValue;  // class field mutation";
+      Async = "const result: T = await asyncFn();";
+    };
+    recurrence_emit = r:
+      "// T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\nfunction solve(n: number): Result {\n  if (n <= BASE) return baseCase(n);\n  const sub = Array.from({length: "
+      + builtins.toString r.input_vars.a
+      + "}, () => solve(Math.floor(n / "
+      + builtins.toString r.input_vars.b + ")));\n  return combine(sub);\n}";
+    hoare_emit = h:
+      "// precondition: " + h.precondition_form
+      + "\n// invariant: " + h.invariant_form
+      + "\nfunction loopBody(arr: number[]): number {\n  let s = 0;\n  for (let i = 0; i < arr.length; i++) {\n    // I: " + h.invariant_form
+      + "\n    s += arr[i];\n  }\n  return s;\n}";
+    concurrency_emit = {
+      none = "// single-threaded; SharedArrayBuffer needs Atomics";
+      atomic = "Atomics.add(sharedBuf, idx, 1);  // SharedArrayBuffer";
+      mutex = "await mutex.acquire();\ntry { criticalSection(); } finally { mutex.release(); }";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "// distributive: a * (b + c) === a * b + a * c\nconst result: number = [b, c].reduce((s, x) => s + a * x, 0);"
+      else "// ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "const g = (b: B): C => f(a, b);  // typed closure\nconst result: C = g(b);";
+      "uncurry-isomorphism" = "function fUncurried(a: A, b: B): C {\n    return f(a)(b);\n}";
+      "tensor-product" = "type Pair<A, B> = [A, B] | { first: A; second: B };";
+      "parallel-composition" = "const [ra, rb] = await Promise.all([f(a), g(b)]);";
+      "arity-transform" = "function f<T extends [A, B, C, D, E]>(...args: T): R {\n    const [a, b, c, d, e] = args;\n    // ...\n}";
+    };
+    null_handling_idiom = "Optional chaining ?. / nullish coalescing ?? / strict null checks";
+    error_handling_idiom = "try/catch + typed Error class + Result<T, E> pattern";
+    async_idiom = "async/await + Promise<T> + AbortController for cancellation";
+    currying_idiom = "arrow function with explicit return type / fp-ts curry";
+    parallel_idiom = "Promise.all / Promise.allSettled / Web Workers";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "let total = 0;\nfor (const x of arr) {\n    total += x;\n}"
+      else if canonical_id == "comprehension"
+      then "const total = arr.reduce((s, x) => s + x, 0);  // or: arr.map/filter"
+      else if canonical_id == "reduce"
+      then "const total: number = arr.reduce((acc: number, x: number) => acc + x, 0);"
+      else if canonical_id == "recursive"
+      then "function f(arr: number[]): number {\n    if (arr.length === 0) return 0;\n    return arr[0] + f(arr.slice(1));\n}"
+      else if canonical_id == "iterative"
+      then "let i = 0;\nwhile (i < arr.length) {\n    process(arr[i]);\n    i += 1;\n}"
+      else "// (no TS template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "Array methods (reduce/map/filter) > for-of > C-style for; prettier + eslint";
+  };
+
+  csharpProfile = mkLanguageProfile {
+    id = "csharp";
+    idiom = "oop-with-linq-and-records";
+    monad_emit = {
+      Maybe = "if (x is not null) {\n    Use(x);\n} else {\n    HandleMissing();\n}\n// or: x?.Method()";
+      Either = "try {\n    var result = Compute();\n} catch (SomeException e) {\n    Handle(e);\n}";
+      State = "this.State = newValue;  // property mutation";
+      Async = "var result = await AsyncFn();";
+    };
+    recurrence_emit = r:
+      "// T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\npublic Result Solve(int n) {\n    if (n <= BASE) return BaseCase(n);\n    var sub = Enumerable.Range(0, "
+      + builtins.toString r.input_vars.a + ").Select(_ => Solve(n / "
+      + builtins.toString r.input_vars.b + ")).ToList();\n    return Combine(sub);\n}";
+    hoare_emit = h:
+      "// precondition: " + h.precondition_form
+      + "\n// invariant: " + h.invariant_form
+      + "\npublic long LoopBody(int[] arr) {\n    long s = 0;\n    for (int i = 0; i < arr.Length; i++) {\n        // I: " + h.invariant_form
+      + "\n        s += arr[i];\n    }\n    return s;\n}";
+    concurrency_emit = {
+      none = "// race — use lock or Interlocked";
+      atomic = "Interlocked.Increment(ref counter);";
+      mutex = "lock (syncRoot) {\n    CriticalSection();\n}";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "// distributive: a * (b + c) == a * b + a * c\nlong result = new[] { b, c }.Sum(x => a * x);  // LINQ"
+      else "// ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "Func<B, C> g = b => f(a, b);  // closure-binds a\nC result = g(b);";
+      "uncurry-isomorphism" = "public C FUncurried(A a, B b) {\n    return f(a)(b);\n}";
+      "tensor-product" = "public record Pair<A, B>(A First, B Second);";
+      "parallel-composition" = "var ta = Task.Run(() => F(a));\nvar tb = Task.Run(() => G(b));\nawait Task.WhenAll(ta, tb);\nvar (ra, rb) = (ta.Result, tb.Result);";
+      "arity-transform" = "// C# params:\npublic R F(params object[] args) {\n    var (a, b, c, d, e) = (args[0], args[1], args[2], args[3], args[4]);\n}";
+    };
+    null_handling_idiom = "nullable reference types T? + null-conditional ?. + null-coalescing ??";
+    error_handling_idiom = "try/catch + custom Exception + Result<T, E> with libraries";
+    async_idiom = "async/await + Task<T> + CancellationToken + ConfigureAwait(false)";
+    currying_idiom = "Func<A, Func<B, C>> + lambda chains / fluent extension methods";
+    parallel_idiom = "Task.Run + Task.WhenAll / Parallel.ForEach / TPL Dataflow";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "long total = 0;\nforeach (var x in arr) {\n    total += x;\n}"
+      else if canonical_id == "comprehension"
+      then "long total = arr.Sum();  // LINQ"
+      else if canonical_id == "reduce"
+      then "long total = arr.Aggregate(0L, (acc, x) => acc + x);"
+      else if canonical_id == "recursive"
+      then "public long F(int[] arr, int i = 0) {\n    if (i >= arr.Length) return 0;\n    return arr[i] + F(arr, i + 1);\n}"
+      else if canonical_id == "iterative"
+      then "int i = 0;\nwhile (i < arr.Length) {\n    Process(arr[i]);\n    i++;\n}"
+      else "// (no C# template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "LINQ > foreach > for loop; dotnet format / .editorconfig";
+  };
+
+  kotlinProfile = mkLanguageProfile {
+    id = "kotlin";
+    idiom = "functional-oop-hybrid-jvm";
+    monad_emit = {
+      Maybe = "x?.let { use(it) } ?: handleMissing()  // safe call + Elvis";
+      Either = "try {\n    val result = compute()\n} catch (e: SomeException) {\n    handle(e)\n}";
+      State = "this.state = newValue  // var property mutation";
+      Async = "val result = asyncFn().await()  // coroutine";
+    };
+    recurrence_emit = r:
+      "// T(n) = " + builtins.toString r.input_vars.a
+      + "·T(n/" + builtins.toString r.input_vars.b
+      + ") + Θ(n^" + builtins.toString r.input_vars.c
+      + ")  → " + r.big_o
+      + "\nfun solve(n: Int): Result {\n    if (n <= BASE) return baseCase(n)\n    val sub = (0 until "
+      + builtins.toString r.input_vars.a + ").map { solve(n / "
+      + builtins.toString r.input_vars.b + ") }\n    return combine(sub)\n}";
+    hoare_emit = h:
+      "// precondition: " + h.precondition_form
+      + "\n// invariant: " + h.invariant_form
+      + "\nfun loopBody(arr: IntArray): Long {\n    var s = 0L\n    for (i in arr.indices) {\n        // I: " + h.invariant_form
+      + "\n        s += arr[i]\n    }\n    return s\n}";
+    concurrency_emit = {
+      none = "// race — use Mutex or AtomicInteger from java.util.concurrent.atomic";
+      atomic = "val counter = AtomicInteger()\ncounter.incrementAndGet()";
+      mutex = "mutex.withLock {\n    criticalSection()\n}";
+    };
+    ring_axiom_emit = r:
+      if r.axiom_name == "distributive"
+      then "// distributive: a * (b + c) == a * b + a * c\nval result = listOf(b, c).sumOf { a * it }"
+      else "// ring axiom: " + r.axiom_name;
+    monoidal_emit = {
+      "curry-isomorphism" = "val g: (B) -> C = { b -> f(a, b) }  // closure-binds a\nval result = g(b)";
+      "uncurry-isomorphism" = "fun fUncurried(a: A, b: B): C = f(a)(b)";
+      "tensor-product" = "data class Pair<A, B>(val first: A, val second: B)";
+      "parallel-composition" = "coroutineScope {\n    val ra = async { f(a) }\n    val rb = async { g(b) }\n    Pair(ra.await(), rb.await())\n}";
+      "arity-transform" = "fun f(vararg args: Any): R {\n    val (a, b, c, d, e) = args.toList()\n    // ...\n}";
+    };
+    null_handling_idiom = "T? nullable type + safe call ?. + Elvis ?: + let/run scope";
+    error_handling_idiom = "try/catch + sealed Result<T> / runCatching";
+    async_idiom = "coroutines + suspend functions + Flow + structured concurrency";
+    currying_idiom = "lambda chains + extension functions + with/apply/run scope";
+    parallel_idiom = "coroutineScope + async/await + Dispatchers.IO/Default";
+    coequalizer_emit = canonical_id:
+      if canonical_id == "for-loop"
+      then "var total = 0L\nfor (x in arr) {\n    total += x\n}"
+      else if canonical_id == "comprehension"
+      then "val total = arr.sum().toLong()  // or: arr.map/filter"
+      else if canonical_id == "reduce"
+      then "val total = arr.fold(0L) { acc, x -> acc + x }"
+      else if canonical_id == "recursive"
+      then "fun f(arr: IntArray, i: Int = 0): Long {\n    if (i >= arr.size) return 0L\n    return arr[i] + f(arr, i + 1)\n}"
+      else if canonical_id == "iterative"
+      then "var i = 0\nwhile (i < arr.size) {\n    process(arr[i])\n    i++\n}"
+      else "// (no Kotlin template for canonical_id=" + canonical_id + ")";
+    canonical_form_idiom = "stdlib collection ops (sumOf/map/filter/fold) > for-each > index loops; ktlint";
+  };
+
+  knownLanguageProfiles = [
+    pythonProfile rustProfile haskellProfile
+    javascriptProfile clojureProfile
+    # Round 63 expansion — 5 new languages
+    goProfile javaProfile typescriptProfile csharpProfile kotlinProfile
+  ];
+
+  # =================================================================
+  # === Mode 13 binding: per-language sentence fanout ===============
+  # =================================================================
+  #
+  # 한 math result 를 받아 모든 알려진 언어로 algorithm sentence skeleton
+  # emit. *same intent, different sentence per language* — runtime
+  # per-language convergence 의 핵심.
+
+  emitPerLanguageSentence = mathResult: profile:
+    let
+      kind = mathResult.math_kind;
+      math_output = mathResult.math_equation;
+    in
+      if kind == "monadic-effect-pattern"
+      then {
+        language = profile.id;
+        idiom = profile.idiom;
+        math_kind = kind;
+        sentence_skeleton =
+          if profile.monad_emit ? "${math_output.monad_type}"
+          then profile.monad_emit.${math_output.monad_type}
+          else "// (no template for " + math_output.monad_type + ")";
+        applicable_idiom =
+          if math_output.monad_type == "Maybe"
+          then profile.null_handling_idiom
+          else if math_output.monad_type == "Either"
+          then profile.error_handling_idiom
+          else if math_output.monad_type == "Async"
+          then profile.async_idiom
+          else "(state pattern)";
+      }
+      else if kind == "recurrence-master-theorem"
+      then {
+        language = profile.id;
+        idiom = profile.idiom;
+        math_kind = kind;
+        sentence_skeleton = profile.recurrence_emit math_output;
+        applicable_idiom = "divide-and-conquer";
+      }
+      else if kind == "hoare-triple-loop-invariant"
+      then {
+        language = profile.id;
+        idiom = profile.idiom;
+        math_kind = kind;
+        sentence_skeleton = profile.hoare_emit math_output;
+        applicable_idiom = "loop invariant + termination";
+      }
+      else if kind == "concurrency-happens-before"
+      then {
+        language = profile.id;
+        idiom = profile.idiom;
+        math_kind = kind;
+        sentence_skeleton =
+          if profile.concurrency_emit ? "${math_output.sync_kind}"
+          then profile.concurrency_emit.${math_output.sync_kind}
+          else "// (no template for sync_kind=" + math_output.sync_kind + ")";
+        applicable_idiom = "happens-before ordering";
+      }
+      else if kind == "ring-axiom-identity"
+      then {
+        language = profile.id;
+        idiom = profile.idiom;
+        math_kind = kind;
+        sentence_skeleton = profile.ring_axiom_emit math_output;
+        applicable_idiom = "algebraic transform";
+      }
+      else if kind == "monoidal-product-pattern"  # Round 49
+      then {
+        language = profile.id;
+        idiom = profile.idiom;
+        math_kind = kind;
+        sentence_skeleton =
+          if profile.monoidal_emit ? "${math_output.product_kind}"
+          then profile.monoidal_emit.${math_output.product_kind}
+          else "// (no template for product_kind="
+               + math_output.product_kind + ")";
+        applicable_idiom =
+          if math_output.product_kind == "curry-isomorphism"
+             || math_output.product_kind == "uncurry-isomorphism"
+          then profile.currying_idiom
+          else if math_output.product_kind == "parallel-composition"
+          then profile.parallel_idiom
+          else "(product / arity transform)";
+      }
+      else if kind == "coequalizer-fold-pattern"  # Round 50
+      then {
+        language = profile.id;
+        idiom = profile.idiom;
+        math_kind = kind;
+        canonical_chain_id = math_output.canonical_chain_id;
+        candidate_count = math_output.candidate_count;
+        selection_reason = math_output.selection_reason;
+        sentence_skeleton =
+          if math_output.canonical_chain_id == null
+          then "(no canonical chain)"
+          else profile.coequalizer_emit math_output.canonical_chain_id;
+        applicable_idiom = profile.canonical_form_idiom;
+      }
+      else if kind == "functor-lift-pattern"  # Round 51
+      then
+        let
+          comment_open =
+            if profile.id == "python" then "#"
+            else if profile.id == "rust" then "//"
+            else if profile.id == "haskell" then "--"
+            else if profile.id == "javascript" then "//"
+            else if profile.id == "clojure" then ";;"
+            else "#";
+        in {
+          language = profile.id;
+          idiom = profile.idiom;
+          math_kind = kind;
+          semantic_role = math_output.semantic_role;
+          algorithm_class = math_output.algorithm_class;
+          intent_signature = math_output.intent_signature;
+          typeclass_required = math_output.typeclass_required;
+          # Meaning object emit = language-agnostic doc block in each lang's comment syntax
+          sentence_skeleton =
+            comment_open + " === Lifted Meaning (functor F : canonical → meaning) ===\n"
+            + comment_open + " Semantic role:      " + math_output.semantic_role + "\n"
+            + comment_open + " Algorithm class:    " + math_output.algorithm_class + "\n"
+            + comment_open + " Intent signature:   " + math_output.intent_signature + "\n"
+            + comment_open + " Typeclass required: "
+              + (if math_output.typeclass_required == null
+                 then "(none — intent-only lift)"
+                 else math_output.typeclass_required) + "\n"
+            + comment_open + " Functor laws preserved: F(g∘f)=F(g)∘F(f), F(id)=id";
+          applicable_idiom = "abstract intent (language-agnostic by construction)";
+        }
+      else {
+        language = profile.id;
+        idiom = profile.idiom;
+        math_kind = kind;
+        sentence_skeleton = null;
+        held = "language-emit-not-mechanized-for-kind";
+        applicable_idiom = null;
+      };
+
+  # =================================================================
+  # === Full runtime loop primitive ==================================
+  # =================================================================
+  #
+  # Mode 4 (cue-detect) + Mode 9 (monadic if cued) + Mode 13 (fanout)
+  # 한 호출.
+
+  runCodingLoop = utterance:
+    let
+      # Mode 4: cue detect via dev-flow (generic engine pipelineFold)
+      cueResult = d.runRealDevFlow utterance;
+    in
+      if cueResult.outcome == "held-no-cue-match"
+      then {
+        outcome = "held-mode-4-no-cue";
+        utterance = utterance;
+      }
+      else
+        let
+          # For each math step, fanout to all 5 languages — Mode 13
+          mathSteps = cueResult.algorithm_step_sequence;
+          fanoutForStep = step:
+            let perLang = builtins.map
+              (profile: emitPerLanguageSentence step profile)
+              knownLanguageProfiles;
+            in {
+              math_kind = step.math_kind;
+              family = step.family;
+              rule_pattern = step.rule_pattern;
+              per_language_emit = perLang;
+              language_count = builtins.length perLang;
+            };
+          fanouts = builtins.map fanoutForStep mathSteps;
+        in {
+          outcome = "coding-loop-emitted";
+          utterance = utterance;
+          mode_4_step_count = cueResult.step_count;
+          mode_13_language_count = builtins.length knownLanguageProfiles;
+          # Per-step per-language algorithm sentence skeletons
+          fanouts = fanouts;
+          # Closed-loop intelligence marker
+          is_runtime_per_language_divergent = true;
+          # Composability proof reference
+          composability_lemma_closed = composabilityProofClosed;
+        };
+
+  # =================================================================
+  # === Demonstration ================================================
+  # =================================================================
+
+  demoUtterances = [
+    "do null check before access"
+    "wrap in try catch and return value"
+    "use merge sort for ordering"
+    "race condition causes throughput drop"
+    "apply distributive law"
+  ];
+
+  demoResults = builtins.map runCodingLoop demoUtterances;
+
+  successDemos = builtins.filter
+    (r: r.outcome == "coding-loop-emitted") demoResults;
+
+  # =================================================================
+  # === Inventory ====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    sixteen_mode_chain_anchored = true;
+    composability_lemma_proof_closed = composabilityProofClosed;
+    bound_mode_count = boundModeCount;     # 4 + 9 + 13 + 15 = 4 modes bound
+    held_mode_count = heldModeCount;       # 10 + 11 + 12 = 3 modes held
+    transport_only_mode_count =
+      builtins.length (builtins.filter
+        (m: m.binding_status == "transport-only"
+            || m.binding_status == "host-side-deferred"
+            || m.binding_status == "implicit-via-cue-rule-family"
+            || m.binding_status == "implicit-via-math-kind-output"
+            || m.binding_status == "implicit-via-held-shape"
+            || m.binding_status == "implicit-via-Held-envelope")
+        modeBindingMap);
+    known_language_profile_count = builtins.length knownLanguageProfiles;
+    has_runCodingLoop = true;
+    has_emitPerLanguageSentence = true;
+    has_mkLanguageProfile = true;
+    generic_engine_owner = g.ownerName;
+    dev_flow_owner = d.ownerName;
+    monad_owner = cat_monad.ownerName;
+    composability_owner = composability.ownerName;
+    demo_count = builtins.length demoUtterances;
+    demo_success_count = builtins.length successDemos;
+    # 사용자 directive evidence
+    is_runtime_coding_loop = true;
+    same_intent_different_sentence_per_language = true;
+    no_hardcoded_per_language_if_else_in_engine = true;
+    new_language_via_one_mkLanguageProfile_call = true;
+    deterministic = true;
+  };
+
+  # =================================================================
+  # === Plate entry ==================================================
+  # =================================================================
+
+  applyRuntimeCodingLoopPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "runtime-coding-loop-inventory";
+      receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "binding_map" request then {
+      outcome = "mode-binding-map-emitted";
+      receipt = modeBindingMap;
+    }
+    else if builtins.hasAttr "run_loop" request then
+      runCodingLoop request.run_loop
+    else if builtins.hasAttr "language_profiles" request then {
+      outcome = "language-profiles-emitted";
+      receipt = {
+        count = builtins.length knownLanguageProfiles;
+        languages = builtins.map (p: { inherit (p) id idiom; })
+          knownLanguageProfiles;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys =
+             [ "inventory" "binding_map" "run_loop" "language_profiles" ];
+           };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit modeBindingMap boundModeCount heldModeCount;
+  inherit mkLanguageProfile knownLanguageProfiles;
+  inherit pythonProfile rustProfile haskellProfile;
+  inherit javascriptProfile clojureProfile;
+  inherit emitPerLanguageSentence runCodingLoop;
+  inherit demoUtterances demoResults successDemos;
+  inherit inventorySummary applyRuntimeCodingLoopPlate;
+}

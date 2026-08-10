@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$clr_meta_root/.." && pwd)"
+runtime_root="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish"
+main_dll="$runtime_root/Clojure.Main.dll"
+source_root="$clr_meta_root/src"
+test_root="$clr_meta_root/test"
+family_root="$clr_meta_root/compiler-selfhost"
+contract="$family_root/contract.edn"
+profile="$family_root/profile.edn"
+plan="$family_root/plan.edn"
+source="$family_root/compiler_kernel.clj"
+
+fail() {
+  echo "clr-meta compiler selfhost admission gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+[[ -f "$main_dll" ]] || fail pinned-runtime-missing
+for input in "$contract" "$profile" "$plan" "$source"; do
+  [[ -f "$input" ]] || fail canonical-input-missing
+done
+command -v jq >/dev/null 2>&1 || fail jq-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-admission.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+export CLOJURE_LOAD_PATH="$source_root:$test_root"
+(
+  cd "$runtime_root"
+  dotnet "$main_dll" -m pnix.clr-meta.compiler-selfhost-admission-test
+) >"$tmp/test.stdout" 2>"$tmp/test.stderr" || {
+  sed -n '1,240p' "$tmp/test.stdout" >&2
+  sed -n '1,240p' "$tmp/test.stderr" >&2
+  fail focused-tests
+}
+
+run_admission() {
+  local output="$1"
+  (
+    cd "$runtime_root"
+    CLOJURE_LOAD_PATH="$source_root" \
+    CLOJURE_COMPILE_PATH= \
+    CLR_META_SOURCE_ROOT= \
+      dotnet "$main_dll" \
+        -m pnix.clr-meta.compiler-selfhost-admission \
+        "$contract" "$profile" "$plan" "$source" "$output"
+  )
+}
+
+run_admission "$tmp/receipt-a.json" >"$tmp/cli-a.stdout" 2>"$tmp/cli-a.stderr"
+run_admission "$tmp/receipt-b.json" >"$tmp/cli-b.stdout" 2>"$tmp/cli-b.stderr"
+[[ ! -s "$tmp/cli-a.stdout" && ! -s "$tmp/cli-a.stderr" ]] || fail cli-a-noise
+[[ ! -s "$tmp/cli-b.stdout" && ! -s "$tmp/cli-b.stderr" ]] || fail cli-b-noise
+cmp "$tmp/receipt-a.json" "$tmp/receipt-b.json" >/dev/null || \
+  fail nondeterministic-receipt
+
+if rg -n \
+  '\((eval|compile|load|load-file|load-reader|load-string|read-string|resolve|requiring-resolve)[[:space:]\)]|clojure\.lang\.Compiler|System\.Diagnostics\.Process|System\.Reflection|Microsoft\.CSharp' \
+  "$source" \
+  "$source_root/pnix/clr_meta/compiler_selfhost_admission.clj" \
+  "$source_root/pnix/clr_meta/compiler_selfhost_contract.clj" \
+  "$source_root/pnix/clr_meta/compiler_selfhost_source.clj" \
+  >"$tmp/forbidden-fallback-references"; then
+  fail forbidden-fallback-reference
+fi
+
+receipt="$tmp/receipt-a.json"
+jq -e '
+  (keys == [
+    "accounting","admitted","checkpoint","compiled_language_id",
+    "compiler_executable","compiler_self_reproduction",
+    "compiler_stage1_artifact","compiler_stage2","compiler_stage3",
+    "contract_id","entry","executable_stage","family","fixed_point",
+    "il_fixed_point","input_closure_sha256","inputs",
+    "lowering_coverage","mutation_propagation","mutation_sites","nodes",
+    "plan_id","profile_id","raw_artifact_reproducibility",
+    "raw_reproducibility","same_source_recompile_executed","schema",
+    "seed_bindings","self_reproduction","source_language_equals_compiled_language",
+    "source_language_id","source_namespace","stage1_artifact","stage2"
+  ]) and
+  .schema == "pnix.clr-meta.compiler-selfhost-admission.v1" and
+  .admitted == true and
+  .checkpoint == "c1-source-admission" and
+  .family == "pnix.clr-meta.compiler-kernel.v1" and
+  .contract_id == "pnix.clr-meta.compiler-kernel-c0-c1.v1" and
+  .profile_id == "pnix.clr-meta.compiler-kernel-source.v1" and
+  .plan_id == "pnix.clr-meta.compiler-kernel-c0-c1-plan.v1" and
+  .source_namespace == "pnix.clr-meta.compiler-kernel.v1" and
+  .entry == "compile-source" and
+  .source_language_id == "pnix.clr-meta.compiler-kernel-source.v1" and
+  .compiled_language_id == .source_language_id and
+  .source_language_equals_compiled_language == true and
+  .compiler_executable == false and
+  .compiler_stage1_artifact == false and
+  .compiler_stage2 == false and
+  .compiler_stage3 == false and
+  .compiler_self_reproduction == false and
+  .executable_stage == false and
+  .stage1_artifact == false and
+  .stage2 == false and
+  .self_reproduction == false and
+  .fixed_point == false and
+  .il_fixed_point == false and
+  .raw_artifact_reproducibility == false and
+  .raw_reproducibility == false and
+  .mutation_propagation == false and
+  .same_source_recompile_executed == false and
+  .accounting.nodes == 2237 and
+  .accounting.top_level_forms == 37 and
+  .accounting.definitions == 36 and
+  .accounting.max_depth == 20 and
+  .accounting.source_unknown_nodes == 0 and
+  .accounting.source_rejected_nodes == 0 and
+  .accounting.source_interpreted_nodes == 0 and
+  .accounting.source_opaque_nodes == 0 and
+  .accounting.source_opaque_payload_nodes == 0 and
+  ((.accounting.node_kinds | to_entries | map(.value) | add) ==
+    .accounting.nodes) and
+  ((.nodes | length) == .accounting.nodes) and
+  (([.nodes[].path | @json] | unique | length) == .accounting.nodes) and
+  (all(.nodes[];
+    (.kind | type == "string" and length > 0) and
+    (.path | type == "array" and length > 0))) and
+  ([.inputs[].path] == ["contract","profile","plan","source"]) and
+  (all(.inputs[];
+    (keys == ["path","sha256"]) and
+    (.sha256 | test("^[0-9a-f]{64}$")))) and
+  ([.lowering_coverage[].construct] == [
+    "ns","def-constant","def-fn","fn*","if","let*","do","literal",
+    "lexical-symbol","global-symbol","call","intrinsic"
+  ]) and
+  (all(.lowering_coverage[];
+    (keys == ["construct","observed_nodes","owner","owner_arity",
+              "owner_is_function","semantic_sha256"]) and
+    .observed_nodes > 0 and .owner_is_function == true and
+    (.semantic_sha256 | test("^[0-9a-f]{64}$")))) and
+  ([.seed_bindings[].kind] == ["support-abi","intrinsics"]) and
+  ([.seed_bindings[].rows | length] == [33,4]) and
+  ([.seed_bindings[].semantic_sha256] == [
+    "d81d4b447c625829ce65a04b863f27fae1c40cecbaf9c15d6c127ab3463f250b",
+    "9c683349d160006d4a19b1d681db6f0847cf8574a056d5920a883f54762e1c89"
+  ]) and
+  (all(.seed_bindings[];
+    (keys == ["kind","rows","semantic_sha256"]) and
+    (all(.rows[]; keys == ["arity","symbol"])))) and
+  .mutation_sites == [
+    {
+      "definition":"kernel-identity",
+      "id":"identity-literal",
+      "observed":"pnix.clr-meta.compiler-kernel.v1",
+      "selector":"string-literal",
+      "semantic_sha256":
+        "c1bc2cdcd782bfc151c9a8f54223462b63534fc4f256824a8a982477e8427b09"
+    },
+    {
+      "definition":"select-intrinsic-opcode",
+      "id":"add-lowering-rule",
+      "input_symbol":"+",
+      "observed":"add.ovf",
+      "selector":"operator-branch",
+      "semantic_sha256":
+        "d092a6b3595cb8f72395da8097a6fb78d9fb06d39f7a1dfaa4b66741f3b1d005"
+    },
+    {
+      "definition":"select-intrinsic-opcode",
+      "id":"subtract-lowering-rule",
+      "input_symbol":"-",
+      "observed":"sub.ovf",
+      "selector":"operator-branch",
+      "semantic_sha256":
+        "3f983eedd94e93d19c30c35a51083cd8bbff5841c84d7d95ae43178c6fa222a5"
+    }
+  ]
+' "$receipt" >/dev/null || fail receipt-contract
+
+for kind in contract profile plan source; do
+  case "$kind" in
+    contract) live="$contract" ;;
+    profile) live="$profile" ;;
+    plan) live="$plan" ;;
+    source) live="$source" ;;
+  esac
+  [[ "$(sha256_file "$live")" == \
+     "$(jq -r --arg kind "$kind" '.inputs[] | select(.path == $kind) | .sha256' "$receipt")" ]] || \
+    fail "$kind-hash"
+done
+
+input_closure="$({
+  jq -r '.inputs[] | "\(.sha256)  \(.path)"' "$receipt"
+} | sha256_stdin)"
+[[ "$input_closure" == "$(jq -r '.input_closure_sha256' "$receipt")" ]] || \
+  fail input-closure
+
+jq -cn \
+  --arg receipt_sha256 "$(sha256_file "$receipt")" \
+  --arg input_closure_sha256 "$input_closure" \
+  --arg source_sha256 "$(sha256_file "$source")" \
+  '{
+    schema:"pnix.clr-meta.compiler-selfhost-admission-gate-receipt.v1",
+    checkpoint:"c1-source-admission",
+    classified_nodes:2237,
+    top_level_forms:37,
+    definitions:36,
+    negative_cases:23,
+    receipt_sha256:$receipt_sha256,
+    input_closure_sha256:$input_closure_sha256,
+    source_sha256:$source_sha256,
+    source_language_equals_compiled_language:true,
+    executable_stage1:false,
+    compiler_stage2:false,
+    self_reproduction:false,
+    fixed_point:false,
+    raw_reproducibility:false,
+    mutation_propagation:false,
+    ready:true
+  }'

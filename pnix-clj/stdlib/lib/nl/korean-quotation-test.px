@@ -1,0 +1,20 @@
+# 인용(quotation) lock — 평서 인용(다고)만 무중의 승급, fail-closed(quote 주어 2개=matrix 중의=held).
+#   {quote(prop); reporting(action)} ⟷ "영희가 온다고 했다". realizeQuotation ↔ parseQuotation(둘 다 mirror, liftToProposition 필요). recursive.
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  splitSp = s: B.filter (w: B.isString w && w != "") (B.split " " s);
+  rq = knm.realizeQuotation; pq = knm.parseQuotation; propEq = knm.propEq;
+  quote1 = { roles=[{entity="영희";role="agent";}]; action="오"; tense="present"; mood="declarative"; level="haera";
+             polarity="positive"; negation_form="none"; modality="plain"; modality_form="none";
+             aspect="plain"; aspect_form="none"; honorific="none"; predicate_kind="verb"; predicate_nominal=null; };
+  q1 = { quote = quote1; reporting = "하"; };
+  s1 = rq q1; back1 = pq (splitSp s1);
+in {
+  s1 = s1; back_reporting = (if back1 == null then "NULL" else back1.reporting); back_type = (if back1 == null then "NULL" else back1.quote_type);
+  all_ok =
+       (s1 == "영희가 온다고 했다")
+    && (back1 != null) && (propEq back1.quote quote1) && (back1.reporting == "하") && (back1.quote_type == "declarative")
+    # ★ambiguity gate: matrix 주어 + quote 주어 = 2주어 → held(null)
+    && (knm.parseQuotation [ "철수가" "영희가" "온다고" "했다" ] == null)
+    # ★마커 없으면 인용 아님 → null
+    && (knm.parseQuotation [ "철수가" "밥을" "먹는다" ] == null);
+}

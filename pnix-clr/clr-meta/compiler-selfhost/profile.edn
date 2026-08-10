@@ -1,0 +1,125 @@
+{:schema :pnix.clr-meta.compiler-selfhost-profile.v1
+ :id :pnix.clr-meta.compiler-kernel-source.v1
+ :family :pnix.clr-meta.compiler-kernel.v1
+ :phase :c1-source-admission
+ :language-invariant
+ {:source-language-id :pnix.clr-meta.compiler-kernel-source.v1
+  :compiled-language-id :pnix.clr-meta.compiler-kernel-source.v1
+  :source-language-equals-compiled-language true}
+ :envelope {:first-form (ns pnix.clr-meta.compiler-kernel.v1)
+            :exactly-one true}
+ :top-level
+ {:after-envelope :def-only
+  :initializer-kinds [:literal :named-fn*]
+  :definitions [kernel-identity
+                kernel-namespace
+                kernel-entry
+                source-limits-id
+                source-profile-id
+                add-opcode
+                subtract-opcode
+                equality-opcode
+                less-than-opcode
+                symbol-named?
+                count-is?
+                count-at-least?
+                binding-kind?
+                binding-arity-is?
+                callable-binding?
+                bind-support-call
+                seed-support-calls
+                seed-intrinsics
+                literal?
+                literal-kind
+                fn-initializer?
+                collect-definitions
+                bind-parameters
+                resolve-required
+                validate-node
+                validate-definition
+                validate-definitions
+                validate-program
+                select-intrinsic-opcode
+                lower-node
+                declare-definitions
+                initialize-constants
+                lower-definition
+                lower-definitions
+                lower-program
+                compile-source]
+  :entry compile-source}
+ :expressions
+ {:special-forms [fn* if let* do]
+  :named-fn-recursion true
+  :multi-arity false
+  :variadic false
+  :nested-fn false
+  :symbol-values [:argument :local :global-constant]
+  :call-targets [:named-fn-recursion :kernel-global :support-global :intrinsic]}
+ :literals {:value-kinds [:nil :boolean :string :system-int64]
+            :structural-vectors [:fn-parameters :let-bindings]}
+ :calls
+ {:support-global {:source [:support-abi :calls]
+                   :contract "contract.edn"
+                   :exact true}
+  :intrinsic [{:symbol + :arity 2}
+              {:symbol - :arity 2}
+              {:symbol = :arity 2}
+              {:symbol < :arity 2}]
+  :kernel-global
+  [{:symbol symbol-named? :arity 2}
+   {:symbol count-is? :arity 2}
+   {:symbol count-at-least? :arity 2}
+   {:symbol binding-kind? :arity 2}
+   {:symbol binding-arity-is? :arity 2}
+   {:symbol callable-binding? :arity 1}
+   {:symbol bind-support-call :arity 3}
+   {:symbol seed-support-calls :arity 1}
+   {:symbol seed-intrinsics :arity 1}
+   {:symbol literal? :arity 1}
+   {:symbol literal-kind :arity 1}
+   {:symbol fn-initializer? :arity 1}
+   {:symbol collect-definitions :arity 3}
+   {:symbol bind-parameters :arity 3}
+   {:symbol resolve-required :arity 3}
+   {:symbol validate-node :arity 4}
+   {:symbol validate-definition :arity 2}
+   {:symbol validate-definitions :arity 3}
+   {:symbol validate-program :arity 1}
+   {:symbol select-intrinsic-opcode :arity 2}
+   {:symbol lower-node :arity 5}
+   {:symbol declare-definitions :arity 3}
+   {:symbol initialize-constants :arity 4}
+   {:symbol lower-definition :arity 3}
+   {:symbol lower-definitions :arity 4}
+   {:symbol lower-program :arity 3}
+   {:symbol compile-source :arity 2 :role :entry}]
+  :lexical
+  {:policy :named-fn-recursion-only
+   :calls [{:symbol collect-definitions :arity 3}
+           {:symbol bind-parameters :arity 3}
+           {:symbol validate-node :arity 4}
+           {:symbol validate-definitions :arity 3}
+           {:symbol lower-node :arity 5}
+           {:symbol declare-definitions :arity 3}
+           {:symbol initialize-constants :arity 4}
+           {:symbol lower-definitions :arity 4}]}}
+ :lowering-coverage
+ {:source [:lowering-coverage]
+  :contract "contract.edn"
+  :exact true}
+ :limits {:max-source-bytes 65536
+          :max-top-level-forms 37
+          :max-nodes 8192
+          :max-depth 128
+          :max-definitions 36
+          :max-parameters 5
+          :max-bindings 64}
+ :forbidden {:contract "contract.edn"
+             :source [:forbidden]
+             :inherit-exact true}
+ :claims {:stage1_artifact false
+          :stage2 false
+          :self_reproduction false
+          :fixed_point false
+          :raw_reproducibility false}}

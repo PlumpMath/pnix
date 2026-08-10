@@ -1,0 +1,78 @@
+# MR15 -- plan execution approval gate (the `execution-approval-gate` that
+# condition-action-plan verdicts name as their next_gate).
+#
+# Scoped human consequence gate (same shape family as owner-law-gate):
+# a plan candidate becomes consequence-bearing only here. Outcomes:
+#   held-awaiting-approval   -- no approval packet supplied (ask the operator)
+#   held-stale-approval      -- approval fingerprint != plan fingerprint (TOCTOU)
+#   held-expired-approval    -- TTL passed (caller supplies current_time_ms;
+#                               hidden now() is forbidden -- replay-stable)
+#   held-invalid-approval-identity -- actor not an operator/ principal
+#   plan-rejected            -- explicit reject (reason kept; supersede chain)
+#   plan-hold-for-more-evidence -- explicit hold
+#   plan-authorized-candidate -- accept. This AUTHORIZES the candidate for the
+#                               downstream fold/replay lane; it does NOT
+#                               execute anything (effect_allowed stays false;
+#                               the execution lane has its own owners).
+{
+  judgePlanApproval = request:
+    let
+      plan = if request ? plan then request.plan else null;
+      fingerprint =
+        if request ? plan_fingerprint then request.plan_fingerprint else "";
+      approval = if request ? approval then request.approval else null;
+      now = if request ? current_time_ms then request.current_time_ms else null;
+      held = outcome: reason: {
+        inherit outcome reason;
+        plan = plan;
+        plan_fingerprint = fingerprint;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/plan-execution-approval-gate.px";
+      };
+      actorOk = actor:
+        builtins.isString actor
+        && builtins.stringLength actor > 9
+        && builtins.substring 0 9 actor == "operator/";
+    in
+    if plan == null || fingerprint == "" then
+      held "held-missing-plan" "plan and plan_fingerprint are required inputs"
+    else if approval == null then
+      held "held-awaiting-approval"
+        "no approval packet; surface the plan to the operator (ask, never auto-accept)"
+    else if !(approval ? actor) || !(actorOk approval.actor) then
+      held "held-invalid-approval-identity"
+        "approval actor must be an operator/ principal"
+    else if !(approval ? plan_fingerprint)
+            || approval.plan_fingerprint != fingerprint then
+      held "held-stale-approval"
+        "approval was granted for a different plan (fingerprint mismatch; TOCTOU guard)"
+    else if approval ? ttl_ms && approval ? granted_at_ms && now != null
+            && now > approval.granted_at_ms + approval.ttl_ms then
+      held "held-expired-approval" "approval TTL passed; re-approval required"
+    else if approval.decision == "reject" then
+      (held "plan-rejected"
+        (if approval ? reason then approval.reason else "operator rejected"))
+      // { supersede = true; }
+    else if approval.decision == "hold" then
+      held "plan-hold-for-more-evidence" "operator asked for more evidence"
+    else if approval.decision == "accept" then {
+      outcome = "plan-authorized-candidate";
+      plan = plan;
+      plan_fingerprint = fingerprint;
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/plan-execution-approval-gate.px";
+      authorization = {
+        actor = approval.actor;
+        scope = "plan-execution-candidate";
+        granted_at_ms =
+          if approval ? granted_at_ms then approval.granted_at_ms else null;
+        ttl_ms = if approval ? ttl_ms then approval.ttl_ms else null;
+        next_lane = "plan-fold-replay";
+      };
+    }
+    else
+      held "held-unknown-decision"
+        "approval.decision must be accept | reject | hold";
+}

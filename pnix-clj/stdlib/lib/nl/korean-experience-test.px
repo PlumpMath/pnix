@@ -1,0 +1,31 @@
+# stdlib/lib/nl/korean-experience-test.px — 경험 보조용언 -ㄴ 적이 있다/없다 (parse + realize 양방향).
+#
+# 능력(-ㄹ 수 있다)과 동형 3어절 chain(V-ㄴ + 적이/적 + 있/없). head=V-ㄴ(verbIdx-2), 적이=별도 제외.
+#   간 적이 있다→action=가 modality=experiential·본 적이 없다→action=보 modality=inexperiential.
+# ★experiential/inexperiential 둘 다 *고유 modality 값* → propToTerm 보존 + realize 키잉(modalityOf) → term round-trip 안정,
+#   conflation 없음(능력의 inability=못 canonical-equate와 달리 표면도 보존: 본 적이 없다→본 적이 없다).
+# V-ㄴ unfuse=parseNAdnominalBase(먹은→먹·간→가/본→보, refold #10 guard 경유). realize=nAdnominal(가→간·먹→먹은·살→산).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  pa = s: let p = knm.liftToProposition s; in p.action + "/" + p.modality;
+  rt = s: let p = knm.liftToProposition s; in knm.realizeSentence p;
+  v = s: (knm.convergeGate s).verdict;
+in {
+  gan = pa "철수가 학교에 간 적이 있다";    # 가/experiential
+  meog = pa "철수가 밥을 먹은 적이 있다";    # 먹/experiential
+  bon = pa "철수가 영화를 본 적이 없다";     # 보/inexperiential
+  rt_bon = rt "철수가 영화를 본 적이 없다";  # 표면 보존(본 적이 없다)
+  all_ok =
+       (pa "철수가 학교에 간 적이 있다" == "가/experiential")
+    && (pa "철수가 밥을 먹은 적이 있다" == "먹/experiential")
+    && (pa "철수가 영화를 본 적이 없다" == "보/inexperiential")
+    # ★object 보존
+    && (B.any (r: (r.role == "object") && (r.entity == "밥")) (knm.liftToProposition "철수가 밥을 먹은 적이 있다").roles)
+    # ★round-trip math-keep + 표면 보존(고유값=conflation 없음)
+    && (v "철수가 학교에 간 적이 있다" == "math-keep")
+    && (v "철수가 밥을 먹은 적이 있다" == "math-keep")
+    && (v "철수가 영화를 본 적이 없다" == "math-keep")
+    && (rt "철수가 영화를 본 적이 없다" == "철수가 영화를 본 적이 없다")
+    # ★회귀: 능력·평서 있다 불변
+    && (pa "철수가 갈 수 있다" == "가/ability")
+    && (pa "철수가 학교에 있다" == "있/plain");
+}

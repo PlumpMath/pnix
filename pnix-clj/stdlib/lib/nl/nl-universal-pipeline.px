@@ -1,0 +1,264 @@
+let
+  ownerName = "stdlib.nl.nl-universal-pipeline";
+
+  # === NL Universal Pipeline (사용자 directive 2026-05-28 — Axiom #38) ===
+  #
+  # 사용자 directive:
+  # > "NL 이 super 셋 같은 표현이기 때문에, 거기 axiom 들이 제대로 모든곳에
+  # > 스며들어 NL 표현이 사람의 의도가 기계적으로 제대로 extract 되어
+  # > 알고리즘 수학식 code 그게 양방향으로 제대로~*"
+  #
+  # = NL 은 모든 domain 의 *superset surface*. 박힌 37 axiom 어디든 NL 로 진입
+  # 가능해야 하고, 어떤 receipt 든 NL 로 재구성 가능해야 한다.
+  #
+  # # NL-as-superset axiom
+  #
+  # 모든 substrate 표면 (math / code / api / shell / diagram / agent / lifecycle
+  # / integration) 의 *진입과 출구* 가 NL 일 수 있다. 이 owner 는 generic
+  # router 다 — utterance 를 domain 별 lifter 에 routing 하고, 어느 axiom 이
+  # 발화 의도 extract 했는지 명시한다.
+  #
+  # # 5-stage pipeline (모든 NL 발화에 적용)
+  #
+  # 1. **Domain classification** — utterance 의 keyword/구조 → likely domain
+  # 2. **Implicit-explicit reconstruction** (Axiom #3) — 누락 dimension 검출
+  # 3. **Domain-specific lift** — math-congruence / code-decomposer /
+  #    api-call-parser / shell-utility / generic-Held 중 routing
+  # 4. **Axiom annotation** — receipt 에 어느 axiom 이 적용됐는지 명시
+  # 5. **Bidirectional verification** — atom → NL 재구성 가능 여부 check
+  #
+  # # Held-honest 헌법 보존
+  #
+  # 도메인 분류 ambiguous → held-multi-domain-candidates. lifter 모두 실패
+  # → held-no-lifter-matched. Silent guess 절대 금지.
+  #
+  # # 학술 origin
+  #
+  # NL as superset surface — Pierce on lattice of types (1991) +
+  # Tarski universal language idea (1944) + Montague semantics (1970).
+  # 5-stage pipeline — Quillian/Schank semantic network → frame → script
+  # cascading lift (1973).
+  #
+  # # DO NOT REBUILD
+  #
+  # 모든 lifter 는 *재사용*: implicit-explicit (Axiom #3), math-congruence-nl
+  # (Axiom #6 NL side), code utterance-decomposer/composer, api-capability
+  # substrate. 이 owner 는 router + axiom annotator + bidirectional verifier.
+
+  # === 5 known NL routing rules =====================================
+  #
+  # 각 rule: (domain, keyword_hint, downstream_lifter, axiom_tag).
+  # match priority 는 list order — math 가 code 보다 먼저 (수학 keyword 가
+  # 더 specific). api/shell 은 "call X.Y" 형태로만.
+
+  knownDomainRoutingRules = [
+    {
+      domain = "math-congruence";
+      keyword_hints = [ "triangle" "삼각형" "congruent" "합동" "SSS" "SAS" "ASA" "AAS" "RHS" "두 삼각형" "닮음 합동" ];
+      downstream_lifter = "stdlib/lib/nl/math-congruence-nl-lifter.px::liftCongruenceUtterance";
+      axiom_tag = "axiom-5-congruence-criteria + axiom-6-bidirectional";
+      receipt_kind = "congruence-query";
+    }
+    {
+      domain = "math-equation";
+      keyword_hints = [ "equation" "solve" "방정식" "풀이" "=" "방정식 풀어" "해를 구해" "미지수 구해" ];
+      downstream_lifter = "stdlib/lib/math/equation-solving-procedure.px::beginSolveProcedure";
+      axiom_tag = "axiom-2-timeless-vs-ordered + axiom-7-bidirectional";
+      receipt_kind = "equation-solve-procedure";
+    }
+    {
+      domain = "code-emission";
+      keyword_hints = [ "binds " "prints " "outputs " "exits " "reads " "comment" ];
+      downstream_lifter = "stdlib/lib/coding/utterance-decomposer.px::decomposeUtterance";
+      axiom_tag = "axiom-implicit-explicit-reconstruction-#3";
+      receipt_kind = "code-atom-list";
+    }
+    {
+      domain = "api-call";
+      keyword_hints = [ "call " " 호출" "API 호출" "함수 호출" ];
+      downstream_lifter = "stdlib/lib/coding/utterance-decomposer.px::parseExternalApiCallUtterance";
+      axiom_tag = "axiom-9-universal-conversion + external-api-call atom";
+      receipt_kind = "api-call-atom";
+    }
+    {
+      domain = "shell-dev-tool";
+      keyword_hints = [ "git" "ripgrep" "rg" "cargo" "npm" "docker" "kubectl" "gh" "yarn" "pnpm" "make" ];
+      downstream_lifter = "stdlib/lib/api/api-capability-substrate.px::applyApiCapabilityCallPlate";
+      axiom_tag = "axiom-9-universal-conversion (OS-aware dispatch)";
+      receipt_kind = "shell-tool-emit";
+    }
+  ];
+
+  routingRuleCount = builtins.length knownDomainRoutingRules;
+
+  findRoutingRulesForUtterance = utterance:
+    let
+      lower = utterance;  # case-sensitive for ko; en/ko mixed possible
+      containsAny = hints:
+        builtins.any (h:
+          let
+            hlen = builtins.stringLength h;
+            ulen = builtins.stringLength utterance;
+            walk = pos:
+              if pos + hlen > ulen then false
+              else if (builtins.substring pos hlen utterance) == h then true
+              else walk (pos + 1);
+          in walk 0) hints;
+    in
+      builtins.filter (rule: containsAny rule.keyword_hints)
+        knownDomainRoutingRules;
+
+  # === 5-stage pipeline ============================================
+
+  classifyDomain = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let rules = findRoutingRulesForUtterance utterance;
+      in
+        if rules == [] then {
+          outcome = "held-no-domain-matched";
+          known_domain_count = routingRuleCount;
+          known_domains = builtins.map (r: r.domain) knownDomainRoutingRules;
+          reason = "어느 keyword_hint 도 match 안 됨. NL 표현이 박힌 domain 어느 곳에도 진입 불가. 새 routing rule 추가 또는 utterance 재구성 필요.";
+        }
+        else if (builtins.length rules) > 1 then {
+          outcome = "held-multi-domain-candidates";
+          candidate_count = builtins.length rules;
+          candidates = builtins.map (r: {
+            inherit (r) domain axiom_tag;
+          }) rules;
+          reason = "여러 domain 의 keyword 가 동시 match. 명시적 disambiguation 필요 (사용자 follow-up 또는 더 specific surface).";
+        }
+        else {
+          outcome = "domain-classified";
+          domain = (builtins.head rules).domain;
+          downstream_lifter = (builtins.head rules).downstream_lifter;
+          axiom_tag = (builtins.head rules).axiom_tag;
+          receipt_kind = (builtins.head rules).receipt_kind;
+        };
+
+  # === Bidirectional verification axiom ==============================
+  #
+  # 모든 receipt 는 NL 재구성 가능해야 한다 (Axiom #7 강화).
+  # 이 helper 는 atom 의 NL 재구성 path 가 존재하는지 *명시* 한다.
+
+  verifyBidirectionalAvailability = receiptKind:
+    let
+      reverseTable = [
+        { receipt_kind = "congruence-query"; reverse_owner = "stdlib/lib/nl/math-to-algorithm-to-nl.px"; supported = true; }
+        { receipt_kind = "equation-solve-procedure"; reverse_owner = "stdlib/lib/nl/math-to-algorithm-to-nl.px"; supported = true; }
+        { receipt_kind = "code-atom-list"; reverse_owner = "stdlib/lib/coding/utterance-composer.px"; supported = true; }
+        { receipt_kind = "api-call-atom"; reverse_owner = "stdlib/lib/coding/utterance-composer.px"; supported = true; }
+        { receipt_kind = "shell-tool-emit"; reverse_owner = null; supported = false; }
+      ];
+      matches = builtins.filter (r: r.receipt_kind == receiptKind) reverseTable;
+    in
+      if matches == [] then {
+        outcome = "held-no-reverse-mapping";
+        receipt_kind = receiptKind;
+      }
+      else
+        let m = builtins.head matches;
+        in {
+          outcome = if m.supported then "reverse-mapping-available"
+                    else "reverse-mapping-deferred";
+          reverse_owner = m.reverse_owner;
+          receipt_kind = m.receipt_kind;
+          bidirectional = m.supported;
+        };
+
+  # === Pipeline entry — substrate primitive ==========================
+
+  applyNlUniversalPipelinePlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else
+      let
+        domain = classifyDomain request.utterance;
+      in
+        if domain.outcome != "domain-classified" then domain
+        else
+          let
+            reverse = verifyBidirectionalAvailability domain.receipt_kind;
+          in {
+            outcome = "nl-pipeline-routed";
+            utterance = request.utterance;
+            domain = domain.domain;
+            downstream_lifter = domain.downstream_lifter;
+            axiom_tag = domain.axiom_tag;
+            receipt_kind = domain.receipt_kind;
+            bidirectional = reverse;
+            substrate_action = "downstream_lifter 가 utterance 를 받아 domain-specific atom 산출. reverse.supported=true 면 atom→NL 재구성도 가능.";
+          };
+
+  # === Introspection =================================================
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-as-superset-bidirectional-axiom-#38";
+    routing_rule_count = routingRuleCount;
+    domains = builtins.map (r: r.domain) knownDomainRoutingRules;
+    bidirectional_domains = builtins.filter (d: d != "shell-dev-tool")
+      (builtins.map (r: r.domain) knownDomainRoutingRules);
+    bidirectional_count = 4;
+    deferred_reverse = [ "shell-dev-tool" ];
+    # DO NOT REBUILD — 모든 lifter / composer 는 *기존* substrate 재사용.
+    new_decision_count = 0;
+    existing_lifters_reused = [
+      "stdlib/lib/nl/math-congruence-nl-lifter.px"
+      "stdlib/lib/math/equation-solving-procedure.px"
+      "stdlib/lib/coding/utterance-decomposer.px"
+      "stdlib/lib/api/api-capability-substrate.px"
+    ];
+    existing_composers_reused = [
+      "stdlib/lib/nl/math-to-algorithm-to-nl.px"
+      "stdlib/lib/coding/utterance-composer.px"
+    ];
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-domain-matched"
+      "held-multi-domain-candidates"
+      "held-no-reverse-mapping"
+    ];
+    correspondence_with_user_directive =
+      "사용자 directive (2026-05-28): 'NL 이 super 셋 같은 표현이기 때문에, "
+      + "거기 axiom 들이 제대로 모든곳에 스며들어 NL 표현이 사람의 의도가 "
+      + "기계적으로 제대로 extract 되어 알고리즘 수학식 code 그게 양방향으로 "
+      + "제대로~*'. 이 owner 는 NL utterance 를 박힌 5 domain (math-congruence "
+      + "/ math-equation / code / api / shell) 에 routing 하는 generic "
+      + "substrate router. 4 domain 양방향, 1 deferred. 새 decision 0.";
+  };
+
+in {
+  inherit
+    ownerName knownDomainRoutingRules routingRuleCount
+    findRoutingRulesForUtterance
+    classifyDomain
+    verifyBidirectionalAvailability
+    applyNlUniversalPipelinePlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL universal pipeline (Axiom #38)";
+    owner = ownerName;
+    base = "nl-universal-pipeline-v0";
+    rev_note = "사용자 directive (2026-05-28) 'NL super-set bidirectional'. "
+      + "5-stage pipeline (classify → reconstruct → lift → annotate → "
+      + "bidirectional-verify) generic router. 5 domain routing rules "
+      + "(math-congruence / math-equation / code / api / shell) × 5 keyword_hints "
+      + "× 4 bidirectional + 1 deferred. DO NOT REBUILD — 모든 lifter/composer "
+      + "는 기존 owner 재사용. 학술: Tarski universal language + Montague "
+      + "semantics + frame-based cascading lift (Schank/Quillian).";
+  };
+}

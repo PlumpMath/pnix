@@ -1,0 +1,191 @@
+# stdlib.lib.math.bitwise
+#
+# OWNER-LAW (v0.12-AAC, div-math, 2026-05-21): bitwise integer
+# operations over non-negative integers.
+#
+# Nix has arithmetic operators but no bitwise ones -- no `&`, no
+# `|`, no `<<`. So this owner *builds* bitwise logic from
+# arithmetic: each operation decomposes its operands into binary
+# digits, combines the digits, and recomposes. Every result is an
+# exact integer.
+#
+# This is the same move the substrate makes everywhere -- when a
+# primitive is missing, construct it deterministically from what
+# exists, rather than reaching outside.
+#
+# # Operations
+#
+#   bitAnd / bitOr / bitXor   digit-wise binary logic
+#   shiftLeft / shiftRight    multiply / integer-divide by 2^n
+#   getBit / setBit / clearBit / flipBit   single-bit access
+#   popcount                  number of 1 bits
+#   bitLength                 index of the highest set bit, + 1
+#   isPowerOfTwo              exactly one bit set
+#
+# # Standalone, non-negative
+#
+# Imports nothing. Operands are non-negative integers (two's
+# complement would need a fixed width; that is out of scope).
+# Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT two's-complement / fixed-width -- non-negative only, so
+#     there is no plain `bitNot` (it needs a width).
+#   - NOT negative-number bit operations.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/bitwise.px";
+
+  intMod2 = x: x - 2 * (x / 2);
+
+  # 2^n by repeated doubling (n >= 0).
+  pow2 = n: if n == 0 then 1 else 2 * (pow2 (n - 1));
+
+  # Combine two non-negative integers digit-wise in binary. `f`
+  # maps a pair of bits (0/1, 0/1) to a result bit.
+  bitCombine = f: a: b:
+    let
+      go = x: y: place: acc:
+        if x == 0 && y == 0 then acc
+        else
+          let
+            bx = intMod2 x;
+            by = intMod2 y;
+            bit = f bx by;
+          in go (x / 2) (y / 2) (place * 2) (acc + bit * place);
+    in go a b 1 0;
+
+  bitAnd = bitCombine (bx: by: if bx == 1 && by == 1 then 1 else 0);
+  bitOr  = bitCombine (bx: by: if bx == 1 || by == 1 then 1 else 0);
+  bitXor = bitCombine (bx: by: if bx != by then 1 else 0);
+
+  # Logical shifts: left is multiply by 2^n, right is integer
+  # divide by 2^n.
+  shiftLeft  = a: n: a * (pow2 n);
+  shiftRight = a: n: a / (pow2 n);
+
+  # The i-th bit (0 = least significant).
+  getBit = a: i: intMod2 (a / (pow2 i));
+
+  # Set / clear / flip a single bit.
+  setBit = a: i:
+    if getBit a i == 1 then a else a + pow2 i;
+  clearBit = a: i:
+    if getBit a i == 0 then a else a - pow2 i;
+  flipBit = a: i:
+    if getBit a i == 1 then a - pow2 i else a + pow2 i;
+
+  # Number of 1 bits (the Hamming weight).
+  popcount = a:
+    let
+      go = x: acc:
+        if x == 0 then acc
+        else go (x / 2) (acc + intMod2 x);
+    in go a 0;
+
+  # Number of bits needed to represent `a`: the index of the
+  # highest set bit, plus one. bitLength 0 = 0.
+  bitLength = a:
+    let
+      go = x: acc:
+        if x == 0 then acc else go (x / 2) (acc + 1);
+    in go a 0;
+
+  # A power of two has exactly one bit set.
+  isPowerOfTwo = a: a > 0 && popcount a == 1;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "and"
+    "or"
+    "xor"
+    "shift-left"
+    "shift-right"
+    "get-bit"
+    "set-bit"
+    "clear-bit"
+    "flip-bit"
+    "popcount"
+    "bit-length"
+    "is-power-of-two"
+  ];
+
+  applyBitwise = request:
+    let
+      op = request.operation;
+      a  = if request ? a then request.a else 0;
+      b  = if request ? b then request.b else 0;
+      n  = if request ? n then request.n else 0;
+      i  = if request ? i then request.i else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if a < 0 || b < 0 then {
+        outcome = "held-negative-operand";
+        operation = op;
+        reason = "bitwise operations here are over non-negative integers";
+      }
+      else if (op == "shift-left" || op == "shift-right") && n < 0 then {
+        outcome = "held-negative-shift";
+        operation = op;
+        n = n;
+      }
+      else if (builtins.elem op [ "get-bit" "set-bit" "clear-bit" "flip-bit" ])
+              && i < 0 then {
+        outcome = "held-negative-bit-index";
+        operation = op;
+        i = i;
+      }
+      else
+        let
+          value =
+            if op == "and" then bitAnd a b
+            else if op == "or" then bitOr a b
+            else if op == "xor" then bitXor a b
+            else if op == "shift-left" then shiftLeft a n
+            else if op == "shift-right" then shiftRight a n
+            else if op == "get-bit" then getBit a i
+            else if op == "set-bit" then setBit a i
+            else if op == "clear-bit" then clearBit a i
+            else if op == "flip-bit" then flipBit a i
+            else if op == "popcount" then popcount a
+            else if op == "bit-length" then bitLength a
+            else (if isPowerOfTwo a then 1 else 0);
+        in {
+          outcome = "bitwise-computed";
+          operation = op;
+          value = value;
+        };
+
+in {
+  inherit
+    ownerName
+    intMod2
+    pow2
+    bitAnd
+    bitOr
+    bitXor
+    shiftLeft
+    shiftRight
+    getBit
+    setBit
+    clearBit
+    flipBit
+    popcount
+    bitLength
+    isPowerOfTwo
+    knownOperations
+    applyBitwise;
+  meta = {
+    source = "stdlib math bitwise";
+    owner = ownerName;
+    base = "parametric-math-bitwise-v0";
+    rev_note = "v0.12-AAC (div-math): bitwise integer operations owner. Nix has no bitwise operators, so AND / OR / XOR are BUILT from arithmetic by binary digit decomposition; shifts are multiply / integer-divide by 2^n; plus single-bit get/set/clear/flip, popcount, bit-length, power-of-two test. Standalone, non-negative integers. NOT two's-complement / fixed-width (so no width-free bitNot), NOT negative operands, NOT yet a registered lens.";
+  };
+}

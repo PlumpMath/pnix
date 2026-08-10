@@ -1,0 +1,78 @@
+# stdlib.corpus.allow-list-store-plan
+#
+# Layer A redb 적재 lens (corpus ingest = gate-graph 생성 배선의 게이트/라우터; idea.md §22).
+#
+# 거울 헌법: 이 .px 가 *plan(의미)* 의 정본 — 어느 테이블에 어떤 key/value 로 append 할지 결정.
+# Rust(store/executor.rs)는 그 plan 을 받아 redb 바이트로 *실행만* 한다(semantic-0 ferry, bridge.rs).
+#
+# 입력: deny-DB 교차검증 끝난 allow-list 레지스트리(JSON, build-corpus-allowlist 워크플로 산출).
+#   data/corpus-allow/allow-list.json (각 row 에 안정적 source_id slug = fuzzy-search 친화 키).
+# 산출 plan: 3 테이블 append (idempotent-only) —
+#   corpus_allowlist            : key=source_id,            value=row(JSON)   [primary lookup]
+#   corpus_allowlist_by_phase   : key="p<phase>/source_id", value=source_id   [THE FINALE 7-step 라우팅]
+#   corpus_allowlist_by_cluster : key="<cluster>/source_id", value=source_id  [분야 라우팅]
+#
+# 검색: mirror 는 이 redb 를 by_phase/by_cluster prefix-scan 으로 좁히고(=fzf prefilter 의 구조판),
+#   의미 확인은 기존 NL 의미엔진(조사 4-N piece / 6하원칙 lift)이 한다(새 검색기 금지, 거울 하나).
+{
+  storageValue = import ./substrate-store-value-literal.px;
+  B = builtins;
+
+  # mkPlan args:
+  #   json_path   : allow-list.json 절대경로 (caller=Rust ferry 가 주입; readFile 대상)
+  #   built_at_ms : replay-stable timestamp (caller 주입; .px 는 시계 없음)
+  mkPlan = args:
+    let
+      payload = B.fromJSON (B.readFile args.json_path);
+      rows = payload.rows or [];
+
+      opsFor = row:
+        let
+          sid = row.source_id;
+          phaseKey = "p" + (B.toString (row.ingest_phase or 0)) + "/" + sid;
+          clusterKey = (row.cluster or "x") + "/" + sid;
+        in [
+          { op_kind = "append"; table = "corpus_allowlist";            key = sid;        value_bytes = storageValue.toPnixStorageValue row; }
+          { op_kind = "append"; table = "corpus_allowlist_by_phase";   key = phaseKey;   value_bytes = storageValue.toPnixStorageValue sid; }
+          { op_kind = "append"; table = "corpus_allowlist_by_cluster"; key = clusterKey; value_bytes = storageValue.toPnixStorageValue sid; }
+        ];
+
+      operations = builtins.concatMap opsFor rows;
+    in {
+      plan = {
+        plan_id = "corpus-allowlist-load-v0";
+        source_lens = "stdlib/lib/corpus/allow-list-store-plan.px";
+        source_verdict = "load-allowlist";
+        operations = operations;
+        receipt_owner = "corpus.allowlist.v0";
+        plan_built_at_ms = args.built_at_ms or 0;
+      };
+      # surface (감사용; bridge 는 .plan 만 ferry)
+      row_count = builtins.length rows;
+      op_count = builtins.length operations;
+    };
+
+  # mkQuery args:
+  #   prefix : scan-prefix 대상 키 접두사 (예: "science-safety." | "p6/" | "korean/")
+  #   table  : 대상 테이블 (기본 corpus_allowlist; 인덱스는 corpus_allowlist_by_phase/_by_cluster)
+  #   built_at_ms : replay-stable timestamp
+  # = 거울/NL·math·code 가 allow-list 를 *직독*하는 read path. fuzzy prefilter 의 구조판(prefix-scan);
+  #   의미 확인은 기존 NL 엔진(조사 4-N piece / 6하원칙)이 별도로 한다(거울 하나).
+  mkQuery = args: {
+    plan = {
+      plan_id = "corpus-allowlist-query-v0";
+      source_lens = "stdlib/lib/corpus/allow-list-store-plan.px";
+      source_verdict = "query-allowlist";
+      operations = [
+        {
+          op_kind = "scan-prefix";
+          table = args.table or "corpus_allowlist";
+          key = "";
+          key_prefix = args.prefix or "";
+        }
+      ];
+      receipt_owner = "corpus.allowlist.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+  };
+}

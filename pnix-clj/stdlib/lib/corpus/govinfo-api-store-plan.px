@@ -1,0 +1,45 @@
+# GovInfo API documentation metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No live package/document payload/legal judgment/graph wiring.
+let
+  B = builtins;
+  genPath = ./govinfo-api.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "regulatory.govinfo.api_schema.v1";
+    source = "GovInfo API documentation/endpoint metadata";
+    license = "US-PD / US federal public information";
+    summary = { endpoints = 0; pages = 0; files = 0; requires_api_key = true; };
+    policy = "documentation shell and endpoint catalog tokens only";
+    manifest = { };
+    files = [ ]; repo_meta = { }; pages = [ ]; endpoints = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "govinfo-api-load-v0";
+      source_lens = "stdlib/lib/corpus/govinfo-api-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "regulatory.govinfo.api_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "govinfo-api-query-v0";
+      source_lens = "stdlib/lib/corpus/govinfo-api-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "regulatory.govinfo.api_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

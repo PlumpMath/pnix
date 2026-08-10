@@ -1,0 +1,322 @@
+let
+  ownerName = "stdlib.nl.etymology-layer";
+
+  # === Etymology layer (4-piece 응용 — NL 다의어 어원 출처) ========
+  #
+  # 사용자 directive (2026-05-28):
+  # "단어자체에도 단어가 가지는 어원의 변화가 존재한다."
+  # "왜 한국어에서 사과/사과 가 collision 인지 가 substrate 위 trace
+  # 가능."
+  #
+  # 이 owner 는 NL 다의어의 *historical 출처* 를 fact 로 carry. 검색기
+  # 안 붙어도 어원 사전 (한국어 어원사전 / OED / etc) 의 well-curated
+  # subset 을 미리 lift 해두는 fact registry.
+  #
+  # 4-piece (수학) 의 second-order-lift 가 (statement, in-context, ...)
+  # → (truth-value) 였듯, 어원 layer 는:
+  #   (surface, etymology-from, source-form, in-era, in-language) →
+  #   (semantic-loading, phonetic-collision-history)
+  #
+  # # 가스라이팅 방어 의 etymological 자리
+  #
+  # 사용자 §15 ontology-ai.md 의 의미 무기화 detection 에서, *어원* 은
+  # 가장 깊은 layer. e.g. 한국어 "사과" 의 두 사용이 *어디서 / 언제 /
+  # 어떤 한자 차용으로* collision 됐는지가 fact 로 carry 되면, 그 두
+  # 의미를 silent merge 하는 시도 (= 의미 무기화의 한 형태) 가 자동
+  # detect.
+
+  # === Known etymological roots ======================================
+  #
+  # Each row:
+  #   surface          — modern surface (한글/한자/라틴 etc)
+  #   meaning_id       — Q-id (or canonical name)
+  #   etymology_from   — origin form (한자/산스크리트/라틴 etc)
+  #   in_era           — historical period (시대 layer mandate)
+  #   in_language      — adoption language
+  #   semantic_loading — 의미가 따라온 layer
+  #   collision_partner — phonetic collision 의 상대 (있으면)
+
+  knownEtymologicalRoots = [
+    # 한국어 "사과" 의 두 의미 — 사용자가 짚은 사례
+    {
+      surface = "사과";
+      meaning_id = "Q89-apple-fruit";
+      etymology_from = "沙果";  # 또는 砂果 / 查果 (한자 차용)
+      in_era = "조선-한자정착기";
+      in_language = "ko";
+      semantic_loading = "fruit-borrowed-from-chinese";
+      collision_partner = "Q485027-apology-speech-act";
+      collision_event =
+        "조선시대 한자 정착기에 沙果(과일) 와 辭過(잘못을 말함) 가 "
+        + "한글 표기에서 'sa-gwa' 로 음차 collision.";
+    }
+    {
+      surface = "사과";
+      meaning_id = "Q485027-apology-speech-act";
+      etymology_from = "辭過";  # 辭(말) + 過(허물/잘못)
+      in_era = "조선-한자정착기";
+      in_language = "ko";
+      semantic_loading = "speech-act-borrowed-from-chinese";
+      collision_partner = "Q89-apple-fruit";
+      collision_event =
+        "辭過 = 잘못(過) 을 말로(辭) 표현. 음 'sa-gwa' 가 沙果 와 "
+        + "겹쳐 동음이의 collision.";
+    }
+
+    # 한국어 "배" 의 세 의미 — 비슷한 phonetic collision
+    {
+      surface = "배";
+      meaning_id = "Q485-pear-fruit";
+      etymology_from = "梨";  # 한자 '리'/'배' 음차
+      in_era = "고대-한국어";
+      in_language = "ko";
+      semantic_loading = "fruit-native-korean";
+      collision_partner = "Q11446-ship";
+    }
+    {
+      surface = "배";
+      meaning_id = "Q11446-ship";
+      etymology_from = "舟";  # native Korean
+      in_era = "고대-한국어";
+      in_language = "ko";
+      semantic_loading = "vessel-native-korean";
+      collision_partner = "Q485-pear-fruit";
+    }
+    {
+      surface = "배";
+      meaning_id = "Q9165-belly";
+      etymology_from = "腹";  # native body part
+      in_era = "고대-한국어";
+      in_language = "ko";
+      semantic_loading = "body-part-native-korean";
+      collision_partner = "Q11446-ship";
+    }
+
+    # 손오공 — 사용자 §15 chain 의 첫 layer
+    {
+      surface = "손오공";
+      meaning_id = "Q-Sun-Wukong-Ming-1592";
+      etymology_from = "孫悟空";
+      in_era = "Ming-1592";
+      in_language = "zh";
+      semantic_loading = "tale-character-Journey-to-West";
+      collision_partner = null;  # 같은 surface, 다른 era 의 layer
+      narrative_chain_parent = null;
+    }
+    {
+      surface = "Goku (悟空)";
+      meaning_id = "Q-Goku-DragonBall-1984";
+      etymology_from = "孫悟空";  # Toriyama 의 인정된 origin
+      in_era = "Showa-Japan-1984";
+      in_language = "ja";
+      semantic_loading = "shounen-hero-adaptation";
+      collision_partner = null;
+      narrative_chain_parent = "Q-Sun-Wukong-Ming-1592";
+    }
+
+    # 영어 "bank" — 다의어 학계 paradigmatic 사례
+    {
+      surface = "bank";
+      meaning_id = "Q-river-bank";
+      etymology_from = "Old Norse 'bakki'";
+      in_era = "Middle-English-12C";
+      in_language = "en";
+      semantic_loading = "geographical-feature";
+      collision_partner = "Q-financial-bank";
+    }
+    {
+      surface = "bank";
+      meaning_id = "Q-financial-bank";
+      etymology_from = "Italian 'banca' (bench)";
+      in_era = "Renaissance-15C";
+      in_language = "en";
+      semantic_loading = "money-changer-bench-via-italian";
+      collision_partner = "Q-river-bank";
+    }
+  ];
+
+  # === Lookup ========================================================
+
+  findEtymologyBySurface = surface:
+    builtins.filter (e: e.surface == surface) knownEtymologicalRoots;
+
+  findEtymologyByMeaningId = meaning_id:
+    let
+      matches = builtins.filter
+        (e: e.meaning_id == meaning_id) knownEtymologicalRoots;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # === Phonetic collision detection =================================
+  #
+  # 한 surface 에 multiple meaning_id 가 있으면 collision.
+  # 같은 etymology source 면 *true polysemy* (one root, multiple senses),
+  # 다른 source 면 *homonymy* (different roots, accidental phonetic match).
+
+  classifyCollision = surface:
+    let
+      entries = findEtymologyBySurface surface;
+      count = builtins.length entries;
+    in
+      if count == 0 then {
+        outcome = "held-no-etymology-registered";
+        surface = surface;
+      }
+      else if count == 1 then {
+        outcome = "single-meaning";
+        surface = surface;
+        meaning_id = (builtins.head entries).meaning_id;
+        etymology_count = 1;
+      }
+      else
+        let
+          sources = builtins.map (e: e.etymology_from) entries;
+          dedup = list:
+            builtins.foldl'
+              (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+              [] list;
+          uniqueSources = dedup sources;
+          allSameSource = builtins.length uniqueSources == 1;
+        in {
+          outcome =
+            if allSameSource then "true-polysemy-shared-root"
+            else "homonymy-distinct-roots";
+          surface = surface;
+          meaning_count = count;
+          meaning_ids = builtins.map (e: e.meaning_id) entries;
+          etymology_sources = uniqueSources;
+          source_count = builtins.length uniqueSources;
+          # The substrate's strongest signal — homonymy 가 더 dangerous
+          # 한 자리 (의미 무기화의 가장 깊은 path) 이므로 명시.
+          gaslighting_risk =
+            if allSameSource then "low (shared semantic root)"
+            else "high (distinct sources accidentally collide — silent merge 시도가 의미 변형 attack 의 자리)";
+        };
+
+  # === Era trace =====================================================
+  #
+  # 한 surface 가 다른 era 들 사이에서 어떻게 변천했는가. 사용자 §15
+  # 손오공 chain 의 일반화.
+
+  findNarrativeChain = meaning_id:
+    let
+      direct = findEtymologyByMeaningId meaning_id;
+    in
+      if direct == null then null
+      else
+        let
+          # Find descendants (this meaning is the parent of which?)
+          descendants = builtins.filter
+            (e: (e ? narrative_chain_parent)
+                && e.narrative_chain_parent == meaning_id)
+            knownEtymologicalRoots;
+          # Find parent
+          parent =
+            if direct ? narrative_chain_parent
+               && direct.narrative_chain_parent != null
+            then findEtymologyByMeaningId direct.narrative_chain_parent
+            else null;
+        in {
+          self = direct;
+          parent = parent;
+          descendant_count = builtins.length descendants;
+          descendants = descendants;
+        };
+
+  # === Mirror plate lens entry =======================================
+
+  applyEtymologyLayerPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "operation" request) then {
+      outcome = "held-operation-required";
+      known_operations = [ "classify-collision" "find-chain" "lookup" ];
+    }
+    else if request.operation == "classify-collision" then
+      classifyCollision request.surface
+    else if request.operation == "find-chain" then
+      let
+        chain = findNarrativeChain request.meaning_id;
+      in
+        if chain == null then {
+          outcome = "held-meaning-id-not-found";
+          meaning_id = request.meaning_id;
+        }
+        else {
+          outcome = "chain-traced";
+          self_era = chain.self.in_era;
+          parent_meaning_id =
+            if chain.parent == null then null
+            else chain.parent.meaning_id;
+          parent_era =
+            if chain.parent == null then null
+            else chain.parent.in_era;
+          descendant_count = chain.descendant_count;
+          descendant_eras =
+            builtins.map (d: d.in_era) chain.descendants;
+        }
+    else if request.operation == "lookup" then
+      let
+        entries = findEtymologyBySurface request.surface;
+      in {
+        outcome = "lookup-result";
+        surface = request.surface;
+        entries = entries;
+        entry_count = builtins.length entries;
+      }
+    else {
+      outcome = "held-unknown-operation";
+      operation = request.operation;
+    };
+
+  # === Introspection =================================================
+
+  etymologyRootCount = builtins.length knownEtymologicalRoots;
+  uniqueSurfaces =
+    let
+      raw = builtins.map (e: e.surface) knownEtymologicalRoots;
+      dedup = list:
+        builtins.foldl'
+          (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+          [] list;
+    in
+      builtins.sort (a: b: a < b) (dedup raw);
+  uniqueLanguages =
+    let
+      raw = builtins.map (e: e.in_language) knownEtymologicalRoots;
+      dedup = list:
+        builtins.foldl'
+          (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+          [] list;
+    in
+      builtins.sort (a: b: a < b) (dedup raw);
+
+  inventorySummary = _: {
+    owner = ownerName;
+    etymology_root_count = etymologyRootCount;
+    unique_surface_count = builtins.length uniqueSurfaces;
+    unique_surfaces = uniqueSurfaces;
+    unique_language_count = builtins.length uniqueLanguages;
+    unique_languages = uniqueLanguages;
+  };
+
+in {
+  inherit
+    ownerName
+    knownEtymologicalRoots
+    findEtymologyBySurface
+    findEtymologyByMeaningId
+    classifyCollision
+    findNarrativeChain
+    applyEtymologyLayerPlate
+    etymologyRootCount
+    inventorySummary;
+  meta = {
+    source = "stdlib nl etymology layer substrate";
+    owner = ownerName;
+    base = "etymology-layer-v0";
+    rev_note = "사용자 directive (2026-05-28): '단어가 가지는 어원의 변화'. NL 다의어의 historical origin fact registry. 9 etymology rows: 사과(沙果/辭過 phonetic collision), 배(梨/舟/腹 3-way), 손오공(Ming→Showa narrative chain), bank(Norse/Italian homonymy). classifyCollision: shared-root → true-polysemy, distinct-roots → homonymy (gaslighting risk high). 4-piece 의 second-order-lift 위에서 NL 도메인 응용. 가스라이팅 방어 가장 깊은 layer.";
+  };
+}

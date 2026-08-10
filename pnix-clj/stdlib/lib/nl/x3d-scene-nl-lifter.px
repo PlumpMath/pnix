@@ -1,0 +1,285 @@
+let
+  ownerName = "stdlib.nl.x3d-scene-nl-lifter";
+
+  x3d = import visualization/x3d-atom-substrate.px;
+
+  # === X3D scene NL lifter (Axiom #79) ============================
+  #
+  # 사용자 directive (2026-05-29 dawn): "차원이 올라가듯한 그런 mirror
+  # runtime interpreter". NL utterance 가 X3D atom tree 로 lift.
+  #
+  # # 발화 예 (v0 — 7 intent kind)
+  #
+  # "빨간 큐브 그려"           → red box scene
+  # "draw a red cube"          → red box scene
+  # "파란 공"                  → blue sphere
+  # "green cylinder"           → green cylinder
+  # "라벨 hello"               → text "hello"
+  # "분자 두 개 연결"          → 2x sphere + cylinder
+  # "3D scene"                 → empty 3D scene with viewpoint
+  # "2D diagram"               → empty 2D scene with orthographic
+  #
+  # # Held-honest 헌법
+  #
+  # 0 intent match → held-no-x3d-intent-matched
+  # multi intent match → held-multi-x3d-intent (priority order 적용)
+  #
+  # # Color name → diffuse_color mapping
+  #
+  # 6 basic colors (en + ko). 미등록 색상 → held-unknown-color.
+
+  knownColorMap = [
+    { en = "red"; ko = "빨간"; rgb = "1.0 0.0 0.0"; }
+    { en = "green"; ko = "초록"; rgb = "0.0 1.0 0.0"; }
+    { en = "blue"; ko = "파란"; rgb = "0.0 0.0 1.0"; }
+    { en = "yellow"; ko = "노란"; rgb = "1.0 1.0 0.0"; }
+    { en = "white"; ko = "흰"; rgb = "1.0 1.0 1.0"; }
+    { en = "black"; ko = "검은"; rgb = "0.0 0.0 0.0"; }
+  ];
+
+  colorCount = builtins.length knownColorMap;
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  findColor = utterance:
+    let
+      hits = builtins.filter (c:
+        (containsAny utterance [ c.en ]) || (containsAny utterance [ c.ko ])
+      ) knownColorMap;
+    in
+      if hits == [] then null else builtins.head hits;
+
+  knownX3dIntentPatterns = [
+    {
+      intent_id = "draw-box";
+      en_keywords = [ "cube" "box" "draw a cube" "draw a box" ];
+      ko_keywords = [ "큐브" "정육면체" "박스" "상자 그려" ];
+      priority = 10;
+      atom_kind = "x3d-box";
+    }
+    {
+      intent_id = "draw-sphere";
+      en_keywords = [ "sphere" "ball" "draw a sphere" "draw a ball" ];
+      ko_keywords = [ "공" "구" "구체 그려" ];
+      priority = 10;
+      atom_kind = "x3d-sphere";
+    }
+    {
+      intent_id = "draw-cylinder";
+      en_keywords = [ "cylinder" "tube" "draw a cylinder" ];
+      ko_keywords = [ "원기둥" "실린더" "관 그려" ];
+      priority = 10;
+      atom_kind = "x3d-cylinder";
+    }
+    {
+      intent_id = "draw-text-label";
+      en_keywords = [ "label" "text" "annotation" "draw text" ];
+      ko_keywords = [ "라벨" "텍스트" "주석" "글자 그려" ];
+      priority = 9;
+      atom_kind = "x3d-text";
+    }
+    {
+      intent_id = "molecule-pair";
+      en_keywords = [ "two atoms" "atom pair" "molecule pair" "bond two" ];
+      ko_keywords = [ "원자 두 개" "분자 두 개 연결" "두 원자 결합" "분자 결합" ];
+      priority = 20;  # higher priority than single shape
+      atom_kind = "molecule-projection";
+    }
+    {
+      intent_id = "empty-3d-scene";
+      en_keywords = [ "3D scene" "3d scene" "empty scene" "3D space" ];
+      ko_keywords = [ "3D scene" "3D 씬" "빈 3D 공간" "3차원 공간" ];
+      priority = 5;
+      atom_kind = "x3d-scene-root";
+    }
+    {
+      intent_id = "empty-2d-scene";
+      en_keywords = [ "2D diagram" "2d diagram" "2D scene" "flat diagram" ];
+      ko_keywords = [ "2D 다이어그램" "2D 씬" "평면 다이어그램" "2차원 도면" ];
+      priority = 5;
+      atom_kind = "x3d-scene-root";
+    }
+  ];
+
+  intentCount = builtins.length knownX3dIntentPatterns;
+
+  matchIntents = utterance:
+    builtins.filter (p:
+      (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords))
+      knownX3dIntentPatterns;
+
+  # === Scene builders (intent → scene atom tree) ====================
+
+  buildBoxScene = color: dimension:
+    let
+      mat = x3d.mkX3dMaterial color.rgb 0.0;
+      geo = x3d.mkX3dBox "1 1 1";
+      shape = x3d.mkX3dShape mat geo;
+      viewpoint = x3d.mkX3dViewpoint "0 0 5" "0 0 1 0" 0.785;
+    in
+      x3d.mkX3dSceneRoot dimension "0.2 0.2 0.2" [ viewpoint shape ];
+
+  buildSphereScene = color: dimension:
+    let
+      mat = x3d.mkX3dMaterial color.rgb 0.0;
+      geo = x3d.mkX3dSphere 0.5;
+      shape = x3d.mkX3dShape mat geo;
+      viewpoint = x3d.mkX3dViewpoint "0 0 5" "0 0 1 0" 0.785;
+    in
+      x3d.mkX3dSceneRoot dimension "0.2 0.2 0.2" [ viewpoint shape ];
+
+  buildCylinderScene = color: dimension:
+    let
+      mat = x3d.mkX3dMaterial color.rgb 0.0;
+      geo = x3d.mkX3dCylinder 0.3 1.0;
+      shape = x3d.mkX3dShape mat geo;
+      viewpoint = x3d.mkX3dViewpoint "0 0 5" "0 0 1 0" 0.785;
+    in
+      x3d.mkX3dSceneRoot dimension "0.2 0.2 0.2" [ viewpoint shape ];
+
+  buildTextScene = textStr: dimension:
+    let
+      txt = x3d.mkX3dText textStr 1.0;
+      viewpoint = x3d.mkX3dViewpoint "0 0 5" "0 0 1 0" 0.785;
+    in
+      x3d.mkX3dSceneRoot dimension "0.2 0.2 0.2" [ viewpoint txt ];
+
+  buildMoleculePairScene = dimension:
+    let
+      whiteMat = x3d.mkX3dMaterial "1.0 1.0 1.0" 0.0;
+      grayMat = x3d.mkX3dMaterial "0.5 0.5 0.5" 0.0;
+      sphere1 = x3d.mkX3dTransform "-1 0 0" "0 0 1 0" "1 1 1"
+        [ (x3d.mkX3dShape whiteMat (x3d.mkX3dSphere 0.4)) ];
+      sphere2 = x3d.mkX3dTransform "1 0 0" "0 0 1 0" "1 1 1"
+        [ (x3d.mkX3dShape whiteMat (x3d.mkX3dSphere 0.4)) ];
+      bond = x3d.mkX3dTransform "0 0 0" "0 0 1 1.5708" "1 1 1"
+        [ (x3d.mkX3dShape grayMat (x3d.mkX3dCylinder 0.08 2.0)) ];
+      viewpoint = x3d.mkX3dViewpoint "0 0 6" "0 0 1 0" 0.785;
+    in
+      x3d.mkX3dSceneRoot dimension "0.2 0.2 0.2" [ viewpoint sphere1 sphere2 bond ];
+
+  buildEmptyScene = dimension:
+    let
+      viewpoint =
+        if dimension == 3
+        then x3d.mkX3dViewpoint "0 0 5" "0 0 1 0" 0.785
+        else x3d.mkX3dViewpoint "0 0 10" "0 0 1 0" 0.5;
+    in
+      x3d.mkX3dSceneRoot dimension "0.2 0.2 0.2" [ viewpoint ];
+
+  # === Lift entry ===================================================
+
+  liftToX3dScene = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let matches = matchIntents utterance;
+      in
+        if matches == [] then {
+          outcome = "held-no-x3d-intent-matched";
+          known_intents = builtins.map (p: p.intent_id) knownX3dIntentPatterns;
+        }
+        else
+          let
+            # Highest priority wins (molecule-pair > single shape > empty)
+            sorted = builtins.sort (a: b: a.priority > b.priority) matches;
+            chosen = builtins.head sorted;
+            color = findColor utterance;
+            # default color = white when none specified
+            actualColor =
+              if color != null then color
+              else { en = "white"; ko = "흰"; rgb = "1.0 1.0 1.0"; };
+            # 2D vs 3D
+            dimension =
+              if chosen.intent_id == "empty-2d-scene" then 2 else 3;
+            scene =
+              if chosen.intent_id == "draw-box" then buildBoxScene actualColor dimension
+              else if chosen.intent_id == "draw-sphere" then buildSphereScene actualColor dimension
+              else if chosen.intent_id == "draw-cylinder" then buildCylinderScene actualColor dimension
+              else if chosen.intent_id == "draw-text-label" then buildTextScene "hello" dimension
+              else if chosen.intent_id == "molecule-pair" then buildMoleculePairScene dimension
+              else if chosen.intent_id == "empty-3d-scene" then buildEmptyScene 3
+              else if chosen.intent_id == "empty-2d-scene" then buildEmptyScene 2
+              else null;
+          in
+            if scene == null then {
+              outcome = "held-no-builder-for-intent";
+              intent_id = chosen.intent_id;
+            }
+            else {
+              outcome = "x3d-scene-lifted";
+              utterance = utterance;
+              intent_id = chosen.intent_id;
+              dimension = dimension;
+              color_applied =
+                if color != null then color.en else "white-default";
+              scene = scene;
+              multi_match_count = builtins.length matches;
+              substrate_action =
+                "X3D scene atom tree 생성됨. dimension=" + (builtins.toString dimension)
+                + ", intent=" + chosen.intent_id + ". 다음 단계: "
+                + "applyX3dAtomSubstratePlate 로 X3D source emit, freecat 렌더.";
+              axiom_origin = "axiom-79-x3d-scene-nl-lifter (composes axiom-78)";
+            };
+
+  applyX3dSceneNlLifterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else liftToX3dScene request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-79 (X3D scene NL forward)";
+    intent_pattern_count = intentCount;
+    intents = builtins.map (p: p.intent_id) knownX3dIntentPatterns;
+    color_count = colorCount;
+    colors = builtins.map (c: c.en) knownColorMap;
+    routed_substrate = "axiom-78 X3D atom substrate";
+    new_decision_count = 0;
+    do_not_rebuild = true;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-x3d-intent-matched"
+      "held-no-builder-for-intent"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownColorMap colorCount findColor
+    knownX3dIntentPatterns intentCount
+    matchIntents
+    buildBoxScene buildSphereScene buildCylinderScene
+    buildTextScene buildMoleculePairScene buildEmptyScene
+    liftToX3dScene applyX3dSceneNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL X3D scene lifter (Axiom #79) — forward";
+    owner = ownerName;
+    base = "x3d-scene-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-29 dawn): 'NL → X3D mirror runtime'. "
+      + "7 intent kind (box/sphere/cylinder/text/molecule-pair/empty-3D/empty-2D) "
+      + "× 6 color (en+ko bilingual). priority order (molecule-pair > single "
+      + "shape > empty). default color = white. dimension = 3 except empty-2D. "
+      + "DO NOT REBUILD — Axiom #78 mk* constructor 재사용.";
+  };
+}

@@ -1,0 +1,1 @@
+let compose = f: g: x: f (g x); inc = x: x + 1; dbl = x: x * 2; apply3 = f: x: f (f (f x)); in { c = compose inc dbl 10; a = apply3 inc 0; curry = (a: b: c: a + b + c) 1 2 3; }

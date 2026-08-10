@@ -1,0 +1,58 @@
+# stdlib/lib/meta/abstraction-gate-bridge.px
+#
+# P3 gate bridge: meta-identity-guided genesis가 낸 abstraction.candidate를 *기존 판사*에게 *제출*하는 어댑터.
+#   ★bridge는 판단하지 않는다 — candidate를 *심판 받을 수 있는 모양으로* 넘기고, 판사 결과를 그대로 반영한다.
+#   새 verifier/gate/Arena/law 0. 직접 durable write 0. redb judge 0. accepted_as_truth 생성 0.
+#
+# ★정직(§38): abstraction promotion(keep/discard)은 *utility FRONTIER*(held-out, HipSpec: 겉보기 redundant 자동폐기 금지)
+#   → gate-ready 후보라도 *결정론 gate 없음* = held-pending-utility(Arena/Held로 라우팅, 지금 승격 0). rule-shaped 후보만
+#   기존 결정론 gate(pnix-lisp-ct.promoteCandidate)로 갈 수 있고, concept/synonym abstraction은 held-pending-utility.
+# ★P3-0 canonical-key lock을 bridge 안에 — 잘못된 keyspace를 판사에 넘기지 않게.
+let
+  B = builtins;
+  idl = import ./identity-law.px;
+
+  # term-dag key spine 인가(content-address): "(...)" 합성 또는 "s:"/"i:"/"S:" leaf
+  isTermKey = k:
+    (B.isString k) && (B.stringLength k >= 1)
+    && ((B.substring 0 1 k == "(") || (B.substring 0 2 k == "s:")
+        || (B.substring 0 2 k == "i:") || (B.substring 0 2 k == "S:"));
+
+  submitToGate = args:
+    let cand = if args ? candidate then args.candidate else { };
+        # ── precheck: gate-ready 인가 (판단 아님, 모양 확인) ──
+        idCheck = idl.checkIdentity cand;                       # 기존 헌법 재검사(bridge가 우회 못 하게)
+        shapeOk = (cand.kind or "") == "abstraction.candidate"
+                  && (cand ? abstraction) && (cand.abstraction ? key);
+        # ★P3-0 canonical-key lock: abstraction.key가 term-dag spine 인가
+        keySpineOk = shapeOk && (isTermKey cand.abstraction.key);
+        statusOk = (cand.status or "candidate") == "candidate";  # genesis가 held로 self-filter한 건 제출 불가
+        gateReady = shapeOk && idCheck.all_pass && keySpineOk && statusOk;
+        # gate 라우팅: rule-shaped(lhs/rhs)면 결정론 gate, 아니면 utility FRONTIER(held)
+        isRuleShaped = (cand.abstraction ? lhs) && (cand.abstraction ? rhs);
+        reasons =
+          (if shapeOk then [ ] else [ "bad-shape" ])
+          ++ (if idCheck.all_pass then [ ] else B.map (v: "identity:" + v) idCheck.violations)
+          ++ (if keySpineOk then [ ] else [ "key-spine-mismatch" ])
+          ++ (if statusOk then [ ] else [ "candidate-already-held" ]);
+    in {
+      gate_ready = gateReady;
+      # ★판사 결과 반영(직접 판단 아님): gate-ready가 아니면 held; gate-ready여도 abstraction promotion=utility FRONTIER → held-pending
+      gate_status =
+        if !gateReady then "held"
+        else if isRuleShaped then "submit-to-promoteCandidate"   # 결정론 rule gate(pnix-lisp-ct, Arena) — 별도 호출자
+        else "held-pending-utility";                              # concept/synonym = §38 FRONTIER(held-out 필수)
+      routed_to =
+        if !gateReady then "rejected (precheck)"
+        else if isRuleShaped then "pnix-lisp-ct.promoteCandidate (Arena/Held)"
+        else "Arena/Held (utility signal — §38 promotion-by-utility)";
+      reasons = reasons;
+      # ★bridge는 truth/durable 절대 생성 안 함 — 통과해도 Verified/Law는 기존 gate result만 반영
+      accepted_as_truth = false;
+      durable_truth = false;
+      ontology_assert_allowed = false;
+      judged_by_bridge = false;            # bridge는 판사 아님
+    };
+in {
+  inherit submitToGate isTermKey;
+}

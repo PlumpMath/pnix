@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+
+const packageRoot = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(packageRoot, "..");
+const metaRoot = path.resolve(
+  process.argv[2] || process.env.PNIX_META_ROOT || path.join(repoRoot, "pnix-meta")
+);
+const runtime = require(path.join(packageRoot, "pnix-cljs", "dist", "pnix-cljs-module.js"));
+
+function discover(directory) {
+  const files = [];
+  for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...discover(absolute));
+    } else if (entry.isFile() && entry.name.endsWith(".px")) {
+      const expected = absolute.slice(0, -3) + ".expected.json";
+      if (fs.existsSync(expected)) files.push({source: absolute, expected});
+    }
+  }
+  return files;
+}
+
+function errorObservation(projection) {
+  const phase = projection && projection.error && projection.error.phase;
+  return JSON.stringify({$error: {phase: typeof phase === "string" ? phase : "eval"}});
+}
+
+const corpusRoot = path.join(metaRoot, "corpus");
+const cases = [];
+let ready = true;
+
+for (const item of discover(corpusRoot).sort((a, b) => a.source.localeCompare(b.source))) {
+  const name = path.basename(item.source);
+  const expected = fs.readFileSync(item.expected, "utf8").trim();
+  const started = process.hrtime.bigint();
+  let got = null;
+  let error = null;
+  try {
+    const projection = JSON.parse(runtime.evalFileJson(item.source));
+    if (projection.outcome_kind === "done") {
+      got = runtime.evalFileValueJson(item.source);
+    } else if (projection.outcome_kind === "failed") {
+      got = errorObservation(projection);
+    } else {
+      error = `unexpected production outcome ${projection.outcome_kind}`;
+    }
+  } catch (cause) {
+    error = cause && cause.stack ? cause.stack : String(cause);
+  }
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  const ok = error === null && got === expected;
+  ready = ready && ok;
+  cases.push({
+    name,
+    ok,
+    got,
+    elapsed_ms: Math.round(elapsedMs * 1000) / 1000,
+    ...(error === null ? {} : {error}),
+  });
+}
+
+const report = {
+  schema: "pnix-cljs.pnix-meta-conformance.v0",
+  ready: ready && cases.length > 0,
+  available: true,
+  root: metaRoot,
+  count: cases.length,
+  cases,
+};
+
+process.stdout.write(JSON.stringify(report) + "\n");
+process.exitCode = report.ready ? 0 : 1;

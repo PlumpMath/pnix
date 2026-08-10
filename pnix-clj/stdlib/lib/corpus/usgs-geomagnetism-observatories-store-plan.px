@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/usgs-geomagnetism-observatories-store-plan.px — USGS Geomagnetism Observatories snapshot.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# observations/realtime feeds/alerts/operational decisions는 포함하지 않는다. graph/mirror 연결도 하지 않는다.
+let
+  B = builtins;
+  genPath = ./usgs-geomagnetism-observatories.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "science.usgs.geomagnetism_observatories.v1";
+    source = { name = "USGS Geomagnetism Observatories"; license = "US Government public domain"; scope = "empty seed fallback"; };
+    summary = { observatory_count = 0; };
+    observatories = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "usgs-geomagnetism-observatories-load-v0";
+      source_lens = "stdlib/lib/corpus/usgs-geomagnetism-observatories-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "science.usgs.geomagnetism_observatories.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "usgs-geomagnetism-observatories-query-v0";
+      source_lens = "stdlib/lib/corpus/usgs-geomagnetism-observatories-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "science.usgs.geomagnetism_observatories.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

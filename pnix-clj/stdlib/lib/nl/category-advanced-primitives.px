@@ -1,0 +1,332 @@
+let
+  ownerName = "stdlib.nl.category-advanced-primitives";
+
+  # === Advanced Categorical Primitives (agent-NL-168) ===============
+  #
+  # 사용자 directive (2026-05-29):
+  # > "더 많은 추상 categorical primitive: pullback / pushout / limit /
+  # >  colimit / Kan extension"
+  #
+  # 기존 12 categorical primitives (identity, fibration, sheaf-section,
+  # free-category-generator, morphism, universal-property, monad,
+  # monoidal-product, coequalizer, functor, natural-transformation, ...)
+  # 위에 5 more 박힘.
+  #
+  # 각 primitive 는:
+  #   - formal categorical definition (paper-quality)
+  #   - universal property statement
+  #   - substrate-side example (where it shows up in pnix substrate)
+  #   - constructor function
+  #   - applyXxxPlate dispatch
+
+  stepKind = "advanced-categorical-primitive";
+  framework_step =
+    "abstract limits/colimits/Kan — 5 new primitives on 12 existing";
+
+  # =================================================================
+  # === Primitive 1: Pullback ======================================
+  # =================================================================
+  #
+  # Given morphisms f: A → C and g: B → C with common target C,
+  # the pullback P = A ×_C B is an object with projections
+  #   π_A: P → A and π_B: P → B
+  # such that f ∘ π_A = g ∘ π_B, and (P, π_A, π_B) is universal
+  # among such cones.
+
+  pullback = {
+    primitive_id = "pullback";
+    family = "limits";
+    formal_definition_en = ''
+      Pullback of f: A → C and g: B → C.
+      Object: P = A ×_C B = { (a, b) : f(a) = g(b) }
+      Projections: π_A: P → A, π_B: P → B
+      Commuting square: f ∘ π_A = g ∘ π_B
+      Universal property: ∀ Q with morphisms (q_A: Q → A, q_B: Q → B)
+        such that f ∘ q_A = g ∘ q_B, ∃! u: Q → P
+        such that π_A ∘ u = q_A and π_B ∘ u = q_B.
+    '';
+    universal_property = "limit of cospan diagram (A → C ← B)";
+    substrate_example_en = ''
+      In pnix: cue overlap between two axiom families.
+      A = "security family activated cues"
+      B = "database family activated cues"
+      C = "all cue space"
+      P = cues in both families ("encrypt query" hits security.encryption +
+                                  database.transactional-semantics)
+    '';
+
+    construct = f: g: {
+      kind = "pullback";
+      source_morphisms = [ f g ];
+      cospan_target = if f ? target then f.target else "unknown";
+      pullback_object = {
+        kind = "pullback-object";
+        factor_a = f.source;
+        factor_b = g.source;
+        equation = "f o pi_A = g o pi_B";
+      };
+      projection_to_a = { kind = "projection"; from = "pullback"; to = f.source; };
+      projection_to_b = { kind = "projection"; from = "pullback"; to = g.source; };
+    };
+  };
+
+  # =================================================================
+  # === Primitive 2: Pushout =======================================
+  # =================================================================
+  #
+  # Dual of pullback. Given f: C → A and g: C → B with common source C,
+  # the pushout Q = A ⊔_C B is the colimit of the span (A ← C → B).
+
+  pushout = {
+    primitive_id = "pushout";
+    family = "colimits";
+    formal_definition_en = ''
+      Pushout of f: C → A and g: C → B.
+      Object: Q = A ⊔_C B (quotient of A ⊔ B by f(c) ~ g(c) for c ∈ C)
+      Injections: i_A: A → Q, i_B: B → Q
+      Commuting square: i_A ∘ f = i_B ∘ g
+      Universal property: ∀ R with morphisms (r_A: A → R, r_B: B → R)
+        such that r_A ∘ f = r_B ∘ g, ∃! u: Q → R
+        such that u ∘ i_A = r_A and u ∘ i_B = r_B.
+    '';
+    universal_property = "colimit of span diagram (A ← C → B)";
+    substrate_example_en = ''
+      In pnix: merging two parallel verb decompositions sharing the
+      same input morphism.
+      C = "shared verb 'rename'"
+      A = "Python rename plan (5 steps)"
+      B = "Rust rename plan (5 steps)"
+      Q = "unified rename plan glued via shared starting morphism"
+    '';
+
+    construct = f: g: {
+      kind = "pushout";
+      source_morphisms = [ f g ];
+      span_source = if f ? source then f.source else "unknown";
+      pushout_object = {
+        kind = "pushout-object";
+        factor_a = f.target;
+        factor_b = g.target;
+        equation = "i_A o f = i_B o g";
+      };
+      injection_from_a = { kind = "injection"; from = f.target; to = "pushout"; };
+      injection_from_b = { kind = "injection"; from = g.target; to = "pushout"; };
+    };
+  };
+
+  # =================================================================
+  # === Primitive 3: Limit (general) ===============================
+  # =================================================================
+  #
+  # Limit of a diagram D: J → C is an object L equipped with a
+  # universal cone (l_j: L → D(j))_{j ∈ J} compatible with all
+  # morphisms in J.
+
+  limit = {
+    primitive_id = "limit";
+    family = "general-limits";
+    formal_definition_en = ''
+      Limit of diagram D: J → C.
+      Object: L = lim D
+      Projections: l_j: L → D(j) for each j ∈ J
+      Compatibility: ∀ α: i → j in J, D(α) ∘ l_i = l_j
+      Universal property: ∀ M with cone (m_j: M → D(j)), ∃! u: M → L
+        such that l_j ∘ u = m_j for all j ∈ J.
+      Special cases:
+        J = empty → terminal object (1)
+        J = discrete two-point → product (A × B)
+        J = parallel pair → equalizer
+        J = cospan → pullback
+    '';
+    universal_property = "universal cone over diagram D";
+    substrate_example_en = ''
+      In pnix: aggregating multiple axiom family activations into the
+      most-specific shared sub-tree.
+      D = { security-cues, database-cues, network-cues }
+      L = "the cue subset belonging to all three families" (often empty;
+          held-honest result when intersection is non-empty)
+    '';
+
+    construct = diagram: {
+      kind = "limit";
+      diagram_size = if builtins.isList diagram then builtins.length diagram else 1;
+      limit_object = { kind = "limit-object"; equation = "universal cone"; };
+      projections =
+        if builtins.isList diagram
+        then builtins.map (d: { kind = "projection"; target = if d ? target then d.target else "unknown"; }) diagram
+        else [];
+    };
+  };
+
+  # =================================================================
+  # === Primitive 4: Colimit (general) =============================
+  # =================================================================
+  #
+  # Dual of limit. Colimit of D: J → C is an object L equipped with a
+  # universal cocone (l_j: D(j) → L)_{j ∈ J}.
+
+  colimit = {
+    primitive_id = "colimit";
+    family = "general-colimits";
+    formal_definition_en = ''
+      Colimit of diagram D: J → C.
+      Object: L = colim D
+      Injections: l_j: D(j) → L for each j ∈ J
+      Compatibility: ∀ α: i → j in J, l_j ∘ D(α) = l_i
+      Universal property: ∀ M with cocone (m_j: D(j) → M), ∃! u: L → M
+        such that u ∘ l_j = m_j for all j ∈ J.
+      Special cases:
+        J = empty → initial object (0)
+        J = discrete two-point → coproduct (A + B)
+        J = parallel pair → coequalizer
+        J = span → pushout
+    '';
+    universal_property = "universal cocone over diagram D";
+    substrate_example_en = ''
+      In pnix: gluing multi-language code emissions (28+ languages) into
+      a single per-language-emit-set.
+      D = { python-emit, rust-emit, go-emit, ... }
+      L = "the per-language-emit-set" (coproduct in CodeCat)
+    '';
+
+    construct = diagram: {
+      kind = "colimit";
+      diagram_size = if builtins.isList diagram then builtins.length diagram else 1;
+      colimit_object = { kind = "colimit-object"; equation = "universal cocone"; };
+      injections =
+        if builtins.isList diagram
+        then builtins.map (d: { kind = "injection"; source = if d ? source then d.source else "unknown"; }) diagram
+        else [];
+    };
+  };
+
+  # =================================================================
+  # === Primitive 5: Kan Extension =================================
+  # =================================================================
+  #
+  # Given F: C → D and K: C → E, the right Kan extension Ran_K F: E → D
+  # is the "best approximation of F factoring through K".
+
+  kanExtension = {
+    primitive_id = "kan-extension";
+    family = "extensions";
+    formal_definition_en = ''
+      Left Kan extension Lan_K F:
+        Given F: C → D and K: C → E, Lan_K F: E → D is universal
+        among functors G: E → D equipped with a natural transformation
+        F → G ∘ K.
+
+      Right Kan extension Ran_K F:
+        Dual — universal among functors G: E → D with natural
+        transformation G ∘ K → F.
+
+      Pointwise formula (when D is cocomplete):
+        Lan_K F (e) = colim ((K ↓ e) → C →^F D)
+
+      Universal property (for Lan_K F):
+        For any G: E → D and ε: F → G ∘ K, ∃! σ: Lan_K F → G
+        with ε = (σ K) ∘ η, where η is the unit.
+    '';
+    universal_property = "best approximation of functor along change of base";
+    substrate_example_en = ''
+      In pnix: extending NL → meaning lift along language-codomain
+      functor.
+      F: NL → Meaning (the substrate-side functor lift in mode 12)
+      K: NL → CodeCat (the codomain functor in mode 13)
+      Lan_K F: CodeCat → Meaning (lift code emissions back to meaning)
+
+      Used in reverse-definition view: result → receipts → formulas →
+      slots → pre-mirror context (CLAUDE.md §natural-language-execution
+      criterion's reverse direction).
+    '';
+
+    construct = F: K: {
+      kind = "kan-extension";
+      direction = "left";  # default; right is dual
+      base_functor_F = F;
+      change_of_base_K = K;
+      kan_extension_functor = {
+        kind = "Lan_K_F";
+        source_category = if K ? target_category then K.target_category else "E";
+        target_category = if F ? target_category then F.target_category else "D";
+        formula = "Lan_K F(e) = colim((K downarrow e) -> C ->^F D)";
+      };
+      unit_eta = { kind = "natural-transformation"; from = "F"; to = "Lan_K_F o K"; };
+    };
+  };
+
+  # =================================================================
+  # === Inventory ==================================================
+  # =================================================================
+
+  primitives = [ pullback pushout limit colimit kanExtension ];
+  primitiveCount = builtins.length primitives;
+
+  families =
+    let
+      raw = builtins.map (p: p.family) primitives;
+      uniq = lst:
+        builtins.foldl' (acc: x:
+          if builtins.elem x acc then acc else acc ++ [ x ]
+        ) [] lst;
+    in
+      uniq raw;
+
+  primitiveIds = builtins.map (p: p.primitive_id) primitives;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    primitive_count = primitiveCount;
+    primitive_ids = primitiveIds;
+    families = families;
+    has_pullback = true;
+    has_pushout = true;
+    has_limit_general = true;
+    has_colimit_general = true;
+    has_kan_extension = true;
+    substrate_existing_primitives_referenced = [
+      "identity" "fibration" "sheaf-section" "free-category-generator"
+      "morphism" "universal-property" "monad" "monoidal-product"
+      "coequalizer" "functor" "natural-transformation"
+    ];
+    total_categorical_primitives_post_extension = 11 + primitiveCount;
+  };
+
+  # =================================================================
+  # === Plate entry ================================================
+  # =================================================================
+
+  findPrimitive = id:
+    let matches = builtins.filter (p: p.primitive_id == id) primitives;
+    in if matches == [] then null else builtins.head matches;
+
+  applyAdvancedPrimitivePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "advanced-primitive-inventory";
+      receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "describe" request then
+      let p = findPrimitive request.describe;
+      in if p == null then { outcome = "held-unknown-primitive";
+                             receipt = { queried = request.describe;
+                                         available = primitiveIds; }; }
+         else { outcome = "advanced-primitive-described";
+                receipt = {
+                  primitive_id = p.primitive_id;
+                  family = p.family;
+                  formal_definition = p.formal_definition_en;
+                  universal_property = p.universal_property;
+                  substrate_example = p.substrate_example_en;
+                };
+              }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [ "inventory" "describe" ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit pullback pushout limit colimit kanExtension;
+  inherit primitives primitiveCount families primitiveIds;
+  inherit findPrimitive inventorySummary applyAdvancedPrimitivePlate;
+}

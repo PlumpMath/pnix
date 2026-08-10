@@ -1,0 +1,45 @@
+# stdlib/lib/corpus/kr-public-biohealth-catalogs-store-plan.px — Korean bio/food/health catalog metadata.
+# redb corpus_source_records에 pnix attrset source(JSON 아님)로 append한다.
+# records/values/guidance/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./kr-public-biohealth-catalogs.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "kr.public_biohealth_catalogs.v1";
+    source = "Korean public biodiversity/food/health catalog metadata";
+    license = "KR public-data catalog metadata only";
+    policy = "empty seed fallback";
+    summary = { source_count = 0; field_catalog_count = 0; payload_rows_ingested = false; mirror_graph_wiring = false; };
+    field_catalogs = [ ]; sources = [ ]; files = [ ]; manifest = { };
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "kr-public-biohealth-catalogs-load-v0";
+      source_lens = "stdlib/lib/corpus/kr-public-biohealth-catalogs-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "kr.public_biohealth_catalogs.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "kr-public-biohealth-catalogs-query-v0";
+      source_lens = "stdlib/lib/corpus/kr-public-biohealth-catalogs-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "kr.public_biohealth_catalogs.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

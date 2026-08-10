@@ -1,0 +1,413 @@
+let
+  ownerName = "stdlib.nl.dev-scenario-real-flow-substrate";
+
+  eq_gen = import nl/coding-agent-math-equation-generator-substrate.px;
+  closure = import nl/nl-goal-closure-substrate.px;
+
+  # === Dev scenario real flow substrate (agent-NL-207) ===============
+  #
+  # 사용자 vision (lang-ava.md line 1040 직격):
+  # > "진짜 dev 시나리오 한 발화 — 다중 family activate + 각 family 의
+  #    algorithm step 사이를 수학이 잇는다. 알고리즘 문장들 잇는 지능."
+  #
+  # 발화 예: "write unit test with AAA. mock the database. find references
+  #          first. then off by one bug in loop. extract function. add
+  #          validation. use hashmap. apply distributive law."
+  #
+  # 이 한 발화 안에 다중 family (#118-131 의 14 family) 활성 +
+  # 각 family 의 algorithm step 사이 *수학식 wire* (Round 38 호출).
+  #
+  # 이 owner = *진짜 dev scenario* 의 *step-by-step 수학 접합* substrate.
+  #
+  # 각 cue → family activation + 그 family 의 *algorithm step* 의 *수학
+  # 원동력* (실제 식, 명칭 매칭 아님).
+
+  stepKind = "dev-scenario-real-flow";
+  framework_step =
+    "다중 family 활성 → algorithm step 사이 수학식 자동 wire";
+
+  # =================================================================
+  # === Cue → family + algorithm step + math wire ====================
+  # =================================================================
+
+  cueToStepAndMath = [
+    {
+      cue = "off by one";
+      family = "diagnostic.logic-bug";
+      algorithm_step = "scan loop bounds for ≤ vs <";
+      math_equation = "loop iterates ∀i ∈ [0, n) ↔ i < n (NOT i ≤ n)";
+      math_kind = "bound-equation";
+      driver_power = "loop bound 의 *수학적 정확성* — i ≤ n 시 1회 over-iterate, IndexOutOfBounds";
+      decision_constraint = "i < n vs i <= n-1 — 둘 다 OK; i <= n 또는 i < n+1 → BUG";
+      eq_gen_call = "loop_invariant kind=linear-search 의 termination 식";
+    }
+    {
+      cue = "extract function";
+      family = "edit/refactor.extract";
+      algorithm_step = "select code region → param identification → new function";
+      math_equation = "behavior preservation: f(x) before extraction ≡ f(x) after extraction (referential transparency)";
+      math_kind = "equivalence-preservation";
+      driver_power = "함수 추출의 *수학적 정당화* — input/output 동일 + side effect 동일 → 등가";
+      decision_constraint = "side effect 가 있으면 *순수 함수 추출* 불가능; 명시적 effect signature 필요";
+      eq_gen_call = "type_refinement (placeholder, Round 38 의 8th)";
+    }
+    {
+      cue = "add validation";
+      family = "edit/refactor.add-validation";
+      algorithm_step = "function entry → precondition check → main body";
+      math_equation = "Hoare triple {P} S {Q}, P: input ≠ null ∧ size ≥ 0 ∧ invariants_satisfied";
+      math_kind = "precondition-equation";
+      driver_power = "validation 의 *수학적 원동력* — precondition 위반 시 정의되지 않은 행동 (UB) 방지";
+      decision_constraint = "P 강한 정도 = error 빠르게 잡힘 / API 사용자 부담; trade-off";
+      eq_gen_call = "loop_invariant 의 precondition slot";
+    }
+    {
+      cue = "use hashmap";
+      family = "data-structure.hash";
+      algorithm_step = "insert (key, value) into hashmap → lookup by key";
+      math_equation = "expected probe length E[L] = 1/(1-α), α = n/m (load factor)";
+      math_kind = "load-factor-equation";
+      driver_power = "hashmap 의 *O(1) average* 보장 — α < 0.75 강제";
+      decision_constraint = "α ≥ 0.75 → rehash (m 2배); α < 0.25 → space waste";
+      eq_gen_call = "probability iid-bounded (collision distribution)";
+    }
+    {
+      cue = "distributive law";
+      family = "math.arithmetic.distributive";
+      algorithm_step = "(a + b) * c → a*c + b*c (transform)";
+      math_equation = "distributivity: a × (b + c) = (a × b) + (a × c), ∀a, b, c ∈ Ring";
+      math_kind = "algebraic-equation";
+      driver_power = "분배법칙의 *수학적 정당화* — Ring axiom; SIMD 벡터화 / 병렬화 가능";
+      decision_constraint = "공통 factor 추출 가능 → factor 우선; SIMD width 일치 시 transform 적용";
+      eq_gen_call = "complexity (factorize 후 recurrence 재계산)";
+    }
+    {
+      cue = "unit test";
+      family = "test.unit-test";
+      algorithm_step = "Arrange (given) → Act (when) → Assert (then)";
+      math_equation = "∀ input x. expected(x) = actual(x); property test: ∀x. invariant(f(x))";
+      math_kind = "property-invariant";
+      driver_power = "unit test 의 *수학적 원동력* — function 의 입출력 specification = 형식 명세";
+      decision_constraint = "edge case (boundary, empty, max) 강제 — boundary value testing";
+      eq_gen_call = "loop_invariant property assertion";
+    }
+    {
+      cue = "mock the database";
+      family = "test.mocking";
+      algorithm_step = "DI injection → mock IDatabase → assert calls";
+      math_equation = "category theory: mock = morphism with controlled image; identity on output domain";
+      math_kind = "morphism-substitution";
+      driver_power = "mocking 의 *수학적 정당화* — interface = functor, mock = natural transformation 의 instance";
+      decision_constraint = "mock vs fake vs spy — interaction count 명세 강도에 따라";
+      eq_gen_call = "type_refinement (interface contract)";
+    }
+    {
+      cue = "find references";
+      family = "navigation.lexical";
+      algorithm_step = "symbol resolution → reverse index lookup → cross-file";
+      math_equation = "reference graph: directed graph G = (V, E); BFS from symbol";
+      math_kind = "graph-traversal";
+      driver_power = "find references 의 *수학적 원동력* — graph reachability (BFS from symbol)";
+      decision_constraint = "scope 한정 시 sub-graph 만; full project 시 entire graph";
+      eq_gen_call = "graph BFS (Θ(V + E))";
+    }
+    {
+      cue = "sort";
+      family = "algorithm-pattern.divide-conquer";
+      algorithm_step = "split → recursively sort → merge";
+      math_equation = "T(n) = 2T(n/2) + Θ(n), Master Thm → T(n) = Θ(n log n)";
+      math_kind = "recurrence-master";
+      driver_power = "sort 의 *수학적 원동력* — comparison-based lower bound Ω(n log n) 도달";
+      decision_constraint = "stable 필요 → merge sort; in-place 우선 → quicksort; small n → insertion";
+      eq_gen_call = "complexity merge-sort";
+    }
+    {
+      cue = "loop";
+      family = "control-flow.loop";
+      algorithm_step = "init → guard → body → step";
+      math_equation = "Hoare {I ∧ B} body {I}; termination measure decreasing";
+      math_kind = "loop-invariant-hoare";
+      driver_power = "loop 의 *수학적 원동력* — invariant 유지 + 종료 보장 = total correctness";
+      decision_constraint = "invariant 명시 시 → 자동 검증 가능; 미명시 → infer 또는 reject";
+      eq_gen_call = "loop_invariant sum-array";
+    }
+
+    # ===== Round 43: 10 추가 cues — 진짜 dev scenario 확장 =====
+    {
+      cue = "memoize";
+      family = "algorithm-pattern.DP";
+      algorithm_step = "compute → store → lookup before recompute";
+      math_equation = "T(n) reduces from exponential (Θ(2^n)) to polynomial (Θ(n²) or less)";
+      math_kind = "complexity-reduction";
+      driver_power = "memoization 의 *수학적 원동력* — overlapping subproblems → DP table";
+      decision_constraint = "subproblem 개수 polynomial → memoize; 아니면 일반 recursion";
+      eq_gen_call = "complexity fibonacci-naive 의 memoized version";
+    }
+    {
+      cue = "greedy";
+      family = "algorithm-pattern.greedy";
+      algorithm_step = "local optimal choice → never reconsider";
+      math_equation = "matroid: ∀A, B ∈ I (independent), |A| < |B| → ∃x ∈ B-A: A∪{x} ∈ I";
+      math_kind = "matroid-property";
+      driver_power = "greedy 의 *수학적 정당화* — matroid 일 때 local optimal = global optimal";
+      decision_constraint = "matroid 증명 가능 → greedy; 아니면 DP";
+      eq_gen_call = "optimization-constraint (placeholder)";
+    }
+    {
+      cue = "race condition";
+      family = "concurrency.thread";
+      algorithm_step = "shared state + concurrent writes → lost update";
+      math_equation = "happens-before partial order: a hb b ⟺ a in same thread before b ∨ a synchronizes-with b";
+      math_kind = "concurrency-ordering";
+      driver_power = "race condition 의 *수학적 원동력* — happens-before 부재 시 visibility / atomicity 깨짐";
+      decision_constraint = "atomic op (CAS, mutex) 또는 immutable state 강제";
+      eq_gen_call = "type_refinement (concurrent invariant)";
+    }
+    {
+      cue = "cache";
+      family = "performance-deep.cache-hierarchy";
+      algorithm_step = "data access → check L1/L2/L3 → main memory";
+      math_equation = "AMAT = T_hit + miss_rate × T_miss_penalty";
+      math_kind = "amortized-access-time";
+      driver_power = "cache 의 *수학적 원동력* — locality (spatial / temporal) 가 throughput 결정";
+      decision_constraint = "sequential access 패턴 우선, stride pattern 시 SIMD prefetch";
+      eq_gen_call = "complexity (cache-aware variant)";
+    }
+    {
+      cue = "type safety";
+      family = "type-theory.refinement";
+      algorithm_step = "function signature → typecheck input/output";
+      math_equation = "Curry-Howard: type = proposition, term = proof";
+      math_kind = "type-propositional";
+      driver_power = "type safety 의 *수학적 원동력* — well-typed → can't go wrong (Milner)";
+      decision_constraint = "strong typing → compile-time guarantee; dynamic → runtime check";
+      eq_gen_call = "type_refinement (placeholder)";
+    }
+    {
+      cue = "regex";
+      family = "automata.regular";
+      algorithm_step = "pattern → NFA → DFA → match";
+      math_equation = "regex L: |Σ*| → {0,1}; DFA: (Q, Σ, δ, q0, F)";
+      math_kind = "regular-language";
+      driver_power = "regex 의 *수학적 원동력* — regular language hierarchy: regex ≡ NFA ≡ DFA";
+      decision_constraint = "regex 표현 가능 → O(n); CFG 필요 → parser";
+      eq_gen_call = "automata-formal-language (placeholder)";
+    }
+    {
+      cue = "stream";
+      family = "data-structure.sequence";
+      algorithm_step = "lazy producer → consumer pull → bounded buffer";
+      math_equation = "throughput = min(producer_rate, consumer_rate, buffer_size / latency)";
+      math_kind = "queueing-theory";
+      driver_power = "stream 의 *수학적 원동력* — Little's law: L = λW";
+      decision_constraint = "buffer 크기 = throughput × max latency";
+      eq_gen_call = "probability (queueing model)";
+    }
+    {
+      cue = "gradient";
+      family = "math.optimization";
+      algorithm_step = "compute ∇f → step in -∇f direction";
+      math_equation = "x_{k+1} = x_k - η ∇f(x_k); convergence if η < 2/L (L = Lipschitz of ∇f)";
+      math_kind = "gradient-descent";
+      driver_power = "gradient descent 의 *수학적 원동력* — convex case: O(1/k) convergence";
+      decision_constraint = "convex → guaranteed; non-convex → only local; learning rate < 2/L";
+      eq_gen_call = "numerical (Newton vs gradient)";
+    }
+    {
+      cue = "lock";
+      family = "concurrency.sync-primitive";
+      algorithm_step = "acquire → critical section → release";
+      math_equation = "mutual exclusion: ¬(thread_a in CS ∧ thread_b in CS), deadlock-free, starvation-free";
+      math_kind = "mutex-property";
+      driver_power = "lock 의 *수학적 원동력* — Peterson's algorithm proof: safety + liveness";
+      decision_constraint = "fine-grained → throughput; coarse → simplicity; lock-free → CAS retry";
+      eq_gen_call = "type_refinement (mutex invariant)";
+    }
+    {
+      cue = "compress";
+      family = "math.information-theory";
+      algorithm_step = "estimate symbol probs → assign code";
+      math_equation = "Shannon: H(X) = -Σ p_i log p_i; Huffman avg code length ≤ H(X) + 1";
+      math_kind = "entropy-bound";
+      driver_power = "compression 의 *수학적 원동력* — Shannon bound 가 optimal limit";
+      decision_constraint = "non-uniform distribution → Huffman / arithmetic; uniform → no compression possible";
+      eq_gen_call = "info-bound (placeholder)";
+    }
+  ];
+
+  # =================================================================
+  # === Activate cues by utterance ===================================
+  # =================================================================
+
+  activateByUtterance = utterance:
+    let
+      contains = haystack: needle:
+        let
+          hLen = builtins.stringLength haystack;
+          nLen = builtins.stringLength needle;
+          go = i:
+            if i + nLen > hLen then false
+            else if builtins.substring i nLen haystack == needle then true
+            else go (i + 1);
+        in if nLen == 0 then true
+           else if hLen < nLen then false
+           else go 0;
+      matches = builtins.filter
+        (entry: contains utterance entry.cue)
+        cueToStepAndMath;
+    in matches;
+
+  # =================================================================
+  # === Build full algorithm sentence chain with math bridges =======
+  # =================================================================
+  #
+  # 한 발화 → 활성 cues → algorithm step sequence + 각 step 사이의 *수학 접합*.
+
+  buildAlgorithmChainWithMathBridges = utterance:
+    let
+      activated = activateByUtterance utterance;
+      stepCount = builtins.length activated;
+    in
+      if activated == []
+      then {
+        outcome = "held-no-cues-activated";
+        utterance = utterance;
+        held_reason = "발화에 등록된 dev cue 가 없음";
+      }
+      else {
+        outcome = "dev-flow-chain-emitted";
+        utterance = utterance;
+        activated_count = stepCount;
+        active_families =
+          builtins.map (e: e.family) activated;
+        # algorithm step sequence: 각 cue 의 step
+        algorithm_step_sequence =
+          builtins.map (e: {
+            step_no = "(implicit order by cue position)";
+            family = e.family;
+            cue = e.cue;
+            step = e.algorithm_step;
+            # 이 step 의 *수학적 원동력*
+            math_equation = e.math_equation;
+            math_kind = e.math_kind;
+            driver_power = e.driver_power;
+            decision_constraint = e.decision_constraint;
+            eq_gen_call = e.eq_gen_call;
+          }) activated;
+        # 한글 chain response
+        korean_chain_response =
+          "발화 '" + utterance + "' → " +
+          builtins.toString stepCount + " family 활성. " +
+          "각 algorithm step 의 *수학적 원동력* 자동 wire.";
+        is_intelligence_chain = true;
+        bridges_count = stepCount;
+      };
+
+  # =================================================================
+  # === Demonstration: lang-ava 1040 의 진짜 dev 발화 ================
+  # =================================================================
+
+  demoUtterances = [
+    {
+      label = "lang-ava-1042-full";
+      utterance = "write unit test with AAA. mock the database. find references first. then off by one bug in loop. extract function. add validation. use hashmap. apply distributive law.";
+      expected_min_families = 8;
+    }
+    {
+      label = "short-loop-validation";
+      utterance = "add validation in loop";
+      expected_min_families = 2;
+    }
+    {
+      label = "sort-then-binary-search";
+      utterance = "sort and find references";
+      expected_min_families = 2;
+    }
+    {
+      label = "no-match";
+      utterance = "completely unknown gibberish";
+      expected_min_families = 0;
+    }
+  ];
+
+  runDemoUtterance = c:
+    let r = buildAlgorithmChainWithMathBridges c.utterance;
+    in {
+      inherit (c) label utterance expected_min_families;
+      actual_outcome = r.outcome;
+      actual_count =
+        if r.outcome == "dev-flow-chain-emitted" then r.activated_count else 0;
+      success =
+        if c.expected_min_families == 0
+        then r.outcome == "held-no-cues-activated"
+        else r.outcome == "dev-flow-chain-emitted"
+             && r.activated_count >= c.expected_min_families;
+    };
+
+  allDemoResults = builtins.map runDemoUtterance demoUtterances;
+  demoSuccessCount =
+    builtins.length (builtins.filter (r: r.success) allDemoResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_cueToStepAndMath = true;
+    has_activateByUtterance = true;
+    has_buildAlgorithmChainWithMathBridges = true;
+    cue_count = 20;  # hardcoded; Round 43 expansion (10 → 20)
+    demo_count = builtins.length demoUtterances;
+    demo_success_count = demoSuccessCount;
+    # lang-ava line 1040 의 *진짜 dev scenario* substrate
+    is_real_dev_scenario_substrate = true;
+    # 알고리즘 문장 사이 *수학 접합제* 자동 wire
+    is_math_bridge_between_algorithm_steps = true;
+    eq_gen_owner_inherited = eq_gen.ownerName;
+    closure_owner_inherited = closure.ownerName;
+    deterministic = true;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyDevScenarioRealFlowPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "dev-scenario-real-flow-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "build" request then
+      buildAlgorithmChainWithMathBridges request.build
+    else if builtins.hasAttr "activate" request then {
+      outcome = "cues-activated";
+      receipt = activateByUtterance request.activate;
+    }
+    else if builtins.hasAttr "cue_registry" request then {
+      outcome = "cue-registry-emitted"; receipt = cueToStepAndMath;
+    }
+    else if builtins.hasAttr "demo_utterances" request then {
+      outcome = "demo-utterances-emitted"; receipt = demoUtterances;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "demo-results-emitted";
+      receipt = {
+        total = builtins.length demoUtterances;
+        success = demoSuccessCount;
+        results = allDemoResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "build" "activate" "cue_registry"
+             "demo_utterances" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit cueToStepAndMath activateByUtterance buildAlgorithmChainWithMathBridges;
+  inherit demoUtterances runDemoUtterance allDemoResults demoSuccessCount;
+  inherit inventorySummary applyDevScenarioRealFlowPlate;
+}

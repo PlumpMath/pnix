@@ -1,0 +1,329 @@
+let
+  ownerName = "stdlib.agent.mcp-capability-contract";
+
+  slotRegistry =
+    import agent/formula-slot-registry-contract.px;
+
+  # === MCP capability contract (Round 69) =============================
+  #
+  # 사용자 directive (Round 68 후):
+  # > 'freecat 역시 mcp server 를 달고 즉 인풋이다. freecat 전용 공통
+  #   dsl 인 expression 과 pnixc-meta 쪽으로 이어지는 자연어 부분 :
+  #   당연히 pnixc 가 뭔지는 몰라야함 : 이부분에 대한 NL + freecat
+  #   layer2 dsl 외부app 공통 frp수식 이부분을 mcp 서버로 노출하고,
+  #   LLM <-> freecat 간에 mcp api 를 따로두는것... 모든게 .px pnix
+  #   그리고 우리 pnix 플랫폼이 어떤식의 api 를 갖고있는지 노출을
+  #   짐작할수조차 없으면서 말이야.'
+  #
+  # 이 owner = freecat 이 MCP server 로서 노출하는 capability 의
+  # substrate-side 계약. **LLM 은 freecat vocabulary 만 본다.**
+  # `pnix` / `pnixc` / `pnixc-meta` / `doghouse` / `yard` 같은
+  # internal 단어가 응답에 새어나가면 *그 자체가 Held* (vocabulary
+  # leak guard).
+  #
+  # # Architecture
+  #
+  #   LLM (Claude / GPT / ...)
+  #     │
+  #     │ MCP request (freecat vocab only)
+  #     ▼
+  #   freecat MCP server (per platform: Kotlin / C# / Swift)
+  #     │
+  #     │ HTTP backend (BACKEND-API.md)
+  #     ▼
+  #   pnix internals (invisible)
+  #
+  # # CLAUDE.md 헌법 fit
+  #
+  # 외부 LLM output 은 *external candidate*, not peer. 모든 MCP
+  # 입력은 paper-note quarantine — 5-gate firewall 통과 후에만
+  # promote. 이 owner 가 그 quarantine 의 substrate schema.
+  #
+  # # .px-first 원칙
+  #
+  # Rust / Kotlin / C# / Swift = MCP wire protocol (JSON-RPC over
+  # stdio/socket) 만. Decision: forbidden vocab list, capability
+  # kinds, quarantine policy → .px substrate.
+  #
+  # # Output verdict family
+  #
+  #   "mcp-request-accepted-as-candidate"  — quarantine 으로 들어감
+  #   "held-vocabulary-leak"               — 응답에 pnix internals 단어
+  #   "held-unknown-capability"            — capability kind 모름
+  #   "held-missing-tenant-or-actor"       — actor 식별 없음
+  #   "held-malformed-envelope"            — request shape 깨짐
+  #   "held-out-of-mode"                   — capability ↔ mode 불일치
+
+  stepKind = "mcp-capability-acceptance";
+  framework_step =
+    "LLM MCP request → opaque vocab check → candidate quarantine envelope";
+
+  # ===================================================================
+  # === Forbidden vocabulary (must NOT appear in MCP responses) =======
+  # ===================================================================
+  #
+  # 응답에 이 단어가 *한 번이라도* 나오면 → held-vocabulary-leak.
+  # substrate identity 노출 차단.
+
+  forbiddenVocabulary = [
+    "pnix"
+    "pnixc"
+    "pnixc-meta"
+    "doghouse"
+    "yard"
+    "ankh"
+    "kimchi"
+    ".px"
+    "tesseract"
+    "mirror plate"
+    "mirrorPlate"
+    "owner-law"
+    "ownerLaw"
+    "stdlib"
+    "applyMirrorPlateWithLensDispatch"
+    "registerFormulaSlot"
+    "round_51"
+    "Round 51"
+  ];
+
+  # ===================================================================
+  # === Allowed capability kinds (closed; freecat vocabulary only) ====
+  # ===================================================================
+  #
+  # 새 capability 추가 = 이 list 에 한 row + handler shape 정의.
+  # LLM 이 alien capability 부르면 → held-unknown-capability.
+
+  knownCapabilityKinds = [
+    # === Formula slot lane (Round 68) ===============================
+    "freecat.formula.register"      # Science → register slot[N]
+    "freecat.formula.read"          # @[N] or @[N].x value read
+    "freecat.formula.list"          # list all slots
+    "freecat.formula.supersede"     # Round 64 supersede chain
+
+    # === Channel / parametric expression (Layer 2 DSL) ==============
+    "freecat.channel.eval"          # parametric channel evaluation
+    "freecat.channel.set"           # set channel value
+    "freecat.channel.list"
+
+    # === Scene / x3d world model ====================================
+    "freecat.scene.read"            # current 2D/3D scene state
+    "freecat.scene.timestep"        # advance time-step animation
+    "freecat.scene.set_transform"   # matrix transforms
+
+    # === Project / git coding cockpit ===============================
+    "freecat.project.structure.read"   # function-tree / class-diagram
+    "freecat.project.diagram.read"
+    "freecat.project.edit.propose"     # LLM-proposed edit (candidate)
+    "freecat.project.edit.verify"      # check against internals (held/promoted)
+
+    # === Coding / science exchange (Terminal / Science tab) =========
+    "freecat.coding.exchange"       # NL coding utterance
+    "freecat.science.exchange"      # NL math/physics utterance
+
+    # === External app bridge (Layer 3 emit, future) =================
+    "freecat.external_app.preview"  # preview emit to external app
+  ];
+
+  # ===================================================================
+  # === Capability ↔ mode binding (freecat 두 사용 모드) ===============
+  # ===================================================================
+  #
+  # 두 모드 모두 같은 MCP surface 사용. 단 mode 마다 어떤 capability
+  # 가 의미 있는지 다름. mode 안 맞으면 → held-out-of-mode.
+
+  knownModes = [
+    "external-app-live-scripting"  # Maya/Houdini/Blender 등 control
+    "git-repo-coding-cockpit"      # 특정 언어 git project coding
+    "freecat-internal-simulation"  # x3d preview + 슬라이더 only
+  ];
+
+  capabilityModeMatrix = {
+    "freecat.formula.register"        = [ "external-app-live-scripting"
+                                          "freecat-internal-simulation" ];
+    "freecat.formula.read"            = knownModes;
+    "freecat.formula.list"            = knownModes;
+    "freecat.formula.supersede"       = [ "external-app-live-scripting"
+                                          "freecat-internal-simulation" ];
+    "freecat.channel.eval"            = knownModes;
+    "freecat.channel.set"             = [ "external-app-live-scripting"
+                                          "freecat-internal-simulation" ];
+    "freecat.channel.list"            = knownModes;
+    "freecat.scene.read"              = knownModes;
+    "freecat.scene.timestep"          = [ "external-app-live-scripting"
+                                          "freecat-internal-simulation" ];
+    "freecat.scene.set_transform"     = [ "external-app-live-scripting"
+                                          "freecat-internal-simulation" ];
+    "freecat.project.structure.read"  = [ "git-repo-coding-cockpit" ];
+    "freecat.project.diagram.read"    = [ "git-repo-coding-cockpit" ];
+    "freecat.project.edit.propose"    = [ "git-repo-coding-cockpit" ];
+    "freecat.project.edit.verify"     = [ "git-repo-coding-cockpit" ];
+    "freecat.coding.exchange"         = [ "external-app-live-scripting"
+                                          "git-repo-coding-cockpit" ];
+    "freecat.science.exchange"        = [ "external-app-live-scripting"
+                                          "freecat-internal-simulation" ];
+    "freecat.external_app.preview"    = [ "external-app-live-scripting" ];
+  };
+
+  # ===================================================================
+  # === Quarantine policy ============================================
+  # ===================================================================
+  #
+  # 모든 LLM 입력은 candidate. 직접 promote 불가. 헌법 그대로:
+  #   - actor_kind: "llm" 또는 "operator" — *peer 아님*
+  #   - status_floor: 항상 "candidate" (never Accepted)
+  #   - 5-gate firewall (Round 51-67 + intent / macro-fold /
+  #     axis / regression / owner-law) 통과 필요
+  #   - capability 실패해도 raw LLM output 을 fallback 으로 안 씀
+
+  quarantinePolicy = {
+    actor_kinds_allowed = [ "llm" "operator" ];
+    status_floor = "candidate";
+    requires_firewall_passage = true;
+    direct_promote_allowed = false;
+    raw_fallback_allowed = false;
+  };
+
+  # ===================================================================
+  # === Helpers ======================================================
+  # ===================================================================
+
+  containsForbiddenWord = text:
+    let
+      hits = builtins.filter (w:
+        let
+          # Nix has no contains; emulate via string-length compare on
+          # split. If splitting "text" on "word" yields >1 segment,
+          # the word is present.
+          parts = builtins.split w text;
+          # builtins.split returns list of strings/lists; if word
+          # found, at least 2 string segments + 1 match marker.
+        in (builtins.length parts) > 1
+      ) forbiddenVocabulary;
+    in (builtins.length hits) > 0;
+
+  hasKey = attrs: key: builtins.elem key (builtins.attrNames attrs);
+
+  isInClosedList = list: value: builtins.elem value list;
+
+  capabilityValidForMode = capability: mode:
+    let modes = capabilityModeMatrix."${capability}" or [];
+    in builtins.elem mode modes;
+
+  # ===================================================================
+  # === Main contract function =======================================
+  # ===================================================================
+  #
+  # Input shape (MCP request envelope):
+  #   {
+  #     capability_kind = "freecat.formula.register";
+  #     mode = "freecat-internal-simulation";
+  #     actor = {
+  #       actor_kind = "llm";        # "llm" | "operator"
+  #       actor_id   = "claude-opus-4-7";
+  #       tenant_id  = "user-001";
+  #     };
+  #     payload = { ... };            # capability-specific
+  #     response_preview_text = "...";  # what the response WOULD say
+  #                                     # (vocab check applied)
+  #   }
+
+  acceptMcpRequest = req:
+    let
+      hasCapability = hasKey req "capability_kind";
+      capabilityKnown =
+        hasCapability && isInClosedList knownCapabilityKinds req.capability_kind;
+
+      hasMode = hasKey req "mode";
+      modeKnown = hasMode && isInClosedList knownModes req.mode;
+
+      modeMatches =
+        capabilityKnown && modeKnown
+        && capabilityValidForMode req.capability_kind req.mode;
+
+      hasActor = hasKey req "actor";
+      actor = if hasActor then req.actor else {};
+      actorKindOk =
+        hasKey actor "actor_kind"
+        && isInClosedList quarantinePolicy.actor_kinds_allowed actor.actor_kind;
+      actorIdOk = hasKey actor "actor_id" && actor.actor_id != "";
+      tenantOk  = hasKey actor "tenant_id" && actor.tenant_id != "";
+      actorComplete = actorKindOk && actorIdOk && tenantOk;
+
+      previewText =
+        if hasKey req "response_preview_text" then req.response_preview_text
+        else "";
+      vocabLeak = containsForbiddenWord previewText;
+
+      envelopeOk =
+        hasCapability && hasMode && hasActor
+        && (hasKey req "payload");
+
+      verdict =
+        if !envelopeOk then "held-malformed-envelope"
+        else if !capabilityKnown then "held-unknown-capability"
+        else if !modeKnown || !modeMatches then "held-out-of-mode"
+        else if !actorComplete then "held-missing-tenant-or-actor"
+        else if vocabLeak then "held-vocabulary-leak"
+        else "mcp-request-accepted-as-candidate";
+
+      isHeld = verdict != "mcp-request-accepted-as-candidate";
+    in {
+      kind = "mcp-capability-acceptance-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      framework_step = framework_step;
+      verdict = verdict;
+      is_held = isHeld;
+      capability_kind = if hasCapability then req.capability_kind else null;
+      mode = if hasMode then req.mode else null;
+      actor =
+        if !isHeld then {
+          inherit (actor) actor_kind actor_id tenant_id;
+        }
+        else null;
+      quarantine_status =
+        if isHeld then "rejected-at-mcp-gate"
+        else quarantinePolicy.status_floor;
+      requires_firewall = quarantinePolicy.requires_firewall_passage;
+      held_diagnostics =
+        if !isHeld then null
+        else {
+          envelope_ok = envelopeOk;
+          capability_known = capabilityKnown;
+          mode_known = modeKnown;
+          mode_matches_capability = modeMatches;
+          actor_complete = actorComplete;
+          response_vocab_leak = vocabLeak;
+        };
+      derived_from = [
+        "formula-slot-registry-contract (Round 68)"
+        "CLAUDE.md OWNER-LAW external-LLM clause"
+      ];
+    };
+
+  # ===================================================================
+  # === Inventory summary ============================================
+  # ===================================================================
+
+  inventorySummary = {
+    owner = ownerName;
+    step_kind = stepKind;
+    forbidden_vocab_count = builtins.length forbiddenVocabulary;
+    forbidden_vocab = forbiddenVocabulary;
+    capability_kind_count = builtins.length knownCapabilityKinds;
+    capability_kinds = knownCapabilityKinds;
+    mode_count = builtins.length knownModes;
+    modes = knownModes;
+    actor_kind_count = builtins.length quarantinePolicy.actor_kinds_allowed;
+    status_floor = quarantinePolicy.status_floor;
+    direct_promote_allowed = quarantinePolicy.direct_promote_allowed;
+    raw_fallback_allowed = quarantinePolicy.raw_fallback_allowed;
+  };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit forbiddenVocabulary knownCapabilityKinds knownModes;
+  inherit capabilityModeMatrix quarantinePolicy;
+  inherit acceptMcpRequest inventorySummary;
+  inherit containsForbiddenWord capabilityValidForMode;
+}

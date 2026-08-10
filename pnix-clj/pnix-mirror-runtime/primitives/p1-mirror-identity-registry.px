@@ -1,0 +1,150 @@
+# P1 — mirror-identity-registry
+#
+# OWNER-LAW (2026-05-13): every mirror spawn produces a typed,
+# replay-stable identity. Same `(parent_mirror_id, source_ankh_path,
+# source_ankh_digest, spawn_index)` → same `id`.
+#
+# Why: today `pnix-eval` returns unnamed attrsets. Two evals are
+# indistinguishable at the substrate. Without P1, every other
+# primitive (ontology delta / boundary / receipt) has no anchor.
+# P1 is the foundation.
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p1-mirror-identity-registry.px";
+
+  # Fields every spawn request MUST carry. Missing any → Held.
+  requiredFields = [
+    "source_ankh_path"
+    "source_ankh_digest"
+    "spawn_index"
+    "spawn_at_ms"
+  ];
+
+  # Optional: parent_mirror_id. null = host-space sibling spawn.
+  # `owner_user_id` was added by P9 (contribution-visibility) — it
+  # is *only* used when visibility="private" and changes the
+  # fingerprint scope (see buildId). Absent owner_user_id ⇒ legacy
+  # fingerprint preserved bit-for-bit. No data migration.
+  #
+  # `overlay_seed_digest` is the *mirror init seed* hook for the
+  # self-modification frontier: a new mirror that boots with an
+  # `overlay_seed` (snapshot of substrate's accumulated overlay
+  # rows) gets a *different* mirror_id from a vanilla mirror. Same
+  # input + same seed → same mirror (RT). Absent seed ⇒ legacy
+  # fingerprint preserved. No data migration.
+  optionalFields = [
+    "parent_mirror_id"
+    "spawn_context_digest"
+    "owner_user_id"
+    "overlay_seed_digest"
+  ];
+
+  # Validate a spawn request. Returns missing-field list (empty = ok).
+  validateRequest = req:
+    let
+      hasField = field:
+        req ? "${field}" && (
+          let v = req."${field}"; in
+          if builtins.isString v then builtins.stringLength v > 0
+          else if builtins.isInt v then true
+          else v != null
+        );
+    in builtins.filter (f: !(hasField f)) requiredFields;
+
+  # Build the replay-stable id string. Algorithm: pipe-separated
+  # canonical fields in declared order. Matches the
+  # persistent_table_contract.buildFingerprint pattern from
+  # ankh-retrieval-cache.px / discourse-state.px — same algorithm,
+  # third-time-extraction candidate when a fourth owner uses it.
+  #
+  # P9 extension: when owner_user_id is present (set only when
+  # visibility="private"), one segment is appended. Absent
+  # owner_user_id ⇒ identical to the legacy fingerprint, so all
+  # pre-P9 mirror_ids stay valid.
+  #
+  # Mirror-init-seed extension (2026-05-14): when
+  # `overlay_seed_digest` is present, a second optional segment
+  # is appended after `owner_user_id`. The digest is caller-
+  # computed (deterministic over the overlay snapshot it
+  # captures), so a mirror booted with the same seed reaches the
+  # same id (RT) and a mirror with no seed keeps the legacy
+  # fingerprint bit-for-bit.
+  hasNonEmptyString = req: field:
+    req ? "${field}"
+    && req."${field}" != null
+    && builtins.isString req."${field}"
+    && builtins.stringLength req."${field}" > 0;
+
+  buildId = req:
+    let
+      parent =
+        if req ? parent_mirror_id && req.parent_mirror_id != null
+        then req.parent_mirror_id
+        else "root";
+      basePartsHead = [
+        "mirror"
+        parent
+        req.source_ankh_path
+        req.source_ankh_digest
+        (builtins.toString req.spawn_index)
+      ];
+      ownerSeg =
+        if hasNonEmptyString req "owner_user_id"
+        then [ req.owner_user_id ]
+        else [ ];
+      seedSeg =
+        if hasNonEmptyString req "overlay_seed_digest"
+        then [ "seed:${req.overlay_seed_digest}" ]
+        else [ ];
+      parts = basePartsHead ++ ownerSeg ++ seedSeg;
+    in builtins.concatStringsSep "|" parts;
+
+  # Build the MirrorIdentity record itself. P2/P3/P4 consume this.
+  spawnMirror = req:
+    let
+      missing = validateRequest req;
+    in
+      if builtins.length missing > 0 then {
+        verdict = "mirror-spawn-held";
+        held_kind = "missing-required-fields";
+        missing_fields = missing;
+        identity = null;
+      } else {
+        verdict = "mirror-spawn-ready";
+        held_kind = null;
+        missing_fields = [];
+        identity = {
+          id = buildId req;
+          spawn_index = req.spawn_index;
+          parent_mirror_id =
+            if req ? parent_mirror_id then req.parent_mirror_id else null;
+          source_ankh_path = req.source_ankh_path;
+          source_ankh_digest = req.source_ankh_digest;
+          spawn_at_ms = req.spawn_at_ms;
+          overlay_seed_digest =
+            if hasNonEmptyString req "overlay_seed_digest"
+            then req.overlay_seed_digest
+            else null;
+        };
+      };
+
+  # Compute child spawn_index given parent's known children. v0:
+  # caller passes the count; substrate later can own this index
+  # source. For now this exposes the policy explicitly.
+  nextSpawnIndex = existingChildCount: existingChildCount + 1;
+in {
+  inherit
+    ownerName
+    requiredFields
+    optionalFields
+    validateRequest
+    buildId
+    spawnMirror
+    nextSpawnIndex;
+  meta = {
+    source = "pnix-mirror-runtime primitive P1";
+    owner = ownerName;
+    role = "assign typed, replay-stable identity to every mirror spawn";
+    consumed_by = [ "P2-ontology-extension-event" "P3-boundary-projection" "P4-typed-receipt-stream" ];
+  };
+}

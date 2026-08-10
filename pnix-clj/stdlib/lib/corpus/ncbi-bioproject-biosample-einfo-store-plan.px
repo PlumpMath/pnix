@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/ncbi-bioproject-biosample-einfo-store-plan.px — NCBI BioProject/BioSample EInfo catalog.
+# redb corpus_source_records에 pnix attrset source(JSON 아님)로 append한다.
+# record payloads, human/sample/sequence data, linked payloads, graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./ncbi-bioproject-biosample-einfo.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "bio.ncbi_bioproject_biosample_einfo.v1";
+    source = { name = "NCBI EInfo BioProject/BioSample catalog"; license = "U.S. government public information"; scope = "empty seed fallback"; };
+    summary = { db_count = 0; record_payloads_ingested = false; human_genomic_payloads_ingested = false; sequence_payloads_ingested = false; linked_payloads_ingested = false; mirror_graph_wiring = false; };
+    databases = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "ncbi-bioproject-biosample-einfo-load-v0";
+      source_lens = "stdlib/lib/corpus/ncbi-bioproject-biosample-einfo-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "bio.ncbi_bioproject_biosample_einfo.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "ncbi-bioproject-biosample-einfo-query-v0";
+      source_lens = "stdlib/lib/corpus/ncbi-bioproject-biosample-einfo-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "bio.ncbi_bioproject_biosample_einfo.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

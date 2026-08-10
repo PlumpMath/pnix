@@ -1,0 +1,44 @@
+# stdlib/lib/corpus/usgs-landslide-inventories-v3-store-plan.px — USGS Landslide Inventories v3 release metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# landslide geometry/event rows/ancillary/analyses/safety judgments는 포함하지 않는다. graph/mirror 연결도 하지 않는다.
+let
+  B = builtins;
+  genPath = ./usgs-landslide-inventories-v3.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "science.usgs.landslide_inventories_v3.release_metadata.v1";
+    source = { name = "USGS Landslide Inventories v3 release metadata"; license = "US Government public domain"; scope = "empty seed fallback"; };
+    summary = { file_count = 0; reference_count = 0; };
+    files = [ ];
+    references = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "usgs-landslide-inventories-v3-load-v0";
+      source_lens = "stdlib/lib/corpus/usgs-landslide-inventories-v3-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "science.usgs.landslide_inventories_v3.release_metadata.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "usgs-landslide-inventories-v3-query-v0";
+      source_lens = "stdlib/lib/corpus/usgs-landslide-inventories-v3-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "science.usgs.landslide_inventories_v3.release_metadata.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

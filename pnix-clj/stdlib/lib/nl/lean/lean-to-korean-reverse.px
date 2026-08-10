@@ -1,0 +1,287 @@
+let
+  ownerName = "stdlib.nl.lean.lean-to-korean-reverse";
+
+  bridge = import nl/lean/nl-to-mathlib-bridge.px;
+  lookup = import nl/lean/lookup-aggregate.px;
+  paired = import nl/lean/paired-claim-aggregate.px;
+  graph = import nl/lean/substrate-mathlib-graph.px;
+
+  # === Lean → Korean reverse lookup (agent-NL-198) ===================
+  #
+  # Round 9 사용자 vision 확장:
+  # > "Bidirectional bridge — Mathlib name 으로도 query → 한글 응답"
+  #
+  # Chain:
+  #   Mathlib theorem name (e.g. "IsGalois")
+  #     → lookup.lookupByName (entry 의 file_path + code_preview)
+  #     → bridge.koreanMathDictionary 역검색 (en → ko)
+  #     → paired claim 안에서 substrate concept 발견
+  #     → graph 안에서 1:N reference network 발견
+  #     → 한글 응답 envelope (모든 layer 합쳐서)
+  #
+  # 1:N reverse lookup — 하나의 Mathlib name 이 여러 한글 동의어와
+  # 여러 substrate concept 에 매핑 가능.
+
+  stepKind = "lean-to-korean-reverse-lookup";
+  framework_step =
+    "Mathlib name → korean synonyms + substrate concepts + graph references";
+
+  # =================================================================
+  # === English → Korean reverse dictionary (auto-derived) ==========
+  # =================================================================
+  #
+  # bridge.koreanMathDictionary 를 *역방향* 으로 fold:
+  #   en keyword → [korean synonyms, ...]
+  #
+  # 같은 영어 keyword 가 여러 한국어 entry 와 매칭 가능 (e.g. "Galois"
+  # 가 "갈루아", "갈루아군", "갈루아확장", "갈루아대응" 모두에 매핑).
+
+  reverseEnglishToKorean = englishKeyword:
+    let
+      koDict = bridge.koreanMathDictionary;
+      matches = builtins.filter
+        (entry: entry.en == englishKeyword)
+        koDict;
+    in
+      if matches == [] then []
+      else builtins.map
+        (entry: { ko = entry.ko; concept = entry.concept; category = entry.category; })
+        matches;
+
+  # =================================================================
+  # === Substrate concept lookup by Mathlib name =====================
+  # =================================================================
+  #
+  # paired claim aggregate 에서 lean_full_name 으로 substrate concept 찾기.
+
+  findPairedSubstrate = mathlibName:
+    let
+      matches = builtins.filter
+        (claim: claim.lean_full_name == mathlibName)
+        paired.pairedClaims;
+    in
+      if matches == [] then null
+      else
+        let m = builtins.head matches;
+        in {
+          substrate_concept = m.substrate_concept;
+          substrate_file = m.substrate_file;
+          correspondence_kind = m.correspondence_kind;
+        };
+
+  # =================================================================
+  # === Graph concept(s) containing this Mathlib reference ===========
+  # =================================================================
+
+  findGraphContainers = mathlibName:
+    let
+      containsRef = entry:
+        builtins.any
+          (ref: ref.name == mathlibName)
+          entry.mathlib_references;
+      matches = builtins.filter containsRef graph.substrateReferenceGraph;
+    in
+      builtins.map
+        (entry: {
+          substrate_concept = entry.substrate_concept;
+          substrate_file = entry.substrate_file;
+          total_references = builtins.length entry.mathlib_references;
+        })
+        matches;
+
+  # =================================================================
+  # === Full reverse query primitive =================================
+  # =================================================================
+  #
+  # Mathlib theorem name → 모든 layer 의 reverse lookup envelope.
+
+  reverseQuery = mathlibName:
+    let
+      leanEntry = lookup.lookupByName mathlibName;
+    in
+      if leanEntry == null
+      then {
+        outcome = "held-no-mathlib-entry-for-name";
+        queried_name = mathlibName;
+        held_reason = "Mathlib lookup table 에 등록되지 않은 이름";
+      }
+      else
+        let
+          # Lean keyword 추출 — full_name 의 last segment 또는 그대로
+          # (단순 휴리스틱: dot split 의 last)
+          # 더 정확히는 reverseEnglishToKorean 가 정확 match 만 보므로
+          # 원본 + 부분 모두 시도
+          koreanSynonyms = reverseEnglishToKorean mathlibName;
+          # 한글 매핑이 없으면 dictionary 의 다른 entry 에서 부분매치
+          substrate = findPairedSubstrate mathlibName;
+          containers = findGraphContainers mathlibName;
+          # 한글 응답 조립
+          synonymsText =
+            if koreanSynonyms == []
+            then "한글 동의어 없음 (직접 영문 reference)"
+            else
+              builtins.concatStringsSep ", "
+                (builtins.map (s: s.ko) koreanSynonyms);
+          substrateText =
+            if substrate == null
+            then "substrate paired claim 없음"
+            else "substrate '" + substrate.substrate_concept + "'";
+        in {
+          outcome = "lean-to-korean-reverse-emitted";
+          queried_name = mathlibName;
+          # Layer 1: Mathlib entry 자체
+          lean_kind = leanEntry.kind;
+          lean_file = leanEntry.file_path;
+          lean_line = leanEntry.start_line;
+          # Layer 2: 한글 동의어 (역방향 dictionary)
+          korean_synonyms = koreanSynonyms;
+          korean_synonym_count = builtins.length koreanSynonyms;
+          # Layer 3: substrate paired claim
+          substrate_concept =
+            if substrate == null then null
+            else substrate.substrate_concept;
+          substrate_file =
+            if substrate == null then null
+            else substrate.substrate_file;
+          # Layer 4: graph 안 reference network
+          graph_containers = containers;
+          graph_container_count = builtins.length containers;
+          # 종합 한글 응답
+          korean_response =
+            "Mathlib '" + mathlibName + "' (" + leanEntry.kind + "@" +
+            leanEntry.file_path + ":" + builtins.toString leanEntry.start_line +
+            ") — 한글: " + synonymsText + "; " + substrateText;
+        };
+
+  # =================================================================
+  # === Demonstration cases ==========================================
+  # =================================================================
+
+  demoReverseCases = [
+    {
+      label = "case-isgalois-reverse";
+      mathlib_name = "IsGalois";
+    }
+    {
+      label = "case-groupcohomology-reverse";
+      mathlib_name = "groupCohomology";
+    }
+    {
+      label = "case-fdrep-reverse";
+      mathlib_name = "FDRep";
+    }
+    {
+      label = "case-padic-reverse";
+      mathlib_name = "Padic";
+    }
+    {
+      label = "case-riemann-reverse";
+      mathlib_name = "riemannZeta";
+    }
+    {
+      label = "case-finite-dim-reverse";
+      mathlib_name = "FiniteDimensional";
+    }
+    {
+      label = "case-tannaka-reverse";
+      mathlib_name = "TannakaDuality.FiniteGroup.forget";
+    }
+    {
+      label = "case-held-unknown-reverse";
+      mathlib_name = "ThisNameIsNotInMathlib";
+    }
+  ];
+
+  runDemoReverse = demoCase:
+    let result = reverseQuery demoCase.mathlib_name;
+    in {
+      inherit (demoCase) label mathlib_name;
+      actual_outcome = result.outcome;
+      result_envelope = result;
+      reached_substrate =
+        result.outcome == "lean-to-korean-reverse-emitted"
+        && result ? substrate_concept
+        && result.substrate_concept != null;
+    };
+
+  allDemoResults = builtins.map runDemoReverse demoReverseCases;
+  demoSuccessCount =
+    builtins.length
+      (builtins.filter (r: r.actual_outcome != "held-no-mathlib-entry-for-name"
+                           || r.label == "case-held-unknown-reverse")
+        allDemoResults);
+  demoSubstrateReachedCount =
+    builtins.length
+      (builtins.filter (r: r.reached_substrate) allDemoResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_reverseQuery = true;
+    has_reverseEnglishToKorean = true;
+    has_findPairedSubstrate = true;
+    has_findGraphContainers = true;
+    demo_case_count = builtins.length demoReverseCases;
+    demo_success_count = demoSuccessCount;
+    demo_substrate_reached_count = demoSubstrateReachedCount;
+    bridge_owner_inherited = bridge.ownerName;
+    lookup_owner_inherited = lookup.ownerName;
+    paired_owner_inherited = paired.ownerName;
+    graph_owner_inherited = graph.ownerName;
+    deterministic = true;  # LLM 없음
+    bidirectional_with_bridge = true;  # 정방향 + 역방향 동시 동작
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyLeanToKoreanReversePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "lean-to-korean-reverse-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "reverse_query" request then
+      reverseQuery request.reverse_query
+    else if builtins.hasAttr "reverse_en_to_ko" request then {
+      outcome = "reverse-english-to-korean-emitted";
+      receipt = reverseEnglishToKorean request.reverse_en_to_ko;
+    }
+    else if builtins.hasAttr "find_substrate" request then
+      let r = findPairedSubstrate request.find_substrate;
+      in if r == null
+         then { outcome = "held-no-substrate-paired-for-name"; receipt = { queried = request.find_substrate; }; }
+         else { outcome = "substrate-paired-found"; receipt = r; }
+    else if builtins.hasAttr "find_graph" request then {
+      outcome = "graph-containers-emitted";
+      receipt = findGraphContainers request.find_graph;
+    }
+    else if builtins.hasAttr "demo_cases" request then {
+      outcome = "reverse-demo-cases-emitted"; receipt = demoReverseCases;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "reverse-demo-results-emitted";
+      receipt = {
+        total = builtins.length demoReverseCases;
+        success = demoSuccessCount;
+        substrate_reached = demoSubstrateReachedCount;
+        results = allDemoResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "reverse_query" "reverse_en_to_ko"
+             "find_substrate" "find_graph" "demo_cases" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit reverseEnglishToKorean findPairedSubstrate findGraphContainers;
+  inherit reverseQuery demoReverseCases runDemoReverse allDemoResults;
+  inherit demoSuccessCount demoSubstrateReachedCount;
+  inherit inventorySummary applyLeanToKoreanReversePlate;
+}

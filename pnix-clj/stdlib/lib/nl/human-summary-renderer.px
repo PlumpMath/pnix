@@ -1,0 +1,272 @@
+# stdlib.lib.nl.human-summary-renderer
+#
+# Human-facing renderer for pnix-nl.
+# No Python. No external semantic logic.
+# Input: converged-engine-entry envelope.
+# Output: plain text string.
+#
+# Boundary:
+#   - pnixc-meta still evaluates this .px.
+#   - shell wrapper only unquotes the JSON string with jq -r.
+#   - math/coding truth remains in existing owners.
+
+let
+  answerComposer = import ../coding/puncheetah-code-answer-composer.px;
+
+  nl = "
+";
+
+  abs = n: if n < 0 then 0 - n else n;
+
+  # Small integer sqrt. Returns exact sqrt when n is a perfect square,
+  # otherwise -1.
+  sqrtExactLoop = n: i:
+    if i * i == n then i
+    else if i * i > n then -1
+    else sqrtExactLoop n (i + 1);
+
+  sqrtExact = n:
+    if n < 0 then -1 else sqrtExactLoop n 0;
+
+  # v0 radical simplifier for small integer discriminants.
+  # Returns { outside, inside } where n = outside² * inside.
+  # This is enough for current quadratic outputs such as 16, 72, etc.
+  simplifyRadicalLoop = n: d: outside: inside:
+    if d * d > inside then { outside = outside; inside = inside; }
+    else if (inside / (d * d)) * (d * d) == inside then
+      simplifyRadicalLoop n d (outside * d) (inside / (d * d))
+    else simplifyRadicalLoop n (d + 1) outside inside;
+
+  simplifyRadical = n: simplifyRadicalLoop n 2 1 n;
+
+  gcdLoop = a: b:
+    if b == 0 then abs a else gcdLoop b (a - ((a / b) * b));
+
+  gcd = a: b: gcdLoop (abs a) (abs b);
+
+  fracText = num: den:
+    let
+      signFix =
+        if den < 0 then { n = 0 - num; d = 0 - den; }
+        else { n = num; d = den; };
+      g = gcd signFix.n signFix.d;
+      n2 = signFix.n / g;
+      d2 = signFix.d / g;
+    in
+      if d2 == 1 then builtins.toString n2
+      else (builtins.toString n2) + "/" + (builtins.toString d2);
+
+  imagCoeffText = absD: denom:
+    let
+      sq = sqrtExact absD;
+    in
+      if sq != -1 then
+        let
+          g = gcd sq denom;
+          num = sq / g;
+          den = denom / g;
+        in
+          if num == den then "i"
+          else if den == 1 then (builtins.toString num) + "i"
+          else (builtins.toString num) + "/" + (builtins.toString den) + "i"
+      else
+        let
+          sim = simplifyRadical absD;
+          g = gcd sim.outside denom;
+          outside = sim.outside / g;
+          den = denom / g;
+          root =
+            if sim.inside == 1 then ""
+            else "√" + (builtins.toString sim.inside);
+        in
+          if den == 1 then
+            if outside == 1 then root + "i"
+            else (builtins.toString outside) + root + "i"
+          else
+            if outside == 1 then root + "/" + (builtins.toString den) + "i"
+            else (builtins.toString outside) + root + "/" + (builtins.toString den) + "i";
+
+  quadExpr = a: b: c: var:
+    let
+      head =
+        if a == 1 then var + "²"
+        else if a == (0 - 1) then "-" + var + "²"
+        else (builtins.toString a) + var + "²";
+
+      bPart =
+        if b == 0 then ""
+        else if b > 0 then
+          " + " + (if b == 1 then var else (builtins.toString b) + var)
+        else
+          " - " + (if abs b == 1 then var else (builtins.toString (abs b)) + var);
+
+      cPart =
+        if c == 0 then ""
+        else if c > 0 then " + " + builtins.toString c
+        else " - " + builtins.toString (abs c);
+    in
+      head + bPart + cPart + " = 0";
+
+  normalizeSup = s:
+    builtins.replaceStrings [ "^2" "^3" "^4" "*" ] [ "²" "³" "⁴" "" ] s;
+
+  renderQuadraticSolve = sol:
+    let
+      q = sol.quadratic;
+      a = sol.a;
+      b = sol.b;
+      c = sol.c;
+      d = q.discriminant;
+      var = sol.variable or "x";
+      equation = quadExpr a b c var;
+    in
+      if d < 0 then
+        let
+          imag = imagCoeffText (0 - d) (2 * a);
+          base =
+            "방정식: " + equation + nl
+            + "판별식: " + builtins.toString d + nl
+            + "실수해: 없음" + nl;
+        in
+          if b == 0 then
+            base
+            + "복소수해: " + var + " = " + imag + " 또는 " + var + " = -" + imag + nl
+            + nl
+            + (if a == 1 then
+                (if c > 0 then var + "² + " + builtins.toString c + " = 0"
+                 else if c < 0 then var + "² - " + builtins.toString (abs c) + " = 0"
+                 else var + "² = 0")
+                + nl
+                + var + "² = " + builtins.toString (0 - c) + nl
+                + var + " = ±" + imag
+              else
+                "해: " + var + " = ±" + imag)
+          else
+            let real = fracText (0 - b) (2 * a);
+            in base
+              + "복소수해: " + var + " = " + real + " + " + imag
+              + " 또는 " + var + " = " + real + " - " + imag
+      else if d == 0 then
+        let root = fracText (0 - b) (2 * a);
+        in
+          "방정식: " + equation + nl
+          + "판별식: " + builtins.toString d + nl
+          + "실수해: " + var + " = " + root + nl
+          + "복소수해: 실수해와 같음"
+      else
+        let
+          sq = sqrtExact d;
+        in
+          if sq != -1 then
+            let
+              r1 = fracText ((0 - b) + sq) (2 * a);
+              r2 = fracText ((0 - b) - sq) (2 * a);
+            in
+              "방정식: " + equation + nl
+              + "판별식: " + builtins.toString d + nl
+              + "실수해: "
+              + (if r1 == r2 then var + " = " + r1
+                 else var + " = " + r1 + " 또는 " + var + " = " + r2)
+          else
+            "방정식: " + equation + nl
+            + "판별식: " + builtins.toString d + nl
+            + "실수해: 무리수 해" + nl
+            + "해: " + var + " = (" + builtins.toString (0 - b)
+            + " ± √" + builtins.toString d + ")/" + builtins.toString (2 * a);
+
+  renderFactorOnly = rr:
+    let
+      inputLine =
+        if rr ? input then "식: " + normalizeSup rr.input + nl else "";
+    in
+      if rr.outcome == "factored" then
+        inputLine
+        + "인수분해: " + rr.factorization
+        + (if rr ? verification && rr.verification.verified then nl + "검증: 전개 결과가 원식과 일치" else "")
+      else if rr.outcome == "held-not-factorable-over-real-linear-roots" then
+        let
+          sol = rr.solve_result;
+          d = sol.quadratic.discriminant;
+        in
+          inputLine
+          + "판별식: " + builtins.toString d + nl
+          + "인수분해: 실수 범위의 선형 인수로는 분해되지 않습니다." + nl
+          + "상태: Held" + nl
+          + "이유: " + rr.reason
+      else if builtins.substring 0 4 rr.outcome == "held" then
+        inputLine
+        + "인수분해: 실행되지 않음" + nl
+        + "상태: Held"
+        + (if rr ? reason then nl + "이유: " + rr.reason else "")
+      else
+        inputLine + "인수분해를 완료하지 못했습니다."
+        + (if rr ? reason then nl + "이유: " + rr.reason else "");
+
+  renderFactorThenSolve = rr:
+    let
+      factor = rr.factor;
+      inputLine =
+        if rr ? input then "방정식: " + normalizeSup rr.input + nl else "";
+      factorLine =
+        if factor ? factorization then "인수분해: " + factor.factorization + nl else "";
+      solveLine =
+        if rr ? summary then "해: " + rr.summary
+        else if factor ? roots_text then "해: " + factor.roots_text
+        else "";
+    in
+      inputLine + factorLine + solveLine;
+
+  renderCodingDispatch = outer:
+    (answerComposer.composePublicAnswer outer).text;
+
+  # Public answer must come from derived product prose (corpus-assembly axiom),
+  # never raw internal fields. Dumping `outcome`/`reason`/`input` here leaked
+  # internal outcome IDs (e.g. held-no-intent) past the T-024 path scrub for any
+  # fall-through op (policy-artifact / service-proof / unknown / non-quadratic
+  # equation / non-composed route-chain). Show the product summary if present,
+  # else an honest held message — no internal tech leaks to Chat.
+  renderFallback = rr:
+    if rr ? summary && rr.summary != "" then rr.summary
+    else "pnix-nl: 렌더링할 수 없는 결과입니다.";
+
+  chooseOp = utterance: outer:
+    if outer ? operation_kind then outer.operation_kind
+    else if outer ? chosen_candidate && outer.chosen_candidate ? operation_kind then outer.chosen_candidate.operation_kind
+    else if outer ? classification && outer.classification ? chosen && outer.classification.chosen ? operation_kind then outer.classification.chosen.operation_kind
+    else
+      let compact = builtins.replaceStrings [ " " ] [ "" ] utterance;
+      in
+        if builtins.match ".*인수분해해서.*풀.*" compact != null then "route-chain"
+        else if builtins.match ".*인수분해.*" compact != null then "math-factor"
+        else if builtins.match ".*방정식.*" compact != null then "equation"
+        else if builtins.match ".*풀어.*" compact != null then "equation"
+        else "unknown";
+
+  render = request:
+    let
+      utterance = request.utterance;
+      envelope = request.envelope;
+      outer = envelope.result;
+      rr = outer.result;
+      op = chooseOp utterance outer;
+    in
+      if op == "code-generation" || op == "code-transform" || op == "equation"
+         || op == "test" || op == "build" || op == "pnix-sample-input"
+         || op == "symbolic-code" || op == "symbolic-code-algorithm" || op == "math-diff-code"
+      then renderCodingDispatch outer
+      else if op == "math-factor" then renderFactorOnly rr
+      else if op == "equation" then
+        if rr ? solution_kind && rr.solution_kind == "quadratic"
+        then renderQuadraticSolve rr
+        else renderFallback rr
+      else if op == "route-chain" then
+        if rr ? outcome && rr.outcome == "factor-solve-composed"
+        then renderFactorThenSolve rr
+        else renderFallback rr
+      else if rr ? outcome && rr.outcome == "factor-solve-composed" then renderFactorThenSolve rr
+      else if rr ? solution_kind && rr.solution_kind == "quadratic" then renderQuadraticSolve rr
+      else renderFallback rr;
+
+in {
+  inherit render;
+}

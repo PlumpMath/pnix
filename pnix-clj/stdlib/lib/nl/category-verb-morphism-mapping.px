@@ -1,0 +1,937 @@
+let
+  ownerName = "stdlib.nl.category-verb-morphism-mapping";
+
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # Reference axiom registries — used as vocabulary source.
+  ed = import nl/code-edit-refactor-axioms.px;
+  dg = import nl/diagnostic-axioms.px;
+  nv = import nl/navigation-axioms.px;
+  ts = import nl/test-axioms.px;
+  rv = import nl/review-axioms.px;
+  ex = import nl/execution-axioms.px;
+  bd = import nl/build-axioms.px;
+  cc = import nl/concurrency-axioms.px;
+  pf = import nl/performance-deep-axioms.px;
+  ar = import nl/architecture-axioms.px;
+
+  # === Verb → Morphism Mapping (agent-NL-139) ======================
+  #
+  # #133 의 intentVerbToMorphismKinds 가 6 verb 만. 이번에 30+ verb +
+  # 박힌 axiom 700 sub-branch 의 *어휘* 깊이 활용.
+  #
+  # Strategy:
+  #   1. detect verb via cue match (박힌 axiom activation_cues 재사용)
+  #   2. lookup verb → morphism decomposition rule
+  #   3. emit step list with proper unknowns (universal property slots)
+
+  stepKind = "verb-morphism-mapping";
+  framework_step =
+    "categorical body — NL verb → categorical morphism decomposition (700+ axiom 어휘 source)";
+
+  # =================================================================
+  # === Verb dispatch table (30+ verbs) ============================
+  # =================================================================
+  #
+  # Each entry:
+  #   { cues = [..]; steps = [..]; unknowns_per_step = { step_name = [..]; }; }
+
+  verbTable = [
+    # ── Edit / Refactor (#122) ────────────────────────────────────
+    {
+      verb = "rename";
+      # `이름 변경` alone also appears in definition/explanation prompts; keep
+      # the morphism route for explicit edit requests only.
+      cues = [ "rename " "이름 바꾸" "이름 변경해" "이름 변경해줘" ];
+      steps = [
+        "locate-definition" "locate-references"
+        "replace-identifier-text" "verify-references-resolve"
+        "update-test-references"
+      ];
+      unknowns = {
+        "locate-definition" = [ "scope" ];
+        "locate-references" = [ "scope" ];
+        "replace-identifier-text" = [ "new-name" "case-handling" ];
+        "update-test-references" = [ "test-files-location" ];
+      };
+    }
+    {
+      verb = "extract";
+      cues = [ "extract" "추출" "분리" ];
+      steps = [
+        "select-region" "infer-parameters" "create-new-definition"
+        "replace-with-call" "verify-equivalent-behavior"
+      ];
+      unknowns = {};
+    }
+    {
+      verb = "inline";
+      cues = [ "inline" "인라인" "병합" ];
+      steps = [
+        "locate-callers" "substitute-body" "remove-definition"
+        "verify-equivalent-behavior"
+      ];
+      unknowns = {
+        "locate-callers" = [ "scope" ];
+      };
+    }
+    {
+      verb = "remove";
+      cues = [ "remove" "delete" "제거" "삭제" ];
+      steps = [
+        "locate-target" "check-dependencies"
+        "remove-target" "verify-no-dangling-refs"
+      ];
+      unknowns = {};
+    }
+    {
+      verb = "move";
+      cues = [ "move" "이동" "옮기" ];
+      steps = [
+        "locate-source" "select-destination" "transfer-code"
+        "update-imports" "verify-references-resolve"
+      ];
+      unknowns = {
+        "select-destination" = [ "target-location" ];
+      };
+    }
+    {
+      verb = "replace";
+      cues = [ "replace" "대체" "변경" ];
+      steps = [
+        "locate-target" "design-replacement"
+        "apply-replacement" "verify-equivalent-behavior"
+      ];
+      unknowns = {
+        "design-replacement" = [ "replacement-strategy" ];
+      };
+    }
+
+    # ── Diagnostic / Fix (#123) ───────────────────────────────────
+    {
+      verb = "fix";
+      cues = [ "fix" "patch" "수정" "고치" ];
+      steps = [
+        "reproduce-bug" "locate-root-cause"
+        "design-patch" "verify-fix" "regression-test"
+      ];
+      unknowns = {
+        "design-patch" = [ "patch-strategy" ];
+      };
+    }
+    {
+      verb = "debug";
+      cues = [ "debug" "디버그" "디버깅" ];
+      steps = [
+        "reproduce-bug" "set-breakpoint" "step-through"
+        "inspect-state" "form-hypothesis"
+      ];
+      unknowns = {
+        "set-breakpoint" = [ "breakpoint-location" ];
+      };
+    }
+    {
+      verb = "investigate";
+      cues = [ "investigate" "조사" "분석" ];
+      steps = [
+        "gather-symptoms" "collect-evidence"
+        "form-hypothesis" "verify-hypothesis"
+      ];
+      unknowns = {};
+    }
+
+    # ── Test (#125) ───────────────────────────────────────────────
+    {
+      verb = "add test";
+      cues = [ "add test" "write test" "테스트 추가" "테스트 작성" ];
+      steps = [
+        "identify-test-target" "design-input-output"
+        "write-assertion" "run-and-verify"
+      ];
+      unknowns = {
+        "design-input-output" = [ "test-cases" ];
+      };
+    }
+    {
+      verb = "mock";
+      cues = [ "mock" "stub" "fake" "목" "스텁" ];
+      steps = [
+        "identify-dependency" "define-mock-interface"
+        "inject-mock" "verify-interaction"
+      ];
+      unknowns = {
+        "define-mock-interface" = [ "mock-behavior" ];
+      };
+    }
+    {
+      verb = "test coverage";
+      cues = [ "coverage" "커버리지" "test coverage" ];
+      steps = [
+        "run-coverage-tool" "identify-uncovered"
+        "add-targeted-tests" "verify-threshold"
+      ];
+      unknowns = {
+        "verify-threshold" = [ "coverage-threshold" ];
+      };
+    }
+
+    # ── Navigation (#124) ─────────────────────────────────────────
+    {
+      verb = "find references";
+      cues = [ "find references" "find usages" "참조 찾기" "사용처" ];
+      steps = [ "lookup-symbol-table" "filter-by-scope" "present-results" ];
+      unknowns = {
+        "filter-by-scope" = [ "scope" ];
+      };
+    }
+    {
+      verb = "go to definition";
+      cues = [ "go to definition" "goto def" "정의로" ];
+      steps = [ "resolve-symbol" "open-defining-file" "scroll-to-line" ];
+      unknowns = {};
+    }
+    {
+      verb = "call hierarchy";
+      cues = [ "call hierarchy" "callers" "callees" "호출 계층" ];
+      steps = [
+        "build-call-graph" "filter-direction"
+        "expand-transitively" "present-tree"
+      ];
+      unknowns = {
+        "filter-direction" = [ "direction" ];
+      };
+    }
+
+    # ── Review (#126) ─────────────────────────────────────────────
+    {
+      verb = "review";
+      cues = [ "code review" "review this change" "please review" "리뷰해줘" "코드 리뷰" "변경 검토" ];
+      steps = [
+        "read-diff" "check-style" "check-naming"
+        "check-tests" "check-documentation" "leave-comments"
+      ];
+      unknowns = {};
+    }
+    {
+      verb = "format";
+      cues = [ "format code" "run formatter" "포매팅" "코드 정리" "형식 정리" ];
+      steps = [ "run-formatter" "verify-no-semantic-change" ];
+      unknowns = {};
+    }
+    {
+      verb = "document";
+      cues = [ "document" "docstring" "주석" "문서화" ];
+      steps = [
+        "identify-public-api" "write-summary-line"
+        "describe-params" "describe-returns" "add-examples"
+      ];
+      unknowns = {};
+    }
+
+    # ── Execution / Debug (#127) ──────────────────────────────────
+    {
+      verb = "run";
+      cues = [ "run" "execute" "실행" "기동" ];
+      steps = [
+        "resolve-entry-point" "set-environment"
+        "execute" "capture-output" "check-exit-code"
+      ];
+      unknowns = {
+        "set-environment" = [ "env-vars" ];
+      };
+    }
+    {
+      verb = "profile";
+      cues = [ "profile" "프로파일" ];
+      steps = [
+        "select-profiler" "instrument-code" "run-workload"
+        "collect-samples" "analyze-hotspots"
+      ];
+      unknowns = {
+        "run-workload" = [ "workload-shape" ];
+      };
+    }
+    {
+      verb = "log";
+      cues = [ "add log" "로깅" "log statement" ];
+      steps = [
+        "select-log-level" "identify-context-fields"
+        "insert-log-call" "verify-no-PII-leak"
+      ];
+      unknowns = {
+        "select-log-level" = [ "log-level" ];
+      };
+    }
+
+    # ── Build / Deploy (#128) ─────────────────────────────────────
+    {
+      verb = "build";
+      cues = [ "build" "compile" "빌드" "컴파일" ];
+      steps = [
+        "fetch-dependencies" "run-compiler"
+        "link-artifacts" "verify-output"
+      ];
+      unknowns = {};
+    }
+    {
+      verb = "publish";
+      cues = [ "publish" "release" "배포" "퍼블리시" ];
+      steps = [
+        "bump-version" "write-changelog" "tag-commit"
+        "build-artifact" "upload-to-registry" "verify-published"
+      ];
+      unknowns = {
+        "bump-version" = [ "version-bump-kind" ];
+      };
+    }
+    {
+      verb = "upgrade dependency";
+      cues = [ "upgrade dep" "update dep" "의존성 업데이트" ];
+      steps = [
+        "identify-deps-to-upgrade" "check-breaking-changes"
+        "apply-upgrade" "run-test-suite" "fix-incompatibilities"
+      ];
+      unknowns = {};
+    }
+
+    # ── Concurrency (#129) ────────────────────────────────────────
+    {
+      verb = "parallelize";
+      cues = [ "parallelize" "병렬화" "make parallel" ];
+      steps = [
+        "identify-data-dependencies" "partition-workload"
+        "spawn-workers" "join-results" "verify-correctness"
+      ];
+      unknowns = {
+        "partition-workload" = [ "partition-strategy" ];
+      };
+    }
+    {
+      verb = "synchronize";
+      cues = [ "synchronize" "동기화" "add lock" ];
+      steps = [
+        "identify-shared-state" "choose-sync-primitive"
+        "wrap-access" "verify-no-deadlock"
+      ];
+      unknowns = {
+        "choose-sync-primitive" = [ "primitive-kind" ];
+      };
+    }
+
+    # ── Performance (#130) ────────────────────────────────────────
+    {
+      verb = "optimize";
+      cues = [ "optimize" "최적화" "make faster" ];
+      steps = [
+        "benchmark-baseline" "identify-hotspot"
+        "apply-optimization" "benchmark-after" "verify-equivalent-output"
+      ];
+      unknowns = {
+        "apply-optimization" = [ "optimization-strategy" ];
+      };
+    }
+    {
+      verb = "cache";
+      cues = [ "cache" "memoize" "캐싱" "메모이제이션" ];
+      steps = [
+        "identify-pure-function" "choose-cache-backend"
+        "wrap-with-cache" "verify-hit-rate"
+      ];
+      unknowns = {
+        "choose-cache-backend" = [ "cache-backend" ];
+      };
+    }
+
+    # ── Architecture (#131) ───────────────────────────────────────
+    {
+      verb = "decouple";
+      cues = [ "decouple" "분리" "loose coupling" ];
+      steps = [
+        "identify-tight-coupling" "introduce-interface"
+        "inject-dependency" "verify-tests-still-pass"
+      ];
+      unknowns = {};
+    }
+    {
+      verb = "introduce service";
+      cues = [ "introduce service" "extract service" "서비스 분리" ];
+      steps = [
+        "identify-bounded-context" "define-service-interface"
+        "extract-implementation" "wire-up-callers" "deploy-separately"
+      ];
+      unknowns = {
+        "define-service-interface" = [ "interface-shape" "transport" ];
+      };
+    }
+
+    # ── Generic / fallback ────────────────────────────────────────
+    {
+      verb = "implement";
+      cues = [ "implement" "구현" "make work" ];
+      steps = [
+        "understand-requirements" "design-approach"
+        "write-skeleton" "fill-in-logic"
+        "add-error-handling" "write-tests"
+      ];
+      unknowns = {
+        "design-approach" = [ "design-choice" ];
+      };
+    }
+    {
+      verb = "explain";
+      cues = [ "explain" "설명해줘" "describe" "what is" "what does" ];
+      steps = [
+        "identify-audience" "outline-key-concepts"
+        "write-explanation" "add-examples"
+      ];
+      unknowns = {
+        "identify-audience" = [ "audience" ];
+      };
+    }
+
+    # ── Edit/Refactor verbs (#122 vocabulary 깊이 활용) ────────────
+    { verb = "swap arguments"; cues = [ "swap arguments" "reorder args" "인자 순서" ];
+      steps = [ "locate-callers" "rewrite-call-sites" "update-signature" "verify-types-resolve" ];
+      unknowns = { "rewrite-call-sites" = [ "new-order" ]; }; }
+    { verb = "extract interface"; cues = [ "extract interface" "extract protocol" "extract trait" "인터페이스 추출" ];
+      steps = [ "identify-method-set" "create-interface-declaration" "make-class-implement" "verify-usages-compile" ];
+      unknowns = { "identify-method-set" = [ "methods-to-include" ]; }; }
+    { verb = "pull up method"; cues = [ "pull up" "pull-up" "move to parent" "상위로" ];
+      steps = [ "locate-duplicate-methods" "create-method-in-parent" "remove-from-subclasses" "verify-equivalent-behavior" ];
+      unknowns = {}; }
+    { verb = "push down method"; cues = [ "push down" "push-down" "move to subclass" "하위로" ];
+      steps = [ "identify-subclass-specific" "create-method-in-subclass" "remove-from-parent" "verify-equivalent-behavior" ];
+      unknowns = { "identify-subclass-specific" = [ "target-subclass" ]; }; }
+    { verb = "encapsulate field"; cues = [ "encapsulate" "make field private" "캡슐화" "은닉" ];
+      steps = [ "make-field-private" "add-getter" "add-setter" "replace-direct-access" "verify-references-resolve" ];
+      unknowns = {}; }
+    { verb = "change signature"; cues = [ "change signature" "modify signature" "시그니처 변경" ];
+      steps = [ "design-new-signature" "update-definition" "update-all-call-sites" "verify-types-resolve" ];
+      unknowns = { "design-new-signature" = [ "new-params" "new-return-type" ]; }; }
+    { verb = "extract type"; cues = [ "extract type" "extract class" "extract struct" "타입 추출" ];
+      steps = [ "identify-field-cluster" "create-new-type" "replace-with-reference" "verify-references-resolve" ];
+      unknowns = {}; }
+    { verb = "convert sync to async"; cues = [ "convert to async" "async-ify" "비동기로" ];
+      steps = [ "identify-blocking-calls" "wrap-with-async" "update-callers-to-await" "verify-no-deadlock" ];
+      unknowns = { "wrap-with-async" = [ "runtime-choice" ]; }; }
+    { verb = "extract constant"; cues = [ "extract constant" "introduce constant" "magic number" "상수 추출" ];
+      steps = [ "locate-literal" "name-constant" "declare-at-module-level" "replace-occurrences" ];
+      unknowns = { "name-constant" = [ "constant-name" ]; }; }
+    { verb = "split file"; cues = [ "split file" "split module" "파일 분리" ];
+      steps = [ "identify-cohesion-groups" "create-new-files" "move-declarations" "update-imports" "verify-references-resolve" ];
+      unknowns = { "identify-cohesion-groups" = [ "split-strategy" ]; }; }
+    { verb = "merge files"; cues = [ "merge files" "consolidate" "파일 병합" ];
+      steps = [ "identify-related-files" "create-merged-file" "move-declarations" "update-imports" "verify-references-resolve" ];
+      unknowns = {}; }
+
+    # ── Diagnostic verbs (#123 vocabulary 깊이 활용) ───────────────
+    { verb = "analyze stack trace"; cues = [ "stack trace" "stacktrace" "스택 트레이스" ];
+      steps = [ "parse-frames" "locate-source-files" "identify-crash-point" "trace-call-flow" "form-hypothesis" ];
+      unknowns = {}; }
+    { verb = "read coredump"; cues = [ "coredump" "core dump" "코어 덤프" ];
+      steps = [ "load-symbols" "inspect-registers" "walk-stack-frames" "inspect-heap" "form-hypothesis" ];
+      unknowns = {}; }
+    { verb = "find memory leak"; cues = [ "memory leak" "메모리 누수" "leak detector" ];
+      steps = [ "run-leak-detector" "capture-allocation-snapshots" "diff-snapshots" "trace-retainers" "design-fix" ];
+      unknowns = { "design-fix" = [ "fix-strategy" ]; }; }
+    { verb = "find perf bottleneck"; cues = [ "bottleneck" "병목" "perf bottleneck" ];
+      steps = [ "establish-baseline" "run-profiler" "identify-hotspot" "verify-with-benchmark" "design-optimization" ];
+      unknowns = {}; }
+    { verb = "triage incident"; cues = [ "triage" "incident" "트리아지" "인시던트" ];
+      steps = [ "assess-severity" "identify-affected-users" "find-root-cause" "design-mitigation" "communicate-status" ];
+      unknowns = { "design-mitigation" = [ "mitigation-strategy" ]; }; }
+    { verb = "investigate flaky test"; cues = [ "flaky" "flaky test" "랜덤 실패" ];
+      steps = [ "rerun-many-times" "identify-non-determinism" "isolate-source" "design-fix" "verify-stability" ];
+      unknowns = {}; }
+
+    # ── Test verbs (#125 vocabulary 깊이 활용) ─────────────────────
+    { verb = "snapshot update"; cues = [ "snapshot" "golden update" "스냅샷 갱신" ];
+      steps = [ "run-tests-with-update" "review-diff" "commit-snapshot" ];
+      unknowns = {}; }
+    { verb = "parameterize test"; cues = [ "parameterize" "parametrize" "테이블 테스트" ];
+      steps = [ "identify-variable-inputs" "design-input-table" "rewrite-as-parametrized" "verify-all-cases" ];
+      unknowns = { "design-input-table" = [ "test-cases" ]; }; }
+    { verb = "fuzz test"; cues = [ "fuzz" "fuzzing" "퍼지 테스트" ];
+      steps = [ "define-input-domain" "select-fuzzer" "run-fuzzing-campaign" "triage-crashes" "add-regression-tests" ];
+      unknowns = { "select-fuzzer" = [ "fuzzer-choice" ]; }; }
+    { verb = "mutation test"; cues = [ "mutation test" "mutation testing" "변이 테스트" ];
+      steps = [ "select-mutation-tool" "run-mutations" "compute-mutation-score" "identify-survived" "add-killing-tests" ];
+      unknowns = {}; }
+    { verb = "contract test"; cues = [ "contract test" "pact" "계약 테스트" ];
+      steps = [ "define-contract-schema" "generate-consumer-tests" "generate-provider-tests" "verify-pact" ];
+      unknowns = {}; }
+
+    # ── Navigation verbs (#124 vocabulary 깊이 활용) ───────────────
+    { verb = "find implementation"; cues = [ "find implementation" "find impl" "구현체 찾기" ];
+      steps = [ "resolve-interface-or-type" "lookup-implementations" "filter-by-context" "present-results" ];
+      unknowns = {}; }
+    { verb = "find type hierarchy"; cues = [ "type hierarchy" "supertypes" "subtypes" "타입 계층" ];
+      steps = [ "resolve-type" "walk-supertypes" "walk-subtypes" "present-tree" ];
+      unknowns = { "walk-supertypes" = [ "direction" ]; }; }
+    { verb = "find by signature"; cues = [ "by signature" "find by type" "시그니처로" ];
+      steps = [ "parse-signature-spec" "search-symbol-table" "match-signatures" "present-results" ];
+      unknowns = { "parse-signature-spec" = [ "signature-template" ]; }; }
+    { verb = "outline document"; cues = [ "outline" "document outline" "아웃라인" ];
+      steps = [ "parse-document" "extract-headings-and-symbols" "build-tree" "present-outline" ];
+      unknowns = {}; }
+
+    # ── Review verbs (#126 vocabulary 깊이 활용) ───────────────────
+    { verb = "check naming convention"; cues = [ "naming convention" "naming check" "명명 규칙" ];
+      steps = [ "load-style-config" "scan-identifiers" "flag-violations" "suggest-fixes" ];
+      unknowns = {}; }
+    { verb = "audit imports"; cues = [ "audit imports" "unused imports" "임포트 감사" ];
+      steps = [ "scan-imports" "compute-reachability" "flag-unused" "flag-circular" ];
+      unknowns = {}; }
+    { verb = "audit deprecations"; cues = [ "deprecation" "deprecated" "사용 중단" ];
+      steps = [ "scan-deprecated-symbols" "list-call-sites" "suggest-replacements" "prioritize-migrations" ];
+      unknowns = {}; }
+    { verb = "check changelog"; cues = [ "changelog" "release notes" "변경 로그" ];
+      steps = [ "diff-since-last-release" "group-by-category" "write-entries" "review-format" ];
+      unknowns = {}; }
+
+    # ── Execution verbs (#127 vocabulary 깊이 활용) ────────────────
+    { verb = "attach debugger"; cues = [ "attach debugger" "디버거 연결" ];
+      steps = [ "identify-process" "load-symbols" "set-initial-breakpoints" "continue-execution" ];
+      unknowns = { "identify-process" = [ "pid-or-name" ]; }; }
+    { verb = "add tracing"; cues = [ "add tracing" "instrument trace" "추적 추가" ];
+      steps = [ "select-trace-library" "annotate-spans" "configure-exporter" "verify-trace-emission" ];
+      unknowns = { "select-trace-library" = [ "tracing-library" ]; }; }
+    { verb = "instrument metric"; cues = [ "instrument metric" "add metric" "메트릭 추가" ];
+      steps = [ "select-metric-type" "add-counter-or-histogram" "configure-exporter" "verify-emission" ];
+      unknowns = { "select-metric-type" = [ "metric-kind" ]; }; }
+    { verb = "analyze flame graph"; cues = [ "flame graph" "flamegraph" "플레임 그래프" ];
+      steps = [ "load-profile-data" "render-flame-graph" "identify-tall-stacks" "drill-down" "form-hypothesis" ];
+      unknowns = {}; }
+
+    # ── Build verbs (#128 vocabulary 깊이 활용) ────────────────────
+    { verb = "pin version"; cues = [ "pin version" "lock version" "버전 고정" ];
+      steps = [ "identify-target-dep" "set-exact-version" "regenerate-lockfile" "verify-tests-pass" ];
+      unknowns = { "set-exact-version" = [ "version" ]; }; }
+    { verb = "audit license"; cues = [ "license audit" "라이선스 감사" ];
+      steps = [ "scan-dep-tree" "collect-licenses" "match-against-policy" "flag-violations" ];
+      unknowns = { "match-against-policy" = [ "policy-file" ]; }; }
+    { verb = "audit cve"; cues = [ "CVE" "vulnerability audit" "취약점 감사" ];
+      steps = [ "scan-dep-tree" "query-CVE-database" "filter-by-severity" "suggest-upgrades" ];
+      unknowns = {}; }
+    { verb = "vendor dependency"; cues = [ "vendor" "vendoring" "벤더링" ];
+      steps = [ "identify-dep-to-vendor" "copy-source-to-vendor-dir" "update-build-config" "verify-builds-offline" ];
+      unknowns = {}; }
+    { verb = "cross compile"; cues = [ "cross compile" "cross-compile" "교차 컴파일" ];
+      steps = [ "install-target-toolchain" "set-target-triple" "build" "verify-binary-runs-on-target" ];
+      unknowns = { "set-target-triple" = [ "target-triple" ]; }; }
+
+    # ── Concurrency verbs (#129 vocabulary 깊이 활용) ──────────────
+    { verb = "add backpressure"; cues = [ "backpressure" "back pressure" "백프레셔" ];
+      steps = [ "identify-fast-producer" "add-bounded-buffer" "signal-when-full" "verify-no-OOM" ];
+      unknowns = { "add-bounded-buffer" = [ "buffer-size" ]; }; }
+    { verb = "add rate limit"; cues = [ "rate limit" "throttle" "속도 제한" ];
+      steps = [ "select-algorithm" "configure-budget" "wrap-call-site" "verify-budget-enforced" ];
+      unknowns = { "select-algorithm" = [ "rate-limit-algorithm" ]; }; }
+    { verb = "make idempotent"; cues = [ "idempotent" "idempotency key" "멱등" ];
+      steps = [ "design-idempotency-key" "store-result-by-key" "return-cached-on-replay" "verify-replay-safety" ];
+      unknowns = { "design-idempotency-key" = [ "key-source" ]; }; }
+    { verb = "add retry"; cues = [ "retry" "재시도" ];
+      steps = [ "identify-transient-failures" "configure-backoff" "wrap-with-retry" "verify-bounded-attempts" ];
+      unknowns = { "configure-backoff" = [ "backoff-strategy" ]; }; }
+    { verb = "add circuit breaker"; cues = [ "circuit breaker" "회로 차단기" ];
+      steps = [ "select-library" "configure-threshold" "wrap-call-site" "monitor-state-transitions" ];
+      unknowns = { "configure-threshold" = [ "failure-threshold" ]; }; }
+
+    # ── Performance-deep verbs (#130 vocabulary 깊이 활용) ─────────
+    { verb = "vectorize loop"; cues = [ "vectorize" "벡터화" ];
+      steps = [ "verify-no-loop-carried-deps" "ensure-aligned-data" "rewrite-with-SIMD-intrinsics" "benchmark-before-after" ];
+      unknowns = {}; }
+    { verb = "SIMD optimize"; cues = [ "SIMD" "SSE" "AVX" "NEON" ];
+      steps = [ "identify-data-parallel-block" "choose-instruction-set" "implement-intrinsics" "benchmark-before-after" ];
+      unknowns = { "choose-instruction-set" = [ "ISA-target" ]; }; }
+    { verb = "reduce allocation"; cues = [ "reduce allocation" "alloc reduction" "할당 줄이기" ];
+      steps = [ "profile-allocations" "identify-hot-allocations" "pool-or-reuse" "benchmark-before-after" ];
+      unknowns = {}; }
+    { verb = "pool objects"; cues = [ "object pool" "객체 풀" ];
+      steps = [ "identify-frequently-allocated" "design-pool-interface" "implement-acquire-release" "verify-no-leak" ];
+      unknowns = {}; }
+
+    # ── Architecture verbs (#131 vocabulary 깊이 활용) ─────────────
+    { verb = "convert to layered"; cues = [ "convert to layered" "introduce layers" "계층 도입" ];
+      steps = [ "identify-layer-boundaries" "extract-presentation-layer" "extract-business-layer" "extract-data-layer" "verify-dependency-direction" ];
+      unknowns = {}; }
+    { verb = "convert to hexagonal"; cues = [ "convert to hexagonal" "introduce hexagonal" "헥사고날 도입" ];
+      steps = [ "identify-domain-core" "define-ports" "wrap-infra-as-adapters" "invert-dependencies" "verify-domain-purity" ];
+      unknowns = {}; }
+    { verb = "convert to event-driven"; cues = [ "convert to event driven" "introduce events" "이벤트 기반" ];
+      steps = [ "identify-state-changes" "define-event-schema" "publish-events" "implement-subscribers" "verify-eventual-consistency" ];
+      unknowns = {}; }
+    { verb = "add saga"; cues = [ "add saga" "saga pattern" "사가 패턴" ];
+      steps = [ "identify-long-running-transaction" "design-saga-steps" "design-compensations" "implement-coordinator" "verify-rollback-paths" ];
+      unknowns = {}; }
+    { verb = "convert to CQRS"; cues = [ "convert to CQRS" "CQRS" "씨큐알에스 도입" ];
+      steps = [ "split-command-from-query" "design-read-model" "design-write-model" "implement-projections" "verify-eventual-consistency" ];
+      unknowns = {}; }
+
+    # ── Algorithm-pattern verbs (#119 — verb 추출 0 → +7) ─────────
+    { verb = "apply DP"; cues = [ "apply DP" "use DP" "memoize" "memoization" "동적 계획법" ];
+      steps = [ "identify-overlapping-subproblems" "define-recurrence" "choose-direction" "implement-table-or-memo" "verify-correctness" ];
+      unknowns = { "choose-direction" = [ "top-down-or-bottom-up" ]; }; }
+    { verb = "apply greedy"; cues = [ "apply greedy" "use greedy" "탐욕 적용" ];
+      steps = [ "identify-locally-optimal" "prove-exchange-argument" "implement-greedy-step" "verify-counterexamples" ];
+      unknowns = {}; }
+    { verb = "apply divide and conquer"; cues = [ "divide and conquer" "분할 정복 적용" ];
+      steps = [ "identify-split-point" "solve-subproblems" "combine-results" "analyze-recurrence" ];
+      unknowns = {}; }
+    { verb = "apply BFS"; cues = [ "BFS" "breadth first" "너비 우선 적용" ];
+      steps = [ "model-as-graph" "init-queue" "level-traversal" "track-visited" "extract-result" ];
+      unknowns = {}; }
+    { verb = "apply DFS"; cues = [ "DFS" "depth first" "깊이 우선 적용" ];
+      steps = [ "model-as-graph" "init-stack-or-recursion" "track-visited" "process-on-enter-or-exit" "extract-result" ];
+      unknowns = {}; }
+    { verb = "apply two pointer"; cues = [ "two pointer" "투 포인터 적용" ];
+      steps = [ "identify-ordered-data" "init-pointers" "design-advance-rule" "design-termination" "extract-result" ];
+      unknowns = {}; }
+    { verb = "apply sliding window"; cues = [ "sliding window" "슬라이딩 윈도우 적용" ];
+      steps = [ "choose-window-kind" "init-window" "design-expand-shrink-rule" "track-best-state" "extract-result" ];
+      unknowns = { "choose-window-kind" = [ "fixed-or-variable" ]; }; }
+
+    # ── Data-structure verbs (#120 — verb 추출 0 → +4) ────────────
+    { verb = "convert to heap"; cues = [ "convert to heap" "heapify" "힙으로 변환" ];
+      steps = [ "verify-comparable-elements" "build-heap" "expose-priority-operations" "verify-invariants" ];
+      unknowns = {}; }
+    { verb = "convert to hash"; cues = [ "convert to hash" "use hashmap" "해시로 변환" ];
+      steps = [ "select-hash-function" "design-key-extraction" "build-hashtable" "verify-amortized-O1" ];
+      unknowns = {}; }
+    { verb = "convert to tree"; cues = [ "convert to tree" "use BST" "트리로 변환" ];
+      steps = [ "select-tree-kind" "design-key-ordering" "build-tree" "verify-balance-invariants" ];
+      unknowns = { "select-tree-kind" = [ "tree-kind" ]; }; }
+    { verb = "add bloom filter"; cues = [ "bloom filter" "블룸 필터" ];
+      steps = [ "estimate-element-count" "choose-false-positive-rate" "compute-bit-array-size" "choose-k-hash-functions" "verify-rate" ];
+      unknowns = {}; }
+
+    # ── Math verbs (#121 — verb 추출 0 → +4) ─────────────────────
+    { verb = "apply induction"; cues = [ "apply induction" "by induction" "귀납법 적용" ];
+      steps = [ "state-base-case" "verify-base" "state-inductive-hypothesis" "prove-inductive-step" "conclude" ];
+      unknowns = {}; }
+    { verb = "apply contradiction"; cues = [ "apply contradiction" "by contradiction" "귀류법 적용" ];
+      steps = [ "assume-negation" "derive-implications" "find-contradiction" "conclude-original" ];
+      unknowns = {}; }
+    { verb = "find invariant"; cues = [ "find invariant" "loop invariant" "불변량 찾기" ];
+      steps = [ "identify-state-shape" "propose-invariant" "verify-init-establishes" "verify-step-preserves" "use-to-prove-postcondition" ];
+      unknowns = {}; }
+    { verb = "verify by counterexample"; cues = [ "counterexample" "반례로 검증" ];
+      steps = [ "state-claim" "enumerate-candidate-counterexamples" "evaluate-each" "report-witness-or-no-counterexample" ];
+      unknowns = {}; }
+
+    # ══════════════════════════════════════════════════════════════
+    # ══ 미박힘 도메인 family verb (#141 — 피의 새 방울들) ══════════
+    # ══════════════════════════════════════════════════════════════
+
+    # ── Security ─────────────────────────────────────────────────
+    { verb = "audit security"; cues = [ "audit security" "security audit" "보안 감사" ];
+      steps = [ "enumerate-attack-surface" "scan-known-CVEs" "review-auth-paths" "review-data-flow" "produce-report" ];
+      unknowns = {}; }
+    { verb = "add auth"; cues = [ "add auth" "add authentication" "add OAuth" "인증 추가" ];
+      steps = [ "choose-auth-mechanism" "design-token-flow" "implement-middleware" "secure-credentials" "verify-flow-end-to-end" ];
+      unknowns = { "choose-auth-mechanism" = [ "mechanism" ]; }; }
+    { verb = "add encryption"; cues = [ "add encryption" "encrypt" "암호화 추가" ];
+      steps = [ "choose-cipher" "manage-keys" "encrypt-at-rest-or-transit" "rotate-keys" "verify-decryption" ];
+      unknowns = { "choose-cipher" = [ "cipher" ] ; "manage-keys" = [ "kms" ]; }; }
+    { verb = "sanitize input"; cues = [ "sanitize" "input validation" "입력 검증" ];
+      steps = [ "identify-untrusted-sources" "define-allowed-set" "reject-or-escape" "verify-injection-blocked" ];
+      unknowns = {}; }
+    { verb = "prevent XSS"; cues = [ "XSS" "cross site scripting" "엑세스" ];
+      steps = [ "escape-output" "enable-CSP" "audit-eval-and-innerHTML" "verify-with-payload" ];
+      unknowns = {}; }
+    { verb = "prevent SQL injection"; cues = [ "SQL injection" "SQLi" "SQL 주입" ];
+      steps = [ "use-parameterized-queries" "audit-string-concat-SQL" "lock-down-privileges" "verify-with-payload" ];
+      unknowns = {}; }
+    { verb = "harden secrets"; cues = [ "secrets" "harden secrets" "비밀 강화" ];
+      steps = [ "scan-for-hardcoded-secrets" "move-to-vault" "rotate-existing" "configure-runtime-access" ];
+      unknowns = { "move-to-vault" = [ "vault-choice" ]; }; }
+    { verb = "audit permissions"; cues = [ "audit permissions" "permission audit" "권한 감사" ];
+      steps = [ "enumerate-roles" "review-grants" "find-excessive-privileges" "apply-least-privilege" ];
+      unknowns = {}; }
+
+    # ── Database ─────────────────────────────────────────────────
+    { verb = "add migration"; cues = [ "add migration" "db migration" "마이그레이션 추가" ];
+      steps = [ "design-schema-change" "write-up-and-down-migration" "test-on-clone" "apply-to-staging" "apply-to-prod" ];
+      unknowns = { "design-schema-change" = [ "schema-delta" ]; }; }
+    { verb = "add index"; cues = [ "add index" "create index" "인덱스 추가" ];
+      steps = [ "identify-slow-query" "choose-index-columns" "create-index" "verify-query-plan" "monitor-write-cost" ];
+      unknowns = { "choose-index-columns" = [ "columns" ]; }; }
+    { verb = "optimize query"; cues = [ "optimize query" "query tuning" "쿼리 최적화" ];
+      steps = [ "explain-current-plan" "rewrite-or-add-index" "verify-new-plan" "benchmark-before-after" ];
+      unknowns = {}; }
+    { verb = "add transaction"; cues = [ "add transaction" "make atomic" "트랜잭션 추가" ];
+      steps = [ "identify-atomic-unit" "wrap-with-BEGIN-COMMIT" "design-rollback-path" "choose-isolation-level" "verify-no-deadlock" ];
+      unknowns = { "choose-isolation-level" = [ "isolation-level" ]; }; }
+    { verb = "denormalize"; cues = [ "denormalize" "denormalization" "역정규화" ];
+      steps = [ "identify-read-hot-path" "duplicate-fields" "design-sync-mechanism" "verify-consistency" ];
+      unknowns = {}; }
+    { verb = "add sharding"; cues = [ "add sharding" "shard" "샤딩" ];
+      steps = [ "choose-shard-key" "design-routing-layer" "migrate-existing-data" "verify-cross-shard-queries" ];
+      unknowns = { "choose-shard-key" = [ "shard-key" ]; }; }
+
+    # ── API-design ──────────────────────────────────────────────
+    { verb = "version API"; cues = [ "version API" "API versioning" "API 버전" ];
+      steps = [ "choose-version-strategy" "freeze-current-as-v1" "design-vN-changes" "maintain-compat-window" "communicate-deprecation" ];
+      unknowns = { "choose-version-strategy" = [ "url-or-header" ]; }; }
+    { verb = "deprecate endpoint"; cues = [ "deprecate" "sunset endpoint" "엔드포인트 폐기" ];
+      steps = [ "announce-deprecation" "add-deprecation-header" "set-removal-date" "monitor-usage" "remove" ];
+      unknowns = { "set-removal-date" = [ "sunset-date" ]; }; }
+    { verb = "add pagination"; cues = [ "add pagination" "paginate" "페이지네이션" ];
+      steps = [ "choose-pagination-style" "design-page-size-default" "implement-cursor-or-offset" "expose-metadata" "verify-stable-order" ];
+      unknowns = { "choose-pagination-style" = [ "cursor-or-offset" ]; }; }
+    { verb = "add API rate limit"; cues = [ "API rate limit" "throttle API" "API 속도 제한" ];
+      steps = [ "choose-quota-strategy" "implement-token-bucket" "expose-rate-headers" "design-overage-behavior" "verify-budget-enforced" ];
+      unknowns = {}; }
+    { verb = "convert REST to gRPC"; cues = [ "REST to gRPC" "gRPC 전환" ];
+      steps = [ "define-proto-schema" "generate-stubs" "implement-server" "migrate-client-callers" "verify-equivalent-behavior" ];
+      unknowns = {}; }
+
+    # ── Frontend ────────────────────────────────────────────────
+    { verb = "extract component"; cues = [ "extract component" "extract widget" "컴포넌트 추출" ];
+      steps = [ "identify-reusable-region" "extract-as-component" "define-props" "replace-instances" "verify-rendering" ];
+      unknowns = {}; }
+    { verb = "add accessibility"; cues = [ "accessibility" "a11y" "접근성" ];
+      steps = [ "audit-with-axe-or-lighthouse" "add-aria-roles" "ensure-keyboard-nav" "verify-screen-reader" "verify-contrast" ];
+      unknowns = {}; }
+    { verb = "add i18n"; cues = [ "i18n" "internationalization" "국제화" ];
+      steps = [ "select-i18n-library" "extract-strings-to-catalog" "wrap-render-with-t" "add-locale-selector" "verify-translations" ];
+      unknowns = { "select-i18n-library" = [ "library" ]; }; }
+    { verb = "optimize rendering"; cues = [ "optimize rendering" "reduce reflow" "렌더링 최적화" ];
+      steps = [ "profile-render-tree" "memoize-or-virtualize" "batch-updates" "verify-FPS" ];
+      unknowns = {}; }
+    { verb = "add lazy load"; cues = [ "lazy load" "code split" "지연 로딩" ];
+      steps = [ "identify-non-critical" "split-bundles" "configure-router-or-loader" "verify-deferred-load" ];
+      unknowns = {}; }
+
+    # ── Data-pipeline ───────────────────────────────────────────
+    { verb = "validate schema"; cues = [ "validate schema" "schema validation" "스키마 검증" ];
+      steps = [ "define-schema" "select-validator" "wrap-input" "reject-on-violation" "log-violations" ];
+      unknowns = { "select-validator" = [ "validator-lib" ]; }; }
+    { verb = "clean data"; cues = [ "clean data" "data cleaning" "데이터 정제" ];
+      steps = [ "profile-input" "detect-anomalies" "design-cleaning-rules" "apply" "verify-distribution" ];
+      unknowns = {}; }
+    { verb = "transform data"; cues = [ "transform data" "ETL transform" "데이터 변환" ];
+      steps = [ "define-source-schema" "define-target-schema" "design-mapping" "apply-transform" "verify-round-trip" ];
+      unknowns = {}; }
+    { verb = "add ETL pipeline"; cues = [ "ETL" "data pipeline" "ETL 파이프라인" ];
+      steps = [ "design-extract" "design-transform" "design-load" "schedule-or-stream" "monitor-freshness" ];
+      unknowns = { "schedule-or-stream" = [ "trigger-kind" ]; }; }
+    { verb = "add data lineage"; cues = [ "data lineage" "lineage tracking" "데이터 계보" ];
+      steps = [ "capture-source-system" "tag-each-transformation" "store-in-catalog" "expose-query-interface" ];
+      unknowns = {}; }
+
+    # ── DevOps ──────────────────────────────────────────────────
+    { verb = "dockerize"; cues = [ "dockerize" "containerize" "도커화" ];
+      steps = [ "write-Dockerfile" "choose-base-image" "configure-multi-stage" "build-and-tag" "verify-runs-in-container" ];
+      unknowns = { "choose-base-image" = [ "base-image" ]; }; }
+    { verb = "add helm chart"; cues = [ "helm" "helm chart" "헬름 차트" ];
+      steps = [ "scaffold-chart" "parameterize-values" "design-templates" "verify-render" "install-on-staging" ];
+      unknowns = {}; }
+    { verb = "add terraform"; cues = [ "terraform" "IaC" "테라폼" ];
+      steps = [ "define-providers" "model-resources" "use-modules" "plan-and-apply" "verify-state" ];
+      unknowns = {}; }
+    { verb = "add CI"; cues = [ "add CI" "CI pipeline" "CI 추가" ];
+      steps = [ "choose-CI-platform" "define-stages" "configure-caching" "set-status-checks" "verify-pipeline" ];
+      unknowns = { "choose-CI-platform" = [ "platform" ]; }; }
+    { verb = "add monitoring"; cues = [ "add monitoring" "observability" "모니터링" ];
+      steps = [ "instrument-metrics" "configure-dashboards" "set-SLOs" "review-trends" ];
+      unknowns = {}; }
+    { verb = "add alert"; cues = [ "add alert" "alerting" "알림 추가" ];
+      steps = [ "select-metric-or-event" "define-threshold" "route-to-channel" "verify-no-flap" ];
+      unknowns = { "route-to-channel" = [ "alert-channel" ]; }; }
+
+    # ── ML ──────────────────────────────────────────────────────
+    { verb = "train model"; cues = [ "train model" "model training" "train transformer" "train neural" "train CNN" "train RNN" "모델 훈련" ];
+      steps = [ "prepare-dataset" "choose-architecture" "set-hyperparameters" "train" "evaluate-on-validation" ];
+      unknowns = { "choose-architecture" = [ "architecture" ]; }; }
+    { verb = "evaluate model"; cues = [ "evaluate model" "model evaluation" "cross validation" "k-fold" "holdout" "모델 평가" ];
+      steps = [ "select-metrics" "run-on-holdout" "compute-confidence-interval" "compare-to-baseline" "report" ];
+      unknowns = { "select-metrics" = [ "eval-metrics" ]; }; }
+    { verb = "tune hyperparameters"; cues = [ "tune hyperparameters" "hyperparameter search" "하이퍼파라미터 튜닝" ];
+      steps = [ "define-search-space" "choose-search-strategy" "run-trials" "select-best" "validate-on-holdout" ];
+      unknowns = { "choose-search-strategy" = [ "strategy" ]; }; }
+    { verb = "add data augmentation"; cues = [ "data augmentation" "augment" "데이터 증강" ];
+      steps = [ "analyze-class-balance" "design-augmentations" "apply-during-training" "measure-impact" ];
+      unknowns = {}; }
+    { verb = "add A B test"; cues = [ "A/B test" "AB test" "A B 테스트" ];
+      steps = [ "define-hypothesis" "design-variant" "compute-sample-size" "run-experiment" "analyze-results" ];
+      unknowns = { "define-hypothesis" = [ "metric" ]; }; }
+  ];
+
+  # =================================================================
+  # === Verb detection =============================================
+  # =================================================================
+  #
+  # Longest-cue-match priority — pick the verb whose matched cue
+  # has the most characters. This avoids "extract" overshadowing
+  # "extract type", "optimize" overshadowing "optimize query", etc.
+
+  # Longest matching cue for one entry, or empty string if none match.
+  longestMatchingCue = utterance: entry:
+    let
+      matched = builtins.filter (c:
+        decomposer.containsAny utterance [ c ]
+      ) entry.cues;
+      step = best: c:
+        if builtins.stringLength c > builtins.stringLength best
+        then c else best;
+    in
+      builtins.foldl' step "" matched;
+
+  detectVerb = utterance:
+    let
+      hits = builtins.filter (entry:
+        decomposer.containsAny utterance entry.cues
+      ) verbTable;
+      scored = builtins.map (entry: {
+        inherit entry;
+        score = builtins.stringLength (longestMatchingCue utterance entry);
+      }) hits;
+      best = builtins.foldl' (acc: s:
+        if acc == null then s
+        else if s.score > acc.score then s
+        else acc
+      ) null scored;
+    in
+      if best == null then null else best.entry;
+
+  # =================================================================
+  # === Detect multiple verbs (multi-action utterance) ============
+  # =================================================================
+
+  detectAllVerbs = utterance:
+    builtins.filter (entry:
+      decomposer.containsAny utterance entry.cues
+    ) verbTable;
+
+  # =================================================================
+  # === Build morphism list with unknowns ==========================
+  # =================================================================
+
+  unknownsFor = entry: stepName:
+    if builtins.hasAttr stepName entry.unknowns
+    then entry.unknowns.${stepName}
+    else [];
+
+  buildMorphismsFromVerb = entry: utterance:
+    let
+      mkMorph = idx: stepName: {
+        morphism_kind = "decomposed-step";
+        step_index = idx;
+        source = {
+          object_kind = "code-state";
+          phase = "pre-step-" + builtins.toString idx;
+        };
+        target = {
+          object_kind = "code-state";
+          phase = "post-step-" + builtins.toString idx;
+        };
+        action = stepName;
+        params = {};
+        unknowns = unknownsFor entry stepName;
+        verb_origin = entry.verb;
+      };
+      n = builtins.length entry.steps;
+      # Local genList replacement (pnixc-meta inline genList unsupported)
+      localRange = m:
+        if m == 0 then []
+        else (localRange (m - 1)) ++ [ (m - 1) ];
+      indices = localRange n;
+    in
+      builtins.map (i: mkMorph i (builtins.elemAt entry.steps i))
+        indices;
+
+  # =================================================================
+  # === Multi-verb morphism list (concatenate) =====================
+  # =================================================================
+
+  buildMorphismsFromAllVerbs = utterance:
+    let
+      entries = detectAllVerbs utterance;
+      perVerb = builtins.map (e: buildMorphismsFromVerb e utterance) entries;
+      flat = builtins.foldl' (acc: lst: acc ++ lst) [] perVerb;
+      localRange = m:
+        if m == 0 then []
+        else (localRange (m - 1)) ++ [ (m - 1) ];
+      reindexed = builtins.map (i:
+        (builtins.elemAt flat i) // { step_index = i; }
+      ) (localRange (builtins.length flat));
+    in {
+      detected_verbs = builtins.map (e: e.verb) entries;
+      morphisms = reindexed;
+      morphism_count = builtins.length reindexed;
+    };
+
+  # =================================================================
+  # === Stats ======================================================
+  # =================================================================
+
+  verbStats = _: {
+    total_verbs = builtins.length verbTable;
+    verbs = builtins.map (e: e.verb) verbTable;
+    total_step_kinds =
+      builtins.length (
+        builtins.foldl' (acc: e: acc ++ e.steps) [] verbTable
+      );
+    verbs_with_unknowns = builtins.length (
+      builtins.filter (e: e.unknowns != {}) verbTable
+    );
+  };
+
+  # =================================================================
+  # === Plate entry ================================================
+  # =================================================================
+
+  applyVerbMorphismPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "detect_verb" request then {
+      outcome =
+        let e = detectVerb request.detect_verb; in
+        if e == null then "no-verb-detected" else "verb-detected";
+      result = detectVerb request.detect_verb;
+    }
+    else if builtins.hasAttr "detect_all_verbs" request then {
+      outcome = "all-verbs-detected";
+      result = builtins.map (e: e.verb)
+        (detectAllVerbs request.detect_all_verbs);
+    }
+    else if builtins.hasAttr "decompose_utterance" request then {
+      outcome = "utterance-decomposed";
+      result = buildMorphismsFromAllVerbs request.decompose_utterance;
+    }
+    else if builtins.hasAttr "stats" request then {
+      outcome = "stats-emitted";
+      result = verbStats {};
+    }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-category-verb-morphism-mapping-axiom-125";
+    composes =
+      "axiom-119-nl-flow-category + 박힌 14 axiom family 어휘 (vocabulary source)";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = true;
+    total_verbs = builtins.length verbTable;
+    primary_outcomes = [
+      "verb-detected"
+      "no-verb-detected"
+      "all-verbs-detected"
+      "utterance-decomposed"
+      "stats-emitted"
+    ];
+  };
+
+in {
+  inherit ownerName verbTable
+    detectVerb detectAllVerbs unknownsFor
+    buildMorphismsFromVerb buildMorphismsFromAllVerbs
+    verbStats applyVerbMorphismPlate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL category verb-morphism mapping (agent-NL-139)";
+    owner = ownerName;
+  };
+}

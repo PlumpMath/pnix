@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+if [[ "${1:-}" == "--rebuild" ]]; then
+  ./bin/build-cljs
+fi
+
+./bin/pnix-cljs-identity-gate
+node bin/artifact-identity.js --check
+node pnix-cljs/dist/pnix-cljs-self-test.js
+node pnix-cljs/test/runtime_cases.js
+node cljs-meta/test/self_test.js
+node cljs-meta/test/fixed_point_test.js
+
+node pnix-cljs/dist/pnix-cljs.js pnix-cljs/examples/00-foundation/program.px \
+  | grep -q '"outcome_kind":"done"'
+
+echo "pnix-cljs aggregate gate: PASS"

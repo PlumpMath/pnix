@@ -1,0 +1,22 @@
+{:schema :pnix.clr-meta.compiler-profile.v1
+ :id :pnix.clr-meta.checked-i64-expression.v1
+ :input-contract {:kind :strict-edn-one-form
+                  :parameter arg
+                  :metadata :rejected
+                  :max-source-bytes 4096
+                  :max-reader-depth 80
+                  :max-nodes 256
+                  :max-depth 64}
+ :value-domain [:system-int64]
+ :special-forms []
+ :primitive-calls [{:symbol + :arity 2 :semantics :checked-i64-add}
+                   {:symbol - :arity 2 :semantics :checked-i64-subtract}
+                   {:symbol * :arity 2 :semantics :checked-i64-multiply}]
+ :error-contract {:unsupported :structured-rejection
+                  :overflow :system-overflow-exception}
+ :output-abi {:kind :managed-console
+              :arguments [:system-int64]
+              :stdout :system-int64-newline
+              :entry "ClrMeta.Stage1.Program/Main"
+              :callable "ClrMeta.Stage1.Program/Run"}
+ :unsupported-policy :reject-no-fallback}

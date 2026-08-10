@@ -1,0 +1,666 @@
+# stdlib.lib.gate.algorithm-synthesis.discourse-state
+#
+# OWNER-LAW (2026-05-13): the **ε lattice** owner of the NL meaning
+# substrate. Closes the prior gap where prior_turn_summaries /
+# target_path / language / active_held flowed ad-hoc through
+# intent-recognition and ankh-retrieval-cache fingerprints without a
+# 1급 owner of their identity.
+#
+# # What discourse-state owns
+#
+# A per-(actor_id, tenant_id, thread_id) **discourse thread** carrying
+# an append-only sequence of `DiscourseTurnRecord`s. Each turn record
+# is the canonical anchor for the four neighbouring lattices:
+#
+#   α (intent-recognition.prior_turn_summaries) — last N turn summaries
+#   β (ankh-retrieval-cache.fingerprint extension) — actor/tenant/
+#     target_path/language anchors that scope replay-stable cache keys
+#   γ (held-to-query → retrieval-execution shiritori) — active_held_refs
+#     are picked up by the next turn and re-entered as fact cues
+#   δ (response-assembly / operator panel) — the receipt operator-
+#     facing surfaces read to know "what came before this turn"
+#
+# # What it does NOT own
+#
+# Tool execution, candidate ranking, memory promotion, actor/tenant
+# identity creation, ankh entry mutation. Those are upstream/downstream
+# owners. This owner only records *that a turn happened* and *what
+# its derived anchors are*, with provenance.
+#
+# # Append-only invariant
+#
+# A turn never overwrites a prior turn. The thread itself IS the
+# supersede chain — if turn N+1 supersedes turn N, that is recorded
+# via a `supersede_of_turn_id` field, not as a mutation. Matches the
+# discipline already enforced by `registry-overlay` (append-only) and
+# `ankh-retrieval-cache` (same-judge/lifecycle with provenance).
+#
+# # Cross-actor / cross-tenant boundary
+#
+# Discourse threads do not merge across actor_id or tenant_id. A turn
+# whose identity disagrees with the thread it claims to extend is
+# Rejected, not silently merged — same boundary the constitution
+# enforces for paper-note candidate ingress.
+#
+# # Pipeline position
+#
+#   NL utterance
+#       │ intent-recognition (consumes prior_turn_summaries)
+#       │
+#       │ discourse-state ← THIS LAW (records turn + exports anchors)
+#       │
+#       ▼
+#   DiscourseTurnReceipt
+#       │
+#       ├──→ α intent-recognition (next turn's prior_turn_summaries)
+#       ├──→ β ankh-retrieval-cache (fingerprint actor/tenant/target/lang)
+#       ├──→ γ retrieval-execution (active_held_refs re-entered as cues)
+#       └──→ δ response-assembly (operator panel prior-turn list)
+
+let
+  ownerName = "stdlib/lib/gate/algorithm-synthesis/discourse-state.px";
+
+  # ─── verdict + held universes ──────────────────────────────────────
+  #
+  # Sync test (when a Rust carrier is added) asserts these stay
+  # byte-identical to the carrier's enums.
+
+  validVerdicts = [
+    "discourse-state-ready"
+    "discourse-state-held"
+    "discourse-state-rejected"
+  ];
+
+  validHeldKinds = [
+    "missing-actor"
+    "missing-tenant"
+    "missing-turn-id"
+    "missing-thread-id"
+    "missing-utterance-digest"
+    "missing-stored-at-ms"
+    "stale-parent-turn"
+    "actor-thread-mismatch"
+    "tenant-thread-mismatch"
+  ];
+
+  # ─── turn record schema ────────────────────────────────────────────
+  #
+  # Required fields on every `DiscourseTurnRecord`. Future Rust mirror
+  # makes these non-Option. Missing any of them → Held.
+
+  requiredTurnFields = [
+    "turn_id"
+    "thread_id"
+    "actor_id"
+    "tenant_id"
+    "utterance_digest"
+    "stored_at_ms"
+  ];
+
+  # Optional turn fields the owner preserves but does not require.
+  # These carry the anchors downstream lattices consume.
+
+  optionalTurnFields = [
+    "parent_turn_id"
+    "supersede_of_turn_id"
+    "derived_intent"
+    "active_held_kind"
+    "target_path"
+    "language"
+    "extracted_predicates"
+    "extracted_targets"
+    "utterance_summary"
+  ];
+
+  # ─── anchors exported to neighbouring lattices ─────────────────────
+  #
+  # Single source of truth for what discourse-state feeds α/β/γ/δ.
+  # When a carrier is added, the sync test reads this table to verify
+  # the actual exported anchors match. Add a row here = one carrier
+  # extension; no per-consumer branch.
+
+  exportedAnchors = [
+    {
+      anchor = "prior_turn_summaries";
+      consumer = "intent-recognition";
+      lattice = "alpha";
+      shape = "list of one-line utterance_summary strings, oldest-to-newest, length <= priorTurnsWindow";
+    }
+    {
+      anchor = "ankh_fingerprint_extension";
+      consumer = "ankh-retrieval-cache";
+      lattice = "beta";
+      shape = "attrset { actor_id; tenant_id; target_path; language }";
+    }
+    {
+      anchor = "active_held_refs";
+      consumer = "retrieval-execution";
+      lattice = "gamma";
+      shape = "list of { held_kind; held_turn_id; recovery_channel } from unresolved prior turns";
+    }
+    {
+      anchor = "operator_panel_summary";
+      consumer = "response-assembly";
+      lattice = "delta";
+      shape = "structured turn list { turn_id; derived_intent; active_held_kind; stored_at_ms } for cockpit prior-turn display";
+    }
+  ];
+
+  # ─── merge policy ──────────────────────────────────────────────────
+  #
+  # v0 is append-only across the entire owner — matches
+  # registry-overlay and ankh-retrieval-cache discipline. v1 may add
+  # `supersede-by-id` once a Rust carrier lands a real store.
+
+  mergePolicies = [
+    { target = "discourse-turn-records"; policy = "append-only"; }
+    { target = "discourse-thread-index"; policy = "append-only"; }
+  ];
+
+  # ─── storage policy ────────────────────────────────────────────────
+  #
+  # Same shape as `ankh-retrieval-cache.cacheStoragePolicies` so the
+  # cockpit can render both with one renderer. v0 names both lanes;
+  # carrier `implemented` flag will flip when a Rust mirror lands.
+
+  storagePolicies = [
+    {
+      policy = "in-memory-session";
+      status = "candidate";
+      description = "session-scoped BTreeMap<ThreadId, Vec<DiscourseTurnRecord>>; entries lost on process restart";
+    }
+    {
+      policy = "doghouse-redb-persistent";
+      status = "candidate";
+      description = "doghouse-core::discourse_persistent_store wraps Arc<DoghouseStore>; entries survive process restart under same provenance contract as ankh. Contract surface (table/key/value/merge/capability) is owned by `persistentTables` below — the Rust adapter reads that contract, it does not redeclare it.";
+    }
+  ];
+
+  # ─── persistent-store contract (doghouse redb) ─────────────────────
+  #
+  # OWNER-LAW (2026-05-13): the `.px` owner declares the persistence
+  # contract; the Rust adapter is *only* a byte transport. Adapters
+  # MUST read `persistentTables` here for table id, key field order,
+  # key separator, value serialization family, merge policy, required
+  # value fields, capability, and restore order. Adapters MUST NOT
+  # redeclare or hardcode any of those — drift from this table is
+  # owner-debt, not a transport detail.
+  #
+  # Same separation as `ankh-retrieval-cache.px::ankhKeyFields`
+  # vs `doghouse-core/src/ankh_persistent_store.rs::key_fingerprint`.
+  #
+  # # Two tables, two roles
+  #
+  #   discourse-turn-records   — append-only fact log. Every turn that
+  #                              passes `classifyTurn` lands here, never
+  #                              mutated. Audit/replay source.
+  #   discourse-thread-index   — latest-only pointer per thread.
+  #                              Lets a process restart re-hydrate
+  #                              `recent_turns` cheaply without
+  #                              scanning the full append log. Pointer
+  #                              row references the most recent
+  #                              `turn_id` (the audit chain itself
+  #                              lives in `discourse-turn-records`).
+
+  validValueFamilies = [ "json-v1" ];
+
+  validMergePolicies = [ "append-only" "latest-only-pointer" ];
+
+  validRestoreOrders = [ "by-stored-at-ms" "by-key" ];
+
+  # The capability authority needed to write to either persistent
+  # table. Same authority shape as `registry-overlay.requiredOverlayFields`
+  # — actor + tenant must scope every write so cross-actor/tenant
+  # leakage is impossible at the store layer too.
+  requiredWriteCapabilities = [
+    "ReadDiscourseThread"
+    "AppendDiscourseTurn"
+  ];
+
+  persistentTables = [
+    {
+      table_id = "discourse-turn-records";
+      role = "append-only-fact-log";
+      key_fields = [ "tenant_id" "actor_id" "thread_id" "turn_id" ];
+      key_separator = "|";
+      value_family = "json-v1";
+      value_root = "DiscourseTurnRecord";
+      required_value_fields = requiredTurnFields;
+      merge_policy = "append-only";
+      capability_required = "AppendDiscourseTurn";
+      restore_order = "by-stored-at-ms";
+      description = "one row per turn; rows are byte-immutable once written. Supersede chains are recorded via `supersede_of_turn_id` fields, not by overwriting.";
+    }
+    {
+      table_id = "discourse-thread-index";
+      role = "latest-pointer-per-thread";
+      key_fields = [ "tenant_id" "actor_id" "thread_id" ];
+      key_separator = "|";
+      value_family = "json-v1";
+      value_root = "DiscourseThreadPointer";
+      required_value_fields = [
+        "thread_id"
+        "actor_id"
+        "tenant_id"
+        "latest_turn_id"
+        "latest_stored_at_ms"
+      ];
+      merge_policy = "latest-only-pointer";
+      capability_required = "AppendDiscourseTurn";
+      restore_order = "by-key";
+      description = "current head pointer per (tenant,actor,thread). Replacing an existing row is allowed (latest-only); the audit chain remains in `discourse-turn-records`.";
+    }
+  ];
+
+  # ─── generic key builder ───────────────────────────────────────────
+  #
+  # Build a redb fingerprint string from a record + a table contract.
+  # Same algorithm both tables use — separated by the contract's
+  # `key_separator`, fields in the contract's declared order. The
+  # Rust adapter calls into this (or replays the same algorithm)
+  # rather than encoding the order itself.
+
+  buildFingerprint = table: record:
+    let
+      pickField = field:
+        if record ? "${field}" && record."${field}" != null
+        then
+          (if builtins.isInt record."${field}"
+           then builtins.toString record."${field}"
+           else record."${field}")
+        else "";
+      parts = builtins.map pickField table.key_fields;
+    in builtins.concatStringsSep table.key_separator parts;
+
+  # Convenience: build the turn-records key for a turn.
+  buildTurnRecordKey = turn:
+    let
+      table = builtins.head (
+        builtins.filter (t: t.table_id == "discourse-turn-records") persistentTables
+      );
+    in buildFingerprint table turn;
+
+  # Convenience: build the thread-index key for a snapshot (or any
+  # record carrying tenant_id/actor_id/thread_id).
+  buildThreadIndexKey = snapshot:
+    let
+      table = builtins.head (
+        builtins.filter (t: t.table_id == "discourse-thread-index") persistentTables
+      );
+    in buildFingerprint table snapshot;
+
+  # Validate that a value record has every required field for a
+  # given table contract. Returns the list of missing field names
+  # (empty = ready to persist).
+  validatePersistentValue = table: record:
+    builtins.filter
+      (f: !(hasFieldPresent record f))
+      table.required_value_fields;
+
+  # Build the latest-only pointer row for a thread. The Rust
+  # adapter writes the JSON form of *this* attrset under the
+  # thread-index key — no hardcoded shape on the Rust side.
+  buildThreadPointer = snapshot:
+    let
+      recent = if snapshot ? recent_turns then snapshot.recent_turns else [];
+      recentLen = builtins.length recent;
+      latest =
+        if recentLen > 0
+        then builtins.elemAt recent (recentLen - 1)
+        else null;
+    in {
+      thread_id =
+        if snapshot ? thread_id then snapshot.thread_id else "";
+      actor_id =
+        if snapshot ? actor_id then snapshot.actor_id else "";
+      tenant_id =
+        if snapshot ? tenant_id then snapshot.tenant_id else "";
+      latest_turn_id =
+        if latest != null && latest ? turn_id then latest.turn_id else "";
+      latest_stored_at_ms =
+        if latest != null && latest ? stored_at_ms then latest.stored_at_ms else 0;
+      known_turn_count = builtins.length (
+        if snapshot ? known_turn_ids then snapshot.known_turn_ids else []
+      );
+    };
+
+  # Build the full persistence plan for a Ready turn — what the
+  # Rust transport needs in order to write to both redb tables.
+  # The transport reads this attrset and emits two K/V writes; it
+  # never decides keys, merge policy, or value shape on its own.
+  buildPersistencePlan = snapshot: turn:
+    let
+      turnTable = builtins.head (
+        builtins.filter (t: t.table_id == "discourse-turn-records") persistentTables
+      );
+      indexTable = builtins.head (
+        builtins.filter (t: t.table_id == "discourse-thread-index") persistentTables
+      );
+      missingTurnFields = validatePersistentValue turnTable turn;
+      pointer = buildThreadPointer (appendTurn snapshot turn);
+      missingPointerFields = validatePersistentValue indexTable pointer;
+      ready =
+        builtins.length missingTurnFields == 0
+        && builtins.length missingPointerFields == 0;
+    in {
+      verdict =
+        if ready then "persistence-plan-ready"
+        else "persistence-plan-held";
+      missing_turn_fields = missingTurnFields;
+      missing_pointer_fields = missingPointerFields;
+      writes =
+        if !ready then []
+        else [
+          {
+            table_id = turnTable.table_id;
+            key = buildFingerprint turnTable turn;
+            value = turn;
+            value_family = turnTable.value_family;
+            merge_policy = turnTable.merge_policy;
+            capability_required = turnTable.capability_required;
+          }
+          {
+            table_id = indexTable.table_id;
+            key = buildFingerprint indexTable pointer;
+            value = pointer;
+            value_family = indexTable.value_family;
+            merge_policy = indexTable.merge_policy;
+            capability_required = indexTable.capability_required;
+          }
+        ];
+    };
+
+  # ─── declarative knobs ─────────────────────────────────────────────
+  #
+  # Tuning is data, not branches. Sync test asserts the carrier reads
+  # these (not its own hardcoded constants).
+
+  priorTurnsWindow = 8;
+
+  # In-memory snapshot buffer cap. `appendTurn` keeps at most this many
+  # of the most-recent turns in the snapshot — twice the export window
+  # so supersede chains slightly further back than the exported anchor
+  # list remain reasonable. Full thread history lives in the persistent
+  # store (separate doghouse-redb slice under the same provenance
+  # contract as ankh-retrieval-cache).
+  recentBufferCap = priorTurnsWindow * 2;
+
+  # ─── generic helpers — no per-case branches ────────────────────────
+
+  isValidVerdict = v: builtins.elem v validVerdicts;
+  isValidHeldKind = k: builtins.elem k validHeldKinds;
+
+  hasFieldPresent = record: field:
+    record ? "${field}" && (
+      let v = record."${field}"; in
+      if builtins.isString v then builtins.stringLength v > 0
+      else if builtins.isList v then builtins.length v > 0
+      else if builtins.isInt v then v > 0
+      else true
+    );
+
+  missingRequiredFields = record:
+    builtins.filter
+      (f: !(hasFieldPresent record f))
+      requiredTurnFields;
+
+  fieldToHeldKind = field:
+    if field == "actor_id" then "missing-actor"
+    else if field == "tenant_id" then "missing-tenant"
+    else if field == "turn_id" then "missing-turn-id"
+    else if field == "thread_id" then "missing-thread-id"
+    else if field == "utterance_digest" then "missing-utterance-digest"
+    else if field == "stored_at_ms" then "missing-stored-at-ms"
+    else "missing-turn-id";
+
+  # ─── classify ──────────────────────────────────────────────────────
+  #
+  # Classify a turn-append request. The request carries:
+  #   turn   : a candidate `DiscourseTurnRecord`
+  #   thread : an existing `DiscourseStateSnapshot` (or null for the
+  #            first turn of a brand-new thread)
+  #
+  # Output verdict tells the carrier whether to append.
+
+  classifyTurn = request:
+    let
+      turn = if request ? turn then request.turn else {};
+      thread =
+        if request ? thread && request.thread != null
+        then request.thread else null;
+
+      missing = missingRequiredFields turn;
+      hasAllRequired = builtins.length missing == 0;
+
+      parentGiven = turn ? parent_turn_id && turn.parent_turn_id != null;
+      threadGiven = thread != null;
+
+      knownTurnIds =
+        if threadGiven && thread ? known_turn_ids
+        then thread.known_turn_ids else [];
+
+      parentKnown =
+        !parentGiven
+        || builtins.elem turn.parent_turn_id knownTurnIds;
+
+      actorMatches =
+        !threadGiven
+        || (thread ? actor_id && thread.actor_id == turn.actor_id);
+
+      tenantMatches =
+        !threadGiven
+        || (thread ? tenant_id && thread.tenant_id == turn.tenant_id);
+    in
+      if !hasAllRequired then {
+        verdict = "discourse-state-held";
+        held_kind = fieldToHeldKind (builtins.head missing);
+        reason =
+          "DiscourseTurnRecord missing required field(s): "
+          + builtins.concatStringsSep ", " missing;
+      }
+      else if !parentKnown then {
+        verdict = "discourse-state-rejected";
+        held_kind = "stale-parent-turn";
+        reason =
+          "parent_turn_id `${turn.parent_turn_id}` not present in thread.known_turn_ids";
+      }
+      else if !actorMatches then {
+        verdict = "discourse-state-rejected";
+        held_kind = "actor-thread-mismatch";
+        reason =
+          "turn.actor_id does not match thread.actor_id; cross-actor merge not allowed";
+      }
+      else if !tenantMatches then {
+        verdict = "discourse-state-rejected";
+        held_kind = "tenant-thread-mismatch";
+        reason =
+          "turn.tenant_id does not match thread.tenant_id; cross-tenant merge not allowed";
+      }
+      else {
+        verdict = "discourse-state-ready";
+        held_kind = null;
+        reason =
+          "turn passes append-only invariants; ready to append to thread";
+      };
+
+  # ─── append-turn ───────────────────────────────────────────────────
+  #
+  # Pure-data append: returns a *new* `DiscourseStateSnapshot` with
+  # `turn` appended to `known_turn_ids` and `recent_turns`. Bounded by
+  # `recentBufferCap`. The caller is responsible for first running
+  # `classifyTurn` and only invoking `appendTurn` when verdict =
+  # `discourse-state-ready`.
+  #
+  # `snapshot` is either an existing snapshot attrset or `null` for a
+  # brand-new thread (the first turn seeds thread_id/actor_id/tenant_id
+  # from the turn itself).
+
+  appendTurn = snapshot: turn:
+    let
+      starting =
+        if snapshot == null
+        then {
+          thread_id = turn.thread_id;
+          actor_id = turn.actor_id;
+          tenant_id = turn.tenant_id;
+          known_turn_ids = [];
+          recent_turns = [];
+        }
+        else snapshot;
+
+      newKnown = starting.known_turn_ids ++ [ turn.turn_id ];
+      newRecentAll = starting.recent_turns ++ [ turn ];
+      overflow = builtins.length newRecentAll - recentBufferCap;
+      newRecent =
+        if overflow > 0
+        then builtins.foldl'
+          (acc: i:
+            if i < overflow then acc
+            else acc ++ [ (builtins.elemAt newRecentAll i) ])
+          []
+          (builtins.genList (i: i) (builtins.length newRecentAll))
+        else newRecentAll;
+    in starting // {
+      known_turn_ids = newKnown;
+      recent_turns = newRecent;
+    };
+
+  # ─── exportAnchors ─────────────────────────────────────────────────
+  #
+  # Project a snapshot into the four anchor surfaces α/β/γ/δ. Pure
+  # function; no mutation. The window size is `priorTurnsWindow`.
+  #
+  # α prior_turn_summaries — drop blank summaries, oldest-to-newest.
+  # β ankh_fingerprint_extension — latest target_path/language wins
+  #   (each turn may narrow context; most-recent is the active scope).
+  # γ active_held_refs — turns with `active_held_kind` minus those
+  #   whose turn_id appears as a later turn's `supersede_of_turn_id`.
+  # δ operator_panel_summary — one row per windowed turn.
+
+  exportAnchors = snapshot:
+    let
+      recent = if snapshot ? recent_turns then snapshot.recent_turns else [];
+      recentLen = builtins.length recent;
+      startIdx =
+        if recentLen > priorTurnsWindow
+        then recentLen - priorTurnsWindow
+        else 0;
+      window = builtins.foldl'
+        (acc: i:
+          if i < startIdx then acc
+          else acc ++ [ (builtins.elemAt recent i) ])
+        []
+        (builtins.genList (i: i) recentLen);
+      windowLen = builtins.length window;
+
+      # α — non-empty summaries in window order.
+      hasSummary = t:
+        t ? utterance_summary
+        && t.utterance_summary != null
+        && builtins.stringLength t.utterance_summary > 0;
+      summarized = builtins.filter hasSummary window;
+      priorTurnSummaries = builtins.map (t: t.utterance_summary) summarized;
+
+      # β — latest turn's target/language scope.
+      latest =
+        if windowLen > 0
+        then builtins.elemAt window (windowLen - 1)
+        else null;
+      pickField = field:
+        if latest != null && latest ? "${field}" && latest."${field}" != null
+        then latest."${field}"
+        else null;
+      ankhFingerprintExtension = {
+        actor_id =
+          if snapshot ? actor_id then snapshot.actor_id else "";
+        tenant_id =
+          if snapshot ? tenant_id then snapshot.tenant_id else "";
+        target_path = pickField "target_path";
+        language = pickField "language";
+      };
+
+      # γ — supersede knockout.
+      hasSupersede = t:
+        t ? supersede_of_turn_id && t.supersede_of_turn_id != null;
+      supersededIds = builtins.map
+        (t: t.supersede_of_turn_id)
+        (builtins.filter hasSupersede window);
+      isHeld = t: t ? active_held_kind && t.active_held_kind != null;
+      notSuperseded = t: !(builtins.elem t.turn_id supersededIds);
+      heldTurns =
+        builtins.filter (t: isHeld t && notSuperseded t) window;
+      activeHeldRefs = builtins.map (t: {
+        held_kind = t.active_held_kind;
+        held_turn_id = t.turn_id;
+      }) heldTurns;
+
+      # δ — one row per windowed turn.
+      operatorPanelSummary = builtins.map (t: {
+        turn_id = t.turn_id;
+        derived_intent =
+          if t ? derived_intent then t.derived_intent else null;
+        active_held_kind =
+          if t ? active_held_kind then t.active_held_kind else null;
+        stored_at_ms = t.stored_at_ms;
+      }) window;
+    in {
+      prior_turn_summaries = priorTurnSummaries;
+      ankh_fingerprint_extension = ankhFingerprintExtension;
+      active_held_refs = activeHeldRefs;
+      operator_panel_summary = operatorPanelSummary;
+    };
+
+  # ─── receipt builder ───────────────────────────────────────────────
+
+  buildReceipt = request:
+    let v = classifyTurn request; in {
+      artifact_family =
+        if v.verdict == "discourse-state-ready"
+        then "coding.algorithm-synthesis.discourse-state-ready"
+        else if v.verdict == "discourse-state-held"
+        then "coding.algorithm-synthesis.discourse-state-held"
+        else "coding.algorithm-synthesis.discourse-state-rejected";
+      owner = ownerName;
+      transform = "algorithm-synthesis.discourse-state";
+      verdict = v.verdict;
+      held_kind = v.held_kind;
+      reason = v.reason;
+      request = request;
+      candidate-only = true;
+      promotion-lane = "InternalOwnerLaw";
+      capability_required = "ReadDiscourseThread";
+    };
+in {
+  inherit
+    classifyTurn
+    appendTurn
+    exportAnchors
+    buildReceipt
+    buildFingerprint
+    buildTurnRecordKey
+    buildThreadIndexKey
+    buildThreadPointer
+    buildPersistencePlan
+    validatePersistentValue
+    ownerName
+    validVerdicts
+    validHeldKinds
+    validValueFamilies
+    validMergePolicies
+    validRestoreOrders
+    requiredTurnFields
+    optionalTurnFields
+    requiredWriteCapabilities
+    exportedAnchors
+    mergePolicies
+    storagePolicies
+    persistentTables
+    priorTurnsWindow
+    recentBufferCap;
+  meta = {
+    source = "stdlib gate algorithm-synthesis";
+    owner = ownerName;
+    base = "deterministic-discourse-state-per-actor-tenant-thread";
+    rev_note = "discourse-state v0: per-(actor,tenant,thread) append-only turn record. Closes the ε lattice of the NL meaning substrate. Exports anchors for α/β/γ/δ. Zero LLM. Candidate-only — no carrier yet; carrier slice will land separately under same-judge/lifecycle.";
+  };
+}

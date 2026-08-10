@@ -1,0 +1,356 @@
+let
+  ownerName = "stdlib.nl.lean.unified-query-entry";
+
+  bridge = import nl/lean/nl-to-mathlib-bridge.px;
+  reverse = import nl/lean/lean-to-korean-reverse.px;
+  axiom = import nl/lean/substrate-axiom-korean-binding.px;
+  e2e = import nl/lean/end-to-end-chain-demo.px;
+  multi = import nl/lean/multi-turn-conversation.px;
+  lookup = import nl/lean/lookup-aggregate.px;
+  defer_lean_grounded = "stdlib/lib/agent/lean-grounded-proof-mirror.px";
+  defer_lean_adversarial = "stdlib/lib/agent/lean-adversarial-corpus.px";
+  defer_lean_trace_kernel = "stdlib/lib/math/lean-trace-certificate-kernel.px";
+
+  # === Unified single-entry query primitive (agent-NL-202) ==========
+  #
+  # Round 13 — substrate 의 NL processing 최종 surface:
+  #
+  # 사용자가 한 query 만 하면, 가장 적절한 layer 로 자동 routing:
+  #   1. axiom binding (한글 → substrate axiom 직접) — priority 1
+  #   2. korean bridge (한글 → mathlib lookup) — priority 2
+  #   3. reverse lookup (Mathlib name → 한글) — priority 3
+  #   4. Held (어디에도 매칭 없음)
+  #
+  # routing 자체가 deterministic + byte-stable.
+  # 결과는 *layer label* + 각 layer 의 native envelope.
+
+  stepKind = "unified-query-entry";
+  framework_step =
+    "single 한글/영문 query → automatic layer routing → unified envelope";
+
+  # =================================================================
+  # === Layer detection (deterministic) ==============================
+  # =================================================================
+  #
+  # query 의 shape 으로 layer 결정.
+
+  detectLayer = query:
+    let
+      # Layer 1: substrate axiom binding 우선 (한글 substrate concept)
+      axiomMatch = axiom.matchAxiomKeyword query;
+      # Layer 2: Korean → Mathlib bridge
+      bridgeMatch = bridge.matchKoreanWord query;
+      # Layer 3: 영문 Mathlib name (Capital letter 시작 또는 dot 포함)
+      isLatinName =
+        let
+          firstChar =
+            if builtins.stringLength query == 0 then ""
+            else builtins.substring 0 1 query;
+          asciiUpperA = "A";
+          asciiUpperZ = "Z";
+          isUpperLetter = c:
+            let
+              go = i:
+                if i >= 26 then false
+                else if c == builtins.substring 0 1
+                                (builtins.substring i 1 "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                     then true
+                else go (i + 1);
+            in go 0;
+        in isUpperLetter firstChar;
+    in
+      if axiomMatch != null then "axiom-binding"
+      else if bridgeMatch != null then "korean-bridge"
+      else if isLatinName then "reverse-lookup"
+      else "unknown-shape";
+
+  # =================================================================
+  # === Unified query primitive ======================================
+  # =================================================================
+
+  unifiedQuery = query:
+    let layer = detectLayer query;
+    in
+      if layer == "axiom-binding"
+      then
+        let result = axiom.fullAxiomChain query;
+        in result // { routed_layer = "axiom-binding";
+                        layer_priority = 1; }
+      else if layer == "korean-bridge"
+      then
+        let result = e2e.fullQuery query;
+        in result // { routed_layer = "korean-bridge";
+                        layer_priority = 2; }
+      else if layer == "reverse-lookup"
+      then
+        let result = reverse.reverseQuery query;
+        in result // { routed_layer = "reverse-lookup";
+                        layer_priority = 3; }
+      else {
+        outcome = "held-unknown-query-shape";
+        query = query;
+        routed_layer = "none";
+        layer_priority = 0;
+        held_reason = "한글 substrate axiom / mathlib keyword / 영문 Mathlib name 어느쪽도 매칭 안 됨";
+      };
+
+  # =================================================================
+  # === Real-corpus proof grounding bridge ===========================
+  # =================================================================
+  #
+  # The ordinary `query` path remains string-based NL/Mathlib lookup.
+  # These structured request paths expose the real LeanDojo/Mathlib4
+  # grounding mirror through the same unified Lean entry point, without
+  # reimplementing the agent owner here.
+
+  groundProofQuery = claim:
+    let
+      leanGround =
+        import agent/lean-grounded-proof-mirror.px;
+    in leanGround.groundProof claim;
+
+  evidenceVsProofQuery = claim:
+    let
+      leanGround =
+        import agent/lean-grounded-proof-mirror.px;
+    in leanGround.evidenceVsProof claim;
+
+  groundCodeInvariantQuery = inv:
+    let
+      leanGround =
+        import agent/lean-grounded-proof-mirror.px;
+    in leanGround.groundCodeInvariant inv;
+
+  auditGroundingCorpus = _arg:
+    let
+      leanAdv =
+        import agent/lean-adversarial-corpus.px;
+    in {
+      outcome =
+        if leanAdv.corpus_clean
+        then "lean-grounding-corpus-clean"
+        else "lean-grounding-corpus-failed";
+      summary = leanAdv.summary;
+      receipt = leanAdv.verifierReceipt;
+    };
+
+  groundingInventory = _arg:
+    let
+      leanGround =
+        import agent/lean-grounded-proof-mirror.px;
+      leanAdv =
+        import agent/lean-adversarial-corpus.px;
+    in {
+      outcome = "lean-grounding-inventory";
+      grounding = leanGround.inventory;
+      audit_summary = leanAdv.summary;
+    };
+
+  verifyTraceCertificateQuery = cert:
+    let
+      traceKernel =
+        import math/lean-trace-certificate-kernel.px;
+    in traceKernel.verifyTraceCertificate cert;
+
+  traceCertificateInventory = _arg:
+    let
+      traceKernel =
+        import math/lean-trace-certificate-kernel.px;
+    in {
+      outcome = "lean-trace-certificate-kernel-inventory";
+      inventory = traceKernel.inventory;
+      demo = traceKernel.adversarialChecks;
+    };
+
+  # =================================================================
+  # === Demonstration cases (모든 layer 의 동작 증명) ================
+  # =================================================================
+
+  demoUnifiedCases = [
+    # Layer 1: axiom binding (한글 substrate axiom 직접)
+    {
+      label = "case-axiom-uc4";
+      query = "UC4";
+      expected_layer = "axiom-binding";
+      expected_priority = 1;
+    }
+    {
+      label = "case-axiom-mech-intelligence";
+      query = "기계지능";
+      expected_layer = "axiom-binding";
+      expected_priority = 1;
+    }
+    {
+      label = "case-axiom-composability";
+      query = "결합성";
+      expected_layer = "axiom-binding";
+      expected_priority = 1;
+    }
+    # Layer 2: Korean bridge (한글 → Mathlib)
+    {
+      label = "case-bridge-galois";
+      query = "갈루아군";
+      expected_layer = "korean-bridge";
+      expected_priority = 2;
+    }
+    {
+      label = "case-bridge-sheaf";
+      query = "층";
+      expected_layer = "korean-bridge";
+      expected_priority = 2;
+    }
+    {
+      label = "case-bridge-padic";
+      query = "p진";
+      expected_layer = "korean-bridge";
+      expected_priority = 2;
+    }
+    # Layer 3: Reverse lookup (영문 Mathlib name)
+    {
+      label = "case-reverse-isgalois";
+      query = "IsGalois";
+      expected_layer = "reverse-lookup";
+      expected_priority = 3;
+    }
+    {
+      label = "case-reverse-fdrep";
+      query = "FDRep";
+      expected_layer = "reverse-lookup";
+      expected_priority = 3;
+    }
+    # Held
+    {
+      label = "case-held-unknown";
+      query = "지구는 둥글다";
+      expected_layer = "none";
+      expected_priority = 0;
+      expected_outcome = "held-unknown-query-shape";
+    }
+  ];
+
+  runDemoUnified = c:
+    let result = unifiedQuery c.query;
+    in {
+      inherit (c) label query expected_layer expected_priority;
+      actual_outcome = result.outcome;
+      actual_layer = result.routed_layer;
+      actual_priority = result.layer_priority;
+      layer_match = result.routed_layer == c.expected_layer;
+      success =
+        if c ? expected_outcome
+        then result.outcome == c.expected_outcome
+        else result.routed_layer == c.expected_layer;
+    };
+
+  allUnifiedResults = builtins.map runDemoUnified demoUnifiedCases;
+  demoSuccessCount =
+    builtins.length (builtins.filter (r: r.success) allUnifiedResults);
+
+  # Layer 별 success 통계
+  axiomLayerSuccess =
+    builtins.length (builtins.filter
+      (r: r.actual_layer == "axiom-binding" && r.success) allUnifiedResults);
+  bridgeLayerSuccess =
+    builtins.length (builtins.filter
+      (r: r.actual_layer == "korean-bridge" && r.success) allUnifiedResults);
+  reverseLayerSuccess =
+    builtins.length (builtins.filter
+      (r: r.actual_layer == "reverse-lookup" && r.success) allUnifiedResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_detectLayer = true;
+    has_unifiedQuery = true;
+    routing_layer_count = 3;  # axiom-binding / korean-bridge / reverse-lookup
+    demo_case_count = builtins.length demoUnifiedCases;
+    demo_success_count = demoSuccessCount;
+    demo_axiom_layer_success = axiomLayerSuccess;
+    demo_bridge_layer_success = bridgeLayerSuccess;
+    demo_reverse_layer_success = reverseLayerSuccess;
+    bridge_owner_inherited = bridge.ownerName;
+    reverse_owner_inherited = reverse.ownerName;
+    axiom_owner_inherited = axiom.ownerName;
+    e2e_owner_inherited = e2e.ownerName;
+    multi_owner_inherited = multi.ownerName;
+    deterministic = true;
+    single_entry_point = true;
+    has_real_corpus_groundProof = true;
+    has_real_corpus_evidenceVsProof = true;
+    has_real_corpus_codeInvariant = true;
+    has_real_corpus_audit = true;
+    has_trace_certificate_kernel = true;
+    grounding_owner_inherited = "stdlib.agent.lean-grounded-proof-mirror";
+    adversarial_owner_inherited = "stdlib.agent.lean-adversarial-corpus";
+    trace_kernel_owner_inherited = "stdlib.lib.math.lean-trace-certificate-kernel";
+    grounding_owner_path = defer_lean_grounded;
+    adversarial_owner_path = defer_lean_adversarial;
+    trace_kernel_owner_path = defer_lean_trace_kernel;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyUnifiedQueryPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "unified-query-entry-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "query" request then
+      unifiedQuery request.query
+    else if builtins.hasAttr "ground_proof" request then
+      groundProofQuery request.ground_proof
+    else if builtins.hasAttr "evidence_vs_proof" request then
+      evidenceVsProofQuery request.evidence_vs_proof
+    else if builtins.hasAttr "ground_code_invariant" request then
+      groundCodeInvariantQuery request.ground_code_invariant
+    else if builtins.hasAttr "audit_grounding_corpus" request then
+      auditGroundingCorpus request.audit_grounding_corpus
+    else if builtins.hasAttr "grounding_inventory" request then
+      groundingInventory request.grounding_inventory
+    else if builtins.hasAttr "verify_trace_certificate" request then
+      verifyTraceCertificateQuery request.verify_trace_certificate
+    else if builtins.hasAttr "trace_certificate_inventory" request then
+      traceCertificateInventory request.trace_certificate_inventory
+    else if builtins.hasAttr "detect_layer" request then {
+      outcome = "layer-detected";
+      receipt = { layer = detectLayer request.detect_layer; };
+    }
+    else if builtins.hasAttr "demo_cases" request then {
+      outcome = "unified-demo-cases-emitted"; receipt = demoUnifiedCases;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "unified-demo-results-emitted";
+      receipt = {
+        total = builtins.length demoUnifiedCases;
+        success = demoSuccessCount;
+        axiom_layer = axiomLayerSuccess;
+        bridge_layer = bridgeLayerSuccess;
+        reverse_layer = reverseLayerSuccess;
+        results = allUnifiedResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "query"
+             "ground_proof" "evidence_vs_proof" "ground_code_invariant"
+             "audit_grounding_corpus" "grounding_inventory"
+             "verify_trace_certificate" "trace_certificate_inventory"
+             "detect_layer" "demo_cases" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit detectLayer unifiedQuery;
+  inherit groundProofQuery evidenceVsProofQuery groundCodeInvariantQuery
+    auditGroundingCorpus groundingInventory
+    verifyTraceCertificateQuery traceCertificateInventory;
+  inherit demoUnifiedCases runDemoUnified allUnifiedResults;
+  inherit demoSuccessCount axiomLayerSuccess bridgeLayerSuccess reverseLayerSuccess;
+  inherit inventorySummary applyUnifiedQueryPlate;
+}

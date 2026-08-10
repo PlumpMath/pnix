@@ -1,0 +1,185 @@
+# stdlib.math.symbolic-code-witness
+#
+# NL/symbolic math -> solved symbolic result -> language code, using the
+# canonical-key witness template as the emit+witness lens.
+#
+# This is deliberately not a new code generator. It lowers a solved/evaluated
+# symbolic problem into canonical atom signatures that
+# `agent/witness-template-mirror.px` already knows bidirectionally:
+#
+#   bind/result/comment/print  --emit--> code(language)
+#   code(language)             --witness--> same canonical signatures
+#
+# The owner only chooses the atoms from the symbolic receipt. Language surface
+# syntax remains data in the witness template rows.
+let
+  extractor = import math/nl-symbolic-extractor.px;
+  eq        = import math/equation-solving-procedure.px;
+  numeric   = import math/numeric-evaluator.px;
+  witness   = import agent/witness-template-mirror.px;
+
+  sub  = builtins.substring;
+  slen = builtins.stringLength;
+
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+
+  firstHit = f: xs:
+    builtins.foldl' (acc: x: if acc != null then acc else f x) null xs;
+
+  languageRows = [
+    { lang = "javascript"; aliases = [ "javascript" "java script" "js" "자바스크립트" "자바스크립트로" ]; }
+    { lang = "typescript"; aliases = [ "typescript" "ts" "타입스크립트" "타입스크립트로" ]; }
+    { lang = "python"; aliases = [ "python" "py" "파이썬" "파이썬으로" "파이썬코드" ]; }
+    { lang = "rust"; aliases = [ "rust" "rs" "러스트" "러스트로" ]; }
+    { lang = "go"; aliases = [ "golang" "go" "고" "고로" ]; }
+    { lang = "java"; aliases = [ "java" "자바" "자바로" ]; }
+    { lang = "swift"; aliases = [ "swift" "스위프트" "스위프트로" ]; }
+    { lang = "kotlin"; aliases = [ "kotlin" "코틀린" "코틀린으로" ]; }
+    { lang = "csharp"; aliases = [ "csharp" "c#" "c-sharp" "씨샵" "씨샵으로" ]; }
+  ];
+
+  codeRequestCues = [
+    "코드로" "코드화" "코드 작성" "코드 만들어" "코드 생성" "소스 코드" "함수 코드"
+    "write code" "generate code" "emit code" "code emit" "write program" "program code"
+    "source code" "write function" "function code"
+  ];
+
+  detectLanguage = utterance:
+    let hit = firstHit (row:
+      if builtins.any (a: hasInfix a utterance) row.aliases then row.lang else null
+    ) languageRows;
+    in if hit == null then null else hit;
+
+  wantsCode = utterance:
+    builtins.any (cue: hasInfix cue utterance) codeRequestCues;
+
+  # Code-emit utterances must reach symbolic frame / witness owners, not arithmetic
+  # fast lanes that answer the numeric result and stop.
+  deferFastMathForCodeEmit = utterance:
+    wantsCode utterance && detectLanguage utterance != null;
+
+  quote = s: "\"" + s + "\"";
+
+  atom = kind: holes: { inherit kind holes; };
+
+  sigFor = a:
+    if a.kind == "bind" then "bind:" + a.holes.var + "=" + a.holes.val
+    else if a.kind == "print" then "print:" + a.holes.var
+    else if a.kind == "comment" then "comment:" + a.holes.text
+    else if a.kind == "print-line" then "print-line:" + a.holes.text
+    else a.kind + ":";
+
+  emitAtoms = language: atoms:
+    builtins.concatStringsSep "\n"
+      (builtins.map (a: witness.emitLineFor language a.kind a.holes) atoms);
+
+  mkVerified = language: atoms:
+    let
+      source = emitAtoms language atoms;
+      expected = builtins.map sigFor atoms;
+      recovered = witness.witnessByLang language source;
+    in {
+      source_text = source;
+      expected_atoms = expected;
+      recovered_atoms = recovered;
+      round_trip_verified = recovered == expected;
+    };
+
+  solutionTextFromEquation = solved:
+    let
+      var = if solved ? variable then solved.variable else "x";
+      kind = if solved ? solution_kind then solved.solution_kind else "";
+    in
+      if kind == "linear" then
+        let exact = solved.linear_exact; out = if exact ? outcome then exact.outcome else "";
+        in if out == "unique-solution" then var + " = " + exact.solution_text
+           else if out == "infinitely-many-solutions" then "all values are solutions"
+           else "no solution"
+      else
+        let q = solved.quadratic; out = if q ? outcome then q.outcome else "";
+        in if out == "complex-roots" then "no real roots"
+           else if out == "one-double-root" then var + " = " + q.root_text
+           else if out == "two-rational-roots" then var + " = " + q.root_plus_text + ", " + var + " = " + q.root_minus_text
+           else if out == "two-irrational-roots" then q.closed_form
+           else "unsolved";
+
+  atomsForArithmetic = expr: evaluated: [
+    (atom "comment" { text = "symbolic: " + expr; })
+    (atom "bind" { var = "result"; val = builtins.toString evaluated.value; })
+    (atom "print" { var = "result"; })
+  ];
+
+  atomsForEquation = expr: solved:
+    let sol = solutionTextFromEquation solved;
+    in [
+      (atom "comment" { text = "symbolic: " + expr; })
+      (atom "bind" { var = "solution"; val = quote sol; })
+      (atom "print" { var = "solution"; })
+    ];
+
+  expressionFrom = req:
+    if (req ? expression) && builtins.isString req.expression && req.expression != ""
+    then { expression = req.expression; extraction = { has_math_words = false; expression = req.expression; mapped_count = 0; }; }
+    else
+      let utterance = if (req ? utterance) && builtins.isString req.utterance then req.utterance else "";
+          ext = extractor.extractExpression utterance;
+      in { expression = ext.expression; extraction = ext; };
+in
+rec {
+  name = "stdlib.math.symbolic-code-witness";
+
+  inherit languageRows codeRequestCues detectLanguage wantsCode deferFastMathForCodeEmit;
+
+  emitSymbolicCode = req:
+    let
+      utterance = if (req ? utterance) && builtins.isString req.utterance then req.utterance else "";
+      language =
+        if (req ? language) && builtins.isString req.language && req.language != ""
+        then req.language else detectLanguage utterance;
+      codeWanted =
+        if (req ? require_code_cue) && req.require_code_cue == false
+        then true else wantsCode utterance;
+      ex = expressionFrom req;
+      expr = ex.expression;
+      solved = eq.beginSolveProcedure expr;
+      evaluated = numeric.evaluateNumericExpression expr { };
+      atoms =
+        if solved.outcome == "solved" then atomsForEquation expr solved
+        else if evaluated.ok then atomsForArithmetic expr evaluated
+        else [ ];
+      verified = if atoms == [ ] || language == null then null else mkVerified language atoms;
+      verdict =
+        if language == null then "held-no-target-language"
+        else if !codeWanted then "held-no-code-request"
+        else if expr == "" then "held-no-symbolic-expression"
+        else if atoms == [ ] then "held-symbolic-not-solvable"
+        else if !(verified.round_trip_verified) then "held-witness-round-trip-failed"
+        else "symbolic-code-emitted";
+    in {
+      kind = "symbolic-code-witness-envelope";
+      owner = name;
+      verdict = verdict;
+      is_held = verdict != "symbolic-code-emitted";
+      language = language;
+      utterance = utterance;
+      expression = expr;
+      extraction = ex.extraction;
+      symbolic_result_kind =
+        if solved.outcome == "solved" then "equation"
+        else if evaluated.ok then "arithmetic" else "held";
+      solution_summary =
+        if solved.outcome == "solved" then solutionTextFromEquation solved
+        else if evaluated.ok then expr + " = " + (builtins.toString evaluated.value)
+        else null;
+      canonical_atoms = builtins.map sigFor atoms;
+      source_text = if verified == null then null else verified.source_text;
+      recovered_atoms = if verified == null then [ ] else verified.recovered_atoms;
+      round_trip_verified = if verified == null then false else verified.round_trip_verified;
+      lens = "stdlib.agent.witness-template-mirror";
+      note =
+        "NL/symbolic -> solved result -> canonical atoms -> witness-template emit+witness. 새 언어/atom 문법은 witness-template 데이터 row가 소유.";
+    };
+}

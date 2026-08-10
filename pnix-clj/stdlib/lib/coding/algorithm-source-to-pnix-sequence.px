@@ -1,0 +1,225 @@
+# stdlib.lib.coding.algorithm-source-to-pnix-sequence
+#
+# Lift witnessed symbolic algorithm source into pnix algorithm sentence
+# sequence. This is the next step after algorithm-code-witness:
+#
+#   source code -> code witness -> algorithm atoms -> pnix sequence/morphism
+#
+# v0 stays scoped to deterministic symbolic algorithms emitted by
+# math/symbolic-algorithm-code-emitter.px.
+let
+  ownerName = "stdlib/lib/coding/algorithm-source-to-pnix-sequence.px";
+
+  witness = import ./algorithm-code-witness.px;
+
+  getAttrOr = attrs: key: dflt:
+    if (builtins.isAttrs attrs) && (builtins.hasAttr key attrs)
+    then builtins.getAttr key attrs else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  step = idx: atom: fields: fields // {
+    step_index = idx;
+    atom = atom;
+    sequence_family = "coding.algorithm-sentence-sequence";
+  };
+
+  derivativeSequence = [
+    (step 0 "input" {
+      object = "coefficient-list";
+      variable = "coeffs";
+      meaning = "input polynomial coefficients, constant term first";
+    })
+    (step 1 "initialize" {
+      target = "result";
+      value = "[]";
+      meaning = "prepare derivative coefficient accumulator";
+    })
+    (step 2 "loop" {
+      variable = "power";
+      range = "1..len(coeffs)-1";
+      meaning = "walk each non-constant polynomial degree";
+    })
+    (step 3 "compute" {
+      expression = "power * coeffs[power]";
+      meaning = "formal derivative coefficient rule d(a*x^n)/dx = n*a*x^(n-1)";
+    })
+    (step 4 "append" {
+      target = "result";
+      value = "power * coeffs[power]";
+      meaning = "append derived coefficient to the output coefficient list";
+    })
+    (step 5 "return" {
+      value = "result";
+      meaning = "return derivative coefficient list";
+    })
+  ];
+
+  quadraticSolveSequence = [
+    (step 0 "input" {
+      object = "quadratic-coefficients";
+      variables = [ "a" "b" "c" ];
+      meaning = "input equation a*x^2 + b*x + c = 0";
+    })
+    (step 1 "compute" {
+      target = "discriminant";
+      expression = "b*b - 4*a*c";
+      meaning = "compute quadratic discriminant";
+    })
+    (step 2 "branch" {
+      condition = "discriminant < 0";
+      then_value = "[]";
+      meaning = "negative discriminant has no real roots in this v0 route";
+    })
+    (step 3 "compute" {
+      target = "sqrt_discriminant";
+      expression = "sqrt(discriminant)";
+      meaning = "prepare the square-root term for the quadratic formula";
+    })
+    (step 4 "branch" {
+      condition = "discriminant == 0";
+      then_value = "[-b/(2*a)]";
+      meaning = "zero discriminant gives one double root";
+    })
+    (step 5 "return" {
+      value = "[(-b+sqrt_discriminant)/(2*a), (-b-sqrt_discriminant)/(2*a)]";
+      meaning = "return both quadratic roots";
+    })
+  ];
+
+  factorSequence = [
+    (step 0 "input" {
+      object = "monic-quadratic-coefficients";
+      variables = [ "b" "c" ];
+      meaning = "input monic quadratic x^2 + b*x + c";
+    })
+    (step 1 "bound" {
+      target = "search-bound";
+      expression = "abs(b) + abs(c) + 2";
+      meaning = "finite integer root-pair search bound";
+    })
+    (step 2 "loop" {
+      variable = "r";
+      range = "-bound..bound";
+      meaning = "search candidate integer root";
+    })
+    (step 3 "compute" {
+      target = "s";
+      expression = "-b - r";
+      meaning = "derive companion root so r+s=-b";
+    })
+    (step 4 "guard" {
+      condition = "r*s == c";
+      meaning = "verify product condition for x^2 + b*x + c";
+    })
+    (step 5 "return" {
+      value = "(r, s)";
+      meaning = "return factor roots for (x-r)(x-s)";
+    })
+  ];
+
+  sequenceFor = kind:
+    if kind == "derivative" then derivativeSequence
+    else if kind == "quadratic-solve" then quadraticSolveSequence
+    else if kind == "factor" then factorSequence
+    else [ ];
+
+  morphismFor = kind:
+    if kind == "derivative" then [
+      "source-code"
+      "anchor-witness"
+      "algorithm-atoms"
+      "coefficient-list-polynomial-sequence"
+      "formal-derivative-morphism"
+    ]
+    else if kind == "quadratic-solve" then [
+      "source-code"
+      "anchor-witness"
+      "algorithm-atoms"
+      "quadratic-discriminant-sequence"
+      "root-formula-morphism"
+    ]
+    else if kind == "factor" then [
+      "source-code"
+      "anchor-witness"
+      "algorithm-atoms"
+      "integer-root-pair-search-sequence"
+      "factorization-morphism"
+    ]
+    else [ "source-code" "anchor-witness" "algorithm-atoms" "pnix-sequence" ];
+
+  mkHeld = outcome: reason: extra: {
+    kind = "algorithm-source-to-pnix-sequence-envelope";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    reason = reason;
+    verified = false;
+    pnix_algorithm_sequence = [ ];
+    receipt = {
+      kind = "code-to-pnix-sequence-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName sequenceFor morphismFor;
+
+  liftAlgorithmSource = req:
+    let
+      witnessed =
+        if (builtins.isAttrs req) && (req ? algorithm_witness) && builtins.isAttrs req.algorithm_witness
+        then req.algorithm_witness
+        else witness.witnessAlgorithmCode req;
+      kind = getAttrOr witnessed "algorithm_kind" "";
+      seq = sequenceFor kind;
+    in
+      if !(builtins.isAttrs witnessed) || getAttrOr witnessed "outcome" "" != "algorithm-code-witnessed" then
+        mkHeld "held-witness-not-closed" "algorithm source를 먼저 canonical meaning으로 witness해야 합니다." {
+          algorithm_witness = witnessed;
+        }
+      else if seq == [ ] then
+        mkHeld "held-no-sequence-template" "지원되는 algorithm sequence template이 없습니다." {
+          algorithm_witness = witnessed;
+          algorithm_kind = kind;
+        }
+      else {
+        kind = "algorithm-source-to-pnix-sequence-envelope";
+        owner = ownerName;
+        outcome = "algorithm-source-lifted";
+        is_held = false;
+        verified = true;
+        source_language = getAttrOr witnessed "source_language" null;
+        canonical_meaning = witnessed.canonical_meaning;
+        algorithm_kind = witnessed.algorithm_kind;
+        representation = witnessed.representation;
+        recovered_algorithm_atoms = witnessed.recovered_algorithm_atoms;
+        pnix_algorithm_sequence = seq;
+        sequence_family = "coding.algorithm-sentence-sequence";
+        morphism_trace = morphismFor kind;
+        receipt = {
+          kind = "code-to-pnix-sequence-receipt";
+          route = ownerName;
+          verified = true;
+          source_language = getAttrOr witnessed "source_language" null;
+          canonical_meaning = witnessed.canonical_meaning;
+          algorithm_kind = witnessed.algorithm_kind;
+          representation = witnessed.representation;
+          sequence_family = "coding.algorithm-sentence-sequence";
+          step_count = builtins.length seq;
+          witness_receipt = witnessed.receipt;
+          invariant = "code witness atoms are lowered to a pnix algorithm sentence/morphism sequence";
+        };
+      };
+
+  meta = {
+    source = "stdlib coding algorithm source to pnix sequence";
+    owner = ownerName;
+    base = "algorithm-source-to-pnix-sequence-v0";
+    rev_note = "2026-06-03: lifts generated symbolic algorithm code witness into pnix algorithm sentence sequence / morphism chain. Scope: derivative/quadratic-solve/factor generated subsets; next step is tree-sitter/LSP AST -> witness -> sequence.";
+  };
+}

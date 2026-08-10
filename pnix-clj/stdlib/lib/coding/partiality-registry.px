@@ -1,0 +1,28 @@
+# stdlib/lib/coding/partiality-registry.px
+# ── ONE partiality registry (CLAUDE.md: 단일 등록처) ─────────────────────────
+# 부분함수(정의역이 좁아 입력 일부에서 미정의) 연산 목록. 정본 한 곳.
+# analysis-bundle.px(result_kind=Maybe 판정)와 pnix-lisp-ct.px(typed/conditioned
+# rewrite 의 0=1 trap 게이트)가 *둘 다* 이 leaf 를 import 한다 — 중복 0, 순환 0
+# (leaf 는 아무것도 import 안 함). 과거: partialOps 가 analysis-bundle 내부에만
+# 있어 ct 가 reuse 하려면 순환(analysis-bundle→ct)이라 불가였음 → 이 leaf 로 해소.
+let B = builtins;
+in {
+  # nil 반환 가능 collection/lookup 연산 (없는 키/빈 시퀀스 → nil = 부분성).
+  # ⚠ analysis-bundle 의 result_kind=Maybe 판정 정본 — 목록 변경은 분석기 분류를
+  #   바꾸므로 추가 시 신중(테스트 영향). 현재=원래 13종 그대로(behavior-preserving).
+  partialOps = [ "get" "first" "find" "seq" "peek" "some" "next" "get-in"
+                 "re-find" "re-matches" "nth" "ffirst" "fnext" ];
+
+  # 산술/interpreted 부분성: division/log/sqrt/역삼각/역행렬 — 정의역 조건(분모≠0, x>0,
+  # |x|≤1, 가역) 필요. ⚠ 0=1 trap 의 핵: "x/x → 1" 은 x≠0 에서만 참(0/0 은 1 아님).
+  # word op(div 등)과 symbol op('/' '//') 둘 다 — ct 가 분리 탐지.
+  #
+  # ★ partiality fail-closed 규율(audit fatal#1, 정직): pnix 재작성은 *구문적 rewriting* 으로
+  #   이미 sound(confluence/left-linearity 보장). 단 *interpreted-partial op*(실제 계산 의미가
+  #   있고 미정의 가능한 연산)은 *모델-soundness* 를 위해 여기 **선언**돼야 한다. 미선언 기호는
+  #   기본 *uninterpreted constructor = total* 로 가정(구문적 rewriting 엔 sound). 즉 이 leaf 가
+  #   fail-closed 선언점 = 데이터로 확장. 새 interpreted-partial op 는 코드 아닌 *이 목록*에 추가.
+  partialArithWords  = [ "div" "quot" "rem" "mod" "log" "ln" "sqrt"
+                         "asin" "acos" "atanh" "recip" "inv" "minv" "pinv" "pow" "factorial" ];
+  partialArithSymbols = [ "/" "//" ];
+}

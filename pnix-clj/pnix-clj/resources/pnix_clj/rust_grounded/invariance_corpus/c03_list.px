@@ -1,0 +1,1 @@
+let range = n: if n == 0 then [] else (range (n - 1)) ++ [ n ]; xs = range 20; in { len = builtins.length xs; mapped = builtins.map (x: x * x) xs; filtered = builtins.filter (x: x > 10) xs; total = builtins.foldl' (a: x: a + x) 0 xs; }

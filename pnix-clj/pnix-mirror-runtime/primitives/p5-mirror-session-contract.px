@@ -1,0 +1,73 @@
+# P5 — mirror-session contract
+#
+# OWNER-LAW (2026-05-13): a *session* is a named thread of mirror
+# activity. Each session tracks its *head receipt id* — the id of
+# the most-recent receipt appended in that thread. New spawns
+# within the session auto-anchor to the head, making subsequent
+# turns chain to prior turns automatically.
+#
+# Why this is one substrate layer above P1-P4:
+#   - P1-P4 define what happens *in one spawn*
+#   - P5 defines what happens *across spawns over time*
+#
+# Without P5, every spawn is isolated. With P5, the mirror VM has
+# *memory*: a session re-opened across processes resumes its chain
+# from where the last invocation left off. This is the substrate
+# requirement for the user's stated AI-core goal of "meaning
+# accumulation across turns".
+#
+# # Contract shape
+#
+# Single redb table `mirror-session-heads`, keyed by session_id.
+# Value: { session_id; head_receipt_id; created_at_ms;
+#          last_active_at_ms; turn_count }
+#
+# Merge policy: *upsert* (per-session head is overwritten as new
+# turns arrive). This is NOT append-only — the *receipts table*
+# already preserves the audit chain; this table is the *cheap
+# pointer* to the chain head. Loss of this row degrades to
+# "rescan all receipts to find head", not "audit log corruption".
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p5-mirror-session-contract.px";
+in {
+  inherit ownerName;
+
+  persistentTables = [
+    {
+      table_id = "mirror-session-heads";
+      role = "latest-receipt-id pointer per named mirror-activity thread";
+      key_fields = [ "session_id" ];
+      key_separator = "|";
+      value_family = "json-v1";
+      value_root = "MirrorSessionHead";
+      required_value_fields = [
+        "session_id"
+        "head_receipt_id"
+        "last_active_at_ms"
+        "turn_count"
+      ];
+      merge_policy = "latest-only-pointer";
+      capability_required = "AppendMirrorReceipt";
+      restore_order = "by-key";
+      description = "small pointer table: session_id -> head_receipt_id. Upsert on each turn. Audit chain itself lives in mirror_receipts table (append-only). This is a cache for fast head resolution — losing it forces a O(n) scan of mirror_receipts to recover.";
+    }
+  ];
+
+  # Session lifecycle invariants (declarative — substrate enforces).
+  sessionInvariants = {
+    one_head_per_session = "exactly one MirrorSessionHead row per session_id; subsequent turns upsert (overwrite) this row";
+    head_chains_to_audit = "head_receipt_id MUST exist in mirror_receipts table (foreign-key-style consistency, enforced by adapter)";
+    new_turn_uses_head_as_parent = "MirrorSession.spawn() auto-fills request.parent_receipt_id = current head; after spawn, new head = last receipt id from this spawn's receipts list";
+    cross_process_resume = "opening a session by id in a fresh process MUST find the same head as the prior process left, because the pointer is persistent";
+  };
+
+  meta = {
+    source = "pnix-mirror-runtime primitive P5 — session contract";
+    owner = ownerName;
+    role = "track the head of a named mirror-activity thread for auto-chaining across turns";
+    consumes = [ "P4 receipt stream (mirror_receipts table)" ];
+    consumed_by = [ "doghouse-core mirror_session_store Rust adapter" "MirrorSession runtime handle" ];
+    pattern_reference = "same shape as p4-receipt-persistence-contract.px persistentTables — single redb table, .px owns contract, Rust is transport.";
+  };
+}

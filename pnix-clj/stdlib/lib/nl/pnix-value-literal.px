@@ -1,0 +1,30 @@
+# stdlib/lib/nl/pnix-value-literal.px — pnix 값 → pnix 소스 리터럴 직렬화기 (redb substrate 저장용)
+#
+# 헌법: redb 엔 JSON 아닌 *pnix attrset 소스*를 저장. 이 함수가 값(중첩 attrset/list/prim)을 pnix 소스
+#   문자열로 직렬화 → store-plan 이 value_bytes 로 redb 에 ferry. 데이터만(클로저 직렬화 불가) 가정.
+# ⚠ 기존 corpus/substrate-store-value-literal.px 는 line23 `'"'`(잘못된 Nix 따옴표)로 Stage-1 파싱 실패
+#   (CODEX c5a62eb5b 기존버그). 이건 올바른 `"\""` 로 동작 — corpus 것 수정은 그쪽 소유라 미수정.
+let
+  B = builtins;
+  esc = s:
+    let a = B.replaceStrings [ "\\" ] [ "\\\\" ] s;
+        b = B.replaceStrings [ "\"" ] [ "\\\"" ] a;
+        c = B.replaceStrings [ "\n" ] [ "\\n" ] b;
+        d = B.replaceStrings [ "\r" ] [ "\\r" ] c;
+        e = B.replaceStrings [ "\t" ] [ "\\t" ] d;
+    in B.replaceStrings [ "$" ] [ "\\$" ] e;
+  strLit = s: "\"" + (esc s) + "\"";
+  emit = v:
+    if B.isNull v then "null"
+    else if B.isBool v then (if v then "true" else "false")
+    else if B.isInt v then B.toString v
+    else if B.isFloat v then B.toString v
+    else if B.isString v then strLit v
+    else if B.isList v then "[ " + (B.concatStringsSep " " (B.map emit v)) + " ]"
+    else if B.isAttrs v then
+      "{ " + (B.concatStringsSep "; " (B.map (n: (strLit n) + " = " + (emit v.${n})) (B.attrNames v))) + " }"
+    else strLit ("<unsupported:" + (B.typeOf v) + ">");
+in {
+  toPnixSource = emit;
+  escapeString = esc;
+}

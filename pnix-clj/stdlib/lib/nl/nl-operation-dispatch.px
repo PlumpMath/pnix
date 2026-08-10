@@ -1,0 +1,253 @@
+# stdlib.nl.nl-operation-dispatch
+#
+# Single-hole NL front door. Fast paths (coding intent + transport preextract)
+# live here; symbolic graph/frame/algorithm projection lazy-imports
+# nl-operation-dispatch-slow.px so module import stays bounded for pnix-eval
+# deep_force at import time (T-021 / import-hang closure).
+let
+in
+rec {
+  name = "stdlib.nl.nl-operation-dispatch";
+
+  slowOwnerPath = ./nl-operation-dispatch-slow.px;
+
+  mkResult = kind: to: classification: result: {
+    operation_kind = kind;
+    outcome = "dispatched";
+    dispatched_to = to;
+    classification = classification;
+    result = result;
+  };
+
+  dispatchCodeTransformFromCodingIntent = utterance: classification:
+    let
+      cdisp = import ../coding/coding-candidate-dispatcher.px;
+    in
+      mkResult "code-transform" "coding-candidate-dispatcher" classification
+        (cdisp.dispatch {
+          path = "/coding/candidate";
+          method = "POST";
+          body = { utterance = utterance; };
+        });
+
+  tryCodingIntentCodeTransform = utterance:
+    if !containsAny utterance refactorIntentCues then null
+    else
+      let
+        lifter = import ../coding/coding-intent-lifter.px;
+        classified = lifter.classifyCodingIntent utterance;
+      in
+        if (builtins.isAttrs classified)
+          && classified.outcome == "coding-intent-classified"
+          && classified.intent_kind == "refactor"
+        then dispatchCodeTransformFromCodingIntent utterance classified
+        else null;
+
+  slen = s: builtins.stringLength s;
+  sub = start: len: s: builtins.substring start len s;
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+  containsAny = utterance: cues:
+    builtins.any (cue: hasInfix cue utterance) cues;
+
+  attrOr = attrs: key: fallback:
+    if (builtins.isAttrs attrs) && (builtins.hasAttr key attrs)
+    then builtins.getAttr key attrs else fallback;
+
+  nonEmptyString = value:
+    builtins.isString value && value != "";
+
+  factorCues = [ "인수분해" "factorize" "factorise" "factor x" "factor y" "factor it" "factor polynomial" "factor expression" ];
+  diffCues = [ "미분" "differentiate" "derivative of" "take derivative" ];
+  refactorIntentCues = [
+    "rename " "rename symbol" "rename function" "rename variable" "rename identifier"
+    "refactor" "import " "unused"
+    "이름 바꿔" "이름 바꾸" "이름 변경해" "심볼 이름" "심볼 변경"
+    "함수 이름 " "변수 이름 " "미분 함수로 바꿔" "함수로 바꿔"
+  ];
+  pnixSampleInputCues = [
+    "docs/pnix-sample-inputs.md" "pnix sample" "pnix 샘플" "pnix 테스트"
+    "이 입력" "평가 불가" "eval-input"
+  ];
+  pnixEvalContextCues = [
+    "pnix" "eval" "evaluate" "입력" "평가" "sample" "샘플"
+    "docs/pnix-sample-inputs.md"
+  ];
+
+  looksLikePnixEvalSurface = utterance:
+    let
+      docOrAction = containsAny utterance pnixSampleInputCues;
+      contextCue = containsAny utterance pnixEvalContextCues;
+      letIn = (containsAny utterance [ "let " ]) && (containsAny utterance [ " in " "; in " "; in" ]);
+      attrset =
+        (containsAny utterance [ "{ " "{" ])
+        && (containsAny utterance [ " = " "=" ])
+        && (containsAny utterance [ "; }" ";}" ]);
+      list = (containsAny utterance [ "[ " "[" ]) && (containsAny utterance [ " ]" "]" ]);
+      structural = letIn || attrset || list;
+    in
+      (docOrAction && (contextCue || structural))
+      || (structural && contextCue);
+
+  pnixSampleInputHeld = utterance: via:
+    mkResult "pnix-sample-input" "pnix-sample-input-eval-gate"
+      { via = via; canonical_meaning = "pnix.sample-input.eval-held"; registry_key = "pnix_sample_input"; }
+      {
+        outcome = "eval-input.held";
+        held_kind = "eval-input.held";
+        reason = "pnix sample/eval input은 구조 전체를 평가해야 하며 equation solver가 일부를 잘라 답하면 안 됩니다; live eval/dry-run evidence 없이는 Held입니다.";
+        source_surface = utterance;
+        required_artifacts = [
+          "whole pnix input surface"
+          "pnix eval owner/provenance"
+          "dry-run result or unsupported-eval reason"
+        ];
+        public_text_normal = "Held: pnix sample/eval input은 구조 전체를 평가해야 하며 equation solver가 일부를 잘라 답하면 안 됩니다; live eval/dry-run evidence 없이는 Held입니다. (held_kind=eval-input.held)";
+        host_execution_deferred = false;
+        workflow_operation = false;
+        next_gate = "provide-pnix-eval-evidence-or-dry-run";
+      };
+
+  arithmeticResultFromExpression = utterance: via: expr:
+    let
+      numOwner = import ../math/numeric-evaluator.px;
+      evaluated = numOwner.evaluateNumericExpression expr { };
+      rational =
+        if evaluated.ok then null
+        else numOwner.evaluateRationalExpression expr { };
+    in
+      if evaluated.ok
+      then mkResult "arithmetic" "numeric-evaluator"
+             { via = via; expression = expr; }
+             { outcome = "evaluated"; value = evaluated.value; input = utterance; }
+      else if rational != null && rational.ok
+      then mkResult "arithmetic" "numeric-evaluator"
+             { via = via; expression = expr; exact = "rational"; }
+             {
+               outcome = "evaluated";
+               value = if rational.is_integer then rational.value else rational.text;
+               value_text = rational.text;
+               exact_rational = rational.rational;
+               input = utterance;
+             }
+      else null;
+
+  dispatchFromTransportPreextract = utterance: context:
+    let
+      tp = attrOr context "transport_preextract" null;
+      symCode = import ../math/symbolic-code-witness.px;
+    in
+      if tp == null || !(builtins.isAttrs tp) then null
+      else if symCode.deferFastMathForCodeEmit utterance then null
+      else if looksLikePnixEvalSurface utterance then
+        pnixSampleInputHeld utterance "transport-preextract-shadowed-by-pnix-eval-surface"
+      else if nonEmptyString (attrOr tp "arithmetic_expression" "") then
+        arithmeticResultFromExpression utterance "transport-preextract" tp.arithmetic_expression
+      else if nonEmptyString (attrOr tp "equation_expression" "") then
+        let
+          expr = tp.equation_expression;
+          eqOwner = import ../math/equation-solving-procedure.px;
+          # idea.md P2: 풀이 결과를 displayable step 으로 lowering 해 함께 실어보냄.
+          # additive (`//`) — 기존 solve 필드 전부 보존, step_render_lines 만 추가.
+          traceOwner = import ../math/solver-step-trace.px;
+          solved = eqOwner.beginSolveProcedureWithContext utterance expr;
+          trace = traceOwner.traceFromSolve solved;
+          stepLines =
+            if (builtins.isAttrs trace) && (trace.outcome == "trace-ready")
+            then trace.render_lines else [ ];
+        in mkResult "equation" "equation-solving-procedure"
+             { via = "transport-preextract"; expression = expr; }
+             (solved // { step_render_lines = stepLines; })
+      else if nonEmptyString (attrOr tp "symbolic_expression" "") then
+        let expr = tp.symbolic_expression;
+        in
+          if containsAny utterance factorCues then
+            let factorOwner = import ../math/factor-executor-bridge.px;
+            in mkResult "math-factor" "factor-executor-bridge"
+                 { via = "transport-preextract"; expression = expr; }
+                 (factorOwner.factorEquation expr)
+          else if containsAny utterance diffCues then
+            let derivOwner = import ../math/derivative-executor-bridge.px;
+            in mkResult "math-diff" "derivative-executor-bridge"
+                 { via = "transport-preextract"; expression = expr; }
+                 (derivOwner.differentiateExpression {
+                   utterance = utterance;
+                   expression = expr;
+                 })
+          else null
+      else null;
+
+  # Avoid loading slow.px for inline ASCII arithmetic (e.g. "1 + 1 계산해줘").
+  trySymbolicExtractArithmetic = utterance:
+    let
+      symCode = import ../math/symbolic-code-witness.px;
+    in
+      if symCode.deferFastMathForCodeEmit utterance then null
+      else
+        let
+          ext = import ../math/nl-symbolic-extractor.px;
+          lifted = ext.extractExpression utterance;
+        in
+          arithmeticResultFromExpression utterance "symbolic-extract-fast" lifted.expression;
+
+  # Lazy delegates — fixtures and slow-path owners import on first use only.
+  dispatchFrame = frame:
+    let slow = import slowOwnerPath;
+    in slow.dispatchFrame frame;
+
+  dispatchContextGraph = graph:
+    let slow = import slowOwnerPath;
+    in slow.dispatchContextGraph graph;
+
+  dispatchSymbolicFirst = utterance:
+    let slow = import slowOwnerPath;
+    in slow.dispatchSymbolicFirst utterance;
+
+  # math/code 정의질문 route (순수 additive: 정답일 때만 반환; 아니면 null→fall-through
+  #   = 기존 동작 무변). senses=.px 데이터(host 배선 불필요), nl-definition-query 재사용.
+  tryDefinitionQuery = utterance:
+    let
+      dq = import nl/nl-definition-query.px;
+      senses = (import nl/math-coding-senses.px).rows;
+    in
+      if !(dq.isDefQuery utterance) then null
+      else
+        let a = dq.answerDefinition senses utterance;
+        in
+          if a.kind == "answer" then {
+            operation_kind = "definition";
+            outcome = "definition-answered";
+            dispatched_to = "nl-definition-query";
+            classification = { via = "px-definition-query"; };
+            result = a;
+            final_render_ko = a.text;
+          } else null;
+
+  dispatchUtteranceWithContext = utterance: context:
+    if !(builtins.isString utterance) then { operation_kind = "none"; outcome = "held-non-string"; }
+    else if (builtins.stringLength utterance) == 0 then { operation_kind = "none"; outcome = "held-empty"; }
+    else
+      let defQuery = tryDefinitionQuery utterance;
+      in
+        if defQuery != null then defQuery
+        else
+          let coding = tryCodingIntentCodeTransform utterance;
+          in
+            if coding != null then coding
+            else
+              let transport = dispatchFromTransportPreextract utterance context;
+              in
+                if transport != null then transport
+                else
+                  let extracted = trySymbolicExtractArithmetic utterance;
+                  in
+                    if extracted != null then extracted
+                    else
+                      let slow = import slowOwnerPath;
+                      in slow.dispatchSlowPath utterance context;
+
+  dispatchUtterance = utterance:
+    dispatchUtteranceWithContext utterance { };
+}

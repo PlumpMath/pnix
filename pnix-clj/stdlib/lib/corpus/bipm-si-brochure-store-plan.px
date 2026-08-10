@@ -1,0 +1,45 @@
+# BIPM SI Brochure closed unit/prefix/constant metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No prose/logo assets or graph wiring.
+let
+  B = builtins;
+  genPath = ./bipm-si-brochure.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "units.bipm_si_brochure.v1";
+    source = "BIPM SI Brochure";
+    license = "CC-BY-4.0";
+    summary = { base_units = 0; derived_units = 0; prefixes = 0; defining_constants = 0; };
+    policy = "closed SI code tables only";
+    manifest = { };
+    base_units = [ ]; derived_units = [ ]; prefixes = [ ]; defining_constants = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "bipm-si-brochure-load-v0";
+      source_lens = "stdlib/lib/corpus/bipm-si-brochure-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "units.bipm_si_brochure.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "bipm-si-brochure-query-v0";
+      source_lens = "stdlib/lib/corpus/bipm-si-brochure-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "units.bipm_si_brochure.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

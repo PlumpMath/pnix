@@ -1,0 +1,94 @@
+# stdlib/lib/nl/chat-respond-with-memory-gate.px
+#
+# P47: leak-safe gate projection for chatRespondWithMemory.
+# Evaluated via pnixc-meta one-shot (PNIX_WORKSPACE_ROOT=pnix-clj + pnixc-pnix runtime).
+# Durable consumers keep counts/kinds/hashes only — no raw sentence, answer, or report lines.
+let
+  knm = import ./korean-nl-mirror.px;
+  B = builtins;
+
+  publicEvidenceFace = ev:
+    if ev == null then null
+    else {
+      evidence_kind = if ev ? evidence_kind then ev.evidence_kind else "";
+      durable_truth = if ev ? durable_truth then ev.durable_truth else false;
+      accepted_as_truth = if ev ? accepted_as_truth then ev.accepted_as_truth else false;
+      proposer_only = if ev ? proposer_only then ev.proposer_only else false;
+    };
+
+  publicMemoryEvidence = me:
+    if me == null then null
+    else (publicEvidenceFace me) // {
+      recognized_count = if me ? recognized_count then me.recognized_count else 0;
+      missing_count = if me ? missing_count then me.missing_count else 0;
+    };
+
+  publicAbstractionEvidence = ae:
+    if ae == null then null
+    else (publicEvidenceFace ae) // {
+      abstraction_status_count = if ae ? abstraction_status_count then ae.abstraction_status_count else 0;
+      held_count = if ae ? held_count then ae.held_count else 0;
+    };
+
+  publicUnderstandingReport = rep:
+    if rep == null then null
+    else (publicEvidenceFace rep) // {
+      report_kind = if rep ? report_kind then rep.report_kind else "";
+      line_count = if rep ? lines then (B.length rep.lines) else 0;
+      held_abstraction_count = if rep ? held_abstraction_count then rep.held_abstraction_count else 0;
+    };
+
+  publicCatalogEvidence = ce:
+    if ce == null then null
+    else (publicEvidenceFace ce) // {
+      entry_count = if ce ? entry_count then ce.entry_count else 0;
+    };
+
+  publicMathEvidence = me:
+    if me == null then null
+    else (publicEvidenceFace me) // {
+      verdict = if me ? verdict then me.verdict else "";
+    };
+
+  runGate = args:
+    let sentence = if B.isAttrs args then (if args ? sentence then args.sentence else "") else args;
+        memKeys = if B.isAttrs args && (args ? memory_keys) then args.memory_keys else [ ];
+        absStatuses = if B.isAttrs args && (args ? abstraction_statuses) then args.abstraction_statuses else [ ];
+        catTerms = if B.isAttrs args && (args ? catalog_terms) then args.catalog_terms else [ ];
+        mathQ = if B.isAttrs args && (args ? math_query) then args.math_query else null;
+        domArgs = B.isAttrs args &&
+          ( ((args ? catalog_terms) && (B.isList args.catalog_terms) && ((B.length args.catalog_terms) > 0))
+            || ((args ? math_query) && (args.math_query != null)) );
+        gateArgs = { sentence = sentence; memory_keys = memKeys; abstraction_statuses = absStatuses; }
+                   // (if domArgs then { catalog_terms = catTerms; math_query = mathQ; } else { });
+        gateArgs' = if domArgs
+                    then gateArgs // { catalog_terms = catTerms; math_query = mathQ; }
+                    else gateArgs;
+        r = knm.chatRespondWithMemory gateArgs';
+        ev = if r ? evidence then r.evidence else null;
+    in {
+      status = "ok";
+      verdict = if r ? verdict then r.verdict else "";
+      understood = if r ? understood then r.understood else false;
+      route = if r ? route then r.route else "";
+      has_evidence = r ? evidence;
+      evidence_keys = if ev != null then B.attrNames ev else [ ];
+      domain_attached = domArgs;
+      has_catalog = r ? catalog_readback_evidence;
+      has_math = (r ? math_evidence) && (r.math_evidence != null);
+      memory = publicMemoryEvidence (if r ? memory_evidence then r.memory_evidence else null);
+      abstraction_status = publicAbstractionEvidence (if r ? abstraction_status_evidence then r.abstraction_status_evidence else null);
+      understanding_report = publicUnderstandingReport (if r ? understanding_report then r.understanding_report else null);
+      catalog = publicCatalogEvidence (if r ? catalog_readback_evidence then r.catalog_readback_evidence else null);
+      math = publicMathEvidence (if r ? math_evidence then r.math_evidence else null);
+      durable_truth = false;
+      accepted_as_truth = false;
+    };
+
+  gateSelfTest = _:
+    let probe = runGate { sentence = "철수가 사과를 먹었다"; memory_keys = [ ]; abstraction_statuses = [ ]; };
+    in probe.has_evidence && probe.understood && (probe.verdict == "math-keep");
+in {
+  inherit runGate publicMemoryEvidence publicAbstractionEvidence publicUnderstandingReport
+          publicCatalogEvidence publicMathEvidence gateSelfTest;
+}

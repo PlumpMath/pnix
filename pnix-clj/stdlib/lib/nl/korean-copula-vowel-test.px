@@ -1,0 +1,15 @@
+# audit #3 lock: 모음종결 명사+bare다 계사(의사다=의사+Ø+다). parseCopulaWord 모음bare-다 분기 + strict-entity 게이트.
+#   dict/protected 명사(의사·친구)만 copula 승급, OOV·동사(간다/가다)=fail-closed(verb 유지). 받침명사(학생이다) 회귀.
+let knm = import ./korean-nl-mirror.px;
+  pk = s: knm.liftToProposition s;
+in {
+  uisa_kind = (pk "철수가 의사다").predicate_kind; uisa_nom = (pk "철수가 의사다").predicate_nominal;
+  chingu_kind = (pk "철수가 친구다").predicate_kind;
+  all_ok =
+       ((pk "철수가 의사다").predicate_kind == "copula") && ((pk "철수가 의사다").predicate_nominal == "의사")
+    && ((pk "철수가 친구다").predicate_kind == "copula") && ((pk "철수가 친구다").predicate_nominal == "친구")
+    && ((pk "철수가 학생이다").predicate_kind == "copula")    # 회귀: 받침 이다
+    && ((pk "철수가 간다").predicate_kind == "verb")           # 회귀: 동사 ㄴ다
+    && ((pk "철수가 갔다").predicate_kind == "verb")           # 회귀: 동사 ㅆ받침
+    && ((pk "철수가 밥을 먹는다").predicate_kind == "verb");   # 회귀: 동사 는다
+}

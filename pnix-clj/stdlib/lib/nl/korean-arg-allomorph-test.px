@@ -1,0 +1,21 @@
+# stdlib/lib/nl/korean-arg-allomorph-test.px — Slice3: 조사 이형태 조화 검증 회귀
+#
+# analyzeArg 가 'w 끝의 마커가 *진짜 조사*인가'를 앞 글자 받침으로 결정: 받침-class(은/이/을/과)=받침 뒤,
+# 모음-class(는/가/를/와)=모음 뒤, (으)로=ㄹ-예외. '사과'의 '과'는 모음(사) 뒤라 마커 불가→strip 거부(명사 보존).
+let
+  lift = import ./korean-taxonomy-lift.px;
+  arg = w: let a = lift.analyzeArg w; in a.entity + "/" + a.role;
+in {
+  apple_bare    = arg "사과";      # 사과/bare  ← 핵심 수리(전: 사/comitative 오분해)
+  apple_obj     = arg "사과를";    # 사과/object (정상 보존)
+  comit_vowel   = arg "철수와";    # 철수/comitative (모음+와)
+  comit_batchim = arg "책과";      # 책/comitative (받침+과)
+  instr_rieul   = arg "칼로";      # 칼/instrument (ㄹ+로 예외)
+  instr_reg     = arg "책으로";    # 책/instrument (받침+으로)
+  subj_batchim  = arg "학생이";    # 학생/agent (받침+이)
+  topic_vowel   = arg "철수는";    # 철수/topic (모음+는)
+  all_ok = (arg "사과" == "사과/bare") && (arg "사과를" == "사과/object")
+           && (arg "철수와" == "철수/comitative") && (arg "책과" == "책/comitative")
+           && (arg "칼로" == "칼/instrument") && (arg "책으로" == "책/instrument")
+           && (arg "학생이" == "학생/agent") && (arg "철수는" == "철수/topic");
+}

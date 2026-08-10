@@ -1,0 +1,45 @@
+# FRP DSL
+# Provides DSL for Functional Reactive Programming structures
+
+{
+  name = "stdlib.lib.frp";
+
+  types = [ "String" "AttrSet" "List" "Bool" ];
+
+  # Formula status types
+  formula_status = {
+    draft = "draft";
+    pending = "pending";
+    locked = "locked";
+    rejected = "rejected";
+  };
+
+  # Formula structure
+  formula = { expr, status ? "draft", feasibility ? null, ... } @ attrs:
+    {
+      kind = "frp-formula";
+      expr = expr;
+      status = status;
+      feasibility = feasibility;
+    } // (builtins.removeAttrs attrs [ "expr" "status" "feasibility" ]);
+
+  # Channel equation (Maya/Houdini style)
+  channelEq = { var, expr, status ? "draft", feasibility ? null, ... } @ attrs:
+    {
+      kind = "frp-channel-eq";
+      var = var;
+      expr = expr;
+      status = status;
+      feasibility = feasibility;
+    } // (builtins.removeAttrs attrs [ "var" "expr" "status" "feasibility" ]);
+
+  # Reverse parametric FRP
+  reverseParam = { target_conditions, inferred_formula ? null, status ? "draft", feasibility ? null, ... } @ attrs:
+    {
+      kind = "frp-reverse-param";
+      target_conditions = target_conditions;
+      inferred_formula = inferred_formula;
+      status = status;
+      feasibility = feasibility;
+    } // (builtins.removeAttrs attrs [ "target_conditions" "inferred_formula" "status" "feasibility" ]);
+}

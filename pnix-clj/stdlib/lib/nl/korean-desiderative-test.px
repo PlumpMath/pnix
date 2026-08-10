@@ -1,0 +1,16 @@
+# 보조용언 확장 lock: 고 싶다(desiderative=원망) — progressive(고 있다) 패턴 미러.
+#   생성 realizeSentence(modality=desiderative) ↔ 이해 lift(desiderativeHeadIdx→modality). 싶=형용사 보조용언.
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  rt = knm.roundTrip;
+  base = { roles=[{entity="철수";role="agent";}{entity="밥";role="object";}]; action="먹"; tense="present"; mood="declarative"; level="haera";
+           polarity="positive"; negation_form="none"; modality="desiderative"; modality_form="none";
+           aspect="plain"; aspect_form="none"; honorific="none"; predicate_kind="verb"; predicate_nominal=null; };
+  r = rt base; rh = rt (base // {level="haeyo";}); rp = rt (base // {tense="past";});
+in {
+  sentence = r.sentence; rec_modality = r.recovered.modality; rec_action = r.recovered.action;
+  haeyo = rh.sentence; past = rp.sentence;
+  all_ok =
+       (r.sentence == "철수가 밥을 먹고 싶다") && (r.recovered.modality == "desiderative") && (r.recovered.action == "먹")
+    && (rh.sentence == "철수가 밥을 먹고 싶어요") && (rh.recovered.modality == "desiderative")
+    && (rp.sentence == "철수가 밥을 먹고 싶었다") && (rp.recovered.modality == "desiderative") && (rp.recovered.tense == "past");
+}

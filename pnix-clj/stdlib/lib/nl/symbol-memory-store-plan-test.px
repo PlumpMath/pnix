@@ -1,0 +1,117 @@
+# stdlib/lib/nl/symbol-memory-store-plan-test.px
+#
+# symbol-memory (common) store-plan 구조 lock. clean clone(symbols 없음)도 eval 가능해야 하고,
+# 비파괴 lock(append-only · proposer_only · non-durable · content-hash key) 보존 확인.
+let
+  sp = import ./symbol-memory-store-plan.px;
+  B = builtins;
+  sampleSyms = [
+    { alias = "@thing:사과#0"; ref_kind = "thing"; name = "사과"; canonical_key = "(s:사과)"; concept = null; }
+    { alias = "@symbol:먹#1"; ref_kind = "symbol"; name = "먹"; canonical_key = "(s:먹)"; concept = "ingest"; }
+  ];
+  p = sp.mkPlan { symbols = sampleSyms; built_at_ms = 0; };
+  manifestOp = B.head p.plan.operations;          # manifest first
+  symOp = B.elemAt p.plan.operations 1;           # first symbol append
+  vb = symOp.value_bytes;
+  q = sp.mkQuery { built_at_ms = 0; };
+  qop = B.head q.plan.operations;
+  pe = sp.mkPlan { built_at_ms = 0; };            # clean-clone: symbols 없음
+  dupSyms = [ { name = "가"; ref_kind = "thing"; canonical_key = "(s:가)"; concept = null; }
+              { name = "가"; ref_kind = "thing"; canonical_key = "(s:가)"; concept = null; } ];
+  pd = sp.mkPlan { symbols = dupSyms; built_at_ms = 0; };   # ★dedup: 같은 신원 2회 → 1 symbol
+  # ★batch 실배선(slice ①): 이미 understand된 proposition record → propose → 同 plan (liftToProposition 재실행 0)
+  batchRecords = [ { proposition = { roles = [ { role = "agent"; entity = "철수"; }
+                                               { role = "object"; entity = "사과"; } ]; action = "먹"; }; } ];
+  pb = sp.mkPlan { records = batchRecords; built_at_ms = 0; };
+  sfr = sp.symbolsFromRecords batchRecords;
+  # ★§34 Layer-1 구조-dispose: set-difference(current−live) + 재유도 guard(witness된 stale만 remove=retraction).
+  dispose = sp.mkDisposePlan { current_keys = [ "k1" "k2" "k3" ]; live_keys = [ "k1" "k3" ];
+                               rederivable_keys = [ "k2" ]; built_at_ms = 0; };   # k2 stale ∧ 재유도 → remove
+  disposeRemoveOp = B.head dispose.plan.operations;
+  # ★fail-closed: stale지만 비-재유도(k4)는 HELD(excision 차단); 재유도된 k2만 remove
+  disposeFC = sp.mkDisposePlan { current_keys = [ "k1" "k2" "k3" "k4" ]; live_keys = [ "k1" "k3" ];
+                                 rederivable_keys = [ "k2" ]; built_at_ms = 0; };
+  # ★witness 없음 → oracle 맹신 차단: 아무것도 안 지움(전부 HELD)
+  disposeNW = sp.mkDisposePlan { current_keys = [ "k1" "k2" ]; live_keys = [ "k1" ]; built_at_ms = 0; };
+  # ★host-wired dispose: ferry된 kept 마디서 live(symbol_refs union) 도출 → orphan(=참조 없는 index key)만 dispose
+  scanNodes = [ { node = { kind = "knowledge.proposition"; }; kept = true; symbol_refs = [ "K/sym/a" "K/sym/b" ]; }
+                { node = { kind = "entity"; }; kept = true; symbol_refs = [ ]; }               # 비-proposition 무시
+                { node = { kind = "knowledge.proposition"; }; kept = false; symbol_refs = [ "K/sym/z" ]; } ];  # held 무시
+  disposeScan = sp.mkDisposeFromScan { nodes = scanNodes; current_keys = [ "K/sym/a" "K/sym/b" "K/sym/orphan" ]; built_at_ms = 0; };
+  disposeScanOp = B.head disposeScan.plan.operations;
+in {
+  schema = p.schema;
+  table = symOp.table;
+  op_kind = symOp.op_kind;
+  manifest_op_kind = manifestOp.op_kind;
+  symbol_count = p.symbol_count;
+  operation_count = p.operation_count;
+  value_starts_brace = (B.substring 0 1 vb) == "{";
+  hash_len = B.stringLength p.content_hash;
+  query_op = qop.op_kind;
+  query_table = qop.table;
+  proposer_only = p.proposer_only;
+  durable_truth = p.durable_truth;
+  ontology_assert_allowed = p.ontology_assert_allowed;
+  append_only = p.append_only;
+  empty_symbol_count = pe.symbol_count;
+  empty_operation_count = pe.operation_count;
+  dedup_symbol_count = pd.symbol_count;
+  dedup_op_count = pd.operation_count;
+  batch_record_count = pb.record_count;
+  batch_symbol_count = pb.symbol_count;
+  batch_op_count = pb.operation_count;
+  sfr_count = B.length sfr;
+  dispose_stale_count = dispose.stale_count;
+  dispose_op_kind = disposeRemoveOp.op_kind;
+  dispose_kind = dispose.dispose_kind;
+  dispose_arena_required = dispose.arena_required;
+  dispose_fc_held = disposeFC.held_count;
+  dispose_fc_ops = disposeFC.operation_count;
+  dispose_nw_ops = disposeNW.operation_count;
+  dispose_nw_held = disposeNW.held_count;
+  scan_live_nodes = disposeScan.live_node_count;
+  scan_live = disposeScan.live_count;
+  scan_removable = disposeScan.removable_count;
+  scan_op_key = disposeScanOp.key;
+  all_ok = (p.schema == "nl.symbol-memory.v0")
+           && (symOp.table == "corpus_symbol_memory_by_canonical_key")
+           && (symOp.op_kind == "append")
+           && (manifestOp.op_kind == "append")
+           && (p.symbol_count == 2)
+           && (p.operation_count == 3)              # manifest + 2 symbols
+           && ((B.substring 0 1 vb) == "{")
+           && (B.stringLength p.content_hash == 64)
+           && (qop.op_kind == "scan-prefix")
+           && (qop.table == "corpus_symbol_memory_by_canonical_key")
+           && p.proposer_only
+           && (p.durable_truth == false)
+           && (p.ontology_assert_allowed == false)
+           && p.append_only
+           && (pe.symbol_count == 0)
+           && (pe.operation_count == 1)             # clean-clone: manifest only
+           && (pd.symbol_count == 1)                # ★dedup: 같은 신원 2회 → 1
+           && (pd.operation_count == 2)             # manifest + 1
+           && (pb.record_count == 1)                # ★batch: proposition record 1
+           && (pb.symbol_count == 3)                # 철수·사과·먹 (self 제외)
+           && (pb.operation_count == 4)             # manifest + 3 symbol
+           && (B.length sfr == 3)                   # symbolsFromRecords 직접
+           && (dispose.stale_count == 1)            # ★§34 dispose: current−live = {k2}
+           && (dispose.operation_count == 1)        # remove-op 1 (k2 재유도 witness됨)
+           && (disposeRemoveOp.op_kind == "remove")
+           && (disposeRemoveOp.key == "k2")         # stale ∧ rederivable key
+           && (dispose.dispose_kind == "retraction") # 가역(excision 아님)
+           && (dispose.reversible == true)
+           && (dispose.arena_required == false)     # 구조 dispose=Arena-free
+           && (dispose.append_only == false)        # dispose 층=append-only 아님
+           && (disposeFC.stale_count == 2)          # ★fail-closed: stale={k2,k4}
+           && (disposeFC.removable_count == 1)      #   재유도된 k2만 remove
+           && (disposeFC.held_count == 1)           #   비-재유도 k4 = HELD(excision 차단)
+           && (disposeFC.operation_count == 1)
+           && (disposeNW.operation_count == 0)      # ★witness 없음 → oracle 맹신 차단(0 제거)
+           && (disposeNW.held_count == 1)           #   stale k2 전부 HELD
+           && (disposeScan.live_node_count == 1)    # ★host-wired: kept knowledge.proposition 1개만 live 기여
+           && (disposeScan.live_count == 2)         #   symbol_refs union = {a,b}
+           && (disposeScan.removable_count == 1)    #   orphan 1개(current−live)
+           && (disposeScanOp.key == "K/sym/orphan"); #   참조 없는 index key만 dispose
+}

@@ -1,0 +1,791 @@
+# stdlib.lib.math.math-kernel
+#
+# OWNER-LAW (v0.12-VV, div-math, 2026-05-21): the integrating
+# capstone of the div-math kernel.
+#
+# The div-math slices v0.12-JJ .. v0.12-ABM built fifty-one math
+# owners, each standalone or layered on simpler ones. Each is a
+# real, tested, deterministic owner -- but until now there was no
+# single object that *is* "the math kernel".
+#
+# (v0.12-VV first folded twelve owners; XX added boolean-logic;
+# YY base-conversion; AAA geometry; AAB complex-number;
+# AAC bitwise; AAD continued-fraction; AAE graph-theory;
+# AAF interval-arithmetic; AAG probability; AAH calculus;
+# AAI chinese-remainder; AAJ vector; AAK prime-sieve;
+# AAL roman-numerals; AAM digit-operations; AAN gray-code;
+# AAO collatz; AAP decimal-expansion; AAQ logarithm;
+# AAR partition; AAS figurate-numbers; AAT pascal-triangle;
+# AAU factoradic; AAX euler-totient; AAY josephus;
+# AAZ perfect-power; ABA stern-brocot; ABB lucas-sequence;
+# ABC ackermann; ABD bell-numbers; ABE pythagorean-triples;
+# ABF tetrahedral-numbers; ABG triangle-classify;
+# ABH harmonic-numbers; ABI kaprekar; ABJ egyptian-fraction;
+# ABK happy-numbers; ABL narcissistic-numbers;
+# ABM amicable-numbers. Every new owner is folded in as it
+# lands.)
+#
+# This owner is that object. It imports every div-math owner and
+# exposes two things:
+#
+#   - `mathKernelInventory` -- a self-describing census: which
+#     domains exist, who owns each, how many units each carries,
+#     and the totals. The substrate can introspect its own math
+#     surface from one envelope.
+#   - `applyMathKernel { kernel_domain; ... }` -- one dispatcher
+#     that routes a request to the right domain's plate. The rest
+#     of the request is passed through verbatim, so each domain's
+#     own plate vocabulary (operation, n, xs, ...) is unchanged.
+#
+# # Why the routing key is `kernel_domain`, not `domain`
+#
+# numeric-evaluator's plate already reads a `domain` field (the
+# finite-domain list for universal-claim checking). To avoid any
+# collision the kernel dispatcher routes on `kernel_domain`. Every
+# domain plate therefore sees its own request fields untouched.
+#
+# # The kernel is a tree, not a heap
+#
+# The fifty-one owners form a dependency tree, not a flat pile:
+#
+#   numeric-evaluator   standalone
+#   number-theory       standalone
+#   rational            -> number-theory
+#   modular-arithmetic  -> number-theory
+#   linear-equation     -> rational
+#   quadratic-equation  -> rational, linear-equation
+#   combinatorics       standalone
+#   polynomial          standalone
+#   statistics          -> rational
+#   matrix              standalone
+#   sequence-series     standalone
+#   set-theory          standalone
+#   boolean-logic       standalone
+#   base-conversion     standalone
+#   geometry            -> rational
+#   complex-number      standalone
+#   bitwise             standalone
+#   continued-fraction  -> rational
+#   graph-theory        standalone
+#   interval-arithmetic -> rational
+#   probability         -> rational, combinatorics
+#   calculus            -> rational
+#   chinese-remainder   -> modular-arithmetic
+#   vector              standalone
+#   prime-sieve         standalone
+#   roman-numerals      standalone
+#   digit-operations    -> base-conversion
+#   gray-code           -> bitwise
+#   collatz             standalone
+#   decimal-expansion   -> rational
+#   logarithm           standalone
+#   partition           standalone
+#   figurate-numbers    standalone
+#   pascal-triangle     standalone
+#   factoradic          standalone
+#   euler-totient       -> number-theory
+#   josephus            standalone
+#   perfect-power       standalone
+#   stern-brocot        standalone
+#   lucas-sequence      standalone
+#   ackermann           standalone
+#   bell-numbers        standalone
+#   pythagorean-triples -> number-theory
+#   tetrahedral-numbers standalone
+#   triangle-classify   standalone
+#   harmonic-numbers    -> rational
+#   kaprekar            standalone
+#   egyptian-fraction   -> rational
+#   happy-numbers       standalone
+#   narcissistic-numbers standalone
+#   amicable-numbers    standalone
+#
+# Each owner depends only on simpler owners. This file is the only
+# one that imports all of them.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT new math -- it adds no operation, only the unifying
+#     inventory + dispatcher over the fifty-one existing owners.
+#   - NOT a natural-language front end -- it dispatches structured
+#     requests, not utterances.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/math-kernel.px";
+
+  numericEvaluator = import ./numeric-evaluator.px;
+  numberTheory     = import ./number-theory.px;
+  rational         = import ./rational.px;
+  linearEquation   = import ./linear-equation.px;
+  combinatorics    = import ./combinatorics.px;
+  modular          = import ./modular-arithmetic.px;
+  polynomial       = import ./polynomial.px;
+  quadratic        = import ./quadratic-equation.px;
+  statistics       = import ./statistics.px;
+  matrix           = import ./matrix.px;
+  sequenceSeries   = import ./sequence-series.px;
+  setTheory        = import ./set-theory.px;
+  booleanLogic     = import ./boolean-logic.px;
+  baseConversion   = import ./base-conversion.px;
+  geometry         = import ./geometry.px;
+  complexNumber    = import ./complex-number.px;
+  bitwise          = import ./bitwise.px;
+  continuedFraction = import ./continued-fraction.px;
+  graphTheory      = import ./graph-theory.px;
+  intervalArith    = import ./interval-arithmetic.px;
+  probability      = import ./probability.px;
+  calculus         = import ./calculus.px;
+  chineseRemainder = import ./chinese-remainder.px;
+  vector           = import ./vector.px;
+  primeSieve       = import ./prime-sieve.px;
+  romanNumerals    = import ./roman-numerals.px;
+  digitOperations  = import ./digit-operations.px;
+  grayCode         = import ./gray-code.px;
+  collatz          = import ./collatz.px;
+  decimalExpansion = import ./decimal-expansion.px;
+  logarithm        = import ./logarithm.px;
+  partition        = import ./partition.px;
+  figurateNumbers  = import ./figurate-numbers.px;
+  pascalTriangle   = import ./pascal-triangle.px;
+  factoradic       = import ./factoradic.px;
+  eulerTotient     = import ./euler-totient.px;
+  josephus         = import ./josephus.px;
+  perfectPower     = import ./perfect-power.px;
+  sternBrocot      = import ./stern-brocot.px;
+  lucasSequence    = import ./lucas-sequence.px;
+  ackermann        = import ./ackermann.px;
+  bellNumbers      = import ./bell-numbers.px;
+  pythagoreanTriples = import ./pythagorean-triples.px;
+  tetrahedralNumbers = import ./tetrahedral-numbers.px;
+  triangleClassify = import ./triangle-classify.px;
+  harmonicNumbers  = import ./harmonic-numbers.px;
+  kaprekar         = import ./kaprekar.px;
+  egyptianFraction = import ./egyptian-fraction.px;
+  happyNumbers     = import ./happy-numbers.px;
+  narcissisticNumbers = import ./narcissistic-numbers.px;
+  amicableNumbers  = import ./amicable-numbers.px;
+
+  # One descriptor per domain. `unit_kind` names what `unit_count`
+  # counts -- the domains do not all expose the same shape of
+  # vocabulary, and the inventory is honest about that.
+  domains = [
+    {
+      domain = "numeric-evaluator";
+      owner = numericEvaluator.ownerName;
+      plate_entry = "applyNumericEvaluatorPlate";
+      unit_kind = "operators";
+      unit_count = builtins.length numericEvaluator.opChars;
+    }
+    {
+      domain = "number-theory";
+      owner = numberTheory.ownerName;
+      plate_entry = "applyNumberTheory";
+      unit_kind = "operations";
+      unit_count = builtins.length numberTheory.knownOperations;
+    }
+    {
+      domain = "rational";
+      owner = rational.ownerName;
+      plate_entry = "applyRational";
+      unit_kind = "operations";
+      unit_count = builtins.length rational.knownRationalOperations;
+    }
+    {
+      domain = "linear-equation";
+      owner = linearEquation.ownerName;
+      plate_entry = "applyLinearEquation";
+      unit_kind = "forms";
+      unit_count = builtins.length linearEquation.knownForms;
+    }
+    {
+      domain = "combinatorics";
+      owner = combinatorics.ownerName;
+      plate_entry = "applyCombinatorics";
+      unit_kind = "operations";
+      unit_count = builtins.length combinatorics.knownOperations;
+    }
+    {
+      domain = "modular-arithmetic";
+      owner = modular.ownerName;
+      plate_entry = "applyModular";
+      unit_kind = "operations";
+      unit_count = builtins.length modular.knownOperations;
+    }
+    {
+      domain = "polynomial";
+      owner = polynomial.ownerName;
+      plate_entry = "applyPolynomial";
+      unit_kind = "operations";
+      unit_count = builtins.length polynomial.knownOperations;
+    }
+    {
+      domain = "quadratic-equation";
+      owner = quadratic.ownerName;
+      plate_entry = "applyQuadratic";
+      unit_kind = "solver";
+      unit_count = 1;
+    }
+    {
+      domain = "statistics";
+      owner = statistics.ownerName;
+      plate_entry = "applyStatistics";
+      unit_kind = "operations";
+      unit_count = builtins.length statistics.knownOperations;
+    }
+    {
+      domain = "matrix";
+      owner = matrix.ownerName;
+      plate_entry = "applyMatrix";
+      unit_kind = "operations";
+      unit_count = builtins.length matrix.knownOperations;
+    }
+    {
+      domain = "sequence-series";
+      owner = sequenceSeries.ownerName;
+      plate_entry = "applySequence";
+      unit_kind = "operations";
+      unit_count = builtins.length sequenceSeries.knownOperations;
+    }
+    {
+      domain = "set-theory";
+      owner = setTheory.ownerName;
+      plate_entry = "applySet";
+      unit_kind = "operations";
+      unit_count = builtins.length setTheory.knownOperations;
+    }
+    {
+      domain = "boolean-logic";
+      owner = booleanLogic.ownerName;
+      plate_entry = "applyBooleanLogic";
+      unit_kind = "operations";
+      unit_count = builtins.length booleanLogic.knownOperations;
+    }
+    {
+      domain = "base-conversion";
+      owner = baseConversion.ownerName;
+      plate_entry = "applyBaseConversion";
+      unit_kind = "operations";
+      unit_count = builtins.length baseConversion.knownOperations;
+    }
+    {
+      domain = "geometry";
+      owner = geometry.ownerName;
+      plate_entry = "applyGeometry";
+      unit_kind = "operations";
+      unit_count = builtins.length geometry.knownOperations;
+    }
+    {
+      domain = "complex-number";
+      owner = complexNumber.ownerName;
+      plate_entry = "applyComplex";
+      unit_kind = "operations";
+      unit_count = builtins.length complexNumber.knownOperations;
+    }
+    {
+      domain = "bitwise";
+      owner = bitwise.ownerName;
+      plate_entry = "applyBitwise";
+      unit_kind = "operations";
+      unit_count = builtins.length bitwise.knownOperations;
+    }
+    {
+      domain = "continued-fraction";
+      owner = continuedFraction.ownerName;
+      plate_entry = "applyContinuedFraction";
+      unit_kind = "operations";
+      unit_count = builtins.length continuedFraction.knownOperations;
+    }
+    {
+      domain = "graph-theory";
+      owner = graphTheory.ownerName;
+      plate_entry = "applyGraph";
+      unit_kind = "operations";
+      unit_count = builtins.length graphTheory.knownOperations;
+    }
+    {
+      domain = "interval-arithmetic";
+      owner = intervalArith.ownerName;
+      plate_entry = "applyInterval";
+      unit_kind = "operations";
+      unit_count = builtins.length intervalArith.knownOperations;
+    }
+    {
+      domain = "probability";
+      owner = probability.ownerName;
+      plate_entry = "applyProbability";
+      unit_kind = "operations";
+      unit_count = builtins.length probability.knownOperations;
+    }
+    {
+      domain = "calculus";
+      owner = calculus.ownerName;
+      plate_entry = "applyCalculus";
+      unit_kind = "operations";
+      unit_count = builtins.length calculus.knownOperations;
+    }
+    {
+      domain = "chinese-remainder";
+      owner = chineseRemainder.ownerName;
+      plate_entry = "applyCRT";
+      unit_kind = "operations";
+      unit_count = builtins.length chineseRemainder.knownOperations;
+    }
+    {
+      domain = "vector";
+      owner = vector.ownerName;
+      plate_entry = "applyVector";
+      unit_kind = "operations";
+      unit_count = builtins.length vector.knownOperations;
+    }
+    {
+      domain = "prime-sieve";
+      owner = primeSieve.ownerName;
+      plate_entry = "applyPrimeSieve";
+      unit_kind = "operations";
+      unit_count = builtins.length primeSieve.knownOperations;
+    }
+    {
+      domain = "roman-numerals";
+      owner = romanNumerals.ownerName;
+      plate_entry = "applyRoman";
+      unit_kind = "operations";
+      unit_count = builtins.length romanNumerals.knownOperations;
+    }
+    {
+      domain = "digit-operations";
+      owner = digitOperations.ownerName;
+      plate_entry = "applyDigitOperations";
+      unit_kind = "operations";
+      unit_count = builtins.length digitOperations.knownOperations;
+    }
+    {
+      domain = "gray-code";
+      owner = grayCode.ownerName;
+      plate_entry = "applyGrayCode";
+      unit_kind = "operations";
+      unit_count = builtins.length grayCode.knownOperations;
+    }
+    {
+      domain = "collatz";
+      owner = collatz.ownerName;
+      plate_entry = "applyCollatz";
+      unit_kind = "operations";
+      unit_count = builtins.length collatz.knownOperations;
+    }
+    {
+      domain = "decimal-expansion";
+      owner = decimalExpansion.ownerName;
+      plate_entry = "applyDecimalExpansion";
+      unit_kind = "operations";
+      unit_count = builtins.length decimalExpansion.knownOperations;
+    }
+    {
+      domain = "logarithm";
+      owner = logarithm.ownerName;
+      plate_entry = "applyLogarithm";
+      unit_kind = "operations";
+      unit_count = builtins.length logarithm.knownOperations;
+    }
+    {
+      domain = "partition";
+      owner = partition.ownerName;
+      plate_entry = "applyPartition";
+      unit_kind = "operations";
+      unit_count = builtins.length partition.knownOperations;
+    }
+    {
+      domain = "figurate-numbers";
+      owner = figurateNumbers.ownerName;
+      plate_entry = "applyFigurate";
+      unit_kind = "operations";
+      unit_count = builtins.length figurateNumbers.knownOperations;
+    }
+    {
+      domain = "pascal-triangle";
+      owner = pascalTriangle.ownerName;
+      plate_entry = "applyPascal";
+      unit_kind = "operations";
+      unit_count = builtins.length pascalTriangle.knownOperations;
+    }
+    {
+      domain = "factoradic";
+      owner = factoradic.ownerName;
+      plate_entry = "applyFactoradic";
+      unit_kind = "operations";
+      unit_count = builtins.length factoradic.knownOperations;
+    }
+    {
+      domain = "euler-totient";
+      owner = eulerTotient.ownerName;
+      plate_entry = "applyEulerTotient";
+      unit_kind = "operations";
+      unit_count = builtins.length eulerTotient.knownOperations;
+    }
+    {
+      domain = "josephus";
+      owner = josephus.ownerName;
+      plate_entry = "applyJosephus";
+      unit_kind = "operations";
+      unit_count = builtins.length josephus.knownOperations;
+    }
+    {
+      domain = "perfect-power";
+      owner = perfectPower.ownerName;
+      plate_entry = "applyPerfectPower";
+      unit_kind = "operations";
+      unit_count = builtins.length perfectPower.knownOperations;
+    }
+    {
+      domain = "stern-brocot";
+      owner = sternBrocot.ownerName;
+      plate_entry = "applySternBrocot";
+      unit_kind = "operations";
+      unit_count = builtins.length sternBrocot.knownOperations;
+    }
+    {
+      domain = "lucas-sequence";
+      owner = lucasSequence.ownerName;
+      plate_entry = "applyLucasSequence";
+      unit_kind = "operations";
+      unit_count = builtins.length lucasSequence.knownOperations;
+    }
+    {
+      domain = "ackermann";
+      owner = ackermann.ownerName;
+      plate_entry = "applyAckermann";
+      unit_kind = "operations";
+      unit_count = builtins.length ackermann.knownOperations;
+    }
+    {
+      domain = "bell-numbers";
+      owner = bellNumbers.ownerName;
+      plate_entry = "applyBellNumbers";
+      unit_kind = "operations";
+      unit_count = builtins.length bellNumbers.knownOperations;
+    }
+    {
+      domain = "pythagorean-triples";
+      owner = pythagoreanTriples.ownerName;
+      plate_entry = "applyPythagoreanTriples";
+      unit_kind = "operations";
+      unit_count = builtins.length pythagoreanTriples.knownOperations;
+    }
+    {
+      domain = "tetrahedral-numbers";
+      owner = tetrahedralNumbers.ownerName;
+      plate_entry = "applyTetrahedralNumbers";
+      unit_kind = "operations";
+      unit_count = builtins.length tetrahedralNumbers.knownOperations;
+    }
+    {
+      domain = "triangle-classify";
+      owner = triangleClassify.ownerName;
+      plate_entry = "applyTriangleClassify";
+      unit_kind = "operations";
+      unit_count = builtins.length triangleClassify.knownOperations;
+    }
+    {
+      domain = "harmonic-numbers";
+      owner = harmonicNumbers.ownerName;
+      plate_entry = "applyHarmonicNumbers";
+      unit_kind = "operations";
+      unit_count = builtins.length harmonicNumbers.knownOperations;
+    }
+    {
+      domain = "kaprekar";
+      owner = kaprekar.ownerName;
+      plate_entry = "applyKaprekar";
+      unit_kind = "operations";
+      unit_count = builtins.length kaprekar.knownOperations;
+    }
+    {
+      domain = "egyptian-fraction";
+      owner = egyptianFraction.ownerName;
+      plate_entry = "applyEgyptianFraction";
+      unit_kind = "operations";
+      unit_count = builtins.length egyptianFraction.knownOperations;
+    }
+    {
+      domain = "happy-numbers";
+      owner = happyNumbers.ownerName;
+      plate_entry = "applyHappyNumbers";
+      unit_kind = "operations";
+      unit_count = builtins.length happyNumbers.knownOperations;
+    }
+    {
+      domain = "narcissistic-numbers";
+      owner = narcissisticNumbers.ownerName;
+      plate_entry = "applyNarcissisticNumbers";
+      unit_kind = "operations";
+      unit_count = builtins.length narcissisticNumbers.knownOperations;
+    }
+    {
+      domain = "amicable-numbers";
+      owner = amicableNumbers.ownerName;
+      plate_entry = "applyAmicableNumbers";
+      unit_kind = "operations";
+      unit_count = builtins.length amicableNumbers.knownOperations;
+    }
+  ];
+
+  knownDomains = builtins.map (d: d.domain) domains;
+
+  # Self-describing census of the whole math kernel.
+  mathKernelInventory = {
+    domain_count = builtins.length domains;
+    total_unit_count =
+      builtins.foldl' (acc: d: acc + d.unit_count) 0 domains;
+    domains = domains;
+    known_domains = knownDomains;
+  };
+
+  # Route a structured request to the owning domain's plate. The
+  # request is passed through verbatim minus nothing -- each plate
+  # reads only the fields it knows. An unknown domain is Held.
+  applyMathKernel = request:
+    let d = request.kernel_domain;
+    in
+      if d == "numeric-evaluator" then
+        numericEvaluator.applyNumericEvaluatorPlate request
+      else if d == "number-theory" then
+        numberTheory.applyNumberTheory request
+      else if d == "rational" then
+        rational.applyRational request
+      else if d == "linear-equation" then
+        linearEquation.applyLinearEquation request
+      else if d == "combinatorics" then
+        combinatorics.applyCombinatorics request
+      else if d == "modular-arithmetic" then
+        modular.applyModular request
+      else if d == "polynomial" then
+        polynomial.applyPolynomial request
+      else if d == "quadratic-equation" then
+        quadratic.applyQuadratic request
+      else if d == "statistics" then
+        statistics.applyStatistics request
+      else if d == "matrix" then
+        matrix.applyMatrix request
+      else if d == "sequence-series" then
+        sequenceSeries.applySequence request
+      else if d == "set-theory" then
+        setTheory.applySet request
+      else if d == "boolean-logic" then
+        booleanLogic.applyBooleanLogic request
+      else if d == "base-conversion" then
+        baseConversion.applyBaseConversion request
+      else if d == "geometry" then
+        geometry.applyGeometry request
+      else if d == "complex-number" then
+        complexNumber.applyComplex request
+      else if d == "bitwise" then
+        bitwise.applyBitwise request
+      else if d == "continued-fraction" then
+        continuedFraction.applyContinuedFraction request
+      else if d == "graph-theory" then
+        graphTheory.applyGraph request
+      else if d == "interval-arithmetic" then
+        intervalArith.applyInterval request
+      else if d == "probability" then
+        probability.applyProbability request
+      else if d == "calculus" then
+        calculus.applyCalculus request
+      else if d == "chinese-remainder" then
+        chineseRemainder.applyCRT request
+      else if d == "vector" then
+        vector.applyVector request
+      else if d == "prime-sieve" then
+        primeSieve.applyPrimeSieve request
+      else if d == "roman-numerals" then
+        romanNumerals.applyRoman request
+      else if d == "digit-operations" then
+        digitOperations.applyDigitOperations request
+      else if d == "gray-code" then
+        grayCode.applyGrayCode request
+      else if d == "collatz" then
+        collatz.applyCollatz request
+      else if d == "decimal-expansion" then
+        decimalExpansion.applyDecimalExpansion request
+      else if d == "logarithm" then
+        logarithm.applyLogarithm request
+      else if d == "partition" then
+        partition.applyPartition request
+      else if d == "figurate-numbers" then
+        figurateNumbers.applyFigurate request
+      else if d == "pascal-triangle" then
+        pascalTriangle.applyPascal request
+      else if d == "factoradic" then
+        factoradic.applyFactoradic request
+      else if d == "euler-totient" then
+        eulerTotient.applyEulerTotient request
+      else if d == "josephus" then
+        josephus.applyJosephus request
+      else if d == "perfect-power" then
+        perfectPower.applyPerfectPower request
+      else if d == "stern-brocot" then
+        sternBrocot.applySternBrocot request
+      else if d == "lucas-sequence" then
+        lucasSequence.applyLucasSequence request
+      else if d == "ackermann" then
+        ackermann.applyAckermann request
+      else if d == "bell-numbers" then
+        bellNumbers.applyBellNumbers request
+      else if d == "pythagorean-triples" then
+        pythagoreanTriples.applyPythagoreanTriples request
+      else if d == "tetrahedral-numbers" then
+        tetrahedralNumbers.applyTetrahedralNumbers request
+      else if d == "triangle-classify" then
+        triangleClassify.applyTriangleClassify request
+      else if d == "harmonic-numbers" then
+        harmonicNumbers.applyHarmonicNumbers request
+      else if d == "kaprekar" then
+        kaprekar.applyKaprekar request
+      else if d == "egyptian-fraction" then
+        egyptianFraction.applyEgyptianFraction request
+      else if d == "happy-numbers" then
+        happyNumbers.applyHappyNumbers request
+      else if d == "narcissistic-numbers" then
+        narcissisticNumbers.applyNarcissisticNumbers request
+      else if d == "amicable-numbers" then
+        amicableNumbers.applyAmicableNumbers request
+      else {
+        outcome = "held-unknown-domain";
+        kernel_domain = d;
+        known_domains = knownDomains;
+      };
+
+  # v0.12-ZZ: the kernel audits its own structural integrity. This
+  # is the substrate self-audit criterion applied to the math
+  # kernel itself -- the kernel verifies, mechanically, that its
+  # own shape is internally consistent. Five invariants:
+  #
+  #   1. every domain descriptor is well-formed (all five fields
+  #      present, owner / domain non-empty strings, unit_count a
+  #      non-negative number)
+  #   2. domain names are pairwise distinct (no domain registered
+  #      twice)
+  #   3. total_unit_count equals the sum of the per-domain counts
+  #   4. known_domains equals the projection of `domain` over the
+  #      descriptors (the inventory's two views agree)
+  #   5. a domain outside the kernel routes to held-unknown-domain
+  #      (the dispatcher's fall-through is correct)
+  #
+  # `all_invariants_hold` is the single bit an external auditor
+  # reads; each check is also surfaced individually.
+  mathKernelSelfAudit =
+    let
+      descriptorOK = d:
+        d ? domain && d ? owner && d ? plate_entry
+        && d ? unit_kind && d ? unit_count
+        && builtins.isString d.domain && d.domain != ""
+        && builtins.isString d.owner && d.owner != ""
+        && builtins.isString d.plate_entry && d.plate_entry != ""
+        && d.unit_count >= 0;
+      descriptorCheck = builtins.all descriptorOK domains;
+
+      domainNames = builtins.map (d: d.domain) domains;
+      dedup = seen: rest:
+        if rest == [] then seen
+        else
+          let h = builtins.head rest;
+          in if builtins.elem h seen
+             then dedup seen (builtins.tail rest)
+             else dedup (seen ++ [ h ]) (builtins.tail rest);
+      uniquenessCheck =
+        builtins.length (dedup [] domainNames)
+        == builtins.length domainNames;
+
+      computedTotal =
+        builtins.foldl' (acc: d: acc + d.unit_count) 0 domains;
+      totalCheck =
+        computedTotal == mathKernelInventory.total_unit_count;
+
+      knownDomainsCheck =
+        mathKernelInventory.known_domains == domainNames;
+
+      probe = applyMathKernel {
+        kernel_domain = "__not-a-real-domain__";
+      };
+      fallThroughCheck = probe.outcome == "held-unknown-domain";
+    in {
+      outcome = "math-kernel-self-audit";
+      all_invariants_hold =
+        descriptorCheck && uniquenessCheck && totalCheck
+        && knownDomainsCheck && fallThroughCheck;
+      descriptor_check = descriptorCheck;
+      uniqueness_check = uniquenessCheck;
+      total_check = totalCheck;
+      known_domains_check = knownDomainsCheck;
+      fall_through_check = fallThroughCheck;
+      audited_domain_count = builtins.length domains;
+      audited_total_units = computedTotal;
+    };
+
+in {
+  inherit
+    ownerName
+    domains
+    knownDomains
+    mathKernelInventory
+    mathKernelSelfAudit
+    applyMathKernel
+    # re-export every owner so a caller that imports the kernel
+    # reaches every domain's bare functions through one import.
+    numericEvaluator
+    numberTheory
+    rational
+    linearEquation
+    combinatorics
+    modular
+    polynomial
+    quadratic
+    statistics
+    matrix
+    sequenceSeries
+    setTheory
+    booleanLogic
+    baseConversion
+    geometry
+    complexNumber
+    bitwise
+    continuedFraction
+    graphTheory
+    intervalArith
+    probability
+    calculus
+    chineseRemainder
+    vector
+    primeSieve
+    romanNumerals
+    digitOperations
+    grayCode
+    collatz
+    decimalExpansion
+    logarithm
+    partition
+    figurateNumbers
+    pascalTriangle
+    factoradic
+    eulerTotient
+    josephus
+    perfectPower
+    sternBrocot
+    lucasSequence
+    ackermann
+    bellNumbers
+    pythagoreanTriples
+    tetrahedralNumbers
+    triangleClassify
+    harmonicNumbers
+    kaprekar
+    egyptianFraction
+    happyNumbers
+    narcissisticNumbers
+    amicableNumbers;
+  meta = {
+    source = "stdlib math kernel";
+    owner = ownerName;
+    base = "parametric-math-kernel-v0";
+    rev_note = "v0.12-VV..AAB (div-math): integrating capstone of the div-math kernel. Imports all forty-three div-math owners (numeric-evaluator, number-theory, rational, linear-equation, combinatorics, modular-arithmetic, polynomial, quadratic-equation, statistics, matrix, sequence-series, set-theory, boolean-logic, base-conversion, geometry, complex-number, bitwise, continued-fraction, graph-theory, interval-arithmetic, probability, calculus, chinese-remainder, vector, prime-sieve, roman-numerals, digit-operations, gray-code, collatz, decimal-expansion, logarithm, partition, figurate-numbers, pascal-triangle, factoradic, euler-totient, josephus, perfect-power, stern-brocot, lucas-sequence, ackermann, bell-numbers, pythagorean-triples, tetrahedral-numbers, triangle-classify, harmonic-numbers, kaprekar, egyptian-fraction, happy-numbers, narcissistic-numbers, amicable-numbers) and exposes a self-describing mathKernelInventory, a single applyMathKernel dispatcher routing on `kernel_domain`, and a mathKernelSelfAudit. Adds no new math -- only the unifying inventory and dispatcher. Every new owner is folded in as it lands (XX: boolean-logic, YY: base-conversion, AAA: geometry, AAB: complex-number, AAC: bitwise, AAD: continued-fraction, AAE: graph-theory, AAF: interval-arithmetic, AAG: probability, AAH: calculus, AAI: chinese-remainder, AAJ: vector, AAK: prime-sieve, AAL: roman-numerals, AAM: digit-operations, AAN: gray-code, AAO: collatz, AAP: decimal-expansion, AAQ: logarithm, AAR: partition, AAS: figurate-numbers, AAT: pascal-triangle, AAU: factoradic, AAX: euler-totient, AAY: josephus, AAZ: perfect-power, ABA: stern-brocot, ABB: lucas-sequence, ABC: ackermann, ABD: bell-numbers, ABE: pythagorean-triples, ABF: tetrahedral-numbers, ABG: triangle-classify, ABH: harmonic-numbers, ABI: kaprekar, ABJ: egyptian-fraction, ABK: happy-numbers, ABL: narcissistic-numbers, ABM: amicable-numbers). NOT a natural-language front end, NOT yet a registered lens.";
+  };
+}

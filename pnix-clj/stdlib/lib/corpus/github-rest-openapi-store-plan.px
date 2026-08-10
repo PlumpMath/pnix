@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/github-rest-openapi-store-plan.px — GitHub REST OpenAPI metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# API calls/tokens/private data/diff bodies/request logs/execution/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./github-rest-openapi.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "api.github_rest.openapi.v1";
+    source = { name = "GitHub REST API official OpenAPI description"; license = "MIT"; scope = "empty seed fallback"; };
+    summary = { path_count = 0; operation_count = 0; component_schema_count = 0; };
+    source_files = [ ]; operations = [ ]; operation_parameters = [ ]; operation_responses = [ ]; request_bodies = [ ]; component_schemas = [ ]; schema_properties = [ ]; schema_required = [ ]; schema_refs = [ ]; schema_enums = [ ]; component_parameters = [ ]; security_schemes = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "github-rest-openapi-load-v0";
+      source_lens = "stdlib/lib/corpus/github-rest-openapi-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "api.github_rest.openapi.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "github-rest-openapi-query-v0";
+      source_lens = "stdlib/lib/corpus/github-rest-openapi-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "api.github_rest.openapi.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

@@ -1,0 +1,206 @@
+# stdlib.lib.math.egyptian-fraction
+#
+# OWNER-LAW (v0.12-ABJ, div-math, 2026-05-22): Egyptian fractions
+# -- writing a proper fraction as a sum of distinct unit fractions.
+#
+# # The greedy (Fibonacci-Sylvester) algorithm
+#
+# A unit fraction is 1/n. The ancient Egyptians wrote every proper
+# fraction p/q as a sum of distinct unit fractions. Fibonacci's
+# greedy algorithm always finds one: take the largest unit
+# fraction 1/n that does not exceed p/q (so n = ceil(q/p)),
+# subtract it, and repeat on the remainder.
+#
+#     2/3 = 1/2 + 1/6
+#     3/7 = 1/3 + 1/11 + 1/231
+#     4/5 = 1/2 + 1/4 + 1/20
+#
+# The remainder's numerator strictly decreases at every step
+# (p*n - q < p), so the process always terminates -- and the
+# denominators strictly increase, so the unit fractions are
+# automatically distinct. The decomposition is therefore correct
+# by construction, with no need to sum it back.
+#
+# # Kernel layering
+#
+#   egyptian-fraction -> rational   (each remainder is kept as a
+#                                    gcd-reduced rational)
+#
+# # What this owner is NOT (honest scope)
+#
+#   - The greedy algorithm is correct but not minimal -- a shorter
+#     decomposition may exist (e.g. 4/5 = 1/2 + 1/4 + 1/20 by
+#     greedy, but also 1/2 + 1/5 + 1/10). This owner computes the
+#     greedy one, not the shortest.
+#   - Greedy denominators can grow double-exponentially. When the
+#     next denominator would leave 64-bit range the owner Holds
+#     (`held-decomposition-unbounded`) rather than overflowing
+#     silently -- some proper fractions genuinely cannot be
+#     decomposed within 64-bit range.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/egyptian-fraction.px";
+
+  rational = import ./rational.px;
+  mkR = rational.mkRational;
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # A working denominator q*n is rejected once it would exceed this
+  # bound, keeping every product inside 64-bit range.
+  denominatorCap = 100000000000000;
+  maxGreedySteps = 16;
+
+  # Greedy Egyptian-fraction decomposition of p0/q0 (a proper
+  # fraction). Returns { denominators; complete } -- complete is
+  # false when the denominators would leave 64-bit range.
+  decompose = p0: q0:
+    let
+      r0 = mkR p0 q0;
+      go = p: q: acc: steps:
+        if steps > maxGreedySteps then { denominators = acc; complete = false; }
+        else if p == 0 then { denominators = acc; complete = true; }
+        else if p == 1 then { denominators = acc ++ [ q ]; complete = true; }
+        else
+          let n = (q + p - 1) / p;
+          in if n > denominatorCap / q
+             then { denominators = acc; complete = false; }
+             else
+               let r = mkR (p * n - q) (q * n);
+               in go r.num r.den (acc ++ [ n ]) (steps + 1);
+    in go r0.num r0.den [] 0;
+
+  # The largest unit fraction not exceeding p0/q0: its denominator
+  # is ceil(q/p) on the reduced fraction.
+  largestUnitFraction = p0: q0:
+    let r = mkR p0 q0;
+    in (r.den + r.num - 1) / r.num;
+
+  # Does p0/q0 reduce to a unit fraction 1/n?
+  isUnitFraction = p0: q0: (mkR p0 q0).num == 1;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "decompose"
+    "largest-unit-fraction"
+    "is-unit-fraction"
+    "longest-decomposition"
+  ];
+
+  # The proper-fraction operations cap the denominator here.
+  properLimit = 100000;
+  # `longest-decomposition` scans every fraction with q <= limit;
+  # this cap keeps the quadratic sweep bounded.
+  searchLimit = 40;
+
+  # The proper fraction p/q with q <= limit whose greedy
+  # decomposition has the most terms (ties resolved to the
+  # smallest q, then the smallest p).
+  longestDecomposition = limit:
+    let
+      considerP = q: best: p:
+        let
+          d = decompose p q;
+          tc = builtins.length d.denominators;
+        in if d.complete && tc > best.term_count
+           then { inherit p q; term_count = tc; }
+           else best;
+      overQ = best: q:
+        builtins.foldl' (considerP q) best (rangeList 1 (q - 1));
+    in builtins.foldl' overQ
+         { p = 0; q = 0; term_count = 0; }
+         (rangeList 2 limit);
+
+  applyEgyptianFraction = request:
+    let
+      op = request.operation;
+      p     = if request ? p then request.p else 0;
+      q     = if request ? q then request.q else 0;
+      limit = if request ? limit then request.limit else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "longest-decomposition" then
+        if limit < 2 then {
+          outcome = "held-argument-too-small";
+          operation = op; limit = limit;
+          reason = "the search needs a denominator limit of at least 2";
+        }
+        else if limit > searchLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; limit = limit;
+          cap = searchLimit;
+          reason = "the sweep is quadratic in the limit; it is capped to stay bounded";
+        }
+        else
+          let r = longestDecomposition limit;
+          in {
+            outcome = "egyptian-fraction-computed";
+            operation = op; limit = limit;
+            p = r.p; q = r.q; term_count = r.term_count;
+          }
+      # The proper-fraction operations below all need 0 < p < q.
+      else if p < 1 || q < 1 then {
+        outcome = "held-nonpositive-number";
+        operation = op; p = p; q = q;
+      }
+      else if p >= q then {
+        outcome = "held-not-proper-fraction";
+        operation = op; p = p; q = q;
+        reason = "an Egyptian-fraction input must satisfy 0 < p < q";
+      }
+      else if q > properLimit then {
+        outcome = "held-argument-too-large";
+        operation = op; q = q;
+        limit = properLimit;
+        reason = "the denominator is capped to keep the greedy step bounded";
+      }
+      else if op == "is-unit-fraction" then {
+        outcome = "egyptian-fraction-computed";
+        operation = op; p = p; q = q;
+        is_unit_fraction = isUnitFraction p q;
+      }
+      else if op == "largest-unit-fraction" then {
+        outcome = "egyptian-fraction-computed";
+        operation = op; p = p; q = q;
+        denominator = largestUnitFraction p q;
+      }
+      else
+        # op == "decompose"
+        let d = decompose p q;
+        in
+          if !d.complete then {
+            outcome = "held-decomposition-unbounded";
+            operation = op; p = p; q = q;
+            partial_denominators = d.denominators;
+            reason = "the greedy denominators would leave 64-bit range";
+          }
+          else {
+            outcome = "egyptian-fraction-computed";
+            operation = op; p = p; q = q;
+            denominators = d.denominators;
+            term_count = builtins.length d.denominators;
+          };
+
+in {
+  inherit
+    ownerName
+    decompose
+    largestUnitFraction
+    isUnitFraction
+    longestDecomposition
+    knownOperations
+    applyEgyptianFraction;
+  meta = {
+    source = "stdlib math egyptian fraction";
+    owner = ownerName;
+    base = "parametric-math-egyptian-fraction-v0";
+    rev_note = "v0.12-ABJ (div-math): Egyptian fractions -- writing a proper fraction as a sum of distinct unit fractions by Fibonacci's greedy (Fibonacci-Sylvester) algorithm. decompose finds the greedy decomposition (2/3=1/2+1/6, 3/7=1/3+1/11+1/231); largestUnitFraction is the first greedy term ceil(q/p); isUnitFraction tests whether p/q reduces to 1/n; longestDecomposition sweeps every proper fraction with q<=limit for the most-term decomposition. The remainder numerator strictly decreases (terminates) and the denominators strictly increase (automatically distinct), so the decomposition is correct by construction. Kernel layering: egyptian-fraction -> rational (each remainder is a gcd-reduced rational). NOT minimal (greedy, not shortest); when greedy denominators would leave 64-bit range the owner Holds rather than overflowing silently. NOT yet a registered lens.";
+  };
+}

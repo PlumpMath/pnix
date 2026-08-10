@@ -1,0 +1,34 @@
+# stdlib/lib/nl/korean-ability-test.px — 능력/불능 보조용언 -ㄹ 수 있다/없다 (parse + realize 양방향).
+#
+# 한국어 최빈 modal 구문. 3어절(V-ㄹ + 수 + 있/없): head=V-ㄹ(verbIdx-2, action 운반), 수=별도 제외.
+#   갈 수 있다→action=가 modality=ability·먹을 수 없다→action=먹 modality=inability(못과 canonical-equate).
+# realize: modalityOf=="ability"=고유값 키잉(modality_form 아님 — termToProp 가 form 미복원→실 round-trip drift 방지).
+#   불능(수 없다)=inability라 못 과 같은 term_key(canonical-equate, 수없다↔못한다 동의)→recovered 표면은 못형이나 math-keep.
+# V-ㄹ unfuse: 먹을→먹(을 strip)·갈→가/할→하/볼→보(lAdnominal=lKkaForm-까). 동음 갈=가/갈다는 unfuse 인식우선 상속.
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  pa = s: let p = knm.liftToProposition s; in p.action + "/" + p.modality;
+  v = s: (knm.convergeGate s).verdict;
+in {
+  gal = pa "철수가 갈 수 있다";          # 가/ability
+  meog = pa "철수가 밥을 먹을 수 있다";  # 먹/ability
+  hal = pa "철수가 일을 할 수 있다";     # 하/ability
+  bol = pa "철수가 영화를 볼 수 없다";   # 보/inability
+  v_gal = v "철수가 갈 수 있다";          # math-keep (정확 round-trip)
+  v_bol = v "철수가 영화를 볼 수 없다";   # math-keep (못 canonical-equate)
+  iss = pa "철수가 학교에 있다";         # 있/plain (회귀: 평서 있다 불변)
+  all_ok =
+       (pa "철수가 갈 수 있다" == "가/ability")
+    && (pa "철수가 밥을 먹을 수 있다" == "먹/ability")
+    && (pa "철수가 일을 할 수 있다" == "하/ability")
+    && (pa "철수가 영화를 볼 수 없다" == "보/inability")
+    # ★parse object 보존(능력 구문서도 목적어 살아있음)
+    && (B.any (r: (r.role == "object") && (r.entity == "밥")) (knm.liftToProposition "철수가 밥을 먹을 수 있다").roles)
+    # ★round-trip math-keep
+    && (v "철수가 갈 수 있다" == "math-keep")
+    && (v "철수가 밥을 먹을 수 있다" == "math-keep")
+    && (v "철수가 일을 할 수 있다" == "math-keep")
+    && (v "철수가 영화를 볼 수 없다" == "math-keep")
+    # ★회귀: 평서 있다/없다·못은 불변
+    && (pa "철수가 학교에 있다" == "있/plain")
+    && (v "철수가 못 간다" == "math-keep");
+}

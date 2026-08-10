@@ -1,0 +1,144 @@
+# stdlib/lib/nl/dictionary-facts.px — 사전 facts(lemma·품사)를 pnix rec{}로 소비하는 거울 측 리더
+#
+# ★헌법: redb엔 pnix rec{}만 (JSON·XML 절대 금지). 사전 원본(stdict JSON 88쪽·woorimalsaem XML 11쪽)은
+#   host(Rust)가 파싱만 하고, facts(lemma·품사·활용·관계 — 정의문/용례 제외=clean-room)를 추출해
+#   `rec { lemma; pos; }` 로 <50MB 샤딩된 redb 파일들에 적재한다. 이 .px가 그 rec{}를 읽어 *generic* 분류.
+#   = 하드코딩 predicate-concepts 의 술어/개체 구분을 *사전 품사*로 대체(어느 단어든 동작).
+# ★one-mirror: 새 거울 0 (korean-nl-mirror apply). Rust=host 바이트, 의미/분류는 전부 여기(.px).
+let
+  B = builtins;
+  firstMatch = list: pred:
+    let go = i: if i >= (B.length list) then null else if pred (B.elemAt list i) then B.elemAt list i else go (i + 1);
+    in go 0;
+  # 한국어 사전 품사(pos) → 역할 종류. 품사 = sense-무모호한 *문법 범주*(단어뜻 아님) → pure 교집합 적격.
+  posSubkind = pos:
+    if pos == "보조 동사" then "auxiliary-verb"
+    else if pos == "보조 형용사" then "auxiliary-adjective"
+    else if pos == "의존 명사" then "dependent-noun"
+    else if pos == "접사" then "affix"
+    else if pos == "구" then "phrase"
+    else if pos == "품사 없음" then "unknown-pos"
+    else "plain";
+  posKind = pos:
+    if (pos == "동사") || (pos == "보조 동사") then "predicate"          # 먹다·가다·하다(aux) …
+    else if (pos == "형용사") || (pos == "보조 형용사") then "predicate"  # 예쁘다 … (한국어 형용사=서술)
+    else if (pos == "명사") || (pos == "의존 명사") then "entity"         # 사과·책·것 …
+    else if pos == "대명사" then "entity"       # 나·너 …
+    else if pos == "수사" then "entity"         # 하나·둘 …
+    else if pos == "부사" then "modifier"       # 매우 …
+    else if pos == "관형사" then "modifier"     # 새 …
+    else if pos == "조사" then "particle"       # 가·를 …
+    else if pos == "감탄사" then "interjection"
+    else if pos == "접사" then "affix"
+    else if pos == "구" then "phrase"
+    else if pos == "품사 없음" then "unknown"
+    else "other";
+  isPredicatePos = pos: (posKind pos) == "predicate";
+  isEntityPos = pos: (posKind pos) == "entity";
+  normalizeFact = f: f // { kind = posKind f.pos; pos_subkind = posSubkind f.pos; };
+  bestCandidate = candidates:
+    if candidates == [ ] then null
+    else let p = firstMatch candidates (c: c.kind == "predicate");
+             e = firstMatch candidates (c: c.kind == "entity");
+             m = firstMatch candidates (c: c.kind == "modifier");
+             q = firstMatch candidates (c: c.kind == "particle");
+             i = firstMatch candidates (c: c.kind == "interjection");
+             a = firstMatch candidates (c: c.kind == "affix");
+             r = firstMatch candidates (c: c.kind == "phrase");
+         in if p != null then p
+            else if e != null then e
+            else if m != null then m
+            else if q != null then q
+            else if i != null then i
+            else if a != null then a
+            else if r != null then r
+            else B.head candidates;
+
+  # facts = [ rec{ lemma; pos; } … ] (redb rec{} 에서 읽어 주입). multi 후보를 정본으로 두고 legacy 단일 API 는 best 후보 wrapper.
+  posCandidatesOf = facts: lemma: B.map normalizeFact (B.filter (f: f.lemma == lemma) facts);
+  posOf = facts: lemma:
+    let c = bestCandidate (posCandidatesOf facts lemma);
+    in if c == null then null else c.pos;
+  lemmaKind = facts: lemma:
+    let p = posOf facts lemma; in if p == null then null else posKind p;
+  knownLemma = facts: lemma: (posCandidatesOf facts lemma) != [ ];
+
+  # ── 사전 citation 형 → lift stem 정규화 (사전→lift 배선 선결) ──
+  #   사전 lemma 는 citation(동사/형용사='-다': 먹다·바꾸다), lift 가 내는 action 은 stem(먹·바꾸). 매칭하려면
+  #   동사/형용사 citation 의 마지막 '다'(3바이트)를 벗겨 stem 으로. 명사 등은 그대로(strip 안 함).
+  stemOf = lemma: pos:
+    let n = builtins.stringLength lemma;
+    in if (isPredicatePos pos) && (n >= 3) && ((builtins.substring (n - 3) 3 lemma) == "다")
+       then builtins.substring 0 (n - 3) lemma else lemma;
+  stemCandidatesOf = facts: stem:
+    B.map (f: normalizeFact (f // { stem = stemOf f.lemma f.pos; }))
+      (B.filter (f: (stemOf f.lemma f.pos) == stem) facts);
+  posOfStem = facts: stem:                # lift stem → pos (citation '다' 정규화 후 매칭)
+    let c = bestCandidate (stemCandidatesOf facts stem);
+    in if c == null then null else c.pos;
+  stemKind = facts: stem:                 # lift stem → 술어/개체 kind
+    let p = posOfStem facts stem; in if p == null then null else posKind p;
+
+  # ── O(1) 인덱스 (대규모 사전: linear posOfStem 의 per-lookup filter 제거 — 5000-fact 측정 +4.4s/문장) ──
+  #   정본은 stem → [candidate] multi-index. legacy stem→pos index 는 bestCandidate wrapper 로 보존.
+  # ⚠★LANDMINE(deep-research wxlqq23u3): buildStemCandidateIndex 의 `acc // {…}` foldl 은 fact마다 누적 attrset
+  #   전체를 clone(interpret.rs // 가 BTreeMap full-clone) = **진짜 O(n²)**(release 16k=11.9s, 40만=시간단위).
+  #   ★hot-path(lift/serve)에서 절대 호출 금지 — buildStemIndex(O(n log n))만 live. 이 API + posOfStem/
+  #   stemCandidatesOf(indexless per-lookup O(n) filter, :73-78)는 multi-candidate 분석 *단발* 용도로만, 문장루프 금지.
+  buildStemCandidateIndex = facts:
+    let add = acc: f:
+          let stem = stemOf f.lemma f.pos;
+              row = normalizeFact (f // { stem = stem; });
+              old = if acc ? ${stem} then acc.${stem} else [ ];
+          in acc // { ${stem} = old ++ [ row ]; };
+    in B.foldl' add { } facts;
+  stemCandidatesAt = idx: stem: if idx ? ${stem} then idx.${stem} else [ ];
+  bestPosAt = idx: stem:
+    let c = bestCandidate (stemCandidatesAt idx stem);
+    in if c == null then null else c.pos;
+  bestKindAt = idx: stem:
+    let c = bestCandidate (stemCandidatesAt idx stem);
+    in if c == null then null else c.kind;
+  kindCandidatesAt = idx: stem: B.map (c: c.kind) (stemCandidatesAt idx stem);
+  #   ★Layer0 perf(deep-research wxlqq23u3): 전엔 4-filter가 posKind 를 fact당 4× force(+map stemOf 1×) =
+  #   import-parsed lazy thunk 재force가 벽의 본체(80k서 genList 0.08s vs import 1.67s=20× 갭). 이제 prio 태그를
+  #   *1패스*로 계산하고(posKind/stemOf fact당 1×), filter는 정수 prio 위에서(재force 0). 파티션/순서(preds++ents++
+  #   mods++rest)+listToAttrs first-wins 그대로 → 기존 stemIdx 와 **byte-identical**(골든 불변).
+  kindPrio = k: if k == "predicate" then 0 else if k == "entity" then 1 else if k == "modifier" then 2 else 3;
+  buildStemIndex = facts:
+    let tagged = B.map (f: { stem = stemOf f.lemma f.pos; pos = f.pos; prio = kindPrio (posKind f.pos); }) facts;
+        preds = B.filter (t: t.prio == 0) tagged;
+        ents  = B.filter (t: t.prio == 1) tagged;
+        mods  = B.filter (t: t.prio == 2) tagged;
+        rest  = B.filter (t: t.prio == 3) tagged;
+    in B.listToAttrs (B.map (t: { name = t.stem; value = t.pos; }) (preds ++ ents ++ mods ++ rest));
+  stemKindAt = idx: stem: if idx ? ${stem} then posKind idx.${stem} else null;   # 인덱스 stem → kind (미등록 null)
+  hasAeo = f: (f ? aeo) && (B.isString f.aeo) && (f.aeo != "");
+  hasAeoRev = f: (hasAeo f) && (f ? aeo_rev) && f.aeo_rev;
+  hasValency = f: (f ? valency) && (B.isString f.valency) && (f.valency != "");
+  hasHadaCompound = f: (f ? derives_hada) && f.derives_hada;
+  buildAeoIndex = facts:
+    B.listToAttrs (B.map (f: { name = stemOf f.lemma f.pos; value = f.aeo; })
+      (B.filter (f: (isPredicatePos f.pos) && (hasAeo f)) facts));
+  buildAeoReverseIndex = facts:
+    B.listToAttrs (B.map (f: { name = f.aeo; value = stemOf f.lemma f.pos; })
+      (B.filter (f: (isPredicatePos f.pos) && (hasAeoRev f)) facts));
+  buildValencyIndex = facts:
+    B.listToAttrs (B.map (f: { name = stemOf f.lemma f.pos; value = f.valency; })
+      (B.filter (f: (isPredicatePos f.pos) && (hasValency f)) facts));
+  buildHadaCompoundIndex = facts:
+    B.listToAttrs (B.map (f: { name = stemOf f.lemma f.pos; value = true; })
+      (B.filter (f: ((posKind f.pos) == "entity") && (hasHadaCompound f)) facts));
+  aeoAt = idx: stem: if idx ? ${stem} then idx.${stem} else null;
+  stemAtAeo = idx: aeo: if idx ? ${aeo} then idx.${aeo} else null;
+  valencyAt = idx: stem: if idx ? ${stem} then idx.${stem} else null;
+  hadaCompoundAt = idx: stem: if idx ? ${stem} then idx.${stem} else false;
+in {
+  inherit posSubkind posKind isPredicatePos isEntityPos normalizeFact bestCandidate
+          posCandidatesOf posOf lemmaKind knownLemma stemOf stemCandidatesOf posOfStem stemKind
+          buildStemCandidateIndex stemCandidatesAt bestPosAt bestKindAt kindCandidatesAt
+          buildStemIndex stemKindAt
+          buildAeoIndex buildAeoReverseIndex aeoAt stemAtAeo
+          buildValencyIndex valencyAt buildHadaCompoundIndex hadaCompoundAt;
+  schema = "dictionary.facts.v1";
+}

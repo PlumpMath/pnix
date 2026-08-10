@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/slsa-spec-store-plan.px — SLSA specification structural metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# prose/examples/real attestations/build logs/secrets/execution/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./slsa-spec.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "supply_chain.slsa.specification.v1";
+    source = { name = "SLSA specification structural metadata"; license = "CC-BY-4.0 / repository permissive source"; scope = "empty seed fallback"; };
+    summary = { source_file_count = 0; cue_field_count = 0; proto_message_count = 0; };
+    source_files = [ ]; cue_fields = [ ]; proto_messages = [ ]; proto_fields = [ ]; section_headings = [ ]; tokens = [ ]; level_tokens = [ ]; predicate_uris = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "slsa-spec-load-v0";
+      source_lens = "stdlib/lib/corpus/slsa-spec-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "supply_chain.slsa.specification.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "slsa-spec-query-v0";
+      source_lens = "stdlib/lib/corpus/slsa-spec-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "supply_chain.slsa.specification.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

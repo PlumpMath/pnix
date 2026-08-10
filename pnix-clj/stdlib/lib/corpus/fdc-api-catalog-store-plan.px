@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/fdc-api-catalog-store-plan.px — USDA FoodData Central API guide catalog metadata.
+# redb corpus_source_records에 pnix attrset source(JSON 아님)로 append한다.
+# food/nutrient payload rows, advice, graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./fdc-api-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "food.fdc_api_catalog.v1";
+    source = { name = "USDA FoodData Central API guide catalog metadata"; license = "USDA public API guide metadata"; scope = "empty seed fallback"; };
+    summary = { api_path_ref_count = 0; html_body_persisted = false; food_item_rows_ingested = false; nutrient_values_ingested = false; branded_product_payloads_ingested = false; ingredients_or_allergens_ingested = false; api_result_rows_ingested = false; dietary_or_medical_advice_ingested = false; mirror_graph_wiring = false; };
+    page = { url = ""; http_status = 0; title = ""; sha256 = ""; api_path_refs = [ ]; };
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "fdc-api-catalog-load-v0";
+      source_lens = "stdlib/lib/corpus/fdc-api-catalog-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "food.fdc_api_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "fdc-api-catalog-query-v0";
+      source_lens = "stdlib/lib/corpus/fdc-api-catalog-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "food.fdc_api_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

@@ -1,0 +1,34 @@
+# stdlib/lib/nl/korean-aux-clause-roundtrip-test.px — 비종결 절 안 보조용언 round-trip lock (realizeClause aux-aware).
+#
+# 이전: realizeClause가 절의 action 동사+연결어미만 생성 → 절 안 보조용언(능력 수 있/경험 적이 있/기동 게 되/의무 야 하/
+#       상태 아어 있)을 버려 "갈 수 있으면"이 "가면"으로 퇴화 → convergeComplexGate held-complex-drift.
+# 수정: realizeClause가 aux prefix(realizeSentence와 동형)+aux동사가 연결어미 수령(갈 수 있+으면). 의미보존 round-trip.
+# ★남은 한계(내부 고/려고 가진 aux): progressive(먹고 있)·desiderative(고 싶)·intention(려고 하)은 splitClauseRelations가
+#   aux 내부 연결어미서 과분리 → 표면은 닫히나 의미 과분리(lift-side, 별도·위험). 여기선 *깨끗이 닫히는 6종*만 lock.
+let knm = import ./korean-nl-mirror.px;
+  rtKeep = s: let cg = knm.convergeComplexGate s;
+    in (cg.verdict == "math-keep-complex") && (cg ? recovered) && (cg.recovered == s) && (cg.clause_count == 2);
+  # 절 c0 의 aux 의미가 보존됐는지(과분리 아님): action+aspect/modality 직접 검사.
+  c0 = s: (builtins.head (knm.liftComplexSentence s).clauses).prop;
+  c0asp = s: let p = c0 s; in if p ? aspect then p.aspect else "plain";
+  c0mod = s: let p = c0 s; in if p ? modality then p.modality else "plain";
+  c0n = s: (knm.liftComplexSentence s).clause_count;
+in {
+  all_ok =
+       (rtKeep "철수가 갈 수 있으면 학교에 간다")          # 능력 ability
+    && (rtKeep "철수가 책을 읽은 적이 있고 영희가 잔다")    # 경험 experiential
+    && (rtKeep "철수가 책을 읽은 적이 없으면 영희가 돕는다") # 무경험 inexperiential
+    && (rtKeep "철수가 가게 되면 영희가 운다")              # 기동 inchoative
+    && (rtKeep "철수가 가야 하면 영희가 돕는다")            # 의무 obligation
+    && (rtKeep "철수가 앉아 있으면 영희가 온다")            # 상태 resultative
+    # ★splitClauseRelations aux 룩어헤드: 진행(고 있)·소망(고 싶) 절이 *의미보존* 2절(과분리 아님)
+    && (rtKeep "철수가 밥을 먹고 있고 영희가 잔다")
+    && ((c0n "철수가 밥을 먹고 있고 영희가 잔다") == 2)
+    && ((c0asp "철수가 밥을 먹고 있고 영희가 잔다") == "progressive")
+    && (rtKeep "철수가 가고 싶고 영희가 잔다")
+    && ((c0n "철수가 가고 싶고 영희가 잔다") == 2)
+    && ((c0mod "철수가 가고 싶고 영희가 잔다") == "desiderative")
+    # ★진성 sequential 무해(고+비-aux): 먹고 학교에=2절 분리 유지
+    && ((c0n "철수가 밥을 먹고 학교에 갔다") == 2)
+    && ((c0asp "철수가 밥을 먹고 학교에 갔다") == "plain");
+}

@@ -1,0 +1,323 @@
+let
+  ownerName = "stdlib.coding.korean-case-marker-lens";
+
+  # v0.16-BN: Korean case marker (조사) lens.
+  #
+  # Takes (noun, BM semantic role, finalKind) → noun + 조사 string.
+  # Reads BM's atom slot semantic role registry semantics: the role
+  # determines WHICH postposition family attaches; the finalKind
+  # determines WHICH allomorph within that family.
+  #
+  # Owner thesis (BL/BM/BN dialogue): Korean postposition algebra
+  # is mathematically isomorphic to substrate atom slot algebra.
+  # King Sejong designed Hangul as ontology surface — each
+  # postposition lifts a noun into a TYPED semantic role:
+  #
+  #   을/를  → object         (동작 대상)
+  #   이/가  → subject        (동작 주체)
+  #   은/는  → topic          (담론 주제)
+  #   에     → target (locative/dative)
+  #   에게   → recipient      (받는 사람)
+  #   에서   → source         (출발 / 위치)
+  #   으로/로 → manner/instrument (수단 / 방법 / 방향)
+  #   와/과  → comitative     (함께)
+  #   의     → genitive       (소유)
+  #
+  # 100% substrate-native: no mecab-ko / lindera / external NLP
+  # dependency. The rules table is a closed `.px` primitive; the
+  # lens function is a pure lookup + concatenation.
+  #
+  # HONEST SCOPE (BN baseline):
+  # Caller provides `finalKind` (받침 kind: "none", "regular",
+  # "rieul") explicitly. The substrate doesn't yet auto-detect
+  # finalKind from a Korean syllable's 종성 because pnix-eval's
+  # byte-indexed substring loses byte-level resolution on invalid
+  # UTF-8 single bytes (replacement-char normalization). Adding
+  # auto-detection is a parallel-of-BN slice — either via a host
+  # bridge that calls pnix-core/src/lang/ko.rs::decompose_hangul_syllable
+  # exposed as a builtin, or via a substrate-internal byte-aware
+  # primitive added to pnix_eval. Both keep the lens
+  # substrate-native (no external NLP).
+  #
+  # finalKind values:
+  #   "none"     — 받침 없음 (모음으로 끝남: 가, 나, 수, 메모리)
+  #   "regular"  — 받침 있음, ㄹ 아님 (각, 값, 문, 컴퓨터)
+  #   "rieul"    — ㄹ 받침 (갈, 술, 물, 한글)
+  #
+  # The 3-way split is needed because 으로/로 alone has a special
+  # ㄹ-받침 rule: ㄹ 받침이거나 받침이 없으면 "로", 다른 받침은
+  # "으로". Other roles use only the 2-way (final / no-final) split.
+
+  # Closed inventory of finalKind values.
+  knownFinalKinds = [ "none" "regular" "rieul" ];
+
+  # Closed rules table. Each row is a (role, allomorph by finalKind)
+  # mapping. The role names match BM's knownSemanticRoles plus
+  # additional Korean-specific roles ("subject"/"topic"/"recipient"/
+  # "source"/"comitative"/"genitive") that BM's atom slot algebra
+  # may need in future atom kinds (e.g. a future "send" atom whose
+  # `recipient` slot would use 에게).
+  knownCaseMarkerRules = [
+    # === BM-baseline roles (5; lens covers 4 of them, body=null) ===
+    {
+      role = "object";
+      none = "를";
+      regular = "을";
+      rieul = "을";
+      example_with_final = "값을";       # 값 + 을
+      example_without_final = "수를";    # 수 + 를
+      ko_note = "동작 대상 (action target)";
+    }
+    {
+      role = "target";
+      none = "에";
+      regular = "에";
+      rieul = "에";
+      example_with_final = "문에";        # 문 + 에
+      example_without_final = "수에";    # 수 + 에
+      ko_note = "위치 / 목표 (locative / dative)";
+    }
+    {
+      role = "manner";
+      # 으로 vs 로 — substrate's clean test case for the
+      # 3-way allomorph rule.
+      none = "로";
+      regular = "으로";
+      rieul = "로";
+      example_with_final = "정수로";     # 정수 (받침 없음, but treat 정수=manner-noun no_final)
+      example_without_final = "공로";    # 공 + 로 (받침 없음)
+      ko_note = "수단 / 방법 / 방향 (instrument / manner / direction)";
+    }
+    {
+      role = "predicate-condition";
+      # As a Korean noun phrase marker, predicate-condition is
+      # the subject of the conditional clause (X가/이 + 면).
+      # The case marker layer only emits 이/가; the conjunctive
+      # ending (면 / 이면 / 일 때) is a separate composition lens
+      # (BO+ candidate).
+      none = "가";
+      regular = "이";
+      rieul = "이";
+      example_with_final = "값이";       # 값 + 이
+      example_without_final = "수가";    # 수 + 가
+      ko_note = "조건 주체 (predicate subject)";
+    }
+    # `consequence-body` (BM role for nested atom body lists) is
+    # NOT in the case marker table — it's a clause-sequencing
+    # construct, not a noun-attached postposition. Downstream NL
+    # composition lens handles the body emission as a separate
+    # clause concatenation. BN's `applyCaseMarker` returns null
+    # for this role (substrate honest — refuses to invent a
+    # case marker that doesn't exist).
+    #
+    # === Korean-specific roles for future atom kinds ===
+    # Not yet referenced by any atom slot at BM baseline, but
+    # included here so future atoms can use them without bumping
+    # this table (e.g. a "send" atom: recipient=에게 slot).
+    {
+      role = "subject";
+      none = "가";
+      regular = "이";
+      rieul = "이";
+      example_with_final = "값이";
+      example_without_final = "수가";
+      ko_note = "동작 주체 (actor / subject)";
+    }
+    {
+      role = "topic";
+      none = "는";
+      regular = "은";
+      rieul = "은";
+      example_with_final = "값은";
+      example_without_final = "수는";
+      ko_note = "담론 주제 (topic of discourse)";
+    }
+    {
+      role = "recipient";
+      none = "에게";
+      regular = "에게";
+      rieul = "에게";
+      example_with_final = "사람에게";
+      example_without_final = "친구에게";
+      ko_note = "받는 사람 / 대상 (recipient)";
+    }
+    {
+      role = "source";
+      none = "에서";
+      regular = "에서";
+      rieul = "에서";
+      example_with_final = "문에서";
+      example_without_final = "곳에서";
+      ko_note = "출발 / 위치 (source / from)";
+    }
+    {
+      role = "comitative";
+      none = "와";
+      regular = "과";
+      rieul = "과";
+      example_with_final = "값과";
+      example_without_final = "수와";
+      ko_note = "함께 / 그리고 (with / and)";
+    }
+    {
+      role = "genitive";
+      none = "의";
+      regular = "의";
+      rieul = "의";
+      example_with_final = "값의";
+      example_without_final = "수의";
+      ko_note = "소유 / 속성 (possessive)";
+    }
+    {
+      role = "comparative";
+      none = "보다";
+      regular = "보다";
+      rieul = "보다";
+      example_with_final = "값보다";
+      example_without_final = "수보다";
+      ko_note = "비교 (comparative)";
+    }
+    {
+      role = "terminative";
+      none = "까지";
+      regular = "까지";
+      rieul = "까지";
+      example_with_final = "값까지";
+      example_without_final = "수까지";
+      ko_note = "범위 끝점 (up-to / until)";
+    }
+    {
+      role = "inceptive";
+      none = "부터";
+      regular = "부터";
+      rieul = "부터";
+      example_with_final = "값부터";
+      example_without_final = "수부터";
+      ko_note = "범위 시작점 (from / since)";
+    }
+  ];
+
+  # Helper: look up a rule by role. Returns null if role not in
+  # the table.
+  ruleFor = role:
+    let
+      matches =
+        builtins.filter (r: r.role == role) knownCaseMarkerRules;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # Core lens function: (role, finalKind) → case marker string.
+  # Substrate honest:
+  #   - unknown role → null (e.g. "consequence-body" not in table)
+  #   - unknown finalKind → null
+  # Caller must check the result; downstream NL composition can
+  # decide whether to fall back, omit, or raise.
+  caseMarkerForRoleAndFinal = role: finalKind:
+    let
+      rule = ruleFor role;
+    in
+      if rule == null then null
+      else if !(builtins.elem finalKind knownFinalKinds) then null
+      else if finalKind == "none" then rule.none
+      else if finalKind == "regular" then rule.regular
+      else if finalKind == "rieul" then rule.rieul
+      else null;
+
+  # Convenience: concatenate noun + case marker. Returns null if
+  # the role lookup returns null (substrate refuses to attach an
+  # unknown postposition).
+  applyCaseMarkerWithExplicitFinal = noun: role: finalKind:
+    let
+      marker = caseMarkerForRoleAndFinal role finalKind;
+    in
+      if marker == null then null
+      else noun + marker;
+
+  # v0.16-BO: auto-detect finalKind from the noun's last character
+  # via the substrate-internal `builtins.koreanFinalConsonantKind`
+  # primitive (defined in pnix-eval, backed by
+  # pnix_core::lang::ko::decompose_hangul_syllable). 100%
+  # substrate-native — no mecab-ko / lindera / external NLP.
+  #
+  # Returns a string ∈ {"none", "regular", "rieul", "non-korean"}.
+  # The non-korean case fires when the last char isn't a Hangul
+  # syllable (English noun, number, mixed-script ending in
+  # non-Hangul). Callers can decide fallback policy; by default
+  # `applyCaseMarker` (the auto-detect convenience below) maps
+  # "non-korean" to "none" — a Korean speaker attaching a case
+  # marker to an English variable name typically uses the
+  # no-final form for safety.
+  analyzeFinalKind = noun:
+    builtins.koreanFinalConsonantKind noun;
+
+  # v0.16-BO: auto-detect convenience. Takes (noun, role) only;
+  # finalKind is inferred from the noun's last character. The
+  # caller's life is simple: pass the BM-derived role + the
+  # noun, get the proper Korean surface form.
+  #
+  # Fallback policy: "non-korean" finalKind (English noun ending,
+  # numbers) maps to "none" (no-final form) since that's the
+  # safest default for a Korean speaker attaching 조사 to an
+  # English-named variable.
+  #
+  # For roles that don't have a noun-attached postposition (e.g.
+  # BM's "consequence-body"), still returns null — the substrate
+  # refuses to invent a postposition that doesn't exist
+  # linguistically.
+  applyCaseMarker = noun: role:
+    let
+      detectedKind = analyzeFinalKind noun;
+      effectiveKind =
+        if detectedKind == "non-korean" then "none"
+        else detectedKind;
+    in
+      applyCaseMarkerWithExplicitFinal noun role effectiveKind;
+
+  # Substrate self-shape: list of roles the lens covers.
+  supportedRoleSet =
+    let
+      allRoles = builtins.map (r: r.role) knownCaseMarkerRules;
+      dedup = list:
+        builtins.foldl'
+          (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+          []
+          list;
+    in
+      builtins.sort (a: b: a < b) (dedup allRoles);
+
+  inventorySummary = _: {
+    owner = ownerName;
+    case_marker_rule_count = builtins.length knownCaseMarkerRules;
+    supported_role_count = builtins.length supportedRoleSet;
+    supported_roles = supportedRoleSet;
+    known_final_kinds = knownFinalKinds;
+    final_kind_count = builtins.length knownFinalKinds;
+    case_marker_rules = builtins.map (r: {
+      role = r.role;
+      none = r.none;
+      regular = r.regular;
+      rieul = r.rieul;
+      ko_note = r.ko_note;
+    }) knownCaseMarkerRules;
+  };
+
+in {
+  inherit
+    ownerName
+    knownFinalKinds
+    knownCaseMarkerRules
+    ruleFor
+    caseMarkerForRoleAndFinal
+    applyCaseMarkerWithExplicitFinal
+    analyzeFinalKind
+    applyCaseMarker
+    supportedRoleSet
+    inventorySummary;
+  meta = {
+    source = "stdlib coding korean case marker lens";
+    owner = ownerName;
+    base = "korean-case-marker-lens-v0";
+    rev_note = "v0.16-BN: first Korean case marker (조사) lens. Takes (noun, BM semantic role, finalKind) -> noun + 조사. Substrate-native (no mecab-ko / lindera external NLP). 11 rules across the 3 finalKind allomorphs (none/regular/rieul). Covers 4 BM-baseline roles (object/target/manner/predicate-condition; consequence-body returns null since body is clause-sequencing not noun-attached) plus 6 Korean-specific roles (subject/topic/recipient/source/comitative/genitive) for future atom kinds. Honest scope: caller provides finalKind explicitly because pnix-eval byte-indexed substring loses single-byte resolution on invalid UTF-8 (replacement-char normalize). Auto-detection from Hangul 종성 = parallel-of-BN slice via host bridge to pnix-core/src/lang/ko.rs::decompose_hangul_syllable or substrate-internal byte-aware primitive in pnix_eval.";
+  };
+}

@@ -1,0 +1,189 @@
+# stdlib.lib.math.modular-arithmetic
+#
+# OWNER-LAW (v0.12-OO, div-math, 2026-05-21): exact modular
+# arithmetic over the integers, modulo a positive integer.
+#
+# The math lane has integer evaluation, number-theory structure,
+# exact rationals, a linear solver, and combinatorics. It had no
+# *modular* arithmetic -- the ring Z/mZ. This owner adds it.
+#
+# Three things here are genuine algorithms, not one-liners:
+#
+#   - modPow: square-and-multiply (binary exponentiation). Computes
+#     `base^exp mod m` in O(log exp) modular multiplications, never
+#     materialising the astronomically large `base^exp`.
+#   - extendedGcd: the extended Euclidean algorithm -- alongside
+#     gcd(a,b) it returns the Bezout coefficients x, y with
+#     `a*x + b*y = gcd(a,b)`.
+#   - modInverse: the modular multiplicative inverse, read off the
+#     Bezout coefficient. It EXISTS iff gcd(a,m) = 1; when it does
+#     not, the owner says so (Held) rather than inventing a value.
+#
+# # Normalisation
+#
+# Every result is normalised into the canonical residue range
+# `[0, m)`. Nix integer division truncates toward zero, so a raw
+# remainder can be negative; `normalizeMod` folds it back up.
+#
+# # Kernel layering
+#
+# modular-arithmetic -> number-theory -> nothing. gcd (used to
+# decide invertibility) is reused from number-theory.px.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a finite-field / polynomial-ring library.
+#   - NOT a Chinese-remainder solver (a later slice could add it
+#     on top of modInverse).
+#   - NOT arbitrary-precision -- host int range.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/modular-arithmetic.px";
+
+  numberTheory = import ./number-theory.px;
+  intMod = numberTheory.intMod;
+  gcd = numberTheory.gcd;
+
+  # Canonical residue: fold `a` into [0, m). Assumes m > 0 (the
+  # plate guards m <= 0). The raw remainder can be negative because
+  # Nix `/` truncates toward zero, so add m back when it is.
+  normalizeMod = a: m:
+    let r = intMod a m;
+    in if r < 0 then r + m else r;
+
+  modAdd = a: b: m: normalizeMod (a + b) m;
+  modSub = a: b: m: normalizeMod (a - b) m;
+  modMul = a: b: m: normalizeMod (a * b) m;
+
+  # base^exp mod m by square-and-multiply. `exp` must be >= 0 (the
+  # plate guards). O(log exp) modular multiplications -- the giant
+  # integer base^exp is never built.
+  modPow = base: exp: m:
+    let
+      go = b: e: acc:
+        if e == 0 then acc
+        else
+          let
+            acc2 = if intMod e 2 == 1 then modMul acc b m else acc;
+          in go (modMul b b m) (e / 2) acc2;
+    in go (normalizeMod base m) exp 1;
+
+  # Extended Euclidean algorithm. Returns `{ g; x; y; }` with
+  # `a*x + b*y = g` and `g = gcd(a, b)`. Assumes a, b >= 0.
+  extendedGcd = a: b:
+    if b == 0 then { g = a; x = 1; y = 0; }
+    else
+      let r = extendedGcd b (intMod a b);
+      in {
+        g = r.g;
+        x = r.y;
+        y = r.x - (a / b) * r.y;
+      };
+
+  # Modular multiplicative inverse of `a` mod `m`. Returns
+  # `{ exists = true; inverse; }` when gcd(a,m) = 1, else
+  # `{ exists = false; }`. Assumes m > 0.
+  modInverse = a: m:
+    let
+      an = normalizeMod a m;
+      r = extendedGcd an m;
+    in
+      if r.g != 1 then { exists = false; }
+      else { exists = true; inverse = normalizeMod r.x m; };
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "normalize"
+    "add"
+    "subtract"
+    "multiply"
+    "power"
+    "inverse"
+  ];
+
+  # Operations that read a second operand `b`.
+  binaryOps = [ "add" "subtract" "multiply" "power" ];
+
+  applyModular = request:
+    let
+      op = request.operation;
+      a  = request.a;
+      b  = if request ? b then request.b else 0;
+      m  = request.m;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if m <= 0 then {
+        outcome = "held-non-positive-modulus";
+        operation = op;
+        m = m;
+      }
+      else if op == "power" && b < 0 then {
+        outcome = "held-negative-exponent";
+        operation = op;
+        exponent = b;
+      }
+      else if op == "normalize" then {
+        outcome = "modular-computed";
+        operation = op; a = a; m = m;
+        result = normalizeMod a m;
+      }
+      else if op == "add" then {
+        outcome = "modular-computed";
+        operation = op; a = a; b = b; m = m;
+        result = modAdd a b m;
+      }
+      else if op == "subtract" then {
+        outcome = "modular-computed";
+        operation = op; a = a; b = b; m = m;
+        result = modSub a b m;
+      }
+      else if op == "multiply" then {
+        outcome = "modular-computed";
+        operation = op; a = a; b = b; m = m;
+        result = modMul a b m;
+      }
+      else if op == "power" then {
+        outcome = "modular-computed";
+        operation = op; a = a; b = b; m = m;
+        result = modPow a b m;
+      }
+      else
+        # op == "inverse"
+        let inv = modInverse a m;
+        in
+          if !inv.exists then {
+            outcome = "held-no-modular-inverse";
+            operation = op; a = a; m = m;
+            reason = "gcd(a, m) != 1: a is not a unit mod m";
+          }
+          else {
+            outcome = "modular-computed";
+            operation = op; a = a; m = m;
+            result = inv.inverse;
+          };
+
+in {
+  inherit
+    ownerName
+    normalizeMod
+    modAdd
+    modSub
+    modMul
+    modPow
+    extendedGcd
+    modInverse
+    knownOperations
+    applyModular;
+  meta = {
+    source = "stdlib math modular arithmetic";
+    owner = ownerName;
+    base = "parametric-math-modular-arithmetic-v0";
+    rev_note = "v0.12-OO (div-math): exact modular arithmetic owner. add/subtract/multiply normalised into [0,m); modPow by square-and-multiply (O(log exp), never builds base^exp); extendedGcd (Bezout coefficients); modInverse via extended Euclidean (Held when gcd(a,m) != 1 -- the inverse genuinely does not exist). Kernel layering: modular-arithmetic -> number-theory. NOT a finite-field library, NOT a CRT solver, NOT arbitrary-precision, NOT yet a registered lens.";
+  };
+}

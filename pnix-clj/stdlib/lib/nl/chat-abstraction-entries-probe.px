@@ -1,0 +1,61 @@
+# stdlib/lib/nl/chat-abstraction-entries-probe.px
+#
+# P54: materialize P3→store-plan abstraction-status entry for chat memory gate ferry.
+# Same closed loop as memory-evidence-shape-test; Clojure durable layer keeps store-key hash only.
+let
+  sp = import ../meta/abstraction-status-store-plan.px;
+  agc = import ../meta/abstraction-genesis-core.px;
+  gb = import ../meta/abstraction-gate-bridge.px;
+  B = builtins;
+
+  # P3 ingest fixture (먹/잡수시 → held-pending-utility, about_concept s:n:ingest)
+  fixturePair =
+    let t1 = [ { sym = "eat"; } { sym = "철수"; } { sym = "사과"; } ];
+        t2 = [ { sym = "eat"; } { sym = "영희"; } { sym = "책"; } ];
+        cand = agc.genesisCandidate {
+          terms = [ t1 t2 ]; owner_candidate = "predicate-concepts";
+          relation = "predicate-synonym-collapse"; source_symbols = [ "먹" "잡수시" ];
+        };
+        gateRes = gb.submitToGate { candidate = cand; };
+    in { candidate = cand; gate_result = gateRes; };
+
+  ferryEntry = e:
+    {
+      abstraction_key = e.abstraction_key;
+      status = e.status;
+      owner = e.owner;
+      relation = e.relation;
+      about_concept = e.about_concept;
+    };
+
+  materializeFixtureEntries = _:
+    let entry = sp.mkEntry fixturePair;
+    in [ entry ];
+
+  runProbe = args:
+    let entries = materializeFixtureEntries null;
+        entry = B.head entries;
+        plan = sp.mkPlan { pairs = [ fixturePair ]; built_at_ms = if args ? built_at_ms then args.built_at_ms else 0; };
+        about = if entry.about_concept == [ ] then "" else B.head entry.about_concept;
+    in {
+      status = "ok";
+      entry_count = B.length entries;
+      store_keys = B.map sp.storeKeyOfEntry entries;
+      plan_entry_count = plan.entry_count;
+      plan_operation_count = plan.operation_count;
+      gate_status = fixturePair.gate_result.gate_status;
+      entries = B.map ferryEntry entries;
+      ferry_abstraction_key = entry.abstraction_key;
+      ferry_status = entry.status;
+      ferry_owner = entry.owner;
+      ferry_relation = entry.relation;
+      ferry_about_concept = about;
+    };
+
+  probeSelfTest = _:
+    let r = runProbe { built_at_ms = 0; };
+    in (r.status == "ok") && (r.entry_count == 1) && (r.plan_entry_count == 1)
+       && (r.gate_status == "held-pending-utility");
+in {
+  inherit materializeFixtureEntries runProbe probeSelfTest ferryEntry;
+}

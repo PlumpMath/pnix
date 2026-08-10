@@ -1,0 +1,183 @@
+let
+  ownerName = "stdlib.coding.korean-verb-suffix-classifier";
+
+  # v0.16-BV: Korean verb suffix → tense/mood classifier.
+  # Owner thesis (BL → BU dialogue + owner directive
+  # "BV로 진행"):
+  #
+  # BR이 matched_stem + suffix 를 정직하게 enumerate 했지만,
+  # 그 suffix 의 의미 (tense/mood/imperative 등) 는 아직
+  # substrate 가 안 읽었다. BV 가 그 의미 layer 를 박는다.
+  #
+  # 입력: (stem 의 마지막 syllable, suffix 문자열)
+  # 출력: { tense; mood; form_label; resolved; ko_note }
+  #     또는 null (unknown suffix)
+  #
+  # 한국어 stem variant 가 phonological information 을 이미
+  # carry — 했/냈 = past tense marker (-ㅆ-), 그 외 = present.
+  # suffix 가 mood 결정 (다 = declarative, 라 = imperative,
+  # 자 = propositive, 야 = modal-necessity, "" = bare).
+  #
+  # v0 scope (substrate-honest):
+  #   - 5 mood: declarative-formal / declarative-bare /
+  #             imperative / propositive / modal-necessity
+  #   - 2 tense: present / past
+  #   - interrogative / conditional 는 BV+ 슬라이스 (BR stem
+  #     registry 에 "출력할" 같은 미래/추측 stem 추가 필요)
+  #
+  # 100% substrate-native: closed lookup tables only. 외부 NLP
+  # 라이브러리 0.
+
+  # ── helpers ──
+
+  # Extract last Hangul syllable (3 UTF-8 bytes) from a stem.
+  # If stem is shorter than 3 bytes (e.g. 1-syllable ASCII), return
+  # the whole stem.
+  lastSyllableOf = stem:
+    let
+      sLen = builtins.stringLength stem;
+    in
+      if sLen >= 3 then builtins.substring (sLen - 3) 3 stem
+      else stem;
+
+  # ── closed registries ──
+
+  # Stem-last-syllable → tense. 한국어 phonology 가 stem variant
+  # 에 tense marker 를 carry. 했/냈 만 past, 그 외 모든 stem
+  # ending 은 present. Note: 결합 음운변화 (-ㅆ- past tense
+  # marker) 가 한 syllable 안에 fold 되어 있음.
+  knownPastStemEndings = [
+    "했"
+    "냈"
+  ];
+
+  # Suffix → mood lookup. closed v0 registry. Empty suffix ("")
+  # 는 parser 가 attribute name 으로 허용 안 함 — special branch
+  # 로 별도 처리 (declarative-bare; 한국어 구어 bare ending).
+  knownMoodBySuffix = {
+    "다"     = { mood = "declarative-formal";    ko_note = "평서 (책/문어체)"; };
+    "라"     = { mood = "imperative";             ko_note = "명령 (출력하라, 출력해라)"; };
+    "자"     = { mood = "propositive";            ko_note = "청유 / 권유 (출력하자, 끝내자)"; };
+    "야"     = { mood = "modal-necessity";        ko_note = "당위 / 의무 (출력해야 — should/must)"; };
+  };
+
+  # Empty suffix sentinel — registered as separate branch since
+  # parser disallows empty attribute names.
+  emptySuffixMood = {
+    mood = "declarative-bare";
+    ko_note = "평서 (구어 bare; 출력해, 출력하)";
+  };
+
+  # Helpers: lookup with null fallback (substrate refuses to invent
+  # a mood/tense if not registered).
+  tenseFromStemEnding = ending:
+    if builtins.elem ending knownPastStemEndings then "past"
+    else "present";
+
+  moodFromSuffix = suffix:
+    if suffix == "" then emptySuffixMood
+    else if builtins.hasAttr suffix knownMoodBySuffix then
+      builtins.getAttr suffix knownMoodBySuffix
+    else null;
+
+  # ── main classifier ──
+
+  # Input: (stem_string, suffix_string)
+  # Output:
+  #   {
+  #     tense          ∈ { "present"; "past" };
+  #     mood           ∈ { 5 closed mood values };
+  #     form_label     = stem + suffix raw concat (audit);
+  #     resolved       = true (registered mood);
+  #     ko_note        = mood 의 한국어 설명;
+  #     stem_last_syllable = ...;
+  #     suffix         = (echo);
+  #   }
+  # 또는 (suffix not in registry) →
+  #   {
+  #     tense          = tenseFromStemEnding 만 known;
+  #     mood           = null;
+  #     resolved       = false;
+  #     reason         = "unknown suffix";
+  #     ...;
+  #   }
+  classifyVerbSuffix = stem: suffix:
+    let
+      lastSyl = lastSyllableOf stem;
+      tense = tenseFromStemEnding lastSyl;
+      moodLookup = moodFromSuffix suffix;
+    in
+      if moodLookup == null then {
+        tense = tense;
+        mood = null;
+        form_label = stem + suffix;
+        resolved = false;
+        reason = "unknown-suffix";
+        stem_last_syllable = lastSyl;
+        suffix = suffix;
+        known_suffixes =
+          builtins.sort (a: b: a < b)
+            (builtins.attrNames knownMoodBySuffix);
+      }
+      else {
+        tense = tense;
+        mood = moodLookup.mood;
+        form_label = stem + suffix;
+        resolved = true;
+        ko_note = moodLookup.ko_note;
+        stem_last_syllable = lastSyl;
+        suffix = suffix;
+      };
+
+  # ── inventory ──
+
+  inventorySummary = _:
+    let
+      registeredMoods =
+        builtins.map
+          (s: (builtins.getAttr s knownMoodBySuffix).mood)
+          (builtins.attrNames knownMoodBySuffix);
+      allMoods = registeredMoods ++ [ emptySuffixMood.mood ];
+    in {
+      owner = ownerName;
+      # 5 mood = 4 suffix-attached (다/라/자/야) + 1 empty-suffix
+      # special branch (declarative-bare).
+      mood_count = builtins.length allMoods;
+      moods = builtins.sort (a: b: a < b) allMoods;
+      # 4 suffix entries (parser 가 empty attribute name 안 받아
+      # empty 는 special branch). substrate-honest 명시.
+      suffix_count = builtins.length (builtins.attrNames knownMoodBySuffix);
+      suffixes =
+        builtins.sort (a: b: a < b)
+          (builtins.attrNames knownMoodBySuffix);
+      has_empty_suffix_branch = true;
+      past_stem_ending_count =
+        builtins.length knownPastStemEndings;
+      past_stem_endings = knownPastStemEndings;
+      tense_categories = [ "present" "past" ];
+      # BV 의도적으로 비커버 (BV+ 후보)
+      uncovered_moods = [
+        "interrogative"
+        "conditional"
+        "exclamatory"
+      ];
+    };
+
+in {
+  inherit
+    ownerName
+    lastSyllableOf
+    knownPastStemEndings
+    knownMoodBySuffix
+    emptySuffixMood
+    tenseFromStemEnding
+    moodFromSuffix
+    classifyVerbSuffix
+    inventorySummary;
+  meta = {
+    source = "stdlib coding korean verb suffix classifier";
+    owner = ownerName;
+    base = "korean-verb-suffix-classifier-v0";
+    rev_note = "v0.16-BV: 한국어 verb suffix → tense/mood 분류기. BR matched_stem + suffix 의 의미 layer. (stem 마지막 syllable, suffix) → (tense, mood, form_label). 5 closed mood (declarative-formal / declarative-bare / imperative / propositive / modal-necessity) + 2 tense (present / past). 한국어 phonology 의 -ㅆ- past tense marker 가 stem variant 의 마지막 syllable 에 fold 되어 있음 — 했/냈 만 past, 그 외 present (substrate 가 algebraic conjugator 발명 안 하고 surface variant enumeration 으로 정직). substrate-honest null on unknown suffix (known_suffixes list 보고). interrogative / conditional / exclamatory 는 BV+ 슬라이스 (BR stem registry 확장 필요). 100% substrate-native — closed lookup tables only.";
+  };
+}

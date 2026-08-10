@@ -1,0 +1,203 @@
+# stdlib.lib.math.complex-number
+#
+# OWNER-LAW (v0.12-AAB, div-math, 2026-05-21): exact complex
+# arithmetic over the Gaussian integers.
+#
+# The div-math kernel works over integers and rationals on the
+# real line. This owner adds the second dimension: complex numbers
+# `a + b*i` with integer real and imaginary parts -- the Gaussian
+# integers Z[i].
+#
+# # Exactness
+#
+# Gaussian-integer addition, subtraction, and multiplication stay
+# inside Z[i] exactly. `(a+bi)(c+di) = (ac-bd) + (ad+bc)i` is an
+# exact integer pair -- no floating point.
+#
+# The MODULUS |a+bi| = sqrt(a^2+b^2) is irrational for almost
+# every Gaussian integer, so -- as geometry.px does with distance
+# -- this owner returns the exact squared norm `a^2 + b^2` and
+# names it as such, never a rounded decimal.
+#
+# # Standalone
+#
+# Imports nothing. A complex number is the attrset `{ re; im; }`
+# with integer components. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT complex division -- the quotient of two Gaussian
+#     integers is generally not a Gaussian integer; exact complex
+#     division needs a Gaussian-rational type, a later slice.
+#   - NOT a Gaussian-prime / factorisation engine.
+#   - NOT floating-point complex (no polar form, no roots).
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/complex-number.px";
+
+  # Construct a complex number from integer real / imaginary parts.
+  mkComplex = re: im: { inherit re im; };
+
+  cZero = { re = 0; im = 0; };
+  cOne  = { re = 1; im = 0; };
+  cI    = { re = 0; im = 1; };
+
+  # Lift a real integer to a complex number.
+  cFromInt = k: { re = k; im = 0; };
+
+  # --- arithmetic ------------------------------------------------
+
+  cAdd = a: b: { re = a.re + b.re; im = a.im + b.im; };
+  cSub = a: b: { re = a.re - b.re; im = a.im - b.im; };
+
+  # (a+bi)(c+di) = (ac - bd) + (ad + bc)i.
+  cMul = a: b: {
+    re = a.re * b.re - a.im * b.im;
+    im = a.re * b.im + a.im * b.re;
+  };
+
+  cNegate = a: { re = 0 - a.re; im = 0 - a.im; };
+
+  # The complex conjugate: a + bi  ->  a - bi.
+  cConjugate = a: { re = a.re; im = 0 - a.im; };
+
+  # Multiply by an integer scalar.
+  cScale = k: a: { re = k * a.re; im = k * a.im; };
+
+  # --- norm / predicates ----------------------------------------
+
+  # Squared modulus a^2 + b^2 -- exact. Equals (z * conjugate z).re.
+  cNormSquared = a: a.re * a.re + a.im * a.im;
+
+  cEquals = a: b: a.re == b.re && a.im == b.im;
+  cIsReal = a: a.im == 0;
+  cIsImaginary = a: a.re == 0;
+  cIsZero = a: a.re == 0 && a.im == 0;
+
+  # Whether `b` exactly divides `a` in Z[i]: a / b is a Gaussian
+  # integer iff conjugate(b) * a is divisible by |b|^2 in both
+  # components.
+  cDividesExactly = a: b:
+    let
+      d = cNormSquared b;
+      p = cMul a (cConjugate b);
+    in
+      d != 0
+      && (p.re - d * (p.re / d)) == 0
+      && (p.im - d * (p.im / d)) == 0;
+
+  # --- text projection ------------------------------------------
+
+  # Canonical text: `5`, `2i`, `-3i`, `3+4i`, `3-4i`, `1+i`,
+  # `2-i`, `0`. The unit imaginary part prints without a `1`.
+  cToString = z:
+    if z.im == 0 then builtins.toString z.re
+    else
+      let
+        absIm = if z.im < 0 then 0 - z.im else z.im;
+        imPart =
+          if absIm == 1 then "i"
+          else builtins.toString absIm + "i";
+      in
+        if z.re == 0
+        then (if z.im < 0 then "-" + imPart else imPart)
+        else
+          builtins.toString z.re
+          + (if z.im < 0 then "-" else "+")
+          + imPart;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "make"
+    "add"
+    "subtract"
+    "multiply"
+    "conjugate"
+    "negate"
+    "scale"
+    "norm-squared"
+    "equals"
+    "divides"
+  ];
+
+  # A success envelope for the operations returning one complex.
+  cEnvelope = op: z: {
+    outcome = "complex-computed";
+    operation = op;
+    re = z.re;
+    im = z.im;
+    text = cToString z;
+  };
+
+  applyComplex = request:
+    let
+      op = request.operation;
+      a = mkComplex
+        (if request ? ar then request.ar else 0)
+        (if request ? ai then request.ai else 0);
+      b = mkComplex
+        (if request ? br then request.br else 0)
+        (if request ? bi then request.bi else 0);
+      k = if request ? k then request.k else 1;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "make" then cEnvelope op a
+      else if op == "add" then cEnvelope op (cAdd a b)
+      else if op == "subtract" then cEnvelope op (cSub a b)
+      else if op == "multiply" then cEnvelope op (cMul a b)
+      else if op == "conjugate" then cEnvelope op (cConjugate a)
+      else if op == "negate" then cEnvelope op (cNegate a)
+      else if op == "scale" then cEnvelope op (cScale k a)
+      else if op == "norm-squared" then {
+        outcome = "complex-computed";
+        operation = op;
+        norm_squared = cNormSquared a;
+      }
+      else if op == "equals" then {
+        outcome = "complex-computed";
+        operation = op;
+        holds = cEquals a b;
+      }
+      else {
+        # op == "divides"
+        outcome = "complex-computed";
+        operation = op;
+        holds = cDividesExactly a b;
+      };
+
+in {
+  inherit
+    ownerName
+    mkComplex
+    cZero
+    cOne
+    cI
+    cFromInt
+    cAdd
+    cSub
+    cMul
+    cNegate
+    cConjugate
+    cScale
+    cNormSquared
+    cEquals
+    cIsReal
+    cIsImaginary
+    cIsZero
+    cDividesExactly
+    cToString
+    knownOperations
+    applyComplex;
+  meta = {
+    source = "stdlib math complex number";
+    owner = ownerName;
+    base = "parametric-math-complex-number-v0";
+    rev_note = "v0.12-AAB (div-math): exact complex arithmetic over the Gaussian integers Z[i]. add / subtract / multiply / conjugate / negate / scale stay exactly inside Z[i]; the modulus is irrational so the owner returns the exact squared norm a^2+b^2; cDividesExactly tests Gaussian-integer divisibility. Canonical text projection (5, 2i, 3+4i, 1-i, ...). Standalone, integer components. NOT complex division into a quotient, NOT Gaussian-prime factorisation, NOT floating-point/polar complex, NOT yet a registered lens.";
+  };
+}

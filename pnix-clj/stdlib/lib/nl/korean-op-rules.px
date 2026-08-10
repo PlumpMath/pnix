@@ -1,0 +1,212 @@
+# stdlib/lib/nl/korean-op-rules.px
+# 프로젝트 소유 한글 연산(op) 규칙 스토어 (TRACKED — 외부 dump 아님).
+#
+# 한글 op 에 필요한 *모든 규칙 데이터*가 여기 들어간다:
+#   josa          = 조사규칙 (받침→조사 부착 등)
+#   eomi          = 어미 (선어말/종결, 시제·서법×화계)
+#   eojeol        = 어절 분절 규칙
+#   irregularities= 활용 불규칙 (11클래스)
+#   special       = dict/corpus 로 안 풀리는 special-case
+#   *_examples    = 각 법칙의 검증 케이스(테스트 벡터). 테스트가 redb 서 꺼내 검사
+#                   (하드코딩 fixture 금지 — 한글의 규칙/불규칙/법칙은 전부 여기서).
+#
+# 헌법(흡수): 규칙도 *검증 케이스도* .px/.clj 하드코딩 금지 — 여기 pnix data 로 모은다.
+#   첫 실행 때 native 로드(redb_catalog/load-korean-op-rules, 1회 cached) →
+#   hangul-codec / 문장생성 / 이해 / *테스트* 가 `korean-op-section` 으로 꺼내 쓴다.
+{ schema = "korean.op-rules.v0";
+  note = "all Korean-op rule data + verification examples; native-loaded at startup; shared by hangul-codec/generation/understanding/tests";
+  coverage = {
+    sections_total = 6;
+    josa_rules_absorbed = 5;
+    eomi_rules_absorbed = 6;
+    eojeol_rules_absorbed = 0;
+    irregularity_classes_total = 11;
+    irregularity_classes_absorbed = 0;
+    special_cases_absorbed = 0;
+    sound_rules_absorbed = 1;
+    batchim_examples_count = 6;
+    josa_examples_count = 11;
+    eomi_examples_count = 23;
+    sound_examples_count = 7;
+  };
+  # josa: 받침(final consonant) 유무로 갈리는 조사쌍. with_batchim=받침O, without_batchim=받침X.
+  josa = [
+    { role = "subject"; with_batchim = "이"; without_batchim = "가"; }
+    { role = "object"; with_batchim = "을"; without_batchim = "를"; }
+    { role = "topic"; with_batchim = "은"; without_batchim = "는"; }
+    { role = "with"; with_batchim = "과"; without_batchim = "와"; }
+    # direction(방향/도구격): ㄹ받침 예외 = 3분기. 무받침→로·ㄹ받침→로·그외받침→으로.
+    #   with_rieul 키가 있으면 select-josa 가 sound.jong.rieul_idx 로 ㄹ받침을 가린다.
+    { role = "direction"; with_batchim = "으로"; with_rieul = "로"; without_batchim = "로"; }
+  ];
+  # eomi: 어간+어미 결합 축약. ha-eot: 어간이 "하"로 끝나고 과거어미 "었다" → "했다".
+  eomi = [
+    { id = "ha-past-contraction"; stem_ends = "하"; suffix = "었다"; drop_tail = "하"; append = "했다"; }
+    # 모음조화(받침 어간): 어간 끝 음절 중성이 양성(ㅏ=0·ㅗ=8)이면 과거 "었다"→"았다"
+    #   (받+었다→받았다·잡+었다→잡았다). medial index = (cp-0xAC00 / 28) mod 21. 받침-ending만(모음-ending 축약은 후속).
+    { id = "past-vowel-harmony"; kind = "vowel-harmony"; suffix = "었다"; positive_medials = [ 0 8 ]; positive_form = "았다"; }
+    # 모음 어간 축약(vowel fusion): 어간 끝이 모음(무받침)일 때 과거 었/았 와 합류, ㅆ(종성20) 부착, 다.
+    #   stem 끝음절 중성 → fused 중성 (harmony 는 fused 값에 이미 반영). 새 음절 = compose(초성, fused, ㅆ).
+    #   regular fusion 만(으 탈락 등 불규칙은 irregularities 후속). 예: 가→갔다·서→섰다·오→왔다·주→줬다·되→됐다·기다리→기다렸다.
+    { id = "past-vowel-fusion"; kind = "vowel-fusion"; suffix = "었다"; ssang_final = 20; result_suffix = "다";
+      table = [
+        { stem_medial = 0;  fused_medial = 0;  }   # ㅏ → ㅏ (가→갔)
+        { stem_medial = 4;  fused_medial = 4;  }   # ㅓ → ㅓ (서→섰)
+        { stem_medial = 8;  fused_medial = 9;  }   # ㅗ → ㅘ (오→왔)
+        { stem_medial = 13; fused_medial = 14; }   # ㅜ → ㅝ (주→줬)
+        { stem_medial = 20; fused_medial = 6;  }   # ㅣ → ㅕ (리→렸)
+        { stem_medial = 11; fused_medial = 10; }   # ㅚ → ㅙ (되→됐)
+      ];
+    }
+    # 으 탈락(eu-deletion): 어간 끝이 ㅡ(중성18)·무받침이면 ㅡ 탈락 후 었/았 결합, ㅆ 부착, 다.
+    #   harmony = 바로 앞 음절 중성(positive_medials ㅏ/ㅗ → 았=positive_fused·else 었=negative_fused;
+    #   앞 음절 없으면 음성 default). 쓰→썼다·크→컸다·바쁘→바빴다·슬프→슬펐다·아프→아팠다·잠그→잠갔다.
+    #   ★르(초성5)-ending 제외(르 불규칙/규칙 어간모양으론 모호 → dict 활용데이터 후속).
+    { id = "past-eu-deletion"; kind = "eu-deletion"; suffix = "었다"; ssang_final = 20; result_suffix = "다";
+      stem_medial = 18; exclude_initial = 5; positive_medials = [ 0 8 ]; positive_fused = 0; negative_fused = 4; }
+    # aeo-불규칙: 어간모양으로 판정불가한 불규칙(ㅂ/ㄷ/ㅅ/르/러/우 등)은 *사전이 정답*을 준다 —
+    #   stdict facts 의 aeo 활용형(돕다→"도와"·듣다→"들어"·낫다→"나아"·흐르다→"흘러"). 과거 = aeo 끝음절에
+    #   ㅆ(종성20) 부착 + 다 (도와→도왔다·들어→들었다·흘러→흘렀다). dict 정답 우선(mechanical보다).
+    #   ★generic: 분류 안 함 — dict aeo(aeo_rev=true)를 그대로 사용. apply-eomi 가 aeo 받으면 이 규칙 적용.
+    { id = "past-aeo-irregular"; kind = "aeo-irregular"; suffix = "었다"; ssang_final = 20; result_suffix = "다"; }
+    # 현재 평서 (동사): suffix 키 "ㄴ다" 로 요청. 무받침/ㄹ받침(bareum_finals 0·8) → ㄴ(종성4) 부착 + 다
+    #   (가→간다·오→온다·울→운다[ㄹ탈락]·만들→만든다), 그 외 받침 → 는다 (먹→먹는다).
+    #   ★verb-only — 형용사 현재는 평서 "다" 그대로(caller POS gate 책임; apply-eomi 는 mechanical).
+    { id = "present-declarative"; kind = "present-declarative"; suffix = "ㄴ다";
+      bareum_finals = [ 0 8 ]; nieun_final = 4; jongseong_form = "는다"; }
+  ];
+  eojeol = [ ];
+  irregularities = [ ];
+  special = [ ];
+  # ── 소리규칙(phonological) — codec sound rules 통합 (korean-josa-rules / korean-verb-rules 서 수렴) ──
+  #   받침=종성: 0xAC00 decompose 시 jong = (cp-0xAC00) mod 28. 이 한 redb 가 소리규칙 단일 출처 —
+  #   batchim?/last-jong(음절=정수 substrate)이 *인덱스*를 읽고, 여기 data 가 "그 인덱스의 뜻"
+  #   (open/rieul/fused/digit/magnitude 받침)을 정한다. MSV(select-josa 등)가 startup-loaded 로 꺼냄.
+  sound = {
+    jong = { open_idx = 0; rieul_idx = 8; };          # 무받침(0) / ㄹ받침(8) 종성 인덱스
+    jong_fused = { bieup = 17; nieun = 4; };          # 어미 융합 종성 (ㅂ니다=ㅂ / ㄴ다=ㄴ)
+    # Sino-Korean digit(영일이삼사오육칠팔구; 0~9) 읽기 받침: 받침 있나 / ㄹ받침인가. (number→한글 reading 용)
+    digit_batchim = [ true true false true false false true true true false ];
+    digit_rieul   = [ false true false false false false false true true false ];
+    # 자릿수 단위(십백천만…경; idx0=십 … idx11=조=무받침) 받침.
+    magnitude_batchim = [ true true true true true true true true true true true false true true true true ];
+  };
+  # ── 지칭(deixis) — 화자-거리/접근성 operator (z축 discourse topology) ──
+  #   이=near/현재초점(just-introduced), 그=anaphoric/기지(already-mentioned), 저=distal(out-of-focus).
+  #   pronoun/place 는 exact 매칭, determiner(이/그/저)는 단독 어절(다음 어절이 head noun).
+  #   ★referent 는 절대 성급히 accepted 금지 → detect 단계는 type만, 바인딩은 held/candidate(gate).
+  deixis = {
+    markers = [
+      { surface = "이것"; type = "near";      kind = "pronoun"; }
+      { surface = "그것"; type = "anaphoric";  kind = "pronoun"; }
+      { surface = "저것"; type = "distal";     kind = "pronoun"; }
+      { surface = "여기"; type = "near";      kind = "place"; }
+      { surface = "거기"; type = "anaphoric";  kind = "place"; }
+      { surface = "저기"; type = "distal";     kind = "place"; }
+      { surface = "이";   type = "near";      kind = "determiner"; }
+      { surface = "그";   type = "anaphoric";  kind = "determiner"; }
+      { surface = "저";   type = "distal";     kind = "determiner"; }
+    ];
+  };
+  # ── 시간(temporal) field (t축) — 화자 시간공간 ⟂ 사건 시간공간 ──
+  #   speech-relative(지금/어제/내일)=speech-time 기준 resolvable. reference-relative
+  #   (그때/당시/그후/이전)=reference-time 필요 → 시간 deixis(공간 그것의 평행) = HELD.
+  #   tense_relation = event-time vs speech-time coarse partition(과거/현재/미래).
+  temporal = {
+    #   direction = before/after = STRICT(tense와 충돌가능); overlaps = flexible(any tense OK,
+    #   예 오늘 먹었다=오늘 안 과거시점). consistency gate 가 strict 충돌만 reject.
+    markers = [
+      { surface = "지금"; class = "speech-relative"; offset = "present"; direction = "overlaps"; }
+      { surface = "방금"; class = "speech-relative"; offset = "just-past"; direction = "before"; }
+      { surface = "어제"; class = "speech-relative"; offset = "past-1day"; direction = "before"; }
+      { surface = "오늘"; class = "speech-relative"; offset = "today"; direction = "overlaps"; }
+      { surface = "내일"; class = "speech-relative"; offset = "future-1day"; direction = "after"; }
+      { surface = "나중"; class = "speech-relative"; offset = "future-unspec"; direction = "after"; }
+      { surface = "그때"; class = "reference-relative"; }
+      { surface = "당시"; class = "reference-relative"; }
+      { surface = "그후"; class = "reference-relative"; relation = "after"; }
+      { surface = "이전"; class = "reference-relative"; relation = "before"; }
+    ];
+    tense_relation = [
+      { tense = "past";    event_vs_speech = "before"; }
+      { tense = "present"; event_vs_speech = "overlaps"; }
+      { tense = "future";  event_vs_speech = "after"; }
+    ];
+  };
+  # ── 검증 케이스 (한글의 법칙들 — 테스트가 여기서 꺼내 검사, 하드코딩 fixture 금지) ──
+  # batchim: 받침(Korean final consonant) / Latin consonant 판정 결정론 검증.
+  batchim_examples = [
+    { word = "산"; batchim = true; }
+    { word = "강"; batchim = true; }
+    { word = "가로무늬"; batchim = false; }
+    { word = "사과"; batchim = false; }
+    { word = "acclaim"; batchim = true; }
+    { word = "apple"; batchim = false; }
+  ];
+  # josa: role + word → 받침-correct 조사.
+  josa_examples = [
+    { role = "subject"; word = "산"; expect = "이"; }
+    { role = "subject"; word = "가로무늬"; expect = "가"; }
+    { role = "object"; word = "acclaim"; expect = "을"; }
+    { role = "object"; word = "apple"; expect = "를"; }
+    { role = "object"; word = "사과"; expect = "를"; }
+    { role = "topic"; word = "산"; expect = "은"; }
+    { role = "topic"; word = "사과"; expect = "는"; }
+    { role = "with"; word = "산"; expect = "과"; }
+    { role = "direction"; word = "학교"; expect = "로"; }
+    { role = "direction"; word = "서울"; expect = "로"; }
+    { role = "direction"; word = "집"; expect = "으로"; }
+  ];
+  # sound: 소리규칙 검증 — jong open/rieul 인덱스 + digit/magnitude 받침 테이블(0-indexed) 일관성.
+  sound_examples = [
+    { check = "jong-open"; expect_idx = 0; }
+    { check = "jong-rieul"; expect_idx = 8; }
+    { check = "digit-batchim"; index = 1; expect = true; }
+    { check = "digit-batchim"; index = 2; expect = false; }
+    { check = "digit-rieul"; index = 1; expect = true; }
+    { check = "magnitude-batchim"; index = 11; expect = false; }
+    { check = "magnitude-batchim"; index = 3; expect = true; }
+  ];
+  # eomi: stem + suffix → 결합(축약 포함).
+  eomi_examples = [
+    { stem = "초과하"; suffix = "었다"; expect = "초과했다"; }
+    { stem = "울"; suffix = "었다"; expect = "울었다"; }
+    { stem = "먹"; suffix = "었다"; expect = "먹었다"; }
+    { stem = "받"; suffix = "었다"; expect = "받았다"; }
+    { stem = "잡"; suffix = "었다"; expect = "잡았다"; }
+    { stem = "가"; suffix = "었다"; expect = "갔다"; }
+    { stem = "서"; suffix = "었다"; expect = "섰다"; }
+    { stem = "오"; suffix = "었다"; expect = "왔다"; }
+    { stem = "주"; suffix = "었다"; expect = "줬다"; }
+    { stem = "되"; suffix = "었다"; expect = "됐다"; }
+    { stem = "기다리"; suffix = "었다"; expect = "기다렸다"; }
+    { stem = "쓰"; suffix = "었다"; expect = "썼다"; }
+    { stem = "크"; suffix = "었다"; expect = "컸다"; }
+    { stem = "바쁘"; suffix = "었다"; expect = "바빴다"; }
+    { stem = "슬프"; suffix = "었다"; expect = "슬펐다"; }
+    { stem = "아프"; suffix = "었다"; expect = "아팠다"; }
+    { stem = "잠그"; suffix = "었다"; expect = "잠갔다"; }
+    { stem = "먹"; suffix = "ㄴ다"; expect = "먹는다"; }
+    { stem = "가"; suffix = "ㄴ다"; expect = "간다"; }
+    { stem = "받"; suffix = "ㄴ다"; expect = "받는다"; }
+    { stem = "울"; suffix = "ㄴ다"; expect = "운다"; }
+    { stem = "만들"; suffix = "ㄴ다"; expect = "만든다"; }
+    { stem = "오"; suffix = "ㄴ다"; expect = "온다"; }
+  ];
+  # aeo-불규칙: dict aeo 활용형 → 과거 (apply-eomi 가 aeo 인자 받을 때). ㅂ/ㄷ/ㅅ/르/러/우 전부 한 메커니즘.
+  aeo_eomi_examples = [
+    { stem = "돕"; aeo = "도와"; suffix = "었다"; expect = "도왔다"; }
+    { stem = "듣"; aeo = "들어"; suffix = "었다"; expect = "들었다"; }
+    { stem = "굽"; aeo = "구워"; suffix = "었다"; expect = "구웠다"; }
+    { stem = "낫"; aeo = "나아"; suffix = "었다"; expect = "나았다"; }
+    { stem = "짓"; aeo = "지어"; suffix = "었다"; expect = "지었다"; }
+    { stem = "흐르"; aeo = "흘러"; suffix = "었다"; expect = "흘렀다"; }
+    { stem = "푸르"; aeo = "푸르러"; suffix = "었다"; expect = "푸르렀다"; }
+  ];
+  # realize: 단일 generic realize-msv-surface(역할 josa + eomi + SOV 어순) 검증벡터.
+  realize_examples = [
+    { agent = "순이"; object = "사과"; predicate_stem = "먹"; tense_suffix = "었다"; expect = "순이가 사과를 먹었다"; }
+    { agent = "산"; object = "acclaim"; predicate_stem = "초과하"; tense_suffix = "었다"; expect = "산이 acclaim을 초과했다"; }
+    { agent = "강"; object = "apple"; predicate_stem = "울"; tense_suffix = "었다"; expect = "강이 apple를 울었다"; }
+  ];
+}

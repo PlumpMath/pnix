@@ -1,0 +1,265 @@
+# stdlib.lib.math.matrix
+#
+# OWNER-LAW (v0.12-SS, div-math, 2026-05-21): exact integer matrix
+# algebra.
+#
+# The math lane has scalar arithmetic, number theory, rationals,
+# equation solvers, combinatorics, modular arithmetic, polynomials,
+# and statistics. It had no *linear algebra*. This owner adds the
+# first piece: exact integer matrices.
+#
+# # Representation
+#
+# A matrix is a list of rows; each row is a list of integers.
+# `[[1 2] [3 4]]` is the 2x2 matrix with first row 1 2. A
+# well-formed matrix is rectangular (every row the same length);
+# `isRectangular` checks that.
+#
+# # The determinant is a real algorithm
+#
+# `matDeterminant` is Laplace (cofactor) expansion along the first
+# row, recursing on (n-1)x(n-1) minors down to the 1x1 base case.
+# It is exact -- an integer matrix has an integer determinant, no
+# rounding. The 2x2 rule `ad - bc` falls out of the general
+# recursion, it is not special-cased.
+#
+# # Standalone
+#
+# Imports nothing -- integer entries only. Same input -> same
+# receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a rational/float matrix -- integer entries only. Matrix
+#     inversion (which needs division) is therefore out of scope
+#     for this slice; a later slice can lift the entry ring to
+#     rational.px and add inverse + Cramer's rule.
+#   - NOT an eigenvalue / decomposition engine.
+#   - NOT sparse -- dense row-list storage.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/matrix.px";
+
+  # Inclusive integer range [lo .. hi] -- pnixc-meta has no genList.
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  intMod = a: b: a - b * (a / b);
+
+  # Dimensions. An empty matrix is 0x0; otherwise rows = number of
+  # rows, cols = length of the first row.
+  matRows = m: builtins.length m;
+  matCols = m: if m == [] then 0 else builtins.length (builtins.head m);
+
+  # Entry at (i, j).
+  matGet = m: i: j: builtins.elemAt (builtins.elemAt m i) j;
+
+  # Rectangular check: every row has the same length as the first.
+  isRectangular = m:
+    if m == [] then true
+    else
+      let c = matCols m;
+      in builtins.all (row: builtins.length row == c) m;
+
+  isSquare = m: matRows m == matCols m;
+
+  # The n x n identity matrix.
+  matIdentity = n:
+    builtins.map
+      (i: builtins.map (j: if i == j then 1 else 0) (rangeList 0 (n - 1)))
+      (rangeList 0 (n - 1));
+
+  # Element-wise sum -- assumes equal dimensions (the plate guards).
+  matAdd = a: b:
+    builtins.map
+      (i: builtins.map
+            (j: (matGet a i j) + (matGet b i j))
+            (rangeList 0 (matCols a - 1)))
+      (rangeList 0 (matRows a - 1));
+
+  # Scale every entry by an integer scalar.
+  matScale = k: m:
+    builtins.map (row: builtins.map (x: k * x) row) m;
+
+  # Transpose: result[j][i] = m[i][j].
+  matTranspose = m:
+    if m == [] then []
+    else
+      builtins.map
+        (j: builtins.map (i: matGet m i j) (rangeList 0 (matRows m - 1)))
+        (rangeList 0 (matCols m - 1));
+
+  # Matrix product -- assumes a.cols == b.rows (the plate guards).
+  # result[i][j] = sum_k a[i][k] * b[k][j].
+  matMul = a: b:
+    let
+      inner = matCols a;
+      cell = i: j:
+        builtins.foldl'
+          (acc: k: acc + (matGet a i k) * (matGet b k j))
+          0
+          (rangeList 0 (inner - 1));
+    in
+      builtins.map
+        (i: builtins.map (j: cell i j) (rangeList 0 (matCols b - 1)))
+        (rangeList 0 (matRows a - 1));
+
+  # Drop element `idx` from a list. foldl' over the index range
+  # (no inner recursive helper -- pnixc-meta's evaluator has shown
+  # scope quirks with same-named nested `let` bindings).
+  removeAt = lst: idx:
+    let n = builtins.length lst;
+    in
+      builtins.foldl'
+        (acc: i:
+          if i == idx then acc
+          else acc ++ [ (builtins.elemAt lst i) ])
+        []
+        (rangeList 0 (n - 1));
+
+  # The minor obtained by deleting row `ri` and column `cj`.
+  matMinor = m: ri: cj:
+    builtins.map (row: removeAt row cj) (removeAt m ri);
+
+  # Determinant by Laplace expansion along the first row. Each
+  # cofactor recurses on an (n-1)x(n-1) minor. det of the 0x0
+  # matrix is 1; det of a 1x1 is its single entry. The cofactor
+  # sum is a foldl' over the column range (no inner `go`).
+  matDeterminant = m:
+    let n = matRows m;
+    in
+      if n == 0 then 1
+      else if n == 1 then matGet m 0 0
+      else
+        builtins.foldl'
+          (acc: j:
+            let sign = if intMod j 2 == 0 then 1 else (0 - 1);
+            in acc
+               + sign
+                 * (matGet m 0 j)
+                 * (matDeterminant (matMinor m 0 j)))
+          0
+          (rangeList 0 (n - 1));
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "dimensions"
+    "identity"
+    "add"
+    "scale"
+    "transpose"
+    "multiply"
+    "determinant"
+  ];
+
+  applyMatrix = request:
+    let
+      op = request.operation;
+      a  = if request ? a then request.a else [];
+      b  = if request ? b then request.b else [];
+      n  = if request ? n then request.n else 0;
+      k  = if request ? k then request.k else 1;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "identity" then {
+        outcome = "matrix-computed";
+        operation = op; n = n;
+        matrix = matIdentity n;
+      }
+      else if (builtins.elem op [ "dimensions" "scale" "transpose"
+                                  "determinant" ])
+              && !(isRectangular a) then {
+        outcome = "held-not-rectangular";
+        operation = op;
+      }
+      else if op == "dimensions" then {
+        outcome = "matrix-computed";
+        operation = op;
+        rows = matRows a;
+        cols = matCols a;
+        is_square = isSquare a;
+      }
+      else if op == "scale" then {
+        outcome = "matrix-computed";
+        operation = op; k = k;
+        matrix = matScale k a;
+      }
+      else if op == "transpose" then {
+        outcome = "matrix-computed";
+        operation = op;
+        matrix = matTranspose a;
+      }
+      else if op == "determinant" then
+        if !(isSquare a) then {
+          outcome = "held-not-square";
+          operation = op;
+          reason = "the determinant is defined only for square matrices";
+        }
+        else {
+          outcome = "matrix-computed";
+          operation = op;
+          determinant = matDeterminant a;
+        }
+      else if op == "add" then
+        if !(isRectangular a) || !(isRectangular b) then {
+          outcome = "held-not-rectangular";
+          operation = op;
+        }
+        else if matRows a != matRows b || matCols a != matCols b then {
+          outcome = "held-dimension-mismatch";
+          operation = op;
+          reason = "add requires both matrices to have the same shape";
+        }
+        else {
+          outcome = "matrix-computed";
+          operation = op;
+          matrix = matAdd a b;
+        }
+      else
+        # op == "multiply"
+        if !(isRectangular a) || !(isRectangular b) then {
+          outcome = "held-not-rectangular";
+          operation = op;
+        }
+        else if matCols a != matRows b then {
+          outcome = "held-dimension-mismatch";
+          operation = op;
+          reason = "multiply requires a.cols == b.rows";
+        }
+        else {
+          outcome = "matrix-computed";
+          operation = op;
+          matrix = matMul a b;
+        };
+
+in {
+  inherit
+    ownerName
+    rangeList
+    matRows
+    matCols
+    matGet
+    isRectangular
+    isSquare
+    matIdentity
+    matAdd
+    matScale
+    matTranspose
+    matMul
+    matMinor
+    matDeterminant
+    knownOperations
+    applyMatrix;
+  meta = {
+    source = "stdlib math matrix";
+    owner = ownerName;
+    base = "parametric-math-matrix-v0";
+    rev_note = "v0.12-SS (div-math): exact integer matrix algebra owner. Row-list representation. Dimensions, rectangularity/squareness checks, identity, element-wise add, scalar scale, transpose, matrix product, and determinant by Laplace cofactor expansion (recursing on (n-1)x(n-1) minors -- the 2x2 ad-bc rule is not special-cased). Exact: an integer matrix has an integer determinant. Standalone. NOT rational/float entries (so no inverse / Cramer this slice), NOT eigenvalues, NOT sparse, NOT yet a registered lens.";
+  };
+}

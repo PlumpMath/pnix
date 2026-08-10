@@ -1,0 +1,210 @@
+# stdlib.lib.math.quadratic-equation
+#
+# OWNER-LAW (v0.12-QQ, div-math, 2026-05-21): exact quadratic
+# equation solver over integer coefficients.
+#
+# v0.12-MM closed the linear case. This owner closes the quadratic
+# case: `a*x^2 + b*x + c = 0`. It is the math lane's second solver
+# and the first that meets *irrational* answers.
+#
+# # The discriminant decides everything
+#
+# D = b^2 - 4*a*c. The solver branches on D and never collapses
+# the cases:
+#
+#   D < 0   complex-roots          no real root exists
+#   D = 0   one-double-root        x = -b / (2a), exactly rational
+#   D > 0, D a perfect square      two-rational-roots
+#                                  x = (-b +/- sqrt D) / (2a)
+#   D > 0, D not a perfect square  two-irrational-roots
+#                                  the roots are genuinely
+#                                  irrational; the owner reports
+#                                  the EXACT closed form
+#                                  (-b +/- sqrt D)/(2a) instead of
+#                                  rounding to a lying decimal
+#
+# Degenerate a = 0 is not a quadratic at all -- the solver defers
+# to the v0.12-MM linear solver and labels the outcome
+# `degenerate-linear`.
+#
+# # Honest about irrationality
+#
+# A quadratic with D = 5 has roots involving sqrt 5, which is
+# irrational. A substrate that answers "2.236..." is lying about
+# exactness. This owner instead returns the exact structure:
+# rational_part = -b/(2a), sqrt_radicand = D, sqrt_coefficient =
+# 1/(2a). That is the precise, replay-stable truth.
+#
+# # Kernel layering
+#
+# quadratic-equation -> { rational, linear-equation } ->
+# number-theory -> nothing. Rational roots are rational.px values;
+# the degenerate case reuses linear-equation.px; the integer
+# square root `isqrt` (Newton's method) is local.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a complex-number engine -- D < 0 reports `complex-roots`
+#     and the discriminant, no complex value is constructed.
+#   - NOT a cubic / higher-degree solver.
+#   - surd simplifier (2026-06-14): sqrt 12 -> 2√3, fraction reduced
+#     (e.g. (0 ± √8)/2 -> ±√2). square-free radicand.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/quadratic-equation.px";
+
+  rational = import ./rational.px;
+  linearEquation = import ./linear-equation.px;
+
+  # Integer square root (floor of the real square root) by
+  # Newton's method. isqrt n is the largest s with s*s <= n.
+  # Returns -1 for negative input.
+  isqrt = n:
+    if n < 0 then (0 - 1)
+    else if n == 0 then 0
+    else
+      let
+        go = x:
+          let y = (x + n / x) / 2;
+          in if y >= x then x else go y;
+      in go n;
+
+  isPerfectSquare = n:
+    let s = isqrt n;
+    in s >= 0 && s * s == n;
+
+  # 정수 gcd (Euclid; 음수 절댓값).
+  intGcd = a: b:
+    let aa = if a < 0 then 0 - a else a;
+        bb = if b < 0 then 0 - b else b;
+        go = x: y: if y == 0 then x else go y (x - ((x / y) * y));
+    in go aa bb;
+
+  # 근호 정리(surd simplifier): √n = coeff·√radicand (최대 제곱인수 추출).
+  #   예: √8 = 2√2, √32 = 4√2, √20 = 2√5. radicand 는 square-free.
+  simplifySurd = n:
+    let s = isqrt n;
+        go = k: if k < 2 then { coeff = 1; radicand = n; }
+               else if (n - ((n / (k * k)) * (k * k))) == 0
+               then { coeff = k; radicand = n / (k * k); }
+               else go (k - 1);
+    in go s;
+
+  # Verify a rational root r against a*x^2 + b*x + c = 0 by
+  # recomputing the left side in exact rational arithmetic.
+  verifyRoot = a: b: c: r:
+    let
+      r2 = rational.ratMul r r;
+      ar2 = rational.ratMul (rational.ratFromInt a) r2;
+      br = rational.ratMul (rational.ratFromInt b) r;
+      lhs = rational.ratAdd (rational.ratAdd ar2 br)
+              (rational.ratFromInt c);
+    in rational.ratIsZero lhs;
+
+  # Solve a*x^2 + b*x + c = 0.
+  solveQuadratic = a: b: c:
+    if a == 0 then
+      # Not a quadratic -- defer to the linear solver.
+      let lin = linearEquation.solveLinear b c 0;
+      in lin // {
+        outcome = "degenerate-linear";
+        linear_outcome = lin.outcome;
+        a = a; b = b; c = c;
+      }
+    else
+      let
+        disc = b * b - 4 * a * c;
+        twoA = 2 * a;
+      in
+        if disc < 0 then {
+          outcome = "complex-roots";
+          a = a; b = b; c = c;
+          discriminant = disc;
+          reason = "discriminant < 0: no real root exists";
+        }
+        else if disc == 0 then
+          let root = rational.mkRational (0 - b) twoA;
+          in {
+            outcome = "one-double-root";
+            a = a; b = b; c = c;
+            discriminant = disc;
+            root_text = rational.ratToString root;
+            root_num = root.num;
+            root_den = root.den;
+            verified = verifyRoot a b c root;
+          }
+        else if isPerfectSquare disc then
+          let
+            s = isqrt disc;
+            rootPlus  = rational.mkRational (0 - b + s) twoA;
+            rootMinus = rational.mkRational (0 - b - s) twoA;
+          in {
+            outcome = "two-rational-roots";
+            a = a; b = b; c = c;
+            discriminant = disc;
+            sqrt_discriminant = s;
+            root_plus_text = rational.ratToString rootPlus;
+            root_minus_text = rational.ratToString rootMinus;
+            verified =
+              verifyRoot a b c rootPlus
+              && verifyRoot a b c rootMinus;
+          }
+        else
+          # D > 0 but not a perfect square: the roots are
+          # genuinely irrational. Report the EXACT, surd-simplified closed form.
+          #   x = (-b ± √D)/(2a),  √D = coeff·√radicand,  then reduce by gcd.
+          let
+            rationalPart = rational.mkRational (0 - b) twoA;
+            sqrtCoeff = rational.mkRational 1 twoA;
+            negB = 0 - b;
+            surd = simplifySurd disc;          # √disc = surd.coeff·√surd.radicand
+            g0 = intGcd (intGcd negB surd.coeff) twoA;
+            g = if g0 == 0 then 1 else g0;
+            rp = negB / g;                     # 약분된 실수부 분자
+            cf = surd.coeff / g;               # 약분된 근호 계수
+            dnRaw = twoA / g;
+            # 분모 양수 정규화
+            dn = if dnRaw < 0 then 0 - dnRaw else dnRaw;
+            rpN = if dnRaw < 0 then 0 - rp else rp;
+            ts = builtins.toString;
+            surdText = (if cf == 1 then "" else ts cf) + "√" + (ts surd.radicand);
+            simplified =
+              if dn == 1 then
+                (if rpN == 0 then "±" + surdText
+                 else (ts rpN) + " ± " + surdText)
+              else
+                "(" + (ts rpN) + " ± " + surdText + ") / " + (ts dn);
+          in {
+            outcome = "two-irrational-roots";
+            a = a; b = b; c = c;
+            discriminant = disc;
+            sqrt_radicand = disc;
+            rational_part_text = rational.ratToString rationalPart;
+            sqrt_coefficient_text = rational.ratToString sqrtCoeff;
+            # surd-simplified exact form (e.g. ±√2, ±2√2, ±√5)
+            surd_coefficient = cf;
+            surd_radicand = surd.radicand;
+            closed_form = simplified;
+          };
+
+  # --- plate-shaped entry ---------------------------------------
+
+  applyQuadratic = request:
+    solveQuadratic request.a request.b request.c;
+
+in {
+  inherit
+    ownerName
+    isqrt
+    isPerfectSquare
+    verifyRoot
+    solveQuadratic
+    applyQuadratic;
+  meta = {
+    source = "stdlib math quadratic equation";
+    owner = ownerName;
+    base = "parametric-math-quadratic-equation-v0";
+    rev_note = "v0.12-QQ (div-math): exact quadratic solver. Branches on the discriminant D = b^2-4ac and never collapses the cases: complex-roots (D<0) / one-double-root (D=0) / two-rational-roots (D>0, D a perfect square) / two-irrational-roots (D>0, not a perfect square). Irrational roots are reported as the EXACT closed form (-b +/- sqrt D)/(2a), never rounded to a lying decimal. Integer square root by Newton's method. Surd simplifier (2026-06-14): irrational closed_form is surd-simplified (√D=coeff·√radicand, square-free) + gcd-reduced (e.g. x²-2=0 -> ±√2, x²-2x-1=0 -> 1±√2). Degenerate a=0 defers to the v0.12-MM linear solver. Kernel layering: quadratic -> {rational, linear-equation} -> number-theory. NOT a complex-number engine, NOT cubic, NOT yet a registered lens.";
+  };
+}

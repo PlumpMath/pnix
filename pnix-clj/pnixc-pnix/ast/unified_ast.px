@@ -1,0 +1,84 @@
+{
+  name = "pnixc.ast.unified";
+  schema = "pnix-unified-ast-v1";
+  subset = "pnix-unified-subset-v1";
+  description = "Data-only Unified AST schema used by pnixc lowering.";
+
+  nodes = [
+    { tag = "Int"; fields = [ { name = "value"; type = "i64"; } ]; }
+    { tag = "Float"; fields = [ { name = "value"; type = "f64"; } ]; }
+    { tag = "Bool"; fields = [ { name = "value"; type = "bool"; } ]; }
+    { tag = "String"; fields = [ { name = "value"; type = "string"; } ]; }
+    { tag = "Var"; fields = [ { name = "name"; type = "string"; } ]; }
+
+    { tag = "ParamTime"; fields = [ ]; }
+    { tag = "ParamDeltaTime"; fields = [ ]; }
+    { tag = "ParamSignal"; fields = [ { name = "name"; type = "string"; } ]; }
+    { tag = "SignalVar"; fields = [ { name = "name"; type = "string"; } ]; }
+
+    { tag = "Add"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Sub"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Mul"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Div"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Mod"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Neg"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+
+    { tag = "Concat"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+
+    { tag = "Floor"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Ceil"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Abs"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Sqrt"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Sin"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Cos"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Tan"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Exp"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Ln"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+    { tag = "Pow"; fields = [ { name = "base"; type = "UnifiedExpr"; } { name = "exponent"; type = "UnifiedExpr"; } ]; }
+
+    { tag = "Lt"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Gt"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Le"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Ge"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Eq"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Ne"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+
+    { tag = "And"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Or"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "Not"; fields = [ { name = "arg"; type = "UnifiedExpr"; } ]; }
+
+    { tag = "If"; fields = [ { name = "cond"; type = "UnifiedExpr"; } { name = "then"; type = "UnifiedExpr"; } { name = "else"; type = "UnifiedExpr"; } ]; }
+    { tag = "Throw"; fields = [ { name = "message"; type = "string"; } ]; }
+
+    { tag = "Let"; fields = [ { name = "name"; type = "string"; } { name = "value"; type = "UnifiedExpr"; } { name = "body"; type = "UnifiedExpr"; } ]; }
+
+    { tag = "Apply"; fields = [ { name = "func"; type = "string"; } { name = "args"; type = "UnifiedExpr[]"; } ]; }
+    { tag = "Fx"; fields = [ { name = "body"; type = "UnifiedExpr"; } ]; }
+    { tag = "Interop"; fields = [ { name = "lang"; type = "string"; } { name = "code"; type = "string"; } ]; }
+    { tag = "Derived"; fields = [ { name = "op"; type = "string"; } { name = "args"; type = "UnifiedExpr[]"; } ]; }
+
+    { tag = "AttrSet"; fields = [ { name = "pairs"; type = "AttrPair[]"; } ]; }
+    { tag = "Merge"; fields = [ { name = "lhs"; type = "UnifiedExpr"; } { name = "rhs"; type = "UnifiedExpr"; } ]; }
+    { tag = "List"; fields = [ { name = "items"; type = "UnifiedExpr[]"; } ]; }
+
+    { tag = "Lambda"; fields = [ { name = "param"; type = "string"; } { name = "body"; type = "UnifiedExpr"; } ]; }
+    { tag = "Null"; fields = [ ]; }
+    { tag = "Construct"; fields = [ { name = "variant"; type = "string"; } { name = "args"; type = "UnifiedExpr[]"; } ]; }
+  ];
+
+  types = [
+    {
+      name = "AttrPair";
+      fields = [
+        { name = "key"; type = "string"; }
+        { name = "value"; type = "UnifiedExpr"; }
+      ];
+    }
+  ];
+
+  notes = [
+    "data-only schema; nodes are a superset of pnix-subset lowering outputs"
+    "Derived.op is stored as a stable string identifier"
+    "AttrSet uses explicit key/value pairs to avoid tuple encoding"
+  ];
+}

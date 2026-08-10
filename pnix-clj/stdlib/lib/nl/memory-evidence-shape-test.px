@@ -1,0 +1,74 @@
+# stdlib/lib/nl/memory-evidence-shape-test.px
+#
+# P5-b-4 call-site 합성 lock: receipt에 memory_evidence(P4)와 abstraction_status_evidence(P5)가 *병치*(머지 X)되고,
+#   둘 다 leak-safe·비파괴이며, base(chatRespond)를 안 깬다.
+#   닫는 루프 검증: 저장된 ingest abstraction(held-pending-utility) → 다음 "철수가 사과를 먹었다" 발화 →
+#   abstraction_status_evidence가 "s:n:ingest held-pending-utility"를 비춤(memory_evidence와 나란히).
+let
+  m = import ./korean-nl-mirror.px;
+  sp = import ../meta/abstraction-status-store-plan.px;
+  agc = import ../meta/abstraction-genesis-core.px;
+  gb = import ../meta/abstraction-gate-bridge.px;
+  propose = import ./symbol-memory-propose.px;
+  spm = import ./symbol-memory-store-plan.px;
+  B = builtins;
+  sentence = "철수가 사과를 먹었다";
+
+  # P3 체인 → abstraction-status entry (ingest, held-pending-utility)
+  t1 = [ { sym = "eat"; } { sym = "철수"; } { sym = "사과"; } ];
+  t2 = [ { sym = "eat"; } { sym = "영희"; } { sym = "책"; } ];
+  cand = agc.genesisCandidate {
+    terms = [ t1 t2 ]; owner_candidate = "predicate-concepts";
+    relation = "predicate-synonym-collapse"; source_symbols = [ "먹" "잡수시" ];
+  };
+  gateRes = gb.submitToGate { candidate = cand; };
+  entry = sp.mkEntry { candidate = cand; gate_result = gateRes; };
+
+  # 현재 발화의 symbol-memory keys(철수·사과·먹 전부 memory에)
+  prop = m.liftToProposition sentence;
+  syms = (propose.proposeSymbols prop).symbols;
+  memKeys = B.map (s: spm.storeKeyOfSymbol s) syms;
+
+  # ★call-site 합성: memory + abstraction status 둘 다
+  full = m.chatRespondWithMemory { sentence = sentence; memory_keys = memKeys; abstraction_statuses = [ entry ]; };
+  noAbs = m.chatRespondWithMemory { sentence = sentence; memory_keys = memKeys; };   # 비파괴: abstraction_statuses 없음
+  base = m.chatRespond sentence;
+
+  me = full.memory_evidence;
+  ase = full.abstraction_status_evidence;
+  aItem = B.head ase.items;
+  rep = full.understanding_report;                 # P6 한국어 이해 설명
+  hasLine = sub: lines: (B.length (B.filter (l: (B.match (".*" + sub + ".*") l) != null) lines)) > 0;
+in {
+  me_recognized = me.recognized_count;
+  ase_count = ase.abstraction_status_count;
+  ase_held = ase.held_count;
+  ase_about = aItem.about;
+  ase_status = aItem.status;
+  all_ok =
+    # base 보존(병치가 base 안 깸)
+       (full.answer == base.answer) && (full.verdict == base.verdict)
+    && (full.route_eligible == base.route_eligible) && (full.understood == base.understood)
+    # memory_evidence(P4) 여전히 동작(철수·사과·먹 인식)
+    && (me.recognized_count == 3) && (me.missing_count == 0)
+    # ★abstraction_status_evidence(P5): ingest abstraction held-pending-utility 인식
+    && (ase.abstraction_status_count == 1) && (ase.held_count == 1)
+    && (aItem.about == "s:n:ingest") && (aItem.status == "held-pending-utility")
+    # ★status ≠ truth(verified여도) — 공개 face 표식
+    && (ase.durable_truth == false) && (ase.proposer_only == true)
+    # ★leak-safe: 두 evidence 모두 internal 비노출
+    && ((me ? internal_results) == false) && ((ase ? internal_entries) == false)
+    && ((aItem ? abstraction_key) == false) && ((aItem ? owner) == false)
+    # ★병치(머지 아님): 두 evidence_kind가 별개 필드
+    && (me.evidence_kind == "symbol-memory.recognition") && (ase.evidence_kind == "abstraction.status")
+    # ★비파괴: abstraction_statuses 없음 → 빈 abstraction_status_evidence, base 불변
+    && (noAbs.abstraction_status_evidence.abstraction_status_count == 0)
+    && (noAbs.answer == base.answer) && (noAbs.memory_evidence.recognized_count == 3)
+    # ★P6 보고면: "왜 그렇게 이해했는가" — 인식한 것 + ingest held-pending-utility 설명, 설명일 뿐 truth 아님
+    && (rep.report_kind == "understanding-report")
+    && (hasLine "철수" rep.lines) && (hasLine "ingest" rep.lines) && (hasLine "아직 검증 대기" rep.lines)
+    && (rep.held_abstraction_count == 1)
+    && (rep.durable_truth == false) && (rep.proposer_only == true)
+    # 비파괴: abstraction 없으면 보고에 abstraction 줄 0(held_abstraction_count=0)
+    && (noAbs.understanding_report.held_abstraction_count == 0);
+}

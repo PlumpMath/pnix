@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+build_project() {
+  local project="$1"
+  shift
+  (
+    cd "$root/$project"
+    rm -rf target dist
+    mkdir -p dist
+    while (( "$#" )); do
+      local config="$1"
+      local namespace="$2"
+      shift 2
+      clojure -Srepro -M -m cljs.main -co "$config" -c "$namespace"
+    done
+  )
+}
+
+if node "$root/bin/meta-artifact-identity.js" --check >/dev/null 2>&1; then
+  node "$root/bin/meta-artifact-identity.js" --check
+  echo "reusing content-identical cljs-meta fixed point"
+else
+  build_project cljs-meta \
+    build-cli.edn pnix.cljs-meta.main \
+    build-module.edn pnix.cljs-meta.module \
+    build-stage-runtime.edn pnix.cljs-meta.stage-runtime
+
+  node "$root/bin/build-fixed-point.js" "$root"
+  node "$root/bin/meta-artifact-identity.js" --write
+fi
+
+build_project pnix-cljs \
+  build-cli.edn pnix-cljs.main \
+  build-module.edn pnix-cljs.module \
+  build-test.edn pnix-cljs.self-test
+
+node "$root/bin/artifact-identity.js" --write
+
+echo "built verified cljs-meta and pnix-cljs JavaScript artifacts"

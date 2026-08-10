@@ -1,0 +1,325 @@
+let
+  ownerName = "stdlib.nl.coding-ask-handler";
+
+  cache =
+    import nl/chain-extract-cache.px;
+  asq =
+    import nl/algorithm-sequence-substrate.px;
+  pin =
+    import nl/attention-pin-policy.px;
+  im =
+    import nl/sentence-instance-memory.px;
+  bt =
+    import nl/branch-tree-substrate.px;
+
+  # === Coding Ask Handler (agent-NL-115) ===========================
+  #
+  # First real-usage wire of the 12-substrate stack.
+  #
+  # 사용자 입력 한 발화 → 박힌 substrate chain 전체 walk → 통합
+  # envelope. 이게 freecat-cli `--ask` mode 의 substrate-side
+  # entry point. Rust HTTP route (POST /coding/ask) 는 cargo 풀리면
+  # 이 handler 를 한 번 호출하면 됨.
+  #
+  # # input shape
+  #
+  #   {
+  #     utterance        — user's NL input (required)
+  #     session_state? = {
+  #       memory      — accumulated #109 instance memory
+  #       cache       — accumulated 4-piece extraction cache
+  #     }
+  #     bound_trees? = [ { instance_role; tree; } ... ]
+  #         # optional pre-bound trees, e.g. user already pinned
+  #         # a triangle-congruence axiom tree for math-step instances
+  #     policy? = {
+  #       keep_horizon                  # default 5
+  #       high_reference_threshold      # default 3
+  #       cache_max_entries             # default 32
+  #     }
+  #   }
+  #
+  # # output shape
+  #
+  #   {
+  #     outcome = "ask-step-emitted" | "held-..." | ...
+  #     public = {
+  #       root_instance_id          # OOP name of root intent
+  #       algorithm_step_count
+  #       step_ids                  # OOP names of decomposed steps
+  #       final_goal_id
+  #       cache_hit                 # was 4-piece served from cache?
+  #       pin_count                 # how many backbone anchors after eviction
+  #       backbone_size             # pin + faded placeholder count
+  #       path_length               # root → final distance
+  #       message_en / message_ko   # human-readable summary
+  #     }
+  #     carry = {
+  #       updated_session_state     # caller pipes this into next ask
+  #       ...detailed receipts for substrate audit
+  #     }
+  #   }
+
+  stepKind = "coding-ask-first-real-usage";
+  framework_step =
+    "integrated entry — utterance → cache → decompose → instance → pin → 통합 envelope";
+
+  emptyState = {
+    memory = im.emptyMemory;
+    cache = cache.emptyCache 32;
+  };
+
+  defaultPolicy = {
+    keep_horizon = 5;
+    high_reference_threshold = 3;
+    cache_max_entries = 32;
+  };
+
+  # === Bind optional pre-supplied trees to matching instances ======
+  #
+  # If caller supplied bound_trees with `instance_role` selector,
+  # walk the memory and attach the tree to the first instance with
+  # that role.
+
+  applyBoundTrees = memory: boundTrees:
+    if !(builtins.isList boundTrees) || boundTrees == []
+      then memory
+    else
+      builtins.foldl' (mem: bt:
+        let
+          role = bt.instance_role or "algorithm-step";
+          tree = bt.tree or null;
+          # Find first instance with that role
+          hits = builtins.filter (i: (i.role or "") == role)
+            mem.instances;
+        in
+          if hits == [] || tree == null then mem
+          else asq.bindTreeToInstance mem
+                 (builtins.head hits).instance_id tree
+      ) memory boundTrees;
+
+  # === Main entry: process one ask =================================
+
+  processAsk = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance";
+    }
+    else if !(builtins.isString request.utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if request.utterance == "" then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let
+        state = request.session_state or emptyState;
+        policy = (defaultPolicy // (request.policy or {}));
+        utterance = request.utterance;
+        boundTrees = request.bound_trees or [];
+
+        # === Stage A: cache lookup for 4-piece ============
+        cacheResult = cache.getOrCompute state.cache utterance;
+
+        # === Stage B: build algorithm sequence ===========
+        seqResult = asq.buildAlgorithmSequence state.memory utterance;
+      in
+        if seqResult.outcome != "algorithm-sequence-built" then {
+          outcome = "held-sequence-build-failed";
+          inner_outcome = seqResult.outcome;
+        }
+        else
+          let
+            memoryAfterSeq = seqResult.carry.updated_memory;
+
+            # === Stage C: bind optional pre-supplied trees ====
+            memoryWithTrees = applyBoundTrees memoryAfterSeq boundTrees;
+
+            # === Stage D: attention pin/evict =================
+            evictResult = pin.evictTransients {
+              memory = memoryWithTrees;
+              policy = policy;
+            };
+            memoryEvicted = evictResult.carry.updated_memory;
+
+            # === Stage E: backbone + path length =============
+            backbone = pin.backbone memoryEvicted;
+            pathLen = pin.pathLengthFromRoot memoryEvicted
+              seqResult.public.root_instance_id
+              seqResult.public.final_goal_instance_id;
+
+            # === Final updated session state =================
+            updatedState = state // {
+              memory = memoryEvicted;
+              cache = cacheResult.cache;
+            };
+          in {
+            outcome = "ask-step-emitted";
+            public = {
+              root_instance_id = seqResult.public.root_instance_id;
+              algorithm_step_count = seqResult.public.algorithm_step_count;
+              step_ids = seqResult.public.algorithm_step_ids;
+              final_goal_id = seqResult.public.final_goal_instance_id;
+              reused_from_fast_map =
+                if builtins.hasAttr "reused_from_fast_map"
+                     seqResult.public
+                then seqResult.public.reused_from_fast_map
+                else false;
+              cache_hit = cacheResult.was_cached;
+              cache_hits_total = cacheResult.cache.stats.hits;
+              cache_misses_total = cacheResult.cache.stats.misses;
+              pin_count = evictResult.public.pin_count;
+              transient_kept_count = evictResult.public.transient_kept_count;
+              faded_count = evictResult.public.transient_faded_count;
+              backbone_size = builtins.length backbone;
+              path_length = pathLen;
+              total_instances = builtins.length memoryEvicted.instances;
+              message_en =
+                "Utterance decomposed into "
+                + builtins.toString seqResult.public.algorithm_step_count
+                + " algorithm step(s). Root instance "
+                + seqResult.public.root_instance_id
+                + ", final goal "
+                + seqResult.public.final_goal_instance_id
+                + ". Session backbone now "
+                + builtins.toString (builtins.length backbone)
+                + " anchor(s), "
+                + builtins.toString evictResult.public.transient_faded_count
+                + " faded.";
+              message_ko =
+                "발화가 "
+                + builtins.toString seqResult.public.algorithm_step_count
+                + " 개 algorithm step 으로 분해됨. root "
+                + seqResult.public.root_instance_id
+                + ", final goal "
+                + seqResult.public.final_goal_instance_id
+                + ". 세션 backbone "
+                + builtins.toString (builtins.length backbone)
+                + " 개 anchor, "
+                + builtins.toString evictResult.public.transient_faded_count
+                + " fade.";
+            };
+            carry = {
+              updated_session_state = updatedState;
+              meaning_vector = cacheResult.meaning_vector;
+              root_row = seqResult.carry.root_row;
+              step_texts = seqResult.carry.step_texts;
+              backbone = backbone;
+              pin_decisions = evictResult.carry.pin_decisions;
+              axiom_origin =
+                "axiom-103-nl-coding-ask-handler "
+                + "(integrates 97/98/100/101/102 + 94)";
+              composed_substrates = [
+                "stdlib/lib/nl/sentence-substrate-mapping.px (#105)"
+                "stdlib/lib/nl/sentence-instance-memory.px (#109)"
+                "stdlib/lib/nl/branch-tree-substrate.px (#110)"
+                "stdlib/lib/nl/algorithm-sequence-substrate.px (#113)"
+                "stdlib/lib/nl/attention-pin-policy.px (#114)"
+                "stdlib/lib/nl/chain-extract-cache.px (#114)"
+              ];
+            };
+          };
+
+  # === Convenience: build a session from a list of utterances =====
+  #
+  # Used for batch smoke + scenario demo. Walks turns, threading
+  # session state through each ask.
+
+  walkAsks = utterances: policy:
+    let
+      step = state: utt:
+        let r = processAsk {
+          utterance = utt;
+          session_state = state;
+          policy = policy;
+        }; in
+        if r.outcome == "ask-step-emitted"
+        then r.carry.updated_session_state
+        else state;
+      finalState = builtins.foldl' step emptyState utterances;
+    in {
+      outcome = "asks-walked";
+      public = {
+        total_instances = builtins.length finalState.memory.instances;
+        cache_size = builtins.length finalState.cache.entries;
+        cache_hits = finalState.cache.stats.hits;
+        cache_misses = finalState.cache.stats.misses;
+      };
+      carry = {
+        final_state = finalState;
+      };
+    };
+
+  applyCodingAskPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "ask" request then
+      processAsk (request.ask // {
+        session_state = request.session_state or emptyState;
+        policy = request.policy or {};
+      })
+    else if builtins.hasAttr "walk_asks" request then
+      walkAsks request.walk_asks (request.policy or {})
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { ask = { utterance; ... }, session_state? } or "
+        + "{ walk_asks = [\"<utt1>\", ...] }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-coding-ask-handler-axiom-103";
+    composes =
+      "axiom-94-chain + axiom-97-instance + axiom-100-sequence "
+      + "+ axiom-101-pin + axiom-102-cache";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    stages = [
+      "A — cache lookup (chain-extract-cache)"
+      "B — algorithm sequence build (algorithm-sequence-substrate)"
+      "C — optional bind_trees (branch-tree as instance attribute)"
+      "D — attention pin/evict (attention-pin-policy)"
+      "E — backbone + path length"
+    ];
+    primary_outcomes = [
+      "ask-step-emitted"
+      "asks-walked"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-utterance"
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-sequence-build-failed"
+    ];
+    first_real_usage_note =
+      "Single entry that exercises the 6 NL substrates in one call. "
+      + "Caller threads session_state through successive asks. Future "
+      + "Rust route POST /coding/ask wraps this with HTTP envelope.";
+  };
+
+in {
+  inherit
+    ownerName
+    emptyState defaultPolicy
+    applyBoundTrees processAsk walkAsks
+    applyCodingAskPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL coding ask handler (agent-NL-115)";
+    owner = ownerName;
+    base = "nl-coding-ask-handler-v0";
+    rev_note = "agent-NL-115 (2026-05-29): 박힌 12 substrate 의 첫 real-"
+      + "usage wire. 한 utterance 입력 → cache → decompose → instance → "
+      + "pin → envelope. session state caller 가 thread. cargo 차단된 "
+      + "동안 binary 직접 evaluate. Rust HTTP route 는 cargo 풀리면 이 "
+      + "handler 한 호출만. DO NOT REBUILD — 모든 stage 가 기존 substrate.";
+  };
+}

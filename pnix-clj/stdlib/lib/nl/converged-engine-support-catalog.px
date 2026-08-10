@@ -1,0 +1,121 @@
+# stdlib.nl.converged-engine-support-catalog
+#
+# Lightweight support-owner manifest for the latest converged engine.
+#
+# Truth owners still own behavior. This file only records small support
+# surfaces that reduce cold imports or keep closed vocabularies aligned across
+# NL/math/coding/freecat families. It is safe for inventories and docs to import:
+# no Lean corpus, no backend dispatcher, no world stack.
+
+let
+  ownerName = "stdlib.nl.converged-engine-support-catalog";
+
+  pathManifest = {
+    phrase_normalization = "stdlib/lib/nl/phrase-normalization.px";
+    nl_code_pair_catalog = "stdlib/lib/agent/nl-code-pair-catalog.px";
+    live_coding_command_catalog =
+      "stdlib/lib/agent/live-coding-command-catalog.px";
+    coding_transform_support_catalog =
+      "stdlib/lib/coding/coding-transform-support-catalog.px";
+    coding_diagnostic_support_catalog =
+      "stdlib/lib/coding/coding-diagnostic-support-catalog.px";
+    freecat_world_surface =
+      "stdlib/lib/agent/freecat-world-model-surface-contract.px";
+    scene_mode_mapping =
+      "stdlib/lib/agent/nl-to-scene-mode-mapping-contract.px";
+  };
+
+  supportOwners = [
+    {
+      key = "phrase-normalization";
+      path = pathManifest.phrase_normalization;
+      role = "shared ASCII lower/whitespace/synonym normalization";
+      consumers = [
+        "math/nl-conjecture-lifter"
+        "coding intent and transform candidates"
+      ];
+      import_policy = "lightweight helper import";
+    }
+    {
+      key = "nl-code-pair-catalog";
+      path = pathManifest.nl_code_pair_catalog;
+      role = "Round 74 NL<->code closed vocabulary";
+      consumers = [
+        "nl-code-pair-resolution-contract"
+        "code-element-detector-contract"
+        "js-to-pnix-lowering-contract"
+      ];
+      import_policy = "catalog import; resolver remains truth owner";
+    }
+    {
+      key = "live-coding-command-catalog";
+      path = pathManifest.live_coding_command_catalog;
+      role = "Round 115 live command verbs/shapes/colors/trajectories";
+      consumers = [
+        "nl-live-coding-incremental-command-contract"
+        "web-freecat-live-code-emit-contract"
+      ];
+      import_policy = "catalog import; resolver/emitter remain truth owners";
+    }
+    {
+      key = "coding-transform-support-catalog";
+      path = pathManifest.coding_transform_support_catalog;
+      role = "coding transform capability rows and finder/gate owner paths";
+      consumers = [
+        "coding-capabilities-aggregator"
+        "latest engine support inventory"
+      ];
+      import_policy =
+        "catalog import for capability inventory; finder/gate owners remain truth owners";
+    }
+    {
+      key = "coding-diagnostic-support-catalog";
+      path = pathManifest.coding_diagnostic_support_catalog;
+      role = "coding diagnostic capability rows and parser/repair owner paths";
+      consumers = [
+        "coding-capabilities-aggregator"
+        "latest engine support inventory"
+      ];
+      import_policy =
+        "catalog import for capability inventory; parser/repair owners remain truth owners";
+    }
+    {
+      key = "freecat-world-provenance";
+      path = pathManifest.freecat_world_surface;
+      role = "world surface truth owner cited by adjacent freecat contracts";
+      consumers = [
+        "external app / selection / snapshot / replay / target / VPL / preview contracts"
+      ];
+      import_policy = "path manifest for provenance-only citations";
+    }
+    {
+      key = "scene-mode-provenance";
+      path = pathManifest.scene_mode_mapping;
+      role = "scene-mode truth owner cited by preview/live/world adjacent contracts";
+      consumers = [
+        "scene-mode-x3d-preview-contract"
+        "live-coding resolver provenance"
+      ];
+      import_policy = "path manifest when only provenance is needed";
+    }
+  ];
+
+  inventorySummary = {
+    owner = ownerName;
+    support_owner_count = builtins.length supportOwners;
+    path_manifest = pathManifest;
+    import_policy =
+      "support catalog only; imports no corpus, backend dispatcher, or world stack";
+    convergence_effect = {
+      size =
+        "callers and docs cite one support manifest instead of duplicating support paths";
+      speed =
+        "support/provenance paths stay manifest-only unless their truth owner is requested";
+      drift =
+        "closed vocabularies have one support owner per family";
+    };
+  };
+in {
+  inherit ownerName;
+  inherit pathManifest supportOwners inventorySummary;
+}

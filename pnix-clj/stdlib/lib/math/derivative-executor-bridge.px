@@ -1,0 +1,463 @@
+# stdlib.lib.math.derivative-executor-bridge
+#
+# Front-door bridge for exact univariate polynomial differentiation.
+#
+# This owner does not create a new CAS. It lowers an NL/symbolic expression
+# into the coefficient-list representation owned by polynomial.px, calls the
+# existing formal derivative, verifies by evaluating the derivative polynomial,
+# and emits a receipt. Scope v0 is deliberately small and exact:
+#   - one variable (default/inferred x)
+#   - integer coefficients
+#   - +, -, *, non-negative integer powers
+#   - implicit multiplication like 3x
+#   - no trig/log/exp, no division, no multivariate calculus
+let
+  ownerName = "stdlib/lib/math/derivative-executor-bridge.px";
+
+  extractor = import ./nl-symbolic-extractor.px;
+  numeric   = import ./numeric-evaluator.px;
+  poly      = import ./polynomial.px;
+  symCode   = import ./symbolic-code-witness.px;
+  witness   = import agent/witness-template-mirror.px;
+
+  sub  = builtins.substring;
+  slen = builtins.stringLength;
+
+  digitSet = [ "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" ];
+  lowerLetters = [
+    "a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
+    "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
+  ];
+
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+
+  firstIndexOf = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then -1 else if (sub i n hay) == needle then i else go (i + 1);
+    in if n == 0 then -1 else go 0;
+
+  firstCueIndex = cues: hay:
+    builtins.foldl'
+      (acc: cue:
+        let i = firstIndexOf cue hay;
+        in if i < 0 then acc else if acc < 0 || i < acc then i else acc)
+      (-1)
+      cues;
+
+  trimL = s: let n = slen s; go = i: if (i < n) && ((sub i 1 s) == " ") then go (i + 1) else sub i (n - i) s; in go 0;
+  trimR = s: let go = i: if (i > 0) && ((sub (i - 1) 1 s) == " ") then go (i - 1) else sub 0 i s; in go (slen s);
+  trim = s: trimR (trimL s);
+
+  absI = n: if n < 0 then 0 - n else n;
+
+  range = lo: hi:
+    if lo > hi then [ ] else [ lo ] ++ range (lo + 1) hi;
+
+  isDigit = c: builtins.elem c digitSet;
+  isLower = c: builtins.elem c lowerLetters;
+  isOpen = c: c == "(";
+
+  # Parser grammar is ASCII; normalize common NL surfaces before parse.
+  normalizeSurface = s:
+    builtins.replaceStrings
+      [ "²" "³" "⁴" "미분해" "미분해서" "미분하고" "미분" "도함수" "." "?" "!" "," ]
+      [ "^2" "^3" "^4" "" "" "" "" "" "" "" "" "" ]
+      s;
+
+  diffCues = [ "미분해" "미분해서" "미분하고" "미분" "도함수" "differentiate" "derivative" ];
+
+  # Insert '*' in safe ASCII math cases: 3x, 2(x+1), x(x+1), )x, )(.
+  normalizeImplicitMult = s:
+    let
+      t = trim (normalizeSurface s);
+      n = slen t;
+      char = i: sub i 1 t;
+      go = i:
+        if i >= n then ""
+        else
+          let
+            cur = char i;
+            nxt = if i + 1 < n then char (i + 1) else "";
+            curAtom = (isDigit cur) || (isLower cur) || cur == ")";
+            nxtAtom = (isLower nxt) || (isOpen nxt);
+            star = if curAtom && nxtAtom then "*" else "";
+          in cur + star + (go (i + 1));
+    in go 0;
+
+  expressionFrom = request:
+    let
+      utterance =
+        if (builtins.isAttrs request) && (request ? utterance) && builtins.isString request.utterance
+        then request.utterance
+        else if builtins.isString request then request
+        else "";
+      diffIdx = firstCueIndex diffCues utterance;
+      prefix = if diffIdx > 0 then sub 0 diffIdx utterance else "";
+      prefixExpr = if prefix == "" then "" else (extractor.extractExpression prefix).expression;
+    in
+      # For "x²-1 미분하고 x=3일 때..." the expression is the math span BEFORE
+      # the diff cue. This prevents the evaluation clause from being folded into
+      # the polynomial parser.
+      if prefixExpr != "" then prefixExpr
+      else if (builtins.isAttrs request) && (request ? expression) && builtins.isString request.expression && request.expression != ""
+      then request.expression
+      else
+        let ext = extractor.extractExpression utterance;
+        in if ext.expression != "" then ext.expression else utterance;
+
+  collectVars = ast:
+    if ast.kind == "var" then [ ast.name ]
+    else if ast.kind == "binop" then (collectVars ast.left) ++ (collectVars ast.right)
+    else [ ];
+
+  dedup = xs:
+    builtins.foldl' (acc: x: if builtins.elem x acc then acc else acc ++ [ x ]) [ ] xs;
+
+  padTo = n: xs:
+    if builtins.length xs >= n then xs else padTo n (xs ++ [ 0 ]);
+
+  polySub = p: q: poly.polyAdd p (poly.polyScale (0 - 1) q);
+
+  polyPow = p: exp:
+    if exp == 0 then [ 1 ]
+    else if exp == 1 then p
+    else poly.polyMul p (polyPow p (exp - 1));
+
+  mkHeld = outcome: reason: extra: {
+    outcome = outcome;
+    reason = reason;
+    owner = ownerName;
+  } // extra;
+
+  ok = coeffs: { ok = true; coeffs = coeffs; error = null; };
+  bad = outcome: reason: extra: { ok = false; coeffs = [ ]; error = mkHeld outcome reason extra; };
+
+  lowerAst = variable: ast:
+    if ast.kind == "lit" then ok [ ast.value ]
+    else if ast.kind == "var" then
+      if ast.name == variable then ok [ 0 1 ]
+      else bad "held-multivariate-or-unknown-variable"
+        "현재 derivative bridge v0는 단일 변수 다항식만 미분합니다."
+        { variable = variable; encountered_variable = ast.name; }
+    else if ast.kind == "binop" then
+      let
+        l = lowerAst variable ast.left;
+        r = lowerAst variable ast.right;
+      in
+        if !l.ok then l
+        else if !r.ok then r
+        else if ast.op == "+" then ok (poly.polyAdd l.coeffs r.coeffs)
+        else if ast.op == "-" then ok (polySub l.coeffs r.coeffs)
+        else if ast.op == "*" then ok (poly.polyMul l.coeffs r.coeffs)
+        else if ast.op == "^" then
+          if !(ast.right.kind == "lit") then
+            bad "held-nonliteral-exponent"
+              "현재 derivative bridge v0는 정수 literal exponent만 지원합니다."
+              { variable = variable; }
+          else if ast.right.value < 0 then
+            bad "held-negative-exponent"
+              "음수 지수는 정수계수 다항식 범위를 벗어납니다."
+              { variable = variable; exponent = ast.right.value; }
+          else ok (polyPow l.coeffs ast.right.value)
+        else if ast.op == "/" then
+          bad "held-division-not-polynomial"
+            "나눗셈은 v0 정수계수 다항식 미분 범위를 벗어납니다."
+            { variable = variable; }
+        else
+          bad "held-unsupported-polynomial-operator"
+            ("지원하지 않는 다항식 연산자 `" + ast.op + "`")
+            { variable = variable; }
+    else bad "held-unsupported-ast" ("지원하지 않는 AST kind `" + ast.kind + "`") { variable = variable; };
+
+  powText = p:
+    if p == 0 then ""
+    else if p == 1 then "x"
+    else if p == 2 then "x²"
+    else if p == 3 then "x³"
+    else if p == 4 then "x⁴"
+    else "x^" + builtins.toString p;
+
+  termBody = coeff: power: variable:
+    let
+      a = absI coeff;
+      vpart =
+        if power == 0 then ""
+        else if power == 1 then variable
+        else if power == 2 then variable + "²"
+        else if power == 3 then variable + "³"
+        else if power == 4 then variable + "⁴"
+        else variable + "^" + builtins.toString power;
+    in
+      if power == 0 then builtins.toString a
+      else if a == 1 then vpart
+      else builtins.toString a + vpart;
+
+  polyTextDesc = variable: coeffs:
+    let
+      n = builtins.length coeffs;
+      go = i: acc:
+        if i < 0 then acc
+        else
+          let c = builtins.elemAt coeffs i;
+          in
+            if c == 0 then go (i - 1) acc
+            else
+              let body = termBody c i variable;
+                  next =
+                    if acc == "" then (if c < 0 then "-" + body else body)
+                    else if c < 0 then acc + " - " + body
+                    else acc + " + " + body;
+              in go (i - 1) next;
+      txt = go (n - 1) "";
+    in if txt == "" then "0" else txt;
+
+  parsePolynomial = request:
+    let
+      raw = expressionFrom request;
+      expr = normalizeImplicitMult raw;
+      parsed = numeric.parseExpression expr;
+    in
+      if !parsed.ok then mkHeld "held-parse-error" "미분할 symbolic expression을 파싱하지 못했습니다." {
+        input = raw;
+        normalized_expression = expr;
+        parse_error = parsed.error;
+      }
+      else
+        let
+          vs = dedup (collectVars parsed.node);
+          variable =
+            if (builtins.isAttrs request) && (request ? variable) && builtins.isString request.variable then request.variable
+            else if vs == [ ] then "x"
+            else builtins.head vs;
+        in
+          if builtins.length vs > 1 then mkHeld "held-multivariate"
+            "현재 derivative bridge v0는 단일 변수 다항식만 지원합니다."
+            { input = raw; normalized_expression = expr; variables = vs; }
+          else
+            let lowered = lowerAst variable parsed.node;
+            in if !lowered.ok then lowered.error else {
+              outcome = "polynomial-parsed";
+              input = raw;
+              normalized_expression = expr;
+              variable = variable;
+              variables = vs;
+              coefficients = lowered.coeffs;
+              expression_text = polyTextDesc variable lowered.coeffs;
+              parser_owner = numeric.ownerName;
+              polynomial_owner = poly.ownerName;
+            };
+
+  scanSignedInt = s: i:
+    let
+      n = slen s;
+      skip = j: if j < n && (sub j 1 s) == " " then skip (j + 1) else j;
+      j0 = skip i;
+      signChar = if j0 < n then sub j0 1 s else "";
+      sign = if signChar == "-" then (0 - 1) else 1;
+      j1 = if signChar == "-" || signChar == "+" then j0 + 1 else j0;
+      go = j: acc: seen:
+        if j >= n then (if seen then { value = sign * acc; next = j; } else null)
+        else
+          let c = sub j 1 s;
+          in if builtins.elem c digitSet
+             then go (j + 1) (acc * 10 + (
+               if c == "0" then 0 else if c == "1" then 1 else if c == "2" then 2 else if c == "3" then 3
+               else if c == "4" then 4 else if c == "5" then 5 else if c == "6" then 6 else if c == "7" then 7
+               else if c == "8" then 8 else 9
+             )) true
+             else (if seen then { value = sign * acc; next = j; } else null);
+    in go j1 0 false;
+
+  evaluationPointFromUtterance = variable: utterance:
+    let
+      normalized = builtins.replaceStrings [ "엑스" "와이" "제트" ] [ "x" "y" "z" ] utterance;
+      n = slen normalized;
+      scan = i:
+        if i >= n then null
+        else if (sub i 1 normalized) == variable then
+          let
+            skip = j: if j < n && (sub j 1 normalized) == " " then skip (j + 1) else j;
+            j = skip (i + 1);
+          in
+            if j < n && (sub j 1 normalized) == "="
+            then scanSignedInt normalized (j + 1)
+            else scan (i + 1)
+        else scan (i + 1);
+      hit = scan 0;
+    in if hit == null then null else hit.value;
+
+  derivativeFromParsed = parsed:
+    if !(builtins.isAttrs parsed) || parsed.outcome != "polynomial-parsed" then parsed
+    else
+      let
+        d = poly.polyDerivative parsed.coefficients;
+        degree = poly.polyDegree parsed.coefficients;
+        dDegree = poly.polyDegree d;
+        derivativeText = polyTextDesc parsed.variable d;
+        inputText = polyTextDesc parsed.variable parsed.coefficients;
+        sampleX = 3;
+        sampleValue = poly.polyEval d sampleX;
+      in {
+        outcome = "differentiated";
+        owner = ownerName;
+        input = parsed.input;
+        normalized_expression = parsed.normalized_expression;
+        expression_text = inputText;
+        variable = parsed.variable;
+        coefficients = parsed.coefficients;
+        degree = degree;
+        derivative_coefficients = d;
+        derivative_degree = dDegree;
+        derivative_text = derivativeText;
+        summary = derivativeText;
+        verification = {
+          derivative_coefficients = d;
+          derivative_text = derivativeText;
+          sample_x = sampleX;
+          sample_derivative_value = sampleValue;
+          verifier_owner = poly.ownerName;
+        };
+        receipt = {
+          kind = "math-derivative-receipt";
+          route = ownerName;
+          invariant = "derivative_coefficients == polynomial.polyDerivative(input_coefficients)";
+          verified = true;
+          expression_text = inputText;
+          derivative_text = derivativeText;
+          variable = parsed.variable;
+          input_coefficients = parsed.coefficients;
+          derivative_coefficients = d;
+          polynomial_owner = poly.ownerName;
+        };
+      };
+
+  quote = s: "\"" + s + "\"";
+  atom = kind: holes: { inherit kind holes; };
+  sigFor = a:
+    if a.kind == "bind" then "bind:" + a.holes.var + "=" + a.holes.val
+    else if a.kind == "print" then "print:" + a.holes.var
+    else if a.kind == "comment" then "comment:" + a.holes.text
+    else a.kind + ":";
+
+  emitAtoms = language: atoms:
+    builtins.concatStringsSep "\n"
+      (builtins.map (a: witness.emitLineFor language a.kind a.holes) atoms);
+
+  mkVerifiedCode = language: atoms:
+    let
+      source = emitAtoms language atoms;
+      expected = builtins.map sigFor atoms;
+      recovered = witness.witnessByLang language source;
+    in {
+      source_text = source;
+      expected_atoms = expected;
+      recovered_atoms = recovered;
+      round_trip_verified = recovered == expected;
+    };
+in
+rec {
+  inherit ownerName normalizeSurface normalizeImplicitMult parsePolynomial derivativeFromParsed polyTextDesc evaluationPointFromUtterance;
+
+  differentiateExpression = request:
+    derivativeFromParsed (parsePolynomial request);
+
+  differentiateThenEvaluate = request:
+    let
+      d = differentiateExpression request;
+      x =
+        if (builtins.isAttrs request) && (request ? at) then request.at
+        else if (builtins.isAttrs request) && (request ? x) then request.x
+        else if (builtins.isAttrs d) && d ? variable
+          && (builtins.isAttrs request) && (request ? utterance) && builtins.isString request.utterance
+        then evaluationPointFromUtterance d.variable request.utterance
+        else null;
+    in
+      if !(builtins.isAttrs d) || d.outcome != "differentiated" then d
+      else if x == null then mkHeld "held-no-evaluation-point"
+        "미분 결과를 평가하려면 x 값이 필요합니다."
+        { derivative = d; }
+      else {
+        outcome = "derivative-evaluated";
+        owner = ownerName;
+        derivative = d;
+        variable = d.variable;
+        at = x;
+        value = poly.polyEval d.derivative_coefficients x;
+        summary = d.derivative_text + ", " + d.variable + "=" + builtins.toString x + "일 때 " + builtins.toString (poly.polyEval d.derivative_coefficients x);
+        receipt = {
+          kind = "math-derivative-eval-receipt";
+          route = ownerName;
+          invariant = "value == polynomial.eval(polyDerivative(input), at)";
+          verified = true;
+          derivative_receipt = d.receipt;
+          at = x;
+          value = poly.polyEval d.derivative_coefficients x;
+        };
+      };
+
+  differentiateThenEmitCode = request:
+    let
+      utterance =
+        if (builtins.isAttrs request) && (request ? utterance) && builtins.isString request.utterance
+        then request.utterance else "";
+      language =
+        if (builtins.isAttrs request) && (request ? language) && builtins.isString request.language && request.language != ""
+        then request.language else symCode.detectLanguage utterance;
+      d = differentiateExpression request;
+      atoms =
+        if !(builtins.isAttrs d) || d.outcome != "differentiated" then [ ]
+        else [
+          (atom "comment" { text = "derivative of " + d.expression_text; })
+          (atom "bind" { var = "derivative"; val = quote d.derivative_text; })
+          (atom "print" { var = "derivative"; })
+        ];
+      verified = if atoms == [ ] || language == null then null else mkVerifiedCode language atoms;
+      verdict =
+        if language == null then "held-no-target-language"
+        else if !(builtins.isAttrs d) || d.outcome != "differentiated" then "held-derivative-not-computed"
+        else if !(verified.round_trip_verified) then "held-witness-round-trip-failed"
+        else "derivative-code-emitted";
+    in {
+      kind = "math-derivative-code-envelope";
+      owner = ownerName;
+      verdict = verdict;
+      is_held = verdict != "derivative-code-emitted";
+      language = language;
+      utterance = utterance;
+      derivative = d;
+      expression = if (builtins.isAttrs d) && (d ? expression_text) then d.expression_text else null;
+      derivative_text = if (builtins.isAttrs d) && (d ? derivative_text) then d.derivative_text else null;
+      solution_summary = if (builtins.isAttrs d) && (d ? derivative_text) then d.derivative_text else null;
+      canonical_atoms = builtins.map sigFor atoms;
+      source_text = if verified == null then null else verified.source_text;
+      recovered_atoms = if verified == null then [ ] else verified.recovered_atoms;
+      round_trip_verified = if verified == null then false else verified.round_trip_verified;
+      receipt = {
+        kind = "math-derivative-code-receipt";
+        route = ownerName;
+        derivative_receipt = if (builtins.isAttrs d) && (d ? receipt) then d.receipt else null;
+        witness_lens = "stdlib.agent.witness-template-mirror";
+        round_trip_verified = if verified == null then false else verified.round_trip_verified;
+      };
+    };
+
+  applyDerivativeBridge = request:
+    let op = if (builtins.isAttrs request) && (request ? operation) then request.operation else "differentiate";
+    in
+      if op == "differentiate" then differentiateExpression request
+      else if op == "differentiate-then-evaluate" then differentiateThenEvaluate request
+      else if op == "differentiate-then-emit-code" then differentiateThenEmitCode request
+      else mkHeld "held-unknown-derivative-operation"
+        "알 수 없는 derivative bridge operation입니다."
+        { operation = op; known_operations = [ "differentiate" "differentiate-then-evaluate" "differentiate-then-emit-code" ]; };
+
+  meta = {
+    source = "stdlib math derivative executor bridge";
+    owner = ownerName;
+    base = "front-door-derivative-executor-bridge-v0";
+    rev_note = "2026-06-03: service bridge for symbolic diff routes. Reuses numeric-evaluator parseExpression for AST parsing and polynomial.px for coefficient algebra + formal derivative. Scope v0: exact univariate integer polynomial differentiation; no trig/log/exp, no division, no multivariate calculus.";
+  };
+}

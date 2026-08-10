@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/fda-drugsfda-products-store-plan.px — openFDA Drugs@FDA application/product metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# submissions/application_docs/labels/strength/prescribing/safety/adverse-event/enforcement payloads는 포함하지 않는다. graph/mirror 연결도 하지 않는다.
+let
+  B = builtins;
+  genPath = ./fda-drugsfda-products.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "pharma.fda_drugsfda_products.v1";
+    source = { name = "openFDA Drugs@FDA application/product metadata"; license = "openFDA public domain / public data policy"; scope = "empty seed fallback"; };
+    summary = { application_count = 0; product_count = 0; };
+    applications = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "fda-drugsfda-products-load-v0";
+      source_lens = "stdlib/lib/corpus/fda-drugsfda-products-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "pharma.fda_drugsfda_products.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "fda-drugsfda-products-query-v0";
+      source_lens = "stdlib/lib/corpus/fda-drugsfda-products-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "pharma.fda_drugsfda_products.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

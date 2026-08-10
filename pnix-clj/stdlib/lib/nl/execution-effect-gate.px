@@ -1,0 +1,90 @@
+# MR19 -- execution-effect-gate (the gate plan-replay-folded names as
+# replay.next_gate). This slice closes the ROUTE-BINDING shape only: every
+# folded step's event kind must resolve to a declared capability route. No
+# route is installed and nothing executes -- same staged discipline as the
+# evaluate/select lane (contract first, scoped install receipt later).
+# Execution additionally requires, per route: an owner-gated install receipt
+# AND an operator effect grant. Outcomes:
+#   held-missing-folded    -- no fold-replay verdict supplied
+#   held-not-replay-folded -- verdict outcome is anything but
+#                             plan-replay-folded (held/stale plans never bind)
+#   held-unrouted-steps    -- >=1 step's event has no declared route; the
+#                             per-step detail is preserved (no silent drop)
+#   effect-routes-bound    -- every step bound to a route id; installed=false
+#                             on every row, effect_allowed stays false
+let
+  # Closed route declarations: event kind -> capability route id. Declaring
+  # a route here is NOT installing it -- installation is a separate
+  # owner-gated receipt per route (effect-route-install-receipt).
+  routesTable = {
+    open = "route/fs.open";
+    read = "route/fs.read";
+    close = "route/fs.close";
+    create = "route/fs.create";
+    remove = "route/fs.remove";
+    append = "route/fs.append";
+    run = "route/proc.run";
+    repair = "route/code.repair";
+    verify = "route/code.verify";
+    transform = "route/code.transform";
+    prove = "route/math.prove";
+  };
+in
+{
+  knownEffectRoutes = routesTable;
+
+  bindEffectRoutes = request:
+    let
+      folded = if request ? folded then request.folded else null;
+      held = outcome: reason: extra: ({
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/execution-effect-gate.px";
+      } // extra);
+      steps =
+        if folded != null && folded ? steps then folded.steps else [];
+      bindStep = step:
+        let
+          event = if step ? event then step.event else "";
+          routed = builtins.hasAttr event routesTable;
+        in
+        step // {
+          route = if routed then routesTable."${event}" else null;
+          route_status = if routed then "declared" else "held-no-route";
+          installed = false;
+        };
+      bound = builtins.map bindStep steps;
+      unrouted =
+        builtins.filter (s: s.route_status == "held-no-route") bound;
+    in
+    if folded == null || !(folded ? outcome) then
+      held "held-missing-folded"
+        "a plan-fold-replay verdict is required input" {}
+    else if folded.outcome != "plan-replay-folded" then
+      held "held-not-replay-folded"
+        ("only plan-replay-folded may bind routes; got " + folded.outcome) {}
+    else if builtins.length unrouted > 0 then
+      held "held-unrouted-steps"
+        "at least one step's event kind has no declared capability route"
+        { steps = bound; unrouted_count = builtins.length unrouted; }
+    else {
+      outcome = "effect-routes-bound";
+      plan_fingerprint =
+        if folded ? plan_fingerprint then folded.plan_fingerprint else null;
+      candidate_only = true;
+      # Still false: declared != installed. Execution needs, per route, an
+      # owner-gated install receipt AND an operator effect grant.
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/execution-effect-gate.px";
+      steps = bound;
+      installed_route_count = 0;
+      receipt = {
+        next_gate = "effect-route-install-receipt";
+        execution_requires = [
+          "per-route owner-gated install receipt"
+          "operator effect grant (actor, scope, TTL, fingerprint)"
+        ];
+      };
+    };
+}

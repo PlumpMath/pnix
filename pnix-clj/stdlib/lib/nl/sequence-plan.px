@@ -1,0 +1,46 @@
+# MR24 -- sequence plan owner (the algorithm.sequence sibling of
+# condition-action-plan.px). Receives the ordered step evidence the generic
+# rule consumed and judges the PLAN verdict. Plans are candidates, never
+# execution (candidate_only / effect_allowed pinned); the consequence chain
+# is the same one if-then plans walk (execution-approval-gate onward).
+# Outcomes:
+#   held-unknown-relation -- only algorithm.sequence lifts here
+#   held-missing-steps    -- fewer than two evidenced steps (no invention)
+#   plan-candidate-ready  -- ordered steps verbatim from the rule's captures
+{
+  liftSequencePlan = request:
+    let
+      relation =
+        if request ? relation_kind then request.relation_kind else "";
+      steps = if request ? steps then request.steps else [];
+      held = outcome: reason: {
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/sequence-plan.px";
+      };
+      stepOk = s:
+        s ? event && s.event != "" && s ? stem && s.stem != "";
+    in
+    if relation != "algorithm.sequence" then
+      held "held-unknown-relation"
+        ("sequence-plan owns algorithm.sequence only; got " + relation)
+    else if builtins.length steps < 2
+            || !(builtins.all stepOk steps) then
+      held "held-missing-steps"
+        "every step needs corpus-evidenced event AND stem (nothing is invented)"
+    else {
+      outcome = "plan-candidate-ready";
+      plan = {
+        kind = "sequence";
+        steps = steps;
+      };
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/sequence-plan.px";
+      receipt = {
+        next_gate = "execution-approval-gate";
+        step_count = builtins.length steps;
+      };
+    };
+}

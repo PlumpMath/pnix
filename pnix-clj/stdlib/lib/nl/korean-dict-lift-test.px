@@ -1,0 +1,52 @@
+# stdlib/lib/nl/korean-dict-lift-test.px — S4-b: 사전 품사가 lift 의 용언/개체 분류를 구동(위치 휴리스틱 보강)
+#
+# 검증: ① OOV 문장(seed 미등록)은 위치 휴리스틱 그대로 = 기존 골든 byte-불변(회귀 방지)
+#       ② seed 등록 단어는 사전 품사로 분류(음식→entity, 바꾸→predicate)
+#       ③ scrambled 어순(마지막 어절이 개체, 앞에 용언)을 사전이 교정(reclassified=true)
+# 거울 하나: 분류 정본 = dictionary-facts.px(무수정), facts = 프로젝트 seed. Rust·redb 런타임 0(정적 import).
+let
+  lift = import ./korean-taxonomy-lift.px;
+  df = import ./dictionary-facts.px;
+  facts = (import ./dictionary-seed-facts.px).facts;
+  B = builtins;
+
+  oov    = lift.liftSentence "철수가 사과를 먹는다";   # seed 전부 미등록 → 위치 휴리스틱(골든 경로)
+  normal = lift.liftSentence "음식을 바꾼다";          # 정상 어순, 사전이 confirm
+  scram  = lift.liftSentence "바꾼다 음식을";          # scrambled, 사전이 교정
+
+  hasRole = lifted: role: ent: (B.filter (r: (r.role == role) && (r.entity == ent)) lifted.roles) != [ ];
+  firstKind = lifted: (B.elemAt lifted.roles 0).kind;
+
+  # ① OOV = 기존 골든 경로 (위치 휴리스틱; 사전 미개입)
+  oov_reclass    = oov.reclassified == false;
+  oov_action     = oov.action;                       # "먹"
+  oov_agent_ok   = hasRole oov "agent" "철수";
+  oov_obj_ok     = hasRole oov "object" "사과";
+  oov_kind_null  = (firstKind oov) == null;          # 철수=고유명사(seed·사전 둘 다 미등록)→kind=null (overlay 유무 불변)
+
+  # ② 정상 어순 + 사전 분류
+  normal_reclass   = normal.reclassified == false;
+  normal_obj_ok    = hasRole normal "object" "음식";
+  normal_obj_kind  = firstKind normal;               # "entity"
+  normal_verb_kind = normal.verb_kind;               # "predicate" (바꾸=동사)
+
+  # ③ scrambled → 사전이 용언 재선택
+  scram_reclass    = scram.reclassified == true;
+  scram_obj_ok     = hasRole scram "object" "음식";
+  scram_verb_kind  = scram.verb_kind;                # "predicate"
+
+  # 직접 stemKind (citation '다' 정규화 포함)
+  k_verb = df.stemKind facts "바꾸";   # "predicate"
+  k_noun = df.stemKind facts "음식";   # "entity"
+  k_oov  = df.stemKind facts "철수";   # null
+
+  all_ok =
+    oov_reclass && (oov_action == "먹") && oov_agent_ok && oov_obj_ok && oov_kind_null
+    && normal_reclass && normal_obj_ok && (normal_obj_kind == "entity") && (normal_verb_kind == "predicate")
+    && scram_reclass && scram_obj_ok && (scram_verb_kind == "predicate")
+    && (k_verb == "predicate") && (k_noun == "entity") && (k_oov == null);
+in {
+  inherit all_ok oov_action oov_reclass scram_reclass scram_verb_kind
+          normal_obj_kind normal_verb_kind k_verb k_noun;
+  oov_byte_identical = oov_reclass && (oov_action == "먹") && oov_agent_ok && oov_obj_ok;
+}

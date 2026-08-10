@@ -1,0 +1,125 @@
+# stdlib/lib/nl/understanding-report.px
+#
+# P6→D 보고면: "왜 그렇게 이해했는가?"를 한국어로 설명하는 *결정론* 보고 생성기(LLM-free).
+#   = receipt의 *공개* evidence에서만 한국어 설명 lines 생성. D단계서 **4-face로 분리**:
+#     ①기억(memory_evidence P4) ②증거(catalog_readback_evidence A/C, 출처-attributed)
+#     ③도출(math_evidence P7/C, derivation) ④보류(held: missing/conflict/stale/held-abstraction).
+#
+# deep-research(reference_faithful_evidence_composition_verdict) 규율:
+#   ★render/decode ONLY — judge/promote/merge 아님. 새 truth 생성 0·held→answer 0·missing 추측보완 0.
+#   ★종류 절대 안 섞음(anti-post-rationalization): recall/evidence/derivation/held = 별도 face.
+#   ★grounding≠attribution: 증거 face는 *출처(source_schema)*를 명시.
+#   ★proposer/설명일 뿐 truth 아님: durable_truth/accepted_as_truth = false.
+# ★backward compat: catalog/math evidence 없으면 lines = 기존 P6 3-line(동일 순서, 비파괴).
+# ★누설 0: *공개 evidence만* 입력. ★dialect 함정 #8: 라벨 테이블을 함수 본문 inline.
+let
+  B = builtins;
+
+  aboutLabel = a:
+    if (B.isString a) && (B.stringLength a >= 4) && (B.substring 0 4 a == "s:n:")
+    then B.substring 4 (B.stringLength a) a
+    else a;
+
+  mkUnderstandingReport = args:
+    let me = if args ? memory_evidence then args.memory_evidence else { };
+        ase = if args ? abstraction_status_evidence then args.abstraction_status_evidence else { };
+        cat = if args ? catalog_readback_evidence then args.catalog_readback_evidence else { };
+        math = if args ? math_evidence then args.math_evidence else null;
+
+        statusKo = s:
+          if s == "held-pending-utility" then "아직 검증 대기"
+          else if s == "held" then "보류"
+          else if s == "submit-to-promoteCandidate" then "검증 게이트 대기"
+          else if s == "verified" then "이전에 검증된 일반화(기록된 gate 상태 — 현재 발화의 truth 아님)"
+          else if s == "rejected" then "이전에 기각됨(기록된 gate 상태)"
+          else s;
+
+        # ── ①기억 face ── (★Fix: evidence_kind assert — wrong-kind이 기억 권위 빌리기 차단)
+        symStatus = if (me ? evidence_kind) && (me.evidence_kind == "symbol-memory.recognition")
+                    then (if me ? symbols_status then me.symbols_status else [ ]) else [ ];
+        recognizedNames = B.map (s: s.name) (B.filter (s: s.status == "recognized") symStatus);
+        missingNames = B.map (s: s.name) (B.filter (s: s.status == "missing") symStatus);
+        recLine = if recognizedNames == [ ] then null
+                  else "기억에서 알아본 것: " + (B.concatStringsSep ", " recognizedNames);
+        memoryLines = B.filter (x: x != null) [ recLine ];
+
+        # ── ②증거 face (catalog_readback_evidence bundle, recognized만 = 출처-attributed) ──
+        # ★Fix: evidence_kind assert — catalog.readback.bundle 아니면 증거 face 비움(wrong-kind smuggle 차단)
+        catEntries = if (cat ? evidence_kind) && (cat.evidence_kind == "catalog.readback.bundle")
+                     then (if cat ? entries then cat.entries else [ ]) else [ ];
+        recogEntries = B.filter (e: (if e ? status then e.status else "") == "recognized") catEntries;
+        sourceLineOf = e:
+          let k = if e ? key then e.key else "";
+              sc = if e ? source_schema then e.source_schema else "";
+          in "카탈로그 증거: '" + k + "'은(는) " + sc + " 에서 확인했습니다.";
+        sourceLines = B.map sourceLineOf recogEntries;
+
+        # ── ③도출 face (math_evidence verdict → 한국어. derivation, 회상/증거와 구별) ──
+        # ★Fix: evidence_kind assert — math.derivation 아니면 도출 face 비움(wrong-kind이 도출 권위 빌리기 차단)
+        mathVerdict = if (math != null) && (math ? evidence_kind) && (math.evidence_kind == "math.derivation") && (math ? verdict)
+                      then math.verdict else "";
+        derivLine =
+          if mathVerdict == "invalid-candidate" then "도출: 차원이 일치하지 않아 그 연산을 할 수 없습니다."
+          else if mathVerdict == "dimension-consistent-candidate" then "도출: 차원이 일치합니다."
+          else if mathVerdict == "consistent" then "도출: 차원이 일치합니다."
+          else if mathVerdict == "held" then "도출: 차원은 같습니다."   # 차원은 계산됨(의미동등은 ④보류로)
+          else null;
+        derivLines = B.filter (x: x != null) [ derivLine ];
+
+        # ── ④보류 face (missing 기억 + held abstraction + catalog 미인식/충돌 + math held) ──
+        misLine = if missingNames == [ ] then null
+                  else "처음 보는 것: " + (B.concatStringsSep ", " missingNames);
+        absItems = ase.items or [ ];
+        absLines = B.map (i:
+          "개념 '" + (aboutLabel i.about) + "' — " + (statusKo i.status)
+          + (if i.status == "verified" then "" else " (아직 검증 못 한 일반화 후보)")) absItems;
+        heldCatEntries = B.filter (e: (if e ? status then e.status else "") != "recognized") catEntries;
+        heldCatLineOf = e:
+          let k = if e ? key then e.key else "";
+              st = if e ? status then e.status else "missing";
+              stKo = if st == "missing" then "아직 확인하지 못함"
+                     else if st == "conflict-held" then "카탈로그 간 충돌로 보류"
+                     else if st == "stale-held" then "출처 깊이 초과로 보류"
+                     else st;
+          in "보류: '" + k + "'은(는) " + stKo + " (추측하지 않음).";
+        heldCatLines = B.map heldCatLineOf heldCatEntries;
+        mathHeldKo = k:
+          if k == "dimension-equal-not-semantic-equivalent" then "차원이 같아도 의미 동등은 도출할 수 없습니다."
+          else if k == "unresolved-korean-query" then "한국어 물리량 또는 연산어를 정확히 찾지 못했습니다."
+          else if k == "concept-ambiguous" then "개념이 모호하여 보류합니다."
+          else "보류 사유: " + k;
+        mathHeldReasons = if math == null then [ ] else (if math ? held_reasons then math.held_reasons else [ ]);
+        mathHeldLines = if mathVerdict == "held"
+                        then B.map (r: "보류: " + (mathHeldKo (if r ? kind then r.kind else ""))) mathHeldReasons
+                        else [ ];
+        heldLines = (B.filter (x: x != null) [ misLine ]) ++ absLines ++ heldCatLines ++ mathHeldLines;
+
+        # ★lines = 기억 ++ 증거 ++ 도출 ++ 보류 (memory-only 입력선 = 기존 P6 3-line 동일 순서·비파괴)
+        lines = memoryLines ++ sourceLines ++ derivLines ++ heldLines;
+    in {
+      report_kind = "understanding-report";
+      lines = lines;
+      # ★D: 구조화 4-face(종류 분리, 섞지 않음)
+      report_faces = {
+        memory = { recognized = recognizedNames; lines = memoryLines; };
+        source_evidence = {
+          entries = B.map (e: { key = if e ? key then e.key else "";
+                                source_schema = if e ? source_schema then e.source_schema else "";
+                                owner_version = if e ? owner_version then e.owner_version else ""; }) recogEntries;
+          lines = sourceLines;
+        };
+        derivation = { verdict = mathVerdict; lines = derivLines; };
+        held = { lines = heldLines; };
+      };
+      recognized_count = me.recognized_count or 0;
+      missing_count = me.missing_count or 0;
+      held_abstraction_count = ase.held_count or 0;
+      proposer_only = true;
+      durable_truth = false;
+      accepted_as_truth = false;
+      ontology_assert_allowed = false;
+      note = "이해 과정 설명(기억/증거/도출/보류 4-face) — render/decode일 뿐 truth/판정/promotion 아님";
+    };
+in {
+  inherit mkUnderstandingReport aboutLabel;
+}

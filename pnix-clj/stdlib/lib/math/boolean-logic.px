@@ -1,0 +1,250 @@
+# stdlib.lib.math.boolean-logic
+#
+# OWNER-LAW (v0.12-WW, div-math, 2026-05-21): propositional /
+# boolean algebra with exhaustive law verification.
+#
+# The div-math kernel covers number theory, algebra, and discrete
+# math, but had no *logic* owner. This one adds boolean algebra:
+# the eight connectives, their truth tables, and -- the real
+# payoff -- a verifier that PROVES boolean-algebra laws by
+# exhaustive truth-table check.
+#
+# # Laws are proved, not asserted
+#
+# `verifyLaw "de-morgan-and"` does not look the law up in a table.
+# It evaluates both sides of `not (a and b) == (not a) or (not b)`
+# at every one of the 2^3 = 8 assignments of (a, b, c) and returns
+# `true` only if they agree at all of them. That IS a proof for
+# propositional logic -- the truth table is the decision procedure.
+#
+# # The eight connectives
+#
+#   not (unary), and, or, xor, implies, iff, nand, nor
+#
+# # Standalone
+#
+# Imports nothing -- booleans only. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a first-order / predicate logic engine -- propositional
+#     only.
+#   - NOT a free-form expression parser -- it evaluates named
+#     connectives and named laws, not arbitrary formula strings.
+#   - NOT a SAT solver for large formulas -- exhaustive check over
+#     a fixed three-variable assignment space.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/boolean-logic.px";
+
+  # --- the eight connectives ------------------------------------
+
+  bNot     = a: !a;
+  bAnd     = a: b: a && b;
+  bOr      = a: b: a || b;
+  bXor     = a: b: a != b;
+  bImplies = a: b: (!a) || b;
+  bIff     = a: b: a == b;
+  bNand    = a: b: !(a && b);
+  bNor     = a: b: !(a || b);
+
+  knownConnectives = [
+    "not" "and" "or" "xor" "implies" "iff" "nand" "nor"
+  ];
+
+  # Evaluate a named binary connective (b is ignored for `not`).
+  evalConnective = name: a: b:
+    if name == "not" then bNot a
+    else if name == "and" then bAnd a b
+    else if name == "or" then bOr a b
+    else if name == "xor" then bXor a b
+    else if name == "implies" then bImplies a b
+    else if name == "iff" then bIff a b
+    else if name == "nand" then bNand a b
+    else bNor a b;
+
+  # 4-row truth table of a binary connective: the results at
+  # (F,F), (F,T), (T,F), (T,T).
+  binaryTruthTable = name: [
+    (evalConnective name false false)
+    (evalConnective name false true)
+    (evalConnective name true false)
+    (evalConnective name true true)
+  ];
+
+  # 2-row truth table of `not`: the results at F, T.
+  unaryTruthTable = [ (bNot false) (bNot true) ];
+
+  # --- exhaustive assignment space ------------------------------
+
+  # All 2^3 = 8 assignments of three boolean variables. Every law
+  # below is checked at every one of these.
+  allAssignments = [
+    { a = false; b = false; c = false; }
+    { a = false; b = false; c = true;  }
+    { a = false; b = true;  c = false; }
+    { a = false; b = true;  c = true;  }
+    { a = true;  b = false; c = false; }
+    { a = true;  b = false; c = true;  }
+    { a = true;  b = true;  c = false; }
+    { a = true;  b = true;  c = true;  }
+  ];
+
+  # --- boolean-algebra laws -------------------------------------
+
+  knownLaws = [
+    "double-negation"
+    "de-morgan-and"
+    "de-morgan-or"
+    "distributive-and-over-or"
+    "distributive-or-over-and"
+    "absorption-and"
+    "absorption-or"
+    "commutative-and"
+    "commutative-or"
+    "associative-and"
+    "associative-or"
+    "idempotent-and"
+    "idempotent-or"
+    "excluded-middle"
+    "non-contradiction"
+    "implication-as-or"
+    "contrapositive"
+  ];
+
+  # The predicate `LHS == RHS` for one law at one assignment.
+  lawHoldsAt = name: a: b: c:
+    if name == "double-negation" then
+      (bNot (bNot a)) == a
+    else if name == "de-morgan-and" then
+      (bNot (bAnd a b)) == (bOr (bNot a) (bNot b))
+    else if name == "de-morgan-or" then
+      (bNot (bOr a b)) == (bAnd (bNot a) (bNot b))
+    else if name == "distributive-and-over-or" then
+      (bAnd a (bOr b c)) == (bOr (bAnd a b) (bAnd a c))
+    else if name == "distributive-or-over-and" then
+      (bOr a (bAnd b c)) == (bAnd (bOr a b) (bOr a c))
+    else if name == "absorption-and" then
+      (bAnd a (bOr a b)) == a
+    else if name == "absorption-or" then
+      (bOr a (bAnd a b)) == a
+    else if name == "commutative-and" then
+      (bAnd a b) == (bAnd b a)
+    else if name == "commutative-or" then
+      (bOr a b) == (bOr b a)
+    else if name == "associative-and" then
+      (bAnd (bAnd a b) c) == (bAnd a (bAnd b c))
+    else if name == "associative-or" then
+      (bOr (bOr a b) c) == (bOr a (bOr b c))
+    else if name == "idempotent-and" then
+      (bAnd a a) == a
+    else if name == "idempotent-or" then
+      (bOr a a) == a
+    else if name == "excluded-middle" then
+      (bOr a (bNot a)) == true
+    else if name == "non-contradiction" then
+      (bAnd a (bNot a)) == false
+    else if name == "implication-as-or" then
+      (bImplies a b) == (bOr (bNot a) b)
+    else
+      # contrapositive
+      (bImplies a b) == (bImplies (bNot b) (bNot a));
+
+  # A law is verified iff it holds at EVERY assignment -- the
+  # exhaustive truth-table proof for propositional logic.
+  verifyLaw = name:
+    builtins.all
+      (asn: lawHoldsAt name asn.a asn.b asn.c)
+      allAssignments;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  # The full plate vocabulary: the eight connectives plus the two
+  # meta-operations. Exported so the math-kernel capstone can
+  # census this owner uniformly with the others.
+  knownOperations =
+    knownConnectives ++ [ "truth-table" "verify-law" ];
+
+  applyBooleanLogic = request:
+    let op = request.operation;
+    in
+      if builtins.elem op knownConnectives then
+        let
+          a = request.a;
+          b = if request ? b then request.b else false;
+        in {
+          outcome = "boolean-computed";
+          operation = op;
+          result = evalConnective op a b;
+        }
+      else if op == "truth-table" then
+        let conn = request.connective;
+        in
+          if !(builtins.elem conn knownConnectives) then {
+            outcome = "held-unknown-connective";
+            operation = op;
+            connective = conn;
+          }
+          else if conn == "not" then {
+            outcome = "boolean-computed";
+            operation = op;
+            connective = conn;
+            table = unaryTruthTable;
+          }
+          else {
+            outcome = "boolean-computed";
+            operation = op;
+            connective = conn;
+            table = binaryTruthTable conn;
+          }
+      else if op == "verify-law" then
+        let law = request.law;
+        in
+          if !(builtins.elem law knownLaws) then {
+            outcome = "held-unknown-law";
+            operation = op;
+            law = law;
+            known_laws = knownLaws;
+          }
+          else {
+            outcome = "boolean-computed";
+            operation = op;
+            law = law;
+            holds = verifyLaw law;
+            checked_assignments = builtins.length allAssignments;
+          }
+      else {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      };
+
+in {
+  inherit
+    ownerName
+    bNot
+    bAnd
+    bOr
+    bXor
+    bImplies
+    bIff
+    bNand
+    bNor
+    knownConnectives
+    knownOperations
+    evalConnective
+    binaryTruthTable
+    unaryTruthTable
+    allAssignments
+    knownLaws
+    lawHoldsAt
+    verifyLaw
+    applyBooleanLogic;
+  meta = {
+    source = "stdlib math boolean logic";
+    owner = ownerName;
+    base = "parametric-math-boolean-logic-v0";
+    rev_note = "v0.12-WW (div-math): propositional / boolean algebra owner. The eight connectives (not / and / or / xor / implies / iff / nand / nor), their truth tables, and a verifier that PROVES seventeen boolean-algebra laws (de Morgan, distributivity, absorption, excluded middle, contrapositive, ...) by exhaustive check over all 2^3 three-variable assignments -- the truth table is the decision procedure. Standalone. NOT predicate logic, NOT a formula parser, NOT a large-scale SAT solver, NOT yet a registered lens.";
+  };
+}

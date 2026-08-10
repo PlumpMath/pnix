@@ -1,0 +1,158 @@
+# stdlib.lib.math.lucas-sequence
+#
+# OWNER-LAW (v0.12-ABB, div-math, 2026-05-22): the general Lucas
+# sequences U_n(P,Q) and V_n(P,Q).
+#
+# combinatorics.px has the Fibonacci numbers as one fixed
+# sequence. This owner gives the PARAMETRIC family they belong to
+# -- the Lucas sequences -- of which Fibonacci, the Lucas numbers,
+# and the Pell numbers are all instances of one rule.
+#
+# # Two interlocking recurrences
+#
+#   U_0 = 0,  U_1 = 1,  U_n = P*U_{n-1} - Q*U_{n-2}
+#   V_0 = 2,  V_1 = P,  V_n = P*V_{n-1} - Q*V_{n-2}
+#
+# and the classical instances fall straight out:
+#
+#   Fibonacci      = U_n(1, -1)
+#   Lucas numbers  = V_n(1, -1)
+#   Pell numbers   = U_n(2, -1)
+#
+# Every term is an exact integer.
+#
+# # Standalone
+#
+# Imports nothing. n >= 0. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a Lucas primality test (that uses these sequences but is
+#     a separate algorithm).
+#   - NOT closed-form (Binet) evaluation -- the recurrence is
+#     iterated exactly.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/lucas-sequence.px";
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # U_n(P,Q): U_0 = 0, U_1 = 1, U_n = P*U_{n-1} - Q*U_{n-2}.
+  lucasU = p: q: n:
+    let
+      go = i: prev: cur:
+        if i >= n then cur
+        else go (i + 1) cur (p * cur - q * prev);
+    in
+      if n <= 0 then 0
+      else go 1 0 1;
+
+  # V_n(P,Q): V_0 = 2, V_1 = P, V_n = P*V_{n-1} - Q*V_{n-2}.
+  lucasV = p: q: n:
+    let
+      go = i: prev: cur:
+        if i >= n then cur
+        else go (i + 1) cur (p * cur - q * prev);
+    in
+      if n <= 0 then 2
+      else go 1 2 p;
+
+  # The classical instances.
+  fibonacci   = n: lucasU 1 (0 - 1) n;
+  lucasNumber = n: lucasV 1 (0 - 1) n;
+  pellNumber  = n: lucasU 2 (0 - 1) n;
+
+  # [ X_0, X_1, ..., X_n ] for a chosen term function.
+  termList = termFn: n:
+    if n < 0 then []
+    else builtins.map termFn (rangeList 0 n);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "u-term"
+    "v-term"
+    "fibonacci"
+    "lucas"
+    "pell"
+    "u-sequence"
+  ];
+
+  termLimit = 90;
+
+  applyLucasSequence = request:
+    let
+      op = request.operation;
+      p  = if request ? p then request.p else 1;
+      q  = if request ? q then request.q else (0 - 1);
+      n  = if request ? n then request.n else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 0 then {
+        outcome = "held-negative-index";
+        operation = op;
+        n = n;
+      }
+      else if n > termLimit then {
+        outcome = "held-index-too-large";
+        operation = op;
+        n = n;
+        limit = termLimit;
+        reason = "terms grow fast; n is capped to stay within 64-bit range";
+      }
+      else if op == "u-term" then {
+        outcome = "lucas-sequence-computed";
+        operation = op; p = p; q = q; n = n;
+        value = lucasU p q n;
+      }
+      else if op == "v-term" then {
+        outcome = "lucas-sequence-computed";
+        operation = op; p = p; q = q; n = n;
+        value = lucasV p q n;
+      }
+      else if op == "fibonacci" then {
+        outcome = "lucas-sequence-computed";
+        operation = op; n = n;
+        value = fibonacci n;
+      }
+      else if op == "lucas" then {
+        outcome = "lucas-sequence-computed";
+        operation = op; n = n;
+        value = lucasNumber n;
+      }
+      else if op == "pell" then {
+        outcome = "lucas-sequence-computed";
+        operation = op; n = n;
+        value = pellNumber n;
+      }
+      else {
+        # op == "u-sequence"
+        outcome = "lucas-sequence-computed";
+        operation = op; p = p; q = q; n = n;
+        sequence = termList (lucasU p q) n;
+      };
+
+in {
+  inherit
+    ownerName
+    lucasU
+    lucasV
+    fibonacci
+    lucasNumber
+    pellNumber
+    termList
+    knownOperations
+    applyLucasSequence;
+  meta = {
+    source = "stdlib math lucas sequence";
+    owner = ownerName;
+    base = "parametric-math-lucas-sequence-v0";
+    rev_note = "v0.12-ABB (div-math): the general Lucas sequences owner. lucasU / lucasV by the interlocking recurrences U_n = P*U_{n-1} - Q*U_{n-2} and V_n = P*V_{n-1} - Q*V_{n-2}; the classical instances Fibonacci = U(1,-1), Lucas numbers = V(1,-1), Pell numbers = U(2,-1) all fall out of one parametric rule. Exact integers. Standalone. NOT a Lucas primality test, NOT closed-form Binet evaluation, NOT yet a registered lens.";
+  };
+}

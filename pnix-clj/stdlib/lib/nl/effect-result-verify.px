@@ -1,0 +1,94 @@
+# MR37 -- client-command-group-result verification: the RETURN half of the
+# MR20 effect lane. The CLIENT executed the translated command group in its
+# sandbox (puncheetah-shared-sandbox) and ferries back one status row per
+# command; this owner verifies the binding and folds the observations.
+# pnixc-meta executed nothing and invents nothing about what happened --
+# verification is observation-folding, never a new effect.
+# Outcomes:
+#   held-missing-translated     -- no translated envelope supplied
+#   held-not-translated         -- only effect-command-group-translated verifies
+#   held-missing-result         -- no client result envelope
+#   held-group-id-mismatch      -- result was for a DIFFERENT command group
+#                                  (same TOCTOU family as the approval gates)
+#   held-count-mismatch         -- not exactly one status row per command
+#   held-unknown-command-status -- status outside the closed vocabulary
+#                                  (ok | failed | skipped); rows preserved
+#   effect-result-failed-commands -- failures preserved per-command, never
+#                                  silently dropped
+#   effect-result-verified      -- the full audit chain closes; observations
+#                                  verbatim, next lane = experience-fact
+#                                  candidate (receipt fact growth engine)
+{
+  verifyCommandGroupResult = request:
+    let
+      translated =
+        if request ? translated then request.translated else null;
+      result = if request ? result then request.result else null;
+      held = outcome: reason: extra: extra // {
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/effect-result-verify.px";
+      };
+      commands =
+        if translated != null && translated ? commands
+        then translated.commands else [];
+      rows =
+        if result != null && result ? command_results
+        then result.command_results else [];
+      knownStatus = s: s == "ok" || s == "failed" || s == "skipped";
+      badRows =
+        builtins.filter (r: !(r ? status) || !(knownStatus r.status)) rows;
+      failedRows = builtins.filter (r: r ? status && r.status == "failed") rows;
+    in
+    if translated == null || !(translated ? outcome) then
+      held "held-missing-translated"
+        "an effect-command-group-translated envelope is required input" {}
+    else if translated.outcome != "effect-command-group-translated" then
+      held "held-not-translated"
+        ("only translated command groups verify; got " + translated.outcome) {}
+    else if result == null || !(result ? group_command_id) then
+      held "held-missing-result"
+        "a client-command-group-result envelope (group_command_id + command_results) is required" {}
+    else if result.group_command_id != translated.group_command_id then
+      held "held-group-id-mismatch"
+        "the result reports a DIFFERENT command group (TOCTOU guard -- never fold foreign observations)"
+        { expected = translated.group_command_id; got = result.group_command_id; }
+    else if builtins.length rows != builtins.length commands then
+      held "held-count-mismatch"
+        "exactly one status row per translated command (order-preserving); nothing is assumed for missing rows"
+        { command_count = builtins.length commands;
+          result_count = builtins.length rows; }
+    else if builtins.length badRows > 0 then
+      held "held-unknown-command-status"
+        "command status vocabulary is closed (ok | failed | skipped)"
+        { bad_rows = badRows; }
+    else if builtins.length failedRows > 0 then {
+      outcome = "effect-result-failed-commands";
+      group_command_id = translated.group_command_id;
+      # MR38 -- the fingerprint rides on failures too: a failed run is
+      # experience as much as a verified one, and it must stay auditable.
+      plan_fingerprint = translated.plan_fingerprint;
+      failed_count = builtins.length failedRows;
+      observation_count = builtins.length rows;
+      observations = rows;
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/effect-result-verify.px";
+    }
+    else {
+      outcome = "effect-result-verified";
+      group_command_id = translated.group_command_id;
+      plan_fingerprint = translated.plan_fingerprint;
+      observation_count = builtins.length rows;
+      observations = rows;
+      receipt = {
+        chain = "plan -> approval -> fold -> route-bind -> grant -> translate -> client-execute -> result-verify";
+        next_lane = "experience-fact-candidate";
+      };
+      # Verification is observation, not a new effect.
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/effect-result-verify.px";
+    };
+}

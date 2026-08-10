@@ -1,0 +1,237 @@
+# stdlib.lib.math.statistics
+#
+# OWNER-LAW (v0.12-RR, div-math, 2026-05-21): exact descriptive
+# statistics over a list of integers.
+#
+# The math lane can do algebra, number theory, and solving. It had
+# no way to *summarise a data set* -- mean, median, mode, spread.
+# This owner adds the descriptive-statistics layer.
+#
+# # Exactness
+#
+# The mean of `[1 2 4]` is 7/3 -- a fraction, not `2.33...`. This
+# owner reuses rational.px so the mean, the median (when the count
+# is even), and the population variance are EXACT rationals. There
+# is no floating point and no rounding.
+#
+# # The standard deviation is deliberately absent
+#
+# Population variance is exact and rational. The standard
+# deviation is its square root, which is irrational for almost
+# every data set -- there is no honest exact value to return. So
+# this owner returns the exact variance and stops there, rather
+# than emitting a rounded decimal that lies about exactness. A
+# caller that needs an integer bound can take `isqrt` of the
+# variance's numerator/denominator itself.
+#
+# # Kernel layering
+#
+# statistics -> rational -> number-theory -> nothing.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT inferential statistics -- no sampling, no distributions,
+#     no hypothesis tests. Descriptive only.
+#   - NOT a floating-point standard deviation (see above).
+#   - NOT weighted / grouped statistics.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/statistics.px";
+
+  rational = import ./rational.px;
+
+  sumOf = xs: builtins.foldl' (acc: x: acc + x) 0 xs;
+  countOf = xs: builtins.length xs;
+
+  # minOf / maxOf assume a non-empty list (the plate guards empty).
+  minOf = xs:
+    builtins.foldl' (acc: x: if x < acc then x else acc)
+      (builtins.head xs) (builtins.tail xs);
+  maxOf = xs:
+    builtins.foldl' (acc: x: if x > acc then x else acc)
+      (builtins.head xs) (builtins.tail xs);
+
+  rangeOf = xs: (maxOf xs) - (minOf xs);
+
+  sortAsc = xs: builtins.sort (a: b: a < b) xs;
+
+  # Distinct values, ascending.
+  distinctOf = xs:
+    let
+      dedup = seen: rest:
+        if rest == [] then seen
+        else
+          let h = builtins.head rest;
+          in if builtins.elem h seen
+             then dedup seen (builtins.tail rest)
+             else dedup (seen ++ [ h ]) (builtins.tail rest);
+    in sortAsc (dedup [] xs);
+
+  # Arithmetic mean as an EXACT rational: sum / count.
+  meanOf = xs: rational.mkRational (sumOf xs) (countOf xs);
+
+  # Median: the middle of the sorted list. Odd count -> the single
+  # middle element; even count -> the exact rational average of
+  # the two middle elements.
+  medianOf = xs:
+    let
+      s = sortAsc xs;
+      n = countOf xs;
+      mid = n / 2;
+    in
+      if n - 2 * mid == 1
+      then rational.ratFromInt (builtins.elemAt s mid)
+      else
+        let
+          lo = builtins.elemAt s (mid - 1);
+          hi = builtins.elemAt s mid;
+        in rational.mkRational (lo + hi) 2;
+
+  # Frequency of a value in the list.
+  frequencyOf = v: xs:
+    builtins.length (builtins.filter (x: x == v) xs);
+
+  # Mode: the most frequent value. On a tie the SMALLEST such value
+  # is chosen, so the result is deterministic. Returns
+  # `{ value; frequency; }`.
+  modeOf = xs:
+    let
+      vals = distinctOf xs;
+      pick = acc: v:
+        let f = frequencyOf v xs;
+        in
+          if acc == null then { value = v; frequency = f; }
+          else if f > acc.frequency
+          then { value = v; frequency = f; }
+          else acc;
+    in builtins.foldl' pick null vals;
+
+  # Population variance as an EXACT rational: the mean of the
+  # squared deviations from the mean.
+  varianceOf = xs:
+    let
+      mu = meanOf xs;
+      n = countOf xs;
+      sqDev = x:
+        let d = rational.ratSub (rational.ratFromInt x) mu;
+        in rational.ratMul d d;
+      total = builtins.foldl'
+        (acc: x: rational.ratAdd acc (sqDev x))
+        rational.ratZero
+        xs;
+    in rational.ratMul total (rational.mkRational 1 n);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "sum"
+    "count"
+    "min"
+    "max"
+    "range"
+    "mean"
+    "median"
+    "mode"
+    "variance"
+  ];
+
+  # Operations that are undefined on an empty list.
+  needsNonEmpty = [
+    "min" "max" "range" "mean" "median" "mode" "variance"
+  ];
+
+  applyStatistics = request:
+    let
+      op = request.operation;
+      xs = request.xs;
+      empty = xs == [];
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if empty && builtins.elem op needsNonEmpty then {
+        outcome = "held-empty-list";
+        operation = op;
+        reason = "this statistic is undefined on an empty data set";
+      }
+      else if op == "sum" then {
+        outcome = "statistics-computed";
+        operation = op; value = sumOf xs;
+      }
+      else if op == "count" then {
+        outcome = "statistics-computed";
+        operation = op; value = countOf xs;
+      }
+      else if op == "min" then {
+        outcome = "statistics-computed";
+        operation = op; value = minOf xs;
+      }
+      else if op == "max" then {
+        outcome = "statistics-computed";
+        operation = op; value = maxOf xs;
+      }
+      else if op == "range" then {
+        outcome = "statistics-computed";
+        operation = op; value = rangeOf xs;
+      }
+      else if op == "mean" then
+        let m = meanOf xs;
+        in {
+          outcome = "statistics-computed";
+          operation = op;
+          num = m.num; den = m.den;
+          text = rational.ratToString m;
+        }
+      else if op == "median" then
+        let m = medianOf xs;
+        in {
+          outcome = "statistics-computed";
+          operation = op;
+          num = m.num; den = m.den;
+          text = rational.ratToString m;
+        }
+      else if op == "mode" then
+        let m = modeOf xs;
+        in {
+          outcome = "statistics-computed";
+          operation = op;
+          value = m.value;
+          frequency = m.frequency;
+        }
+      else
+        # op == "variance"
+        let v = varianceOf xs;
+        in {
+          outcome = "statistics-computed";
+          operation = op;
+          num = v.num; den = v.den;
+          text = rational.ratToString v;
+        };
+
+in {
+  inherit
+    ownerName
+    sumOf
+    countOf
+    minOf
+    maxOf
+    rangeOf
+    sortAsc
+    distinctOf
+    meanOf
+    medianOf
+    frequencyOf
+    modeOf
+    varianceOf
+    knownOperations
+    applyStatistics;
+  meta = {
+    source = "stdlib math statistics";
+    owner = ownerName;
+    base = "parametric-math-statistics-v0";
+    rev_note = "v0.12-RR (div-math): exact descriptive statistics owner. sum/count/min/max/range as integers; mean, median (even count), and population variance as EXACT rationals via rational.px -- no floating point. The standard deviation is deliberately absent: it is irrational for almost every data set and there is no honest exact value, so the owner returns the exact variance instead of a rounded decimal. Empty-list statistics are Held. Kernel layering: statistics -> rational -> number-theory. NOT inferential statistics, NOT weighted, NOT yet a registered lens.";
+  };
+}

@@ -1,0 +1,245 @@
+# stdlib.lib.math.factor-executor-bridge
+#
+# Front-door bridge for factoring univariate quadratic equations.
+#
+# This owner does not replace the existing solvers. It reuses
+# equation-solving-procedure.px to parse/lower NL equations into coefficients,
+# then reuses polynomial.px to verify the reconstructed factor product. Scope
+# v0 is deliberately small and exact: monic quadratics with integer factors.
+let
+  ownerName = "stdlib/lib/math/factor-executor-bridge.px";
+
+  eq = import ./equation-solving-procedure.px;
+  poly = import ./polynomial.px;
+
+  absI = n: if n < 0 then (0 - n) else n;
+
+  range = lo: hi:
+    if lo > hi then [ ] else [ lo ] ++ range (lo + 1) hi;
+
+  containsSlash = s:
+    let n = builtins.stringLength s;
+        go = i: if i >= n then false else if builtins.substring i 1 s == "/" then true else go (i + 1);
+    in go 0;
+
+  containsEquals = s:
+    let n = builtins.stringLength s;
+        go = i: if i >= n then false else if builtins.substring i 1 s == "=" then true else go (i + 1);
+    in go 0;
+
+  expressionAsZeroEquation = expression:
+    if containsEquals expression then expression else expression + " = 0";
+
+  term = co: sym:
+    if co == 0 then ""
+    else (if co > 0 then " + " else " - ")
+      + (let ab = absI co; in if (ab == 1) && (sym != "") then sym else (builtins.toString ab) + sym);
+
+  quadraticText = var: a: b: c:
+    let
+      head =
+        if a == 1 then var + "²"
+        else if a == (0 - 1) then "-" + var + "²"
+        else (builtins.toString a) + var + "²";
+    in head + (term b var) + (term c "");
+
+  factorText = var: root:
+    if root == 0 then var
+    else if root > 0 then "(" + var + " - " + builtins.toString root + ")"
+    else "(" + var + " + " + builtins.toString (absI root) + ")";
+
+  orderedRoots = r: s:
+    if r == s then [ r s ]
+    else if r >= 0 && s < 0 then [ r s ]
+    else if s >= 0 && r < 0 then [ s r ]
+    else if r <= s then [ r s ]
+    else [ s r ];
+
+  rootLine = var: r: s:
+    if r == s
+    then var + " = " + builtins.toString r
+    else var + " = " + builtins.toString r + " 또는 " + var + " = " + builtins.toString s;
+
+  # For monic x² + b*x + c, find integer r,s with r+s=-b and r*s=c.
+  integerRootPair = b: c:
+    let
+      bound = (absI b) + (absI c) + 2;
+      candidates = builtins.filter
+        (r:
+          let s = (0 - b) - r;
+          in r * s == c)
+        (range (0 - bound) bound);
+    in
+      if candidates == [ ] then null
+      else
+        let r0 = builtins.head candidates;
+            s0 = (0 - b) - r0;
+            ord = orderedRoots r0 s0;
+        in {
+          r = builtins.elemAt ord 0;
+          s = builtins.elemAt ord 1;
+        };
+
+  factorFromSolved = utterance: solved:
+    if !(builtins.isAttrs solved) || solved.outcome != "solved" then {
+      outcome = "held-not-solved-equation";
+      reason = "인수분해하려면 먼저 2차 방정식 계수를 얻어야 합니다.";
+      input = utterance;
+      solve_result = solved;
+    }
+    else if solved.solution_kind != "quadratic" then {
+      outcome = "held-not-quadratic";
+      reason = "현재 factor bridge는 2차식 인수분해만 실행합니다.";
+      input = utterance;
+      solve_result = solved;
+    }
+    else if solved.a != 1 then {
+      outcome = "held-non-monic-quadratic";
+      reason = "현재 factor bridge v0는 monic quadratic(a=1)만 정확히 인수분해합니다.";
+      input = utterance;
+      a = solved.a; b = solved.b; c = solved.c;
+      solve_result = solved;
+    }
+    else if solved.quadratic.outcome == "complex-roots" then {
+      outcome = "held-not-factorable-over-real-linear-roots";
+      reason = "판별식이 음수라 실수 선형 인수로 분해하지 않습니다.";
+      input = utterance;
+      solve_result = solved;
+    }
+    else if solved.quadratic.outcome == "two-rational-roots" && (
+      (containsSlash solved.quadratic.root_plus_text)
+      || (containsSlash solved.quadratic.root_minus_text)
+    ) then {
+      outcome = "held-rational-root-format";
+      reason = "현재 factor bridge v0는 정수근 인수분해만 실행합니다.";
+      input = utterance;
+      solve_result = solved;
+    }
+    else
+      let
+        var = solved.variable;
+        b = solved.b;
+        c = solved.c;
+        pair = integerRootPair b c;
+      in
+        if pair == null then {
+          outcome = "held-no-integer-factor-pair";
+          reason = "정수 r,s with r+s=-b and r*s=c 를 찾지 못했습니다.";
+          input = utterance;
+          a = solved.a; b = b; c = c;
+          solve_result = solved;
+        }
+        else
+          let
+            r = pair.r;
+            s = pair.s;
+            p = [ (0 - r) 1 ];
+            q = [ (0 - s) 1 ];
+            product = poly.polyMul p q;
+            expected = [ c b 1 ];
+            verified = product == expected;
+            f1 = factorText var r;
+            f2 = factorText var s;
+            factorization = if r == s then f1 + "²" else f1 + f2;
+            normal = quadraticText var 1 b c;
+            eqText = factorization + " = 0";
+            roots = rootLine var r s;
+          in {
+            outcome = if verified then "factored" else "held-factor-verification-failed";
+            input = utterance;
+            variable = var;
+            degree = 2;
+            a = 1; b = b; c = c;
+            normalized_expression = normal;
+            normalized_equation = normal + " = 0";
+            factorization = factorization;
+            factorized_equation = eqText;
+            roots_text = roots;
+            roots = [
+              { value = r; text = builtins.toString r; }
+            ] ++ (if r == s then [ ] else [
+              { value = s; text = builtins.toString s; }
+            ]);
+            verification = {
+              product_coefficients = product;
+              expected_coefficients = expected;
+              verified = verified;
+              verifier_owner = poly.ownerName;
+            };
+            solve_result = solved;
+            receipt = {
+              kind = "math-factor-receipt";
+              route = ownerName;
+              invariant = "factor_product_coefficients == normalized_quadratic_coefficients";
+              verified = verified;
+              normalized_expression = normal;
+              normalized_equation = normal + " = 0";
+              factorization = factorization;
+              factorized_equation = eqText;
+              roots_text = roots;
+              variable = var;
+            };
+          };
+
+in
+rec {
+  inherit ownerName factorFromSolved;
+
+  factorEquation = utterance:
+    factorFromSolved utterance (eq.beginSolveProcedure (expressionAsZeroEquation utterance));
+
+  factorExpression = utterance: expression:
+    factorFromSolved utterance (eq.beginSolveProcedure (expressionAsZeroEquation expression));
+
+  factorThenSolve = utterance:
+    let factored = factorEquation utterance;
+    in
+      if !(builtins.isAttrs factored) || factored.outcome != "factored" then {
+        outcome = "held-factor-solve-composition";
+        reason = "factor 단계가 실행되지 않아 solve와 합성할 수 없습니다.";
+        input = utterance;
+        factor = factored;
+      }
+      else {
+        outcome = "factor-solve-composed";
+        input = utterance;
+        factor = factored;
+        solve = factored.solve_result;
+        summary = factored.roots_text;
+        route_chain = [
+          { canonical_meaning = "math.expression.factor"; owner = ownerName; outcome = factored.outcome; }
+          { canonical_meaning = "math.equation.solve"; owner = eq.ownerName; outcome = factored.solve_result.outcome; }
+        ];
+        route_relation = "compatible-sequential";
+        receipt = {
+          kind = "math-factor-solve-chain-receipt";
+          route = ownerName;
+          invariant = "factor_product_verified && zero_product_roots_match_solver_roots";
+          verified = factored.verification.verified;
+          factor_receipt = factored.receipt;
+          solve_owner = eq.ownerName;
+          factorized_equation = factored.factorized_equation;
+          roots_text = factored.roots_text;
+        };
+      };
+
+  applyFactorBridge = request:
+    let op = if request ? operation then request.operation else "factor";
+        utterance = if request ? utterance then request.utterance else "";
+        expression = if request ? expression then request.expression else utterance;
+    in
+      if op == "factor" then factorExpression utterance expression
+      else if op == "factor-then-solve" then factorThenSolve utterance
+      else {
+        outcome = "held-unknown-factor-operation";
+        operation = op;
+        known_operations = [ "factor" "factor-then-solve" ];
+      };
+
+  meta = {
+    source = "stdlib math factor executor bridge";
+    owner = ownerName;
+    base = "front-door-factor-executor-bridge-v0";
+    rev_note = "2026-06-03: service bridge for compatible sequential factor→solve routes. Reuses equation-solving-procedure for coefficient extraction and polynomial.px for product verification. Scope v0: exact monic quadratic integer factorization. NOT a general CAS factorizer, NOT multivariate, NOT rational/non-monic factorization yet.";
+  };
+}

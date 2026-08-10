@@ -1,0 +1,139 @@
+# P3 — boundary-projection
+#
+# OWNER-LAW (2026-05-13): the same ankh has two faces — live
+# instance inside its mirror, reference shadow outside. P3 builds
+# the typed projection record that outside callers receive instead
+# of the live value. The substrate enforces: outside code cannot
+# directly access the live ankh, only the projection.
+#
+# Why: today an evaluated attrset is returned in full to the caller.
+# No inside/outside distinction. P3 introduces the boundary so the
+# 4th axis (in-mirror vs out-of-mirror view) becomes observable.
+#
+# Consumes: MirrorIdentity from P1 (the mirror that owns the ankh).
+# Emits: BoundaryProjection records — typed handles, not live values.
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p3-boundary-projection.px";
+
+  # The four projection kinds. Each represents a different staleness/
+  # cost tradeoff for outside access.
+  validProjectionKinds = [
+    "name-only"    # cheapest: just the ankh id, no shape, no value
+    "shape-only"   # id + typed shape (attrset keys / type info), no values
+    "snapshot"     # frozen value at projection time (eager eval)
+    "lazy-stub"    # handle that requires mirror re-entry to force
+  ];
+
+  # Staleness policies for projections that may go out of date.
+  validStalenessPolicies = [
+    "freeze-once"          # projection value never refreshes
+    "re-fetch-on-access"   # caller asks for fresh value each access
+  ];
+
+  # Required fields on a projection request.
+  requiredRequestFields = [
+    "ankh_id"
+    "source_mirror_id"
+    "projection_kind"
+    "projection_at_ms"
+  ];
+
+  validateRequest = req:
+    let
+      hasField = field:
+        req ? "${field}" && (
+          let v = req."${field}"; in
+          if builtins.isString v then builtins.stringLength v > 0
+          else if builtins.isInt v then true
+          else v != null
+        );
+      missing = builtins.filter (f: !(hasField f)) requiredRequestFields;
+      kindValid =
+        req ? projection_kind
+        && builtins.elem req.projection_kind validProjectionKinds;
+    in {
+      missing_fields = missing;
+      kind_valid = kindValid;
+      ready = builtins.length missing == 0 && kindValid;
+    };
+
+  # Build the BoundaryProjection record. The ankh's *live value* is
+  # absent from the output — that's the whole point: outside callers
+  # see id + shape (depending on kind), not the live value.
+  #
+  # Replay-stable id: fingerprint over (ankh_id, source_mirror_id,
+  # projection_kind, projection_at_ms). Two projections at different
+  # times → different ids. Same time same ankh → same id.
+  buildProjectionId = req:
+    builtins.concatStringsSep "|" [
+      "projection"
+      req.source_mirror_id
+      req.ankh_id
+      req.projection_kind
+      (builtins.toString req.projection_at_ms)
+    ];
+
+  # The actual projection content depends on kind. shape_hint and
+  # snapshot_value are caller-supplied (P3 doesn't introspect the
+  # live ankh — substrate would).
+  buildProjection = req:
+    let
+      validation = validateRequest req;
+    in
+      if !validation.ready then {
+        verdict = "boundary-projection-held";
+        held_kind =
+          if !validation.kind_valid then "invalid-projection-kind"
+          else "missing-required-fields";
+        missing_fields = validation.missing_fields;
+        projection = null;
+      } else {
+        verdict = "boundary-projection-ready";
+        held_kind = null;
+        projection = {
+          id = buildProjectionId req;
+          ankh_id = req.ankh_id;
+          source_mirror_id = req.source_mirror_id;
+          projection_kind = req.projection_kind;
+          projection_at_ms = req.projection_at_ms;
+          staleness_policy =
+            if req ? staleness_policy then req.staleness_policy
+            else "freeze-once";
+          # Optional content layers (only populated per kind):
+          shape_hint =
+            if req.projection_kind == "shape-only" && req ? shape_hint
+            then req.shape_hint else null;
+          snapshot_value =
+            if req.projection_kind == "snapshot" && req ? snapshot_value
+            then req.snapshot_value else null;
+          requires_mirror_reentry =
+            req.projection_kind == "lazy-stub";
+        };
+      };
+
+  # Inside-vs-outside symmetry rule (declarative — substrate enforces).
+  insideOutsideContract = {
+    inside_access = "live-fold-able-ankh";
+    outside_access = "projection-handle-only";
+    cross_boundary_direct_access = "forbidden";
+    cross_boundary_re_entry = "allowed-via-mirror-re-spawn";
+  };
+in {
+  inherit
+    ownerName
+    validProjectionKinds
+    validStalenessPolicies
+    requiredRequestFields
+    validateRequest
+    buildProjectionId
+    buildProjection
+    insideOutsideContract;
+  meta = {
+    source = "pnix-mirror-runtime primitive P3";
+    owner = ownerName;
+    role = "build typed boundary projections — outside callers receive these instead of live in-mirror values";
+    consumes = [ "P1-mirror-identity (source_mirror_id)" ];
+    consumed_by = [ "P4-typed-receipt-stream" ];
+  };
+}

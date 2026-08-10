@@ -1,0 +1,177 @@
+# stdlib.lib.math.continued-fraction
+#
+# OWNER-LAW (v0.12-AAD, div-math, 2026-05-21): exact continued
+# fraction expansion of rationals.
+#
+# rational.px represents a fraction as a reduced num/den pair.
+# This owner adds the OTHER canonical representation of a rational
+# number: its continued fraction [a0; a1, a2, ...], the sequence
+# produced by the Euclidean algorithm.
+#
+# # Two exact inverses
+#
+#   rationalToCF p q  ->  the CF term list of p/q
+#   cfToRational ts   ->  the exact rational a CF term list denotes
+#
+# These round-trip: `cfToRational (rationalToCF p q)` equals the
+# reduced p/q for every non-negative p and positive q. The CF
+# expansion IS the Euclidean algorithm's quotient sequence, so it
+# always terminates for a rational.
+#
+# # Convergents
+#
+# `convergents` returns the successive truncations of a CF as
+# exact rationals -- the classic best rational approximations.
+# Truncating the CF of 355/113 (which is pi to six places) after
+# its first term gives 3, after two gives 22/7, and so on.
+#
+# # Kernel layering
+#
+# continued-fraction -> rational -> number-theory.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT infinite continued fractions -- a rational has a finite
+#     CF; irrational CFs (sqrt 2 = [1;2,2,2,...]) are out of scope.
+#   - NOT negative rationals (non-negative p, positive q only).
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/continued-fraction.px";
+
+  rational = import ./rational.px;
+
+  # The continued fraction term list of p/q (p >= 0, q > 0). This
+  # is exactly the Euclidean algorithm: each term is a quotient,
+  # the remainder feeds the next step.
+  rationalToCF = p: q:
+    if q == 0 then []
+    else
+      let
+        a = p / q;
+        r = p - a * q;
+      in [ a ] ++ rationalToCF q r;
+
+  # The exact rational denoted by a CF term list. Built from the
+  # back: the last term alone is itself; each earlier term ai
+  # becomes ai + 1/(value-so-far).
+  cfToRational = terms:
+    let
+      n = builtins.length terms;
+      last = builtins.elemAt terms (n - 1);
+      go = i: acc:
+        if i < 0 then acc
+        else
+          let ai = builtins.elemAt terms i;
+          in go (i - 1)
+               (rational.ratAdd
+                 (rational.ratFromInt ai)
+                 (rational.ratReciprocal acc));
+    in
+      if n == 0 then rational.ratZero
+      else go (n - 2) (rational.ratFromInt last);
+
+  # The successive convergents: cfToRational of each non-empty
+  # prefix of the term list. Each is an exact rational.
+  convergents = terms:
+    let
+      n = builtins.length terms;
+      prefix = len:
+        let
+          take = i: acc:
+            if i >= len then acc
+            else take (i + 1) (acc ++ [ (builtins.elemAt terms i) ]);
+        in take 0 [];
+      lengths =
+        let go = i: if i > n then [] else [ i ] ++ go (i + 1);
+        in go 1;
+    in builtins.map (len: cfToRational (prefix len)) lengths;
+
+  # CF term lists are valid iff every term after the first is >= 1
+  # (a0 may be 0; later 0 terms would mean a division by zero in
+  # cfToRational).
+  cfTermsValid = terms:
+    let
+      n = builtins.length terms;
+      go = i:
+        if i >= n then true
+        else if builtins.elemAt terms i < 1 then false
+        else go (i + 1);
+    in n >= 1 && go 1;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "expand"
+    "to-rational"
+    "convergents"
+  ];
+
+  applyContinuedFraction = request:
+    let
+      op = request.operation;
+      p  = if request ? p then request.p else 0;
+      q  = if request ? q then request.q else 1;
+      terms = if request ? terms then request.terms else [];
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "expand" then
+        if p < 0 || q <= 0 then {
+          outcome = "held-out-of-domain";
+          operation = op;
+          reason = "expand needs p >= 0 and q > 0";
+        }
+        else {
+          outcome = "continued-fraction-computed";
+          operation = op;
+          terms = rationalToCF p q;
+        }
+      else if op == "to-rational" then
+        if !(cfTermsValid terms) then {
+          outcome = "held-invalid-cf-terms";
+          operation = op;
+          reason = "every term after the first must be >= 1";
+        }
+        else
+          let r = cfToRational terms;
+          in {
+            outcome = "continued-fraction-computed";
+            operation = op;
+            num = r.num;
+            den = r.den;
+            text = rational.ratToString r;
+          }
+      else
+        # op == "convergents"
+        if !(cfTermsValid terms) then {
+          outcome = "held-invalid-cf-terms";
+          operation = op;
+          reason = "every term after the first must be >= 1";
+        }
+        else {
+          outcome = "continued-fraction-computed";
+          operation = op;
+          convergent_texts =
+            builtins.map rational.ratToString (convergents terms);
+        };
+
+in {
+  inherit
+    ownerName
+    rationalToCF
+    cfToRational
+    convergents
+    cfTermsValid
+    knownOperations
+    applyContinuedFraction;
+  meta = {
+    source = "stdlib math continued fraction";
+    owner = ownerName;
+    base = "parametric-math-continued-fraction-v0";
+    rev_note = "v0.12-AAD (div-math): exact continued fraction owner. rationalToCF (the Euclidean quotient sequence) and cfToRational are exact inverses -- round-trip identity for every non-negative p, positive q. convergents returns the successive truncations as exact rationals (the classic best rational approximations: the CF of 355/113 truncates to 3, 22/7, ...). Kernel layering: continued-fraction -> rational. NOT infinite/irrational CFs, NOT negative rationals, NOT yet a registered lens.";
+  };
+}

@@ -1,0 +1,11 @@
+{:kind :import-module-fixture-set
+ :schema-version 1
+ :lineage
+ {:source "pnix-clj in-memory import host-lane fixture"
+  :captured-at "2026-07-02"
+  :note "Pure import coverage using explicit target-string -> pnix source maps. This covers the host evaluator/lowering import seam without filesystem IO; .px source-module import remains a separate frontier."}
+ :cases
+ [{:source-id :import-module/in-memory-value
+   :source "import ./m"
+   :import-modules {"./m" "1 + 2"}
+   :oracle-result {:status :ok :value 3}}]}

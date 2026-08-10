@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Thin CLI for the built pnix-cljs host artifact (peer to other hosts' CLIs).
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+js="$root/pnix-cljs/dist/pnix-cljs.js"
+if [[ ! -f "$js" ]]; then
+  echo "pnix-cljs: missing $js — run ./bin/build-cljs first" >&2
+  exit 2
+fi
+exec node "$js" "$@"

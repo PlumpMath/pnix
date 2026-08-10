@@ -1,0 +1,336 @@
+let
+  ownerName = "stdlib.nl.sentence-clarification-protocol";
+
+  chainOwner =
+    import nl/sentence-substrate-mapping.px;
+
+  # === Clarification Protocol (agent-NL-106) =======================
+  #
+  # 사용자 directive (2026-05-29):
+  # - "interactive scenario 도 가져야 한다."
+  # - "선택적 프롬프트 대답"
+  # - "yes (네/맞다/그렇다) 등 대답하면 빠진 증명 문장으로 인식해서
+  #    일시적 axiom 생성? 증명되는지 명제가 맞는지 확인"
+  #
+  # chain manifest (#105) 가 held 출력 시, 본 owner 가 *사용자에게
+  # 무엇을 물을지* deterministic 생성. 사용자 응답을 다시 chain 에
+  # 넣으면 재분류 → 새 manifest. 이게 substrate 측 interactive
+  # protocol 의 base. LLM 없이 의미 인식 + 추가 정보 요청.
+  #
+  # # held → question 의 규칙
+  #
+  # chain rule           | question template
+  # ---------------------|-----------------------------------------------
+  # R-6 conditional-held | 조건 was X — what is the consequent (then ...)?
+  # R-7 default-held     | 의도가 불명확 — 다시 명확히 말해주세요.
+  # R-3-mid-meta-no-elev | 메타 atom 이 중간에 있음 — 어느 atom 이 진짜?
+  # decomposition-failed | 발화가 너무 짧거나 깨져 있음.
+  # empty / non-string   | 명확화 불가 — 처음부터 다시.
+  #
+  # # 사용자 응답 받아 일시적 axiom 처리
+  #
+  # caller 가 받은 question 을 사용자에게 보여주고, 사용자가 응답하면
+  # combineClarification 호출:
+  #   - 응답이 "네 / Yes / 맞다" → 명시적 confirmation, 이전 ambiguous
+  #     atom 의 의도 lock
+  #   - 응답이 새 문장 → 그것을 원 utterance 에 추가하여 재분류
+  #
+  # # public/carry envelope 헌법 보존
+
+  stepKind = "clarify";
+  framework_step = "interactive — held 시 사용자에게 무엇을 물을지";
+
+  # === Question templates ========================================
+
+  knownQuestionTemplates = [
+    {
+      rule = "R-6-conditional-held";
+      question_en = "I see a conditional ('if ...') sentence. What should happen when the condition holds (the consequent)?";
+      question_ko = "조건 문장 ('만약 ...') 을 보았습니다. 조건이 참일 때 어떤 일이 일어나야 하나요?";
+      expected_answer_kind = "consequent-action";
+      followup_combinator = "append-as-next-sentence";
+    }
+    {
+      rule = "R-7-default-held";
+      question_en = "I could not determine the intent of your message deterministically. Could you rephrase it as a single, clear action or question?";
+      question_ko = "발화의 의도를 결정론적으로 식별하지 못했습니다. 단일하고 명확한 명령이나 질문으로 다시 말씀해 주실 수 있나요?";
+      expected_answer_kind = "fresh-utterance";
+      followup_combinator = "replace-utterance";
+    }
+    {
+      rule = "R3-mid-meta-no-elevation";
+      question_en = "I noticed a meta statement in the middle of your message. Which of your statements carries your true intent?";
+      question_ko = "발화 중간에 메타 문장이 있습니다. 어느 문장이 진짜 의도인가요?";
+      expected_answer_kind = "atom-selection";
+      followup_combinator = "select-atom-as-true-intent";
+    }
+    {
+      rule = "held-decomposition-failed";
+      question_en = "I could not split your message into sentence atoms. Could you write at least one complete sentence ending with a period, question mark, or exclamation?";
+      question_ko = "발화를 sentence atom 으로 분해하지 못했습니다. 마침표 / 물음표 / 느낌표로 끝나는 완전한 문장을 한 개 이상 적어 주세요.";
+      expected_answer_kind = "fresh-utterance";
+      followup_combinator = "replace-utterance";
+    }
+    {
+      rule = "held-empty-utterance";
+      question_en = "Your message was empty. What would you like to do?";
+      question_ko = "발화가 비어 있습니다. 무엇을 하고 싶으신가요?";
+      expected_answer_kind = "fresh-utterance";
+      followup_combinator = "replace-utterance";
+    }
+    {
+      rule = "held-non-string-utterance";
+      question_en = "I expected text, but received something else. Please send a written message.";
+      question_ko = "텍스트를 기대했지만 다른 형식을 받았습니다. 글로 적어 보내 주세요.";
+      expected_answer_kind = "fresh-utterance";
+      followup_combinator = "replace-utterance";
+    }
+  ];
+
+  templateCount = builtins.length knownQuestionTemplates;
+  templateRules = builtins.map (t: t.rule) knownQuestionTemplates;
+
+  findTemplate = rule:
+    let
+      found = builtins.filter (t: t.rule == rule) knownQuestionTemplates;
+    in
+      if found == [] then null else builtins.head found;
+
+  # === Generate clarification from a chain manifest ===============
+  #
+  # Input: chain manifest from #105.
+  # Output:
+  #   if chain was resolved → outcome = "no-clarification-needed"
+  #   if chain held → outcome = "clarification-needed" + question pair
+
+  generateClarification = chainManifest:
+    if !(builtins.isAttrs chainManifest) then {
+      outcome = "held-non-attrs-manifest";
+    }
+    else if !(builtins.hasAttr "outcome" chainManifest) then {
+      outcome = "held-missing-outcome";
+    }
+    else
+      let
+        co = chainManifest.outcome;
+        # The held outcomes carried by chain itself:
+        # - chain-held: rule comes from carry.routing_rule
+        # - held-* (decomposition / empty / non-string): rule = outcome
+        rule =
+          if co == "chain-held"
+             && builtins.hasAttr "carry" chainManifest
+             && builtins.hasAttr "routing_rule" chainManifest.carry
+          then chainManifest.carry.routing_rule
+          else co;
+        tmpl = findTemplate rule;
+      in
+        if co == "chain-resolved" then {
+          outcome = "no-clarification-needed";
+          reason_en = "Chain resolved deterministically — proceed to substrate dispatch.";
+          reason_ko = "Chain 이 결정론적으로 해결됨 — substrate dispatch 진행.";
+        }
+        else if tmpl == null then {
+          outcome = "held-no-template-for-rule";
+          rule = rule;
+          known_rules = templateRules;
+        }
+        else {
+          outcome = "clarification-needed";
+          public = {
+            question_en = tmpl.question_en;
+            question_ko = tmpl.question_ko;
+          };
+          carry = {
+            triggering_rule = rule;
+            expected_answer_kind = tmpl.expected_answer_kind;
+            followup_combinator = tmpl.followup_combinator;
+            original_outcome = co;
+            axiom_origin = "axiom-95-nl-clarification (composes axiom-94-nl-chain)";
+            composes = [
+              "axiom-94-nl-chain-end-to-end"
+              "agent-NL-105 (substrate mapping manifest)"
+            ];
+          };
+        };
+
+  generateFromUtterance = utterance:
+    let
+      manifest = chainOwner.resolveChain utterance;
+    in generateClarification manifest;
+
+  # === Combine user answer back with original utterance ==========
+  #
+  # caller 가 사용자에게 question 보여주고 응답 받으면, combinator 별
+  # 처리:
+  #   - append-as-next-sentence: orig + ". " + answer + (마침표 보강)
+  #   - replace-utterance: answer 자체가 새 발화
+  #   - select-atom-as-true-intent: answer 가 atom 번호 (1-based) →
+  #     해당 atom 만 추출 (시연 simplification — v0 에서는 answer 가
+  #     fresh utterance 처럼 처리됨)
+  #
+  # output: combined utterance string, ready to be re-fed to chain.
+
+  ensureTerminator = s:
+    let
+      n = builtins.stringLength s;
+      last = if n == 0 then "" else builtins.substring (n - 1) 1 s;
+      isTerm = last == "." || last == "?" || last == "!";
+    in
+      if n == 0 then ""
+      else if isTerm then s
+      else s + ".";
+
+  combineClarification =
+    { original_utterance, clarification_receipt, user_answer }:
+    if !(builtins.isString original_utterance) then {
+      outcome = "held-non-string-original";
+    }
+    else if !(builtins.isString user_answer) then {
+      outcome = "held-non-string-answer";
+    }
+    else if !(builtins.isAttrs clarification_receipt)
+         || !(builtins.hasAttr "carry" clarification_receipt) then {
+      outcome = "held-bad-clarification-receipt";
+    }
+    else
+      let
+        comb = clarification_receipt.carry.followup_combinator;
+        oTerm = ensureTerminator original_utterance;
+        aTerm = ensureTerminator user_answer;
+        combined =
+          if comb == "replace-utterance" then aTerm
+          else if comb == "append-as-next-sentence" then oTerm + " " + aTerm
+          else if comb == "select-atom-as-true-intent" then
+            # v0: caller's answer is itself the picked atom's text.
+            aTerm
+          else oTerm + " " + aTerm;
+      in {
+        outcome = "clarification-combined";
+        public = {
+          combined_utterance = combined;
+          note_en = "Send the combined utterance back to the NL chain for re-classification.";
+          note_ko = "결합된 발화를 NL chain 에 다시 보내 재분류하세요.";
+        };
+        carry = {
+          followup_combinator = comb;
+          original_utterance = original_utterance;
+          user_answer = user_answer;
+          combined_utterance = combined;
+          axiom_origin = "axiom-95-nl-clarification (combine step)";
+        };
+      };
+
+  # Convenience: full roundtrip — utterance → ask → answer → combine
+  # → re-chain. This wraps the human interactive turn assuming the
+  # answer is supplied programmatically (smokes, tests, scripted UX).
+
+  roundtripWithAnswer = utterance: answer:
+    let
+      clar = generateFromUtterance utterance;
+    in
+      if clar.outcome == "no-clarification-needed" then {
+        outcome = "no-clarification-needed";
+        original_utterance = utterance;
+        original_chain = chainOwner.resolveChain utterance;
+      }
+      else if clar.outcome != "clarification-needed" then {
+        outcome = "held-clarification-failed";
+        clarification_outcome = clar.outcome;
+      }
+      else
+        let
+          combined = combineClarification {
+            original_utterance = utterance;
+            clarification_receipt = clar;
+            user_answer = answer;
+          };
+        in
+          if combined.outcome != "clarification-combined" then {
+            outcome = "held-combine-failed";
+            combine_outcome = combined.outcome;
+          }
+          else
+            let
+              newChain = chainOwner.resolveChain combined.public.combined_utterance;
+            in {
+              outcome = "roundtrip-complete";
+              public = {
+                question_en = clar.public.question_en;
+                question_ko = clar.public.question_ko;
+                user_answer = answer;
+                combined_utterance = combined.public.combined_utterance;
+                final_chain_outcome = newChain.outcome;
+              };
+              carry = {
+                triggering_rule = clar.carry.triggering_rule;
+                followup_combinator = clar.carry.followup_combinator;
+                final_chain_manifest = newChain;
+                axiom_origin = "axiom-95-nl-clarification (full roundtrip)";
+              };
+            };
+
+  applyNlClarificationPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "utterance" request
+         && builtins.hasAttr "answer" request then
+      roundtripWithAnswer request.utterance request.answer
+    else if builtins.hasAttr "chain_manifest" request then
+      generateClarification request.chain_manifest
+    else if builtins.hasAttr "utterance" request then
+      generateFromUtterance request.utterance
+    else {
+      outcome = "held-missing-input-field";
+      reason = "Provide { utterance } or { utterance, answer } or { chain_manifest }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-clarification-axiom-95";
+    template_count = templateCount;
+    template_rules = templateRules;
+    composes = "axiom-94-nl-chain-end-to-end (clarification on held)";
+    inherit framework_step;
+    step_kind = stepKind;
+    followup_combinators = [
+      "append-as-next-sentence"
+      "replace-utterance"
+      "select-atom-as-true-intent"
+    ];
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-attrs-manifest"
+      "held-missing-outcome"
+      "held-no-template-for-rule"
+      "held-non-string-original"
+      "held-non-string-answer"
+      "held-bad-clarification-receipt"
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-clarification-failed"
+      "held-combine-failed"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownQuestionTemplates templateCount templateRules
+    findTemplate ensureTerminator
+    generateClarification generateFromUtterance
+    combineClarification roundtripWithAnswer
+    applyNlClarificationPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL clarification protocol (agent-NL-106)";
+    owner = ownerName;
+    base = "nl-sentence-clarification-protocol-v0";
+    rev_note = "interactive scenario base. chain held → deterministic "
+      + "question generation × en+ko bilingual. 3 followup combinator "
+      + "(append / replace / select-atom). roundtripWithAnswer 가 "
+      + "ask → answer → combine → re-chain 한 호출. LLM 없이 의미 "
+      + "인식 + 추가 정보 요청. DO NOT REBUILD — chain manifest 재사용.";
+  };
+}

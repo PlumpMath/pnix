@@ -1,0 +1,1934 @@
+# AUTO-GENERATED — order-theory
+# Entries: 275
+let
+  ownerName = "stdlib.nl.lean.lookup-order-theory";
+  category = "order-theory";
+  entries = [
+    {
+      full_name = "OrderTopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 61;
+      code_preview = "class OrderTopology (α : Type*) [t : TopologicalSpace α] [Preorder α] : Prop where      topology_eq_generate_intervals : t = generateFrom { s | ∃ a, s = Ioi a ∨ s = Iio a }";
+    }
+    {
+      full_name = "Preorder.topology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 69;
+      code_preview = "def Preorder.topology (α : Type*) [Preorder α] : TopologicalSpace α :=   generateFrom { s : Set α | ∃ a : α, s = { b : α | a < b } ∨ s = { b : α | b < a } }";
+    }
+    {
+      full_name = "isOpen_iff_generate_intervals";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 87;
+      code_preview = "theorem isOpen_iff_generate_intervals [t : OrderTopology α] {s : Set α} :     IsOpen s ↔ GenerateOpen { s | ∃ a, s = Ioi a ∨ s = Iio a } s";
+    }
+    {
+      full_name = "isOpen_lt'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 91;
+      code_preview = "theorem isOpen_lt' [OrderTopology α] (a : α) : IsOpen { b : α | a < b }";
+    }
+    {
+      full_name = "isOpen_gt'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 94;
+      code_preview = "theorem isOpen_gt' [OrderTopology α] (a : α) : IsOpen { b : α | b < a }";
+    }
+    {
+      full_name = "lt_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 97;
+      code_preview = "theorem lt_mem_nhds [OrderTopology α] {a b : α} (h : a < b) : ∀ᶠ x in 𝓝 b, a < x";
+    }
+    {
+      full_name = "le_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 100;
+      code_preview = "theorem le_mem_nhds [OrderTopology α] {a b : α} (h : a < b) : ∀ᶠ x in 𝓝 b, a ≤ x";
+    }
+    {
+      full_name = "gt_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 103;
+      code_preview = "theorem gt_mem_nhds [OrderTopology α] {a b : α} (h : a < b) : ∀ᶠ x in 𝓝 a, x < b";
+    }
+    {
+      full_name = "ge_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 106;
+      code_preview = "theorem ge_mem_nhds [OrderTopology α] {a b : α} (h : a < b) : ∀ᶠ x in 𝓝 a, x ≤ b";
+    }
+    {
+      full_name = "nhds_eq_order";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 109;
+      code_preview = "theorem nhds_eq_order [OrderTopology α] (a : α) :     𝓝 a = (⨅ b ∈ Iio a, 𝓟 (Ioi b)) ⊓ ⨅ b ∈ Ioi a, 𝓟 (Iio b)";
+    }
+    {
+      full_name = "tendsto_order";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 115;
+      code_preview = "theorem tendsto_order [OrderTopology α] {f : β → α} {a : α} {x : Filter β} :     Tendsto f x (𝓝 a) ↔ (∀ a' < a, ∀ᶠ b in x, a' < f b) ∧ ∀ a' > a, ∀ᶠ b in x, f b < a'";
+    }
+    {
+      full_name = "tendstoIccClassNhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 118;
+      code_preview = "instance tendstoIccClassNhds [OrderTopology α] (a : α) : TendstoIxxClass Icc (𝓝 a) (𝓝 a) := by   simp only [nhds_eq_order, iInf_subtype']   refine     ((hasBasis_iInf_principal_finite _).inf (hasBasis_iInf_principal_finite _)).tendstoIxxClass       fun s _ => ?_   refine ((ordConnected_biInter ?_).i";
+    }
+    {
+      full_name = "tendstoIcoClassNhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 126;
+      code_preview = "instance tendstoIcoClassNhds [OrderTopology α] (a : α) : TendstoIxxClass Ico (𝓝 a) (𝓝 a) :=   tendstoIxxClass_of_subset fun _ _ => Ico_subset_Icc_self";
+    }
+    {
+      full_name = "tendstoIocClassNhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 129;
+      code_preview = "instance tendstoIocClassNhds [OrderTopology α] (a : α) : TendstoIxxClass Ioc (𝓝 a) (𝓝 a) :=   tendstoIxxClass_of_subset fun _ _ => Ioc_subset_Icc_self";
+    }
+    {
+      full_name = "tendstoIooClassNhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 132;
+      code_preview = "instance tendstoIooClassNhds [OrderTopology α] (a : α) : TendstoIxxClass Ioo (𝓝 a) (𝓝 a) :=   tendstoIxxClass_of_subset fun _ _ => Ioo_subset_Icc_self";
+    }
+    {
+      full_name = "tendsto_of_tendsto_of_tendsto_of_le_of_le'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 135;
+      code_preview = "theorem tendsto_of_tendsto_of_tendsto_of_le_of_le' [OrderTopology α] {f g h : β → α} {b : Filter β}     {a : α} (hg : Tendsto g b (𝓝 a)) (hh : Tendsto h b (𝓝 a)) (hgf : ∀ᶠ b in b, g b ≤ f b)     (hfh : ∀ᶠ b in b, f b ≤ h b) : Tendsto f b (𝓝 a)";
+    }
+    {
+      full_name = "tendsto_of_tendsto_of_tendsto_of_le_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 144;
+      code_preview = "theorem tendsto_of_tendsto_of_tendsto_of_le_of_le [OrderTopology α] {f g h : β → α} {b : Filter β}     {a : α} (hg : Tendsto g b (𝓝 a)) (hh : Tendsto h b (𝓝 a)) (hgf : g ≤ f) (hfh : f ≤ h) :     Tendsto f b (𝓝 a)";
+    }
+    {
+      full_name = "nhds_order_unbounded";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 154;
+      code_preview = "theorem nhds_order_unbounded [OrderTopology α] {a : α} (hu : ∃ u, a < u) (hl : ∃ l, l < a) :     𝓝 a = ⨅ (l) (_ : l < a) (u) (_ : a < u), 𝓟 (Ioo l u)";
+    }
+    {
+      full_name = "tendsto_order_unbounded";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 158;
+      code_preview = "theorem tendsto_order_unbounded [OrderTopology α] {f : β → α} {a : α} {x : Filter β}     (hu : ∃ u, a < u) (hl : ∃ l, l < a) (h : ∀ l u, l < a → a < u → ∀ᶠ b in x, l < f b ∧ f b < u) :     Tendsto f x (𝓝 a)";
+    }
+    {
+      full_name = "tendstoIxxNhdsWithin";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 166;
+      code_preview = "instance tendstoIxxNhdsWithin {α : Type*} [TopologicalSpace α] (a : α) {s t : Set α}     {Ixx} [TendstoIxxClass Ixx (𝓝 a) (𝓝 a)] [TendstoIxxClass Ixx (𝓟 s) (𝓟 t)] :     TendstoIxxClass Ixx (𝓝[s] a) (𝓝[t] a) :=   Filter.tendstoIxxClass_inf";
+    }
+    {
+      full_name = "tendstoIccClassNhdsPi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 171;
+      code_preview = "instance tendstoIccClassNhdsPi {ι : Type*} {α : ι → Type*} [∀ i, Preorder (α i)]     [∀ i, TopologicalSpace (α i)] [∀ i, OrderTopology (α i)] (f : ∀ i, α i) :     TendstoIxxClass Icc (𝓝 f) (𝓝 f) := by   constructor   conv in (𝓝 f).smallSets => rw [nhds_pi, Filter.pi]   simp only [smallSets_iInf, sma";
+    }
+    {
+      full_name = "induced_topology_le_preorder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 182;
+      code_preview = "theorem induced_topology_le_preorder [Preorder α] [Preorder β] [TopologicalSpace β]     [OrderTopology β] {f : α → β} (hf : ∀ {x y}, f x < f y ↔ x < y) :     induced f ‹TopologicalSpace β› ≤ Preorder.topology α";
+    }
+    {
+      full_name = "induced_topology_eq_preorder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 191;
+      code_preview = "theorem induced_topology_eq_preorder [Preorder α] [Preorder β] [TopologicalSpace β]     [OrderTopology β] {f : α → β} (hf : ∀ {x y}, f x < f y ↔ x < y)     (H₁ : ∀ {a b x}, b < f a → ¬(b < f x) → ∃ y, y < a ∧ b ≤ f y)     (H₂ : ∀ {a b x}, f a < b → ¬(f x < b) → ∃ y, a < y ∧ f y ≤ b) :     induced f ";
+    }
+    {
+      full_name = "induced_orderTopology'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 212;
+      code_preview = "theorem induced_orderTopology' {α : Type u} {β : Type v} [Preorder α] [ta : TopologicalSpace β]     [Preorder β] [OrderTopology β] (f : α → β) (hf : ∀ {x y}, f x < f y ↔ x < y)     (H₁ : ∀ {a x}, x < f a → ∃ b < a, x ≤ f b) (H₂ : ∀ {a x}, f a < x → ∃ b > a, f b ≤ x) :     @OrderTopology _ (induced f";
+    }
+    {
+      full_name = "induced_orderTopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 219;
+      code_preview = "theorem induced_orderTopology {α : Type u} {β : Type v} [Preorder α] [ta : TopologicalSpace β]     [Preorder β] [OrderTopology β] (f : α → β) (hf : ∀ {x y}, f x < f y ↔ x < y)     (H : ∀ {x y}, x < y → ∃ a, x < f a ∧ f a < y) : @OrderTopology _ (induced f ta) _";
+    }
+    {
+      full_name = "StrictMono.induced_topology_eq_preorder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 226;
+      code_preview = "nonrec theorem StrictMono.induced_topology_eq_preorder {α β : Type*} [LinearOrder α]     [LinearOrder β] [t : TopologicalSpace β] [OrderTopology β] {f : α → β}     (hf : StrictMono f) (hc : OrdConnected (range f)) : t.induced f = Preorder.topology α";
+    }
+    {
+      full_name = "StrictMono.isEmbedding_of_ordConnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 237;
+      code_preview = "theorem StrictMono.isEmbedding_of_ordConnected {α β : Type*} [LinearOrder α] [LinearOrder β]     [TopologicalSpace α] [h : OrderTopology α] [TopologicalSpace β] [OrderTopology β] {f : α → β}     (hf : StrictMono f) (hc : OrdConnected (range f)) : IsEmbedding f";
+    }
+    {
+      full_name = "orderTopology_of_ordConnected";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 247;
+      code_preview = "instance orderTopology_of_ordConnected {α : Type u} [TopologicalSpace α] [LinearOrder α]     [OrderTopology α] {t : Set α} [ht : OrdConnected t] : OrderTopology t :=   ⟨(Subtype.strictMono_coe t).induced_topology_eq_preorder <| by     rwa [← @Subtype.range_val _ t] at ht⟩";
+    }
+    {
+      full_name = "nhdsGE_eq_iInf_inf_principal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 254;
+      code_preview = "theorem nhdsGE_eq_iInf_inf_principal [TopologicalSpace α] [Preorder α] [OrderTopology α] (a : α) :     𝓝[≥] a = (⨅ (u) (_ : a < u), 𝓟 (Iio u)) ⊓ 𝓟 (Ici a)";
+    }
+    {
+      full_name = "nhdsLE_eq_iInf_inf_principal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 262;
+      code_preview = "theorem nhdsLE_eq_iInf_inf_principal [TopologicalSpace α] [Preorder α] [OrderTopology α] (a : α) :     𝓝[≤] a = (⨅ l < a, 𝓟 (Ioi l)) ⊓ 𝓟 (Iic a)";
+    }
+    {
+      full_name = "nhdsGE_eq_iInf_principal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 268;
+      code_preview = "theorem nhdsGE_eq_iInf_principal [TopologicalSpace α] [Preorder α] [OrderTopology α] {a : α}     (ha : ∃ u, a < u) : 𝓝[≥] a = ⨅ (u) (_ : a < u), 𝓟 (Ico a u)";
+    }
+    {
+      full_name = "nhdsLE_eq_iInf_principal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 274;
+      code_preview = "theorem nhdsLE_eq_iInf_principal [TopologicalSpace α] [Preorder α] [OrderTopology α] {a : α}     (ha : ∃ l, l < a) : 𝓝[≤] a = ⨅ l < a, 𝓟 (Ioc l a)";
+    }
+    {
+      full_name = "nhdsGE_basis_of_exists_gt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 280;
+      code_preview = "theorem nhdsGE_basis_of_exists_gt [TopologicalSpace α] [LinearOrder α] [OrderTopology α] {a : α}     (ha : ∃ u, a < u) : (𝓝[≥] a).HasBasis (fun u => a < u) fun u => Ico a u";
+    }
+    {
+      full_name = "nhdsLE_basis_of_exists_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 290;
+      code_preview = "theorem nhdsLE_basis_of_exists_lt [TopologicalSpace α] [LinearOrder α] [OrderTopology α] {a : α}     (ha : ∃ l, l < a) : (𝓝[≤] a).HasBasis (fun l => l < a) fun l => Ioc l a";
+    }
+    {
+      full_name = "nhdsGE_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 297;
+      code_preview = "theorem nhdsGE_basis [TopologicalSpace α] [LinearOrder α] [OrderTopology α] [NoMaxOrder α] (a : α) :     (𝓝[≥] a).HasBasis (fun u => a < u) fun u => Ico a u";
+    }
+    {
+      full_name = "nhdsLE_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 303;
+      code_preview = "theorem nhdsLE_basis [TopologicalSpace α] [LinearOrder α] [OrderTopology α] [NoMinOrder α] (a : α) :     (𝓝[≤] a).HasBasis (fun l => l < a) fun l => Ioc l a";
+    }
+    {
+      full_name = "nhds_top_order";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 309;
+      code_preview = "theorem nhds_top_order [TopologicalSpace α] [Preorder α] [OrderTop α] [OrderTopology α] :     𝓝 (⊤ : α) = ⨅ (l) (_ : l < ⊤), 𝓟 (Ioi l)";
+    }
+    {
+      full_name = "nhds_bot_order";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 312;
+      code_preview = "theorem nhds_bot_order [TopologicalSpace α] [Preorder α] [OrderBot α] [OrderTopology α] :     𝓝 (⊥ : α) = ⨅ (l) (_ : ⊥ < l), 𝓟 (Iio l)";
+    }
+    {
+      full_name = "nhds_top_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 315;
+      code_preview = "theorem nhds_top_basis [TopologicalSpace α] [LinearOrder α] [OrderTop α] [OrderTopology α]     [Nontrivial α] : (𝓝 ⊤).HasBasis (fun a : α => a < ⊤) fun a : α => Ioi a";
+    }
+    {
+      full_name = "nhds_bot_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 320;
+      code_preview = "theorem nhds_bot_basis [TopologicalSpace α] [LinearOrder α] [OrderBot α] [OrderTopology α]     [Nontrivial α] : (𝓝 ⊥).HasBasis (fun a : α => ⊥ < a) fun a : α => Iio a";
+    }
+    {
+      full_name = "nhds_top_basis_Ici";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 324;
+      code_preview = "theorem nhds_top_basis_Ici [TopologicalSpace α] [LinearOrder α] [OrderTop α] [OrderTopology α]     [Nontrivial α] [DenselyOrdered α] : (𝓝 ⊤).HasBasis (fun a : α => a < ⊤) Ici";
+    }
+    {
+      full_name = "nhds_bot_basis_Iic";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 330;
+      code_preview = "theorem nhds_bot_basis_Iic [TopologicalSpace α] [LinearOrder α] [OrderBot α] [OrderTopology α]     [Nontrivial α] [DenselyOrdered α] : (𝓝 ⊥).HasBasis (fun a : α => ⊥ < a) Iic";
+    }
+    {
+      full_name = "tendsto_nhds_top_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 334;
+      code_preview = "theorem tendsto_nhds_top_mono [TopologicalSpace β] [Preorder β] [OrderTop β] [OrderTopology β]     {l : Filter α} {f g : α → β} (hf : Tendsto f l (𝓝 ⊤)) (hg : f ≤ᶠ[l] g) : Tendsto g l (𝓝 ⊤)";
+    }
+    {
+      full_name = "tendsto_nhds_bot_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 340;
+      code_preview = "theorem tendsto_nhds_bot_mono [TopologicalSpace β] [Preorder β] [OrderBot β] [OrderTopology β]     {l : Filter α} {f g : α → β} (hf : Tendsto f l (𝓝 ⊥)) (hg : g ≤ᶠ[l] f) : Tendsto g l (𝓝 ⊥)";
+    }
+    {
+      full_name = "tendsto_nhds_top_mono'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 344;
+      code_preview = "theorem tendsto_nhds_top_mono' [TopologicalSpace β] [Preorder β] [OrderTop β] [OrderTopology β]     {l : Filter α} {f g : α → β} (hf : Tendsto f l (𝓝 ⊤)) (hg : f ≤ g) : Tendsto g l (𝓝 ⊤)";
+    }
+    {
+      full_name = "tendsto_nhds_bot_mono'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 348;
+      code_preview = "theorem tendsto_nhds_bot_mono' [TopologicalSpace β] [Preorder β] [OrderBot β] [OrderTopology β]     {l : Filter α} {f g : α → β} (hf : Tendsto f l (𝓝 ⊥)) (hg : g ≤ f) : Tendsto g l (𝓝 ⊥)";
+    }
+    {
+      full_name = "order_separated";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 358;
+      code_preview = "theorem order_separated [OrderTopology α] {a₁ a₂ : α} (h : a₁ < a₂) :     ∃ u v : Set α, IsOpen u ∧ IsOpen v ∧ a₁ ∈ u ∧ a₂ ∈ v ∧ ∀ b₁ ∈ u, ∀ b₂ ∈ v, b₁ < b₂";
+    }
+    {
+      full_name = "OrderTopology.to_orderClosedTopology";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 364;
+      code_preview = "instance (priority := 100) OrderTopology.to_orderClosedTopology [OrderTopology α] :     OrderClosedTopology α where   isClosed_le' := isOpen_compl_iff.1 <| isOpen_prod_iff.mpr fun a₁ a₂ (h : ¬a₁ ≤ a₂) =>     have h : a₂ < a₁ := lt_of_not_ge h     let ⟨u, v, hu, hv, ha₁, ha₂, h⟩ := order_separated h ";
+    }
+    {
+      full_name = "exists_Ioc_subset_of_mem_nhds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 371;
+      code_preview = "theorem exists_Ioc_subset_of_mem_nhds [OrderTopology α] {a : α} {s : Set α} (hs : s ∈ 𝓝 a)     (h : ∃ l, l < a) : ∃ l < a, Ioc l a ⊆ s";
+    }
+    {
+      full_name = "exists_Ioc_subset_of_mem_nhds'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Basic.lean";
+      start_line = 375;
+      code_preview = "theorem exists_Ioc_subset_of_mem_nhds' [OrderTopology α] {a : α} {s : Set α} (hs : s ∈ 𝓝 a) {l : α}     (hl : l < a) : ∃ l' ∈ Ico l a, Ioc l' a ⊆ s";
+    }
+    {
+      full_name = "ContinuousOrderHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 33;
+      code_preview = "structure ContinuousOrderHom (α β : Type*) [Preorder α] [Preorder β] [TopologicalSpace α]   [TopologicalSpace β] extends OrderHom α β where   continuous_toFun : Continuous toFun";
+    }
+    {
+      full_name = "ContinuousOrderHomClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 42;
+      code_preview = "class ContinuousOrderHomClass (F : Type*) (α β : outParam Type*) [Preorder α] [Preorder β]     [TopologicalSpace α] [TopologicalSpace β] [FunLike F α β] : Prop     extends ContinuousMapClass F α β where   map_monotone (f : F) : Monotone f";
+    }
+    {
+      full_name = "ContinuousOrderHomClass.toOrderHomClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 56;
+      code_preview = "instance (priority := 100) toOrderHomClass :     OrderHomClass F α β :=   { ‹ContinuousOrderHomClass F α β› with     map_rel := ContinuousOrderHomClass.map_monotone }";
+    }
+    {
+      full_name = "ContinuousOrderHomClass.toContinuousOrderHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 61;
+      code_preview = "@[coe] def toContinuousOrderHom (f : F) : α →Co β :=     { toFun := f       monotone' := ContinuousOrderHomClass.map_monotone f       continuous_toFun := map_continuous f }";
+    }
+    {
+      full_name = "ContinuousOrderHom.toContinuousMap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 84;
+      code_preview = "def toContinuousMap (f : α →Co β) : C(α, β) :=   { f with }";
+    }
+    {
+      full_name = "ContinuousOrderHom.instFunLike";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 88;
+      code_preview = "instance instFunLike : FunLike (α →Co β) α β where   coe f := f.toFun   coe_injective' f g h := by     obtain ⟨⟨_, _⟩, _⟩ := f     obtain ⟨⟨_, _⟩, _⟩ := g     congr";
+    }
+    {
+      full_name = "ContinuousOrderHom.coe_toOrderHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 99;
+      code_preview = "@[simp] theorem coe_toOrderHom (f : α →Co β) : ⇑f.toOrderHom = f";
+    }
+    {
+      full_name = "ContinuousOrderHom.toFun_eq_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 101;
+      code_preview = "theorem toFun_eq_coe {f : α →Co β} : f.toFun = (f : α → β)";
+    }
+    {
+      full_name = "ContinuousOrderHom.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 103;
+      code_preview = "@[ext] theorem ext {f g : α →Co β} (h : ∀ a, f a = g a) : f = g";
+    }
+    {
+      full_name = "ContinuousOrderHom.copy";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 107;
+      code_preview = "protected def copy (f : α →Co β) (f' : α → β) (h : f' = f) : α →Co β :=   ⟨f.toOrderHom.copy f' h, h.symm.subst f.continuous_toFun⟩";
+    }
+    {
+      full_name = "ContinuousOrderHom.coe_copy";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 112;
+      code_preview = "@[simp] theorem coe_copy (f : α →Co β) (f' : α → β) (h : f' = f) : ⇑(f.copy f' h) = f'";
+    }
+    {
+      full_name = "ContinuousOrderHom.copy_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 116;
+      code_preview = "theorem copy_eq (f : α →Co β) (f' : α → β) (h : f' = f) : f.copy f' h = f";
+    }
+    {
+      full_name = "ContinuousOrderHom.id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 121;
+      code_preview = "protected def id : α →Co α :=   ⟨OrderHom.id, continuous_id⟩";
+    }
+    {
+      full_name = "ContinuousOrderHom.coe_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 128;
+      code_preview = "@[simp, norm_cast] theorem coe_id : ⇑(ContinuousOrderHom.id α) = id";
+    }
+    {
+      full_name = "ContinuousOrderHom.id_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 134;
+      code_preview = "@[simp] theorem id_apply (a : α) : ContinuousOrderHom.id α a = a";
+    }
+    {
+      full_name = "ContinuousOrderHom.comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 138;
+      code_preview = "def comp (f : β →Co γ) (g : α →Co β) : ContinuousOrderHom α γ :=   ⟨f.toOrderHom.comp g.toOrderHom, f.continuous_toFun.comp g.continuous_toFun⟩";
+    }
+    {
+      full_name = "ContinuousOrderHom.coe_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 142;
+      code_preview = "@[simp] theorem coe_comp (f : β →Co γ) (g : α →Co β) : (f.comp g : α → γ) = f ∘ g";
+    }
+    {
+      full_name = "ContinuousOrderHom.comp_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 146;
+      code_preview = "@[simp] theorem comp_apply (f : β →Co γ) (g : α →Co β) (a : α) : (f.comp g) a = f (g a)";
+    }
+    {
+      full_name = "ContinuousOrderHom.comp_assoc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 150;
+      code_preview = "@[simp] theorem comp_assoc (f : γ →Co δ) (g : β →Co γ) (h : α →Co β) :     (f.comp g).comp h = f.comp (g.comp h)";
+    }
+    {
+      full_name = "ContinuousOrderHom.comp_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 155;
+      code_preview = "@[simp] theorem comp_id (f : α →Co β) : f.comp (ContinuousOrderHom.id α) = f";
+    }
+    {
+      full_name = "ContinuousOrderHom.id_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 159;
+      code_preview = "@[simp] theorem id_comp (f : α →Co β) : (ContinuousOrderHom.id β).comp f = f";
+    }
+    {
+      full_name = "ContinuousOrderHom.cancel_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 163;
+      code_preview = "@[simp] theorem cancel_right {g₁ g₂ : β →Co γ} {f : α →Co β} (hf : Surjective f) :     g₁.comp f = g₂.comp f ↔ g₁ = g₂";
+    }
+    {
+      full_name = "ContinuousOrderHom.cancel_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Topology/Order/Hom/Basic.lean";
+      start_line = 168;
+      code_preview = "@[simp] theorem cancel_left {g : β →Co γ} {f₁ f₂ : α →Co β} (hg : Injective g) :     g.comp f₁ = g.comp f₂ ↔ f₁ = f₂";
+    }
+    {
+      full_name = "OrderedAddCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 34;
+      code_preview = "@[deprecated \"Use `[AddCommGroup α] [PartialOrder α] [IsOrderedAddMonoid α]` instead.\"   (since := \"2025-04-10\")] structure OrderedAddCommGroup (α : Type u) extends AddCommGroup α, PartialOrder α where      protected add_le_add_left : ∀ a b : α, a ≤ b → ∀ c : α, c + a ≤ c + b";
+    }
+    {
+      full_name = "OrderedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 43;
+      code_preview = "@[to_additive,   deprecated \"Use `[CommGroup α] [PartialOrder α] [IsOrderedMonoid α]` instead.\"   (since := \"2025-04-10\")] structure OrderedCommGroup (α : Type u) extends CommGroup α, PartialOrder α where      protected mul_le_mul_left : ∀ a b : α, a ≤ b → ∀ c : α, c * a ≤ c * b";
+    }
+    {
+      full_name = "IsOrderedMonoid.toIsOrderedCancelMonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 65;
+      code_preview = "@[to_additive IsOrderedAddMonoid.toIsOrderedCancelAddMonoid] instance (priority := 100) IsOrderedMonoid.toIsOrderedCancelMonoid     [CommGroup α] [PartialOrder α] [IsOrderedMonoid α] : IsOrderedCancelMonoid α where   le_of_mul_le_mul_left a b c bc := by simpa using mul_le_mul_left' bc a⁻¹   le_of_mu";
+    }
+    {
+      full_name = "LinearOrderedAddCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 78;
+      code_preview = "@[deprecated \"Use `[AddCommGroup α] [LinearOrder α] [IsOrderedAddMonoid α]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedAddCommGroup (α : Type u) extends OrderedAddCommGroup α, LinearOrder α";
+    }
+    {
+      full_name = "LinearOrderedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 87;
+      code_preview = "@[to_additive,   deprecated \"Use `[CommGroup α] [LinearOrder α] [IsOrderedMonoid α]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedCommGroup (α : Type u) extends OrderedCommGroup α, LinearOrder α";
+    }
+    {
+      full_name = "LinearOrderedCommGroup.mul_lt_mul_left'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 102;
+      code_preview = "@[to_additive LinearOrderedAddCommGroup.add_lt_add_left] theorem LinearOrderedCommGroup.mul_lt_mul_left' (a b : α) (h : a < b) (c : α) : c * a < c * b";
+    }
+    {
+      full_name = "eq_one_of_inv_eq'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 106;
+      code_preview = "@[to_additive eq_zero_of_neg_eq] theorem eq_one_of_inv_eq' (h : a⁻¹ = a) : a = 1";
+    }
+    {
+      full_name = "exists_one_lt'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 117;
+      code_preview = "@[to_additive exists_zero_lt] theorem exists_one_lt' [Nontrivial α] : ∃ a : α, 1 < a";
+    }
+    {
+      full_name = "LinearOrderedCommGroup.to_noMaxOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 125;
+      code_preview = "@[to_additive] instance (priority := 100) LinearOrderedCommGroup.to_noMaxOrder [Nontrivial α] : NoMaxOrder α :=   ⟨by     obtain ⟨y, hy⟩ : ∃ a : α, 1 < a := exists_one_lt'     exact fun a => ⟨a * y, lt_mul_of_one_lt_right' a hy⟩⟩";
+    }
+    {
+      full_name = "LinearOrderedCommGroup.to_noMinOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 132;
+      code_preview = "@[to_additive] instance (priority := 100) LinearOrderedCommGroup.to_noMinOrder [Nontrivial α] : NoMinOrder α :=   ⟨by     obtain ⟨y, hy⟩ : ∃ a : α, 1 < a := exists_one_lt'     exact fun a => ⟨a / y, (div_lt_self_iff a).mpr hy⟩⟩";
+    }
+    {
+      full_name = "inv_le_self_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 138;
+      code_preview = "@[to_additive (attr := simp)] theorem inv_le_self_iff : a⁻¹ ≤ a ↔ 1 ≤ a";
+    }
+    {
+      full_name = "inv_lt_self_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 141;
+      code_preview = "@[to_additive (attr := simp)] theorem inv_lt_self_iff : a⁻¹ < a ↔ 1 < a";
+    }
+    {
+      full_name = "le_inv_self_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 144;
+      code_preview = "@[to_additive (attr := simp)] theorem le_inv_self_iff : a ≤ a⁻¹ ↔ a ≤ 1";
+    }
+    {
+      full_name = "lt_inv_self_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 147;
+      code_preview = "@[to_additive (attr := simp)] theorem lt_inv_self_iff : a < a⁻¹ ↔ a < 1";
+    }
+    {
+      full_name = "inv_le_inv'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 158;
+      code_preview = "@[to_additive (attr := gcongr) neg_le_neg] theorem inv_le_inv' : a ≤ b → b⁻¹ ≤ a⁻¹";
+    }
+    {
+      full_name = "inv_lt_inv'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 162;
+      code_preview = "@[to_additive (attr := gcongr) neg_lt_neg] theorem inv_lt_inv' : a < b → b⁻¹ < a⁻¹";
+    }
+    {
+      full_name = "inv_lt_one_of_one_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 167;
+      code_preview = "@[to_additive] theorem inv_lt_one_of_one_lt : 1 < a → a⁻¹ < 1";
+    }
+    {
+      full_name = "inv_le_one_of_one_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 172;
+      code_preview = "@[to_additive] theorem inv_le_one_of_one_le : 1 ≤ a → a⁻¹ ≤ 1";
+    }
+    {
+      full_name = "one_le_inv_of_le_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 176;
+      code_preview = "@[to_additive neg_nonneg_of_nonpos] theorem one_le_inv_of_le_one : a ≤ 1 → 1 ≤ a⁻¹";
+    }
+    {
+      full_name = "IsOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 114;
+      code_preview = "class IsOrderedRing (R : Type*) [Semiring R] [PartialOrder R] extends     IsOrderedAddMonoid R, ZeroLEOneClass R where      protected mul_le_mul_of_nonneg_left : ∀ a b c : R, a ≤ b → 0 ≤ c → c * a ≤ c * b      protected mul_le_mul_of_nonneg_right : ∀ a b c : R, a ≤ b → 0 ≤ c → a * c ≤ b * c";
+    }
+    {
+      full_name = "IsStrictOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 127;
+      code_preview = "class IsStrictOrderedRing (R : Type*) [Semiring R] [PartialOrder R] extends     IsOrderedCancelAddMonoid R, ZeroLEOneClass R, Nontrivial R where      protected mul_lt_mul_of_pos_left : ∀ a b c : R, a < b → 0 < c → c * a < c * b      protected mul_lt_mul_of_pos_right : ∀ a b c : R, a < b → 0 < c → a ";
+    }
+    {
+      full_name = "IsOrderedRing.of_mul_nonneg";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 141;
+      code_preview = "lemma IsOrderedRing.of_mul_nonneg [Ring R] [PartialOrder R] [IsOrderedAddMonoid R]     [ZeroLEOneClass R] (mul_nonneg : ∀ a b : R, 0 ≤ a → 0 ≤ b → 0 ≤ a * b) :     IsOrderedRing R where   mul_le_mul_of_nonneg_left a b c ab hc := by     simpa only [mul_sub, sub_nonneg] using mul_nonneg _ _ hc (sub_no";
+    }
+    {
+      full_name = "IsStrictOrderedRing.of_mul_pos";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 149;
+      code_preview = "lemma IsStrictOrderedRing.of_mul_pos [Ring R] [PartialOrder R] [IsOrderedAddMonoid R]     [ZeroLEOneClass R] [Nontrivial R] (mul_pos : ∀ a b : R, 0 < a → 0 < b → 0 < a * b) :     IsStrictOrderedRing R where   mul_lt_mul_of_pos_left a b c ab hc := by     simpa only [mul_sub, sub_pos] using mul_pos _ ";
+    }
+    {
+      full_name = "IsOrderedRing.toPosMulMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 161;
+      code_preview = "instance (priority := 200) IsOrderedRing.toPosMulMono : PosMulMono R where   elim x _ _ h := IsOrderedRing.mul_le_mul_of_nonneg_left _ _ _ h x.2";
+    }
+    {
+      full_name = "IsOrderedRing.toMulPosMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 165;
+      code_preview = "instance (priority := 200) IsOrderedRing.toMulPosMono : MulPosMono R where   elim x _ _ h := IsOrderedRing.mul_le_mul_of_nonneg_right _ _ _ h x.2";
+    }
+    {
+      full_name = "IsOrderedRing.toIsStrictOrderedRing";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 170;
+      code_preview = "lemma IsOrderedRing.toIsStrictOrderedRing (R : Type*)     [Ring R] [PartialOrder R] [IsOrderedRing R] [NoZeroDivisors R] [Nontrivial R] :     IsStrictOrderedRing R :=   .of_mul_pos fun _ _ ap bp ↦ (mul_nonneg ap.le bp.le).lt_of_ne' (mul_ne_zero ap.ne' bp.ne')";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toPosMulStrictMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 180;
+      code_preview = "instance (priority := 200) IsStrictOrderedRing.toPosMulStrictMono : PosMulStrictMono R where   elim x _ _ h := IsStrictOrderedRing.mul_lt_mul_of_pos_left _ _ _ h x.prop";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toMulPosStrictMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 184;
+      code_preview = "instance (priority := 200) IsStrictOrderedRing.toMulPosStrictMono : MulPosStrictMono R where   elim x _ _ h := IsStrictOrderedRing.mul_lt_mul_of_pos_right _ _ _ h x.prop";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toIsOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 188;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.toIsOrderedRing : IsOrderedRing R where   __ := ‹IsStrictOrderedRing R›   mul_le_mul_of_nonneg_left _ _ _ := mul_le_mul_of_nonneg_left   mul_le_mul_of_nonneg_right _ _ _ := mul_le_mul_of_nonneg_right";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toCharZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 194;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.toCharZero :     CharZero R where   cast_injective :=     (strictMono_nat_of_lt_succ fun n ↦ by rw [Nat.cast_succ]; apply lt_add_one).injective";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toNoMaxOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 200;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.toNoMaxOrder : NoMaxOrder R :=   ⟨fun a => ⟨a + 1, lt_add_of_pos_right _ one_pos⟩⟩";
+    }
+    {
+      full_name = "IsStrictOrderedRing.noZeroDivisors";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 210;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.noZeroDivisors : NoZeroDivisors R where   eq_zero_or_eq_zero_of_mul_eq_zero {a b} hab := by     contrapose! hab     obtain ha | ha := hab.1.lt_or_lt <;> obtain hb | hb := hab.2.lt_or_lt     exacts [(mul_pos_of_neg_of_neg ha hb).ne', (mul_neg_of_neg_of_p";
+    }
+    {
+      full_name = "IsStrictOrderedRing.isDomain";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 219;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.isDomain : IsDomain R where   mul_left_cancel_of_ne_zero {a b c} ha h := by     obtain ha | ha := ha.lt_or_lt     exacts [(strictAnti_mul_left ha).injective h, (strictMono_mul_left_of_pos ha).injective h]   mul_right_cancel_of_ne_zero {b a c} ha h := by";
+    }
+    {
+      full_name = "OrderedSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 233;
+      code_preview = "@[deprecated \"Use `[Semiring R] [PartialOrder R] [IsOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure OrderedSemiring (R : Type u) extends Semiring R, OrderedAddCommMonoid R where      protected zero_le_one : (0 : R) ≤ 1      protected mul_le_mul_of_nonneg_left : ∀ a b c : R, a ≤ b → 0 ";
+    }
+    {
+      full_name = "OrderedCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 248;
+      code_preview = "@[deprecated \"Use `[CommSemiring R] [PartialOrder R] [IsOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure OrderedCommSemiring (R : Type u) extends OrderedSemiring R, CommSemiring R where   mul_le_mul_of_nonneg_right a b c ha hc :=     (by simpa only [mul_comm] using mul_le_mul_of_nonneg";
+    }
+    {
+      full_name = "OrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 258;
+      code_preview = "@[deprecated \"Use `[Ring R] [PartialOrder R] [IsOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure OrderedRing (R : Type u) extends Ring R, OrderedAddCommGroup R where      protected zero_le_one : 0 ≤ (1 : R)      protected mul_nonneg : ∀ a b : R, 0 ≤ a → 0 ≤ b → 0 ≤ a * b";
+    }
+    {
+      full_name = "OrderedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 269;
+      code_preview = "@[deprecated \"Use `[CommRing R] [PartialOrder R] [IsOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure OrderedCommRing (R : Type u) extends OrderedRing R, CommRing R";
+    }
+    {
+      full_name = "StrictOrderedSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 276;
+      code_preview = "@[deprecated \"Use `[Semiring R] [PartialOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure StrictOrderedSemiring (R : Type u) extends Semiring R, OrderedCancelAddCommMonoid R,     Nontrivial R where      protected zero_le_one : (0 : R) ≤ 1      protected mul_lt_mul_of_p";
+    }
+    {
+      full_name = "StrictOrderedCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 290;
+      code_preview = "@[deprecated \"Use `[CommSemiring R] [PartialOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure StrictOrderedCommSemiring (R : Type u) extends StrictOrderedSemiring R, CommSemiring R";
+    }
+    {
+      full_name = "StrictOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 297;
+      code_preview = "@[deprecated \"Use `[Ring R] [PartialOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure StrictOrderedRing (R : Type u) extends Ring R, OrderedAddCommGroup R, Nontrivial R where      protected zero_le_one : 0 ≤ (1 : R)      protected mul_pos : ∀ a b : R, 0 < a → 0 < b → 0";
+    }
+    {
+      full_name = "StrictOrderedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 308;
+      code_preview = "@[deprecated \"Use `[CommRing R] [PartialOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure StrictOrderedCommRing (R : Type*) extends StrictOrderedRing R, CommRing R";
+    }
+    {
+      full_name = "LinearOrderedSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 318;
+      code_preview = "@[deprecated \"Use `[Semiring R] [LinearOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedSemiring (R : Type u) extends StrictOrderedSemiring R,   LinearOrderedAddCommMonoid R";
+    }
+    {
+      full_name = "LinearOrderedCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 326;
+      code_preview = "@[deprecated \"Use `[CommSemiring R] [LinearOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedCommSemiring (R : Type*) extends StrictOrderedCommSemiring R,   LinearOrderedSemiring R";
+    }
+    {
+      full_name = "LinearOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 334;
+      code_preview = "@[deprecated \"Use `[Ring R] [LinearOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedRing (R : Type u) extends StrictOrderedRing R, LinearOrder R";
+    }
+    {
+      full_name = "LinearOrderedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 341;
+      code_preview = "@[deprecated \"Use `[CommRing R] [LinearOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedCommRing (R : Type u) extends LinearOrderedRing R, CommMonoid R";
+    }
+    {
+      full_name = "one_add_le_one_sub_mul_one_add";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 365;
+      code_preview = "lemma one_add_le_one_sub_mul_one_add (h : a + b + b * c ≤ c) : 1 + a ≤ (1 - b) * (1 + c) := by   rw [one_sub_mul, mul_one_add, le_sub_iff_add_le, add_assoc, ← add_assoc a]   gcongr";
+    }
+    {
+      full_name = "one_add_le_one_add_mul_one_sub";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 369;
+      code_preview = "lemma one_add_le_one_add_mul_one_sub (h : a + c + b * c ≤ b) : 1 + a ≤ (1 + b) * (1 - c) := by   rw [mul_one_sub, one_add_mul, le_sub_iff_add_le, add_assoc, ← add_assoc a]   gcongr";
+    }
+    {
+      full_name = "one_sub_le_one_sub_mul_one_add";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 373;
+      code_preview = "lemma one_sub_le_one_sub_mul_one_add (h : b + b * c ≤ a + c) : 1 - a ≤ (1 - b) * (1 + c) := by   rw [one_sub_mul, mul_one_add, sub_le_sub_iff, add_assoc, add_comm c]   gcongr";
+    }
+    {
+      full_name = "one_sub_le_one_add_mul_one_sub";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 377;
+      code_preview = "lemma one_sub_le_one_add_mul_one_sub (h : c + b * c ≤ a + b) : 1 - a ≤ (1 + b) * (1 - c) := by   rw [mul_one_sub, one_add_mul, sub_le_sub_iff, add_assoc, add_comm b]   gcongr";
+    }
+    {
+      full_name = "LinearOrderedSemifield";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Field/Defs.lean";
+      start_line = 27;
+      code_preview = "@[deprecated \"Use `[Semifield K] [LinearOrder K] [IsStrictOrderedRing K]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedSemifield (K : Type*) extends LinearOrderedCommSemiring K, Semifield K";
+    }
+    {
+      full_name = "LinearOrderedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Field/Defs.lean";
+      start_line = 33;
+      code_preview = "@[deprecated \"Use `[Field K] [LinearOrder K] [IsStrictOrderedRing K]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedField (K : Type*) extends LinearOrderedCommRing K, Field K";
+    }
+    {
+      full_name = "LE.le.ge";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 70;
+      code_preview = "protected lemma LE.le.ge [LE α] {x y : α} (h : x ≤ y) : y ≥ x := h";
+    }
+    {
+      full_name = "GE.ge.le";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 71;
+      code_preview = "protected lemma GE.ge.le [LE α] {x y : α} (h : x ≥ y) : y ≤ x := h";
+    }
+    {
+      full_name = "LT.lt.gt";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 72;
+      code_preview = "protected lemma LT.lt.gt [LT α] {x y : α} (h : x < y) : y > x := h";
+    }
+    {
+      full_name = "GT.gt.lt";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 73;
+      code_preview = "protected lemma GT.gt.lt [LT α] {x y : α} (h : x > y) : y < x := h";
+    }
+    {
+      full_name = "Order.Preimage";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 75;
+      code_preview = "@[simp] def Order.Preimage (f : α → β) (s : β → β → Prop) (x y : α) : Prop := s (f x) (f y)";
+    }
+    {
+      full_name = "Order.Preimage.decidable";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 83;
+      code_preview = "instance Order.Preimage.decidable (f : α → β) (s : β → β → Prop) [H : DecidableRel s] :     DecidableRel (f ⁻¹'o s) := fun _ _ ↦ H _ _";
+    }
+    {
+      full_name = "le_trans'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 93;
+      code_preview = "theorem le_trans' : b ≤ c → a ≤ b → a ≤ c";
+    }
+    {
+      full_name = "lt_trans'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 96;
+      code_preview = "theorem lt_trans' : b < c → a < b → a < c";
+    }
+    {
+      full_name = "lt_of_le_of_lt'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 99;
+      code_preview = "theorem lt_of_le_of_lt' : b ≤ c → a < b → a < c";
+    }
+    {
+      full_name = "lt_of_lt_of_le'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 102;
+      code_preview = "theorem lt_of_lt_of_le' : b < c → a ≤ b → a < c";
+    }
+    {
+      full_name = "le_of_le_of_eq'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 105;
+      code_preview = "theorem le_of_le_of_eq' : b ≤ c → a = b → a ≤ c";
+    }
+    {
+      full_name = "le_of_eq_of_le'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 108;
+      code_preview = "theorem le_of_eq_of_le' : b = c → a ≤ b → a ≤ c";
+    }
+    {
+      full_name = "lt_of_lt_of_eq'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 111;
+      code_preview = "theorem lt_of_lt_of_eq' : b < c → a = b → a < c";
+    }
+    {
+      full_name = "lt_of_eq_of_lt'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 114;
+      code_preview = "theorem lt_of_eq_of_lt' : b = c → a < b → a < c";
+    }
+    {
+      full_name = "not_lt_iff_not_le_or_ge";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 117;
+      code_preview = "theorem not_lt_iff_not_le_or_ge : ¬a < b ↔ ¬a ≤ b ∨ b ≤ a";
+    }
+    {
+      full_name = "not_lt_iff_le_imp_le";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 121;
+      code_preview = "lemma not_lt_iff_le_imp_le : ¬ a < b ↔ (a ≤ b → b ≤ a) := by   simp [not_lt_iff_not_le_or_ge, or_iff_not_imp_left]";
+    }
+    {
+      full_name = "ge_of_eq";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 124;
+      code_preview = "lemma ge_of_eq (h : a = b) : b ≤ a := le_of_eq h.symm";
+    }
+    {
+      full_name = "lt_self_iff_false";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 128;
+      code_preview = "@[simp] lemma lt_self_iff_false (x : α) : x < x ↔ False := ⟨lt_irrefl x, False.elim⟩";
+    }
+    {
+      full_name = "ne_of_not_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 155;
+      code_preview = "theorem ne_of_not_le (h : ¬a ≤ b) : a ≠ b";
+    }
+    {
+      full_name = "Eq.not_lt";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 157;
+      code_preview = "protected lemma Eq.not_lt (hab : a = b) : ¬a < b := fun h' ↦ h'.ne hab";
+    }
+    {
+      full_name = "Eq.not_gt";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 158;
+      code_preview = "protected lemma Eq.not_gt (hab : a = b) : ¬b < a := hab.symm.not_lt";
+    }
+    {
+      full_name = "le_of_subsingleton";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 160;
+      code_preview = "@[simp] lemma le_of_subsingleton [Subsingleton α] : a ≤ b := (Subsingleton.elim a b).le";
+    }
+    {
+      full_name = "not_lt_of_subsingleton";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 163;
+      code_preview = "lemma not_lt_of_subsingleton [Subsingleton α] : ¬a < b := (Subsingleton.elim a b).not_lt";
+    }
+    {
+      full_name = "LT.lt.false";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 167;
+      code_preview = "protected theorem false : a < a → False";
+    }
+    {
+      full_name = "LT.lt.ne'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 169;
+      code_preview = "theorem ne' (h : a < b) : b ≠ a";
+    }
+    {
+      full_name = "le_of_forall_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 173;
+      code_preview = "theorem le_of_forall_le (H : ∀ c, c ≤ a → c ≤ b) : a ≤ b";
+    }
+    {
+      full_name = "le_of_forall_ge";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 174;
+      code_preview = "theorem le_of_forall_ge (H : ∀ c, a ≤ c → b ≤ c) : b ≤ a";
+    }
+    {
+      full_name = "forall_le_iff_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 178;
+      code_preview = "theorem forall_le_iff_le : (∀ ⦃c⦄, c ≤ a → c ≤ b) ↔ a ≤ b";
+    }
+    {
+      full_name = "forall_le_iff_ge";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 181;
+      code_preview = "theorem forall_le_iff_ge : (∀ ⦃c⦄, a ≤ c → b ≤ c) ↔ b ≤ a";
+    }
+    {
+      full_name = "le_implies_le_of_le_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 184;
+      code_preview = "theorem le_implies_le_of_le_of_le (hca : c ≤ a) (hbd : b ≤ d) : a ≤ b → c ≤ d";
+    }
+    {
+      full_name = "ge_antisymm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 196;
+      code_preview = "theorem ge_antisymm : a ≤ b → b ≤ a → b = a";
+    }
+    {
+      full_name = "lt_of_le_of_ne'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 199;
+      code_preview = "theorem lt_of_le_of_ne' : a ≤ b → b ≠ a → a < b";
+    }
+    {
+      full_name = "Ne.lt_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 201;
+      code_preview = "theorem Ne.lt_of_le : a ≠ b → a ≤ b → a < b";
+    }
+    {
+      full_name = "Ne.lt_of_le'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 204;
+      code_preview = "theorem Ne.lt_of_le' : b ≠ a → a ≤ b → a < b";
+    }
+    {
+      full_name = "le_imp_eq_iff_le_imp_le";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 214;
+      code_preview = "lemma le_imp_eq_iff_le_imp_le : (a ≤ b → b = a) ↔ (a ≤ b → b ≤ a) where   mp h hab := (h hab).le   mpr h hab := (h hab).antisymm hab";
+    }
+    {
+      full_name = "ge_imp_eq_iff_le_imp_le";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 219;
+      code_preview = "lemma ge_imp_eq_iff_le_imp_le : (a ≤ b → a = b) ↔ (a ≤ b → b ≤ a) where   mp h hab := (h hab).ge   mpr h hab := hab.antisymm (h hab)";
+    }
+    {
+      full_name = "LE.le.lt_iff_ne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 225;
+      code_preview = "theorem lt_iff_ne (h : a ≤ b) : a < b ↔ a ≠ b";
+    }
+    {
+      full_name = "LE.le.gt_iff_ne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 228;
+      code_preview = "theorem gt_iff_ne (h : a ≤ b) : a < b ↔ b ≠ a";
+    }
+    {
+      full_name = "LE.le.not_lt_iff_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 231;
+      code_preview = "theorem not_lt_iff_eq (h : a ≤ b) : ¬a < b ↔ a = b";
+    }
+    {
+      full_name = "LE.le.not_gt_iff_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 234;
+      code_preview = "theorem not_gt_iff_eq (h : a ≤ b) : ¬a < b ↔ b = a";
+    }
+    {
+      full_name = "LE.le.le_iff_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 237;
+      code_preview = "theorem le_iff_eq (h : a ≤ b) : b ≤ a ↔ b = a";
+    }
+    {
+      full_name = "LE.le.ge_iff_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 240;
+      code_preview = "theorem ge_iff_eq (h : a ≤ b) : b ≤ a ↔ a = b";
+    }
+    {
+      full_name = "Decidable.le_iff_eq_or_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 246;
+      code_preview = "protected theorem Decidable.le_iff_eq_or_lt [DecidableLE α] : a ≤ b ↔ a = b ∨ a < b";
+    }
+    {
+      full_name = "le_iff_eq_or_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 249;
+      code_preview = "theorem le_iff_eq_or_lt : a ≤ b ↔ a = b ∨ a < b";
+    }
+    {
+      full_name = "lt_iff_le_and_ne";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 251;
+      code_preview = "theorem lt_iff_le_and_ne : a < b ↔ a ≤ b ∧ a ≠ b";
+    }
+    {
+      full_name = "eq_iff_not_lt_of_le";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 254;
+      code_preview = "lemma eq_iff_not_lt_of_le (hab : a ≤ b) : a = b ↔ ¬ a < b := by simp [hab, lt_iff_le_and_ne]";
+    }
+    {
+      full_name = "Decidable.eq_iff_le_not_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 259;
+      code_preview = "protected theorem Decidable.eq_iff_le_not_lt [DecidableLE α] : a = b ↔ a ≤ b ∧ ¬a < b";
+    }
+    {
+      full_name = "eq_iff_le_not_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 263;
+      code_preview = "theorem eq_iff_le_not_lt : a = b ↔ a ≤ b ∧ ¬a < b";
+    }
+    {
+      full_name = "eq_or_lt_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 267;
+      code_preview = "theorem eq_or_lt_of_le (h : a ≤ b) : a = b ∨ a < b";
+    }
+    {
+      full_name = "eq_or_gt_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Basic.lean";
+      start_line = 268;
+      code_preview = "theorem eq_or_gt_of_le (h : a ≤ b) : b = a ∨ a < b";
+    }
+    {
+      full_name = "exactSubsetOfSSubset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 52;
+      code_preview = "@[gcongr_forward] def exactSubsetOfSSubset : Mathlib.Tactic.GCongr.ForwardExt where   eval h goal := do goal.assignIfDefEq (← Lean.Meta.mkAppM ``subset_of_ssubset #[h])";
+    }
+    {
+      full_name = "SemilatticeSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 65;
+      code_preview = "class SemilatticeSup (α : Type u) extends PartialOrder α where      sup : α → α → α      protected le_sup_left : ∀ a b : α, a ≤ sup a b      protected le_sup_right : ∀ a b : α, b ≤ sup a b      protected sup_le : ∀ a b c : α, a ≤ c → b ≤ c → sup a b ≤ c";
+    }
+    {
+      full_name = "SemilatticeSup.toMax";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 78;
+      code_preview = "instance SemilatticeSup.toMax [SemilatticeSup α] : Max α where max a b := SemilatticeSup.sup a b";
+    }
+    {
+      full_name = "SemilatticeSup.mk'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 80;
+      code_preview = "def SemilatticeSup.mk' {α : Type*} [Max α] (sup_comm : ∀ a b : α, a ⊔ b = b ⊔ a)     (sup_assoc : ∀ a b c : α, a ⊔ b ⊔ c = a ⊔ (b ⊔ c)) (sup_idem : ∀ a : α, a ⊔ a = a) :     SemilatticeSup α where   sup := (· ⊔ ·)   le a b := a ⊔ b = b   le_refl := sup_idem   le_trans a b c hab hbc := by rw [← hbc, ";
+    }
+    {
+      full_name = "le_sup_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 102;
+      code_preview = "@[simp] theorem le_sup_left : a ≤ a ⊔ b";
+    }
+    {
+      full_name = "le_sup_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 106;
+      code_preview = "@[simp] theorem le_sup_right : b ≤ a ⊔ b";
+    }
+    {
+      full_name = "le_sup_of_le_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 110;
+      code_preview = "theorem le_sup_of_le_left (h : c ≤ a) : c ≤ a ⊔ b";
+    }
+    {
+      full_name = "le_sup_of_le_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 113;
+      code_preview = "theorem le_sup_of_le_right (h : c ≤ b) : c ≤ a ⊔ b";
+    }
+    {
+      full_name = "lt_sup_of_lt_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 116;
+      code_preview = "theorem lt_sup_of_lt_left (h : c < a) : c < a ⊔ b";
+    }
+    {
+      full_name = "lt_sup_of_lt_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 119;
+      code_preview = "theorem lt_sup_of_lt_right (h : c < b) : c < a ⊔ b";
+    }
+    {
+      full_name = "sup_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 122;
+      code_preview = "theorem sup_le : a ≤ c → b ≤ c → a ⊔ b ≤ c";
+    }
+    {
+      full_name = "sup_le_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 125;
+      code_preview = "@[simp] theorem sup_le_iff : a ⊔ b ≤ c ↔ a ≤ c ∧ b ≤ c";
+    }
+    {
+      full_name = "sup_eq_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 130;
+      code_preview = "@[simp] theorem sup_eq_left : a ⊔ b = a ↔ b ≤ a";
+    }
+    {
+      full_name = "sup_eq_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 134;
+      code_preview = "@[simp] theorem sup_eq_right : a ⊔ b = b ↔ a ≤ b";
+    }
+    {
+      full_name = "left_eq_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 138;
+      code_preview = "@[simp] theorem left_eq_sup : a = a ⊔ b ↔ b ≤ a";
+    }
+    {
+      full_name = "right_eq_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 142;
+      code_preview = "@[simp] theorem right_eq_sup : b = a ⊔ b ↔ a ≤ b";
+    }
+    {
+      full_name = "left_lt_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 152;
+      code_preview = "@[simp] theorem left_lt_sup : a < a ⊔ b ↔ ¬b ≤ a";
+    }
+    {
+      full_name = "right_lt_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 156;
+      code_preview = "@[simp] theorem right_lt_sup : b < a ⊔ b ↔ ¬a ≤ b";
+    }
+    {
+      full_name = "left_or_right_lt_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 160;
+      code_preview = "theorem left_or_right_lt_sup (h : a ≠ b) : a < a ⊔ b ∨ b < a ⊔ b";
+    }
+    {
+      full_name = "le_iff_exists_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 163;
+      code_preview = "theorem le_iff_exists_sup : a ≤ b ↔ ∃ c, b = a ⊔ c";
+    }
+    {
+      full_name = "sup_le_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 170;
+      code_preview = "@[gcongr] theorem sup_le_sup (h₁ : a ≤ b) (h₂ : c ≤ d) : a ⊔ c ≤ b ⊔ d";
+    }
+    {
+      full_name = "sup_le_sup_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 174;
+      code_preview = "@[gcongr] theorem sup_le_sup_left (h₁ : a ≤ b) (c) : c ⊔ a ≤ c ⊔ b";
+    }
+    {
+      full_name = "sup_le_sup_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 178;
+      code_preview = "@[gcongr] theorem sup_le_sup_right (h₁ : a ≤ b) (c) : a ⊔ c ≤ b ⊔ c";
+    }
+    {
+      full_name = "sup_idem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 182;
+      code_preview = "theorem sup_idem (a : α) : a ⊔ a = a";
+    }
+    {
+      full_name = "sup_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 186;
+      code_preview = "theorem sup_comm (a b : α) : a ⊔ b = b ⊔ a";
+    }
+    {
+      full_name = "sup_assoc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 190;
+      code_preview = "theorem sup_assoc (a b c : α) : a ⊔ b ⊔ c = a ⊔ (b ⊔ c)";
+    }
+    {
+      full_name = "sup_left_right_swap";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 195;
+      code_preview = "theorem sup_left_right_swap (a b c : α) : a ⊔ b ⊔ c = c ⊔ b ⊔ a";
+    }
+    {
+      full_name = "sup_left_idem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 198;
+      code_preview = "theorem sup_left_idem (a b : α) : a ⊔ (a ⊔ b) = a ⊔ b";
+    }
+    {
+      full_name = "sup_right_idem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 200;
+      code_preview = "theorem sup_right_idem (a b : α) : a ⊔ b ⊔ b = a ⊔ b";
+    }
+    {
+      full_name = "sup_left_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 202;
+      code_preview = "theorem sup_left_comm (a b c : α) : a ⊔ (b ⊔ c) = b ⊔ (a ⊔ c)";
+    }
+    {
+      full_name = "sup_right_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 205;
+      code_preview = "theorem sup_right_comm (a b c : α) : a ⊔ b ⊔ c = a ⊔ c ⊔ b";
+    }
+    {
+      full_name = "sup_sup_sup_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 208;
+      code_preview = "theorem sup_sup_sup_comm (a b c d : α) : a ⊔ b ⊔ (c ⊔ d) = a ⊔ c ⊔ (b ⊔ d)";
+    }
+    {
+      full_name = "sup_sup_distrib_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 211;
+      code_preview = "theorem sup_sup_distrib_left (a b c : α) : a ⊔ (b ⊔ c) = a ⊔ b ⊔ (a ⊔ c)";
+    }
+    {
+      full_name = "sup_sup_distrib_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 214;
+      code_preview = "theorem sup_sup_distrib_right (a b c : α) : a ⊔ b ⊔ c = a ⊔ c ⊔ (b ⊔ c)";
+    }
+    {
+      full_name = "sup_congr_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 217;
+      code_preview = "theorem sup_congr_left (hb : b ≤ a ⊔ c) (hc : c ≤ a ⊔ b) : a ⊔ b = a ⊔ c";
+    }
+    {
+      full_name = "sup_congr_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 220;
+      code_preview = "theorem sup_congr_right (ha : a ≤ b ⊔ c) (hb : b ≤ a ⊔ c) : a ⊔ c = b ⊔ c";
+    }
+    {
+      full_name = "sup_eq_sup_iff_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 223;
+      code_preview = "theorem sup_eq_sup_iff_left : a ⊔ b = a ⊔ c ↔ b ≤ a ⊔ c ∧ c ≤ a ⊔ b";
+    }
+    {
+      full_name = "sup_eq_sup_iff_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 226;
+      code_preview = "theorem sup_eq_sup_iff_right : a ⊔ c = b ⊔ c ↔ a ≤ b ⊔ c ∧ b ≤ a ⊔ c";
+    }
+    {
+      full_name = "Ne.lt_sup_or_lt_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 229;
+      code_preview = "theorem Ne.lt_sup_or_lt_sup (hab : a ≠ b) : a < a ⊔ b ∨ b < a ⊔ b";
+    }
+    {
+      full_name = "Monotone.forall_le_of_antitone";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 232;
+      code_preview = "theorem Monotone.forall_le_of_antitone {β : Type*} [Preorder β] {f g : α → β} (hf : Monotone f)     (hg : Antitone g) (h : f ≤ g) (m n : α) : f m ≤ g n";
+    }
+    {
+      full_name = "SemilatticeSup.ext_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 240;
+      code_preview = "theorem SemilatticeSup.ext_sup {α} {A B : SemilatticeSup α}     (H : ∀ x y : α, (haveI := A; x ≤ y) ↔ x ≤ y)     (x y : α) :     (haveI := A; x ⊔ y) = x ⊔ y";
+    }
+    {
+      full_name = "SemilatticeSup.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 246;
+      code_preview = "theorem SemilatticeSup.ext {α} {A B : SemilatticeSup α}     (H : ∀ x y : α, (haveI := A; x ≤ y) ↔ x ≤ y) :     A = B";
+    }
+    {
+      full_name = "ite_le_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 255;
+      code_preview = "theorem ite_le_sup (s s' : α) (P : Prop) [Decidable P] : ite P s s' ≤ s ⊔ s'";
+    }
+    {
+      full_name = "SemilatticeInf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 265;
+      code_preview = "class SemilatticeInf (α : Type u) extends PartialOrder α where      inf : α → α → α      protected inf_le_left : ∀ a b : α, inf a b ≤ a      protected inf_le_right : ∀ a b : α, inf a b ≤ b      protected le_inf : ∀ a b c : α, a ≤ b → a ≤ c → a ≤ inf b c";
+    }
+    {
+      full_name = "SemilatticeInf.toMin";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 278;
+      code_preview = "instance SemilatticeInf.toMin [SemilatticeInf α] : Min α where min a b := SemilatticeInf.inf a b";
+    }
+    {
+      full_name = "OrderDual.instSemilatticeSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 280;
+      code_preview = "instance OrderDual.instSemilatticeSup (α) [SemilatticeInf α] : SemilatticeSup αᵒᵈ where   sup := @SemilatticeInf.inf α _   le_sup_left := @SemilatticeInf.inf_le_left α _   le_sup_right := @SemilatticeInf.inf_le_right α _   sup_le := fun _ _ _ hca hcb => @SemilatticeInf.le_inf α _ _ _ _ hca hcb";
+    }
+    {
+      full_name = "OrderDual.instSemilatticeInf";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 286;
+      code_preview = "instance OrderDual.instSemilatticeInf (α) [SemilatticeSup α] : SemilatticeInf αᵒᵈ where   inf := @SemilatticeSup.sup α _   inf_le_left := @le_sup_left α _   inf_le_right := @le_sup_right α _   le_inf := fun _ _ _ hca hcb => @sup_le α _ _ _ _ hca hcb";
+    }
+    {
+      full_name = "SemilatticeSup.dual_dual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 292;
+      code_preview = "theorem SemilatticeSup.dual_dual (α : Type*) [H : SemilatticeSup α] :     OrderDual.instSemilatticeSup αᵒᵈ = H";
+    }
+    {
+      full_name = "inf_le_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 300;
+      code_preview = "@[simp] theorem inf_le_left : a ⊓ b ≤ a";
+    }
+    {
+      full_name = "inf_le_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 304;
+      code_preview = "@[simp] theorem inf_le_right : a ⊓ b ≤ b";
+    }
+    {
+      full_name = "mem_upperBounds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 31;
+      code_preview = "theorem mem_upperBounds : a ∈ upperBounds s ↔ ∀ x ∈ s, x ≤ a";
+    }
+    {
+      full_name = "mem_lowerBounds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 34;
+      code_preview = "theorem mem_lowerBounds : a ∈ lowerBounds s ↔ ∀ x ∈ s, a ≤ x";
+    }
+    {
+      full_name = "mem_upperBounds_iff_subset_Iic";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 37;
+      code_preview = "lemma mem_upperBounds_iff_subset_Iic : a ∈ upperBounds s ↔ s ⊆ Iic a := Iff.rfl";
+    }
+    {
+      full_name = "mem_lowerBounds_iff_subset_Ici";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 39;
+      code_preview = "lemma mem_lowerBounds_iff_subset_Ici : a ∈ lowerBounds s ↔ s ⊆ Ici a := Iff.rfl";
+    }
+    {
+      full_name = "bddAbove_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 41;
+      code_preview = "theorem bddAbove_def : BddAbove s ↔ ∃ x, ∀ y ∈ s, y ≤ x";
+    }
+    {
+      full_name = "bddBelow_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 44;
+      code_preview = "theorem bddBelow_def : BddBelow s ↔ ∃ x, ∀ y ∈ s, x ≤ y";
+    }
+    {
+      full_name = "bot_mem_lowerBounds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 47;
+      code_preview = "theorem bot_mem_lowerBounds [OrderBot α] (s : Set α) : ⊥ ∈ lowerBounds s";
+    }
+    {
+      full_name = "top_mem_upperBounds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 49;
+      code_preview = "theorem top_mem_upperBounds [OrderTop α] (s : Set α) : ⊤ ∈ upperBounds s";
+    }
+    {
+      full_name = "isLeast_bot_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 51;
+      code_preview = "@[simp] theorem isLeast_bot_iff [OrderBot α] : IsLeast s ⊥ ↔ ⊥ ∈ s";
+    }
+    {
+      full_name = "isGreatest_top_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 55;
+      code_preview = "@[simp] theorem isGreatest_top_iff [OrderTop α] : IsGreatest s ⊤ ↔ ⊤ ∈ s";
+    }
+    {
+      full_name = "not_bddAbove_iff'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 59;
+      code_preview = "theorem not_bddAbove_iff' : ¬BddAbove s ↔ ∀ x, ∃ y ∈ s, ¬y ≤ x";
+    }
+    {
+      full_name = "not_bddBelow_iff'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 65;
+      code_preview = "theorem not_bddBelow_iff' : ¬BddBelow s ↔ ∀ x, ∃ y ∈ s, ¬x ≤ y";
+    }
+    {
+      full_name = "not_bddAbove_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 71;
+      code_preview = "theorem not_bddAbove_iff {α : Type*} [LinearOrder α] {s : Set α} :     ¬BddAbove s ↔ ∀ x, ∃ y ∈ s, x < y";
+    }
+    {
+      full_name = "not_bddBelow_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 77;
+      code_preview = "theorem not_bddBelow_iff {α : Type*} [LinearOrder α] {s : Set α} :     ¬BddBelow s ↔ ∀ x, ∃ y ∈ s, y < x";
+    }
+    {
+      full_name = "bddBelow_preimage_ofDual";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 83;
+      code_preview = "@[simp] lemma bddBelow_preimage_ofDual {s : Set α} : BddBelow (ofDual ⁻¹' s) ↔ BddAbove s := Iff.rfl";
+    }
+    {
+      full_name = "bddAbove_preimage_ofDual";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 84;
+      code_preview = "@[simp] lemma bddAbove_preimage_ofDual {s : Set α} : BddAbove (ofDual ⁻¹' s) ↔ BddBelow s := Iff.rfl";
+    }
+    {
+      full_name = "bddBelow_preimage_toDual";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 86;
+      code_preview = "@[simp] lemma bddBelow_preimage_toDual {s : Set αᵒᵈ} :     BddBelow (toDual ⁻¹' s) ↔ BddAbove s := Iff.rfl";
+    }
+    {
+      full_name = "bddAbove_preimage_toDual";
+      kind = "lemma";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 89;
+      code_preview = "@[simp] lemma bddAbove_preimage_toDual {s : Set αᵒᵈ} :     BddAbove (toDual ⁻¹' s) ↔ BddBelow s := Iff.rfl";
+    }
+    {
+      full_name = "BddAbove.dual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 92;
+      code_preview = "theorem BddAbove.dual (h : BddAbove s) : BddBelow (ofDual ⁻¹' s)";
+    }
+    {
+      full_name = "BddBelow.dual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 95;
+      code_preview = "theorem BddBelow.dual (h : BddBelow s) : BddAbove (ofDual ⁻¹' s)";
+    }
+    {
+      full_name = "IsLeast.dual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 98;
+      code_preview = "theorem IsLeast.dual (h : IsLeast s a) : IsGreatest (ofDual ⁻¹' s) (toDual a)";
+    }
+    {
+      full_name = "IsGreatest.dual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 101;
+      code_preview = "theorem IsGreatest.dual (h : IsGreatest s a) : IsLeast (ofDual ⁻¹' s) (toDual a)";
+    }
+    {
+      full_name = "IsLUB.dual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 104;
+      code_preview = "theorem IsLUB.dual (h : IsLUB s a) : IsGLB (ofDual ⁻¹' s) (toDual a)";
+    }
+    {
+      full_name = "IsGLB.dual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 107;
+      code_preview = "theorem IsGLB.dual (h : IsGLB s a) : IsLUB (ofDual ⁻¹' s) (toDual a)";
+    }
+    {
+      full_name = "IsLeast.orderBot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 110;
+      code_preview = "abbrev IsLeast.orderBot (h : IsLeast s a) :     OrderBot s where   bot := ⟨a, h.1⟩   bot_le := Subtype.forall.2 h.2";
+    }
+    {
+      full_name = "IsGreatest.orderTop";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 116;
+      code_preview = "abbrev IsGreatest.orderTop (h : IsGreatest s a) :     OrderTop s where   top := ⟨a, h.1⟩   le_top := Subtype.forall.2 h.2";
+    }
+    {
+      full_name = "isLUB_congr";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 122;
+      code_preview = "theorem isLUB_congr (h : upperBounds s = upperBounds t) : IsLUB s a ↔ IsLUB t a";
+    }
+    {
+      full_name = "isGLB_congr";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 125;
+      code_preview = "theorem isGLB_congr (h : lowerBounds s = lowerBounds t) : IsGLB s a ↔ IsGLB t a";
+    }
+    {
+      full_name = "upperBounds_mono_set";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 133;
+      code_preview = "theorem upperBounds_mono_set ⦃s t : Set α⦄ (hst : s ⊆ t) : upperBounds t ⊆ upperBounds s";
+    }
+    {
+      full_name = "lowerBounds_mono_set";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 136;
+      code_preview = "theorem lowerBounds_mono_set ⦃s t : Set α⦄ (hst : s ⊆ t) : lowerBounds t ⊆ lowerBounds s";
+    }
+    {
+      full_name = "upperBounds_mono_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 139;
+      code_preview = "theorem upperBounds_mono_mem ⦃a b⦄ (hab : a ≤ b) : a ∈ upperBounds s → b ∈ upperBounds s";
+    }
+    {
+      full_name = "lowerBounds_mono_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 142;
+      code_preview = "theorem lowerBounds_mono_mem ⦃a b⦄ (hab : a ≤ b) : b ∈ lowerBounds s → a ∈ lowerBounds s";
+    }
+    {
+      full_name = "upperBounds_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 145;
+      code_preview = "theorem upperBounds_mono ⦃s t : Set α⦄ (hst : s ⊆ t) ⦃a b⦄ (hab : a ≤ b) :     a ∈ upperBounds t → b ∈ upperBounds s";
+    }
+    {
+      full_name = "lowerBounds_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 149;
+      code_preview = "theorem lowerBounds_mono ⦃s t : Set α⦄ (hst : s ⊆ t) ⦃a b⦄ (hab : a ≤ b) :     b ∈ lowerBounds t → a ∈ lowerBounds s";
+    }
+    {
+      full_name = "BddAbove.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 153;
+      code_preview = "theorem BddAbove.mono ⦃s t : Set α⦄ (h : s ⊆ t) : BddAbove t → BddAbove s";
+    }
+    {
+      full_name = "BddBelow.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 157;
+      code_preview = "theorem BddBelow.mono ⦃s t : Set α⦄ (h : s ⊆ t) : BddBelow t → BddBelow s";
+    }
+    {
+      full_name = "IsLUB.of_subset_of_superset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 161;
+      code_preview = "theorem IsLUB.of_subset_of_superset {s t p : Set α} (hs : IsLUB s a) (hp : IsLUB p a) (hst : s ⊆ t)     (htp : t ⊆ p) : IsLUB t a";
+    }
+    {
+      full_name = "IsGLB.of_subset_of_superset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 167;
+      code_preview = "theorem IsGLB.of_subset_of_superset {s t p : Set α} (hs : IsGLB s a) (hp : IsGLB p a) (hst : s ⊆ t)     (htp : t ⊆ p) : IsGLB t a";
+    }
+    {
+      full_name = "IsLeast.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 173;
+      code_preview = "theorem IsLeast.mono (ha : IsLeast s a) (hb : IsLeast t b) (hst : s ⊆ t) : b ≤ a";
+    }
+    {
+      full_name = "IsGreatest.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 176;
+      code_preview = "theorem IsGreatest.mono (ha : IsGreatest s a) (hb : IsGreatest t b) (hst : s ⊆ t) : a ≤ b";
+    }
+    {
+      full_name = "IsLUB.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 179;
+      code_preview = "theorem IsLUB.mono (ha : IsLUB s a) (hb : IsLUB t b) (hst : s ⊆ t) : a ≤ b";
+    }
+    {
+      full_name = "IsGLB.mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 182;
+      code_preview = "theorem IsGLB.mono (ha : IsGLB s a) (hb : IsGLB t b) (hst : s ⊆ t) : b ≤ a";
+    }
+    {
+      full_name = "subset_lowerBounds_upperBounds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 185;
+      code_preview = "theorem subset_lowerBounds_upperBounds (s : Set α) : s ⊆ lowerBounds (upperBounds s)";
+    }
+    {
+      full_name = "subset_upperBounds_lowerBounds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 188;
+      code_preview = "theorem subset_upperBounds_lowerBounds (s : Set α) : s ⊆ upperBounds (lowerBounds s)";
+    }
+    {
+      full_name = "Set.Nonempty.bddAbove_lowerBounds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 191;
+      code_preview = "theorem Set.Nonempty.bddAbove_lowerBounds (hs : s.Nonempty) : BddAbove (lowerBounds s)";
+    }
+    {
+      full_name = "Set.Nonempty.bddBelow_upperBounds";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 194;
+      code_preview = "theorem Set.Nonempty.bddBelow_upperBounds (hs : s.Nonempty) : BddBelow (upperBounds s)";
+    }
+    {
+      full_name = "IsLeast.isGLB";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 202;
+      code_preview = "theorem IsLeast.isGLB (h : IsLeast s a) : IsGLB s a";
+    }
+    {
+      full_name = "IsGreatest.isLUB";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 205;
+      code_preview = "theorem IsGreatest.isLUB (h : IsGreatest s a) : IsLUB s a";
+    }
+    {
+      full_name = "IsLUB.upperBounds_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 208;
+      code_preview = "theorem IsLUB.upperBounds_eq (h : IsLUB s a) : upperBounds s = Ici a";
+    }
+    {
+      full_name = "IsGLB.lowerBounds_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Bounds/Basic.lean";
+      start_line = 211;
+      code_preview = "theorem IsGLB.lowerBounds_eq (h : IsGLB s a) : lowerBounds s = Iic a";
+    }
+    {
+      full_name = "Lattice";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Order/Lattice.lean";
+      start_line = 463;
+      code_preview = "class Lattice (α : Type u) extends SemilatticeSup α, SemilatticeInf α";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

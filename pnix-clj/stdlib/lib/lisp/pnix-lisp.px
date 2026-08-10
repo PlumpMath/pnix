@@ -1,0 +1,236 @@
+# ════════════════════════════════════════════════════════════════════════
+# stdlib/lib/lisp/pnix-lisp.px — pnix-lisp A1: homoiconic Lisp reader
+# (idea.md §18 Phase A1)
+# ════════════════════════════════════════════════════════════════════════
+#
+# pnix-lisp is a SURFACE, NOT a new mirror. It reads s-expressions into the
+# EXISTING pnix AST (`runtime.px` `mk_*` shapes) and hands them to the EXISTING
+# meta-circular evaluator's `eval`. Same intelligence, reflectively applied —
+# exactly SICP eval/apply and the Hy model (Hy emits Python AST that CPython's
+# own eval runs). Deep-research(2026-06-15) verdict: "reader → host AST → same
+# runtime, NO second evaluator" (idea.md §18 / project-wiki/maps/pnix-lisp-
+# substrate-research.md).
+#
+# A1 scope = atoms (int / symbol) + binary-op forms + nesting + general
+# application chains. LATER slices: initialEnv exposure (so Var/builtins/Apply
+# evaluate), special forms (let/if/lambda), hygienic macros, content-addressed
+# storage, and the "white blood cell" verify gate (idea.md §1 checker/arena =
+# the immune system that admits only verified cells).
+#
+# ⚠ CODE/VALUE PLANE SEPARATION (operator constraint 2026-06-15, 불가침):
+# pnix-lisp is AST-ONLY (the Hy model). Its CODE plane — homoiconic data, the
+# closed grammar `int | {sym} | {str} | list-of-those` — must NEVER be conflated
+# with pnix's VALUE / LAZY plane. Mixing them breaks (the hard-won Clojure
+# lazy-seq lesson: pnix/Nix is lazy; a lazy or non-code pnix VALUE leaking into
+# the code plane corrupts evaluation). So `eval` validates its input is a closed
+# code datum and FAILS CLOSED otherwise (`isCodeDatum`), and we never feed raw
+# pnix values back in as code — only `read`/`quote`/`list`-of-code produce code.
+
+let
+  runtime   = import ../../../pnixc-pnix/exec/runtime.px;
+  evaluator = (import ../../../pnixc-pnix/eval/evaluator.px) { inherit runtime; };
+  B = builtins;   # = Stage-2 nativeBuiltins (curated subset; no genList)
+
+  # ── char utils (Stage-2 has no genList → recurse) ────────────────────
+  charsOf = s:
+    let n  = B.stringLength s;
+        go = i: if i >= n then [ ] else [ (B.substring i 1 s) ] ++ (go (i + 1));
+    in go 0;
+  isWS       = c: c == " " || c == "\n" || c == "\t" || c == "\r";
+  isParen    = c: c == "(" || c == ")";
+  dquote     = "\"";
+  isDigitTok = t: B.match "[0-9]+" t != null;   # POSIX ERE, full-string anchored
+  isStrTok   = t: B.stringLength t >= 1 && B.substring 0 1 t == dquote;
+  stripQuotes = t: B.substring 1 (B.stringLength t - 2) t;   # drop the two "
+
+  # ── tokenize : string → [token] ──────────────────────────────────────
+  # tokens = "(" | ")" | "…"(quoted string, kept with quotes) | atom-string.
+  # Whitespace separates; parens stand alone; a "…" run is one token even with
+  # spaces/parens inside.
+  # tokens = "(" | ")" | "[" | "]" | "…"(string) | atom.  ';' = line comment
+  # (skipped to newline) — Clojure/Lisp surface. homoiconic pnix-lisp 는 []/; 안 씀.
+  tokenize = s:
+    let
+      flush   = acc: if acc.cur == "" then acc.toks else acc.toks ++ [ acc.cur ];
+      isDelim = c: isParen c || c == "[" || c == "]";
+      step  = acc: c:
+        if acc.inComment then
+          (if c == "\n" then { toks = acc.toks; cur = ""; inStr = false; inComment = false; }
+           else acc)
+        else if acc.inStr then
+          (if c == dquote then { toks = acc.toks ++ [ (acc.cur + c) ]; cur = ""; inStr = false; inComment = false; }
+           else { toks = acc.toks; cur = acc.cur + c; inStr = true; inComment = false; })
+        else if c == ";" then { toks = flush acc; cur = ""; inStr = false; inComment = true; }
+        else if c == dquote then { toks = flush acc; cur = c; inStr = true; inComment = false; }
+        else if isDelim c then { toks = (flush acc) ++ [ c ]; cur = ""; inStr = false; inComment = false; }
+        else if isWS c then { toks = flush acc; cur = ""; inStr = false; inComment = false; }
+        else { toks = acc.toks; cur = acc.cur + c; inStr = false; inComment = false; };
+      r = B.foldl' step { toks = [ ]; cur = ""; inStr = false; inComment = false; } (charsOf s);
+    in flush r;
+
+  # ── read : [token] → homoiconic datum ────────────────────────────────
+  # datum = int | { sym = name; } | [ datum … ]   (lists ARE code-as-data)
+  # datum = int | {sym} | {str} | {vec=[…]} | [ datum … ]  (lists/vecs = code-as-data)
+  readExpr = toks: i:
+    let t = B.elemAt toks i; in
+    if t == "(" then readList toks (i + 1) [ ]
+    else if t == "[" then readVec toks (i + 1) [ ]
+    else if t == ")" || t == "]" then throw ("pnix-lisp: unexpected " + t)
+    else if isStrTok t then { value = { str = stripQuotes t; }; next = i + 1; }
+    else if isDigitTok t then { value = B.fromJSON t; next = i + 1; }
+    else { value = { sym = t; }; next = i + 1; };
+  readList = toks: i: acc:
+    let t = B.elemAt toks i; in
+    if t == ")" then { value = acc; next = i + 1; }
+    else let e = readExpr toks i; in readList toks e.next (acc ++ [ e.value ]);
+  readVec = toks: i: acc:                              # Clojure vector → { vec = [ … ]; }
+    let t = B.elemAt toks i; in
+    if t == "]" then { value = { vec = acc; }; next = i + 1; }
+    else let e = readExpr toks i; in readVec toks e.next (acc ++ [ e.value ]);
+  read = s: (readExpr (tokenize s) 0).value;           # ONE form
+  readAll = s:                                         # ALL top-level forms (a file) → [ datum … ]
+    let toks = tokenize s; n = B.length toks;
+        go = i: if i >= n then [ ] else let e = readExpr toks i; in [ e.value ] ++ go e.next;
+    in go 0;
+
+  # ── lower : datum → pnix AST (runtime.px `mk_*` shapes) ───────────────
+  binops = [ "+" "-" "*" "/" "%" "==" "!=" "<" "<=" ">" ">=" "&&" "||" "++" "//" ];
+  isSym  = d: B.isAttrs d && (d ? sym);
+  isStr  = d: B.isAttrs d && (d ? str);
+  # dotted symbol → Select chain:  builtins.toString → Select(Var builtins, "toString")
+  mkVar = name:
+    let parts = B.filter B.isString (B.split "[.]" name); in
+    if B.length parts <= 1 then { tag = "Var"; name = name; }
+    else B.foldl' (acc: p: { tag = "Select"; base = acc; attr = p; })
+                  { tag = "Var"; name = B.head parts; }
+                  (B.tail parts);
+  lower = d:
+    if B.isInt d then { tag = "Int"; value = d; }
+    else if isStr d then { tag = "String"; value = d.str; }
+    else if isSym d then
+      (if d.sym == "true" then { tag = "Bool"; value = true; }
+       else if d.sym == "false" then { tag = "Bool"; value = false; }
+       else if d.sym == "null" then { tag = "Null"; }
+       else mkVar d.sym)
+    else if B.isList d then lowerList d
+    else throw "pnix-lisp: cannot lower datum";
+  # list form: special forms (if/lambda/let) first, then binary op, then apply.
+  lowerList = d:
+    let h = B.elemAt d 0; n = B.length d; in
+    if isSym h then
+      (let s = h.sym; in
+       if s == "if" && n == 4 then
+         { tag = "If"; cond = lower (B.elemAt d 1);
+           "then" = lower (B.elemAt d 2); "else" = lower (B.elemAt d 3); }
+       else if s == "lambda" && n == 3 then lowerLambda (B.elemAt d 1) (B.elemAt d 2)
+       else if s == "let" && n == 3 then lowerLet (B.elemAt d 1) (B.elemAt d 2)
+       else if s == "list" then { tag = "List"; items = lowerArgs d 1; }
+       else if s == "attrset" then lowerAttrSet d
+       else if s == "quote" && n == 2 then datumToAst (B.elemAt d 1)
+       else if (B.elem s binops) && n == 3 then
+         { tag = "Binary"; op = s;
+           lhs = lower (B.elemAt d 1); rhs = lower (B.elemAt d 2); }
+       else lowerApply d)
+    else lowerApply d;
+  # (lambda (x y) body) → Lambda x (Lambda y body)  (curried)
+  lowerLambda = params: body:
+    let go = i: if i >= B.length params then lower body
+               else { tag = "Lambda";
+                      param = { tag = "Ident"; name = (B.elemAt params i).sym; };
+                      body = go (i + 1); };
+    in go 0;
+  # (let ((x v) (y w)) body) → Let [Binding x v, Binding y w] body
+  lowerLet = binds: body:
+    let mkB = b: { tag = "Binding";
+                   pattern = { tag = "Ident"; name = (B.elemAt b 0).sym; };
+                   value = lower (B.elemAt b 1); };
+    in { tag = "Let"; bindings = B.map mkB binds; body = lower body; };
+  # lower the args d[i..] to a list of AST nodes (shared by list + apply).
+  lowerArgs = d: i:
+    if i >= B.length d then [ ]
+    else [ (lower (B.elemAt d i)) ] ++ (lowerArgs d (i + 1));
+  # (f a b c) → Apply(Apply(Apply f a) b) c  (curried application; needs env)
+  lowerApply = d:
+    B.foldl' (acc: a: { tag = "Apply"; func = acc; arg = a; })
+             (lower (B.elemAt d 0)) (lowerArgs d 1);
+  # (attrset (k v) (k2 v2) …) → { k = v; k2 = v2; }  (AttrSet node; values evaluated).
+  # Lets pnix-lisp build canonical/ontology structures (the CA-graph content).
+  lowerAttrSet = d:
+    let mkItem = pair: { tag = "Assign"; key_path = [ (B.elemAt pair 0).sym ];
+                         value = lower (B.elemAt pair 1); };
+        pairsOf = i: if i >= B.length d then [ ]
+                     else [ (mkItem (B.elemAt d i)) ] ++ (pairsOf (i + 1));
+    in { tag = "AttrSet"; recursive = false; items = pairsOf 1; };
+
+  # quote: build an AST that evaluates BACK to the homoiconic datum (code=data).
+  # `(quote (+ 1 2))` ⇒ the data `[ {sym=+} 1 2 ]`, identical to `(read "(+ 1 2)")`.
+  # This is the homoiconic keystone — the bridge to macros and to storing code
+  # AS data in the content-addressed graph (idea.md §18).
+  mkAttr1 = key: valAst:
+    { tag = "AttrSet"; recursive = false;
+      items = [ { tag = "Assign"; key_path = [ key ]; value = valAst; } ]; };
+  datumToAst = d:
+    if B.isInt d then { tag = "Int"; value = d; }
+    else if isStr d then mkAttr1 "str" { tag = "String"; value = d.str; }
+    else if isSym d then mkAttr1 "sym" { tag = "String"; value = d.sym; }
+    else if B.isList d then { tag = "List"; items = B.map datumToAst d; }
+    else throw "pnix-lisp quote: bad datum";
+
+  # ── evalLisp / eval : through the ONE mirror ─────────────────────────
+  # The lisp env passes pnix-lisp.px's OWN ambient `builtins` (= the Stage-2
+  # nativeBuiltins the mirror gave us) + `throw` straight through — no second
+  # env, no mirror-core edit. So `(builtins.X …)` resolves to the same
+  # primitives the mirror uses. (lambda/let still bind their own locals on top.)
+  #
+  # `eval` is exposed INTO the lisp env (recursive let: lispEnv ↔ lispEval), so
+  # lisp code can evaluate homoiconic data it built — closing the loop
+  # read/quote → datum → eval → value. This is the self-cell foundation
+  # (idea.md §18): code assembled AS DATA, then run by the same mirror.
+  # ── expander (syntax → syntax), DECOUPLED from lower (syntax → AST) ───
+  # JFP 2012 "Macros that Work Together" architecture: reader → EXPANDER →
+  # lower. BOUNDED pattern macros expand to CORE forms only (the shape `lower`
+  # already accepts) → no arbitrary new syntax, terminating, never a 2nd
+  # evaluator. These first macros introduce NO bindings, so set-of-scopes
+  # hygiene (Flatt 2016) is deferred to the later binding-introducing macros.
+  # Macros = the ONLY structure/order-switching tool (idea.md §18.1/§18.2).
+  mkSym = name: { sym = name; };
+  expand = d: if B.isList d && B.length d >= 1 then expandList d else d;
+  expandList = d:
+    let h = B.elemAt d 0; n = B.length d; in
+    if isSym h then
+      (let s = h.sym; in
+       if s == "quote" then d                       # never expand inside quoted data
+       else if s == "when" && n == 3 then
+         expand [ (mkSym "if") (B.elemAt d 1) (B.elemAt d 2) (mkSym "null") ]
+       else if s == "unless" && n == 3 then
+         expand [ (mkSym "if") (B.elemAt d 1) (mkSym "null") (B.elemAt d 2) ]
+       else if s == "cond" then expandCond d 1
+       else B.map expand d)                          # not a macro: recurse into elements
+    else B.map expand d;
+  # (cond (c1 e1) (c2 e2) … (else e)) → (if c1 e1 (if c2 e2 … e))  [order/branch macro]
+  expandCond = d: i:
+    if i >= B.length d then (mkSym "null")
+    else let clause = B.elemAt d i; test = B.elemAt clause 0; body = B.elemAt clause 1; in
+         if isSym test && test.sym == "else" then expand body
+         else [ (mkSym "if") (expand test) (expand body) (expandCond d (i + 1)) ];
+
+  # white-blood-cell guard: a value may enter the code plane ONLY if it is a
+  # closed code datum (int | {sym} | {str} | list-of-those). Anything else — a
+  # pnix VALUE, esp. a lazy/foreign structure — is rejected, fail-closed.
+  isCodeDatum = d:
+    B.isInt d
+    || (B.isAttrs d && (d ? sym) && B.isString d.sym)
+    || (B.isAttrs d && (d ? str) && B.isString d.str)
+    || (B.isList d && B.all isCodeDatum d);
+  # pipeline: expand (syntax→syntax) → lower (syntax→AST) → mirror eval.
+  lispEvalUnchecked = d: evaluator.eval (lower (expand d)) lispEnv;
+  lispEval = d:                                              # exposed to lisp as `eval`
+    if isCodeDatum d then lispEvalUnchecked d
+    else throw "pnix-lisp eval: not a code datum — a pnix value must not enter the code plane (AST-only)";
+  lispEnv  = { builtins = builtins; throw = throw; eval = lispEval; };
+  evalLisp = s: lispEvalUnchecked (read s);                 # read output is trusted
+
+in {
+  inherit tokenize read readAll expand lower evalLisp;
+  eval = lispEval;
+}

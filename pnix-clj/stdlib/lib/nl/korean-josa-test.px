@@ -1,0 +1,45 @@
+# stdlib/lib/nl/korean-josa-test.px — josa 받침 음운(resolveJosaMarkers) 회귀 하니스
+#
+# korean-nl-mirror.{finalSound,selectJosa,resolveJosaMarkers}가 Rust nl_core/josa.rs(MR3)와
+# 동치인지 self-check. 받침=수(數) 산술: 한글 종성(0xAC00) + 숫자 Sino-Korean 읽기 + 자릿수 단위.
+# 케이스 출처 = josa.rs 의 mr3_* 테스트 정본. 새 거울 0(korean-nl-mirror apply).
+let
+  knl = import ./korean-nl-mirror.px;
+  B = builtins;
+  fsBat = t: let f = knl.finalSound t; in f.batchim;        # 받침 있나
+  fsRie = t: let f = knl.finalSound t; in f.batchim && f.rieul;
+  sj = knl.selectJosa;
+  rj = knl.resolveJosaMarkers;
+  fsCases = [
+    { t = "집"; bat = true;  } { t = "바다"; bat = false; } { t = "칼"; bat = true; }   # 한글 종성
+    { t = "3"; bat = true; } { t = "6"; bat = true; } { t = "2"; bat = false; }          # 숫자 Sino-Korean
+    { t = "0"; bat = true; } { t = "9"; bat = false; } { t = "12"; bat = false; } { t = "13"; bat = true; }
+    { t = "10"; bat = true; } { t = "100"; bat = true; } { t = "1000"; bat = true; }     # 자릿수 단위
+    { t = "50000"; bat = true; } { t = "1000000000000"; bat = false; }                   # 조=무받침
+  ];
+  sjCases = [
+    { got = sj "3" "은" "는";     exp = "은"; }
+    { got = sj "9" "이에요" "예요"; exp = "예요"; }
+    { got = sj "13" "이에요" "예요"; exp = "이에요"; }
+    { got = sj "칼" "은" "는";    exp = "은"; }      # ㄹ 평형=받침형
+    { got = sj "칼" "으로" "로";  exp = "로"; }      # ㄹ + (으)-삽입형=무받침형
+    { got = sj "집" "으로" "로";  exp = "으로"; }
+    { got = sj "abc" "은" "는";   exp = "은"; }      # unknown→받침형 fallback
+  ];
+  rjCases = [
+    { got = rj "12 빼기 3{josa:은|는} 9{josa:이에요|예요}."; exp = "12 빼기 3은 9예요."; }
+    { got = rj "9 더하기 4{josa:은|는} 13{josa:이에요|예요}."; exp = "9 더하기 4는 13이에요."; }
+    { got = rj "x{josa:는}"; exp = "x{josa:는}"; }   # malformed=원문 보존
+    { got = rj "no markers"; exp = "no markers"; }
+  ];
+  fsOk = B.all (c: (fsBat c.t) == c.bat) fsCases;
+  sjOk = B.all (c: c.got == c.exp) sjCases;
+  rjOk = B.all (c: c.got == c.exp) rjCases;
+in {
+  rieul_check = (fsRie "칼") && (fsRie "1") && ((fsRie "3") == false);   # ㄹ 표식 정확
+  fs_ok = fsOk; sj_ok = sjOk; rj_ok = rjOk;
+  fs_fail = B.filter (c: (fsBat c.t) != c.bat) fsCases;
+  sj_fail = B.filter (c: c.got != c.exp) sjCases;
+  rj_fail = B.map (c: { got = c.got; exp = c.exp; }) (B.filter (c: c.got != c.exp) rjCases);
+  all_ok = fsOk && sjOk && rjOk && (fsRie "칼") && (fsRie "1");
+}

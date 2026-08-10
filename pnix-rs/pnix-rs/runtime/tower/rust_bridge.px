@@ -1,0 +1,32 @@
+# P6 v2 join: a px-WRITTEN translator from typed Rust AST nodes (rust_mirror's
+# sig-typed encoding, kinds rint/rvar/rbin/rif) into the P11 tower encoding —
+# so a Rust expression, reified through rs-meta ast-canonical, becomes a node
+# the px self-interpreter can evaluate. Unknown Rust kinds translate to an
+# explicit unsupported node (the self-interpreter then fails loudly, never
+# silently misreads).
+#
+# The whole file evaluates to `translate`, a lambda: node -> tower node.
+let
+  opsym = o:
+    if o == "add" then "+"
+    else if o == "sub" then "-"
+    else if o == "mul" then "*"
+    else if o == "div" then "/"
+    else if o == "eq" then "=="
+    else if o == "ne" then "!="
+    else if o == "lt" then "<"
+    else if o == "le" then "<="
+    else if o == "gt" then ">"
+    else ">=";
+
+  translate = node:
+    if node.kind == "rint" then { kind = "int"; value = node.value; }
+    else if node.kind == "rvar" then { kind = "var"; name = node.name; }
+    else if node.kind == "rbin" then
+      { kind = "binary"; op = opsym node.op;
+        lhs = translate node.lhs; rhs = translate node.rhs; }
+    else if node.kind == "rif" then
+      { kind = "if"; cond = translate node.cond;
+        then_e = translate node.then_e; else_e = translate node.else_e; }
+    else { kind = "unsupported-rust-node"; };
+in translate

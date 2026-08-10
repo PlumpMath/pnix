@@ -1,0 +1,49 @@
+# stdlib/lib/nl/korean-complex-understanding-test.px — 복합문 완전 이해(liftComplexSentence) lock.
+#
+# 단문 liftToProposition 이 flatten 하던 복합문(비가 오면 집에 간다)을 splitClauseRelations 로 절 분리 →
+# 각 절 liftToProposition → 절-관계(conditional/sequential/contrast)로 연결 = 다절 meaning-graph.
+# 추가전용(단문 lift 무수정 = 코퍼스 무파손). realizeComplex 의 역방향 → 복합문 이해+생성 양방향.
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  g = knm.liftComplexSentence;
+  # 2절 복합문 round-trip: liftComplexSentence → realizeComplex
+  rt2 = s: let x = g s; c0 = B.head x.clauses; c1 = B.elemAt x.clauses 1;
+           in knm.realizeComplex [ { prop = c0.prop; relation = c0.relation; } ] c1.prop;
+  cond = g "비가 오면 집에 간다";
+  seq = g "철수가 밥을 먹고 학교에 갔다";
+  contrast = g "철수는 크지만 영희는 작다";
+in {
+  cond_clauses = B.map (c: c.prop.action + "/" + (if c.relation==null then "final" else c.relation)) cond.clauses;
+  rt_cond = rt2 "비가 오면 집에 간다";
+  rt_contrast = rt2 "철수는 크지만 영희는 작다";
+  all_ok =
+    # ★복합문이 flatten 없이 다절로 이해됨 (각 절 prop + 관계)
+       (cond.clause_count == 2)
+    && ((B.head cond.clauses).prop.action == "오") && ((B.head cond.clauses).relation == "conditional")
+    && ((B.elemAt cond.clauses 1).prop.action == "가")
+    && (seq.clause_count == 2) && ((B.head seq.clauses).relation == "sequential")
+    && ((B.head seq.clauses).prop.action == "먹")
+    && (contrast.clause_count == 2) && ((B.head contrast.clauses).relation == "contrast")
+    && ((B.head contrast.clauses).prop.action == "크") && ((B.elemAt contrast.clauses 1).prop.action == "작")
+    # ★절 안의 논항도 완전 이해(flatten 아님): 비가 오 → agent=비, 집에 간다 → location=집
+    && (B.any (r: (r.role=="agent") && (r.entity=="비")) (B.head cond.clauses).prop.roles)
+    && (B.any (r: (r.role=="location") && (r.entity=="집")) (B.elemAt cond.clauses 1).prop.roles)
+    # ★round-trip(이해→생성): 2절 복합문 재생성이 비지 않음(realizeComplex 양방향)
+    && ((rt2 "비가 오면 집에 간다") != "") && ((rt2 "철수는 크지만 영희는 작다") != "")
+    # ★convergeComplexGate: 복합문 round-trip 검증=math-keep-complex(글자그대로 복원), 단문=convergeGate 위임
+    && ((knm.convergeComplexGate "비가 오면 집에 간다").verdict == "math-keep-complex")
+    && ((knm.convergeComplexGate "철수가 밥을 먹고 학교에 갔다").verdict == "math-keep-complex")
+    && ((knm.convergeComplexGate "철수는 크지만 영희는 작다").recovered == "철수는 크지만 영희는 작다")
+    && ((knm.convergeComplexGate "철수가 사과를 먹었다").verdict == "math-keep")
+    # ★N절·혼합관계 일반화: 3절(오고/불고/춥다)·혼합(오면+막히지만) 전부 글자그대로 round-trip
+    && ((g "비가 오고 바람이 불고 춥다").clause_count == 3)
+    && ((knm.convergeComplexGate "비가 오고 바람이 불고 춥다").recovered == "비가 오고 바람이 불고 춥다")
+    && ((knm.convergeComplexGate "비가 오면 길이 막히지만 철수는 간다").recovered == "비가 오면 길이 막히지만 철수는 간다")
+    # ★연결어미 보강(거나/다가/더니) + ★fail-closed: round-trip 불가 복합문은 held-complex-drift(crash 아님, 추측 commit 금지)
+    && ((knm.convergeComplexGate "철수가 가거나 영희가 온다").verdict == "math-keep-complex")
+    && ((knm.convergeComplexGate "철수가 가거나 영희가 온다").recovered == "철수가 가거나 영희가 온다")
+    && ((knm.convergeComplexGate "비가 오니까 집에 간다").verdict == "held-complex-drift")
+    # ★복합문 evidence(receipt→evidence 융합): 각 절 노드에 evidence(span·connective·relation_source) 부착
+    && (B.all (c: c ? evidence) cond.clauses)
+    && ((B.head cond.clauses).evidence.connective == "면")
+    && ((B.head cond.clauses).evidence.span == "비가 오");
+}

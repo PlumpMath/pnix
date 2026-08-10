@@ -1,0 +1,241 @@
+let
+  ownerName = "stdlib.nl.category-e2e-demo-v2";
+
+  cat = import nl/nl-flow-category-substrate.px;
+  monoidal = import nl/category-monoidal-product.px;
+  monad = import nl/category-monad.px;
+  verbs = import nl/category-verb-morphism-mapping.px;
+  langCodom = import nl/category-language-codomain-functor.px;
+  newDomain = import nl/new-domain-axiom-families.px;
+
+  # === E2E Demo v2 (agent-NL-149) ==================================
+  #
+  # #137 was tied to factorizeIntent (6 verb). v2 uses the full
+  # 140-verb table + 13-language codomain + cue-priority match.
+  #
+  # Flow:
+  #   utterance + language
+  #     ↓ multi-verb detect (longest-cue-match priority)
+  #     ↓ verb → morphism decompose (all detected verbs)
+  #     ↓ annotate read/write for monoidal parallelize
+  #     ↓ Maybe wrap (universal property tracking)
+  #     ↓ codomain functor emit (per language, 13 supported)
+  #     ↓ new-domain axiom family activation (security/db/api/...)
+  #     ↓ unified envelope
+
+  stepKind = "categorical-e2e-demo-v2";
+  framework_step =
+    "v2: 140 verb + 13 lang + 21 axiom family — full substrate stack";
+
+  # Annotate morphism read/write (mirrors #137).
+  annotateReadWrite = morphisms:
+    builtins.map (m: m // {
+      params = (m.params or {}) // {
+        reads =
+          if m.action == "locate-definition"
+              || m.action == "locate-references"
+              || m.action == "select-region"
+              || m.action == "identify-test-target"
+              || m.action == "lookup-symbol-table"
+              || m.action == "scan-imports"
+              || m.action == "scan-deprecated-symbols"
+              || m.action == "explain-current-plan"
+              || m.action == "profile-allocations"
+              || m.action == "enumerate-attack-surface"
+              || m.action == "audit-with-axe-or-lighthouse"
+              || m.action == "load-profile-data"
+          then [ "code-files" ]
+          else [];
+        writes =
+          if m.action == "replace-identifier-text"
+              || m.action == "create-new-definition"
+              || m.action == "replace-with-call"
+              || m.action == "design-patch"
+              || m.action == "update-test-references"
+              || m.action == "apply-replacement"
+              || m.action == "rewrite-call-sites"
+              || m.action == "add-getter"
+              || m.action == "add-setter"
+              || m.action == "remove-target"
+              || m.action == "remove-definition"
+              || m.action == "create-new-type"
+              || m.action == "extract-as-component"
+              || m.action == "build-and-tag"
+              || m.action == "create-index"
+              || m.action == "wrap-with-cache"
+          then [ "code-files" ]
+          else [];
+      };
+    }) morphisms;
+
+  # Reformat morphism to match cat's morphism shape.
+  toCatMorphism = m: {
+    morphism_kind = m.morphism_kind;
+    source = m.source;
+    target = m.target;
+    action = m.action;
+    params = m.params;
+    unknowns = m.unknowns;
+  };
+
+  # =================================================================
+  # === Main entry: full v2 e2e demo ================================
+  # =================================================================
+
+  runFullDemoV2 = utterance: language:
+    let
+      # Stage 1: multi-verb detect + decompose using verbTable
+      decomp = verbs.buildMorphismsFromAllVerbs utterance;
+      morphisms = decomp.morphisms;
+      verbList = decomp.detected_verbs;
+
+      # Stage 2: annotate read/write for parallelize
+      annotated = annotateReadWrite morphisms;
+
+      # Stage 3: monoidal parallelize
+      parallelized =
+        if morphisms == [] then null
+        else monoidal.parallelizeChain annotated;
+
+      # Stage 4: Maybe-wrap each morphism (track unknowns)
+      maybeWrapped = builtins.map monad.toMaybeMorphism morphisms;
+      blockedCount = builtins.length (
+        builtins.filter (m: m.tag == "Nothing") maybeWrapped
+      );
+
+      # Stage 5: emit code per language using codomain functor
+      emitted =
+        if morphisms == [] then []
+        else langCodom.emitChain morphisms language;
+
+      # Stage 6: also activate new-domain axiom families
+      newDomActivations = newDomain.axiomsActivatedBy utterance;
+      newDomNames = builtins.map (ax: ax.name) newDomActivations;
+
+      # Stage 7: aggregate unknowns across all morphisms
+      allUnknowns =
+        builtins.foldl' (acc: m: acc ++ m.unknowns) [] morphisms;
+      uniqUnknowns =
+        let add = acc: u:
+              if builtins.elem u acc then acc else acc ++ [ u ];
+        in builtins.foldl' add [] allUnknowns;
+
+      # Substrate question
+      question_en =
+        if morphisms == [] then
+          "No verb detected. Please clarify the action."
+        else if uniqUnknowns == [] then
+          builtins.toString (builtins.length morphisms)
+          + " morphisms, "
+          + builtins.toString parallelized.block_count
+          + " parallel blocks. Fully determined — ready to run."
+        else
+          builtins.toString (builtins.length uniqUnknowns)
+          + " slots required: "
+          + builtins.concatStringsSep ", " uniqUnknowns;
+      question_ko =
+        if morphisms == [] then
+          "verb 감지 안 됨. 행동 명시 필요."
+        else if uniqUnknowns == [] then
+          builtins.toString (builtins.length morphisms)
+          + " morphisms, "
+          + builtins.toString parallelized.block_count
+          + " 병렬 블록. 완전 결정 — 실행 가능."
+        else
+          builtins.toString (builtins.length uniqUnknowns)
+          + " 개 슬롯 입력 후 실행: "
+          + builtins.concatStringsSep ", " uniqUnknowns;
+    in {
+      outcome = "e2e-demo-v2-complete";
+      public = {
+        utterance = utterance;
+        language = language;
+        detected_verbs = verbList;
+        verb_count = builtins.length verbList;
+        morphism_count = builtins.length morphisms;
+        step_actions = builtins.map (m: m.action) morphisms;
+        parallel_block_count =
+          if parallelized == null then 0
+          else parallelized.block_count;
+        unknown_slot_count = builtins.length uniqUnknowns;
+        unknown_slots = uniqUnknowns;
+        new_domain_axioms_activated = newDomNames;
+        new_domain_axiom_count = builtins.length newDomNames;
+        emitted_code = emitted;
+        substrate_question_en = question_en;
+        substrate_question_ko = question_ko;
+      };
+      carry = {
+        verbs_decomp = decomp;
+        annotated_morphisms = annotated;
+        parallelization = parallelized;
+        maybe_wrapped = maybeWrapped;
+        new_domain_activations = newDomActivations;
+        composed_substrates = [
+          "stdlib/lib/nl/nl-flow-category-substrate.px (#133)"
+          "stdlib/lib/nl/category-monoidal-product.px (#134)"
+          "stdlib/lib/nl/category-monad.px (#135)"
+          "stdlib/lib/nl/category-verb-morphism-mapping.px (#139/#140/#141)"
+          "stdlib/lib/nl/category-language-codomain-functor.px (#138)"
+          "stdlib/lib/nl/new-domain-axiom-families.px (#142-#148)"
+        ];
+        axiom_origin =
+          "axiom-127-nl-category-e2e-demo-v2 "
+          + "(integrates 140 verbs / 13 langs / 21 axiom families)";
+      };
+    };
+
+  # === Run demo across multiple languages ========================
+
+  runMultiLangV2 = utterance: languages:
+    builtins.map (lang: {
+      language = lang;
+      result = runFullDemoV2 utterance lang;
+    }) languages;
+
+  # === Plate entry ===============================================
+
+  applyE2EDemoV2Plate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if (builtins.hasAttr "utterance" request)
+         && (builtins.hasAttr "language" request) then
+      runFullDemoV2 request.utterance request.language
+    else if (builtins.hasAttr "utterance" request)
+         && (builtins.hasAttr "languages" request) then {
+      outcome = "multi-lang-v2-complete";
+      results = runMultiLangV2 request.utterance request.languages;
+    }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-category-e2e-demo-v2-axiom-127";
+    composes =
+      "axiom-119-cat + axiom-120-monoidal + axiom-121-monad + "
+      + "axiom-124-lang + axiom-125-verbs + axiom-126-new-domain";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = true;
+    upgrade_over_v1 = {
+      v1_verbs = 6;
+      v2_verbs = 140;
+      v1_languages = 3;
+      v2_languages = 13;
+      v1_axiom_families = 0;
+      v2_axiom_families = 21;
+    };
+    primary_outcomes = [
+      "e2e-demo-v2-complete"
+      "multi-lang-v2-complete"
+    ];
+  };
+
+in {
+  inherit ownerName annotateReadWrite toCatMorphism
+    runFullDemoV2 runMultiLangV2 applyE2EDemoV2Plate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL category e2e demo v2 (agent-NL-149)";
+    owner = ownerName;
+  };
+}

@@ -1,0 +1,82 @@
+# stdlib/lib/corpus/catalog-typed-link-test.px
+#
+# B단계 lock: typed-symbol candidate link. shared exact-key만 candidate, 나머지 held/conflict(over-merge 방어).
+let
+  cr = import ./catalog-readback.px;
+  tl = import ./catalog-typed-link.px;
+  B = builtins;
+
+  # 1. compatible shared exact-key → candidate-link (length ↔ length, 둘 다 physical_quantity)
+  evLenA = cr.mkEvidence { source_schema = "physics.standard_quantities"; key = "length"; key_kind = "quantity_en";
+             exact_match = true; source_supported = true; status = "recognized";
+             payload = { dimension = "L"; quantity_en = "length"; }; };
+  evLenB = cr.mkEvidence { source_schema = "qudt.dimension_code"; key = "length"; key_kind = "quantity_en";
+             exact_match = true; source_supported = true; status = "recognized"; payload = { dimension = "L"; }; };
+  t1 = tl.linkEvidence { left = evLenA; right = evLenB; relation_kind = "shared-exact-key"; };
+  # 2. missing evidence → missing
+  evMiss = cr.mkEvidence { source_schema = "physics.standard_quantities"; key = "nope"; key_kind = "quantity_en";
+             status = "missing"; held_reasons = [ { kind = "no-exact-quantity-anchor"; } ]; };
+  t2 = tl.linkEvidence { left = evLenA; right = evMiss; relation_kind = "shared-exact-key"; };
+  # 3. held evidence(conflict-held) → held(오염 전파 차단)
+  evHeld = cr.mkEvidence { source_schema = "security.ocsf"; key = "version"; key_kind = "ocsf_attr";
+             status = "conflict-held"; held_reasons = [ { kind = "intra-catalog-ambiguous"; } ]; };
+  t3 = tl.linkEvidence { left = evLenA; right = evHeld; relation_kind = "shared-exact-key"; };
+  # 4. ★same dimension, different concept → held(F7: 차원동등≠의미동등)
+  evEnergy = cr.mkEvidence { source_schema = "physics.standard_quantities"; key = "energy"; key_kind = "quantity_en";
+               status = "recognized"; exact_match = true; payload = { dimension = "M1L2T-2"; quantity_en = "energy"; }; };
+  evMoment = cr.mkEvidence { source_schema = "physics.standard_quantities"; key = "moment"; key_kind = "quantity_en";
+               status = "recognized"; exact_match = true; payload = { dimension = "M1L2T-2"; quantity_en = "moment"; }; };
+  t4 = tl.linkEvidence { left = evEnergy; right = evMoment; relation_kind = "same-dimension"; };
+  # 5. ★mutual-exclusion(Hz/Bq) → conflict-held(negative-edge, dimension 같아도 금지)
+  evHz = cr.mkEvidence { source_schema = "physics.standard_quantities"; key = "frequency"; key_kind = "quantity_en";
+           status = "recognized"; exact_match = true; payload = { dimension = "T-1"; }; };
+  evBq = cr.mkEvidence { source_schema = "physics.standard_quantities"; key = "activity"; key_kind = "quantity_en";
+           status = "recognized"; exact_match = true; payload = { dimension = "T-1"; }; };
+  t5 = tl.linkEvidence { left = evHz; right = evBq; relation_kind = "shared-exact-key";
+         left_concept = "hertz"; right_concept = "becquerel"; };
+  # 6. type-family 비호환(license ↔ chemical, 같은 key "MIT"여도) → held
+  evLic = cr.mkEvidence { source_schema = "license.spdx"; key = "MIT"; key_kind = "spdx_id";
+            status = "recognized"; exact_match = true; payload = { name = "MIT License"; }; };
+  evChem = cr.mkEvidence { source_schema = "chem.chebi"; key = "MIT"; key_kind = "chebi_id";
+             status = "recognized"; exact_match = true; payload = { name = "x"; }; };
+  t6 = tl.linkEvidence { left = evLic; right = evChem; relation_kind = "shared-exact-key"; };
+  # 7. publicProjection leak 0
+  # 7. ★Fix #4: dimension_code는 classifier(not identity) — shared-exact-key여도 held(압력/에너지밀도 over-merge 차단)
+  evDim = cr.mkEvidence { source_schema = "qudt.dimension_code"; key = "A0E0L-1I0M1H0T-2D0"; key_kind = "dimension_code";
+            status = "recognized"; exact_match = true; payload = { dimension = "ML-1T-2"; }; };
+  t7 = tl.linkEvidence { left = evDim; right = evDim; relation_kind = "shared-exact-key";
+         left_concept = "pressure"; right_concept = "energy_density"; };
+  # 8. ★Fix(identity-kind allowlist): non-identity key_kind(translation 등) shared-exact-key → held(candidate-link 금지)
+  evTr = cr.mkEvidence { source_schema = "physics.standard_quantities"; key = "X"; key_kind = "translation";
+           status = "recognized"; exact_match = true; payload = { dimension = "L"; }; };
+  t8 = tl.linkEvidence { left = evTr; right = evTr; relation_kind = "shared-exact-key"; };
+  proj = tl.publicProjection t1;
+  projKeys = B.attrNames proj;
+in {
+  t1_status = t1.status; t2_status = t2.status; t3_status = t3.status;
+  t4_status = t4.status; t5_status = t5.status; t6_status = t6.status; t7_status = t7.status;
+  all_ok =
+    # ★shared exact-key → candidate-link(truth/resident/promotion 전부 false)
+       (t1.status == "candidate-link") && (t1.candidate_link == true)
+    && (t1.durable_truth == false) && (t1.resident_edge_write == false) && (t1.promotion_allowed == false)
+    && (t1.exact_key_basis == "length")
+    # ★missing evidence → missing
+    && (t2.status == "missing") && ((B.head t2.held_reasons).kind == "evidence-not-recognized")
+    # ★held evidence → held(오염 전파 차단)
+    && (t3.status == "held") && ((B.head t3.held_reasons).kind == "evidence-held")
+    # ★F7: same dimension different concept → held
+    && (t4.status == "held") && ((B.head t4.held_reasons).kind == "dimension-equal-not-semantic-equivalent")
+    # ★mutual-exclusion → conflict-held
+    && (t5.status == "conflict-held") && ((B.head t5.held_reasons).kind == "mutual-exclusion")
+    # ★type-family 비호환 → held(cross-type 연결 금지)
+    && (t6.status == "held") && ((B.head t6.held_reasons).kind == "type-family-incompatible")
+    # ★publicProjection: resident_edge_write/promotion_allowed 노출(false로), 내부 leak 0
+    && (B.elem "resident_edge_write" projKeys == true) && (B.elem "promotion_allowed" projKeys == true)
+    # ★Fix #4: dimension_code shared-exact-key → held(classifier, not identity — 모든 차원충돌 쌍 차단)
+    && (t7.status == "held") && ((B.head t7.held_reasons).kind == "dimension-code-is-classifier-not-identity")
+    # ★Fix: non-identity key_kind → held(candidate-link은 identity 키에만)
+    && (t8.status == "held") && ((B.head t8.held_reasons).kind == "non-identity-key-kind")
+    # ★truth 승급 0 전수
+    && (t1.durable_truth == false) && (t5.durable_truth == false) && (t1.accepted_as_truth == false)
+    && (t7.durable_truth == false);
+}

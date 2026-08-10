@@ -1,0 +1,243 @@
+# stdlib.nl.meaning-rule-engine
+#
+# **K5 in .px (one-mirror 정본): cue stream × rule sheet → 의미 후보 (ambiguity 보존).**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): 의미 규칙 엔진(domain try_derive_*
+# 의 통합 타깃)은 Rust(`nl_corpus/meaning_rule_engine.rs` K5)가 아니라 거울(.px)에.
+#
+# 매칭 규율(Rust K5 동형):
+#   ① forbids: 금지 cue_class 가 cue 에 있으면 no-match (MR4 negative-first).
+#   ② cue-consuming: 각 condition 은 *서로 다른* cue 를 소비(consumed) — 같은 cue 두 번
+#      바인딩 금지.
+#   ③ ordered lexeme(M-2b): `lexeme.*` condition 은 이전 lexeme 바인딩보다 *높은* stream
+#      index 에 바인딩(표면 순서 보존 — 미정렬 drift 가 "n 더하기 0 은 n"을 "0 + n = n"
+#      으로 오인식해 뺄셈 진리를 flip 시켰던 버그 방지). 그 외 cue 는 미정렬.
+#   ④ ambiguity 보존: 매칭되는 모든 rule → 모든 후보(런타임이 >1 에서 Held).
+#
+# bound(정직): cue_class 일치는 v0 *정확 일치*(Rust 의 hierarchical prefix 는 follow-up =
+#   false-negative-leaning). MR7 repeat-group/슬롯/obligation/evaluator emit 은 별 슬라이스.
+# 경계(host): rule_id digest 등 hash = host.
+let
+  genList = builtins.genList;
+  len = builtins.length;
+  elemAt = builtins.elemAt;
+  filter = builtins.filter;
+  map = builtins.map;
+  foldl' = builtins.foldl';
+  any = builtins.any;
+  attrNames = builtins.attrNames;
+
+  allFalse = n: genList (i: false) n;
+  setTrueAt = list: idx: genList (i: if i == idx then true else elemAt list i) (len list);
+
+  fieldOr = a: k: d: if a ? ${k} then a.${k} else d;
+
+  stringLength = builtins.stringLength;
+  substring = builtins.substring;
+
+  # cue_class 계층 매칭 (Rust cue_class_matches): 정확 일치 또는 expected+"." prefix.
+  #   예: actual "clause.seq.event" 가 expected "clause.seq" 에 매칭.
+  cueClassMatches = actual: expected:
+    actual == expected
+    || (let el = stringLength expected;
+        in (stringLength actual) > el
+           && (substring 0 el actual) == expected
+           && (substring el 1 actual) == ".");
+
+  # lexeme.* prefix (positional 계산용; "lexeme." = 7자).
+  startsWithLexeme = s: (stringLength s) >= 7 && (substring 0 7 s) == "lexeme.";
+
+  # cue_ref (Rust cue_ref): "{source_kind}:{cue_class}={value}" (value 없으면 =없이).
+  cueRef = cue:
+    let
+      sk = fieldOr cue "source_kind" "cue";
+      v = fieldOr cue "value" null;
+    in if v == null then sk + ":" + cue.cue_class else sk + ":" + cue.cue_class + "=" + v;
+
+  # 첫 unconsumed cue (index > minIdx) 중 cue_class 계층 매칭 → index, 없으면 null
+  findCueAfter = cues: consumed: cueClass: minIdx:
+    let go = i:
+      if i >= (len cues) then null
+      else if (i > minIdx) && (! (elemAt consumed i)) && (cueClassMatches (elemAt cues i).cue_class cueClass)
+           then i
+           else go (i + 1);
+    in go 0;
+
+  # ── MR7 repeat_groups (Rust 충실 포팅): 그룹 조건을 stream 잔여에 반복 매칭 ──
+  elemContains = list: x: any (y: y == x) list;
+  markAll = consumed: indices: foldl' (acc: i: setTrueAt acc i) consumed indices;
+
+  # 한 그룹 1회 iteration: 조건들 fold (iterIndices/row/lastIdx/fence/ok thread)
+  #   MR61 fence: 첫 required 조건이 바인딩하면, 같은 class 의 *다음* 미소비 cue 를 fence
+  #   로 → 이후 optional 조건은 그 아래에서만(다음 step head 침범 방지).
+  matchGroupIter = cues: consumed: conds:
+    let
+      findFor = iterIndices: lastIdx: fence: cueClass:
+        let go = i:
+          if i >= (len cues) then null
+          else if (! (elemAt consumed i))
+               && (! (elemContains iterIndices i))
+               && (lastIdx == null || i > lastIdx)
+               && (fence == null || i < fence)
+               && (cueClassMatches (elemAt cues i).cue_class cueClass)
+               then i else go (i + 1);
+        in go 0;
+      nextOfClass = idx: cueClass:
+        let go = i:
+          if i >= (len cues) then null
+          else if (i > idx) && (! (elemAt consumed i)) && (cueClassMatches (elemAt cues i).cue_class cueClass)
+               then i else go (i + 1);
+        in go 0;
+      step = st: cond:
+        if ! st.ok then st
+        else
+          let idx = findFor st.iterIndices st.lastIdx st.fence cond.cue_class;
+          in
+            if idx == null then
+              (if (fieldOr cond "required" true) then st // { ok = false; } else st)
+            else
+              let
+                capName = fieldOr cond "capture_as" null;
+                newFence = if st.fence == null && (fieldOr cond "required" true)
+                           then nextOfClass idx cond.cue_class else st.fence;
+              in st // {
+                iterIndices = st.iterIndices ++ [ idx ];
+                lastIdx = idx;
+                fence = newFence;
+                row = if capName == null then st.row else st.row // { ${capName} = (elemAt cues idx).value; };
+              };
+    in foldl' step { iterIndices = [ ]; lastIdx = null; fence = null; row = { }; ok = true; } conds;
+
+  # 한 그룹: iteration 반복 (소비 thread) → { rows; consumed }
+  matchGroup = cues: group: startConsumed:
+    let
+      go = consumed: rows:
+        let it = matchGroupIter cues consumed group.conditions;
+        in
+          if (! it.ok) || (it.iterIndices == [ ]) then { rows = rows; consumed = consumed; }
+          else go (markAll consumed it.iterIndices) (rows ++ [ it.row ]);
+    in go startConsumed [ ];
+
+  # 모든 그룹 (소비 thread) → { groups; consumed; ok }  (min_count 미달 → ok=false)
+  matchGroups = cues: groupList: startConsumed:
+    foldl' (st: group:
+      if ! st.ok then st
+      else
+        let res = matchGroup cues group st.consumed;
+        in
+          if (len res.rows) < (fieldOr group "min_count" 0) then (st // { ok = false; })
+          else st // {
+            consumed = res.consumed;
+            groups = if res.rows == [ ] then st.groups
+                     else st.groups // { ${fieldOr group "group_name" "g"} = res.rows; };
+          }
+    ) { consumed = startConsumed; groups = { }; ok = true; } groupList;
+
+  # emit.slots 해석 (Rust 동형): 각 슬롯 값이 "$name" 이면 captures[name] 로 치환,
+  #   *없으면 룰 전체 no-match*(Rust `captures.get(name)?`); "$" 아니면 리터럴 그대로.
+  #   captures 를 슬롯에 통째 merge 하지 않는다(emit.slots key 집합만 유지 = Rust 패리티).
+  resolveSlots = emitSlots: capturesMap:
+    foldl' (st: key:
+      if ! st.ok then st
+      else
+        let v = emitSlots.${key};
+        in
+          if builtins.isString v && (stringLength v) >= 1 && (substring 0 1 v) == "$"
+          then
+            let nm = substring 1 ((stringLength v) - 1) v;
+            in if capturesMap ? ${nm}
+               then st // { slots = st.slots // { ${key} = capturesMap.${nm}; }; }
+               else { ok = false; slots = { }; }
+          else st // { slots = st.slots // { ${key} = v; }; }
+    ) { ok = true; slots = { }; } (attrNames emitSlots);
+
+  # 한 rule 매칭 (조건들을 fold 하며 consumed/captures/lastBound/ok 를 thread)
+  #   cue:  { cue_class; value; ref }
+  #   rule: { rule_id; conditions=[{cue_class; required; capture_as?; positional?}]; forbids=[class]; emit={...} }
+  matchRule = rule: cues:
+    let forbidden = any (f: any (c: cueClassMatches c.cue_class f) cues)
+          (fieldOr rule "forbids_cues" (fieldOr rule "forbids" [ ]));
+    in
+      if forbidden then null
+      else
+        let
+          init = { consumed = allFalse (len cues); captures = [ ]; lastBound = (0 - 1); ok = true; };
+          step = st: cond:
+            if ! st.ok then st
+            else
+              let
+                # Rust: positional = !free_condition_order && cue_class.starts_with("lexeme.")
+                #   (M-2b: lexeme.* 만 표면순서; explicit 필드 있으면 그것도 허용).
+                positional =
+                  if cond ? positional then cond.positional
+                  else (! (fieldOr rule "free_condition_order" false)) && (startsWithLexeme cond.cue_class);
+                minIdx = if positional then st.lastBound else (0 - 1);
+                idx = findCueAfter cues st.consumed cond.cue_class minIdx;
+              in
+                if idx == null then
+                  (if (fieldOr cond "required" true) then (st // { ok = false; }) else st)
+                else
+                  let capName = fieldOr cond "capture_as" null;
+                  in st // {
+                    consumed = setTrueAt st.consumed idx;
+                    captures = st.captures
+                      ++ (if capName == null then [ ]
+                          else [ { name = capName; value = (elemAt cues idx).value; } ]);
+                    lastBound = if positional then idx else st.lastBound;
+                  };
+          final = foldl' step init rule.conditions;
+          # MR7 — repeat_groups 가 조건 후 stream 잔여를 소비 (min_count 미달 → 매칭 실패).
+          groupRes = matchGroups cues (fieldOr rule "repeat_groups" [ ]) final.consumed;
+          capturesMap = foldl' (acc: c: acc // { ${c.name} = c.value; }) { } final.captures;
+          # emit.slots 의 $ref 해석(없으면 룰 no-match); captures 통째 merge 안 함.
+          slotRes = resolveSlots (fieldOr rule.emit "slots" { }) capturesMap;
+        in
+          if ! final.ok then null
+          else if ! groupRes.ok then null
+          else if ! slotRes.ok then null
+          else {
+            rule_id = rule.rule_id;
+            groups = groupRes.groups;
+            relation_kind = fieldOr rule.emit "relation_kind" "";
+            focus_kind = fieldOr rule.emit "focus_kind" "";
+            answer_mode = fieldOr rule.emit "answer_mode" "";
+            captures = final.captures;
+            candidate_only = fieldOr rule.emit "candidate_only" true;
+            # Rust MeaningCandidate 의 emit 통과 필드 (effect-free-evaluator 가 소비).
+            evaluator_id = fieldOr rule.emit "evaluator_id" null;
+            expression_template_id = fieldOr rule.emit "expression_template_id" null;
+            # ★ slots = emit.slots 의 $ref 해석(Rust 동형); captures 통째 merge 안 함 ★
+            #   math: operation="add"(리터럴)+lhs="$lhs"→capture; if-then: condition="$condition_stem".
+            slots = slotRes.slots;
+            # Rust MeaningCandidate 출력 패리티 (다운스트림 소비):
+            captures_map = capturesMap;
+            opens_obligations = fieldOr rule.emit "opens_obligations" [ ];
+            closes_obligations = fieldOr rule.emit "closes_obligations" [ ];
+            effect_allowed = fieldOr rule "effect_allowed" false;
+            # cue_refs = 소비된 cue 들의 ref (index 순; algorithm_plan_bridge 가 event_kind 추출).
+            cue_refs = map (i: cueRef (elemAt cues i))
+              (filter (i: elemAt groupRes.consumed i) (genList (j: j) (len cues)));
+          };
+
+  # 매칭되는 모든 rule → 후보 (ambiguity 보존; collapse 안 함)
+  deriveCandidates = rules: cues:
+    filter (c: c != null) (map (rule: matchRule rule cues) rules);
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.meaning-rule-engine";
+    consumes = "cue stream + rule sheet rows (corpus); 의미 문자열 비변경";
+    role = "K5 generic meaning rule engine: cue×rule→의미 후보. forbids·distinct-cue·ordered-lexeme(M-2b 표면순서)·ambiguity 보존. domain try_derive_* 통합 타깃 .px 정본.";
+    boundary = "cue_class v0 정확 일치(hierarchical=follow-up); MR7 group/slot/obligation emit=별 슬라이스; hash=host.";
+    note = "Rust nl_corpus/meaning_rule_engine.rs K5 = Phase 2/3 삭제 대상.";
+  };
+
+in {
+  inherit findCueAfter matchRule deriveCandidates inventorySummary;
+  ownerName = "stdlib.nl.meaning-rule-engine";
+  meta = {
+    source = "stdlib nl meaning-rule-engine (.px K5: cue×rule→의미 후보; one-mirror 정본)";
+    owner = "stdlib.nl.meaning-rule-engine";
+    base = "meaning-rule-engine-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1: ingest/NL K5 의미 규칙 엔진의 .px 정본. cue-consuming match(distinct cue 소비)·forbids(MR4)·ordered lexeme(M-2b: lexeme.* 는 이전보다 높은 index — 'n 더하기 0 은 n' 오인식/뺄셈 flip 방지)·ambiguity 보존(모든 매칭 후보). 순수함수 fold(consumed/captures/lastBound thread). 검증: distinct 바인딩(2 num cue→cond1=idx0,cond2=idx2)·ordered·forbids·ambiguity. bound: cue_class 정확 일치(hierarchical follow-up), MR7 group/slot/obligation 별 슬라이스. Rust meaning_rule_engine.rs=Phase 2/3 삭제.";
+  };
+}

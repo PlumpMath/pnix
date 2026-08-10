@@ -1,0 +1,310 @@
+let
+  ownerName = "stdlib.nl.patch-ir-nl-lifter";
+
+  patchIrPlate = import agent/patch-ir-plate.px;
+
+  # === Patch IR NL lifter (Axiom #89) ==============================
+  #
+  # 사용자 directive (2026-05-28): "내부적으로 알고리즘 관련 pnix 과거
+  # .px 파일들이 잔뜩 존재. 그것을 분석/지능/판단/시나리오작성/패치처리
+  # 등에 사용 가능. 4-piece axiom 처럼".
+  #
+  # Axiom #13 (coding-agent-loop-primitives) + Axiom #41 (agent-loop NL)
+  # 의 stage 4 (patch-candidate) 에서 dispatched 된 patch intent 를
+  # Axiom #89 가 *어떤 12 patch kinds 인지* 정확히 분류한다.
+  #
+  # # 12 patch kinds (patch-ir-plate.px 의 canonical Patch IR)
+  #
+  # NL utterance → patch kind 매핑. each kind 가 어떤 substrate field 를
+  # 요구하는지는 patch-ir-plate.px::kindRequirements 가 owner. 본 lifter
+  # 는 *intent classification* 만; field extraction (file_path, anchor,
+  # new_text, old_text) 은 downstream lifter 가 한다.
+  #
+  # # 사용자 발화 예시
+  #
+  #   "foo 함수 이름 bar 로 바꿔"           → rename-symbol
+  #   "rename quicksort to fast_sort"        → rename-symbol
+  #   "use std::collections::HashMap 추가"   → add-import
+  #   "import statement 추가"                → add-import
+  #   "src/util.rs 의 unused import 제거"    → remove-import
+  #   "이 줄 삭제해"                          → delete-range
+  #   "이 함수 시그니처 바꿔"                 → change-signature
+  #   "테스트 stub 추가해"                    → add-test
+  #   "새 파일 만들어"                        → create-file
+  #   "파일 옮겨"                             → move-file
+  #   "이 부분 다른 코드로 교체"              → replace-range
+  #
+  # # Held-honest 헌법
+  #
+  # NL → kind 직접 mapping 은 *intent classification* 만. caller 가
+  # receipt 의 kind 로 patch-ir-plate::validatePatch 호출하여 envelope
+  # 검증. field 가 누락이면 patch-ir-plate 자체가 held-missing-* 반환.
+
+  knownPatchKindNLPatterns = [
+    {
+      kind = "rename-symbol";
+      en_keywords = [
+        "rename" "rename symbol" "rename function" "rename variable"
+        "rename method" "change name" "alias to"
+      ];
+      ko_keywords = [
+        "이름 바꿔" "이름 바꾸" "이름 변경" "심볼 이름" "함수 이름"
+        "변수 이름" "rename" "이름을 바꿔"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-rename-symbol";
+      required_fields = [ "old_text" "new_text" ];
+    }
+    {
+      kind = "add-import";
+      en_keywords = [
+        "add import" "import statement" "use statement" "require"
+        "include header" "import line" "needs to import"
+        "use std::" "use crate::"
+      ];
+      ko_keywords = [
+        "import 추가" "import 넣어" "use 추가" "include 추가"
+        "헤더 추가" "import 문 추가" "use std::"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-add-import";
+      required_fields = [ "file_path" "new_text" ];
+    }
+    {
+      kind = "remove-import";
+      en_keywords = [
+        "remove import" "unused import" "delete unused import"
+        "cleanup imports" "purge import" "drop import"
+      ];
+      ko_keywords = [
+        "import 제거" "import 삭제" "안 쓰는 import"
+        "미사용 import" "사용 안 하는 import" "import 정리"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-remove-import";
+      required_fields = [ "anchor" "old_text" ];
+    }
+    {
+      kind = "create-file";
+      en_keywords = [
+        "create file" "new file" "make a file" "scaffold file"
+        "generate file" "write new file"
+      ];
+      ko_keywords = [
+        "파일 생성" "새 파일" "파일 만들" "파일 생성해"
+        "파일 작성" "새로 파일"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-create-file";
+      required_fields = [ "file_path" "new_text" ];
+    }
+    {
+      kind = "move-file";
+      en_keywords = [
+        "move file" "rename file" "relocate file" "move to"
+        "change path"
+      ];
+      ko_keywords = [
+        "파일 옮겨" "파일 이동" "파일 이름 바꿔" "파일 위치"
+        "다른 경로로"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-move-file";
+      required_fields = [ "file_path" "new_text" ];
+    }
+    {
+      kind = "change-signature";
+      en_keywords = [
+        "change signature" "modify signature" "add parameter"
+        "remove parameter" "function signature" "method signature"
+      ];
+      ko_keywords = [
+        "시그니처 변경" "시그니처 바꿔" "파라미터 추가"
+        "파라미터 제거" "인자 추가" "함수 시그니처"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-change-signature";
+      required_fields = [ "anchor" "new_text" ];
+    }
+    {
+      kind = "add-test";
+      en_keywords = [
+        "add test" "write test" "test stub" "scaffold test"
+        "create test" "test case"
+      ];
+      ko_keywords = [
+        "테스트 추가" "테스트 작성" "테스트 stub"
+        "테스트 생성" "테스트 케이스" "테스트 만들"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-add-test";
+      required_fields = [ "file_path" "new_text" ];
+    }
+    {
+      kind = "delete-range";
+      en_keywords = [
+        "delete range" "delete lines" "remove lines" "drop these lines"
+        "delete these lines" "delete this code" "remove this block"
+        "remove these lines"
+      ];
+      ko_keywords = [
+        "줄 삭제" "줄 지워" "이 부분 삭제" "이 코드 제거"
+        "라인 제거" "블록 삭제"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-delete-range";
+      required_fields = [ "anchor" "old_text" ];
+    }
+    {
+      kind = "insert-before";
+      en_keywords = [
+        "insert before" "add before this" "prepend"
+      ];
+      ko_keywords = [
+        "앞에 넣어" "앞에 삽입" "위에 추가" "이 위에"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-insert-before";
+      required_fields = [ "anchor" "new_text" ];
+    }
+    {
+      kind = "insert-after";
+      en_keywords = [
+        "insert after" "add after this" "append"
+      ];
+      ko_keywords = [
+        "뒤에 넣어" "뒤에 삽입" "아래에 추가" "이 아래"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-insert-after";
+      required_fields = [ "anchor" "new_text" ];
+    }
+    {
+      kind = "replace-range";
+      en_keywords = [
+        "replace range" "replace this code" "swap with"
+        "substitute" "rewrite this block"
+      ];
+      ko_keywords = [
+        "이 부분 교체" "이 코드 바꿔" "이 블록 교체"
+        "대체" "다른 코드로 바꿔"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-replace-range";
+      required_fields = [ "anchor" "old_text" "new_text" ];
+    }
+    {
+      kind = "composite";
+      en_keywords = [
+        "atomic patch" "composite patch" "all-or-none"
+        "multiple patches together" "batch patches"
+      ];
+      ko_keywords = [
+        "원자적 패치" "여러 패치" "한꺼번에 적용"
+        "전부 또는 전혀" "복합 패치"
+      ];
+      kind_axiom_origin = "axiom-89-patch-ir-composite";
+      required_fields = [ "patches" ];
+    }
+  ];
+
+  patchPatternCount = builtins.length knownPatchKindNLPatterns;
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ll = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ll then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0
+    ) hints;
+
+  matchPatchKind = utterance: pat:
+    if !(builtins.isString utterance) || utterance == "" then false
+    else
+      containsAny utterance pat.en_keywords
+      || containsAny utterance pat.ko_keywords;
+
+  liftToPatchKind = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if utterance == "" then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let
+        matches =
+          builtins.filter (p: matchPatchKind utterance p) knownPatchKindNLPatterns;
+        matchCount = builtins.length matches;
+      in
+        if matchCount == 0 then {
+          outcome = "held-no-patch-kind-matched";
+          utterance = utterance;
+          known_kinds = patchIrPlate.patchKinds;
+          reason =
+            "발화에서 12 patch kinds 중 어떤 것도 매치하지 않음. "
+            + "caller 가 발화 명확화 (예: 'rename foo to bar' / "
+            + "'add import json' / 'remove unused import') 후 재시도.";
+        }
+        else if matchCount > 1 then {
+          outcome = "held-ambiguous-patch-kind";
+          utterance = utterance;
+          candidate_kinds = builtins.map (m: m.kind) matches;
+          reason =
+            "여러 patch kind 가 매치됨. caller 가 추가 단서 제공 "
+            + "(file_path / 명시적 kind 명령어).";
+        }
+        else
+          let
+            entry = builtins.head matches;
+          in {
+            outcome = "patch-kind-lifted";
+            utterance = utterance;
+            kind = entry.kind;
+            required_fields = entry.required_fields;
+            kind_axiom_origin = entry.kind_axiom_origin;
+            axiom_origin =
+              "axiom-89-patch-ir-nl-lifter (composes axiom-13-patch-ir-plate)";
+            substrate_action =
+              "caller 가 utterance 에서 required_fields 추출 후 "
+              + "patch-ir-plate::validatePatch 호출. field 누락 시 "
+              + "patch-ir-plate 자체가 held-missing-* 반환.";
+            production_owner = "stdlib/lib/agent/patch-ir-plate.px";
+          };
+
+  applyPatchIrNlLifterPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else liftToPatchKind request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-89";
+    patch_kind_count = patchPatternCount;
+    routed_substrate = "stdlib/lib/agent/patch-ir-plate.px (12 patch kinds)";
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-patch-kind-matched"
+      "held-ambiguous-patch-kind"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownPatchKindNLPatterns patchPatternCount
+    containsAny matchPatchKind
+    liftToPatchKind applyPatchIrNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL patch IR lifter (Axiom #89)";
+    owner = ownerName;
+    base = "patch-ir-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-28). Axiom #13 patch-ir-plate "
+      + "의 12 canonical Patch IR kinds 의 NL surface. 각 kind 가 "
+      + "en/ko bilingual keyword + required_fields metadata. ambiguous "
+      + "match 는 held 로 caller 가 명확화. DO NOT REBUILD — patch-ir-plate "
+      + "재사용, NL surface 만 신규.";
+  };
+}

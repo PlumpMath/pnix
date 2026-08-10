@@ -1,0 +1,70 @@
+# stdlib/lib/nl/understanding-report-probe.px
+#
+# S99-3: lightweight understanding-report probe for held/failure MSV metadata.
+# Composes symbol-memory + abstraction-status evidence; flat JSON out (no raw prose lines).
+let
+  ur = import ./understanding-report.px;
+  smev = import ./symbol-memory-recognition-evidence.px;
+  asev = import ../meta/abstraction-status-evidence.px;
+  abProbe = import ./chat-abstraction-entries-probe.px;
+  B = builtins;
+
+  catalogToProp = args:
+    let terms = if args ? catalog_terms then args.catalog_terms else [ ];
+        pred = if args ? predicate_lemma then args.predicate_lemma else "";
+        roles = B.map (t:
+          { role = if t ? role then t.role else "entity";
+            entity = if t ? key then t.key else ""; })
+                  terms;
+    in { roles = roles; action = pred; };
+
+  runProbe = args:
+    let terms = if args ? catalog_terms then args.catalog_terms else [ ];
+        pred = if args ? predicate_lemma then args.predicate_lemma else "";
+        memKeys = if args ? memory_keys then args.memory_keys else [ ];
+        absEntries = if args ? abstraction_statuses then args.abstraction_statuses else [ ];
+        absEntries' = if B.length absEntries > 0 then absEntries else (abProbe.materializeFixtureEntries null);
+        recog = if args ? recognized_concepts then args.recognized_concepts else [ ];
+        meRaw = smev.mkMemoryEvidence { prop = catalogToProp args; memory_keys = memKeys; memory_entries = [ ]; };
+        me = smev.publicProjection meRaw;
+        aseRaw = asev.mkAbstractionStatusEvidence { abstraction_statuses = absEntries'; recognized_concepts = recog; };
+        ase = asev.publicProjection aseRaw;
+        rep = ur.mkUnderstandingReport { memory_evidence = me; abstraction_status_evidence = ase; };
+        faces = rep.report_faces;
+        absAbouts = B.map (i: if i ? about then i.about else "") ase.items;
+        absStatuses = B.map (i: if i ? status then i.status else "") ase.items;
+    in {
+      status = "ok";
+      report_kind = rep.report_kind;
+      line_count = B.length rep.lines;
+      held_abstraction_count = rep.held_abstraction_count;
+      recognized_count = rep.recognized_count;
+      missing_count = rep.missing_count;
+      memory_line_count = B.length faces.memory.lines;
+      source_line_count = B.length faces.source_evidence.lines;
+      derivation_line_count = B.length faces.derivation.lines;
+      held_line_count = B.length faces.held.lines;
+      recognized_names = faces.memory.recognized;
+      missing_names = B.map (s: if s ? name then s.name else "")
+                    (B.filter (s: (if s ? status then s.status else "") == "missing") me.symbols_status);
+      abstraction_abouts = absAbouts;
+      abstraction_statuses = absStatuses;
+      proposer_only = rep.proposer_only;
+      durable_truth = rep.durable_truth;
+      accepted_as_truth = rep.accepted_as_truth;
+    };
+
+  probeSelfTest = _:
+    let r = runProbe {
+          catalog_terms = [ { key = "철수"; role = "agent"; } { key = "사과"; role = "object"; } { key = "책"; role = "entity"; } ];
+          predicate_lemma = "먹다";
+          recognized_concepts = [ "s:n:ingest" ];
+        };
+    in (r.status == "ok")
+    && (r.report_kind == "understanding-report")
+    && (r.line_count >= 3)
+    && (r.held_abstraction_count == 1)
+    && (r.proposer_only == true)
+    && (r.durable_truth == false);
+
+in { inherit runProbe probeSelfTest; }

@@ -1,0 +1,157 @@
+let
+  ownerName = "stdlib.nl.system-domain-nl-lifters";
+
+  # === System domain NL lifters (Axioms #49-#52) ===================
+  #
+  # 사용자 directive: "NL 이 super 셋... 모든 곳에 스며들어".
+  #
+  # #49 diff substrate NL (Axiom #18)
+  # #50 markup-language NL (Axiom #32)
+  # #51 host integration NL (Axiom #25)
+  # #52 mirror-primitive NL (Axiom #36)
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  # === Axiom #49 diff substrate NL ==================================
+  knownDiffOperationNLPatterns = [
+    { op = "make-diff"; en_keywords = [ "make diff" "create diff" "compute diff" "show diff" "git diff" ]; ko_keywords = [ "diff 만들기" "차이 계산" "차이 보기" "diff 생성" "변경 사항 보여줘" "변경점" ]; }
+    { op = "apply-patch"; en_keywords = [ "apply patch" "apply hunk" "patch the file" "git apply" ]; ko_keywords = [ "패치 적용" "헝크 적용" "패치 적용해" "diff 적용" ]; }
+    { op = "invert-patch"; en_keywords = [ "invert patch" "reverse patch" "undo diff" "git revert" ]; ko_keywords = [ "패치 반전" "역방향 패치" "diff 취소" "패치 되돌리기" ]; }
+    { op = "three-way-merge"; en_keywords = [ "three way merge" "3-way merge" "merge conflict" "git merge" ]; ko_keywords = [ "삼방 병합" "3-way merge" "병합 충돌" "머지 충돌" "git merge" ]; }
+    { op = "detect-conflict"; en_keywords = [ "detect conflict" "find conflicting hunks" "merge conflict detection" "conflict marker" ]; ko_keywords = [ "충돌 감지" "충돌 찾기" "충돌 검출" "conflict 표시" ]; }
+  ];
+
+  liftToDiffOperation = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownDiffOperationNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-diff-op-matched"; known_ops = builtins.map (p: p.op) knownDiffOperationNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-diff-op"; candidates = builtins.map (x: x.op) m; }
+      else { outcome = "diff-op-lifted"; op = (builtins.head m).op; axiom_origin = "axiom-18-diff-substrate"; };
+
+  # === Axiom #50 markup-language NL =================================
+  knownMarkupConversionNLPatterns = [
+    { source = "x3d"; target = "svg"; en_keywords = [ "X3D to SVG" "x3d → svg" "convert X3D to SVG" ]; ko_keywords = [ "X3D 를 SVG 로" "x3d 에서 svg" "X3D 를 SVG 변환" ]; }
+    { source = "openmath"; target = "mathml"; en_keywords = [ "OpenMath to MathML" "openmath → mathml" "OpenMath converted to MathML" ]; ko_keywords = [ "OpenMath 를 MathML 로" "OpenMath 변환 MathML" ]; }
+    { source = "mathml"; target = "latex"; en_keywords = [ "MathML to LaTeX" "mathml → latex" "MathML rendered as LaTeX" ]; ko_keywords = [ "MathML 을 LaTeX 로" "MathML 을 텍 변환" ]; }
+    { source = "collada"; target = "x3d"; en_keywords = [ "COLLADA to X3D" "collada → x3d" "DAE to X3D" ]; ko_keywords = [ "COLLADA 를 X3D 로" "DAE 를 X3D 로" ]; }
+    { source = "ifcxml"; target = "x3d"; en_keywords = [ "IFC to X3D" "ifcxml → x3d" "BIM to X3D" ]; ko_keywords = [ "IFC 를 X3D 로" "BIM 을 X3D 로" "건축 모델을 X3D 로" ]; }
+    { source = "mathcad"; target = "openmath"; en_keywords = [ "Mathcad to OpenMath" "mathcad → openmath" "Mathcad export OpenMath" ]; ko_keywords = [ "Mathcad 를 OpenMath 로" "매스캐드 변환" ]; }
+    { source = "html"; target = "xml"; en_keywords = [ "HTML to XML" "html → xml" "HTML cleaned as XML" ]; ko_keywords = [ "HTML 을 XML 로" "HTML 을 XML 변환" ]; }
+  ];
+
+  liftToMarkupConversion = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownMarkupConversionNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-markup-conversion-matched"; known_conversions = builtins.map (p: p.source + "→" + p.target) knownMarkupConversionNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-markup-candidates"; candidates = builtins.map (x: x.source + "→" + x.target) m; }
+      else
+        let p = builtins.head m;
+        in { outcome = "markup-conversion-lifted"; inherit (p) source target; axiom_origin = "axiom-32-top-level-markup-language-registry + axiom-6-bidirectional"; };
+
+  # === Axiom #51 host integration NL ================================
+  knownHostBoundaryNLPatterns = [
+    { boundary = "window"; en_keywords = [ "create window" "spawn window" "window surface" "open window" ]; ko_keywords = [ "윈도우 생성" "윈도우 표면" "창 열어" "창 만들어" "윈도우 열어" ]; }
+    { boundary = "event-loop"; en_keywords = [ "event loop" "main loop" "tick" "frame loop" ]; ko_keywords = [ "이벤트 루프" "메인 루프" "틱" "프레임 루프" ]; }
+    { boundary = "input"; en_keywords = [ "keyboard input" "mouse input" "input event" "touch input" ]; ko_keywords = [ "키보드 입력" "마우스 입력" "입력 이벤트" "터치 입력" ]; }
+    { boundary = "backend"; en_keywords = [ "backend driver" "host backend" "platform backend" "graphics backend" ]; ko_keywords = [ "백엔드 드라이버" "호스트 백엔드" "플랫폼 백엔드" "그래픽 백엔드" ]; }
+    { boundary = "replay"; en_keywords = [ "replay events" "record events" "session replay" "record session" ]; ko_keywords = [ "이벤트 재생" "이벤트 기록" "세션 재생" "세션 기록" ]; }
+    { boundary = "lifecycle"; en_keywords = [ "host lifecycle" "startup shutdown" "init teardown" "boot exit" ]; ko_keywords = [ "호스트 lifecycle" "시작 종료" "초기화 정리" "부팅 종료" ]; }
+    { boundary = "surface"; en_keywords = [ "render surface" "drawing surface" "swap chain" "frame buffer" ]; ko_keywords = [ "렌더 표면" "스왑체인" "그리기 표면" "프레임 버퍼" ]; }
+  ];
+
+  liftToHostBoundary = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownHostBoundaryNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-host-boundary-matched"; known_boundaries = builtins.map (p: p.boundary) knownHostBoundaryNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-host-boundary"; candidates = builtins.map (x: x.boundary) m; }
+      else { outcome = "host-boundary-lifted"; boundary = (builtins.head m).boundary; axiom_origin = "axiom-25-host-integration-registry"; };
+
+  # === Axiom #52 mirror-primitive NL ================================
+  knownMirrorPrimitiveNLPatterns = [
+    { primitive = "parametric-mirror-plate"; en_keywords = [ "mirror plate" "parametric plate" "create plate" "spawn mirror" "plate primitive" ]; ko_keywords = [ "거울 플레이트" "파라메트릭 플레이트" "거울 생성" "거울 만들" "플레이트 생성" ]; }
+    { primitive = "mirror-plate-test-harness"; en_keywords = [ "test harness" "plate test" "harness primitive" "plate harness" ]; ko_keywords = [ "테스트 하니스" "플레이트 테스트" "테스트 harness" "플레이트 검증" ]; }
+    { primitive = "identity-registry"; en_keywords = [ "identity registry" "register identity" "identity primitive" "id registry" ]; ko_keywords = [ "identity 레지스트리" "id 등록" "ID 등록" "신원 레지스트리" ]; }
+    { primitive = "ontology-extension"; en_keywords = [ "ontology extension" "extend ontology" "new ontology row" "add ontology" ]; ko_keywords = [ "ontology 확장" "ontology 추가" "온톨로지 확장" "온톨로지 row 추가" ]; }
+    { primitive = "boundary-projection"; en_keywords = [ "boundary projection" "project surface" "boundary primitive" "boundary lens" ]; ko_keywords = [ "경계 투영" "표면 투영" "경계 lens" "경계 표면 투영" ]; }
+    { primitive = "receipt-persistence"; en_keywords = [ "persist receipt" "save receipt" "receipt store" "receipt save" ]; ko_keywords = [ "receipt 저장" "영구 저장" "receipt 보존" "receipt 영속화" ]; }
+    { primitive = "mirror-gc"; en_keywords = [ "mirror gc" "garbage collect" "mirror cleanup" "GC mirror" ]; ko_keywords = [ "거울 gc" "garbage collect" "거울 정리" "거울 청소" ]; }
+  ];
+
+  liftToMirrorPrimitive = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownMirrorPrimitiveNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-mirror-primitive-matched"; known_primitives = builtins.map (p: p.primitive) knownMirrorPrimitiveNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-mirror-primitive"; candidates = builtins.map (x: x.primitive) m; }
+      else { outcome = "mirror-primitive-lifted"; primitive = (builtins.head m).primitive; axiom_origin = "axiom-36-mirror-primitive-registry"; };
+
+  # === Plate dispatcher entry =======================================
+
+  applySystemDomainNlLifterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then { outcome = "held-missing-utterance-field"; }
+    else if !(builtins.hasAttr "lifter_kind" request) then { outcome = "held-missing-lifter-kind"; known_kinds = [ "diff" "markup-conversion" "host" "mirror-primitive" ]; }
+    else
+      let k = request.lifter_kind; u = request.utterance;
+      in
+        if k == "diff" then liftToDiffOperation u
+        else if k == "markup-conversion" then liftToMarkupConversion u
+        else if k == "host" then liftToHostBoundary u
+        else if k == "mirror-primitive" then liftToMirrorPrimitive u
+        else { outcome = "held-unknown-lifter-kind"; kind = k; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axioms-49-to-52";
+    lifter_count = 4;
+    lifters = [
+      { id = "diff"; axiom = 18; patterns = builtins.length knownDiffOperationNLPatterns; }
+      { id = "markup-conversion"; axiom = 32; patterns = builtins.length knownMarkupConversionNLPatterns; }
+      { id = "host"; axiom = 25; patterns = builtins.length knownHostBoundaryNLPatterns; }
+      { id = "mirror-primitive"; axiom = 36; patterns = builtins.length knownMirrorPrimitiveNLPatterns; }
+    ];
+    new_decision_count = 0;
+    bilingual = true;
+    routed_substrates = [
+      "stdlib/lib/diff/diff-substrate.px (Axiom #18)"
+      "stdlib/lib/integration/top-level-markup-language-registry.px (Axiom #32)"
+      "stdlib/lib/integration/host-integration-registry.px (Axiom #25)"
+      "stdlib/lib/integration/mirror-primitive-registry.px (Axiom #36)"
+    ];
+  };
+
+in {
+  inherit
+    ownerName containsAny
+    knownDiffOperationNLPatterns knownMarkupConversionNLPatterns
+    knownHostBoundaryNLPatterns knownMirrorPrimitiveNLPatterns
+    liftToDiffOperation liftToMarkupConversion
+    liftToHostBoundary liftToMirrorPrimitive
+    applySystemDomainNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL system domain lifters (Axioms #49-52)";
+    owner = ownerName;
+    base = "system-domain-nl-lifters-v0";
+    rev_note = "사용자 directive (2026-05-28). 4 system-layer lifter "
+      + "(diff / markup-conversion / host / mirror-primitive) bilingual "
+      + "en + ko. DO NOT REBUILD — 4 substrate 기존 owner 재사용. "
+      + "markup-conversion 은 bidirectional axiom #6 의 직접 NL surface.";
+  };
+}

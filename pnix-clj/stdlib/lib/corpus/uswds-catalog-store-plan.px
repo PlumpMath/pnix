@@ -1,0 +1,45 @@
+# USWDS component/token catalog -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No assets/source bodies/runtime/graph wiring.
+let
+  B = builtins;
+  genPath = ./uswds-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "ui.uswds.catalog.v1";
+    source = "U.S. Web Design System release tree catalog";
+    license = "US-PD/CC0-1.0 with third-party asset exclusions";
+    summary = { components = 0; components_total_seen = 0; content_variants = 0; token_files = 0; style_entries = 0; component_limit = 0; };
+    policy = "component/token path metadata only";
+    manifest = { }; release = { tag = ""; name = ""; };
+    files = [ ]; components = [ ]; content_variants = [ ]; token_files = [ ]; style_entries = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "uswds-catalog-load-v0";
+      source_lens = "stdlib/lib/corpus/uswds-catalog-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "ui.uswds.catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "uswds-catalog-query-v0";
+      source_lens = "stdlib/lib/corpus/uswds-catalog-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "ui.uswds.catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

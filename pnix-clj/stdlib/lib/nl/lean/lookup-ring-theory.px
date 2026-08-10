@@ -1,0 +1,268 @@
+# AUTO-GENERATED — ring-theory
+# Entries: 37
+let
+  ownerName = "stdlib.nl.lean.lookup-ring-theory";
+  category = "ring-theory";
+  entries = [
+    {
+      full_name = "Ideal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 34;
+      code_preview = "abbrev Ideal (R : Type u) [Semiring R] :=   Submodule R R";
+    }
+    {
+      full_name = "Ideal.IsTwoSided";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 45;
+      code_preview = "@[mk_iff] class IsTwoSided : Prop where   mul_mem_of_left {a : α} (b : α) : a ∈ I → a * b ∈ I";
+    }
+    {
+      full_name = "Ideal.zero_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 49;
+      code_preview = "protected theorem zero_mem : (0 : α) ∈ I";
+    }
+    {
+      full_name = "Ideal.add_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 52;
+      code_preview = "protected theorem add_mem : a ∈ I → b ∈ I → a + b ∈ I";
+    }
+    {
+      full_name = "Ideal.mul_mem_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 57;
+      code_preview = "theorem mul_mem_left : b ∈ I → a * b ∈ I";
+    }
+    {
+      full_name = "Ideal.mul_mem_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 60;
+      code_preview = "theorem mul_mem_right {α} {a : α} (b : α) [Semiring α] (I : Ideal α) [I.IsTwoSided]     (h : a ∈ I) : a * b ∈ I";
+    }
+    {
+      full_name = "Ideal.ext";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 66;
+      code_preview = "@[ext] theorem ext {I J : Ideal α} (h : ∀ x, x ∈ I ↔ x ∈ J) : I = J";
+    }
+    {
+      full_name = "Ideal.unit_mul_mem_iff_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 70;
+      code_preview = "@[simp] theorem unit_mul_mem_iff_mem {x y : α} (hy : IsUnit y) : y * x ∈ I ↔ x ∈ I";
+    }
+    {
+      full_name = "Ideal.pow_mem_of_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 77;
+      code_preview = "theorem pow_mem_of_mem (ha : a ∈ I) (n : ℕ) (hn : 0 < n) : a ^ n ∈ I";
+    }
+    {
+      full_name = "Ideal.pow_mem_of_pow_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 81;
+      code_preview = "theorem pow_mem_of_pow_mem {m n : ℕ} (ha : a ^ m ∈ I) (h : m ≤ n) : a ^ n ∈ I";
+    }
+    {
+      full_name = "Module.eqIdeal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 87;
+      code_preview = "def Module.eqIdeal (R) {M} [Semiring R] [AddCommMonoid M] [Module R M] (m m' : M) : Ideal R where   carrier := {r : R | r • m = r • m'}   add_mem' h h' := by simpa [add_smul] using congr($h + $h')   zero_mem' := by simp_rw [Set.mem_setOf, zero_smul]   smul_mem' _ _ h := by simpa [mul_smul] using con";
+    }
+    {
+      full_name = "Ideal.mul_unit_mem_iff_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 111;
+      code_preview = "@[simp] theorem mul_unit_mem_iff_mem {x y : α} (hy : IsUnit y) : x * y ∈ I ↔ x ∈ I";
+    }
+    {
+      full_name = "Ideal.mem_of_dvd";
+      kind = "lemma";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 115;
+      code_preview = "lemma mem_of_dvd (hab : a ∣ b) (ha : a ∈ I) : b ∈ I := by   obtain ⟨c, rfl⟩ := hab; exact I.mul_mem_right _ ha";
+    }
+    {
+      full_name = "Ideal.neg_mem_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 128;
+      code_preview = "protected theorem neg_mem_iff : -a ∈ I ↔ a ∈ I";
+    }
+    {
+      full_name = "Ideal.add_mem_iff_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 131;
+      code_preview = "protected theorem add_mem_iff_left : b ∈ I → (a + b ∈ I ↔ a ∈ I)";
+    }
+    {
+      full_name = "Ideal.add_mem_iff_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 134;
+      code_preview = "protected theorem add_mem_iff_right : a ∈ I → (a + b ∈ I ↔ b ∈ I)";
+    }
+    {
+      full_name = "Ideal.sub_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 137;
+      code_preview = "protected theorem sub_mem : a ∈ I → b ∈ I → a - b ∈ I";
+    }
+    {
+      full_name = "Ideal.mul_sub_mul_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Defs.lean";
+      start_line = 140;
+      code_preview = "theorem mul_sub_mul_mem [I.IsTwoSided]     (h1 : a - b ∈ I) (h2 : c - d ∈ I) : a * c - b * d ∈ I";
+    }
+    {
+      full_name = "Ideal.pi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 45;
+      code_preview = "def pi : Ideal (Π i, α i) where   carrier := { x | ∀ i, x i ∈ I i }   zero_mem' i := (I i).zero_mem   add_mem' ha hb i := (I i).add_mem (ha i) (hb i)   smul_mem' a _b hb i := (I i).mul_mem_left (a i) (hb i)";
+    }
+    {
+      full_name = "Ideal.mem_pi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 52;
+      code_preview = "theorem mem_pi (x : Π i, α i) : x ∈ pi I ↔ ∀ i, x i ∈ I i";
+    }
+    {
+      full_name = "Ideal.add_pow_mem_of_pow_mem_of_le_of_commute";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 64;
+      code_preview = "theorem add_pow_mem_of_pow_mem_of_le_of_commute {m n k : ℕ}     (ha : a ^ m ∈ I) (hb : b ^ n ∈ I) (hk : m + n ≤ k + 1)     (hab : Commute a b) :     (a + b) ^ k ∈ I";
+    }
+    {
+      full_name = "Ideal.add_pow_add_pred_mem_of_pow_mem_of_commute";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 78;
+      code_preview = "theorem add_pow_add_pred_mem_of_pow_mem_of_commute {m n : ℕ}     (ha : a ^ m ∈ I) (hb : b ^ n ∈ I) (hab : Commute a b) :     (a + b) ^ (m + n - 1) ∈ I";
+    }
+    {
+      full_name = "Ideal.add_pow_mem_of_pow_mem_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 99;
+      code_preview = "theorem add_pow_mem_of_pow_mem_of_le {m n k : ℕ}     (ha : a ^ m ∈ I) (hb : b ^ n ∈ I) (hk : m + n ≤ k + 1) :     (a + b) ^ k ∈ I";
+    }
+    {
+      full_name = "Ideal.add_pow_add_pred_mem_of_pow_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 104;
+      code_preview = "theorem add_pow_add_pred_mem_of_pow_mem {m n : ℕ}     (ha : a ^ m ∈ I) (hb : b ^ n ∈ I) :     (a + b) ^ (m + n - 1) ∈ I";
+    }
+    {
+      full_name = "Ideal.pow_multiset_sum_mem_span_pow";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 109;
+      code_preview = "theorem pow_multiset_sum_mem_span_pow [DecidableEq α] (s : Multiset α) (n : ℕ) :     s.sum ^ (Multiset.card s * n + 1) ∈     span ((s.map fun (x : α) ↦ x ^ (n + 1)).toFinset : Set α)";
+    }
+    {
+      full_name = "Ideal.sum_pow_mem_span_pow";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 135;
+      code_preview = "theorem sum_pow_mem_span_pow {ι} (s : Finset ι) (f : ι → α) (n : ℕ) :     (∑ i ∈ s, f i) ^ (s.card * n + 1) ∈ span ((fun i => f i ^ (n + 1)) '' s)";
+    }
+    {
+      full_name = "Ideal.span_pow_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 141;
+      code_preview = "theorem span_pow_eq_top (s : Set α) (hs : span s = ⊤) (n : ℕ) :     span ((fun (x : α) => x ^ n) '' s) = ⊤";
+    }
+    {
+      full_name = "Ideal.span_range_pow_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 165;
+      code_preview = "theorem span_range_pow_eq_top (s : Set α) (hs : span s = ⊤) (n : s → ℕ) :     span (Set.range fun x ↦ x.1 ^ n x) = ⊤";
+    }
+    {
+      full_name = "Ideal.prod_mem";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 175;
+      code_preview = "theorem prod_mem {ι : Type*} {f : ι → α} {s : Finset ι}     (I : Ideal α) {i : ι} (hi : i ∈ s) (hfi : f i ∈ I) :     ∏ i ∈ s, f i ∈ I";
+    }
+    {
+      full_name = "Ideal.equivFinTwo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 193;
+      code_preview = "def equivFinTwo [DecidableEq (Ideal K)] : Ideal K ≃ Fin 2 where   toFun := fun I ↦ if I = ⊥ then 0 else 1   invFun := ![⊥, ⊤]   left_inv := fun I ↦ by rcases eq_bot_or_top I with rfl | rfl <;> simp   right_inv := fun i ↦ by fin_cases i <;> simp";
+    }
+    {
+      full_name = "Ideal.isSimpleOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 203;
+      code_preview = "instance isSimpleOrder : IsSimpleOrder (Ideal K) :=   ⟨eq_bot_or_top⟩";
+    }
+    {
+      full_name = "Ring.exists_not_isUnit_of_not_isField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 218;
+      code_preview = "theorem exists_not_isUnit_of_not_isField [Nontrivial R] (hf : ¬IsField R) :     ∃ (x : R) (_hx : x ≠ (0 : R)), ¬IsUnit x";
+    }
+    {
+      full_name = "Ring.not_isField_iff_exists_ideal_bot_lt_and_lt_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 226;
+      code_preview = "theorem not_isField_iff_exists_ideal_bot_lt_and_lt_top [Nontrivial R] :     ¬IsField R ↔ ∃ I : Ideal R, ⊥ < I ∧ I < ⊤";
+    }
+    {
+      full_name = "Ring.not_isField_iff_exists_prime";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 241;
+      code_preview = "theorem not_isField_iff_exists_prime [Nontrivial R] :     ¬IsField R ↔ ∃ p : Ideal R, p ≠ ⊥ ∧ p.IsPrime";
+    }
+    {
+      full_name = "Ring.isField_iff_isSimpleOrder_ideal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 249;
+      code_preview = "theorem isField_iff_isSimpleOrder_ideal : IsField R ↔ IsSimpleOrder (Ideal R)";
+    }
+    {
+      full_name = "Ring.ne_bot_of_isMaximal_of_not_isField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 263;
+      code_preview = "theorem ne_bot_of_isMaximal_of_not_isField [Nontrivial R] {M : Ideal R} (max : M.IsMaximal)     (not_field : ¬IsField R) : M ≠ ⊥";
+    }
+    {
+      full_name = "Ideal.bot_lt_of_maximal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/RingTheory/Ideal/Basic.lean";
+      start_line = 278;
+      code_preview = "theorem bot_lt_of_maximal (M : Ideal R) [hm : M.IsMaximal] (non_field : ¬IsField R) : ⊥ < M";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

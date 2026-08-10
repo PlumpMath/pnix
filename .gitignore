@@ -1,0 +1,121 @@
+# pnix root gitignore — build outputs across every host present
+# (pnix-clj: Clojure/JVM · pnix-cljs: ClojureScript/Node · pnix-clr: .NET ·
+#  pnix-hy: Python/Hy · pnix-rs: Rust/Cargo · all: Nix flakes, macOS, editors).
+# Each host carries its own .gitignore; this root file is the belt-and-braces
+# defense so a missing local ignore can never leak build artifacts.
+# NOTE deliberate non-entries: Cargo.lock (reproducibility), docs/
+# (machine-generated but TRACKED and drift-gated in pnix-clj).
+
+# Transient compiler/runtime products. `work/` remains available for owned,
+# manifested fixtures, but native cache artifacts and active receipts are not
+# closure evidence and must never enter the index.
+/work/native/prog_*
+/work/realisations-check.tsv
+/proof/check-receipt.txt
+
+# ── JVM / Clojure (pnix-clj, clj-meta, puck-cli) ──────────────────────────
+target/
+classes/
+.cpcache/
+.nrepl-port
+.nrepl-history
+.socket-repl-port
+.rebel_readline_history
+.lsp/.cache/
+.clj-kondo/.cache/
+.cljs_compiler_output/
+.eastwood
+.calva/output-window/
+.portal/
+*.class
+*.jar
+hs_err_pid*
+replay_pid*
+
+# ── Python / Hy (pnix-hy, hy-meta, scripts) ───────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.tox/
+.nox/
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+__pypackages__/
+_build/
+
+# ── Rust / Cargo (pnix-rs, rs-meta) ───────────────────────────────────────
+# target/ covered above (shared with JVM)
+*.rs.bk
+*.pdb
+.cargo/registry/
+.cargo/git/
+
+# ── Node (pnix-cljs) ──────────────────────────────────────────────────────
+node_modules/
+*.tsbuildinfo
+.vite/
+.parcel-cache/
+
+# ── generic build dirs ────────────────────────────────────────────────────
+build/
+dist/
+out/
+
+# ── regenerable proof/stage scratch ───────────────────────────────────────
+# Each host's gate rebuilds these (self-host stage ladders, native probe
+# binaries, extracted compiler substrates). They are evidence OUTPUT, not
+# source, and are far larger than the sources that produce them.
+work/
+
+# Upstream compiler substrates are fetched from their package registries at
+# build time and never committed: ClojureScript from its Maven jar (see
+# pnix-cljs/flake.nix) and ClojureCLR from the pinned `Clojure` NuGet package
+# (see pnix-clr/clr-bootstrap/, published into the path below).
+/pnix-cljs/clojurescript-r1.12.145/
+/pnix-clr/clojure-clr-clojure-1.12.3-alpha8/
+
+# ── Nix ───────────────────────────────────────────────────────────────────
+# `result` (exact name) is safe repo-wide; `result-*` is ANCHORED to the
+# flake roots only.
+result
+/result-*
+/pnix-clj/result-*
+/pnix-cljs/result-*
+/pnix-clr/result-*
+/pnix-hy/result-*
+/pnix-rs/result-*
+.direnv/
+
+# ── macOS / editors / tooling ─────────────────────────────────────────────
+.DS_Store
+._*
+*~
+.*.sw?
+\#*\#
+.idea/
+*.iml
+.claude/settings.local.json
+.aider*
+
+# ── secrets / local env (publish-safety) ──────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# editor (beyond .idea already listed)
+.vscode/
+*.code-workspace
+
+# ── .NET (pnix-clr) ───────────────────────────────────────────────────────
+obj/

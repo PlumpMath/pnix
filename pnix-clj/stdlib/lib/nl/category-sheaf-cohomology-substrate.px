@@ -1,0 +1,343 @@
+let
+  ownerName = "stdlib.nl.category-sheaf-cohomology-substrate";
+
+  sheaf = import nl/category-mode-14-15-16-sheaf-lemma.px;
+  topos = import nl/category-topos-internal-language.px;
+
+  # === Sheaf Cohomology Substrate (agent-NL-179) ====================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Sheaf cohomology — substrate site 의 H^*(F) computation"
+  #
+  # Sheaf condition (#175) 박은 결과: substrate 가 Site_coding 위
+  # sheaf F 보유. 이제 H^n(Site_coding, F) 의 substrate-side
+  # operational definition.
+  #
+  # Cohomology H^n measures "obstructions to gluing" at level n:
+  #   H^0 = global sections (substrate-wide receipts)
+  #   H^1 = first obstruction (held cases that languages can't
+  #         reconcile by adding more)
+  #   H^n = higher obstructions (rarely relevant in substrate)
+
+  stepKind = "sheaf-cohomology-substrate";
+  framework_step =
+    "H^n computation — obstructions to gluing at each cohomology degree";
+
+  # =================================================================
+  # === Cohomology degrees =========================================
+  # =================================================================
+
+  cohomologyDegrees = {
+    H0 = {
+      degree = 0;
+      name = "H^0(Site_coding, F)";
+      meaning_en = ''
+        Global sections of F: receipts that are consistent across
+        the entire 16-mode chain. Equivalent to fixed-points of the
+        sheaf structure — receipts that can be assembled into a
+        unique global object.
+      '';
+      meaning_ko = ''
+        F 의 global section: 16-mode chain 전체에 걸쳐 일관된
+        receipts. sheaf 구조의 fixed-point — unique global object 로
+        조립 가능한 receipts.
+      '';
+      operational_en = ''
+        H^0(F) = { receipts s | for all covers {U_i → U},
+                    s|_{U_i} are compatible and glue to s|_U }
+      '';
+      substrate_witness = "successful Mode 16 freecat-projection envelope";
+      computation_complexity = "linear in chain length";
+    };
+
+    H1 = {
+      degree = 1;
+      name = "H^1(Site_coding, F)";
+      meaning_en = ''
+        First obstruction to gluing. Measures "compatible local
+        sections that DO NOT extend to a global section". In substrate
+        terms: per-language receipts that pairwise agree but admit
+        no canonical meaning-object.
+
+        Operationally: H^1 captures irreducible held-honest cases.
+        These are silent-guess refusals that cannot be lifted to
+        T (gated-emit-cleared) regardless of additional input.
+      '';
+      meaning_ko = ''
+        gluing 의 첫 obstruction. pairwise compatible 하지만 global
+        section 으로 확장 불가한 local sections.
+
+        operationally: H^1 이 irreducible held-honest cases 캡처.
+        추가 입력으로도 T 로 lift 불가능한 silent-guess refusals.
+      '';
+      operational_en = ''
+        H^1(F) = { (compatible local sections) / (extendable to global) }
+              = obstructions in degree 1
+      '';
+      substrate_witness = "Held envelopes that remain Held under all language additions";
+      computation_complexity = "polynomial in cover refinement count";
+    };
+
+    H2 = {
+      degree = 2;
+      name = "H^2(Site_coding, F)";
+      meaning_en = ''
+        Second-order obstruction. Measures "higher" non-gluing —
+        obstructions to lifting H^1 obstruction structures
+        themselves.
+
+        In substrate: rarely relevant for current 16-mode chain,
+        but would appear in meta-level reasoning about which Held
+        cases share the same H^1 class.
+      '';
+      meaning_ko = ''
+        2-차 obstruction. H^1 obstruction structures 자체를 lift
+        하는 obstruction. 현재 substrate 에서 거의 발생하지 않음.
+      '';
+      operational_en = ''
+        H^2(F) = obstructions in degree 2
+              = (compatibility of H^1 classes) / (extendable)
+      '';
+      substrate_witness = "meta-classes of Held envelopes that disagree about which lifting strategy to apply";
+      computation_complexity = "polynomial in H^1 class count";
+    };
+
+    HN = {
+      degree = "n >= 3";
+      name = "H^n for n >= 3";
+      meaning_en = ''
+        Higher cohomology. In well-behaved Grothendieck topoi, often
+        vanish for n large enough (cohomological dimension).
+
+        Substrate honest status: not yet investigated. CLAUDE.md
+        cohomological dimension of Site_coding remains open research.
+      '';
+      meaning_ko = ''
+        고차 cohomology. 잘 작동하는 topos 에서는 충분히 큰 n 에서
+        소실 (cohomological dimension). substrate 솔직: 미조사.
+      '';
+      cohomological_dimension_status = "open-research-question";
+    };
+  };
+
+  # =================================================================
+  # === H^0 computation (operational) ==============================
+  # =================================================================
+  #
+  # H^0(F) = global sections of F.
+  # Substrate witness: a meaning-object that successfully passes
+  # through Mode 14 gate (= gated-emit-cleared) and projects via
+  # Mode 16 to a user-facing-projection.
+
+  computeH0Witness = receiptChain:
+    # receiptChain is a list of per-mode receipts. H^0 witness
+    # exists iff the chain produced a successful projection.
+    let
+      hasModeReceipt = id:
+        builtins.any (r:
+          if builtins.hasAttr "mode_id" r then r.mode_id == id else false
+        ) receiptChain;
+      hasMode14Gated =
+        builtins.any (r:
+          if r ? mode_id && r.mode_id == 14
+          then (if r ? gate_outcome then r.gate_outcome == "gated-emit-cleared" else false)
+          else false
+        ) receiptChain;
+      hasMode16Projection =
+        builtins.any (r:
+          if r ? mode_id then r.mode_id == 16 else false
+        ) receiptChain;
+    in {
+      degree = 0;
+      receipts_present = builtins.length receiptChain;
+      gate_cleared = hasMode14Gated;
+      projection_emitted = hasMode16Projection;
+      global_section_exists = hasMode14Gated && hasMode16Projection;
+      cohomology_class = if hasMode14Gated && hasMode16Projection
+                         then "non-trivial-H0"
+                         else "no-H0-witness";
+    };
+
+  # =================================================================
+  # === H^1 computation (obstruction detection) =====================
+  # =================================================================
+  #
+  # H^1(F) detection: receipts where Mode 14 emitted Held but the
+  # individual language receipts were compatible (pairwise agree).
+
+  computeH1Obstructions = perLangReceipts: gateOutcome:
+    # If gate outcome is held but per-language receipts are
+    # pairwise compatible, we have an H^1 class.
+    let
+      perLangCount = builtins.length perLangReceipts;
+      gateIsHeld = gateOutcome == "held" || gateOutcome == "ask-multi-choice";
+
+      # Pairwise compatibility: simplified to "all receipts non-null"
+      allNonNull = builtins.all (r: r != null) perLangReceipts;
+    in {
+      degree = 1;
+      per_language_receipt_count = perLangCount;
+      gate_outcome = gateOutcome;
+      pairwise_compatible = allNonNull;
+      h1_class_exists = gateIsHeld && allNonNull && perLangCount > 0;
+      obstruction_witness = if gateIsHeld && allNonNull
+                           then "compatible-local-sections-no-global-section"
+                           else "no-h1-obstruction-detected";
+      held_envelope_classification =
+        if !gateIsHeld then "not-held"
+        else if !allNonNull then "trivially-held-due-to-missing-data"
+        else "irreducible-held-honest-h1-class";
+    };
+
+  # =================================================================
+  # === Long exact sequence (LES) skeleton ==========================
+  # =================================================================
+  #
+  # For short exact sequence of sheaves 0 → F' → F → F'' → 0,
+  # there's a long exact sequence:
+  #   0 → H^0(F') → H^0(F) → H^0(F'') → H^1(F') → H^1(F) → ...
+
+  longExactSequenceSkeleton = sourceSheaf: middleSheaf: quotientSheaf: {
+    sequence_kind = "long-exact-sequence-of-sheaf-cohomology";
+    short_exact_sequence = "0 → " + sourceSheaf + " → " + middleSheaf + " → " + quotientSheaf + " → 0";
+    long_exact_sequence_template = [
+      "0"
+      "H^0(" + sourceSheaf + ")"
+      "H^0(" + middleSheaf + ")"
+      "H^0(" + quotientSheaf + ")"
+      "H^1(" + sourceSheaf + ")"
+      "H^1(" + middleSheaf + ")"
+      "H^1(" + quotientSheaf + ")"
+      "H^2(" + sourceSheaf + ")"
+      "..."
+    ];
+    boundary_morphisms = "delta^n : H^n(F'') → H^{n+1}(F')";
+    exactness_at_each_position = "ker(next) = image(prev)";
+  };
+
+  # =================================================================
+  # === Substrate-side cohomology audit ============================
+  # =================================================================
+  #
+  # Aggregate cohomology evidence across the substrate.
+
+  substrateCohomologyAudit = {
+    H0_status = ''
+      H^0 is non-trivial: substrate produces global-section receipts
+      (gated-emit-cleared envelopes that project to user-facing
+      projection). Multiple H^0 classes exist (one per successfully
+      processed utterance).
+    '';
+    H1_status = ''
+      H^1 measures irreducible Held cases. Substrate honest position:
+      every Held outcome is potentially an H^1 obstruction candidate.
+      Adjoint AC3 (before closure by Kan extension) was an H^1
+      candidate; UC4 (LLM-substitution impossibility) is an H^∞
+      obstruction (irreducible at every cohomology degree —
+      mathematically proven, not just observed).
+    '';
+    H2_status = ''
+      H^2 not yet observed in substrate. Would require meta-level
+      Held reasoning, e.g., disagreement about *which* Kan extension
+      to use to close an AC3-like Held. Open research.
+    '';
+    cohomological_dimension = "unknown (>= 1, since H^1 non-trivial via UC4)";
+    cohomology_directly_relates_to_self_audit = ''
+      H^0 non-trivial = substrate emits global receipts.
+      H^1 non-trivial = substrate has irreducible Held cases.
+      Topos internal language gives χ : F → Ω; cohomology
+      classifies χ-failures.
+    '';
+  };
+
+  # =================================================================
+  # === Substrate-internal cohomology classes =======================
+  # =================================================================
+  #
+  # Concrete substrate Held cases and their cohomology classification.
+
+  knownCohomologyClasses = [
+    {
+      class_id = "h0-global-section-gated";
+      degree = 0;
+      example_substrate_event = "Successful utterance 'rename foo to bar' producing rust/python/go code emit";
+      classification_en = "Non-trivial H^0 class — substrate produces successful global section";
+    }
+    {
+      class_id = "h1-pre-kan-AC3";
+      degree = 1;
+      example_substrate_event = "Adjoint AC3 Held BEFORE category-mode-13-reverse-functor.px was added";
+      classification_en = "H^1 obstruction class — historically observed, now reduced to H^0 via Kan extension closure";
+      historical_note = "AC3 was an H^1 obstruction at substrate timestamp ~2026-05-29 (Adjoint Lemma). Reduced by #174 mode-13-reverse-functor via Kan extension.";
+    }
+    {
+      class_id = "h-infty-uc4-llm-impossibility";
+      degree = "infinity";
+      example_substrate_event = "UC4: LLM-substitution mathematically impossible";
+      classification_en = "H^infty obstruction (irreducible at every cohomology degree). Cannot be reduced by adding more languages, modes, or receipts. This is not a substrate gap but a substrate axiom.";
+      mathematical_status = "proven impossibility (not observed Held — mathematically required)";
+    }
+  ];
+
+  # =================================================================
+  # === Inventory ===================================================
+  # =================================================================
+
+  inventorySummary = _: {
+    owner = ownerName;
+    cohomology_degrees_defined = builtins.length (builtins.attrNames cohomologyDegrees);
+    h0_supported = true;
+    h1_supported = true;
+    h2_supported = true;
+    hn_status = "documented-as-open-research";
+    has_h0_computation = true;
+    has_h1_computation = true;
+    long_exact_sequence_supported = true;
+    known_cohomology_class_count = builtins.length knownCohomologyClasses;
+    substrate_cohomological_dimension = "unknown-but-at-least-1";
+    sheaf_lemma_qed = (sheaf.inventorySummary {}).qed;
+    topos_internal_language_owner = topos.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ================================================
+  # =================================================================
+
+  applySheafCohomologyPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "sheaf-cohomology-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "degrees" request then {
+      outcome = "sheaf-cohomology-degrees-emitted"; receipt = cohomologyDegrees;
+    }
+    else if builtins.hasAttr "compute_h0" request then
+      let r = request.compute_h0;
+      in { outcome = "sheaf-cohomology-h0-computed";
+           receipt = computeH0Witness r; }
+    else if builtins.hasAttr "compute_h1" request then
+      let r = request.compute_h1;
+      in { outcome = "sheaf-cohomology-h1-computed";
+           receipt = computeH1Obstructions r.per_lang_receipts r.gate_outcome; }
+    else if builtins.hasAttr "long_exact_sequence" request then
+      let r = request.long_exact_sequence;
+      in { outcome = "sheaf-cohomology-LES-emitted";
+           receipt = longExactSequenceSkeleton r.source r.middle r.quotient; }
+    else if builtins.hasAttr "audit" request then {
+      outcome = "sheaf-cohomology-audit-emitted"; receipt = substrateCohomologyAudit;
+    }
+    else if builtins.hasAttr "known_classes" request then {
+      outcome = "sheaf-cohomology-known-classes-emitted";
+      receipt = knownCohomologyClasses;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [ "inventory" "degrees" "compute_h0" "compute_h1" "long_exact_sequence" "audit" "known_classes" ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit cohomologyDegrees;
+  inherit computeH0Witness computeH1Obstructions longExactSequenceSkeleton;
+  inherit substrateCohomologyAudit knownCohomologyClasses;
+  inherit inventorySummary applySheafCohomologyPlate;
+}

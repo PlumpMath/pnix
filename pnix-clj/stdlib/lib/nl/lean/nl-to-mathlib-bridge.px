@@ -1,0 +1,461 @@
+let
+  ownerName = "stdlib.nl.lean.nl-to-mathlib-bridge";
+
+  lookup = import nl/lean/lookup-aggregate.px;
+
+  # === Korean NL → Mathlib lookup bridge (agent-NL-195) =============
+  #
+  # 사용자 vision 의 핵심:
+  # > "한글 query 로 Mathlib 정리 직접 조회"
+  #
+  # Chain:
+  #   한글 utterance
+  #     → 조사 strip / 키워드 추출
+  #     → 한국어 ↔ Mathlib keyword 매핑 (deterministic dictionary)
+  #     → category hint emit (어느 lookup category 가 가장 likely 인지)
+  #     → lookup.searchByKeyword / byCategory dispatch
+  #     → 한글 응답 envelope
+  #
+  # 모든 단계 *deterministic + byte-stable*. LLM 0.
+
+  stepKind = "korean-nl-to-mathlib-bridge";
+  framework_step =
+    "한글 utterance → Mathlib lookup envelope (deterministic dictionary)";
+
+  # =================================================================
+  # === 한글 ↔ Mathlib keyword 매핑 ===================================
+  # =================================================================
+  #
+  # 한글 수학 vocabulary → Mathlib 영어 keyword + category hint.
+
+  koreanMathDictionary = [
+    # === Sheaf cohomology ===
+    { ko = "층"; en = "Sheaf"; category = "sheaf"; concept = "sheaf"; }
+    { ko = "단순층"; en = "Sheaf"; category = "sheaf"; concept = "sheaf"; }
+    { ko = "층화"; en = "Sheafify"; category = "sheaf"; concept = "sheafification"; }
+
+    # === Galois ===
+    { ko = "갈루아"; en = "Galois"; category = "galois"; concept = "galois"; }
+    { ko = "갈루아군"; en = "Galois"; category = "galois"; concept = "galois group"; }
+    { ko = "갈루아확장"; en = "IsGalois"; category = "galois"; concept = "galois extension"; }
+    { ko = "분리"; en = "Separable"; category = "galois"; concept = "separable"; }
+    { ko = "체"; en = "Field"; category = "galois"; concept = "field"; }
+    { ko = "대수적폐포"; en = "AlgClosed"; category = "galois"; concept = "algebraic closure"; }
+
+    # === Group cohomology ===
+    { ko = "군코호몰로지"; en = "groupCohomology"; category = "group-cohomology"; concept = "group cohomology"; }
+    { ko = "코호몰로지"; en = "Cohomology"; category = "group-cohomology"; concept = "cohomology"; }
+    { ko = "불변원"; en = "Invariants"; category = "group-cohomology"; concept = "invariants"; }
+    { ko = "표현"; en = "Rep"; category = "representation-theory"; concept = "representation"; }
+    { ko = "타나카"; en = "Tannaka"; category = "representation-theory"; concept = "Tannaka duality"; }
+    { ko = "유한차원표현"; en = "FDRep"; category = "representation-theory"; concept = "finite-dimensional representation"; }
+
+    # === Triangulated / derived ===
+    { ko = "삼각화"; en = "Triangulated"; category = "triangulated"; concept = "triangulated category"; }
+    { ko = "유도범주"; en = "Triangulated"; category = "triangulated"; concept = "derived category"; }
+    { ko = "T구조"; en = "TStructure"; category = "triangulated"; concept = "t-structure"; }
+
+    # === Homological algebra ===
+    { ko = "쇄복합체"; en = "HomologicalComplex"; category = "homological"; concept = "chain complex"; }
+    { ko = "복합체"; en = "Complex"; category = "homological"; concept = "complex"; }
+    { ko = "스펙트럴"; en = "Spectral"; category = "homological"; concept = "spectral sequence"; }
+    { ko = "스펙트럴수열"; en = "SpectralObject"; category = "homological"; concept = "spectral object"; }
+    { ko = "동형"; en = "Iso"; category = "homological"; concept = "isomorphism"; }
+    { ko = "준동형"; en = "Hom"; category = "homological"; concept = "homomorphism"; }
+
+    # === Monoidal ===
+    { ko = "텐서"; en = "Monoidal"; category = "monoidal"; concept = "monoidal (tensor)"; }
+    { ko = "텐서곱"; en = "Tensor"; category = "monoidal"; concept = "tensor product"; }
+    { ko = "단단한"; en = "Rigid"; category = "monoidal"; concept = "rigid monoidal"; }
+    { ko = "이중대수"; en = "Closed"; category = "monoidal"; concept = "closed monoidal"; }
+
+    # === Abelian ===
+    { ko = "가환"; en = "Abelian"; category = "abelian"; concept = "abelian category"; }
+    { ko = "아벨"; en = "Abelian"; category = "abelian"; concept = "abelian"; }
+
+    # === p-adic ===
+    { ko = "p진"; en = "Padic"; category = "p-adic"; concept = "p-adic number"; }
+    { ko = "패딕"; en = "Padic"; category = "p-adic"; concept = "p-adic"; }
+
+    # === Zeta ===
+    { ko = "리만"; en = "Riemann"; category = "zeta"; concept = "Riemann zeta"; }
+    { ko = "제타"; en = "Zeta"; category = "zeta"; concept = "zeta function"; }
+    { ko = "제타함수"; en = "riemannZeta"; category = "zeta"; concept = "Riemann zeta function"; }
+    { ko = "엘함수"; en = "LSeries"; category = "zeta"; concept = "L-function"; }
+
+    # === Algebraic geometry ===
+    { ko = "에탈"; en = "Etale"; category = "algebraic-geometry"; concept = "étale morphism"; }
+    { ko = "스킴"; en = "Scheme"; category = "algebraic-geometry"; concept = "scheme"; }
+    { ko = "소스펙트럼"; en = "PrimeSpectrum"; category = "algebraic-geometry"; concept = "prime spectrum"; }
+
+    # === Sheaf 추가 ===
+    { ko = "전층"; en = "Presheaf"; category = "sheaf"; concept = "presheaf"; }
+    { ko = "사이트"; en = "Site"; category = "sheaf"; concept = "Grothendieck site"; }
+    { ko = "체"; en = "Sieve"; category = "sheaf"; concept = "sieve"; }
+    { ko = "체계"; en = "Sieves"; category = "sheaf"; concept = "sieve system"; }
+    { ko = "그로텐디크"; en = "Grothendieck"; category = "sheaf"; concept = "Grothendieck topology"; }
+    { ko = "위상사이트"; en = "Site"; category = "sheaf"; concept = "topology site"; }
+
+    # === Galois 추가 ===
+    { ko = "갈루아대응"; en = "Galois"; category = "galois"; concept = "Galois correspondence"; }
+    { ko = "정규"; en = "Normal"; category = "galois"; concept = "normal extension"; }
+    { ko = "정규확장"; en = "Normal"; category = "galois"; concept = "normal field extension"; }
+    { ko = "확장"; en = "Adjoin"; category = "galois"; concept = "field extension"; }
+    { ko = "체확장"; en = "FieldExtension"; category = "galois"; concept = "field extension"; }
+    { ko = "프로유한"; en = "Profinite"; category = "galois"; concept = "profinite Galois"; }
+    { ko = "무한갈루아"; en = "InfiniteGalois"; category = "galois"; concept = "infinite Galois"; }
+    { ko = "절대갈루아"; en = "AbsoluteGalois"; category = "galois"; concept = "absolute Galois group"; }
+
+    # === Group cohomology 추가 ===
+    { ko = "힐베르트90"; en = "Hilbert90"; category = "group-cohomology"; concept = "Hilbert 90"; }
+    { ko = "함자성"; en = "Functoriality"; category = "group-cohomology"; concept = "functoriality"; }
+    { ko = "분해"; en = "Resolution"; category = "group-cohomology"; concept = "resolution"; }
+    { ko = "저차"; en = "LowDegree"; category = "group-cohomology"; concept = "low-degree cohomology"; }
+    { ko = "마쉬케"; en = "Maschke"; category = "representation-theory"; concept = "Maschke theorem"; }
+    { ko = "표현이론"; en = "Rep"; category = "representation-theory"; concept = "representation theory"; }
+    { ko = "특성"; en = "Character"; category = "representation-theory"; concept = "character"; }
+    { ko = "지표"; en = "Character"; category = "representation-theory"; concept = "character"; }
+    { ko = "타나카쌍대성"; en = "TannakaDuality"; category = "representation-theory"; concept = "Tannaka duality"; }
+
+    # === Triangulated / derived 추가 ===
+    { ko = "사전삼각화"; en = "Pretriangulated"; category = "triangulated"; concept = "pretriangulated"; }
+    { ko = "구분삼각형"; en = "Triangle"; category = "triangulated"; concept = "distinguished triangle"; }
+    { ko = "옥타헤드론"; en = "Triangulated"; category = "triangulated"; concept = "octahedral axiom"; }
+    { ko = "주변화"; en = "Localization"; category = "triangulated"; concept = "Verdier localization"; }
+
+    # === Homological 추가 ===
+    { ko = "호몰로지"; en = "Homology"; category = "homological"; concept = "homology"; }
+    { ko = "코사슬"; en = "Cochain"; category = "homological"; concept = "cochain"; }
+    { ko = "사슬"; en = "Chain"; category = "homological"; concept = "chain"; }
+    { ko = "단복합체"; en = "ShortComplex"; category = "homological"; concept = "short complex"; }
+    { ko = "단복합"; en = "ShortComplex"; category = "homological"; concept = "short complex"; }
+    { ko = "왼호몰로지"; en = "LeftHomology"; category = "homological"; concept = "left homology"; }
+    { ko = "오른호몰로지"; en = "RightHomology"; category = "homological"; concept = "right homology"; }
+    { ko = "스펙트럴객체"; en = "SpectralObject"; category = "homological"; concept = "spectral object"; }
+    { ko = "단사"; en = "Mono"; category = "homological"; concept = "monomorphism"; }
+    { ko = "전사"; en = "Epi"; category = "homological"; concept = "epimorphism"; }
+    { ko = "동치"; en = "Equiv"; category = "homological"; concept = "equivalence"; }
+    { ko = "퀴린"; en = "Quillen"; category = "homological"; concept = "Quillen equivalence"; }
+
+    # === Monoidal 추가 ===
+    { ko = "모노이달"; en = "Monoidal"; category = "monoidal"; concept = "monoidal category"; }
+    { ko = "모노이달범주"; en = "Monoidal"; category = "monoidal"; concept = "monoidal category"; }
+    { ko = "쌍대"; en = "Dual"; category = "monoidal"; concept = "dual"; }
+    { ko = "함자"; en = "Functor"; category = "monoidal"; concept = "functor"; }
+    { ko = "자연변환"; en = "NatTrans"; category = "monoidal"; concept = "natural transformation"; }
+    { ko = "내부홈"; en = "InternalHom"; category = "monoidal"; concept = "internal hom"; }
+
+    # === Abelian 추가 ===
+    { ko = "아벨범주"; en = "Abelian"; category = "abelian"; concept = "abelian category"; }
+    { ko = "핵"; en = "Kernel"; category = "abelian"; concept = "kernel"; }
+    { ko = "여핵"; en = "Cokernel"; category = "abelian"; concept = "cokernel"; }
+    { ko = "정확열"; en = "Exact"; category = "abelian"; concept = "exact sequence"; }
+    { ko = "짧은정확열"; en = "ShortExact"; category = "abelian"; concept = "short exact sequence"; }
+
+    # === p-adic 추가 ===
+    { ko = "p진수"; en = "PadicNumbers"; category = "p-adic"; concept = "p-adic numbers"; }
+    { ko = "p진정수"; en = "PadicInt"; category = "p-adic"; concept = "p-adic integers"; }
+    { ko = "p진규범"; en = "PadicNorm"; category = "p-adic"; concept = "p-adic norm"; }
+    { ko = "p진평가"; en = "PadicVal"; category = "p-adic"; concept = "p-adic valuation"; }
+    { ko = "비트벡터"; en = "Witt"; category = "p-adic"; concept = "Witt vectors"; }
+
+    # === Zeta / L-function 추가 ===
+    { ko = "디리클레"; en = "Dirichlet"; category = "zeta"; concept = "Dirichlet L-function"; }
+    { ko = "디리클레L"; en = "Dirichlet"; category = "zeta"; concept = "Dirichlet character"; }
+    { ko = "모듈러"; en = "Modular"; category = "zeta"; concept = "modular form"; }
+    { ko = "모듈러형식"; en = "ModularForms"; category = "zeta"; concept = "modular forms"; }
+
+    # === Algebraic geometry 추가 ===
+    { ko = "에탈사상"; en = "EtaleMorphism"; category = "algebraic-geometry"; concept = "étale morphism"; }
+    { ko = "사영적"; en = "Projective"; category = "algebraic-geometry"; concept = "projective scheme"; }
+    { ko = "준연속"; en = "Quasi"; category = "algebraic-geometry"; concept = "quasi-continuous"; }
+
+    # === Round 15: NumberField vocabulary ===
+    { ko = "수체"; en = "NumberField"; category = "number-field"; concept = "number field"; }
+    { ko = "수체기본"; en = "NumberField"; category = "number-field"; concept = "number field basic"; }
+    { ko = "대수적정수"; en = "NumberField"; category = "number-field"; concept = "algebraic integer"; }
+    { ko = "임베딩"; en = "Embeddings"; category = "number-field"; concept = "embedding"; }
+    { ko = "내장"; en = "Embeddings"; category = "number-field"; concept = "embedding"; }
+    { ko = "표준임베딩"; en = "CanonicalEmbedding"; category = "number-field"; concept = "canonical embedding"; }
+    { ko = "표준내장"; en = "CanonicalEmbedding"; category = "number-field"; concept = "canonical embedding"; }
+    { ko = "류수"; en = "ClassNumber"; category = "number-field"; concept = "class number"; }
+    { ko = "이상류수"; en = "ClassNumber"; category = "number-field"; concept = "ideal class number"; }
+    { ko = "판별식"; en = "Discriminant"; category = "number-field"; concept = "discriminant"; }
+    { ko = "단위군"; en = "Units"; category = "number-field"; concept = "unit group"; }
+    { ko = "아델"; en = "Adele"; category = "number-field"; concept = "adele"; }
+    { ko = "아델환"; en = "AdeleRing"; category = "number-field"; concept = "adele ring"; }
+    { ko = "이상"; en = "Ideal"; category = "number-field"; concept = "ideal"; }
+    { ko = "소이상"; en = "PrimeIdeal"; category = "number-field"; concept = "prime ideal"; }
+    { ko = "분기"; en = "Ramification"; category = "number-field"; concept = "ramification"; }
+    { ko = "비분기"; en = "Unramified"; category = "number-field"; concept = "unramified"; }
+    { ko = "프로비니우스"; en = "Frobenius"; category = "number-field"; concept = "Frobenius"; }
+    { ko = "프로베니우스"; en = "Frobenius"; category = "number-field"; concept = "Frobenius (alt spelling)"; }
+
+    # === Round 15: Algebra Order vocabulary ===
+    { ko = "순서군"; en = "OrderedGroup"; category = "algebra-order"; concept = "ordered group"; }
+    { ko = "순서환"; en = "OrderedRing"; category = "algebra-order"; concept = "ordered ring"; }
+    { ko = "순서체"; en = "OrderedField"; category = "algebra-order"; concept = "ordered field"; }
+    { ko = "전순서"; en = "LinearOrder"; category = "algebra-order"; concept = "linear order"; }
+    { ko = "부분순서"; en = "PartialOrder"; category = "algebra-order"; concept = "partial order"; }
+    { ko = "순서동형"; en = "OrderIso"; category = "algebra-order"; concept = "order isomorphism"; }
+    { ko = "양의"; en = "Pos"; category = "algebra-order"; concept = "positive"; }
+    { ko = "음의"; en = "Neg"; category = "algebra-order"; concept = "negative"; }
+    { ko = "절댓값"; en = "AbsoluteValue"; category = "algebra-order"; concept = "absolute value"; }
+
+    # === Round 15: Topology 더 ===
+    { ko = "위상"; en = "TopologicalSpace"; category = "topology"; concept = "topology"; }
+    { ko = "위상공간"; en = "TopologicalSpace"; category = "topology"; concept = "topological space"; }
+    { ko = "연속"; en = "Continuous"; category = "topology"; concept = "continuous"; }
+    { ko = "연속함수"; en = "Continuous"; category = "topology"; concept = "continuous function"; }
+    { ko = "콤팩트"; en = "IsCompact"; category = "topology"; concept = "compact"; }
+    { ko = "콤팩트성"; en = "Compact"; category = "topology"; concept = "compactness"; }
+    { ko = "거리공간"; en = "MetricSpace"; category = "topology"; concept = "metric space"; }
+    { ko = "거리"; en = "Metric"; category = "topology"; concept = "metric"; }
+    { ko = "열린집합"; en = "IsOpen"; category = "topology"; concept = "open set"; }
+    { ko = "닫힌집합"; en = "IsClosed"; category = "topology"; concept = "closed set"; }
+    { ko = "연결"; en = "IsConnected"; category = "topology"; concept = "connected"; }
+    { ko = "연결성"; en = "Connected"; category = "topology"; concept = "connectedness"; }
+    { ko = "분리"; en = "Separation"; category = "topology"; concept = "separation"; }
+    { ko = "분리공리"; en = "T2"; category = "topology"; concept = "separation axioms"; }
+    { ko = "T2"; en = "T2Space"; category = "topology"; concept = "Hausdorff (T2)"; }
+    { ko = "하우스도르프"; en = "Hausdorff"; category = "topology"; concept = "Hausdorff space"; }
+
+    # === Round 15: Linear Algebra 더 ===
+    { ko = "선형사상"; en = "LinearMap"; category = "linear-algebra"; concept = "linear map"; }
+    { ko = "선형변환"; en = "LinearMap"; category = "linear-algebra"; concept = "linear transformation"; }
+    { ko = "부분공간"; en = "Submodule"; category = "linear-algebra"; concept = "subspace / submodule"; }
+    { ko = "부가군"; en = "Submodule"; category = "linear-algebra"; concept = "submodule"; }
+    { ko = "차원"; en = "Dimension"; category = "linear-algebra"; concept = "dimension"; }
+    { ko = "차수"; en = "rank"; category = "linear-algebra"; concept = "rank"; }
+    { ko = "기저"; en = "Basis"; category = "linear-algebra"; concept = "basis"; }
+    { ko = "행렬"; en = "Matrix"; category = "linear-algebra"; concept = "matrix"; }
+    { ko = "유한차원"; en = "FiniteDimensional"; category = "linear-algebra"; concept = "finite-dimensional"; }
+    { ko = "유한차원공간"; en = "FiniteDimensional"; category = "linear-algebra"; concept = "finite-dimensional space"; }
+    { ko = "범위"; en = "Span"; category = "linear-algebra"; concept = "span"; }
+    { ko = "선형독립"; en = "LinearIndependent"; category = "linear-algebra"; concept = "linear independence"; }
+
+    # === Round 18: Algebra Group / Ring / Module / Ideal vocabulary ===
+    { ko = "군"; en = "Group"; category = "algebra-group"; concept = "group"; }
+    { ko = "곱군"; en = "MulGroup"; category = "algebra-group"; concept = "multiplicative group"; }
+    { ko = "덧군"; en = "AddGroup"; category = "algebra-group"; concept = "additive group"; }
+    { ko = "가환군"; en = "CommGroup"; category = "algebra-group"; concept = "commutative group"; }
+    { ko = "아벨군"; en = "CommGroup"; category = "algebra-group"; concept = "abelian group"; }
+    { ko = "단위원"; en = "One"; category = "algebra-group"; concept = "identity element"; }
+    { ko = "역원"; en = "Inv"; category = "algebra-group"; concept = "inverse"; }
+    { ko = "단위반"; en = "Monoid"; category = "algebra-group"; concept = "monoid"; }
+    { ko = "준동형군"; en = "MonoidHom"; category = "algebra-group"; concept = "monoid hom"; }
+
+    { ko = "환"; en = "Ring"; category = "algebra-ring"; concept = "ring"; }
+    { ko = "가환환"; en = "CommRing"; category = "algebra-ring"; concept = "commutative ring"; }
+    { ko = "반환"; en = "Semiring"; category = "algebra-ring"; concept = "semiring"; }
+    { ko = "정역"; en = "IntegralDomain"; category = "algebra-ring"; concept = "integral domain"; }
+    { ko = "환준동형"; en = "RingHom"; category = "algebra-ring"; concept = "ring homomorphism"; }
+    { ko = "사칙"; en = "Field"; category = "algebra-ring"; concept = "field arithmetic"; }
+
+    { ko = "이상"; en = "Ideal"; category = "ring-theory"; concept = "ideal"; }
+    { ko = "주이상"; en = "Principal"; category = "ring-theory"; concept = "principal ideal"; }
+    { ko = "극대이상"; en = "Maximal"; category = "ring-theory"; concept = "maximal ideal"; }
+    { ko = "소이상"; en = "Prime"; category = "ring-theory"; concept = "prime ideal"; }
+    { ko = "환몫"; en = "Quotient"; category = "ring-theory"; concept = "quotient ring"; }
+    { ko = "이상생성"; en = "Span"; category = "ring-theory"; concept = "ideal span"; }
+
+    { ko = "가군"; en = "Module"; category = "algebra-module"; concept = "module"; }
+    { ko = "왼가군"; en = "LeftModule"; category = "algebra-module"; concept = "left module"; }
+    { ko = "오른가군"; en = "RightModule"; category = "algebra-module"; concept = "right module"; }
+    { ko = "자유가군"; en = "FreeModule"; category = "algebra-module"; concept = "free module"; }
+    { ko = "유한생성가군"; en = "FG"; category = "algebra-module"; concept = "finitely generated module"; }
+    { ko = "스칼라곱"; en = "SMul"; category = "algebra-module"; concept = "scalar multiplication"; }
+
+    # === Round 27: Analysis vocabulary ===
+    { ko = "노름"; en = "Norm"; category = "analysis"; concept = "norm"; }
+    { ko = "노름군"; en = "NormedGroup"; category = "analysis"; concept = "normed group"; }
+    { ko = "노름환"; en = "NormedRing"; category = "analysis"; concept = "normed ring"; }
+    { ko = "노름체"; en = "NormedField"; category = "analysis"; concept = "normed field"; }
+    { ko = "내적"; en = "Inner"; category = "analysis"; concept = "inner product"; }
+    { ko = "내적공간"; en = "InnerProductSpace"; category = "analysis"; concept = "inner product space"; }
+    { ko = "미분"; en = "Deriv"; category = "analysis"; concept = "derivative"; }
+    { ko = "도함수"; en = "Deriv"; category = "analysis"; concept = "derivative"; }
+    { ko = "RC유사"; en = "RCLike"; category = "analysis"; concept = "real or complex"; }
+    { ko = "실수"; en = "Real"; category = "analysis"; concept = "real number"; }
+    { ko = "복소수"; en = "Complex"; category = "analysis"; concept = "complex number"; }
+
+    # === Round 27: MeasureTheory vocabulary ===
+    { ko = "측도"; en = "Measure"; category = "measure-theory"; concept = "measure"; }
+    { ko = "측도공간"; en = "MeasureSpace"; category = "measure-theory"; concept = "measure space"; }
+    { ko = "가측"; en = "Measurable"; category = "measure-theory"; concept = "measurable"; }
+    { ko = "가측공간"; en = "MeasurableSpace"; category = "measure-theory"; concept = "measurable space"; }
+    { ko = "보렐"; en = "Borel"; category = "measure-theory"; concept = "Borel space"; }
+    { ko = "적분"; en = "Integral"; category = "measure-theory"; concept = "integral"; }
+    { ko = "L1공간"; en = "L1Space"; category = "measure-theory"; concept = "L^1 space"; }
+
+    # === Round 30: Order theory + Combinatorics vocabulary ===
+    { ko = "격자"; en = "Lattice"; category = "order-theory"; concept = "lattice"; }
+    { ko = "완비격자"; en = "CompleteLattice"; category = "order-theory"; concept = "complete lattice"; }
+    { ko = "상한"; en = "sSup"; category = "order-theory"; concept = "supremum"; }
+    { ko = "하한"; en = "sInf"; category = "order-theory"; concept = "infimum"; }
+    { ko = "상계"; en = "UpperBound"; category = "order-theory"; concept = "upper bound"; }
+    { ko = "하계"; en = "LowerBound"; category = "order-theory"; concept = "lower bound"; }
+    { ko = "그래프"; en = "SimpleGraph"; category = "combinatorics"; concept = "simple graph"; }
+    { ko = "조합"; en = "Choose"; category = "combinatorics"; concept = "binomial coefficient"; }
+    { ko = "이항계수"; en = "Choose"; category = "combinatorics"; concept = "binomial coefficient"; }
+    { ko = "카탈란"; en = "Catalan"; category = "combinatorics"; concept = "Catalan number"; }
+    { ko = "집합"; en = "Set"; category = "data-foundation"; concept = "set"; }
+    { ko = "유한집합"; en = "Finset"; category = "data-foundation"; concept = "finite set"; }
+    { ko = "자연수"; en = "Nat"; category = "data-foundation"; concept = "natural number"; }
+    { ko = "정수"; en = "Int"; category = "data-foundation"; concept = "integer"; }
+  ];
+
+  # =================================================================
+  # === 한글 조사 strip (deterministic) ==============================
+  # =================================================================
+  #
+  # 자주 등장하는 조사 강제 제거.
+
+  koreanParticles = [
+    "이란" "이라는" "이라고" "이라" "이가" "이가" "이의" "이는" "이를" "이에" "이에서"
+    "가" "이" "는" "은" "을" "를" "의" "에" "에서" "으로" "로"
+    "와" "과" "와의" "과의" "이란" "라는" "라고"
+  ];
+
+  stripParticle = word:
+    let
+      tryStrip = particle: rest:
+        let
+          wLen = builtins.stringLength word;
+          pLen = builtins.stringLength particle;
+        in
+          if wLen > pLen
+            && builtins.substring (wLen - pLen) pLen word == particle
+          then builtins.substring 0 (wLen - pLen) word
+          else rest;
+      go = particles:
+        if particles == [] then word
+        else
+          let stripped = tryStrip (builtins.head particles) null;
+          in if stripped != null then stripped
+             else go (builtins.tail particles);
+    in go koreanParticles;
+
+  # =================================================================
+  # === 한글 utterance → Mathlib keyword 매핑 ========================
+  # =================================================================
+
+  matchKoreanWord = word:
+    let stripped = stripParticle word;
+        matches = builtins.filter
+          (entry: entry.ko == stripped || entry.ko == word)
+          koreanMathDictionary;
+    in if matches == [] then null else builtins.head matches;
+
+  # tokenize: 공백 split
+  tokenize = utterance:
+    builtins.filter
+      (s: builtins.isString s && builtins.stringLength s > 0)
+      (builtins.split " " utterance);
+
+  # =================================================================
+  # === Bridge query primitive =======================================
+  # =================================================================
+  #
+  # 한글 utterance → matched dictionary entries → Mathlib lookup
+  # → envelope.
+
+  bridgeQuery = utterance:
+    let
+      tokens = tokenize utterance;
+      tokenMatches = builtins.filter (m: m != null)
+        (builtins.map matchKoreanWord tokens);
+    in
+      if tokenMatches == [] then {
+        outcome = "held-no-korean-dictionary-match";
+        utterance = utterance;
+        tokens = tokens;
+        held_reason = "한글 발화에 등록된 수학 vocabulary 가 없음";
+      }
+      else
+        let
+          firstMatch = builtins.head tokenMatches;
+          categoryHits = lookup.byCategory firstMatch.category;
+          keywordHits = lookup.searchByKeyword firstMatch.en;
+          # 같은 카테고리 + keyword 매칭 = best
+          # 단순화: keywordHits 우선
+          bestHits =
+            if builtins.length keywordHits > 0
+            then keywordHits
+            else categoryHits;
+        in {
+          outcome =
+            if bestHits == []
+            then "held-no-mathlib-match-for-keyword"
+            else "mathlib-search-from-korean";
+          utterance = utterance;
+          matched_korean_word = firstMatch.ko;
+          english_keyword = firstMatch.en;
+          inferred_category = firstMatch.category;
+          concept = firstMatch.concept;
+          match_count = builtins.length bestHits;
+          # 첫 5 entries 만 surface (envelope size 제어)
+          top_matches =
+            let
+              take = n: lst:
+                if n == 0 || lst == [] then []
+                else [(builtins.head lst)] ++ take (n - 1) (builtins.tail lst);
+            in take 5 bestHits;
+          korean_response =
+            if bestHits == []
+            then "'" + firstMatch.ko + "' (" + firstMatch.en + ") 는 Mathlib 에 직접 매칭 없음"
+            else "'" + firstMatch.ko + "' → Mathlib '" + firstMatch.en + "' (" +
+                 builtins.toString (builtins.length bestHits) + " 개 매칭)";
+        };
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    dictionary_entry_count = 216;  # hardcoded; Round 30 expansion (+ Order/Combinatorics/Data)
+    particle_count = 23;  # hardcoded
+    has_bridgeQuery = true;
+    has_matchKoreanWord = true;
+    has_stripParticle = true;
+    has_tokenize = true;
+    lookup_owner_inherited = lookup.ownerName;
+    deterministic = true;  # LLM 없음
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyKoreanToMathlibBridgePlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "korean-bridge-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "dictionary" request then {
+      outcome = "korean-dictionary-emitted"; receipt = koreanMathDictionary;
+    }
+    else if builtins.hasAttr "query" request then
+      bridgeQuery request.query
+    else if builtins.hasAttr "match_word" request then
+      let m = matchKoreanWord request.match_word;
+      in if m == null
+         then { outcome = "held-no-dictionary-entry"; receipt = { word = request.match_word; }; }
+         else { outcome = "korean-word-matched"; receipt = m; }
+    else if builtins.hasAttr "strip_particle" request then {
+      outcome = "particle-stripped";
+      receipt = { input = request.strip_particle; stripped = stripParticle request.strip_particle; };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "dictionary" "query" "match_word" "strip_particle"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit koreanMathDictionary koreanParticles;
+  inherit stripParticle matchKoreanWord tokenize bridgeQuery;
+  inherit inventorySummary applyKoreanToMathlibBridgePlate;
+}

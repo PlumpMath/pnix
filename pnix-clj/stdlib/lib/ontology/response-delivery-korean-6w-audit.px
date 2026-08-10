@@ -1,0 +1,407 @@
+# stdlib.lib.ontology.response-delivery-korean-6w-audit
+#
+# Korean 6W explanation surface for a verified response delivery timeline audit.
+# It is read-only: no response delivery, timeline write, memory/DB write, source
+# ingest, ontology promotion, or policy persistence.
+let
+  ownerName = "stdlib.lib.ontology.response-delivery-korean-6w-audit";
+
+  timelineAuditOwner = import ./response-delivery-timeline-audit.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  intAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isInt v then v else dflt;
+
+  listAttrOr = attrs: key:
+    let v = getAttrOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  isEmptyAttrs = attrs:
+    builtins.isAttrs attrs && builtins.attrNames attrs == [ ];
+
+  auditFrom = req:
+    if hasAttr req "response_delivery_timeline_audit" && builtins.isAttrs req.response_delivery_timeline_audit then
+      req.response_delivery_timeline_audit
+    else if hasAttr req "timeline_audit_receipt" && builtins.isAttrs req.timeline_audit_receipt then
+      req.timeline_audit_receipt
+    else if hasAttr req "audit" && builtins.isAttrs req.audit then
+      req.audit
+    else if hasAttr req "source" && builtins.isAttrs req.source then
+      req.source
+    else { };
+
+  timelineFromAudit = audit:
+    if hasAttr audit "response_delivery_timeline_snapshot" && builtins.isAttrs audit.response_delivery_timeline_snapshot then
+      audit.response_delivery_timeline_snapshot
+    else { };
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "response_emit_requested" false
+    || getBool req "public_response_emit_requested" false
+    || getBool req "response_delivery_requested" false
+    || getBool req "public_response_delivery_requested" false
+    || getBool req "wire_write_requested" false
+    || getBool req "public_wire_write_requested" false
+    || getBool req "timeline_write_requested" false
+    || getBool req "conversation_state_write_requested" false
+    || getBool req "discourse_state_write_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  effectLocked = attrs:
+    builtins.isAttrs attrs
+    && getBool attrs "public_response_emit_allowed" true == false
+    && getBool attrs "response_delivery_allowed" true == false
+    && getBool attrs "wire_write_allowed" true == false
+    && getBool attrs "timeline_write_allowed" true == false
+    && getBool attrs "conversation_state_write_allowed" true == false
+    && getBool attrs "discourse_state_write_allowed" true == false
+    && getBool attrs "ontology_query_allowed" true == false
+    && getBool attrs "ontology_emit_allowed" true == false
+    && getBool attrs "ontology_promote_allowed" true == false
+    && getBool attrs "accepted_fact_promotion_allowed" true == false
+    && getBool attrs "learning_promotion_allowed" true == false
+    && getBool attrs "file_write_allowed" true == false
+    && getBool attrs "host_execution_allowed" true == false
+    && getBool attrs "host_apply_allowed" true == false
+    && getBool attrs "direct_apply_allowed" true == false
+    && getBool attrs "apply_allowed" true == false
+    && getBool attrs "raw_eval_allowed" true == false
+    && getBool attrs "test_execution_allowed" true == false
+    && getBool attrs "search_execution_allowed" true == false
+    && getBool attrs "memory_write_allowed" true == false
+    && getBool attrs "db_write_allowed" true == false
+    && getBool attrs "policy_persistence_allowed" true == false;
+
+  auditOk = audit:
+    builtins.isAttrs audit
+    && stringAttrOr audit "schema" "" == "puncheetah.response-delivery-timeline-audit.v0"
+    && stringAttrOr audit "outcome" "" == "response-delivery-timeline-audit-passed"
+    && getBool audit "verified" false == true
+    && getBool audit "is_held" true == false
+    && getBool audit "response_delivery_timeline_audit_passed" false == true
+    && getBool audit "public_response_delivery_receipt_verified" false == true
+    && getBool audit "timeline_snapshot_verified" false == true
+    && getBool audit "public_response_delivered" false == true
+    && getBool audit "public_wire_shape_opaque" false == true
+    && stringAttrOr audit "session_id" "" != ""
+    && stringAttrOr audit "exchange_id" "" != ""
+    && stringAttrOr audit "terminal_receipt_outcome" "" == "public-response-delivery-receipt-verified"
+    && stringAttrOr audit "next_gate" "" == "response-delivery-korean-6w-audit"
+    && effectLocked audit;
+
+  timelineOk = timeline:
+    builtins.isAttrs timeline
+    && stringAttrOr timeline "kind" "" == "response-delivery-timeline-snapshot-v0"
+    && stringAttrOr timeline "schema" "" == "puncheetah.response.delivery-timeline-snapshot.v0"
+    && getBool timeline "verified" false == true
+    && stringAttrOr timeline "final_status" "" == "delivered"
+    && listAttrOr timeline "events" != [ ];
+
+  eventOutcome = event:
+    stringAttrOr event "receipt_outcome" (stringAttrOr event "outcome" "");
+
+  eventSeq = event:
+    intAttrOr event "seq" 0;
+
+  labelForOutcome = outcome:
+    if outcome == "ontology-discourse-state-projection-built" then
+      "대화 맥락이 discourse-state anchor 후보로 정리됨"
+    else if outcome == "ontology-response-assembly-surface-built" then
+      "public-safe response envelope가 shape/opacity 검증을 통과함"
+    else if outcome == "public-response-delivery-receipt-verified" then
+      "host delivery result가 public envelope와 정확히 일치함"
+    else
+      outcome;
+
+  stepSummary = event: {
+    seq = eventSeq event;
+    outcome = eventOutcome event;
+    label_ko = labelForOutcome (eventOutcome event);
+  };
+
+  timelineText = events:
+    builtins.concatStringsSep " -> " (
+      builtins.map
+        (event:
+          (builtins.toString (eventSeq event)) + ". " + labelForOutcome (eventOutcome event))
+        events
+    );
+
+  allowedQueryKinds = [
+    "status"
+    "six-w"
+    "why-delivered"
+    "public-boundary"
+    "evidence-chain"
+    "gate-order"
+  ];
+
+  sixWFor = audit: timeline:
+    let
+      events = listAttrOr timeline "events";
+      eventCount = builtins.length events;
+      firstEvent = if eventCount > 0 then builtins.elemAt events 0 else { };
+      lastEvent = if eventCount > 0 then builtins.elemAt events (eventCount - 1) else { };
+      sessionId = stringAttrOr audit "session_id" "";
+      exchangeId = stringAttrOr audit "exchange_id" "";
+      whatText =
+        "검증된 public response envelope가 host delivery result와 정확히 일치하는지 확인하고, 전달 완료를 receipt로 감사했다.";
+      whyText =
+        "사용자 표면에는 내부 substrate/owner/path를 숨기고, shape/opacity 검증을 통과한 공개 응답만 전달해야 하기 때문이다.";
+      howText =
+        "discourse-state projection, response assembly surface, public response delivery receipt가 timeline seq 순서로 관찰됐고, delivery는 host evidence로만 인정됐다.";
+      resultText =
+        "최종 상태는 delivered이며, .px는 전달을 실행하지 않고 delivery evidence와 public opacity만 검증했다.";
+    in {
+      who = "host delivery transport가 응답을 전달했고, pnix response/opacity owners가 delivery evidence를 검증했다.";
+      what = whatText;
+      when = "timeline seq 1.." + builtins.toString eventCount + " 사이에서 " + labelForOutcome (eventOutcome firstEvent) + "부터 " + labelForOutcome (eventOutcome lastEvent) + "까지 진행됐다.";
+      where = "session=" + sessionId + ", exchange=" + exchangeId + " public response lane에서 감사됐다.";
+      why = whyText;
+      how = howText;
+      result = resultText;
+      text =
+        "누가: host delivery transport와 pnix response/opacity owners. "
+        + "무엇을: " + whatText + " "
+        + "언제: timeline seq 1.." + builtins.toString eventCount + ". "
+        + "어디서: session=" + sessionId + ", exchange=" + exchangeId + ". "
+        + "왜: " + whyText + " "
+        + "어떻게: " + howText + " "
+        + "결과: " + resultText;
+      terminal_status = stringAttrOr timeline "final_status" "";
+      terminal_receipt_outcome = stringAttrOr audit "terminal_receipt_outcome" "";
+    };
+
+  answerFor = queryKind: audit: sixW: timeline:
+    let events = listAttrOr timeline "events";
+    in
+      if queryKind == "status" then
+        "이 응답 전달 lane의 최종 상태는 delivered다. " + sixW.result
+      else if queryKind == "six-w" then
+        sixW.text
+      else if queryKind == "why-delivered" then
+        sixW.why
+      else if queryKind == "public-boundary" then
+        "공개 표면에는 summary/body/evidence 같은 public field만 나가야 하고, owner path, construction trace, mirror plate, substrate envelope는 전달될 수 없다."
+      else if queryKind == "evidence-chain" then
+        "증거 chain은 다음 순서다: " + timelineText events
+      else if queryKind == "gate-order" then
+        "gate/event 순서는 event seq 기준으로 검증됐다: " + timelineText events
+      else
+        sixW.text;
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.response-delivery-korean-6w-audit.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    reason = reason;
+    timeline_query_answered = false;
+    six_w_explanation_built = false;
+    surface_language = "korean";
+    public_response_emit_allowed = false;
+    response_delivery_allowed = false;
+    wire_write_allowed = false;
+    timeline_write_allowed = false;
+    conversation_state_write_allowed = false;
+    discourse_state_write_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    receipt = {
+      kind = "response-delivery-korean-6w-audit-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      timeline_query_answered = false;
+      six_w_explanation_built = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+    negative_receipt = {
+      kind = "response-delivery-korean-6w-audit-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "do not explain response delivery in Korean unless a verified read-only response delivery timeline audit is present";
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName auditOk timelineOk labelForOutcome sixWFor answerFor;
+
+  buildResponseDeliveryKorean6wAudit = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-response-delivery-korean-6w-non-attr-request" "Response delivery Korean 6W request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-response-delivery-korean-6w-effect-blocked" "Response delivery Korean 6W is read-only; it never emits/delivers responses, writes timeline/conversation state, writes memory/DB, or persists policy." { }
+    else
+      let
+        audit = auditFrom req;
+        timeline = timelineFromAudit audit;
+        queryKind = stringAttrOr req "query_kind" "status";
+        events = listAttrOr timeline "events";
+        sixW = sixWFor audit timeline;
+      in
+        if !(builtins.isAttrs audit) || isEmptyAttrs audit then
+          mkHeld "held-response-delivery-korean-6w-audit-required" "Korean 6W response delivery explanation requires a verified response delivery timeline audit." { }
+        else if !auditOk audit then
+          mkHeld "held-response-delivery-korean-6w-invalid-audit" "Response delivery timeline audit must be verified, public-opaque, effect-locked, delivered, and point at response-delivery-korean-6w-audit." {
+            response_delivery_timeline_audit = audit;
+          }
+        else if !timelineOk timeline then
+          mkHeld "held-response-delivery-korean-6w-timeline-required" "Response delivery timeline audit must carry a verified response delivery timeline snapshot with events." {
+            response_delivery_timeline_audit = audit;
+          }
+        else if !(builtins.elem queryKind allowedQueryKinds) then
+          mkHeld "held-response-delivery-korean-6w-unsupported-query" "Unsupported response delivery Korean 6W query kind." {
+            query_kind = queryKind;
+            allowed_query_kinds = allowedQueryKinds;
+          }
+        else {
+          schema = "puncheetah.response-delivery-korean-6w-audit.v0";
+          owner = ownerName;
+          outcome = "response-delivery-korean-6w-audit-built";
+          is_held = false;
+          verified = true;
+          timeline_query_answered = true;
+          surface_language = "korean";
+          six_w_explanation_built = true;
+          query_kind = queryKind;
+          session_id = stringAttrOr audit "session_id" "";
+          exchange_id = stringAttrOr audit "exchange_id" "";
+          terminal_status = stringAttrOr timeline "final_status" "";
+          terminal_receipt_outcome = stringAttrOr audit "terminal_receipt_outcome" "";
+          six_w = sixW;
+          focused_answer_ko = answerFor queryKind audit sixW timeline;
+          evidence_steps = builtins.map stepSummary events;
+          source_ref = {
+            schema = stringAttrOr audit "schema" "";
+            outcome = stringAttrOr audit "outcome" "";
+            event_count = getAttrOr audit "event_count" 0;
+            public_wire_shape_opaque = getBool audit "public_wire_shape_opaque" false;
+          };
+          source_owner_reuse = {
+            response_delivery_timeline_audit_owner = timelineAuditOwner.ownerName;
+            response_delivery_timeline_audit_replaced = false;
+            pnix_db_transaction_timeline_korean_6w_replaced = false;
+            conversation_store_replaced = false;
+            pnix_db_append_gate_replaced = false;
+          };
+          next_gate = "public-response-opacity-regression-rescan";
+          public_response_emit_allowed = false;
+          response_delivery_allowed = false;
+          wire_write_allowed = false;
+          timeline_write_allowed = false;
+          conversation_state_write_allowed = false;
+          discourse_state_write_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "response-delivery-korean-6w-audit-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "response-delivery-korean-6w-audit-built";
+            timeline_query_answered = true;
+            six_w_explanation_built = true;
+            surface_language = "korean";
+            query_kind = queryKind;
+            next_gate = "public-response-opacity-regression-rescan";
+            invariant = "Korean 6W explanation is derived only from verified response delivery timeline audit evidence while all .px effects remain closed";
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "response-delivery-korean-6w-audit-v0";
+    role = "verified response delivery timeline audit -> Korean 6W public delivery explanation";
+    source_gate = "response-delivery-timeline-audit";
+    next_gate = "public-response-opacity-regression-rescan";
+    allowed_query_kinds = allowedQueryKinds;
+    non_replacement_boundary = "does not replace pnix-db transaction Korean 6W audit, response delivery timeline audit, conversation store, response assembly, host delivery transport, or pnix-db append gates";
+    effect_policy = "read-only Korean explanation; no response emit/delivery, no timeline/conversation/discourse write, no ontology query/emit/promote, no accepted fact promotion, no memory/DB write, no policy persistence, no route execution, and no code write";
+  };
+}

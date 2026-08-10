@@ -1,0 +1,22 @@
+# stdlib/lib/nl/korean-inchoative-test.px — 기동상(inchoative) 보조용언 -게 되다 (parse + realize).
+#
+# 2어절 [V-게 되다]: head=V-게(verbIdx-1, action=게 strip), 되=aux. 가게 된다→action=가 aspect=inchoative.
+#   되다=주동사(의사가 된다)와 구분: 직전 어절이 *게-종결 술어*일 때만(progressive #6 동형 stem-predicate 게이트).
+# aspect 슬롯(progressive/resultative 형제). realize=V-게 + 되다(coreWords aspect 블록). unfusion 불요(게 strip).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  pa = s: let p = knm.liftToProposition s; in p.action + "/" + p.aspect;
+  v = s: (knm.convergeGate s).verdict;
+in {
+  gage = pa "철수가 학교에 가게 된다";   # 가/inchoative
+  meokge = pa "철수가 밥을 먹게 된다";    # 먹/inchoative
+  all_ok =
+       (pa "철수가 학교에 가게 된다" == "가/inchoative")
+    && (pa "철수가 밥을 먹게 된다" == "먹/inchoative")
+    # ★object 보존
+    && (B.any (r: (r.role == "object") && (r.entity == "밥")) (knm.liftToProposition "철수가 밥을 먹게 된다").roles)
+    # ★round-trip math-keep
+    && (v "철수가 학교에 가게 된다" == "math-keep")
+    && (v "철수가 밥을 먹게 된다" == "math-keep")
+    # ★회귀: 되다 주동사(V-게 아님)는 inchoative 미발화 → aspect plain
+    && (pa "철수가 의사가 된다" == "되/plain");
+}

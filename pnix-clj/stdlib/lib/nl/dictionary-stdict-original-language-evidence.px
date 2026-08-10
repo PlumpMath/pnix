@@ -1,0 +1,109 @@
+# stdlib/lib/nl/dictionary-stdict-original-language-evidence.px
+#
+# stdict `original_language_info` -> typed lexical evidence.
+#
+# This module is deliberately NOT a translation table and NOT an ontology writer.
+# It consumes pnix rec{} facts shaped by
+# `dictionary-stdict-original-language-store-plan.px` and projects them as
+# proposer-only evidence for retrieval/route/output faces. A target owner must
+# still dispose before any durable semantic claim.
+let
+  B = builtins;
+  schema = "dictionary.stdict-original-language-facts.v1";
+  generatedPath = ./dictionary-stdict-original-language-facts.generated.px;
+  generatedFacts =
+    if B.pathExists generatedPath
+    then import generatedPath
+    else {
+      inherit schema;
+      source = "국립국어원 표준국어대사전 original_language_info";
+      record_count = 0;
+      records = [ ];
+    };
+
+  concatLists = lists: B.foldl' (acc: xs: acc ++ xs) [ ] lists;
+  recordsFrom = facts:
+    if facts ? records then facts.records
+    else if facts ? shards then concatLists (B.map (s: s.records or [ ]) facts.shards)
+    else [ ];
+  generatedRecords = recordsFrom generatedFacts;
+
+  take = n: xs:
+    let len = B.length xs;
+        k = if n < len then n else len;
+    in B.genList (i: B.elemAt xs i) k;
+  defaultLimit = 5;
+  limitOf = args: args.limit or defaultLimit;
+
+  normalizeEvidence = r: {
+    evidence_kind = "stdict.original_language_info";
+    evidence_role = "lexical-origin-clue";
+    evidence_source = schema;
+    lemma = r.lemma or "";
+    target_code = r.target_code or null;
+    word_type = r.word_type or "";
+    origin_surface = r.origin_surface or "";
+    origin_language_type = r.origin_language_type or "";
+    origin_index = r.origin_index or 0;
+    proposer_only = true;
+    durable_truth = false;
+    accepted_as_truth = false;
+    ontology_assert_allowed = false;
+    translation_truth = false;
+    note = "origin-language lexical clue only; not semantic equivalence";
+  };
+
+  responseFor = e:
+    "표준국어대사전 원어 단서: " + e.lemma + " <= " + e.origin_surface
+    + " (" + e.origin_language_type + ")";
+
+  envelope = hits:
+    let evidence = B.map normalizeEvidence hits;
+        first = if evidence == [ ] then null else B.head evidence;
+    in {
+      outcome = if evidence == [ ] then "held-no-stdict-origin-clue" else "evidence-ready";
+      evidence_kind = "stdict.original_language_info";
+      evidence_count = B.length evidence;
+      evidence = evidence;
+      response = if first == null then "표준국어대사전 원어 단서가 없습니다." else responseFor first;
+      proposer_only = true;
+      durable_truth = false;
+      accepted_as_truth = false;
+      ontology_assert_allowed = false;
+      translation_truth = false;
+    };
+
+  lookupByLemmaIn = factRecords: args:
+    let lemma = args.lemma or "";
+        hits = B.filter (r: (r.lemma or "") == lemma) factRecords;
+    in envelope (take (limitOf args) hits);
+
+  lookupByOriginSurfaceIn = factRecords: args:
+    let surface = args.origin_surface or "";
+        hits = B.filter (r: (r.origin_surface or "") == surface) factRecords;
+    in envelope (take (limitOf args) hits);
+
+  splitWords = s: B.filter B.isString (B.split " " s);
+  evidenceForUtteranceIn = factRecords: utterance:
+    let tokens = splitWords utterance;
+        perToken = B.map (t: (lookupByLemmaIn factRecords { lemma = t; limit = 2; }).evidence) tokens;
+        evidence = concatLists perToken;
+    in envelope evidence;
+in {
+  inherit schema generatedRecords normalizeEvidence responseFor
+          lookupByLemmaIn lookupByOriginSurfaceIn evidenceForUtteranceIn;
+
+  lookupByLemma = args: lookupByLemmaIn generatedRecords args;
+  lookupByOriginSurface = args: lookupByOriginSurfaceIn generatedRecords args;
+  evidenceForUtterance = utterance: evidenceForUtteranceIn generatedRecords utterance;
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.dictionary-stdict-original-language-evidence";
+    consumes = "dictionary.stdict-original-language-facts.v1 rec{} facts";
+    emits = "typed lexical-origin evidence only";
+    proposer_only = true;
+    durable_truth = false;
+    ontology_assert_allowed = false;
+    translation_truth = false;
+  };
+}

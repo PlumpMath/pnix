@@ -1,0 +1,24 @@
+{:kind :stage7-core-lockin-set
+ :schema-version 1
+ :lineage
+ {:source-repo "~/pnix-hy/pnix-hy"
+  :source-file "~/pnix-hy/pnix-hy/pnix_hy/pnix_runtime.py"
+  :source-symbols ["SELF_TEST_CASES" "HY_RUNTIME_CORE_CASES"]
+  :captured-at "2026-06-29"
+  :note "Structural lock-ins only. pnix-clj does not use Hy/Python runtime machinery."}
+ :cases
+ [{:name "arith"
+   :source "1 + 1"
+   :oracle-result {:status :ok :value 2}}
+  {:name "lambda"
+   :source "(x: x + 1) 41"
+   :oracle-result {:status :ok :value 42}}
+  {:name "list-builtin"
+   :source "builtins.elemAt [ 10 20 30 ] 1"
+   :oracle-result {:status :ok :value 20}}
+  {:name "merge"
+   :source "({ a = 1; } // { b = 2; }).b"
+   :oracle-result {:status :ok :value 2}}
+  {:name "float-plus"
+   :source "1 + 1.5"
+   :oracle-result {:status :ok :value 2.5}}]}

@@ -1,0 +1,224 @@
+let
+  ownerName = "stdlib.nl.math-domain-nl-lifter";
+
+  # === Math domain NL lifter (Axiom #43) ===========================
+  #
+  # 사용자 directive (2026-05-28): NL super-set bidirectional.
+  # Axiom #27 (math-domain-registry, 84 plates × 18 categories) 의 NL surface.
+  #
+  # NL utterance → math category routing.
+  #
+  # # 18 categories cover (en + ko 양어)
+  #
+  # 가장 자주 쓰이는 category 부터:
+  # - number-theory      소수 / GCD / LCM / 합동
+  # - number-sequences   피보나치 / 등차 / 등비
+  # - algebra            방정식 / 다항식
+  # - geometry           기하 / 도형 / 합동
+  # - combinatorics      순열 / 조합 / 확률
+  # - analysis           미적분 / 극한
+  # - probability        확률 / 기댓값
+  # - proof              증명 / 귀납
+  # - set-theory         집합 / 멱집합
+  # - logic              명제 / 양화사
+  # - linear-algebra     행렬 / 벡터
+  # - calculus           미분 / 적분
+  # - statistics         통계 / 분산
+  # - graph-theory       그래프 / 노드
+  # - optimization       최적화 / 선형계획
+  # - topology           위상 / 연결성
+  # - category-theory    범주론 / 함자
+  # - number-system      실수 / 복소수
+  #
+  # # Held-honest 헌법
+  #
+  # 키워드 0 → held-no-math-domain. multiple → held-multi-domain.
+
+  knownMathDomainNLPatterns = [
+    {
+      domain = "number-theory";
+      en_keywords = [ "prime" "GCD" "LCM" "modulo" "divisibility" "factorial" ];
+      ko_keywords = [ "소수" "최대공약수" "최소공배수" "나머지" "약수" "팩토리얼" "소수 판정" "약수 구해" ];
+    }
+    {
+      domain = "number-sequences";
+      en_keywords = [ "Fibonacci" "arithmetic sequence" "geometric sequence" "sequence sum" ];
+      ko_keywords = [ "피보나치" "등차" "등비" "수열" "등차 수열" "등비 수열" "수열의 합" ];
+    }
+    {
+      domain = "algebra";
+      en_keywords = [ "polynomial" "factorize" "quadratic" "expand expression" ];
+      ko_keywords = [ "다항식" "인수분해" "이차" "전개" "이차 방정식" "다항식 전개" ];
+    }
+    {
+      domain = "geometry";
+      en_keywords = [ "circle area" "triangle area" "Pythagoras" "Euclidean" ];
+      ko_keywords = [ "원 넓이" "삼각형 넓이" "피타고라스" "유클리드" "도형 넓이" "기하 문제" ];
+    }
+    {
+      domain = "combinatorics";
+      en_keywords = [ "permutation" "combination" "n choose k" "binomial" ];
+      ko_keywords = [ "순열" "조합" "이항" "이산" "n 개 중에서" "경우의 수" ];
+    }
+    {
+      domain = "analysis";
+      en_keywords = [ "Riemann" "real analysis" "completeness" ];
+      ko_keywords = [ "해석학" "리만" "실해석" "완비성" "엡실론 델타" ];
+    }
+    {
+      domain = "probability";
+      en_keywords = [ "probability" "expected value" "variance" "random" ];
+      ko_keywords = [ "확률" "기댓값" "분산" "랜덤" "확률 분포" "주사위" ];
+    }
+    {
+      domain = "proof-substrate";
+      en_keywords = [ "Mizar" "Coq proof" "induction proof" "axiom" ];
+      ko_keywords = [ "Mizar" "Coq" "공리" "정리" "수학적 귀납법" "정리 증명" ];
+    }
+    {
+      domain = "set-theory";
+      en_keywords = [ "set theory" "power set" "Cantor" "cardinality" ];
+      ko_keywords = [ "집합론" "멱집합" "기수" "집합의 크기" "칸토어" ];
+    }
+    {
+      domain = "logic";
+      en_keywords = [ "predicate logic" "quantifier" "Boolean" "first-order" ];
+      ko_keywords = [ "명제논리" "양화사" "부울" "일계논리" "술어 논리" ];
+    }
+    {
+      domain = "linear-algebra";
+      en_keywords = [ "linear algebra" "matrix product" "vector space" ];
+      ko_keywords = [ "선형대수" "행렬곱" "벡터공간" "행렬 연산" "벡터 공간" ];
+    }
+    {
+      domain = "calculus";
+      en_keywords = [ "calculus" "derivative" "integral" "Leibniz" ];
+      ko_keywords = [ "미적분" "도함수" "정적분" "라이프니츠" "미분해" "적분해" ];
+    }
+    {
+      domain = "statistics";
+      en_keywords = [ "statistics" "mean" "median" "standard deviation" ];
+      ko_keywords = [ "통계" "평균" "중앙값" "표준편차" "분산 분석" "히스토그램" ];
+    }
+    {
+      domain = "graph-theory";
+      en_keywords = [ "graph theory" "shortest path" "Dijkstra" "spanning tree" ];
+      ko_keywords = [ "그래프 이론" "최단경로" "다익스트라" "스패닝" "최단 경로" "신장 트리" ];
+    }
+    {
+      domain = "optimization";
+      en_keywords = [ "optimization" "linear programming" "minimize" "maximize" ];
+      ko_keywords = [ "최적화" "선형계획" "최소화" "최대화" "최소값 구해" "최대값 구해" ];
+    }
+    {
+      domain = "topology";
+      en_keywords = [ "topology" "connectedness" "continuous map" "open set" ];
+      ko_keywords = [ "위상" "연결성" "연속사상" "열린집합" "위상 공간" ];
+    }
+    {
+      domain = "category-theory";
+      en_keywords = [ "category theory" "functor" "natural transformation" "morphism" ];
+      ko_keywords = [ "범주론" "함자" "자연변환" "사상" "모피즘" ];
+    }
+    {
+      domain = "number-system";
+      en_keywords = [ "real number" "complex number" "rational" "irrational" ];
+      ko_keywords = [ "실수" "복소수" "유리수" "무리수" "허수" "수 체계" ];
+    }
+  ];
+
+  domainPatternCount = builtins.length knownMathDomainNLPatterns;
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  matchMathDomain = utterance:
+    builtins.filter (p:
+      (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords))
+      knownMathDomainNLPatterns;
+
+  liftToMathDomain = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let matches = matchMathDomain utterance;
+      in
+        if matches == [] then {
+          outcome = "held-no-math-domain-matched";
+          known_domain_count = domainPatternCount;
+          known_domains = builtins.map (p: p.domain) knownMathDomainNLPatterns;
+        }
+        else if (builtins.length matches) > 1 then {
+          outcome = "held-multi-math-domain-candidates";
+          candidate_count = builtins.length matches;
+          candidates = builtins.map (m: m.domain) matches;
+        }
+        else
+          let m = builtins.head matches;
+          in {
+            outcome = "math-domain-lifted";
+            utterance = utterance;
+            domain = m.domain;
+            substrate_action =
+              "math-domain-registry (Axiom #27) 의 " + m.domain
+              + " category 의 84 math plate 중 하나가 활성화될 수 있음. "
+              + "caller 가 구체 plate 선택 (introspection 또는 ankh-cache).";
+            axiom_origin = "axiom-27-math-domain-registry (84 plates / 18 categories)";
+          };
+
+  applyMathDomainNlLifterPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else liftToMathDomain request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-43";
+    domain_pattern_count = domainPatternCount;
+    routed_substrate = "stdlib/lib/integration/math-domain-registry.px (Axiom #27, 84 plates)";
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-math-domain-matched"
+      "held-multi-math-domain-candidates"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownMathDomainNLPatterns domainPatternCount
+    containsAny matchMathDomain
+    liftToMathDomain applyMathDomainNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL math domain lifter (Axiom #43)";
+    owner = ownerName;
+    base = "math-domain-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-28). Axiom #27 math-domain-registry "
+      + "(84 plate × 18 category) 의 NL surface. 18 category × en/ko "
+      + "bilingual keyword routing. DO NOT REBUILD — 84 math plate "
+      + "기존 owner 재사용. axiom #11 problem-kernel 과 다른 layer: "
+      + "#11 = 7 archetype × 8 check (verifier-level); "
+      + "#43 = 18 domain (taxonomy-level routing).";
+  };
+}

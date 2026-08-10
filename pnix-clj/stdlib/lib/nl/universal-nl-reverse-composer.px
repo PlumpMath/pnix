@@ -1,0 +1,327 @@
+let
+  ownerName = "stdlib.nl.universal-nl-reverse-composer";
+
+  # === Universal NL Reverse Composer (Axiom #68) ====================
+  #
+  # 사용자 directive (2026-05-28):
+  # > "그게 양방향으로 제대로~*"
+  #
+  # Master Router (#67) 가 NL → substrate FORWARD direction 의 single entry.
+  # 이 owner 가 substrate receipt → NL REVERSE direction 의 single entry.
+  #
+  # 입력: receipt (forward lifter 가 emit 한 envelope)
+  # 출력: 사용자 친화 NL explanation (en + ko bilingual)
+  #
+  # # 핵심: receipt 의 axiom_origin field 기준 routing
+  #
+  # 각 forward lifter receipt 는 axiom_origin 을 carry 한다 (#38-#66).
+  # 이 owner 는 그 axiom_origin → NL template 매핑.
+  #
+  # 박힌 receipt kinds (29 + 1 master):
+  # - domain-classified         → "발화는 X 도메인으로 분류됨"
+  # - archetype-lifted          → "X archetype 의 수학 문제"
+  # - diagram-view-lifted       → "X view 다이어그램"
+  # - agent-stage-lifted        → "Agent loop X stage 진입"
+  # ...
+
+  knownReverseTemplates = [
+    {
+      axiom_id = "axiom-5-congruence-criteria + axiom-6-bidirectional";
+      en_template = "Utterance routed to math congruence query.";
+      ko_template = "발화는 합동 정리 질의로 분류됨.";
+    }
+    {
+      axiom_id = "axiom-implicit-explicit-reconstruction-#3";
+      en_template = "Utterance routed to code emission.";
+      ko_template = "발화는 코드 생성으로 분류됨.";
+    }
+    {
+      axiom_id = "axiom-9-universal-conversion + external-api-call atom";
+      en_template = "Utterance routed to API call.";
+      ko_template = "발화는 API 호출로 분류됨.";
+    }
+    {
+      axiom_id = "axiom-9-universal-conversion (OS-aware dispatch)";
+      en_template = "Utterance routed to shell dev-tool (OS-aware).";
+      ko_template = "발화는 셸 개발 도구로 분류됨 (OS-aware).";
+    }
+    {
+      axiom_id = "axiom-11-math-problem-kernel-substrate (LLM-zero)";
+      en_template = "Math problem archetype identified.";
+      ko_template = "수학 문제 archetype 식별됨.";
+    }
+    {
+      axiom_id = "axiom-10-diagram-ir-substrate";
+      en_template = "Diagram view classified.";
+      ko_template = "다이어그램 view 분류됨.";
+    }
+    {
+      axiom_id = "axiom-13-coding-agent-loop-primitives + axiom-21-closed-loop-integration";
+      en_template = "Agent loop stage entry identified.";
+      ko_template = "에이전트 루프 stage 진입점 식별됨.";
+    }
+    {
+      axiom_id = "axiom-22-code-transform-registry";
+      en_template = "Code transform identified.";
+      ko_template = "코드 변환 식별됨.";
+    }
+    {
+      axiom_id = "axiom-27-math-domain-registry (84 plates / 18 categories)";
+      en_template = "Math domain category identified.";
+      ko_template = "수학 도메인 카테고리 식별됨.";
+    }
+    {
+      axiom_id = "axiom-28-bio-markup-schema-registry";
+      en_template = "Bio markup schema identified.";
+      ko_template = "생물 markup 스키마 식별됨.";
+    }
+    {
+      axiom_id = "axiom-37-erp-substrate-registry";
+      en_template = "ERP category identified.";
+      ko_template = "ERP 카테고리 식별됨.";
+    }
+    {
+      axiom_id = "axiom-12-roundtrip + axiom-16-benchmark-battery";
+      en_template = "Benchmark kind identified.";
+      ko_template = "벤치마크 종류 식별됨.";
+    }
+    {
+      axiom_id = "axiom-30-engine-integration-registry";
+      en_template = "Engine family identified.";
+      ko_template = "엔진 패밀리 식별됨.";
+    }
+    {
+      axiom_id = "axiom-24-freecat-surface-registry";
+      en_template = "Freecat surface identified.";
+      ko_template = "Freecat 표면 식별됨.";
+    }
+    {
+      axiom_id = "axiom-18-diff-substrate";
+      en_template = "Diff operation identified.";
+      ko_template = "Diff 연산 식별됨.";
+    }
+    {
+      axiom_id = "axiom-32-top-level-markup-language-registry + axiom-6-bidirectional";
+      en_template = "Markup conversion identified.";
+      ko_template = "Markup 변환 식별됨.";
+    }
+    {
+      axiom_id = "axiom-25-host-integration-registry";
+      en_template = "Host integration boundary identified.";
+      ko_template = "호스트 통합 경계 식별됨.";
+    }
+    {
+      axiom_id = "axiom-36-mirror-primitive-registry";
+      en_template = "Mirror primitive identified.";
+      ko_template = "거울 primitive 식별됨.";
+    }
+    {
+      axiom_id = "axiom-2-timeless-vs-ordered";
+      en_template = "Temporal fact category identified.";
+      ko_template = "시간 fact 카테고리 식별됨.";
+    }
+    {
+      axiom_id = "axiom-14-api-tool-safety-substrate (POLA, Saltzer-Schroeder 1975)";
+      en_template = "Tool safety tier identified.";
+      ko_template = "도구 안전 tier 식별됨.";
+    }
+    {
+      axiom_id = "axiom-19-capability-discovery-substrate";
+      en_template = "Capability discovery source identified.";
+      ko_template = "Capability discovery 출처 식별됨.";
+    }
+    {
+      axiom_id = "axiom-20-quantitative-invariant-substrate (Bachmann-Landau + Floyd)";
+      en_template = "Quantitative invariant kind identified.";
+      ko_template = "Quantitative invariant 종류 식별됨.";
+    }
+    {
+      axiom_id = "axiom-23-algorithm-synthesis-evolution-lane-registry";
+      en_template = "Evolution lane stage identified.";
+      ko_template = "Evolution lane stage 식별됨.";
+    }
+    {
+      axiom_id = "axiom-4-second-order-recursive-lift (Tarski meta-language)";
+      en_template = "Second-order relation identified.";
+      ko_template = "Second-order 관계 식별됨.";
+    }
+    {
+      axiom_id = "axiom-16-provenance-supersede-substrate (Lampson, W3C PROV-O)";
+      en_template = "Lifecycle state identified.";
+      ko_template = "Lifecycle 상태 식별됨.";
+    }
+    {
+      axiom_id = "axiom-17-replay-determinism-substrate (Lamport, LeBlanc)";
+      en_template = "Replay concern identified.";
+      ko_template = "Replay 관심사 식별됨.";
+    }
+    {
+      axiom_id = "axiom-33-top-level-router-registry";
+      en_template = "Router target identified.";
+      ko_template = "Router 대상 식별됨.";
+    }
+    {
+      axiom_id = "axiom-31-ankh-language-and-universal-nl-registry";
+      en_template = "Ankh host language identified.";
+      ko_template = "Ankh 호스트 언어 식별됨.";
+    }
+    {
+      axiom_id = "axiom-29-gate-sub-registries";
+      en_template = "Gate sub-area identified.";
+      ko_template = "Gate sub-area 식별됨.";
+    }
+    {
+      axiom_id = "axiom-34-top-level-core-utility-registry";
+      en_template = "Core utility family identified.";
+      ko_template = "Core utility family 식별됨.";
+    }
+    {
+      axiom_id = "axiom-26-api-library-taxonomy-registry";
+      en_template = "API capability category identified.";
+      ko_template = "API capability 카테고리 식별됨.";
+    }
+    {
+      axiom_id = "axiom-21-closed-loop-integration-registry";
+      en_template = "Closed-loop scenario identified.";
+      ko_template = "Closed-loop 시나리오 식별됨.";
+    }
+    {
+      axiom_id = "axiom-76-substrate-introspection-nl-lifter (composes axiom-75)";
+      en_template = "Substrate self-knowledge query lifted (composes #75 coverage introspection).";
+      ko_template = "Substrate 자기지식 질의 lift 됨 (#75 coverage introspection 합성).";
+    }
+    {
+      axiom_id = "axiom-79-x3d-scene-nl-lifter (composes axiom-78)";
+      en_template = "X3D scene lifted from NL utterance (composes #78 X3D mirror runtime).";
+      ko_template = "NL 발화로부터 X3D scene lift 됨 (#78 X3D mirror runtime 합성).";
+    }
+    {
+      axiom_id = "axiom-80-x3d-scene-reverse-composer (composes axiom-79)";
+      en_template = "X3D scene composed back to NL (forward + reverse roundtrip).";
+      ko_template = "X3D scene 이 NL 로 재구성됨 (forward + reverse 양방향).";
+    }
+  ];
+
+  templateCount = builtins.length knownReverseTemplates;
+
+  findTemplate = axiomId:
+    let matches = builtins.filter (t: t.axiom_id == axiomId) knownReverseTemplates;
+    in if matches == [] then null else builtins.head matches;
+
+  # Build receipt body description — receipt 의 specific field name 들을 추출
+  # (다소 lossy — substrate-honest, full receipt 보존은 caller 책임).
+  describeReceiptBody = receipt:
+    let
+      fields = builtins.attrNames receipt;
+      identifierFields = builtins.filter (f:
+        f != "outcome"
+        && f != "axiom_origin"
+        && f != "substrate_action"
+        && f != "utterance"
+        && f != "reason"
+        && f != "known_archetype_count"
+        && f != "known_archetypes") fields;
+      describeOne = f:
+        let v = builtins.getAttr f receipt;
+        in
+          if builtins.isString v then f + "=" + v
+          else if builtins.isInt v then f + "=" + (builtins.toString v)
+          else f + "=<complex>";
+      lines = builtins.map describeOne identifierFields;
+    in builtins.concatStringsSep "; " lines;
+
+  # === Reverse compose: receipt → NL =================================
+
+  composeReceiptToNl = receipt: language:
+    if !(builtins.isAttrs receipt) then {
+      outcome = "held-non-attrs-receipt";
+    }
+    else
+      # 2026-05-28: pipeline 의 `domain-classified` 는 `axiom_tag` field,
+      # 다른 lifter 는 `axiom_origin`. 둘 다 지원.
+      let
+        axiomId =
+          if builtins.hasAttr "axiom_origin" receipt then receipt.axiom_origin
+          else if builtins.hasAttr "axiom_tag" receipt then receipt.axiom_tag
+          else null;
+      in
+      if axiomId == null then {
+        outcome = "held-receipt-missing-axiom-origin";
+        reason = "Receipt 는 axiom_origin 또는 axiom_tag field 가 있어야 함.";
+      }
+    else if language != "en" && language != "ko" then {
+      outcome = "held-unsupported-language";
+      requested_language = language;
+      supported = [ "en" "ko" ];
+    }
+    else
+      let
+        tmpl = findTemplate axiomId;
+      in
+        if tmpl == null then {
+          outcome = "held-no-template-for-axiom";
+          axiom_origin = axiomId;
+          reason = "이 axiom 에 대한 reverse template 미등록. caller 가 새 template 등록 필요.";
+        }
+        else
+          let
+            headLine = if language == "en" then tmpl.en_template else tmpl.ko_template;
+            body = describeReceiptBody receipt;
+            full_text =
+              if body == "" then headLine
+              else headLine + " (" + body + ")";
+          in {
+            outcome = "nl-composed";
+            language = language;
+            text = full_text;
+            head_line = headLine;
+            body_description = body;
+            axiom_origin = axiomId;
+          };
+
+  applyUniversalNlReverseComposerPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "receipt" request) then { outcome = "held-missing-receipt"; }
+    else
+      let
+        lang =
+          if builtins.hasAttr "language" request
+          then request.language
+          else "en";
+      in composeReceiptToNl request.receipt lang;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-reverse-composer-axiom-68";
+    template_count = templateCount;
+    bilingual = true;
+    supported_languages = [ "en" "ko" ];
+    routed_axiom_range = "2-37 (forward lifter axiom_origin 별 routing)";
+    new_decision_count = 0;
+    held_outcomes = [
+      "held-non-attrs-receipt"
+      "held-receipt-missing-axiom-origin"
+      "held-unsupported-language"
+      "held-no-template-for-axiom"
+      "held-non-attrs-request"
+      "held-missing-receipt"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownReverseTemplates templateCount
+    findTemplate describeReceiptBody
+    composeReceiptToNl applyUniversalNlReverseComposerPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL universal reverse composer (Axiom #68)";
+    owner = ownerName;
+    base = "universal-nl-reverse-composer-v0";
+    rev_note = "사용자 directive (2026-05-28) '양방향으로 제대로'. "
+      + "Master Router (#67) 의 reverse pair. receipt (forward lifter "
+      + "envelope) → NL utterance. axiom_origin 기준 template routing. "
+      + "29 forward axiom 의 reverse template 박힘 + bilingual en/ko. "
+      + "DO NOT REBUILD — forward lifter 결과만 carry, 새 결정 0.";
+  };
+}

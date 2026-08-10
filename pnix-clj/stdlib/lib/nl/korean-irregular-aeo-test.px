@@ -1,0 +1,26 @@
+# stdlib/lib/nl/korean-irregular-aeo-test.px
+#
+# F9 lock (audit w6vx4gwd8): 불규칙 활용 aeo 6클래스 결정론 자모산술 lock — audit가 "추론-위험 무회귀"로 지목.
+#   *CandidateAeo = 어간 받침만 보고 불규칙 표면을 *순수 자모산술*로 계산(dict 무관, 환경독립). 받침 불일치=null(오분류 0).
+let
+  lift = import ./korean-taxonomy-lift.px;
+in {
+  bieup = lift.bieupCandidateAeo "돕";    # 도와 (ㅂ불규칙)
+  digeut = lift.digeutCandidateAeo "듣";   # 들어 (ㄷ불규칙)
+  sieut = lift.sieutCandidateAeo "짓";     # 지어 (ㅅ불규칙)
+  reu = lift.reuCandidateAeo "모르";        # 몰라 (르불규칙)
+  reo = lift.reoCandidateAeo "푸르";        # 푸르러 (러불규칙)
+  h = lift.hCandidateAeo "노랗";            # 노래 (ㅎ불규칙)
+  all_ok =
+    # ★6클래스 결정론 자모산술 (dict 무관)
+       (lift.bieupCandidateAeo "돕" == "도와")
+    && (lift.digeutCandidateAeo "듣" == "들어")
+    && (lift.sieutCandidateAeo "짓" == "지어")
+    && (lift.reuCandidateAeo "모르" == "몰라")
+    && (lift.reoCandidateAeo "푸르" == "푸르러")
+    && (lift.hCandidateAeo "노랗" == "노래")
+    # ★받침 불일치 → null (정규 동사 오분류 0; candidate는 받침-구조 게이트)
+    && (lift.bieupCandidateAeo "먹" == null)      # 먹: 받침 ㄱ≠ㅂ
+    && (lift.digeutCandidateAeo "먹" == null)     # 먹: 받침 ㄱ≠ㄷ
+    && (lift.sieutCandidateAeo "가" == null);     # 가: 받침 없음≠ㅅ
+}

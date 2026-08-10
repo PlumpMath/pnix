@@ -1,0 +1,157 @@
+# P11 — write-batching contract (redb single-writer 병목 흡수)
+#
+# OWNER-LAW (2026-05-13): a single `with_mirror` call typically
+# emits multiple typed receipts (mirror-spawn + ontology-extend,
+# plus future fold-step / boundary-project / etc). P11 declares
+# that all receipts produced by *one* spawn turn MUST commit in
+# *one* redb write transaction (atomic batch). N concurrent
+# spawns still serialize on the redb write-lock, but each spawn
+# now pays at most ONE tx-cost instead of one per receipt.
+#
+# This is P11.a — the *single-spawn batch* layer. P11.b
+# (cross-call queue + worker thread) is a separate row that this
+# layer keeps compatible.
+#
+# # Why batching matters (heard from the sustainability axiom)
+#
+#   - 1 dev sustains N users only if write throughput scales.
+#   - redb gives one writer at a time; N receipts = N tx is
+#     wasteful when those receipts belong to the same audit step.
+#   - Atomic batch = one tx, one commit, all-or-nothing rollback,
+#     same audit chain — append-only invariant unchanged.
+#
+# # Non-goals
+#
+# - NOT a cross-call queue. Concurrent spawns from different
+#   sessions still wait on redb's write-lock. That's P11.b.
+# - NOT a performance claim. "Faster" requires the measurement
+#   layer (baseline vs candidate run, repeated distribution) —
+#   substrate-only. P11.b will own the measurement frontier.
+# - NO async fire-and-forget. The caller still synchronously
+#   waits for the batch commit; ack is implicit in normal return.
+#
+# # RT / append-only preservation
+#
+# Same input → same receipt id set (P1 RT, P4 build). The batch
+# layer never invents ids; it only changes *how many tx wrap the
+# commit*. Hydrate order is determined by parent_receipt_id, NOT
+# by commit batching, so timeline reconstruction is invariant.
+#
+# Collision rules (already on append):
+#   - same id, byte-identical payload  ⇒  idempotent (no-op)
+#   - same id, differing payload      ⇒  reject batch
+# Within a batch, two entries with the same id+payload are
+# de-duplicated; same id with different payload fails the whole
+# batch (atomic rollback via redb tx).
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p11-write-batching-contract.px";
+  version = "0.1.0-a";
+
+  # ─── batch scopes ─────────────────────────────────────────────
+  #
+  # `single-spawn-batch` is P11.a (this layer).
+  # `cross-call-queue`   is P11.b (future row, declared so the
+  #                                 adapter cannot silently grow
+  #                                 into it without an owner-law
+  #                                 update).
+  validBatchScopes = [
+    "single-spawn-batch"
+    "cross-call-queue"
+  ];
+  activeBatchScope = "single-spawn-batch";
+
+  # ─── policy knobs (P11.a) ─────────────────────────────────────
+  #
+  # singleSpawnMaxReceipts: the maximum receipts a single spawn
+  # is allowed to emit. Currently a spawn produces ≤ 2 receipts
+  # (mirror-spawn + optional ontology-extend). Future verbs
+  # (fold-step, boundary-project nested under spawn) push this
+  # number up. Declare the upper bound to keep batch sizing
+  # predictable.
+  #
+  # singleSpawnRollbackOnAnyFailure: any receipt validation or
+  # collision within the batch rolls back the whole batch. No
+  # partial chains in the store.
+  singleSpawnMaxReceipts = 8;
+  singleSpawnRollbackOnAnyFailure = true;
+
+  # ─── held kinds ───────────────────────────────────────────────
+  validHeldKinds = [
+    "batch-exceeds-max-size"
+    "batch-receipt-validation-failed"
+    "batch-collision-different-payload"
+    "batch-commit-failed-rolled-back"
+  ];
+
+  # ─── invariants ───────────────────────────────────────────────
+  invariants = {
+    append_only_preserved =
+      "the existing append-only collision rules apply per-entry inside the batch; idempotent re-batch is allowed";
+    rt_preserved =
+      "same input → same receipt id set → same batch outcome (no nondeterminism from batching)";
+    atomic_batch_or_rollback =
+      "either every receipt in the batch commits, or NONE commit; no partial audit chains";
+    hydrate_order_independent_of_batching =
+      "chain order is determined by parent_receipt_id pointers, NOT by commit batching; hydrate timeline is identical regardless of how many tx wrapped the commit";
+    backward_compat_single_append =
+      "for callers that still emit one receipt at a time (cross-process tests, legacy adapters), the per-receipt append path remains valid; batch is an additive operation";
+    measurement_deferred_to_p11b =
+      "P11.a is the substrate-only layer; throughput proof (baseline vs candidate, repeated runs) is owned by P11.b along with the cross-call queue";
+  };
+
+  # ─── future P11.b sketch (declared, not active) ──────────────
+  #
+  # Recorded here so adapter authors know what shape the future
+  # row will take. NO IMPLEMENTATION until that owner-law lands.
+  futureP11bSketch = {
+    scope = "cross-call-queue";
+    role = "concurrent enqueue → single worker → batched commit; per-owner ordering preserved";
+    knobs = [
+      "maxBatchSize"
+      "maxFlushIntervalMs"
+      "maxQueueDepth"
+      "ackChannel"
+    ];
+    heldKinds = [
+      "queue-overflow"
+      "worker-shutdown-pending"
+      "ack-timeout"
+    ];
+    measurementInvariants = [
+      "baseline throughput receipt"
+      "candidate throughput receipt"
+      "per-user ordering preserved across N concurrent enqueues"
+      "drop = explicit Held, never silent"
+    ];
+  };
+in {
+  inherit
+    ownerName
+    version
+    validBatchScopes
+    activeBatchScope
+    singleSpawnMaxReceipts
+    singleSpawnRollbackOnAnyFailure
+    validHeldKinds
+    invariants
+    futureP11bSketch;
+  meta = {
+    source = "pnix-mirror-runtime primitive P11 (a)";
+    owner = ownerName;
+    role = "single-spawn write-batching contract — N receipts of one spawn commit in one redb write transaction; atomic-or-rollback; RT and append-only preserved";
+    consumes = [ "P4 typed-receipt-stream (collision rules)" ];
+    consumed_by = [
+      "doghouse-core MirrorReceiptStore::append_batch"
+      "doghouse-core DoghouseStore::put_mirror_receipts_batch"
+      "doghouse-core MirrorRuntime::with_mirror_traced commit path"
+    ];
+    constitutional_alignment = [
+      "格子 안 row 추가 — P4 append-only contract 변경 없음"
+      "RT 보존 — receipt id 는 입력 결정"
+      "audit chain 보존 — hydrate order 는 parent pointer 결정"
+      "측정 claim 없음 — throughput proof 는 P11.b 의 의무"
+      "no silent drop — batch failure 는 typed Held"
+    ];
+  };
+}

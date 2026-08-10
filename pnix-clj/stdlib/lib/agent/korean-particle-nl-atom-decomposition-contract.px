@@ -1,0 +1,227 @@
+let
+  ownerName = "stdlib.agent.korean-particle-nl-atom-decomposition-contract";
+
+  vocabContract =
+    import agent/internal-vocab-translation-contract.px;
+
+  # === Korean particle NL atom decomposition contract (Round 79) ======
+  #
+  # 이미 있는 자산 (CLAUDE.md "natural-language execution criterion"):
+  #   - crates/pnix-core/src/lang/ko.rs — 한글 음절 분해 + 15 조사 패턴
+  #     + 서법 판단
+  #   - ontology_demo.rs::korean_language_facts — ContextualFact 변환
+  #
+  # 이 owner = 그 ko.rs 자산을 substrate-side *atom decomposition*
+  # 의 entry point 로 박는다. Round 73 externalToInternalMap 의
+  # "korean-particle-modality" source 와 binding.
+  #
+  # # CLAUDE.md NL execution criterion 그대로
+  #
+  # "PNIX 에서 '이해' 는 fluent paraphrase 가 아니다. 이해는 자연어
+  # 문장의 함축된 시간 / 인과 / 속성 전이를 extract 해서, 수학적 정의처
+  # 럼 replay-stable 한 meaning atom 으로 쪼개고, 그 atom 들을 다시
+  # 실행 가능한 algorithm-sentence / runtime function candidate 로
+  # 낮추는 것이다."
+  #
+  # 한글의 경우: 조사 (15 종) 가 *문법적 역할 marker*. 조사 한 개 = 한
+  # atom 의 role/modality 결정. 즉 한글 utterance 분해는 *결정론적*
+  # (LLM 통계 추측 X — 조사 패턴 매칭).
+  #
+  # # 15 closed particle classes (ko.rs 와 일치)
+  #
+  #   nominative (이/가), topic (은/는), accusative (을/를),
+  #   dative (에게/한테), locative (에/에서), instrumental (로/으로),
+  #   comitative (와/과/하고), genitive (의), vocative (아/야),
+  #   modal-question (?), modal-imperative (해/해줘),
+  #   modal-conjunctive (고/며), modal-causal (서/니까),
+  #   modal-conditional (면), modal-concessive (지만)
+  #
+  # # Output verdict family
+  #
+  #   "korean-particle-decomposed"      — atom list emit
+  #   "held-no-particle-detected"       — 조사 0 — 매칭 불가
+  #   "held-malformed-utterance"        — utterance empty/invalid
+  #   "held-language-not-korean"        — language != "ko"
+  #   "held-unknown-particle-pattern"   — closed list 밖 시도
+
+  stepKind = "korean-particle-nl-atom-decomposition";
+  framework_step =
+    "Korean utterance → atom list via 15 particle pattern matching";
+
+  # ===================================================================
+  # === Closed particle classes ======================================
+  # ===================================================================
+
+  knownParticleClasses = [
+    "nominative"            # 이 / 가
+    "topic"                 # 은 / 는
+    "accusative"            # 을 / 를
+    "dative"                # 에게 / 한테
+    "locative"              # 에 / 에서
+    "instrumental"          # 로 / 으로
+    "comitative"            # 와 / 과 / 하고
+    "genitive"              # 의
+    "vocative"              # 아 / 야
+    "modal-question"        # ?
+    "modal-imperative"      # 해 / 해줘 / 해주세요
+    "modal-conjunctive"     # 고 / 며
+    "modal-causal"          # 서 / 니까
+    "modal-conditional"     # 면
+    "modal-concessive"      # 지만 / 어도
+  ];
+
+  # closed particle surface forms — 결정론적 매칭용
+  knownParticleSurfaces = {
+    "nominative"        = [ "이" "가" ];
+    "topic"             = [ "은" "는" ];
+    "accusative"        = [ "을" "를" ];
+    "dative"            = [ "에게" "한테" ];
+    "locative"          = [ "에" "에서" ];
+    "instrumental"      = [ "로" "으로" ];
+    "comitative"        = [ "와" "과" "하고" ];
+    "genitive"          = [ "의" ];
+    "vocative"          = [ "아" "야" ];
+    "modal-question"    = [ "?" ];
+    "modal-imperative"  = [ "해" "해줘" "해주세요" ];
+    "modal-conjunctive" = [ "고" "며" ];
+    "modal-causal"      = [ "서" "니까" ];
+    "modal-conditional" = [ "면" ];
+    "modal-concessive"  = [ "지만" "어도" ];
+  };
+
+  # 어느 조사 class 가 어느 internal modality 로 lift 되는지
+  # (Round 73 의 iv.modality.* namespace 와 일치)
+  particleClassToInternalModality = {
+    "modal-question"    = "iv.modality.interrogative";
+    "modal-imperative"  = "iv.modality.imperative";
+    "modal-conditional" = "iv.modality.held-for-context";
+    "modal-causal"      = "iv.modality.declarative";
+    "modal-concessive"  = "iv.modality.declarative";
+    "modal-conjunctive" = "iv.modality.declarative";
+  };
+
+  # ===================================================================
+  # === Helpers ======================================================
+  # ===================================================================
+
+  hasKey = attrs: key: builtins.elem key (builtins.attrNames attrs);
+  isInClosedList = list: v: builtins.elem v list;
+
+  # NOTE: `builtins.split` 의 needle 은 regex. `?` 같은 meta char 가
+  # 있으면 parse error. modal-question (`?`) 만 별 path 로 처리하고
+  # 나머지 한글 조사는 regex-safe.
+  hasSubstring = haystack: needle:
+    if needle == "?"
+    then
+      # 끝이 ? 인지 (또는 안에 있는지)
+      let len = builtins.stringLength haystack;
+          containsViaSplitOnSpace = false;  # `?` 는 split 불가
+          # 간단: char-by-char loop
+          chars = builtins.length (
+            builtins.filter (i:
+              (builtins.substring i 1 haystack) == "?"
+            ) (
+              builtins.genList (i: i) len
+            )
+          );
+      in chars > 0
+    else
+      let parts = builtins.split needle haystack;
+      in (builtins.length parts) > 1;
+
+  detectParticleClasses = utterance:
+    builtins.filter (cls:
+      let
+        surfaces = knownParticleSurfaces."${cls}" or [];
+      in builtins.any (s: hasSubstring utterance s) surfaces
+    ) knownParticleClasses;
+
+  # ===================================================================
+  # === Main contract function =======================================
+  # ===================================================================
+  #
+  # Input shape:
+  #   {
+  #     utterance = "이 변수 무엇이야?";
+  #     language = "ko";
+  #   }
+
+  decomposeKoreanUtterance = req:
+    let
+      hasUtt = hasKey req "utterance" && req.utterance != "";
+      hasLang = hasKey req "language";
+      isKorean = hasLang && req.language == "ko";
+
+      detected = if hasUtt then detectParticleClasses req.utterance else [];
+      anyParticle = (builtins.length detected) > 0;
+
+      atoms = builtins.map (cls:
+        let
+          internal = particleClassToInternalModality."${cls}" or null;
+        in {
+          kind = "particle";
+          particle_class = cls;
+          surfaces_searched = knownParticleSurfaces."${cls}" or [];
+          internal_modality_token = internal;
+        }
+      ) detected;
+
+      verdict =
+        if !hasUtt then "held-malformed-utterance"
+        else if !isKorean then "held-language-not-korean"
+        else if !anyParticle then "held-no-particle-detected"
+        else "korean-particle-decomposed";
+
+      isHeld = verdict != "korean-particle-decomposed";
+    in {
+      kind = "korean-particle-nl-atom-decomposition-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      framework_step = framework_step;
+      verdict = verdict;
+      is_held = isHeld;
+      utterance = if hasUtt then req.utterance else null;
+      detected_particle_classes = detected;
+      atoms = if isHeld then [] else atoms;
+      atom_count = builtins.length atoms;
+      held_diagnostics =
+        if !isHeld then null
+        else {
+          utterance_present = hasUtt;
+          is_korean = isKorean;
+          any_particle = anyParticle;
+        };
+      derived_from = [
+        "crates/pnix-core/src/lang/ko.rs (existing asset)"
+        "ontology_demo.rs::korean_language_facts"
+        "internal-vocab-translation-contract (Round 73) iv.modality.* namespace"
+        "CLAUDE.md natural-language execution criterion"
+      ];
+    };
+
+  # ===================================================================
+  # === Inventory summary ============================================
+  # ===================================================================
+
+  inventorySummary = {
+    owner = ownerName;
+    step_kind = stepKind;
+    particle_class_count = builtins.length knownParticleClasses;
+    particle_classes = knownParticleClasses;
+    total_particle_surface_count =
+      builtins.foldl' (acc: cls:
+        acc + (builtins.length (knownParticleSurfaces."${cls}" or []))
+      ) 0 knownParticleClasses;
+    modal_class_count =
+      builtins.length (builtins.attrNames particleClassToInternalModality);
+    role = "한글 utterance → particle-decomposed atom list — LLM-free";
+    asset_origin = "ko.rs particle dictionary + ko.rs syllable analysis";
+  };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit knownParticleClasses knownParticleSurfaces;
+  inherit particleClassToInternalModality;
+  inherit decomposeKoreanUtterance inventorySummary;
+  inherit detectParticleClasses;
+}

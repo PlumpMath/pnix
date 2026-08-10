@@ -1,0 +1,349 @@
+let
+  ownerName = "stdlib.nl.attention-pin-policy";
+
+  # === Attention Pin Policy (agent-NL-114) =========================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "메모리증가(온길에 대한 궤적)들은 잔상처럼 서서히 지워져야한다.
+  # >  (당연히 내부적으로 왔던길에 대한 무언가 재계산이 필요할때는
+  # >  역으로 첫점(oop name) 들 ... 그 사이에 발화되었다가 사라지는
+  # >  잔상 문장들. 사실 다 지우면 안되고, pin point 처럼 oop name 이
+  # >  어떤것은 남기고 어떤것은 안남기고, (즉, 명제들이 띄엄 띄엄
+  # >  있어도, 정확한 길이 체크가되는 oop name 들만 남기는것! (그러면
+  # >  세션 메모리가 너무 커지는걸 막을수있다고 봄)"
+  #
+  # # mental model
+  #
+  #   session memory 의 instance 들은 두 카테고리:
+  #     - FIXED ANCHOR (pin) — 절대 evict 안 함
+  #       · root intent sentence
+  #       · final goal sentence
+  #       · 증명문 핵심 step (proven step)
+  #       · 사용자가 explicit 가리킨 instance
+  #       · reference_count 높은 (자주 fast-map 된)
+  #     - TRANSIENT (잔상) — TTL/usage 따라 fade
+  #       · clarification 답 (이미 결합된)
+  #       · intermediate evaluation step
+  #       · pruned branch result
+  #       · failed candidate
+  #
+  #   evict 시 *path length placeholder* 보존:
+  #     - 원본 instance 의 id, role, step_index 만 keep
+  #     - meaning_vector, bound_tree, original_utterance 는 drop
+  #     - "step at index K (faded)" 만 남음
+  #     - root → final 의 logical distance 가 *정확히* 측정 가능
+  #
+  # # 사용자 vision 의 핵심
+  #
+  # "명제들이 띄엄띄엄 있어도, 정확한 길이 체크가 되는 OOP name 들만
+  # 남기는 것" — pin point 위주로 backbone 유지, 잔상은 fade.
+
+  stepKind = "attention-pin-and-evict";
+  framework_step =
+    "bounded session memory — pin 의 backbone + transient fade + path-length 보존";
+
+  # === Pin decision rule ==========================================
+  #
+  # Returns "pin" | "transient" based on instance properties.
+
+  pinStatusFor = instance: policy:
+    let
+      role = instance.role or "algorithm-step";
+      refCount = instance.reference_count or 1;
+      hasBoundTree = (instance.bound_tree or null) != null;
+      hasBoundSubstrate = (instance.bound_substrate or null) != null;
+      explicitPin = instance.explicit_pin or false;
+      refThreshold = policy.high_reference_threshold or 3;
+
+      pinReasons = []
+        ++ (if role == "root-intent" then [ "is-root-intent" ] else [])
+        ++ (if role == "final-goal" then [ "is-final-goal" ] else [])
+        ++ (if refCount >= refThreshold
+             then [ "high-reference-count" ] else [])
+        ++ (if hasBoundTree then [ "has-bound-tree" ] else [])
+        ++ (if hasBoundSubstrate
+             then [ "has-bound-substrate" ] else [])
+        ++ (if explicitPin then [ "explicit-pin" ] else []);
+    in
+      if pinReasons == [] then {
+        status = "transient";
+        reasons = [ "no-pin-reason-applies" ];
+      }
+      else {
+        status = "pin";
+        reasons = pinReasons;
+      };
+
+  # === Path-length placeholder ====================================
+  #
+  # When evicting a transient instance, replace it with a faded
+  # placeholder so the logical step distance from root to final
+  # goal is preserved exactly.
+
+  makeFadedPlaceholder = instance:
+    {
+      instance_id = instance.instance_id;
+      role = instance.role or "algorithm-step";
+      algorithm_step_index = instance.algorithm_step_index or 0;
+      faded = true;
+      first_seen_at_turn = instance.first_seen_at_turn or 0;
+      decomposed_from = instance.decomposed_from or null;
+      # Body fields removed:
+      #   meaning_vector / original_utterance / bound_tree /
+      #   bound_substrate / aliases_seen / reference_count detail
+      placeholder_note = "transient instance faded — path index preserved";
+    };
+
+  # === Eviction primitive =========================================
+  #
+  # Walk memory, classify each instance, evict transients beyond
+  # the keep horizon. Default keep_horizon = 5 means the most recent
+  # 5 transient instances stay verbatim; older transients fade.
+
+  evictTransients =
+    { memory, policy ? {} }:
+    let
+      keepHorizon = policy.keep_horizon or 5;
+      instances = memory.instances;
+
+      # Classify all
+      classified = builtins.map (i: {
+        instance = i;
+        pin_decision = pinStatusFor i policy;
+      }) instances;
+
+      # Pin instances always kept as-is
+      pinned = builtins.filter
+        (c: c.pin_decision.status == "pin") classified;
+
+      transients = builtins.filter
+        (c: c.pin_decision.status == "transient") classified;
+
+      # Sort transients by step_index descending; keep top keepHorizon
+      sortedTransients =
+        let
+          sorter = a: b:
+            (a.instance.algorithm_step_index or 0)
+            > (b.instance.algorithm_step_index or 0);
+        in
+          builtins.sort sorter transients;
+
+      keepCount =
+        if builtins.length sortedTransients < keepHorizon
+        then builtins.length sortedTransients
+        else keepHorizon;
+
+      keptTransients =
+        if keepCount == 0 then []
+        else
+          let
+            take = n: list:
+              if n == 0 || list == [] then []
+              else [ (builtins.head list) ] ++ take (n - 1)
+                     (builtins.tail list);
+          in take keepCount sortedTransients;
+
+      fadedTransients =
+        let
+          allCount = builtins.length sortedTransients;
+          drop = n: list:
+            if n == 0 then list
+            else if list == [] then []
+            else drop (n - 1) (builtins.tail list);
+        in
+          builtins.map (c: c.instance)
+            (drop keepCount sortedTransients);
+
+      newInstances =
+        # Preserve original order by step_index
+        let
+          all = (builtins.map (c: c.instance) pinned)
+                ++ (builtins.map (c: c.instance) keptTransients)
+                ++ (builtins.map makeFadedPlaceholder fadedTransients);
+          sorter = a: b:
+            (a.algorithm_step_index or 0)
+            < (b.algorithm_step_index or 0);
+        in builtins.sort sorter all;
+
+      pinCount = builtins.length pinned;
+      transientCount = builtins.length transients;
+      fadedCount = builtins.length fadedTransients;
+    in {
+      outcome = "memory-eviction-applied";
+      public = {
+        pin_count = pinCount;
+        transient_kept_count = keepCount;
+        transient_faded_count = fadedCount;
+        total_after = builtins.length newInstances;
+        message_en =
+          "Memory eviction: " + builtins.toString pinCount
+          + " pinned, " + builtins.toString keepCount
+          + " transients kept, " + builtins.toString fadedCount
+          + " faded (path length preserved).";
+        message_ko =
+          "메모리 eviction: pin "
+          + builtins.toString pinCount + " 개, transient 보존 "
+          + builtins.toString keepCount + " 개, fade "
+          + builtins.toString fadedCount + " 개 (path length 보존).";
+      };
+      carry = {
+        updated_memory = memory // { instances = newInstances; };
+        pin_decisions = classified;
+        axiom_origin =
+          "axiom-101-nl-attention-pin "
+          + "(composes axiom-97-instance)";
+      };
+    };
+
+  # === Path length query (preserved across eviction) ==============
+
+  pathLengthFromRoot = memory: rootId: targetId:
+    let
+      root = let hits = builtins.filter
+        (i: i.instance_id == rootId) memory.instances; in
+        if hits == [] then null else builtins.head hits;
+      target = let hits = builtins.filter
+        (i: i.instance_id == targetId) memory.instances; in
+        if hits == [] then null else builtins.head hits;
+    in
+      if root == null || target == null then null
+      else
+        (target.algorithm_step_index or 0)
+        - (root.algorithm_step_index or 0);
+
+  # === Walk the pinned backbone ===================================
+  #
+  # 사용자 vision: 재계산 필요 시 역으로 OOP name 들 따라간다.
+  # backbone = pinned + faded placeholders (정확한 path length 유지).
+
+  backbone = memory:
+    builtins.filter
+      (i:
+        (i.role or "") == "root-intent"
+        || (i.role or "") == "final-goal"
+        || (i.faded or false)
+        || (i.explicit_pin or false)
+        || ((i.reference_count or 0) >= 3)
+      ) memory.instances;
+
+  # === Mark instance as explicitly pinned (user gesture) ==========
+
+  pinInstance = memory: instanceId:
+    memory // {
+      instances = builtins.map (i:
+        if i.instance_id == instanceId
+        then i // { explicit_pin = true; }
+        else i
+      ) memory.instances;
+    };
+
+  # === Plate entry =================================================
+
+  applyAttentionPinPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if (builtins.hasAttr "evict" request)
+         && (builtins.hasAttr "memory" request) then
+      evictTransients {
+        memory = request.memory;
+        policy = request.policy or {};
+      }
+    else if (builtins.hasAttr "pin_instance" request)
+         && (builtins.hasAttr "memory" request) then
+      let newMemory = pinInstance request.memory request.pin_instance; in
+      {
+        outcome = "instance-pinned";
+        public = { instance_id = request.pin_instance; };
+        carry = {
+          updated_memory = newMemory;
+          axiom_origin =
+            "axiom-101-nl-attention-pin "
+            + "(composes axiom-97-instance)";
+        };
+      }
+    else if (builtins.hasAttr "backbone_query" request)
+         && (builtins.hasAttr "memory" request) then
+      let bb = backbone request.memory; in
+      {
+        outcome = "backbone-returned";
+        public = {
+          backbone_size = builtins.length bb;
+        };
+        carry = { backbone = bb; };
+      }
+    else if (builtins.hasAttr "path_length" request)
+         && (builtins.hasAttr "memory" request)
+         && (builtins.hasAttr "from_id" request)
+         && (builtins.hasAttr "to_id" request) then
+      let
+        len = pathLengthFromRoot request.memory
+          request.from_id request.to_id;
+      in
+        if len == null then { outcome = "held-instance-not-found"; }
+        else {
+          outcome = "path-length-computed";
+          public = { length = len; };
+        }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { evict, memory, policy? } or { pin_instance, memory } "
+        + "or { backbone_query, memory } or { path_length, memory, "
+        + "from_id, to_id }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-attention-pin-policy-axiom-101";
+    composes = "axiom-97-instance + axiom-100-algorithm-sequence";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    pin_rules = [
+      "role == root-intent (always pin)"
+      "role == final-goal (always pin)"
+      "reference_count >= high_reference_threshold (default 3)"
+      "has bound_tree (algorithm node with discrimination)"
+      "has bound_substrate (proven via substrate)"
+      "explicit_pin (user gesture)"
+    ];
+    transient_fade_rule =
+      "transient instances older than keep_horizon (default 5) replaced "
+      + "by faded placeholder (path index + role preserved, body dropped)";
+    primary_outcomes = [
+      "memory-eviction-applied"
+      "instance-pinned"
+      "backbone-returned"
+      "path-length-computed"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-instance-not-found"
+    ];
+    user_vision =
+      "명제들이 띄엄띄엄 있어도 정확한 길이 체크가 되는 OOP name 들만 남김";
+  };
+
+in {
+  inherit
+    ownerName
+    pinStatusFor makeFadedPlaceholder evictTransients
+    pathLengthFromRoot backbone pinInstance
+    applyAttentionPinPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL attention pin policy (agent-NL-114)";
+    owner = ownerName;
+    base = "nl-attention-pin-policy-v0";
+    rev_note = "agent-NL-114 (2026-05-29): 사용자 directive — 메모리는 "
+      + "잔상처럼 fade, pin point 만 backbone 유지. evict 시 path length "
+      + "placeholder 보존. session memory bounded. pin rules: root-intent, "
+      + "final-goal, high reference, bound_tree/substrate, explicit. "
+      + "transient fade by step_index 우선순위 + keep_horizon. DO NOT "
+      + "REBUILD — #109 instance memory 의 row shape 그대로 사용.";
+  };
+}

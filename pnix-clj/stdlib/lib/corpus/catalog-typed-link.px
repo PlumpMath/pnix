@@ -1,0 +1,143 @@
+# stdlib/lib/corpus/catalog-typed-link.px
+#
+# B단계(post-L0): typed-symbol candidate link. A(catalog-readback) evidence 둘을 받아,
+#   *shared exact-key + 호환 type family + negative-edge/mutual-exclusion 무충돌*일 때만 candidate link.
+#   ★truth 승급 0: resident edge write 금지·promotion 금지·automatic merge 금지. candidate relation까지만.
+#
+# deep-research(reference_post_l0_self_learning_sequencing_verdict) failure-mode c/d 반영:
+#   - over-merge(거짓 entity 병합)가 최대 위험 → 핵심은 "연결"이 아니라 *연결 차단 조건*.
+#   - typed mutual-exclusion(C1(x)→¬C2(x)) + type-family 호환 + ★F7(차원동등≠의미동등) gate.
+#   - shared *exact-key*만 sound CORE(연구); same-dimension은 항상 held(F7).
+#
+# ★새 거울/brain codec/schema/owner 0: A evidence shape 재사용, link gate 한 겹만. read-only.
+let
+  B = builtins;
+
+  # source_schema → type_family(연결 호환성 판정).
+  typeFamilyOf = schema:
+    if (schema == "physics.standard_quantities") || (schema == "qudt.dimension_code") then "physical_quantity"
+    else if schema == "license.spdx" then "license"
+    else if schema == "chem.chebi" then "chemical_entity"
+    else if schema == "regulatory.ecfr_hazmat" then "regulatory_identifier"
+    else if schema == "authority.kr_public" then "authority_catalog"
+    else if schema == "security.ocsf" then "schema_attribute"
+    else "unknown";
+
+  # ★mutual-exclusion(negative-edge): dimension은 같지만 concept이 상호배타 = 연결 금지(F7 일반화).
+  #   pairs는 *함수 내부* 리터럴(모듈-const closure 함정 #8 회피).
+  isMutuallyExclusive = x: y:
+    let pairs = [ { a = "becquerel"; b = "hertz"; }     # 활동도 vs 진동수(둘 다 s⁻¹)
+                  { a = "torque"; b = "energy"; }        # 토크 vs 에너지(둘 다 M L² T⁻²)
+                  { a = "gray"; b = "sievert"; } ];      # 흡수선량 vs 등가선량(둘 다 J/kg)
+        hit = B.filter (p: ((p.a == x) && (p.b == y)) || ((p.a == y) && (p.b == x))) pairs;
+    in hit != [ ];
+
+  # typed_symbol_link_evidence shape — 불변 guard(truth/resident/promotion 항상 false).
+  mkLink = a: {
+    evidence_kind = "typed-symbol.link";
+    status = a.status or "missing";           # candidate-link | held | conflict-held | missing
+    relation_kind = a.relation_kind or "";
+    left = a.left or "";
+    right = a.right or "";
+    type_family = a.type_family or "";
+    exact_key_basis = a.exact_key_basis or "";
+    candidate_link = a.candidate_link or false;
+    durable_truth = false;
+    accepted_as_truth = false;
+    ontology_assert_allowed = false;
+    resident_edge_write = false;              # ★B는 resident edge 안 씀
+    promotion_allowed = false;                # ★promotion 영구 Held
+    held_reasons = a.held_reasons or [ ];
+  };
+
+  # linkEvidence { left, right, relation_kind, left_concept?, right_concept? }
+  #   left/right = catalog_readback_evidence. relation_kind = "shared-exact-key" | "same-dimension".
+  #   left_concept/right_concept = mutual-exclusion 판정용 concept 키(payload.quantity_en 등).
+  linkEvidence = args:
+    let L = if args ? left then args.left else { };
+        R = if args ? right then args.right else { };
+        rel = args.relation_kind or "shared-exact-key";
+        lConcept = args.left_concept or "";
+        rConcept = args.right_concept or "";
+        lStatus = if L ? status then L.status else "missing";
+        rStatus = if R ? status then R.status else "missing";
+        lSchema = if L ? source_schema then L.source_schema else "";
+        rSchema = if R ? source_schema then R.source_schema else "";
+        lKey = if L ? key then L.key else "";
+        rKey = if R ? key then R.key else "";
+        lKind = if L ? key_kind then L.key_kind else "";
+        rKind = if R ? key_kind then R.key_kind else "";
+        lFam = typeFamilyOf lSchema;
+        rFam = typeFamilyOf rSchema;
+        famCompatible = (lFam == rFam) && (lFam != "unknown");
+        mx = isMutuallyExclusive lConcept rConcept;
+        # ★Fix(적대검증): candidate-link은 *identity* key_kind에만. dimension_code(classifier)·미지 kind 제외.
+        #   ★production contract: linkEvidence는 *실 catalog-readback evidence*로만 배선(forged raw evidence 금지).
+        #     실 adapter에선 identity key = 개념 이름(quantity_en 등)이라 distinct concept = distinct key → 위조 불가.
+        identityKinds = [ "spdx_id" "chebi_id" "un_id" "quantity_en" "quantity_ko"
+                          "source_id" "canonical_key" "iri" "catalog_id" "shared_key" "source_key" "symbol" ];
+        lIsIdentity = B.elem lKind identityKinds;
+    in
+       # G1: 둘 중 missing → missing(fail-closed)
+       if (lStatus == "missing") || (rStatus == "missing")
+       then mkLink { status = "missing"; relation_kind = rel; left = lKey; right = rKey;
+              held_reasons = [ { kind = "evidence-not-recognized"; } ]; }
+       # G1b: 둘 중 held/conflict-held/stale-held → held(오염 전파 차단)
+       else if (lStatus != "recognized") || (rStatus != "recognized")
+       then mkLink { status = "held"; relation_kind = rel; left = lKey; right = rKey;
+              held_reasons = [ { kind = "evidence-held"; detail = lStatus + "/" + rStatus; } ]; }
+       # G6: mutual-exclusion(negative-edge) → conflict-held(★dimension 같아도 연결 금지)
+       else if mx
+       then mkLink { status = "conflict-held"; relation_kind = rel; left = lConcept; right = rConcept;
+              type_family = lFam;
+              held_reasons = [ { kind = "mutual-exclusion";
+                                 detail = "dimension 같아도 concept 상호배타 = 연결 금지(over-merge 방어)"; } ]; }
+       # G4/G5: type family 비호환 → held(license↔chemical 등 cross-type 연결 금지)
+       else if (famCompatible == false)
+       then mkLink { status = "held"; relation_kind = rel; left = lKey; right = rKey;
+              held_reasons = [ { kind = "type-family-incompatible"; detail = lFam + " vs " + rFam; } ]; }
+       # ★F7: relation=same-dimension은 *항상* held(차원 동등 ≠ 의미 동등). shared-exact-key만 sound.
+       else if rel == "same-dimension"
+       then mkLink { status = "held"; relation_kind = rel; left = lKey; right = rKey; type_family = lFam;
+              held_reasons = [ { kind = "dimension-equal-not-semantic-equivalent";
+                                 detail = "차원 동등은 의미 동등 아님(F7) — shared-exact-key만 sound link"; } ]; }
+       # ★Fix #4(적대검증): dimension_code는 *classifier*(많은 개념이 공유)지 identity 키 아님 → shared-exact-key여도
+       #   held(F7 일반화). 3쌍 mutual-exclusion blocklist는 불충분(압력/에너지밀도 등 모든 차원충돌 쌍이 샘) → 구조적 차단.
+       else if (lKind == "dimension_code") || (rKind == "dimension_code")
+       then mkLink { status = "held"; relation_kind = rel; left = lKey; right = rKey; type_family = lFam;
+              held_reasons = [ { kind = "dimension-code-is-classifier-not-identity";
+                                 detail = "dimension code는 분류자(많은 개념이 공유) — 차원 동등 ≠ 의미 동등(F7), identity 연결 금지"; } ]; }
+       # shared-exact-key: 같은 *identity* exact key(byte-identical) + key_kind 호환 → candidate-link(truth 아님)
+       else if rel == "shared-exact-key"
+       then (if (lKey == rKey) && (lKey != "") && (lKind == rKind) && lIsIdentity
+             then mkLink { status = "candidate-link"; relation_kind = rel; left = lKey; right = rKey;
+                    type_family = lFam; exact_key_basis = lKey; candidate_link = true; }
+             else if (lKey == rKey) && (lKey != "") && (lKind == rKind) && (lIsIdentity == false)
+             then mkLink { status = "held"; relation_kind = rel; left = lKey; right = rKey; type_family = lFam;
+                    held_reasons = [ { kind = "non-identity-key-kind";
+                                       detail = "key_kind '" + lKind + "'은 identity 아님 — candidate-link 금지"; } ]; }
+             else mkLink { status = "missing"; relation_kind = rel; left = lKey; right = rKey;
+                    held_reasons = [ { kind = "no-shared-exact-key"; detail = "키 불일치 또는 key_kind 불일치"; } ]; })
+       else mkLink { status = "held"; relation_kind = rel; left = lKey; right = rKey;
+              held_reasons = [ { kind = "unknown-relation-kind"; detail = rel; } ]; };
+
+  # publicProjection: 내부 누출 0(허용 필드만).
+  publicProjection = e: {
+    evidence_kind = e.evidence_kind or "typed-symbol.link";
+    status = e.status or "missing";
+    relation_kind = e.relation_kind or "";
+    left = e.left or "";
+    right = e.right or "";
+    type_family = e.type_family or "";
+    exact_key_basis = e.exact_key_basis or "";
+    candidate_link = e.candidate_link or false;
+    durable_truth = false;
+    accepted_as_truth = false;
+    ontology_assert_allowed = false;
+    resident_edge_write = false;
+    promotion_allowed = false;
+    held_reasons = e.held_reasons or [ ];
+  };
+in {
+  inherit linkEvidence typeFamilyOf isMutuallyExclusive mkLink publicProjection;
+}

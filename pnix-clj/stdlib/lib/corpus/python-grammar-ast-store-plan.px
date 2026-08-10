@@ -1,0 +1,45 @@
+# CPython grammar/AST metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No runtime source/prose/examples/execution/graph wiring.
+let
+  B = builtins;
+  genPath = ./python-grammar-ast.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "code.python.grammar_ast.v1";
+    source = "CPython grammar and AST schema metadata";
+    license = "PSF-2.0";
+    summary = { grammar_rules = 0; ast_constructors = 0; version_tags = 0; };
+    policy = "structural grammar/ASDL identifiers only";
+    manifest = { };
+    version_tags = [ ]; grammar_rules = [ ]; ast_constructors = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "python-grammar-ast-load-v0";
+      source_lens = "stdlib/lib/corpus/python-grammar-ast-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "code.python.grammar_ast.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "python-grammar-ast-query-v0";
+      source_lens = "stdlib/lib/corpus/python-grammar-ast-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "code.python.grammar_ast.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

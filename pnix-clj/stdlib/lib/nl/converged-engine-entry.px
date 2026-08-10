@@ -1,0 +1,327 @@
+# stdlib.nl.converged-engine-entry
+#
+# Latest converged engine entry (2026-06-03).
+#
+# first.md now has a stable shape:
+#   NL/front-door + math/Lean + coding + verification + Held/challenge.
+# The problem is no longer "make one more backend"; it is that callers import
+# several heavy owners directly and accidentally fork the surface.  This owner
+# is a thin, lazy convergence shell:
+#
+#   - inventory is import-light (path manifest only)
+#   - each operation imports the narrow existing owner(s) it needs on demand
+#   - results keep the native backend receipt under `result`
+#   - unknown op/request remains Held, never fallback-success
+#
+# This is a routing/convergence owner, not a second judge.  Truth still lives in
+# the backend owner: Lean grounding, trace certificate kernel, abstract
+# interpretation, lens law, search verifier, coding owners, or math lifter.
+let
+  ownerName = "stdlib.nl.converged-engine-entry";
+
+  supportCatalog =
+    import nl/converged-engine-support-catalog.px;
+  supportPaths = supportCatalog.pathManifest;
+
+  paths = {
+    lean_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    lean_grounded = "stdlib/lib/agent/lean-grounded-proof-mirror.px";
+    lean_adversarial = "stdlib/lib/agent/lean-adversarial-corpus.px";
+    math_axioms = "stdlib/lib/nl/math-axioms-nl-layer.px";
+    verification_router = "stdlib/lib/agent/verification-router-mirror.px";
+    trace_certificate_kernel = "stdlib/lib/math/lean-trace-certificate-kernel.px";
+    converged_support_catalog =
+      "stdlib/lib/nl/converged-engine-support-catalog.px";
+    coding_live_resolver = "stdlib/lib/agent/nl-live-coding-incremental-command-contract.px";
+    coding_live_emitter = "stdlib/lib/agent/web-freecat-live-code-emit-contract.px";
+    freecat_js_projector = "stdlib/lib/freecat/freecat-js-api-projector.px";
+    coding_pair_resolver = "stdlib/lib/agent/nl-code-pair-resolution-contract.px";
+    coding_candidate_dispatcher = "stdlib/lib/coding/coding-candidate-dispatcher.px";
+    math_nl_judge = "stdlib/lib/math/nl-conjecture-lifter.px";
+    nl_front_door = "stdlib/lib/nl/nl-operation-dispatch.px";
+    lift_witness_turn_graph = "stdlib/lib/coding/lift-witness-turn-graph.px";
+    runtime_function_to_code = "stdlib/lib/agent/nl-runtime-function-to-code-pipeline.px";
+    human_summary_renderer = "stdlib/lib/nl/human-summary-renderer.px";
+  } // supportPaths;
+
+  ops = [
+    "inventory"
+    "unified-query"
+    "detect-layer"
+    "ground-proof"
+    "evidence-vs-proof"
+    "ground-code-invariant"
+    "audit-grounding-corpus"
+    "grounding-inventory"
+    "trace-certificate-inventory"
+    "verify-trace-certificate"
+    "verify"
+    "verify-all"
+    "math-axiom"
+    "math-axiom-defer"
+    "coding-live"
+    "freecat-js"
+    "coding-candidate"
+    "coding-pair"
+    "math-judge"
+    "front-door"
+    "lift-witness-turn"
+    "runtime-function-to-code"
+    "human-summary"
+  ];
+
+  routeResult = route: requestKind: result: {
+    outcome = "converged-engine-routed";
+    owner = ownerName;
+    inherit route requestKind result;
+    import_policy = "lazy-per-op";
+    truth_owner = route;
+  };
+
+  held = outcome: extra: {
+    inherit outcome;
+    owner = ownerName;
+    import_policy = "lazy-per-op";
+  } // extra;
+
+  firstArg = args:
+    if builtins.length args == 0 then {}
+    else builtins.elemAt args 0;
+in
+rec {
+  name = ownerName;
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    version = "2026-06-03-nl-math-coding-verification-converged";
+    first_md_alignment = [
+      "one canonical meaning pivot across NL/code/math/search"
+      "real grounding beats more verifier layers"
+      "unknown stays Held/challenge"
+      "heavy Lean/corpus imports are on-demand"
+    ];
+    surface = "single latest engine entry; not a second judge";
+    lazy_import_by_op = true;
+    inventory_imports_heavy_corpus = false;
+    pnixc_meta_runtime = [
+      "target/debug/pnixc-meta /path/to/check.px"
+      "target/debug/pnixc-meta --daemon --workers N"
+    ];
+    support_catalog = supportCatalog.inventorySummary;
+    path_manifest = paths;
+    supported_ops = ops;
+    convergence_effect = {
+      size = "callers depend on one stable entry instead of duplicating owner imports";
+      speed = "inventory and unrelated ops avoid Lean/corpus/coding owner imports";
+      safety = "backend native verdict is preserved; unknown request = Held";
+      scale = "new backend is one lazy branch + one manifest row, not a new top-level surface";
+    };
+  };
+
+  applyConvergedEngine = request:
+    if !(builtins.isAttrs request) then
+      held "held-non-attrs-request" {
+        reason = "request must be an attrset.";
+      }
+    else if builtins.hasAttr "inventory" request then
+      {
+        outcome = "converged-engine-inventory";
+        owner = ownerName;
+        receipt = inventorySummary {};
+      }
+    else if builtins.hasAttr "query" request then
+      let u = import ./lean/unified-query-entry.px;
+      in routeResult paths.lean_unified "unified-query"
+        (u.applyUnifiedQueryPlate { query = request.query; })
+    else if builtins.hasAttr "detect_layer" request then
+      let u = import ./lean/unified-query-entry.px;
+      in routeResult paths.lean_unified "detect-layer"
+        (u.applyUnifiedQueryPlate { detect_layer = request.detect_layer; })
+    else if builtins.hasAttr "ground_proof" request then
+      let lean = import ../agent/lean-grounded-proof-mirror.px;
+      in routeResult paths.lean_grounded "ground-proof"
+        (lean.groundProof request.ground_proof)
+    else if builtins.hasAttr "evidence_vs_proof" request then
+      let lean = import ../agent/lean-grounded-proof-mirror.px;
+      in routeResult paths.lean_grounded "evidence-vs-proof"
+        (lean.evidenceVsProof request.evidence_vs_proof)
+    else if builtins.hasAttr "ground_code_invariant" request then
+      let lean = import ../agent/lean-grounded-proof-mirror.px;
+      in routeResult paths.lean_grounded "ground-code-invariant"
+        (lean.groundCodeInvariant request.ground_code_invariant)
+    else if builtins.hasAttr "audit_grounding_corpus" request then
+      let leanAdv = import ../agent/lean-adversarial-corpus.px;
+      in routeResult paths.lean_adversarial "audit-grounding-corpus"
+        {
+          outcome =
+            if leanAdv.corpus_clean
+            then "lean-grounding-corpus-clean"
+            else "lean-grounding-corpus-failed";
+          summary = leanAdv.summary;
+          receipt = leanAdv.verifierReceipt;
+        }
+    else if builtins.hasAttr "grounding_inventory" request then
+      let
+        lean = import ../agent/lean-grounded-proof-mirror.px;
+        leanAdv = import ../agent/lean-adversarial-corpus.px;
+      in routeResult paths.lean_grounded "grounding-inventory"
+        {
+          outcome = "lean-grounding-inventory";
+          grounding = lean.inventory;
+          audit_summary = leanAdv.summary;
+        }
+    else if builtins.hasAttr "trace_certificate_inventory" request then
+      let k = import ../math/lean-trace-certificate-kernel.px;
+      in routeResult paths.trace_certificate_kernel "trace-certificate-inventory"
+        {
+          outcome = "lean-trace-certificate-kernel-inventory";
+          inventory = k.inventory;
+          demo = k.adversarialChecks;
+        }
+    else if builtins.hasAttr "verify_trace_certificate" request then
+      let k = import ../math/lean-trace-certificate-kernel.px;
+      in routeResult paths.trace_certificate_kernel "verify-trace-certificate"
+        (k.verifyTraceCertificate request.verify_trace_certificate)
+    else if builtins.hasAttr "verify" request then
+      let v = import ../agent/verification-router-mirror.px;
+      in routeResult paths.verification_router "verify" (v.verify request.verify)
+    else if builtins.hasAttr "verify_all" request then
+      let v = import ../agent/verification-router-mirror.px;
+      in routeResult paths.verification_router "verify-all" (v.verifyAll request.verify_all)
+    else if builtins.hasAttr "math_axiom" request then
+      let m = import ./math-axioms-nl-layer.px;
+      in routeResult paths.math_axioms "math-axiom"
+        (m.applyMathAxiomPlate request.math_axiom)
+    else if builtins.hasAttr "math_axiom_defer" request then
+      let m = import ./math-axioms-nl-layer.px;
+      in routeResult paths.math_axioms "math-axiom-defer"
+        (m.applyMathAxiomPlate { defer_for = request.math_axiom_defer; })
+    else if builtins.hasAttr "coding_live" request then
+      let
+        freecatJs = import ../freecat/freecat-js-api-projector.px;
+        projected = freecatJs.projectFreecatJs { utterance = request.coding_live; };
+        live = import ../agent/nl-live-coding-incremental-command-contract.px;
+        emit = import ../agent/web-freecat-live-code-emit-contract.px;
+        envelope = live.resolveLiveCommand { utterance = request.coding_live; };
+      in
+        if !(projected.is_held or true) then
+          routeResult paths.freecat_js_projector "coding-live" projected
+        else
+          routeResult paths.coding_live_emitter "coding-live"
+            (emit.emitLiveCodeJsSource envelope)
+    else if builtins.hasAttr "freecat_js" request then
+      let freecatJs = import ../freecat/freecat-js-api-projector.px;
+      in routeResult paths.freecat_js_projector "freecat-js"
+        (freecatJs.projectFreecatJs (
+          if builtins.isString request.freecat_js
+          then { utterance = request.freecat_js; }
+          else request.freecat_js
+        ))
+    else if builtins.hasAttr "coding_candidate" request then
+      let
+        c = import ../coding/coding-candidate-dispatcher.px;
+        req =
+          if builtins.isString request.coding_candidate then {
+            path = "/coding/candidate";
+            method = "POST";
+            body = { utterance = request.coding_candidate; };
+          } else request.coding_candidate;
+      in routeResult paths.coding_candidate_dispatcher "coding-candidate"
+        (c.dispatch req)
+    else if builtins.hasAttr "coding_pair" request then
+      let p = import ../agent/nl-code-pair-resolution-contract.px;
+      in routeResult paths.coding_pair_resolver "coding-pair"
+        (p.resolveNLCodePair request.coding_pair)
+    else if builtins.hasAttr "math_judge" request then
+      let m = import ../math/nl-conjecture-lifter.px;
+      in routeResult paths.math_nl_judge "math-judge"
+        (m.liftAndJudge request.math_judge)
+    else if builtins.hasAttr "front_door" request then
+      # GENERIC front-door: classify the utterance's operation-kind (existing
+      # ambient/domain classifiers) and DISPATCH to the existing executor —
+      # equation / arithmetic / code / math-judge / congruence / general.
+      let d = import ./nl-operation-dispatch.px;
+      in routeResult paths.nl_front_door "front-door"
+        (if builtins.isAttrs request.front_door then
+          d.dispatchUtteranceWithContext
+            (request.front_door.utterance or "")
+            (request.front_door.context or { })
+        else
+          d.dispatchUtterance request.front_door)
+    else if builtins.hasAttr "lift_witness_turn" request then
+      let g = import ../coding/lift-witness-turn-graph.px;
+      in routeResult paths.lift_witness_turn_graph "lift-witness-turn"
+        (g.runLiftWitnessTurnGraph request.lift_witness_turn)
+    else if builtins.hasAttr "runtime_function_to_code" request then
+      let p = import ../agent/nl-runtime-function-to-code-pipeline.px;
+      in routeResult paths.runtime_function_to_code "runtime-function-to-code"
+        (p.runtimeFunctionToCode request.runtime_function_to_code)
+    else if builtins.hasAttr "human_summary" request then
+      let
+        d = import ./nl-operation-dispatch.px;
+        h = import ./human-summary-renderer.px;
+        req = request.human_summary;
+        utterance =
+          if builtins.isAttrs req then (req.utterance or "")
+          else if builtins.isString req then req else "";
+        dispatchEnv =
+          if builtins.isAttrs req && (req ? envelope) then req.envelope
+          else
+            d.dispatchUtteranceWithContext utterance (if builtins.isAttrs req then (req.context or { }) else { });
+        renderEnvelope =
+          if builtins.isAttrs dispatchEnv && (dispatchEnv ? result) then dispatchEnv
+          else { result = dispatchEnv; };
+        text = h.render { utterance = utterance; envelope = renderEnvelope; };
+      in routeResult paths.human_summary_renderer "human-summary"
+        {
+          outcome = "human-summary-rendered";
+          utterance = utterance;
+          envelope = renderEnvelope;
+          dispatch = dispatchEnv;
+          text = text;
+        }
+    else
+      held "held-unknown-converged-engine-request" {
+        allowed_keys = [
+          "inventory" "query" "detect_layer"
+          "ground_proof" "evidence_vs_proof" "ground_code_invariant"
+          "audit_grounding_corpus" "grounding_inventory"
+          "trace_certificate_inventory" "verify_trace_certificate"
+          "verify" "verify_all"
+          "math_axiom" "math_axiom_defer"
+          "coding_live" "freecat_js" "coding_candidate" "coding_pair" "math_judge"
+          "front_door" "lift_witness_turn" "runtime_function_to_code" "human_summary"
+        ];
+        reason = "No known latest-engine request key; keep as Held/challenge.";
+      };
+
+  # Meta-router friendly facade.
+  dispatch = op: args:
+    if op == "inventory" then applyConvergedEngine { inventory = true; }
+    else if op == "unified-query" then applyConvergedEngine { query = firstArg args; }
+    else if op == "detect-layer" then applyConvergedEngine { detect_layer = firstArg args; }
+    else if op == "ground-proof" then applyConvergedEngine { ground_proof = firstArg args; }
+    else if op == "evidence-vs-proof" then applyConvergedEngine { evidence_vs_proof = firstArg args; }
+    else if op == "ground-code-invariant" then applyConvergedEngine { ground_code_invariant = firstArg args; }
+    else if op == "audit-grounding-corpus" then applyConvergedEngine { audit_grounding_corpus = firstArg args; }
+    else if op == "grounding-inventory" then applyConvergedEngine { grounding_inventory = firstArg args; }
+    else if op == "trace-certificate-inventory" then applyConvergedEngine { trace_certificate_inventory = firstArg args; }
+    else if op == "verify-trace-certificate" then applyConvergedEngine { verify_trace_certificate = firstArg args; }
+    else if op == "verify" then applyConvergedEngine { verify = firstArg args; }
+    else if op == "verify-all" then applyConvergedEngine { verify_all = firstArg args; }
+    else if op == "math-axiom" then applyConvergedEngine { math_axiom = firstArg args; }
+    else if op == "math-axiom-defer" then applyConvergedEngine { math_axiom_defer = firstArg args; }
+    else if op == "coding-live" then applyConvergedEngine { coding_live = firstArg args; }
+    else if op == "freecat-js" then applyConvergedEngine { freecat_js = firstArg args; }
+    else if op == "coding-candidate" then applyConvergedEngine { coding_candidate = firstArg args; }
+    else if op == "coding-pair" then applyConvergedEngine { coding_pair = firstArg args; }
+    else if op == "math-judge" then applyConvergedEngine { math_judge = firstArg args; }
+    else if op == "front-door" then applyConvergedEngine { front_door = firstArg args; }
+    else if op == "lift-witness-turn" then applyConvergedEngine { lift_witness_turn = firstArg args; }
+    else if op == "runtime-function-to-code" then applyConvergedEngine { runtime_function_to_code = firstArg args; }
+    else if op == "human-summary" then applyConvergedEngine { human_summary = firstArg args; }
+    else null;
+
+  supportedOps = ops;
+  hasOp = op: builtins.elem op ops;
+}

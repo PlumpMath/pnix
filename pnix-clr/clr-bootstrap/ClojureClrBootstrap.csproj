@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The ClojureCLR runtime substrate for pnix-clr.
+
+       The pinned upstream compiler/runtime is consumed as the published
+       `Clojure` NuGet package (exact version below), not as a vendored source
+       tree. That package IS the explicit bootstrap trust root: it is the
+       upstream release artifact, pinned by version and verified by NuGet's
+       own package signature. pnix-clr therefore carries no third-party
+       compiler sources of its own. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Clojure.Main</AssemblyName>
+    <RootNamespace>Pnix.Clr.Bootstrap</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Clojure" Version="1.12.3-alpha8" />
+  </ItemGroup>
+
+</Project>

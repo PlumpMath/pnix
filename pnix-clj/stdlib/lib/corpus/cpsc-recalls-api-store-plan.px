@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/cpsc-recalls-api-store-plan.px — CPSC recalls tokenized metadata.
+# redb corpus_source_records에 pnix attrset source(JSON 아님)로 append한다.
+# narrative text, images, contacts, company identifiers, safety/legal advice, graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./cpsc-recalls-api.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "consumer.cpsc_recalls_api.v1";
+    source = { name = "U.S. CPSC Recalls API"; license = "U.S. federal public information"; scope = "empty seed fallback"; };
+    summary = { api_total = 0; stored_count = 0; narrative_prose_ingested = false; image_payloads_ingested = false; contact_text_ingested = false; company_identifiers_ingested = false; legal_safety_advice_ingested = false; mirror_graph_wiring = false; };
+    recalls = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "cpsc-recalls-api-load-v0";
+      source_lens = "stdlib/lib/corpus/cpsc-recalls-api-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "consumer.cpsc_recalls_api.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "cpsc-recalls-api-query-v0";
+      source_lens = "stdlib/lib/corpus/cpsc-recalls-api-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "consumer.cpsc_recalls_api.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

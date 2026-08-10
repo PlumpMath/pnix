@@ -1,0 +1,81 @@
+# stdlib/lib/nl/korean-discourse-relation-test.px — 문장간 담화관계(inter-sentence discourse relation) lock.
+#
+# meaning-graph L2 의 *문장간* 층: 문장-초 연결어(그래서/하지만/그리고…)가 명제들을 typed relation edge 로 잇는다
+# (splitClauseRelations 절-내 연결어미의 문장간 아날로그). 데이터=korean-morphology sentence-discourse-markers,
+# glue=liftDiscourse(strip→clean prop + processDiscourse 출력에 discourse_relation zip; dc/prop/term_key 무수정).
+# 설계+마커별 적대 soundness 검증 = workflow whgzc5a1r(23-agent). ★determinate 3개만(그러므로·또한·게다가);
+# 하지만/그러나도 contrast⟂concession 중의=candidate. 왜냐하면=backward·즉/예를들어=non-vocab → edge 없음(fail-closed).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  edge = sents: let d = knm.liftDiscourse sents; s2 = B.elemAt d 1; dr = s2.discourse_relation;
+                in if dr == null then "none" else dr.relation + "/" + dr.status;
+  # backward(왜냐하면): cur 이 cause → from→to 의미방향(directed coherence edge) 검증용
+  edgeDir = sents: let d = knm.liftDiscourse sents; dr = (B.elemAt d 1).discourse_relation;
+                in if dr == null then "none" else dr.direction + " from=" + (B.toString dr.from) + " to=" + (B.toString dr.to);
+  # 비-마커 둘째 문장의 pro-drop 복원이 strip 경유에도 정상(회귀): "철수가 갔다. 그리고 잤다" → 잤다 주어=철수
+  recAfterMarker = let d = knm.liftDiscourse [ "철수가 잔다" "그리고 사과를 먹었다" ]; s2 = B.elemAt d 1;
+                   recs = B.filter (r: r.slot == "agent") s2.recovered;
+                   in if recs == [] then "none" else let e = (B.head recs).entity; in if e == null then "null" else e.name;
+in {
+  geureomeuro = edge [ "비가 왔다" "그러므로 길이 막혔다" ];
+  ddohan      = edge [ "그는 똑똑하다" "또한 성실하다" ];
+  gedaga      = edge [ "길을 잃었다" "게다가 비가 왔다" ];
+  geuraeseo   = edge [ "비가 왔다" "그래서 길이 막혔다" ];
+  geureona    = edge [ "철수는 크다" "그러나 농구를 못한다" ];
+  geureonde   = edge [ "길을 걸었다" "그런데 비가 왔다" ];
+  geurigo     = edge [ "손을 씻었다" "그리고 밥을 먹었다" ];
+  geureomyeon = edge [ "비가 온다" "그러면 길이 막힌다" ];
+  jeuk        = edge [ "그는 독신이다" "즉 결혼 안 했다" ];     # restatement/determinate (환언)
+  yerye       = edge [ "운동을 좋아한다" "예를들어 달리기를 한다" ]; # exemplification/determinate (예시)
+  waenya      = edge [ "그는 죽었다" "왜냐하면 총에 맞았다" ];  # cause/candidate (backward)
+  waenya_dir  = edgeDir [ "그는 죽었다" "왜냐하면 총에 맞았다" ]; # backward from=1 to=0 (cur=원인→prev=결과)
+  geureomeuro_dir = edgeDir [ "비가 왔다" "그러므로 길이 막혔다" ]; # forward from=0 to=1 (prev=원인→cur=결과)
+  rec_thru    = recAfterMarker;                                  # 철수 (strip 경유 pro-drop 정상)
+  all_ok =
+    # determinate(반례 없음)
+       (edge [ "비가 왔다" "그러므로 길이 막혔다" ] == "cause/determinate")
+    && (edge [ "그는 똑똑하다" "또한 성실하다" ] == "addition/determinate")
+    && (edge [ "길을 잃었다" "게다가 비가 왔다" ] == "addition/determinate")
+    # candidate(중의=propose-only)
+    && (edge [ "비가 왔다" "그래서 길이 막혔다" ] == "cause/candidate")
+    && (edge [ "철수는 크다" "그러나 농구를 못한다" ] == "contrast/candidate")
+    && (edge [ "길을 걸었다" "그런데 비가 왔다" ] == "contrast/candidate")
+    && (edge [ "손을 씻었다" "그리고 밥을 먹었다" ] == "addition/candidate")
+    # ★그리고 disambiguation: 양쪽 형용사(stative)=addition/determinate 승급(sequential 불가); 동사=candidate 유지
+    && (edge [ "철수는 크다" "그리고 작다" ] == "addition/determinate")
+    && (edge [ "비가 온다" "그러면 길이 막힌다" ] == "conditional/candidate")
+    # ★환언/예시 승급(unambiguous discourse-only 관계): held→determinate
+    && (edge [ "그는 독신이다" "즉 결혼 안 했다" ] == "restatement/determinate")
+    && (edge [ "운동을 좋아한다" "예를들어 달리기를 한다" ] == "exemplification/determinate")
+    # ★담화관계 생성(역방향=이해↔생성 한 reflection): relation → canonical 연결어
+    && (knm.interSentenceConnectorOf "cause" == "그래서")
+    && (knm.interSentenceConnectorOf "contrast" == "하지만")
+    && (knm.interSentenceConnectorOf "restatement" == "즉")
+    && (knm.interSentenceConnectorOf "exemplification" == "예를들어")
+    && (knm.interSentenceConnectorOf "addition" == "그리고")
+    # ★담화 coherence 그래프 1급 객체: node_count + edges(from→to/relation/structural) 집계
+    && (let g = knm.discourseGraph [ "어제 비가 왔다" "그래서 길이 막혔다" "하지만 곧 뚫렸다" ];
+        in (g.node_count == 3) && ((B.length g.edges) == 2)
+           && ((B.head g.edges).relation == "cause") && ((B.head g.edges).from == 0))
+    # ★backward(왜냐하면): cause/candidate + from→to 역방향(cur=원인→prev=결과); 인과는 forward와 cause→effect 통일
+    && (edge [ "그는 죽었다" "왜냐하면 총에 맞았다" ] == "cause/candidate")
+    && (edgeDir [ "그는 죽었다" "왜냐하면 총에 맞았다" ] == "backward from=1 to=0")
+    && (edgeDir [ "비가 왔다" "그러므로 길이 막혔다" ] == "forward from=0 to=1")
+    # ★SDRT 구조제약(deep-research 교정): Result/addition/contrast=coordinating·Explanation(왜냐하면)/conditional=subordinating
+    && ((B.elemAt (knm.liftDiscourse [ "비가 왔다" "그래서 막혔다" ]) 1).discourse_relation.structural == "coordinating")
+    && ((B.elemAt (knm.liftDiscourse [ "죽었다" "왜냐하면 아팠다" ]) 1).discourse_relation.structural == "subordinating")
+    && ((B.elemAt (knm.liftDiscourse [ "온다" "그러면 막힌다" ]) 1).discourse_relation.structural == "subordinating")
+    # ★right-frontier(SDRT 1-step): coord 문장이 직전 subord 절 건너뛰고 부모에 부착 (그리고는 1=아팠다 아닌 0=왔다에)
+    && ((B.elemAt (knm.liftDiscourse [ "철수가 왔다" "왜냐하면 아팠다" "그리고 쉬었다" ]) 2).discourse_relation.prev == 0)
+    # 일반 인접 부착 유지(2문장=i-1)
+    && ((B.elemAt (knm.liftDiscourse [ "비가 왔다" "그래서 막혔다" ]) 1).discourse_relation.prev == 0)
+    # ★multi-level right-frontier: 종속 절 체인(1,2) 전체 건너뛰고 주서사선(0)에 부착
+    && ((B.elemAt (knm.liftDiscourse [ "철수가 왔다" "왜냐하면 아팠다" "그러면 쉬어야한다" "그리고 나았다" ]) 3).discourse_relation.prev == 0)
+    # narration 체인: C(2)→B(1)
+    && ((B.elemAt (knm.liftDiscourse [ "왔다" "그리고 먹었다" "그리고 잤다" ]) 2).discourse_relation.prev == 1)
+    # 첫 문장 마커 = antecedent 없음 → edge 없음
+    && (let d = knm.liftDiscourse [ "그래서 시작했다" ]; in (B.elemAt d 0).discourse_relation == null)
+    # 비-마커 둘째 문장 = edge 없음(회귀)
+    && (edge [ "철수가 잔다" "사과를 먹었다" ] == "none")
+    # ★strip 경유 pro-drop 복원 정상(연결어 제거 후 깨끗한 prop)
+    && (recAfterMarker == "철수");
+}

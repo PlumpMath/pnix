@@ -1,0 +1,496 @@
+let
+  ownerName = "stdlib.nl.execution-axioms";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Execution Axioms (agent-NL-127) =============================
+  #
+  # 실행/디버그/프로파일/추적의 손/도구.
+  #
+  # 5 family:
+  #   1. run (실행 진입)
+  #   2. debug (브레이크포인트 / 스텝)
+  #   3. profile (CPU / 메모리 / IO)
+  #   4. trace (로깅 / 분산 추적)
+  #   5. runtime-introspect (스택 / 힙 / 스레드)
+
+  stepKind = "execution-tool-axiom";
+  framework_step =
+    "axiom content — 코드 실행 시 도구 (run / debug / profile / trace / introspect)";
+
+  # === 1. Run ==================================================
+
+  runAxiomTree = bt.composeBranchTree "run axiom" [
+    {
+      name = "entry-point";
+      cues = [ "entry point" "main function" "진입점" "메인" ];
+      sub_specs = [
+        { name = "main-function"; cues = [ "main" "메인" ]; terminal = true; }
+        { name = "library-entry"; cues = [ "library" "lib" "라이브러리" ]; terminal = true; }
+        { name = "binary-entry"; cues = [ "binary" "executable" "실행 파일" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "command-line-args";
+      cues = [ "command line" "argv" "cli args" "명령행 인자" ];
+      sub_specs = [
+        { name = "positional-args"; cues = [ "positional" "위치 인자" ]; terminal = true; }
+        { name = "named-flags"; cues = [ "flag" "option" "플래그" ]; terminal = true; }
+        { name = "subcommand"; cues = [ "subcommand" "서브 커맨드" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "environment";
+      cues = [ "environment variable" "env var" "환경 변수" ];
+      sub_specs = [
+        { name = "config-via-env"; cues = [ "config" "구성" ]; terminal = true; }
+        { name = "secret-via-env"; cues = [ "secret" "비밀" ]; terminal = true; }
+        { name = "dotenv"; cues = [ "dotenv" ".env" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "run-mode";
+      cues = [ "run mode" "release" "debug build" "production" "실행 모드" "릴리스" ];
+      sub_specs = [
+        { name = "debug-mode"; cues = [ "debug build" "디버그" ]; terminal = true; }
+        { name = "release-mode"; cues = [ "release" "릴리스" ]; terminal = true; }
+        { name = "test-mode"; cues = [ "test mode" "테스트" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "exit-status";
+      cues = [ "exit status" "exit code" "return code" "종료 코드" ];
+      sub_specs = [
+        { name = "zero-on-success"; cues = []; terminal = true; }
+        { name = "nonzero-on-error"; cues = []; terminal = true; }
+        { name = "specific-error-codes"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Debug ================================================
+
+  debugAxiomTree = bt.composeBranchTree "debug axiom" [
+    {
+      name = "breakpoint";
+      cues = [ "breakpoint" "break point" "브레이크포인트" ];
+      sub_specs = [
+        { name = "line-breakpoint"; cues = [ "line" "줄" ]; terminal = true; }
+        { name = "conditional-breakpoint"; cues = [ "conditional" "조건부" ]; terminal = true; }
+        { name = "function-breakpoint"; cues = [ "function" "함수 진입" ]; terminal = true; }
+        { name = "logpoint"; cues = [ "logpoint" "log point" "로그 포인트" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "stepping";
+      cues = [ "step over" "step into" "step out" "스텝 오버" "스텝 인" ];
+      sub_specs = [
+        { name = "step-over"; cues = [ "step over" "스텝 오버" ]; terminal = true; }
+        { name = "step-into"; cues = [ "step into" "스텝 인" ]; terminal = true; }
+        { name = "step-out"; cues = [ "step out" "스텝 아웃" ]; terminal = true; }
+        { name = "continue"; cues = [ "continue" "계속" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "inspect";
+      cues = [ "inspect" "variable inspection" "변수 검사" "검사" ];
+      sub_specs = [
+        { name = "local-variables"; cues = [ "local" "지역" ]; terminal = true; }
+        { name = "evaluate-expression"; cues = [ "evaluate" "expression" "표현식 평가" ]; terminal = true; }
+        { name = "memory-view"; cues = [ "memory view" "메모리 뷰" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "watch";
+      cues = [ "watch" "watch expression" "watch variable" "감시식" ];
+      sub_specs = [
+        { name = "value-watch"; cues = []; terminal = true; }
+        { name = "address-watch"; cues = [ "address" "주소" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "post-mortem";
+      cues = [ "post mortem" "core dump" "crash dump" "사후 분석" "코어 덤프" ];
+      sub_specs = [
+        { name = "core-dump-analysis"; cues = [ "core dump" "코어" ]; terminal = true; }
+        { name = "stack-trace-analysis"; cues = [ "stack trace" "스택 트레이스" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Profile ==============================================
+
+  profileAxiomTree = bt.composeBranchTree "profile axiom" [
+    {
+      name = "cpu-profile";
+      cues = [ "cpu profile" "cpu profiler" "프로파일링" "cpu" ];
+      sub_specs = [
+        { name = "sampling-profiler"; cues = [ "sampling" "샘플링" ]; terminal = true; }
+        { name = "instrumented-profiler"; cues = [ "instrumented" "계측" ]; terminal = true; }
+        { name = "flame-graph"; cues = [ "flame graph" "플레임 그래프" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "memory-profile";
+      cues = [ "memory profile" "heap profile" "메모리 프로파일" "힙 프로파일" ];
+      sub_specs = [
+        { name = "heap-snapshot"; cues = [ "heap snapshot" "힙 스냅샷" ]; terminal = true; }
+        { name = "allocation-tracking"; cues = [ "allocation" "할당 추적" ]; terminal = true; }
+        { name = "leak-detection"; cues = [ "leak detection" "누수 탐지" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "io-profile";
+      cues = [ "io profile" "disk profile" "network profile" "IO 프로파일" ];
+      sub_specs = [
+        { name = "disk-io"; cues = [ "disk" "디스크" ]; terminal = true; }
+        { name = "network-io"; cues = [ "network" "네트워크" ]; terminal = true; }
+        { name = "syscall-trace"; cues = [ "syscall" "시스템 콜" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "benchmark";
+      cues = [ "benchmark" "bench" "벤치마크" ];
+      sub_specs = [
+        { name = "micro-benchmark"; cues = [ "micro" "마이크로" ]; terminal = true; }
+        { name = "macro-benchmark"; cues = [ "macro" "매크로" ]; terminal = true; }
+        { name = "stress-test"; cues = [ "stress" "load" "부하" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "perf-counter";
+      cues = [ "perf counter" "hardware counter" "perf event" "성능 카운터" ];
+      sub_specs = [
+        { name = "cache-miss"; cues = [ "cache miss" "캐시 미스" ]; terminal = true; }
+        { name = "branch-misprediction"; cues = [ "branch misprediction" "분기 예측 실패" ]; terminal = true; }
+        { name = "instructions-per-cycle"; cues = [ "IPC" "instructions per cycle" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Trace ================================================
+
+  traceAxiomTree = bt.composeBranchTree "trace axiom" [
+    {
+      name = "log-level";
+      cues = [ "log level" "log filter" "로그 레벨" ];
+      sub_specs = [
+        { name = "trace-level"; cues = [ "trace" ]; terminal = true; }
+        { name = "debug-level"; cues = [ "debug" ]; terminal = true; }
+        { name = "info-level"; cues = [ "info" ]; terminal = true; }
+        { name = "warn-error"; cues = [ "warn" "error" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "structured-logging";
+      cues = [ "structured log" "json log" "key value log" "구조적 로그" ];
+      sub_specs = [
+        { name = "json-format"; cues = [ "json" ]; terminal = true; }
+        { name = "key-value-pairs"; cues = [ "key value" "key=value" ]; terminal = true; }
+        { name = "context-fields"; cues = [ "context" "맥락" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "distributed-trace";
+      cues = [ "distributed trace" "trace id" "span" "opentelemetry" "분산 추적" ];
+      sub_specs = [
+        { name = "trace-id"; cues = [ "trace id" "trace_id" ]; terminal = true; }
+        { name = "span-id"; cues = [ "span id" "span_id" ]; terminal = true; }
+        { name = "baggage"; cues = [ "baggage" "수하물" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "log-correlation";
+      cues = [ "log correlation" "correlate" "request id" "로그 상관" ];
+      sub_specs = [
+        { name = "request-id"; cues = [ "request id" ]; terminal = true; }
+        { name = "user-id"; cues = [ "user id" ]; terminal = true; }
+        { name = "session-id"; cues = [ "session id" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "audit-log";
+      cues = [ "audit log" "audit trail" "감사 로그" ];
+      sub_specs = [
+        { name = "who-did-what"; cues = []; terminal = true; }
+        { name = "tamper-evident"; cues = [ "tamper evident" "변조 감지" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Runtime Introspect ===================================
+
+  runtimeIntrospectAxiomTree =
+    bt.composeBranchTree "runtime introspect axiom" [
+    {
+      name = "stack-frame";
+      cues = [ "stack frame" "call stack" "스택 프레임" "호출 스택" ];
+      sub_specs = [
+        { name = "current-frame"; cues = [ "current" "현재" ]; terminal = true; }
+        { name = "frame-list"; cues = [ "list" "목록" ]; terminal = true; }
+        { name = "frame-locals"; cues = [ "locals" "지역" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "heap-inspection";
+      cues = [ "heap" "heap object" "힙 객체" ];
+      sub_specs = [
+        { name = "object-graph"; cues = [ "object graph" "객체 그래프" ]; terminal = true; }
+        { name = "object-size"; cues = [ "size" "크기" ]; terminal = true; }
+        { name = "retainers"; cues = [ "retainer" "유지자" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "gc-information";
+      cues = [ "garbage collection" "gc" "가비지 컬렉션" ];
+      sub_specs = [
+        { name = "gc-pause-time"; cues = [ "pause time" "일시 정지" ]; terminal = true; }
+        { name = "generation-info"; cues = [ "generation" "세대" ]; terminal = true; }
+        { name = "force-gc"; cues = [ "force gc" "강제 gc" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "thread-inspection";
+      cues = [ "thread" "goroutine" "스레드" "고루틴" ];
+      sub_specs = [
+        { name = "thread-list"; cues = [ "list" "목록" ]; terminal = true; }
+        { name = "thread-state"; cues = [ "state" "상태" ]; terminal = true; }
+        { name = "deadlock-detection"; cues = [ "deadlock" "데드락" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "reflection";
+      cues = [ "reflection" "introspect" "리플렉션" "내부 검사" ];
+      sub_specs = [
+        { name = "type-info"; cues = [ "type info" "타입 정보" ]; terminal = true; }
+        { name = "method-list"; cues = [ "method list" "메소드 목록" ]; terminal = true; }
+        { name = "annotation"; cues = [ "annotation" "어노테이션" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "dry-run-and-sandbox";
+      cues = [ "dry run" "sandbox" "shadow execute" "replay" "리허설" ];
+      sub_specs = [
+        { name = "dry-run-mode"; cues = [ "dry run" "리허설" ]; terminal = true; }
+        { name = "sandbox-execution"; cues = [ "sandbox" "격리 실행" ]; terminal = true; }
+        { name = "shadow-execute"; cues = [ "shadow execute" "쉐도우" ]; terminal = true; }
+        { name = "replay-recorded-input"; cues = [ "replay" "재생" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry ===================================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-exec-001";
+      name = "run";
+      domain = "execution";
+      activation_cues = [
+        "run" "execute" "launch" "start"
+        "entry point" "argv" "env var" "release" "debug build"
+        "실행" "기동" "진입점" "환경 변수"
+      ];
+      tree = runAxiomTree;
+      sub_count = builtins.length runAxiomTree.branches;
+      tool_role = "실행 진입";
+    }
+    {
+      axiom_id = "axiom-exec-002";
+      name = "debug";
+      domain = "execution";
+      activation_cues = [
+        "debug" "debugger" "breakpoint" "step over" "step into"
+        "inspect" "watch" "post mortem"
+        "디버그" "디버거" "브레이크포인트" "스텝"
+      ];
+      tree = debugAxiomTree;
+      sub_count = builtins.length debugAxiomTree.branches;
+      tool_role = "디버깅";
+    }
+    {
+      axiom_id = "axiom-exec-003";
+      name = "profile";
+      domain = "execution";
+      activation_cues = [
+        "profile" "profiler" "benchmark" "flame graph"
+        "cpu profile" "memory profile" "heap snapshot" "perf counter"
+        "프로파일" "벤치마크" "플레임 그래프"
+      ];
+      tree = profileAxiomTree;
+      sub_count = builtins.length profileAxiomTree.branches;
+      tool_role = "프로파일링";
+    }
+    {
+      axiom_id = "axiom-exec-004";
+      name = "trace";
+      domain = "execution";
+      activation_cues = [
+        "log" "logging" "trace" "span" "opentelemetry"
+        "structured log" "distributed trace"
+        "로그" "로깅" "추적" "분산 추적"
+      ];
+      tree = traceAxiomTree;
+      sub_count = builtins.length traceAxiomTree.branches;
+      tool_role = "추적 / 로깅";
+    }
+    {
+      axiom_id = "axiom-exec-005";
+      name = "runtime-introspect";
+      domain = "execution";
+      activation_cues = [
+        "stack frame" "heap" "gc" "garbage collection" "thread"
+        "reflection" "introspect"
+        "스택 프레임" "힙" "가비지 컬렉션" "스레드" "리플렉션"
+      ];
+      tree = runtimeIntrospectAxiomTree;
+      sub_count = builtins.length runtimeIntrospectAxiomTree.branches;
+      tool_role = "런타임 내부 검사";
+    }
+  ];
+
+  # === Activation + Plate (boilerplate) ===========================
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple execution axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "use " + ax.name + " runtime tool";
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  applyExecutionAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-113-nl-execution (composes axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+              tool_role = ax.tool_role;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason = "Provide { list_axioms } | { activate_for } | { describe }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-execution-axiom-113";
+    composes = "axiom-98-tree";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "run (entry / args / env / mode / exit-status)"
+      "debug (breakpoint / stepping / inspect / watch / post-mortem)"
+      "profile (cpu / memory / io / benchmark / perf-counter)"
+      "trace (log-level / structured / distributed / correlation / audit)"
+      "runtime-introspect (stack / heap / gc / thread / reflection)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    tool_metaphor =
+      "실행/디버그/프로파일/추적 도구. diagnostic (#123) 가 *무엇이* 잘못 "
+      + "이면, execution 은 *어떻게 관찰* 할지의 손/도구.";
+  };
+
+in {
+  inherit
+    ownerName
+    runAxiomTree debugAxiomTree profileAxiomTree
+    traceAxiomTree runtimeIntrospectAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    applyExecutionAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL execution axioms (agent-NL-127)";
+    owner = ownerName;
+    base = "nl-execution-axioms-v0";
+    rev_note = "agent-NL-127 (2026-05-29): 실행/디버그/프로파일/추적 도구. "
+      + "5 family. DO NOT REBUILD.";
+  };
+}

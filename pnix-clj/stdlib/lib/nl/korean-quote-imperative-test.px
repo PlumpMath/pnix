@@ -1,0 +1,14 @@
+# 인용 명령(라고) 생성 lock — 간접명령 euStem+라고(먹으라고·가라고·들으라고·사라고·도우라고). 불규칙 euStem 흡수.
+#   ★parse(라고)는 불규칙 역추론 다대일 중의(들으라고=듣다⟂들다)=held, Codex spec(hangul-codec.md 이어10). 여기선 생성만 잠금.
+let knm = import ./korean-nl-mirror.px;
+  rq = knm.realizeQuotation;
+  mk = stem: { quote = { roles=[]; action=stem; tense="present"; mood="imperative"; level="haera";
+                         polarity="positive"; negation_form="none"; modality="plain"; modality_form="none";
+                         aspect="plain"; aspect_form="none"; honorific="none"; predicate_kind="verb"; predicate_nominal=null; };
+               reporting = "하"; };
+in {
+  meok = rq (mk "먹"); ga = rq (mk "가"); deut = rq (mk "듣"); sal = rq (mk "살"); dop = rq (mk "돕");
+  all_ok =
+       (rq (mk "먹") == "먹으라고 했다") && (rq (mk "가") == "가라고 했다")
+    && (rq (mk "듣") == "들으라고 했다") && (rq (mk "살") == "사라고 했다") && (rq (mk "돕") == "도우라고 했다");
+}

@@ -1,0 +1,31 @@
+# stdlib/lib/nl/korean-clause-relation-test.px
+#
+# F2-graph L2 lock: 복문 → [{clause; connective; relation; status}] (splitClauseRelations).
+#   "표면(연결어미)이 edge를 준다"의 담화관계 적용. clause-connectors 21쌍(canonical 테이블) longest-match +
+#   connectiveToRelation(명확=determinate·모호 고/는데/아서=candidate). 단문=1절(connective null). theory-neutral 리스트.
+#   ⚠fusion 연결어미(오+아서→와서)는 표면-suffix 매칭 한계 — 비융합 예로 lock(융합 복원은 후속 slice).
+let
+  lift = import ./korean-taxonomy-lift.px;
+  B = builtins;
+  s1 = lift.splitClauseRelations "철수가 밥을 먹고 학교에 갔다";    # 2절: 고/sequential(모호→candidate)
+  s2 = lift.splitClauseRelations "철수가 밥을 먹지만 영희는 잔다";  # 2절: 지만/contrast(determinate)
+  s3 = lift.splitClauseRelations "비가 오면 우산을 쓴다";           # 2절: 면/conditional(determinate)
+  s4 = lift.splitClauseRelations "철수가 밥을 먹는다";               # 1절: 단문(연결어미 없음)
+  s5 = lift.splitClauseRelations "철수가 밥을 먹으려고 갔다";        # 2절: 려고/purpose(고보다 longest-match)
+in {
+  s1_count = B.length s1;
+  s1_rel = (B.head s1).relation;
+  s1_status = (B.head s1).status;
+  s4_count = B.length s4;
+  all_ok =
+    # ★연결어미 → 절 분리 + 관계 lift
+       (B.length s1 == 2) && ((B.head s1).relation == "sequential") && ((B.head s1).status == "candidate") && ((B.head s1).connective == "고")
+    # ★.clause 필드 강제 force(연결어미 strip 된 절 표면) — Nix list-juxtaposition 함정(괄호 누락) 회귀 차단
+    && ((B.head s1).clause == "철수가 밥을 먹") && ((B.elemAt s1 1).clause == "학교에 갔다")
+    && (B.length s2 == 2) && ((B.head s2).relation == "contrast") && ((B.head s2).status == "determinate")
+    && (B.length s3 == 2) && ((B.head s3).relation == "conditional")
+    # ★단문 = 1절, connective null
+    && (B.length s4 == 1) && ((B.head s4).connective == null) && ((B.head s4).relation == null)
+    # ★longest-match: 려고(purpose)가 고(sequential)보다 우선
+    && (B.length s5 == 2) && ((B.head s5).relation == "purpose") && ((B.head s5).connective == "려고");
+}

@@ -1,0 +1,186 @@
+# P12 — mirror-gc contract (lazy-stub + thunk-gc)
+#
+# OWNER-LAW (2026-05-13): mirror GC never deletes audit truth.
+# P4 receipts remain append-only. P12 only declares when a mirror's
+# materialized outside payload may be lowered to a P3 `lazy-stub`,
+# and requires a P4 `thunk-gc` receipt to record that maintenance
+# decision.
+#
+# Multi-user rule (P9-compatible):
+#   - public mirrors are content-addressed shared intelligence; they
+#     may be aggressively GC'd because they can be re-forced from the
+#     same deterministic substrate.
+#   - private mirrors carry owner_user_id in the P1 fingerprint; they
+#     are sticky by default because owner attention/privacy is part of
+#     the semantic boundary.
+#
+# Non-goals:
+#   - no receipt deletion
+#   - no session-head mutation
+#   - no private mirror collection without a future explicit owner
+#     policy and consent receipt
+
+let
+  ownerName = "pnix-mirror-runtime/primitives/p12-mirror-gc-contract.px";
+
+  version = "P12.a";
+
+  activePolicy = "public-aggressive-private-sticky";
+
+  validGcActions = [
+    "emit-thunk-gc"
+    "keep-sticky"
+    "held"
+  ];
+
+  validGcHeldKinds = [
+    "active-session-chain"
+    "already-gc-marked"
+    "missing-required-fields"
+    "unknown-visibility-kind"
+    "scoped-future-not-yet-implemented"
+  ];
+
+  requiredCandidateFields = [
+    "target_receipt_id"
+    "target_mirror_id"
+    "visibility"
+    "observed_at_ms"
+  ];
+
+  # The materialized outside view after GC. It is still reachable,
+  # but forcing it requires mirror re-entry.
+  postGcProjectionKind = "lazy-stub";
+
+  # P4 receipt kind emitted for a GC decision.
+  gcReceiptKind = "thunk-gc";
+
+  visibilityPolicy = [
+    {
+      visibility = "public";
+      action = "emit-thunk-gc";
+      reason = "public mirror is shared/deduped and deterministic re-force is allowed";
+    }
+    {
+      visibility = "private";
+      action = "keep-sticky";
+      reason = "private mirror carries owner_user_id and remains sticky by default";
+    }
+    {
+      visibility = "scoped-future";
+      action = "held";
+      held_kind = "scoped-future-not-yet-implemented";
+      reason = "scoped visibility has no P12 collection policy yet";
+    }
+  ];
+
+  validateCandidate = candidate:
+    let
+      hasField = field:
+        candidate ? "${field}" && (
+          let v = candidate."${field}"; in
+          if builtins.isString v then builtins.stringLength v > 0
+          else if builtins.isInt v then true
+          else v != null
+        );
+      missing = builtins.filter (f: !(hasField f)) requiredCandidateFields;
+      visibility =
+        if candidate ? visibility then candidate.visibility else "public";
+      visibilityKnown =
+        visibility == "public"
+        || visibility == "private"
+        || visibility == "scoped-future";
+    in {
+      missing_fields = missing;
+      visibility_known = visibilityKnown;
+      ready = builtins.length missing == 0 && visibilityKnown;
+      held_kind =
+        if builtins.length missing != 0 then "missing-required-fields"
+        else if !visibilityKnown then "unknown-visibility-kind"
+        else null;
+    };
+
+  # Declarative decision helper. Rust carrier mirrors this policy while
+  # using the actual receipt/session stores to determine
+  # active-session-chain and already-gc-marked.
+  classifyCandidate = candidate:
+    let
+      v = validateCandidate candidate;
+      visibility =
+        if candidate ? visibility then candidate.visibility else "public";
+      sessionProtected =
+        if candidate ? session_protected then candidate.session_protected else false;
+      alreadyGcMarked =
+        if candidate ? already_gc_marked then candidate.already_gc_marked else false;
+    in
+      if !v.ready then {
+        action = "held";
+        held_kind = v.held_kind;
+        reason = "P12 candidate is not well-formed";
+      } else if alreadyGcMarked then {
+        action = "held";
+        held_kind = "already-gc-marked";
+        reason = "target mirror already has a thunk-gc receipt";
+      } else if sessionProtected then {
+        action = "held";
+        held_kind = "active-session-chain";
+        reason = "target mirror is still in an active P5 session chain";
+      } else if visibility == "private" then {
+        action = "keep-sticky";
+        held_kind = null;
+        reason = "private mirror is sticky by default";
+      } else if visibility == "scoped-future" then {
+        action = "held";
+        held_kind = "scoped-future-not-yet-implemented";
+        reason = "scoped-future visibility has no collection policy yet";
+      } else {
+        action = "emit-thunk-gc";
+        held_kind = null;
+        reason = "public mirror can be lowered to lazy-stub and re-forced deterministically";
+      };
+
+  invariants = [
+    "P12 MUST NOT delete or rewrite P4 receipts; it only appends thunk-gc receipts"
+    "P12 MUST NOT advance or rewrite P5 session heads; maintenance is not a user turn"
+    "P12 public mirrors MAY be lowered to P3 lazy-stub because P1/P2 make them replay-stable and shared"
+    "P12 private mirrors MUST remain sticky unless a future explicit owner-consent policy is added"
+    "P12 MUST preserve P9 visibility semantics: public dedups across users, private isolates by owner_user_id"
+    "P12 MUST be idempotent: a mirror with an existing thunk-gc receipt is held as already-gc-marked, not re-emitted"
+    "P12 MUST protect active session chains so the current session head remains replayable without branch confusion"
+  ];
+in {
+  inherit
+    ownerName
+    version
+    activePolicy
+    validGcActions
+    validGcHeldKinds
+    requiredCandidateFields
+    postGcProjectionKind
+    gcReceiptKind
+    visibilityPolicy
+    validateCandidate
+    classifyCandidate
+    invariants;
+
+  meta = {
+    source = "pnix-mirror-runtime primitive P12 (a)";
+    owner = ownerName;
+    role = "mirror materialization GC policy — lower collectable public mirrors to lazy-stub, record thunk-gc, keep private mirrors sticky";
+    consumes = [
+      "P3 boundary-projection lazy-stub"
+      "P4 typed receipt stream thunk-gc"
+      "P5 session heads"
+      "P9 contribution visibility"
+    ];
+    consumed_by = [
+      "doghouse-core MirrorGcPlanner"
+      "cockpit / inspector sustain surface"
+    ];
+    non_goals = [
+      "receipt deletion"
+      "session-head mutation"
+      "private mirror collection without owner policy"
+    ];
+  };
+}

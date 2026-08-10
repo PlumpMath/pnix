@@ -1,0 +1,37 @@
+# stdlib/lib/nl/korean-complex-generation-test.px
+#
+# F2-graph(L2) 생성 lock: 절 proposition + discourse 관계 → 복문 표면(realizeComplex/realizeClauseConnective).
+#   splitClauseRelations(이해)의 역방향 = 의미그래프 L2 양방향 완성. euphony 3클래스(bare/eu/aeo) + 불규칙(듣→들으면/들어서).
+#   복문 생성 → splitClauseRelations 로 round-trip(절 분리 + 관계 복원) 검증.
+let
+  knm = import ./korean-nl-mirror.px;
+  lift = import ./korean-taxonomy-lift.px;
+  B = builtins;
+  rcc = knm.realizeClauseConnective;
+  rc = knm.realizeComplex;
+  scr = lift.splitClauseRelations;
+  ag = { entity = "철수"; role = "agent"; };
+  ob = { entity = "밥"; role = "object"; };
+  p1 = { roles = [ ag ob ]; action = "먹"; };
+  pf = { roles = [ { entity = "학교"; role = "location"; } ]; action = "가"; tense = "past"; mood = "declarative"; level = "haera";
+         polarity = "positive"; negation_form = "none"; modality = "plain"; modality_form = "none";
+         aspect = "plain"; aspect_form = "none"; honorific = "none"; predicate_kind = "verb"; predicate_nominal = null; };
+  cx = rc [ { prop = p1; relation = "sequential"; } ] pf;
+  back = scr cx;
+in {
+  seq = rcc "먹" "sequential"; cond = rcc "먹" "conditional"; cause = rcc "먹" "cause";
+  cond_irr = rcc "듣" "conditional"; cause_irr = rcc "듣" "cause";
+  cx_sentence = cx;
+  all_ok =
+    # ★euphony 3클래스: bare(고/지만)·eu(면/려고/면서)·aeo(어서/어도)
+       (rcc "먹" "sequential" == "먹고") && (rcc "먹" "contrast" == "먹지만")
+    && (rcc "먹" "conditional" == "먹으면") && (rcc "가" "conditional" == "가면")
+    && (rcc "먹" "purpose" == "먹으려고") && (rcc "먹" "simultaneous" == "먹으면서")
+    && (rcc "먹" "cause" == "먹어서") && (rcc "먹" "concession" == "먹어도")
+    # ★불규칙(ㄷ) euStem/fuseAeo 흡수
+    && (rcc "듣" "conditional" == "들으면") && (rcc "듣" "cause" == "들어서")
+    # ★복문 생성 → splitClauseRelations round-trip (생성↔이해 L2 양방향)
+    && (cx == "철수가 밥을 먹고 학교에 갔다")
+    && (B.length back == 2) && ((B.head back).relation == "sequential") && ((B.head back).connective == "고")
+    && ((B.head back).clause == "철수가 밥을 먹");
+}

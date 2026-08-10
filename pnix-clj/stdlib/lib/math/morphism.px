@@ -1,0 +1,231 @@
+let
+  ownerName = "stdlib.math.morphism";
+
+  # === Morphism fact substrate (Piece 2 of 4 — Cyc 원석) ===========
+  #
+  # 사용자 directive (2026-05-28):
+  # "morphism fact — chart/embedding 이 *언제* 의미 보존하는지가 또
+  # fact. 사용자가 짚은 문장이 다시 의미가 됨 = second-order recursive
+  # lift = Cyc 가 못 넘은 벽."
+  #
+  # 이 owner 는 4 piece 의 두 번째 — **공간-간 morphism registry**.
+  # 한 공간의 statement 가 다른 공간으로 transfer 될 때 *무엇이*
+  # 보존되고 *무엇이* 잃히는지가 fact 로 등록됨.
+  #
+  # 예: S² 위 삼각형이 stereographic projection 으로 R² 에 mapping —
+  #     각도는 보존, 면적은 왜곡. 이 사실 자체가 fact 의 형태로
+  #     다른 fact 에 의해 referenced 됨.
+  #
+  # 즉 (statement-in-S²) → morphism → (statement-in-R²) 의 truth
+  # transfer 가 어느 properties 에 대해 가능한지를 명시.
+  #
+  # # 왜 substrate 가 이걸 명시해야 하는가
+  #
+  # Cyc 의 함정: "이 fact 가 다른 공간에 transfer 되는가?" 가 사람의
+  # 판단에 맡겨짐. 대부분 default-Euclidean 으로 가정. 충돌 시
+  # 사람이 fact 분리. fuzzy.
+  #
+  # 사용자 substrate: morphism 자체가 fact. ((space-A, ϕ, space-B),
+  # preserves, "angle") 같은 정직한 row. 자동 unification — fact
+  # transfer 시도 시 morphism 의 preserves list 가 그 property 를
+  # 포함하는지 자동 검증.
+
+  ambientSpaceOwner = import ./ambient-space.px;
+
+  # === Known morphisms ==============================================
+  #
+  # Each row:
+  #   id          — canonical name
+  #   from_space  — source ambient space id
+  #   to_space    — target ambient space id
+  #   morphism_type — diffeomorphism / isometric-embedding /
+  #                   local-diffeomorphism / projection / chart
+  #   preserves   — list of properties carried over
+  #                 (distance / angle / area / orientation /
+  #                  collinearity / cross-ratio / curvature)
+  #   loses       — list of properties NOT carried over
+  #                 (honest scope — substrate refuses fact transfer
+  #                  for these)
+
+  knownMorphisms = [
+    {
+      id = "stereographic-S-2-to-R-2";
+      from_space = "S-2";
+      to_space = "R-2";
+      morphism_type = "diffeomorphism";
+      preserves = [ "angle" "circle-shape" "smoothness" ];
+      loses = [ "distance" "area" "great-circle-as-line" ];
+    }
+    {
+      id = "exp-map-T_p-S-2-to-S-2";
+      from_space = "T_pS-2";  # tangent plane at p
+      to_space = "S-2";
+      morphism_type = "local-diffeomorphism";
+      preserves = [ "angle-at-origin" "smoothness" "germ-of-distance" ];
+      loses = [ "global-distance" "global-area" ];
+    }
+    {
+      id = "isometric-R-2-into-R-3";
+      from_space = "R-2";
+      to_space = "R-3";
+      morphism_type = "isometric-embedding";
+      preserves = [ "distance" "angle" "area" "collinearity" "orientation" ];
+      loses = [ ];  # isometric — nothing lost
+    }
+    {
+      id = "poincare-disk-H-2-to-R-2";
+      from_space = "H-2";
+      to_space = "R-2";  # unit disk model
+      morphism_type = "diffeomorphism";
+      preserves = [ "angle" "conformality" ];
+      loses = [ "distance" "geodesics-as-straight-lines" ];
+    }
+    {
+      id = "klein-disk-H-2-to-R-2";
+      from_space = "H-2";
+      to_space = "R-2";
+      morphism_type = "diffeomorphism";
+      preserves = [ "geodesics-as-straight-lines" "collinearity" ];
+      loses = [ "angle" "distance" ];
+    }
+    {
+      id = "identity-R-2";
+      from_space = "R-2";
+      to_space = "R-2";
+      morphism_type = "diffeomorphism";
+      preserves = [
+        "distance" "angle" "area" "orientation" "collinearity"
+      ];
+      loses = [ ];
+    }
+  ];
+
+  # === Lookup ========================================================
+
+  findMorphism = id:
+    let
+      matches = builtins.filter (m: m.id == id) knownMorphisms;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  findMorphismsBetween = from_space: to_space:
+    builtins.filter
+      (m: m.from_space == from_space && m.to_space == to_space)
+      knownMorphisms;
+
+  # === Property transfer check =====================================
+  #
+  # 주어진 morphism 이 *그 property* 를 보존하는지 검사. 보존하면
+  # fact transfer 허용; 그렇지 않으면 Hold + 명시 reason.
+
+  canTransferProperty = morphism: property:
+    if !(builtins.isAttrs morphism) then false
+    else builtins.elem property morphism.preserves;
+
+  checkPropertyTransfer = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else
+      let
+        morphism_id =
+          if builtins.hasAttr "morphism_id" request
+          then request.morphism_id else null;
+        property =
+          if builtins.hasAttr "property" request
+          then request.property else null;
+      in
+        if morphism_id == null then {
+          outcome = "held-morphism-required";
+          reason = "request must specify morphism_id";
+        }
+        else if property == null then {
+          outcome = "held-property-required";
+          reason = "request must specify property";
+        }
+        else
+          let
+            m = findMorphism morphism_id;
+          in
+            if m == null then {
+              outcome = "held-unknown-morphism";
+              morphism_id = morphism_id;
+              known_morphisms = builtins.map (m: m.id) knownMorphisms;
+            }
+            else if builtins.elem property m.preserves then {
+              outcome = "property-transfer-allowed";
+              morphism_id = morphism_id;
+              property = property;
+              from_space = m.from_space;
+              to_space = m.to_space;
+            }
+            else if builtins.elem property m.loses then {
+              outcome = "held-property-not-preserved";
+              morphism_id = morphism_id;
+              property = property;
+              from_space = m.from_space;
+              to_space = m.to_space;
+              reason =
+                "morphism '" + morphism_id + "' explicitly loses '"
+                + property + "' — substrate refuses fact transfer.";
+              preserves = m.preserves;
+              loses = m.loses;
+            }
+            else {
+              outcome = "held-property-unspecified-for-morphism";
+              morphism_id = morphism_id;
+              property = property;
+              reason =
+                "morphism '" + morphism_id + "' neither preserves "
+                + "nor explicitly loses '" + property + "'. "
+                + "Add to either preserves or loses (substrate refuses "
+                + "implicit assumptions).";
+              preserves = m.preserves;
+              loses = m.loses;
+            };
+
+  # === Mirror plate lens entry =======================================
+
+  applyMorphismPlate = request:
+    checkPropertyTransfer request;
+
+  # === Introspection =================================================
+
+  morphismCount = builtins.length knownMorphisms;
+  morphismIds = builtins.map (m: m.id) knownMorphisms;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    morphism_count = morphismCount;
+    morphism_ids = morphismIds;
+    morphism_rows =
+      builtins.map (m: {
+        id = m.id;
+        from = m.from_space;
+        to = m.to_space;
+        type = m.morphism_type;
+        preserves_count = builtins.length m.preserves;
+        loses_count = builtins.length m.loses;
+      }) knownMorphisms;
+  };
+
+in {
+  inherit
+    ownerName
+    knownMorphisms
+    findMorphism
+    findMorphismsBetween
+    canTransferProperty
+    checkPropertyTransfer
+    applyMorphismPlate
+    morphismCount
+    morphismIds
+    inventorySummary;
+  meta = {
+    source = "stdlib math morphism substrate";
+    owner = ownerName;
+    base = "morphism-v0";
+    rev_note = "Piece 2 of 4 (Cyc 원석, 2026-05-28). 6 morphisms (stereographic-S²→R² / exp-map / isometric-R²→R³ / poincare-disk / klein-disk / identity). 각 morphism 이 preserves + loses list carry — fact transfer 시 substrate 가 자동 검증. unspecified property → Hold (implicit assumption 금지).";
+  };
+}

@@ -1,0 +1,6 @@
+let
+  range = n: if n == 0 then [] else (range (n - 1)) ++ [ n ];
+  xs = range 30;
+  evens = builtins.filter (x: x - (x / 2) * 2 == 0) xs;
+  rec = builtins.foldl' (acc: x: acc // { "k${builtins.toString x}" = x * x; }) {} evens;
+in { count = builtins.length evens; squares = rec; total = builtins.foldl' (a: x: a + x) 0 evens; label = "evens-${builtins.toString (builtins.length evens)}"; }

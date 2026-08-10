@@ -1,0 +1,35 @@
+# stdlib/lib/nl/korean-core-aux-test.px — 코어 완성 배치: 수혜(-아 주다)·의도(-려고 하다)·되다 보어(CC1/CC2/CC4).
+#
+# 수혜 -아/어 주다: V-아/어 + 주다(2어절), head=V-아/어. 도와 준다→돕/benefactive(주다 본동사와 aeo-predicate 게이트로 구분).
+# 의도 -려고 하다: V-려고 + 하다, head=V-려고(려고+으 strip). 가려고 한다→가/intention.
+# 되다 보어: 의사가 된다 = 의사(complement, 주격표지지만 agent 아님)+철수(agent). 이중 agent 버그 봉인 + 어순 복원.
+#   기동 -게 되다(inchoative)는 complement 재배정 제외. modality/role=고유값 → term round-trip 안정.
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  am = s: let p = knm.liftToProposition s; in p.action + "/" + p.modality;
+  rt = s: let p = knm.liftToProposition s; in knm.realizeSentence p;
+  v = s: (knm.convergeGate s).verdict;
+  rolesOf = s: B.map (r: r.role+":"+r.entity) (knm.liftToProposition s).roles;
+in {
+  dowa = am "철수가 영희를 도와 준다";       # 돕/benefactive
+  garyeogo = am "철수가 학교에 가려고 한다";  # 가/intention
+  doctor = rolesOf "철수가 의사가 된다";      # [agent:철수, complement:의사]
+  all_ok =
+    # ★수혜 -아 주다
+       (am "철수가 영희를 도와 준다" == "돕/benefactive")
+    && (am "철수가 밥을 사 준다" == "사/benefactive")
+    && (v "철수가 영희를 도와 준다" == "math-keep")
+    # ★의도 -려고 하다
+    && (am "철수가 학교에 가려고 한다" == "가/intention")
+    && (am "철수가 밥을 먹으려고 한다" == "먹/intention")
+    && (v "철수가 학교에 가려고 한다" == "math-keep")
+    # ★되다 보어: complement role + 어순 복원 + math-keep (이중 agent 봉인)
+    && (rolesOf "철수가 의사가 된다" == [ "agent:철수" "complement:의사" ])
+    && (rt "철수가 의사가 된다" == "철수가 의사가 된다")
+    && (v "철수가 의사가 된다" == "math-keep")
+    && (v "철수가 의사가 되었다" == "math-keep")
+    # ★회귀: 주다 본동사·기동 되다·copula·능력
+    && (am "철수가 책을 준다" == "주/plain")
+    && (v "철수가 학교에 가게 된다" == "math-keep")
+    && (v "철수가 의사이다" == "math-keep")
+    && (am "철수가 갈 수 있다" == "가/ability");
+}

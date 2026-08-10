@@ -1,0 +1,27 @@
+# stdlib/lib/nl/nl-service-route-proposer-probe.px
+#
+# S99-5: lightweight utterance → service route proposal probe for MSV process hints.
+# Ephemeral utterance in; flat JSON out (no raw prose persisted by host).
+let
+  sr = import ./nl-service-route-proposer.px;
+  B = builtins;
+
+  runProbe = args:
+    let utterance = if args ? utterance then args.utterance else "";
+        p = sr.proposeServiceRouteForUtterance { utterance = utterance; };
+    in {
+      status = "ok";
+      service_route_proposed = if p ? service_route_proposed then p.service_route_proposed else false;
+      proposed_route = if p ? proposed_route then p.proposed_route else "";
+      cue_class = if p ? cue_class then p.cue_class else "";
+      decision = if p ? decision then p.decision else "";
+      durable_truth = if p ? durable_truth then p.durable_truth else false;
+      dispose_required = if p ? dispose_required then p.dispose_required else false;
+      route_execute_allowed = if p ? route_execute_allowed then p.route_execute_allowed else false;
+    };
+
+  probeSelfTest = _:
+    let r = runProbe { utterance = "grpc ssh 더하기"; };
+    in (r.status == "ok") && r.service_route_proposed && (r.proposed_route == "math");
+
+in { inherit runProbe probeSelfTest; }

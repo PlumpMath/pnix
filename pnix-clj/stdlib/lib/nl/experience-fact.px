@@ -1,0 +1,60 @@
+# MR38 -- experience-fact lane v0: a verified (or failed) effect outcome
+# becomes an experience-fact CANDIDATE -- the entry of the receipt-fact
+# growth engine ("knowledge = experience"). Corpus-assembly-axiom
+# compliant: the fact is typed outcome coordinates (assembly material),
+# never reply prose. Privacy gate first-class: experience can carry
+# project-private signals, so the candidate is operator-only with no
+# public projection until a promotion gate (future) decides otherwise.
+# Outcomes:
+#   held-missing-result -- no result envelope supplied
+#   held-not-foldable   -- only effect-result-verified and
+#                          effect-result-failed-commands fold; partial or
+#                          held results are NOT experience (no invention)
+#   experience-fact-candidate
+{
+  liftExperienceFact = request:
+    let
+      result = if request ? result then request.result else null;
+      held = outcome: reason: {
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/experience-fact.px";
+      };
+      foldable = o:
+        o == "effect-result-verified" || o == "effect-result-failed-commands";
+    in
+    if result == null || !(result ? outcome) then
+      held "held-missing-result"
+        "an effect-result verdict is required input"
+    else if !(foldable result.outcome) then
+      held "held-not-foldable"
+        ("only verified/failed effect results are experience; got "
+          + result.outcome)
+    else {
+      outcome = "experience-fact-candidate";
+      fact = {
+        kind = "effect-outcome";
+        plan_fingerprint =
+          if result ? plan_fingerprint then result.plan_fingerprint else "";
+        group_command_id = result.group_command_id;
+        success = result.outcome == "effect-result-verified";
+        observation_count =
+          if result ? observation_count then result.observation_count
+          else builtins.length result.observations;
+        failed_count =
+          if result ? failed_count then result.failed_count else 0;
+      };
+      privacy = {
+        gate = "operator-only";
+        public_projection = false;
+      };
+      candidate_only = true;
+      effect_allowed = false;
+      receipt = {
+        source_lane = "effect-result-verify";
+        next_gate = "fact-promotion-gate";
+      };
+      owner = "stdlib/lib/nl/experience-fact.px";
+    };
+}

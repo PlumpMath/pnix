@@ -1,0 +1,287 @@
+let
+  ownerName = "stdlib.nl.lean.substrate-axiom-korean-binding";
+
+  chain = import nl/lean/substrate-axiom-dependency-chain.px;
+  graph = import nl/lean/substrate-mathlib-graph.px;
+  paired = import nl/lean/paired-claim-aggregate.px;
+  bridge = import nl/lean/nl-to-mathlib-bridge.px;
+  lookup = import nl/lean/lookup-aggregate.px;
+
+  # === Substrate axiom direct Korean binding (agent-NL-201) =========
+  #
+  # Round 12 사용자 vision 확장:
+  # > "한글로 substrate axiom 직접 reach"
+  #
+  # 이전 한글 bridge 는 mathlib 정리 *이름* 까지만 매칭. substrate
+  # axiom (composability QED, UC4 etc.) 자체는 mathlib 에 *없는*
+  # substrate-internal 개념이라 reach 안 됨.
+  #
+  # 이 owner 는 *직접 binding* 박음:
+  #   한글 keyword (결합성, 유일성, LLM 불가능성, ...)
+  #     → substrate axiom (composability-qed, uniqueness-qed, uc4-llm-impossibility, ...)
+  #     → axiom 의 *전체 dependency chain* + *paired claim*
+  #     → 종합 한글 응답
+  #
+  # 결정적: 한글 query 가 *substrate-internal axiom* 까지 reach 가능
+  # — substrate 의 paper-qed 6 lemma 와 main theorem 이 한글로 접근.
+
+  stepKind = "substrate-axiom-korean-binding";
+  framework_step =
+    "한글 keyword → substrate axiom → dependency chain + paper QED";
+
+  # =================================================================
+  # === 한글 keyword → substrate axiom 직접 binding ==================
+  # =================================================================
+
+  axiomKoreanBinding = [
+    # ===== Composability QED =====
+    { ko = "결합성"; axiom_id = "composability-qed"; concept = "두 plate 의 composition 의 verdict"; }
+    { ko = "조합성"; axiom_id = "composability-qed"; concept = "composability QED"; }
+    { ko = "합성"; axiom_id = "composability-qed"; concept = "plate composition"; }
+
+    # ===== Uniqueness QED =====
+    { ko = "유일성"; axiom_id = "uniqueness-qed"; concept = "receipt byte-determinism"; }
+    { ko = "결정성"; axiom_id = "uniqueness-qed"; concept = "deterministic receipt"; }
+    { ko = "유일한증명"; axiom_id = "uniqueness-qed"; concept = "uniqueness QED"; }
+
+    # ===== UC4 LLM-substitution impossibility =====
+    { ko = "UC4"; axiom_id = "uc4-llm-impossibility"; concept = "UC4 LLM-substitution impossibility"; }
+    { ko = "LLM불가능성"; axiom_id = "uc4-llm-impossibility"; concept = "LLM substitution impossibility"; }
+    { ko = "LLM불가"; axiom_id = "uc4-llm-impossibility"; concept = "LLM 으로 substrate 대체 불가"; }
+    { ko = "엘엘엠불가"; axiom_id = "uc4-llm-impossibility"; concept = "LLM substitution impossibility"; }
+    { ko = "기계지능"; axiom_id = "uc4-llm-impossibility"; concept = "mechanical AGI (substrate)"; }
+    { ko = "결정론적지능"; axiom_id = "uc4-llm-impossibility"; concept = "deterministic intelligence"; }
+
+    # ===== AC3 Kan extension closure =====
+    { ko = "AC3"; axiom_id = "ac3-kan-extension"; concept = "Kan extension closure"; }
+    { ko = "칸확장"; axiom_id = "ac3-kan-extension"; concept = "Kan extension"; }
+    { ko = "프런티어폐쇄"; axiom_id = "ac3-kan-extension"; concept = "frontier closure"; }
+
+    # ===== SC4 substrate topos elementary =====
+    { ko = "SC4"; axiom_id = "sc4-substrate-topos"; concept = "elementary topos"; }
+    { ko = "토포스"; axiom_id = "sc4-substrate-topos"; concept = "substrate topos"; }
+    { ko = "기본토포스"; axiom_id = "sc4-substrate-topos"; concept = "elementary topos"; }
+    { ko = "subobject분류기"; axiom_id = "sc4-substrate-topos"; concept = "subobject classifier"; }
+
+    # ===== UC4 motivic Galois invariance =====
+    { ko = "G_mot"; axiom_id = "uc4-motivic-galois-invariance"; concept = "motivic Galois group"; }
+    { ko = "모티빅갈루아"; axiom_id = "uc4-motivic-galois-invariance"; concept = "motivic Galois"; }
+    { ko = "타나카쌍대성"; axiom_id = "uc4-motivic-galois-invariance"; concept = "Tannakian duality"; }
+    { ko = "모티빅불변"; axiom_id = "uc4-motivic-galois-invariance"; concept = "motivic invariant"; }
+
+    # ===== Round 24: Mode 11 Yoneda canonicalization =====
+    { ko = "Mode11"; axiom_id = "mode-11-yoneda-canonicalization"; concept = "Mode 11 Yoneda canonicalization"; }
+    { ko = "요네다"; axiom_id = "mode-11-yoneda-canonicalization"; concept = "Yoneda embedding"; }
+    { ko = "요네다정규화"; axiom_id = "mode-11-yoneda-canonicalization"; concept = "Yoneda canonicalization"; }
+    { ko = "표현가능"; axiom_id = "mode-11-yoneda-canonicalization"; concept = "representable functor"; }
+
+    # ===== Round 24: Mode 14 subobject classifier =====
+    { ko = "Mode14"; axiom_id = "mode-14-subobject-classifier"; concept = "Mode 14 subobject classifier"; }
+    { ko = "오메가"; axiom_id = "mode-14-subobject-classifier"; concept = "Omega subobject classifier"; }
+    { ko = "부분객체분류기"; axiom_id = "mode-14-subobject-classifier"; concept = "subobject classifier"; }
+    { ko = "Held분류기"; axiom_id = "mode-14-subobject-classifier"; concept = "Held envelope classifier"; }
+
+    # ===== Round 36: Mode 12 temporal consistency =====
+    { ko = "Mode12"; axiom_id = "mode-12-temporal-consistency"; concept = "Mode 12 temporal consistency"; }
+    { ko = "시간일관성"; axiom_id = "mode-12-temporal-consistency"; concept = "temporal consistency"; }
+    { ko = "append-only"; axiom_id = "mode-12-temporal-consistency"; concept = "append-only log"; }
+
+    # ===== Round 36: Mode 13 context flow =====
+    { ko = "Mode13"; axiom_id = "mode-13-context-flow"; concept = "Mode 13 context flow"; }
+    { ko = "맥락흐름"; axiom_id = "mode-13-context-flow"; concept = "context flow"; }
+    { ko = "context-flow"; axiom_id = "mode-13-context-flow"; concept = "context flow"; }
+  ];
+
+  # =================================================================
+  # === 한글 keyword → axiom 직접 lookup ============================
+  # =================================================================
+
+  matchAxiomKeyword = utterance:
+    let
+      contains = haystack: needle:
+        let
+          hLen = builtins.stringLength haystack;
+          nLen = builtins.stringLength needle;
+          go = i:
+            if i + nLen > hLen then false
+            else if builtins.substring i nLen haystack == needle then true
+            else go (i + 1);
+        in if nLen == 0 then true
+           else if hLen < nLen then false
+           else go 0;
+      matches = builtins.filter
+        (b: contains utterance b.ko)
+        axiomKoreanBinding;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # =================================================================
+  # === Full chain: 한글 → axiom + dependencies + paired claims ======
+  # =================================================================
+
+  fullAxiomChain = utterance:
+    let
+      binding = matchAxiomKeyword utterance;
+    in
+      if binding == null
+      then {
+        outcome = "held-no-axiom-keyword-match";
+        inherit utterance;
+        held_reason = "한글 발화에 등록된 substrate axiom keyword 없음";
+      }
+      else
+        let
+          axiomId = binding.axiom_id;
+          coverage = (chain.applySubstrateAxiomDependencyPlate
+            { verify_axiom = axiomId; }).receipt;
+          # 어떤 substrate file 들이 이 axiom 과 관련 있는지
+          relatedClaims = builtins.filter
+            (c: builtins.any
+                  (dep: c.lean_full_name == dep.name)
+                  coverage.dependency_verifications)
+            paired.pairedClaims;
+        in {
+          outcome = "axiom-chain-emitted";
+          inherit utterance;
+          matched_korean = binding.ko;
+          axiom_id = binding.axiom_id;
+          axiom_name = coverage.axiom_name;
+          axiom_concept = binding.concept;
+          dependency_count = coverage.total_dependencies;
+          verified_count = coverage.verified_dependencies;
+          coverage_percent = coverage.coverage_percent;
+          dependency_lean_files =
+            builtins.map (d: d.lean_file) coverage.dependency_verifications;
+          related_substrate_claim_count = builtins.length relatedClaims;
+          paper_lemma_index =
+            if axiomId == "composability-qed" then 1
+            else if axiomId == "uniqueness-qed" then 2
+            else if axiomId == "uc4-llm-impossibility" then 3
+            else if axiomId == "ac3-kan-extension" then 4
+            else if axiomId == "sc4-substrate-topos" then 5
+            else if axiomId == "uc4-motivic-galois-invariance" then 6
+            else if axiomId == "mode-11-yoneda-canonicalization" then 7  # post-paper
+            else if axiomId == "mode-14-subobject-classifier" then 8  # post-paper
+            else if axiomId == "mode-12-temporal-consistency" then 9  # post-paper
+            else if axiomId == "mode-13-context-flow" then 10  # post-paper
+            else 0;
+          korean_response =
+            "'" + binding.ko + "' → substrate axiom '" + coverage.axiom_name +
+            "' (paper-QED Lemma " +
+            builtins.toString (
+              if axiomId == "composability-qed" then 1
+              else if axiomId == "uniqueness-qed" then 2
+              else if axiomId == "uc4-llm-impossibility" then 3
+              else if axiomId == "ac3-kan-extension" then 4
+              else if axiomId == "sc4-substrate-topos" then 5
+              else if axiomId == "uc4-motivic-galois-invariance" then 6
+              else if axiomId == "mode-11-yoneda-canonicalization" then 7
+              else if axiomId == "mode-14-subobject-classifier" then 8
+              else if axiomId == "mode-12-temporal-consistency" then 9
+              else if axiomId == "mode-13-context-flow" then 10
+              else 0
+            ) + "). " +
+            "Mathlib dependency: " +
+            builtins.toString coverage.verified_dependencies + "/" +
+            builtins.toString coverage.total_dependencies + " verified (" +
+            builtins.toString coverage.coverage_percent + "%).";
+        };
+
+  # =================================================================
+  # === Demonstration cases ==========================================
+  # =================================================================
+
+  demoAxiomCases = [
+    { label = "case-결합성"; utterance = "결합성"; expected_axiom = "composability-qed"; }
+    { label = "case-유일성"; utterance = "유일성"; expected_axiom = "uniqueness-qed"; }
+    { label = "case-UC4"; utterance = "UC4"; expected_axiom = "uc4-llm-impossibility"; }
+    { label = "case-LLM불가능성"; utterance = "LLM불가능성"; expected_axiom = "uc4-llm-impossibility"; }
+    { label = "case-기계지능"; utterance = "기계지능"; expected_axiom = "uc4-llm-impossibility"; }
+    { label = "case-AC3"; utterance = "AC3"; expected_axiom = "ac3-kan-extension"; }
+    { label = "case-SC4"; utterance = "SC4"; expected_axiom = "sc4-substrate-topos"; }
+    { label = "case-토포스"; utterance = "토포스"; expected_axiom = "sc4-substrate-topos"; }
+    { label = "case-G_mot"; utterance = "G_mot"; expected_axiom = "uc4-motivic-galois-invariance"; }
+    { label = "case-타나카쌍대성"; utterance = "타나카쌍대성"; expected_axiom = "uc4-motivic-galois-invariance"; }
+    { label = "case-held-unknown"; utterance = "지구는 둥글다"; expected_outcome = "held-no-axiom-keyword-match"; }
+  ];
+
+  runDemoAxiom = demoCase:
+    let result = fullAxiomChain demoCase.utterance;
+    in {
+      inherit (demoCase) label utterance;
+      actual_outcome = result.outcome;
+      success =
+        if demoCase ? expected_outcome
+        then result.outcome == demoCase.expected_outcome
+        else result.outcome == "axiom-chain-emitted"
+             && result.axiom_id == demoCase.expected_axiom;
+    };
+
+  allAxiomDemoResults = builtins.map runDemoAxiom demoAxiomCases;
+  demoSuccessCount =
+    builtins.length (builtins.filter (r: r.success) allAxiomDemoResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_matchAxiomKeyword = true;
+    has_fullAxiomChain = true;
+    axiom_korean_binding_count = 36;  # hardcoded; Round 36 (+ Mode 12 + Mode 13)
+    distinct_axiom_count = 10;  # 10 substrate axioms (6 paper + Mode 11/14 + Mode 12/13)
+    demo_case_count = builtins.length demoAxiomCases;
+    demo_success_count = demoSuccessCount;
+    chain_owner_inherited = chain.ownerName;
+    paired_owner_inherited = paired.ownerName;
+    graph_owner_inherited = graph.ownerName;
+    bridge_owner_inherited = bridge.ownerName;
+    direct_axiom_reach_via_korean = true;
+    deterministic = true;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applySubstrateAxiomKoreanBindingPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "axiom-korean-binding-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "binding" request then {
+      outcome = "axiom-korean-binding-emitted"; receipt = axiomKoreanBinding;
+    }
+    else if builtins.hasAttr "match" request then
+      let r = matchAxiomKeyword request.match;
+      in if r == null
+         then { outcome = "held-no-keyword-binding"; receipt = { queried = request.match; }; }
+         else { outcome = "axiom-keyword-matched"; receipt = r; }
+    else if builtins.hasAttr "chain" request then
+      fullAxiomChain request.chain
+    else if builtins.hasAttr "demo_cases" request then {
+      outcome = "axiom-demo-cases-emitted"; receipt = demoAxiomCases;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "axiom-demo-results-emitted";
+      receipt = {
+        total = builtins.length demoAxiomCases;
+        success = demoSuccessCount;
+        results = allAxiomDemoResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "binding" "match" "chain" "demo_cases" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit axiomKoreanBinding matchAxiomKeyword fullAxiomChain;
+  inherit demoAxiomCases runDemoAxiom allAxiomDemoResults;
+  inherit demoSuccessCount;
+  inherit inventorySummary applySubstrateAxiomKoreanBindingPlate;
+}

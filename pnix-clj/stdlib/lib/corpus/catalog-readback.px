@@ -1,0 +1,211 @@
+# stdlib/lib/corpus/catalog-readback.px
+#
+# A단계(post-L0): 301 generated catalog의 통합 exact-key read-back facade.
+#   = "도메인 지식을 외워 말하기"가 아니라, catalog 안 anchor를 *exact-key*로 찾아 evidence로 꺼냄.
+#   deep-research(reference_post_l0_self_learning_sequencing_verdict) 반영:
+#     - exact-key만 CORE(결정론). fuzzy label/synonym/translation/약어 = Held.
+#     - row 존재 ≠ truth(durable_truth/accepted/ontology_assert 항상 false).
+#     - recursive provenance 불안정 → depth_bound(>1 = Held).
+#     - cross-catalog over-merge(거짓 entity 병합) 방어 → 불일치 = conflict-held(자동 병합 금지).
+#
+# ★새 거울/schema/owner 0: 기존 owner(kr-quantity-dimension·dimension-gate) 재사용, exact-key 통합 표면만 추가.
+# ★read-only: redb write 0, generated corpus 재작성 0, Rust 의미판단 0.
+# ★A-2 어댑터(7개, 이질 shape): physics.standard_quantities·qudt.dimension_code(tracked owner) +
+#   license.spdx·chem.chebi·regulatory.ecfr_hazmat·authority.kr_public·security.ocsf(generated catalog).
+#   ★generated catalog은 *gitignored* → committed owner가 하드 import 금지 → pathExists 가드 *조건부 import*
+#    (local 있으면 실데이터, fresh checkout 없으면 [] = missing graceful). per-catalog pure lookup(*LookupIn)은
+#    fixtures로 환경독립 테스트. 새 catalog은 *LookupIn + 조건부 바인딩 + dispatch row 추가로 plug-in.
+let
+  B = builtins;
+  kq = import ../math/kr-quantity-dimension.px;
+  dg = import ../math/dimension-gate.px;
+
+  # 공통 evidence shape — 불변 guard(truth 승급 봉인). a.* 누락은 안전 기본값.
+  mkEvidence = a: {
+    evidence_kind = "catalog.readback";
+    source_schema = a.source_schema or "";
+    owner_version = a.owner_version or "";
+    key = a.key or "";
+    key_kind = a.key_kind or "";
+    exact_match = a.exact_match or false;
+    source_supported = a.source_supported or false;
+    durable_truth = false;            # ★row≠truth 불변
+    accepted_as_truth = false;
+    ontology_assert_allowed = false;
+    status = a.status or "missing";   # recognized | missing | conflict-held | stale-held
+    held_reasons = a.held_reasons or [ ];
+    payload = if a ? payload then a.payload else { };  # recognized 시 도출 public 사실(dimension 등). publicProjection서 제외.
+    proposer_only = true;
+  };
+
+  # ── 어댑터(기존 owner exact lookup을 통합 shape로 wrap) ──
+  # physics.standard_quantities (kr-quantity-dimension)
+  quantityAdapter = key: keyKind:
+    let q = kq.lookupQuantity { term = key; };
+    in if q.status == "anchor"
+       then mkEvidence { source_schema = "physics.standard_quantities";
+              owner_version = "stdlib.math.kr-quantity-dimension.v1";
+              key = key; key_kind = keyKind; exact_match = true; source_supported = true; status = "recognized";
+              payload = { dimension = q.dimension; quantity_ko = q.quantity_ko; quantity_en = q.quantity_en; }; }
+       else mkEvidence { source_schema = "physics.standard_quantities";
+              owner_version = "stdlib.math.kr-quantity-dimension.v1";
+              key = key; key_kind = keyKind; status = "missing";
+              held_reasons = [ { kind = "no-exact-quantity-anchor"; detail = "미등록 물리량(fuzzy 금지)"; } ]; };
+
+  # qudt.dimension_code (dimension-gate parseDimCode = QUDT 8-slot exact)
+  dimCodeAdapter = key: keyKind:
+    let p = dg.parseDimCode key;
+    in if p.valid
+       then mkEvidence { source_schema = "qudt.dimension_code"; owner_version = "stdlib.math.dimension-gate.v1";
+              key = key; key_kind = keyKind; exact_match = true; source_supported = true; status = "recognized";
+              payload = { dimension = dg.canon p; }; }
+       else mkEvidence { source_schema = "qudt.dimension_code"; owner_version = "stdlib.math.dimension-gate.v1";
+              key = key; key_kind = keyKind; status = "missing";
+              held_reasons = [ { kind = "malformed-dimension-code"; detail = "8-slot qkdv 코드 아님"; } ]; };
+
+  # ── A-2: 대표 generated catalog 어댑터 ──
+  # ★committed owner는 gitignored generated catalog을 *하드 import 안 함*(fresh checkout서 깨짐).
+  #   pathExists 가드 조건부 import = 있으면 실데이터, 없으면 graceful 빈 리스트(=missing, fail-closed).
+  condImport = path: fallback: if B.pathExists path then import path else fallback;
+
+  # resolveMatches: 0=missing · 1/2+동일=recognized · 2+상이=conflict-held(intra-catalog over-merge 방어, DR).
+  resolveMatches = schema: ver: key: kk: matches: payloadFn:
+    let n = B.length matches;
+        hd = if matches == [ ] then { } else B.head matches;
+        first = if matches == [ ] then { } else payloadFn hd;
+        diff = B.filter (m: (payloadFn m) != first) matches;
+    # ★Fix(적대검증): empty key는 빈-field 레코드("" == "")에 ghost-match → missing(추측 금지)
+    in if key == ""
+       then mkEvidence { source_schema = schema; owner_version = ver; key = key; key_kind = kk; status = "missing";
+              held_reasons = [ { kind = "empty-key"; } ]; }
+       else if n == 0
+       then mkEvidence { source_schema = schema; owner_version = ver; key = key; key_kind = kk; status = "missing";
+              held_reasons = [ { kind = "no-exact-match"; } ]; }
+       else if diff == [ ]
+       then mkEvidence { source_schema = schema; owner_version = ver; key = key; key_kind = kk;
+              exact_match = true; source_supported = true; status = "recognized";
+              payload = first // { match_count = n; }; }
+       else mkEvidence { source_schema = schema; owner_version = ver; key = key; key_kind = kk; status = "conflict-held";
+              held_reasons = [ { kind = "intra-catalog-ambiguous";
+                                 detail = "같은 key가 카탈로그 내 상이 레코드 = ambiguous-held(자동 선택 금지)";
+                                 match_count = n; } ]; };
+
+  # per-catalog *pure* lookup(records 입력 → evidence). 테스트는 fixtures로 이걸 직접 호출(환경독립).
+  #   각 카탈로그의 *서로 다른* 배열명·키필드·payload를 캡슐화(이질성 = adapter 패턴 증명).
+  spdxLookupIn = records: key: kk:                      # SPDX: id (license/exception)
+    resolveMatches "license.spdx" "stdlib.corpus.spdx-license-list.generated.v1" key kk
+      (B.filter (r: (if r ? id then r.id else "") == key) records)
+      (m: { name = if m ? name then m.name else "";
+            osi_approved = if m ? is_osi_approved then m.is_osi_approved else null; });
+  chebiLookupIn = records: key: kk:                     # ChEBI: id (CHEBI:nnn)
+    resolveMatches "chem.chebi" "stdlib.corpus.chebi.generated.v1" key kk
+      (B.filter (r: (if r ? id then r.id else "") == key) records)
+      (m: { name = if m ? name then m.name else ""; });
+  ecfrHazmatLookupIn = records: key: kk:                # eCFR 49 CFR 172.101: identification_number (UN/NA)
+    resolveMatches "regulatory.ecfr_hazmat" "stdlib.corpus.ecfr-49-172-101-hazmat.generated.v1" key kk
+      (B.filter (r: (if r ? identification_number then r.identification_number else "") == key) records)
+      (m: { proper_shipping_name = if m ? proper_shipping_name then m.proper_shipping_name else "";
+            hazard_class = if m ? hazard_class_or_division then m.hazard_class_or_division else ""; });
+  krAuthorityLookupIn = records: key: kk:               # KR authority: source_id
+    resolveMatches "authority.kr_public" "stdlib.corpus.kr-public-authority-catalogs.generated.v1" key kk
+      (B.filter (r: (if r ? source_id then r.source_id else "") == key) records)
+      (m: { label = if m ? label then m.label else ""; domain = if m ? domain then m.domain else ""; });
+  ocsfLookupIn = records: key: kk:                      # OCSF: attribute name (intra-cat dup 가능 → ambiguous-held)
+    resolveMatches "security.ocsf" "stdlib.corpus.ocsf-schema.generated.v1" key kk
+      (B.filter (r: (if r ? name then r.name else "") == key) records)
+      (m: { entity = if m ? entity then m.entity else ""; });
+
+  # real-data 바인딩(조건부 import). local 있으면 실 카탈로그, fresh checkout 없으면 [ ] → missing(graceful).
+  spdxAll = let c = condImport ./spdx-license-list.generated.px { };
+                l = if c ? licenses then c.licenses else [ ];
+                e = if c ? exceptions then c.exceptions else [ ]; in l ++ e;
+  chebiAll = let c = condImport ./chebi.generated.px { }; in if c ? records then c.records else [ ];
+  ecfrAll = let c = condImport ./ecfr-49-172-101-hazmat-identifiers.generated.px { };
+            in if c ? rows then c.rows else [ ];
+  krAuthAll = let c = condImport ./kr-public-authority-catalogs.generated.px { };
+              in if c ? field_catalogs then c.field_catalogs else [ ];
+  ocsfAll = let c = condImport ./ocsf-schema.generated.px { }; in if c ? attributes then c.attributes else [ ];
+
+  # ── 단일-스키마 exact-key read-back(가드: depth>1 · fuzzy · unknown-kind · unknown-schema) ──
+  readbackByExactKey = args:
+    let schema = args.source_schema or "";
+        key = args.key or "";
+        keyKind = args.key_kind or "";
+        depth = args.depth or 0;
+        # ★가드 리스트는 *함수 내부* let(모듈-const closure 함정 #8 회피)
+        exactKinds = [ "quantity_ko" "quantity_en" "dimension_code" "iri" "canonical_key"
+                       "catalog_id" "shared_key" "source_key" "symbol"
+                       "spdx_id" "chebi_id" "un_id" "ocsf_attr" "source_id" ];   # A-2 추가
+        fuzzyKinds = [ "label" "synonym" "translation" "abbreviation" "fuzzy" ];
+        isExact = B.elem keyKind exactKinds;
+        isFuzzy = B.elem keyKind fuzzyKinds;
+    in if depth > 1
+       then mkEvidence { source_schema = schema; key = key; key_kind = keyKind; status = "stale-held";
+              held_reasons = [ { kind = "provenance-depth-exceeded";
+                                 detail = "depth>1 = recursive provenance Held(무한 derivation tree 회피)"; } ]; }
+       else if isFuzzy
+       then mkEvidence { source_schema = schema; key = key; key_kind = keyKind; status = "missing";
+              held_reasons = [ { kind = "fuzzy-key-not-exact";
+                                 detail = "label/synonym/translation/약어 = Held, exact-key만 CORE"; } ]; }
+       else if (isExact == false)
+       then mkEvidence { source_schema = schema; key = key; key_kind = keyKind; status = "missing";
+              held_reasons = [ { kind = "unknown-key-kind"; detail = keyKind; } ]; }
+       else if schema == "physics.standard_quantities" then quantityAdapter key keyKind
+       else if schema == "qudt.dimension_code" then dimCodeAdapter key keyKind
+       # A-2: 대표 generated catalog(조건부 import 실데이터; 없으면 missing graceful)
+       else if schema == "license.spdx" then spdxLookupIn spdxAll key keyKind
+       else if schema == "chem.chebi" then chebiLookupIn chebiAll key keyKind
+       else if schema == "regulatory.ecfr_hazmat" then ecfrHazmatLookupIn ecfrAll key keyKind
+       else if schema == "authority.kr_public" then krAuthorityLookupIn krAuthAll key keyKind
+       else if schema == "security.ocsf" then ocsfLookupIn ocsfAll key keyKind
+       else mkEvidence { source_schema = schema; key = key; key_kind = keyKind; status = "missing";
+              held_reasons = [ { kind = "unknown-source-schema"; detail = schema; } ]; };
+
+  # ── 다중-카탈로그: 같은 key를 여러 schema에 시도 ──
+  #   0 = missing · 1 = recognized(candidate) · 2+ 일치 = candidate_link(truth 아님) · 2+ 불일치 = conflict-held.
+  #   ★over-merge 방어(DR failure-mode c): 불일치는 자동 병합 금지 = conflict-held.
+  #   args.evidences(주입) 있으면 그것을, 없으면 schemas 어댑터 결과를 대상으로.
+  readbackMultiSchema = args:
+    let key = args.key or "";
+        keyKind = args.key_kind or "";
+        schemas = args.schemas or [ ];
+        injected = if args ? evidences then args.evidences else null;
+        results = if injected != null then injected
+                  else B.map (s: readbackByExactKey { source_schema = s; key = key; key_kind = keyKind; }) schemas;
+        recognized = B.filter (r: (if r ? status then r.status else "") == "recognized") results;
+        n = B.length recognized;
+        first = if n == 0 then { } else (B.head recognized).payload;
+        disagree = B.filter (r: (if r ? payload then r.payload else { }) != first) recognized;
+    in if n == 0
+       then mkEvidence { source_schema = "multi"; key = key; key_kind = keyKind; status = "missing";
+              held_reasons = [ { kind = "no-exact-anchor-any-catalog"; } ]; }
+       else if n == 1
+       then (B.head recognized) // { multi_schema = true; candidate_link = false; }
+       else if disagree == [ ]
+       then (B.head recognized) // { multi_schema = true; candidate_link = true;
+              agreeing_schemas = B.map (r: r.source_schema or "") recognized; }   # 일치 = candidate link(truth 아님)
+       else mkEvidence { source_schema = "multi"; key = key; key_kind = keyKind; status = "conflict-held";
+              held_reasons = [ { kind = "cross-catalog-conflict";
+                                 detail = "같은 key가 카탈로그마다 다른 의미 = conflict-held(자동 병합 금지)";
+                                 schemas = B.map (r: r.source_schema or "") recognized; } ]; };
+
+  # publicProjection: raw row/internal payload leak 0(허용 필드만).
+  publicProjection = e: {
+    evidence_kind = e.evidence_kind or "catalog.readback";
+    source_schema = e.source_schema or "";
+    owner_version = e.owner_version or "";
+    key = e.key or "";
+    key_kind = e.key_kind or "";
+    exact_match = e.exact_match or false;
+    source_supported = e.source_supported or false;
+    durable_truth = false;
+    accepted_as_truth = false;
+    ontology_assert_allowed = false;
+    status = e.status or "missing";
+    held_reasons = e.held_reasons or [ ];
+  };
+in {
+  inherit readbackByExactKey readbackMultiSchema mkEvidence publicProjection;
+  # A-2 per-catalog pure lookups(테스트 fixtures + 향후 host-ferry 입력용)
+  inherit spdxLookupIn chebiLookupIn ecfrHazmatLookupIn krAuthorityLookupIn ocsfLookupIn resolveMatches;
+}

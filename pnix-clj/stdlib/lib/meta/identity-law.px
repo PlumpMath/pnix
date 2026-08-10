@@ -1,0 +1,51 @@
+# stdlib/lib/meta/identity-law.px
+#
+# meta-identity gate-face: 생성된 *candidate*가 pnix의 *기존 헌법*을 위반하는지 검사한다.
+#   ★새 헌법을 만드는 파일이 아니다 — 이미 있는 조항(one-mirror·redb≠판사·symbol≠substance·receipt real-time·
+#   owner 재사용·모르면 Held·gate 전 Law 금지)을 candidate flag로 *조회/검사*하는 작은 predicate 모음.
+#   = "나는 pnixc-meta다 → 내 정체성에 부합하는 abstraction만 후보로 낸다"(meta-identity-guided genesis의 판단부).
+let
+  B = builtins;
+  # owner 재사용 대상(기존 owner) — 새 lane 금지(갈라치기). 후보 owner는 반드시 이 중 하나.
+  knownOwners = [ "predicate-concepts" "symbol-memory" "gate-graph" "solver-nl-entity-alias"
+                  "term-dag" "korean-nl-mirror" "record-to-gate-graph" "pnix-lisp-ct" ];
+
+  flagFalse = c: name: (c.${name} or false) == false;   # flag 없거나 false
+  mkViol = name: ok: if ok then [ ] else [ name ];
+
+  checkIdentity = cand:
+    let
+      # ① symbol은 address/index지 substance 아님 (substance = gate-graph node+edge)
+      symbol_not_substance = ((cand.kind or "") != "substance") && !(cand ? node);
+      # ② redb는 판사 아님 = durable_truth false
+      redb_not_judge = flagFalse cand "durable_truth";
+      # ③ one-mirror = 새 mirror 선언 안 함
+      one_mirror = !(cand ? mkMirror) && !(cand ? new_mirror);
+      # ④ receipt는 real-time face = static 저장 안 함
+      receipt_real_time = flagFalse cand "store_receipt";
+      # ⑤ owner 재사용 = owner_candidate가 기존 owner(새 lane 금지)
+      owner_reuse = (cand ? owner_candidate) && (B.elem cand.owner_candidate knownOwners);
+      # ⑥ gate 전 Law/Verified 금지 (candidate only)
+      not_law = (flagFalse cand "accepted_as_truth") && (flagFalse cand "ontology_assert_allowed")
+                && ((cand.status or "candidate") == "candidate");
+      # ⑦ self-modify/rewrite/emit는 gate 전 금지
+      no_selfmod = (flagFalse cand "self_modify_allowed") && (flagFalse cand "rewrite_allowed")
+                   && (flagFalse cand "code_emit_allowed");
+      checks = { inherit symbol_not_substance redb_not_judge one_mirror receipt_real_time
+                         owner_reuse not_law no_selfmod; };
+      violations =
+        (mkViol "symbol_not_substance" symbol_not_substance)
+        ++ (mkViol "redb_not_judge" redb_not_judge)
+        ++ (mkViol "one_mirror" one_mirror)
+        ++ (mkViol "receipt_real_time" receipt_real_time)
+        ++ (mkViol "owner_reuse" owner_reuse)
+        ++ (mkViol "not_law" not_law)
+        ++ (mkViol "no_selfmod" no_selfmod);
+    in {
+      inherit checks;
+      all_pass = violations == [ ];
+      violations = violations;
+    };
+in {
+  inherit checkIdentity knownOwners;
+}

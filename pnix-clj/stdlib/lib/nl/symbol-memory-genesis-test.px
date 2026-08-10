@@ -1,0 +1,36 @@
+# stdlib/lib/nl/symbol-memory-genesis-test.px
+#
+# genesis(diverge) lock + read-back(converge)와의 동형/반동형 대칭:
+#   diverge: instance term들 → antiUnify → 공통 추상 schema(LGG)
+#   converge: schema + term → match → instance인가
+#   ★대칭: antiUnify(instances)=pattern ⟹ 각 instance가 match(pattern). promotion은 Held(§38).
+let
+  g = import ./symbol-memory-genesis.px;
+  td = import ../lisp/term-dag.px;
+  B = builtins;
+  mkSym = s: { sym = s; };
+  # ★propToTerm이 만드는 term 형태(프로그램 빌드, Korean sym 포함) — td.parse는 Korean 토큰 미지원(별개 한계)
+  t1 = [ (mkSym "eat") (mkSym "철수") (mkSym "사과") ];
+  t2 = [ (mkSym "eat") (mkSym "영희") (mkSym "책") ];
+  t3 = [ (mkSym "run") (mkSym "철수") ];        # 다른 head → instance 아님
+  abs = g.proposeAbstraction { terms = [ t1 t2 ]; };
+  inst = g.instancesOf { abstraction = abs.abstraction; terms = [ t1 t2 t3 ]; };
+  # 단일 instance = 일반화 불요(그대로)
+  solo = g.proposeAbstraction { terms = [ t1 ]; };
+in {
+  abstraction_text = abs.abstraction_text;
+  instance_count = abs.instance_count;
+  promotion_held = abs.promotion_held;
+  recognized_instances = inst.instance_count;
+  solo_text = solo.abstraction_text;
+  all_ok =
+       (abs.abstraction_text == "(eat ?g0 ?g1)")     # ★diverge: 두 instance의 LGG
+    && (abs.instance_count == 2)
+    && (abs.proposer_only == true) && (abs.durable_truth == false)
+    && (abs.promotion_held == true)                  # ★promotion = Held(§38, 자동 KEEP 금지)
+    # ★동형/반동형 대칭: pattern의 instance가 정확히 t1·t2(converge가 diverge를 되짚음)
+    && (inst.instance_count == 2) && (B.length inst.instances == 2) && (inst.total == 3)
+    # 단일 instance는 일반화 불요 = 자기 자신
+    && (solo.abstraction_text == "(eat 철수 사과)")
+    && (abs.abstraction_key == "(s:eat s:?g0 s:?g1)");   # content-key(LGG 신원)
+}

@@ -1,0 +1,116 @@
+# stdlib.math.hangul-phoneme-mirror
+#
+# **음소 거울: 글자(jamo 골격) ⟷ 소리(음소/로마자 발음). 한글과 로마자는 한 소리의 두 라벨.**
+#
+# 운영자(2026-06-14): "소리가 우선 ... 세계표준단위처럼 그냥 존재하는걸 다르게 부를뿐." jamo 는 발음을
+# encode 한다(세종 featural 설계). 글자↔음소를 박으면 시스템이 한글을 *발음* 한다("한글"→"hangeul").
+# 음소(로마자) = jamo 보다 더 *보편적인 symbol* — 한글·로마자는 한 소리의 두 표면.
+#   diverge(발산/표현) : 소리 {초;중;종 idx} → 음소 번들 {c;v;f} (toPhonemes; pronounce 로 평탄화)
+#   converge(수렴/이해) : 음소 번들 → 소리 (fromPhonemes; 각 음소 → jamo index 역탐색)
+#   roundTrip = id (음소 라벨이 위치별로 distinct → 형태음소론적 underlying 표현으로 bijective).
+#
+# 정직한 범위: *표면* 음운(받침 중화 ㄷㅅ→[t̚]·동화·연음)은 under-determined 역(held+후보) = 별 거울로 deferred.
+#   여기 음소는 underlying(형태음소론적; 한글 맞춤법이 보존하는 그 층)이라 깨끗이 역가능.
+# meta-mirror-primitive 로 instance 등록(mirror-instances). 비수정 data-only 조립: hangul-mirror.
+let
+  hg = import ./hangul-mirror.px;
+
+  elemAt = builtins.elemAt;
+  len = builtins.length;
+  map = builtins.map;
+  genList = builtins.genList;
+  all = builtins.all;
+  concatSep = builtins.concatStringsSep;
+
+  # 위치별 음소(로마자, underlying) — 각 리스트 내 distinct → bijective
+  choPh = [ "g" "kk" "n" "d" "tt" "r" "m" "b" "pp" "s" "ss" "" "j" "jj" "ch" "k" "t" "p" "h" ];                               # 초성 19
+  jungPh = [ "a" "ae" "ya" "yae" "eo" "e" "yeo" "ye" "o" "wa" "wae" "oe" "yo" "u" "wo" "we" "wi" "yu" "eu" "ui" "i" ];        # 중성 21
+  jongPh = [ "" "g" "kk" "gs" "n" "nj" "nh" "d" "l" "lg" "lm" "lb" "ls" "lt" "lp" "lh" "m" "b" "bs" "s" "ss" "ng" "j" "ch" "k" "t" "p" "h" ];   # 종성 28 (0=없음)
+
+  indexOf = list: x:
+    let go = i: if i >= (len list) then 0 - 1 else if (elemAt list i) == x then i else go (i + 1);
+    in go 0;
+
+  # ── 발산 (소리 → 음소 번들) ──
+  toPhonemes = s: { c = elemAt choPh s.cho; v = elemAt jungPh s.jung; f = elemAt jongPh s.jong; };
+  # ── 수렴 (음소 번들 → 소리; 위치별 역탐색) ──
+  fromPhonemes = p: { cho = indexOf choPh p.c; jung = indexOf jungPh p.v; jong = indexOf jongPh p.f; };
+
+  phEq = a: b: (a.c == b.c) && (a.v == b.v) && (a.f == b.f);
+
+  # 발음 평탄화 (한 음절 → "han", 단어 → "hangeul") — 사람 눈용 (underlying 로마자)
+  pronounce = s: (elemAt choPh s.cho) + (elemAt jungPh s.jung) + (elemAt jongPh s.jong);
+  pronounceWord = sounds: concatSep "" (map pronounce sounds);
+
+  # ══ 의미↔symbol 불일치 (운영자 발견): 표면 음운은 under-determined 역 = held + 후보 ══
+  #   받침 중화 — 종성 글자(meaning/맞춤법)가 표면 소리(symbol/귀)로 갈 때 7→1 로 뭉친다.
+  #   [t] ← ㄷㅅㅆㅈㅊㅌㅎ (7 글자가 한 소리). 그래서 소리→글자 역은 *후보 7개* = held.
+  #   인간은 lexicon/context 로 무의식에 메우지만, 그건 *더 많은 정보*가 필요하다는 증거(불일치).
+  surfaceJong = [ "" "k" "k" "k" "n" "n" "n" "t" "l" "k" "m" "l" "l" "l" "p" "l" "m" "p" "p" "t" "t" "ng" "t" "t" "k" "t" "p" "t" ];   # 종성 28 → 표면 7종
+
+  surfaceFinal = jongIndex: elemAt surfaceJong jongIndex;
+
+  # 표면 소리 → 그 소리를 내는 *모든* 종성 글자 후보 (역관계의 under-determination)
+  surfaceCandidates = surf:
+    builtins.filter (i: (elemAt surfaceJong i) == surf)
+      (genList (i: i) (len surfaceJong));
+
+  # 표면 perceive: 소리 하나 → 글자 후보들. 1개면 determined, 2+면 held(불일치).
+  surfacePerceive = surf:
+    let cands = surfaceCandidates surf;
+        jongNames = map (i: elemAt (import ./hangul-mirror.px).jongList i) cands;
+    in {
+      surface = surf;
+      candidate_count = len cands;
+      candidate_letters = jongNames;
+      determined = (len cands) <= 1;
+      verdict = if (len cands) <= 1 then "symbol-determines-meaning"
+                else "held-meaning-symbol-mismatch";    # 불일치: 소리가 글자를 못 정함
+    };
+
+  # 한 종성의 불일치 보고: underlying(글자) vs surface(소리), 그리고 표면 역의 후보 수.
+  mismatchOf = jongIndex:
+    let surf = surfaceFinal jongIndex;
+        cands = surfaceCandidates surf;
+    in {
+      underlying_letter = elemAt (import ./hangul-mirror.px).jongList jongIndex;
+      surface_sound = surf;
+      matches = (elemAt jongPh jongIndex) == surf;       # underlying 음소 == 표면 음소?
+      inverse_candidate_count = len cands;               # 표면에서 글자 되돌릴 때 후보 수
+      is_mismatch = (len cands) > 1;
+    };
+
+  # ── round-trip: 소리 → 음소 → 소리 = 글자와 소리가 한 symbol (underlying 층; 깨끗한 reflection) ──
+  roundTrip = sound:
+    let ph = toPhonemes sound; back = fromPhonemes ph;
+    in {
+      sound = hg.soundText sound;
+      phoneme = ph;
+      pronounce = pronounce sound;
+      recovered = hg.soundText back;
+      structure_preserved = hg.soundEq back sound;
+      verdict = if (hg.soundEq back sound) then "letter-sound-are-one" else "held-phoneme-drift";
+    };
+
+  inventorySummary = _: {
+    owner = "stdlib.math.hangul-phoneme-mirror";
+    consumes = "hangul-mirror(mkSound/soundEq/soundText) (data-only; 비수정)";
+    role = "음소 거울: 글자(jamo 골격) ⟷ 소리(음소 로마자 발음). diverge(toPhonemes/pronounce)+converge(fromPhonemes 역탐색)+roundTrip=id. 시스템이 한글을 발음('한글'→'hangeul')";
+    note = "음소=jamo 보다 보편적 symbol(한글·로마자 한 소리 두 라벨). underlying(형태음소론) bijective. 표면 음운(중화·동화)은 under-determined held 별 거울. meta-mirror-primitive instance.";
+  };
+
+in {
+  inherit
+    choPh jungPh jongPh
+    toPhonemes fromPhonemes phEq
+    pronounce pronounceWord roundTrip
+    surfaceJong surfaceFinal surfaceCandidates surfacePerceive mismatchOf
+    inventorySummary;
+  ownerName = "stdlib.math.hangul-phoneme-mirror";
+  meta = {
+    source = "stdlib math hangul-phoneme-mirror (jamo letter <-> phoneme/romanized sound; two labels for one sound)";
+    owner = "stdlib.math.hangul-phoneme-mirror";
+    base = "hangul-phoneme-mirror-v0";
+    rev_note = "idea.md (2026-06-14) 음소 거울 = 글자(jamo {초;중;종 idx} 골격) ⟷ 소리(음소 번들 {c;v;f} 로마자). diverge=toPhonemes(위치별 음소 lookup)+pronounce(평탄 'han'/'hangeul'), converge=fromPhonemes(위치별 음소→jamo index 역탐색), roundTrip=soundEq 항등(='글자와 소리가 한 symbol'). 음소 라벨 위치별 distinct → underlying(형태음소론) bijective. 표면 음운(받침 중화 ㄷㅅ→[t̚]·동화·연음)은 under-determined 역=held+후보 별 거울 deferred. 운영자: 소리 우선, 음소=더 보편 symbol, 한글·로마자 한 소리 두 라벨. hangul-mirror 비수정 조립. meta-mirror-primitive instance.";
+  };
+}

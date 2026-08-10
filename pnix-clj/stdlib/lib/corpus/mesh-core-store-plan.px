@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/mesh-core-store-plan.px — NLM MeSH core vocabulary structure.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# scope-note/annotation/history/prose, translations, SCR records, PubMed records, clinical advice, graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./mesh-core.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "clinical.mesh_core.v1";
+    source = { name = "NLM Medical Subject Headings (MeSH) core"; license = "NLM Terms and Conditions"; scope = "empty seed fallback"; };
+    summary = { descriptor_count_total = 0; descriptor_count_stored = 0; qualifier_count_total = 0; qualifier_count_stored = 0; scope_note_prose_ingested = false; translations_ingested = false; scr_ingested = false; pubmed_records_ingested = false; mirror_graph_wiring = false; };
+    descriptors = [ ]; qualifiers = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "mesh-core-load-v0";
+      source_lens = "stdlib/lib/corpus/mesh-core-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "clinical.mesh_core.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "mesh-core-query-v0";
+      source_lens = "stdlib/lib/corpus/mesh-core-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "clinical.mesh_core.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

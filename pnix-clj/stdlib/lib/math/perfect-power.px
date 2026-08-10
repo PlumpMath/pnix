@@ -1,0 +1,173 @@
+# stdlib.lib.math.perfect-power
+#
+# OWNER-LAW (v0.12-AAZ, div-math, 2026-05-22): perfect-power
+# detection.
+#
+# logarithm.px asks "is n a power of a GIVEN base". This owner
+# asks the harder question with both unknowns free: is there ANY
+# base a >= 2 and exponent b >= 2 with a^b = n, and if so, which?
+#
+# # The canonical form
+#
+# 64 = 8^2 = 4^3 = 2^6. `perfectPowerForm` returns the
+# representation with the SMALLEST base (equivalently the LARGEST
+# exponent) -- for 64 that is base 2, exponent 6. It searches
+# exponents from the largest possible (floor of log2 n) downward
+# and returns the first exact hit.
+#
+# # Overflow-safe, exact
+#
+# The integer b-th root is found by binary search, and every
+# comparison goes through `powLE` -- which stops multiplying the
+# moment the running product passes the limit, so a^b is never
+# computed past the 64-bit range. No floating point anywhere.
+#
+# # Standalone
+#
+# Imports nothing. n >= 1. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a full integer factorisation (number-theory.px).
+#   - NOT perfect powers of negative numbers.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/perfect-power.px";
+
+  # Whether base^exp <= limit, computed without overflow: the
+  # running product is checked against `limit` before each further
+  # multiplication, so it never grows more than one step past it.
+  powLE = base: exp: limit:
+    let
+      go = e: acc:
+        if e <= 0 then acc <= limit
+        else if acc > limit then false
+        else go (e - 1) (acc * base);
+    in go exp 1;
+
+  # The largest integer a with a^b <= n (the floor b-th root),
+  # by binary search.
+  integerRoot = n: b:
+    let
+      go = lo: hi:
+        if lo >= hi then lo
+        else
+          let mid = (lo + hi + 1) / 2;
+          in if powLE mid b n then go mid hi else go lo (mid - 1);
+    in go 1 n;
+
+  # Whether n is exactly a perfect b-th power of some base >= 2.
+  # a^b = n iff a^b <= n AND a^b > n-1.
+  isExactPower = n: b:
+    let a = integerRoot n b;
+    in a >= 2 && powLE a b n && !(powLE a b (n - 1));
+
+  # The largest exponent worth trying: the biggest b with 2^b <= n.
+  maxExponent = n:
+    let
+      go = b: if powLE 2 (b + 1) n then go (b + 1) else b;
+    in if n < 4 then 1 else go 1;
+
+  # The perfect-power representation with the smallest base, or
+  # null. Searches exponents from largest to smallest.
+  perfectPowerForm = n:
+    let
+      maxB = maxExponent n;
+      go = b:
+        if b < 2 then null
+        else if isExactPower n b then {
+          base = integerRoot n b;
+          exponent = b;
+        }
+        else go (b - 1);
+    in go maxB;
+
+  # Whether n is a^b for some a >= 2, b >= 2.
+  isPerfectPower = n: perfectPowerForm n != null;
+
+  # Perfect square / cube tests -- these admit base 1 (1 = 1^2),
+  # so they do not use the base >= 2 guard.
+  isPerfectSquare = n:
+    let a = integerRoot n 2;
+    in n >= 1 && powLE a 2 n && !(powLE a 2 (n - 1));
+  isPerfectCube = n:
+    let a = integerRoot n 3;
+    in n >= 1 && powLE a 3 n && !(powLE a 3 (n - 1));
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "is-perfect-power"
+    "perfect-power-form"
+    "is-square"
+    "is-cube"
+  ];
+
+  applyPerfectPower = request:
+    let
+      op = request.operation;
+      n  = request.n;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 1 then {
+        outcome = "held-non-positive-number";
+        operation = op;
+        n = n;
+      }
+      else if op == "is-perfect-power" then {
+        outcome = "perfect-power-computed";
+        operation = op; n = n;
+        holds = isPerfectPower n;
+      }
+      else if op == "perfect-power-form" then
+        let form = perfectPowerForm n;
+        in
+          if form == null then {
+            outcome = "perfect-power-computed";
+            operation = op; n = n;
+            is_perfect_power = false;
+          }
+          else {
+            outcome = "perfect-power-computed";
+            operation = op; n = n;
+            is_perfect_power = true;
+            base = form.base;
+            exponent = form.exponent;
+          }
+      else if op == "is-square" then {
+        outcome = "perfect-power-computed";
+        operation = op; n = n;
+        holds = isPerfectSquare n;
+      }
+      else {
+        # op == "is-cube"
+        outcome = "perfect-power-computed";
+        operation = op; n = n;
+        holds = isPerfectCube n;
+      };
+
+in {
+  inherit
+    ownerName
+    powLE
+    integerRoot
+    isExactPower
+    maxExponent
+    perfectPowerForm
+    isPerfectPower
+    isPerfectSquare
+    isPerfectCube
+    knownOperations
+    applyPerfectPower;
+  meta = {
+    source = "stdlib math perfect power";
+    owner = ownerName;
+    base = "parametric-math-perfect-power-v0";
+    rev_note = "v0.12-AAZ (div-math): perfect-power detection owner. Where logarithm.px tests a power of a GIVEN base, this owner frees both unknowns: isPerfectPower (any a>=2, b>=2 with a^b=n), perfectPowerForm (the smallest-base representation -- 64 -> base 2 exponent 6), isPerfectSquare / isPerfectCube. Integer b-th root by binary search; every comparison via powLE which stops before 64-bit overflow. Exact, no floating point. Standalone. NOT factorisation, NOT negative numbers, NOT yet a registered lens.";
+  };
+}

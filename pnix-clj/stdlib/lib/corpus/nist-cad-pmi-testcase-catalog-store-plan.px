@@ -1,0 +1,44 @@
+# stdlib/lib/corpus/nist-cad-pmi-testcase-catalog-store-plan.px — NIST CAD/STEP PMI test-case catalog metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# CAD/STEP/native model/PDF/PMI bodies/reports/toolpath guidance는 포함하지 않는다. graph/mirror 연결도 하지 않는다.
+let
+  B = builtins;
+  genPath = ./nist-cad-pmi-testcase-catalog.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "cad.nist_pmi_testcase_catalog.v1";
+    source = { name = "NIST CAD PMI test-case catalog"; license = "NIST public data / public domain where applicable"; scope = "empty seed fallback"; };
+    summary = { test_case_count = 0; };
+    fields = [ ];
+    test_cases = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "nist-cad-pmi-testcase-catalog-load-v0";
+      source_lens = "stdlib/lib/corpus/nist-cad-pmi-testcase-catalog-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "cad.nist_pmi_testcase_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "nist-cad-pmi-testcase-catalog-query-v0";
+      source_lens = "stdlib/lib/corpus/nist-cad-pmi-testcase-catalog-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "cad.nist_pmi_testcase_catalog.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

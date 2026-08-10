@@ -1,0 +1,397 @@
+let
+  ownerName = "stdlib.agent.internal-vocab-translation-contract";
+
+  wireContract =
+    import agent/wire-shape-opacity-contract.px;
+  replayContract =
+    import agent/x3d-coding-process-replay-contract.px;
+
+  # === Internal vocab translation contract (Round 73) =================
+  #
+  # 사용자 directive (Round 72 후):
+  # > 'pnixc-meta 에 NL 부분이 너무 노출방식 용어로 chat prompt 에서
+  #   자꾸만 나와서 이부분은 내부공통용어 (내부에서만 아는 단어들) 로
+  #   번역식으로 만들어지면 될듯, 이미 있나?'
+  #
+  # 답: 부분만 있고 완성 형태 없음. 이 owner = 양방향 *번역식* 가드.
+  #
+  # # Problem (사용자 catch)
+  #
+  # 외부 공개 vocab (`script-eval`, `channel-bind`, `diff-apply` 등
+  # Round 72 의 game-engine vocab) 이 chat prompt 로 substrate 내부
+  # 처리에 새어들어옴. substrate 가 자기 internal 결정도 외부 vocab 으로
+  # *thought 해버림* → internal vocab boundary 흐려짐.
+  #
+  # # Two-way translation layer (이 owner 가 박는 것)
+  #
+  #   외부 NL/prompt   ──── lowerExternalNLToInternal ────→  internal token
+  #   (chat input)                                            (substrate-private)
+  #                                                                 │
+  #                                                                 │ substrate
+  #                                                                 │ processing
+  #                                                                 │ (closed)
+  #                                                                 ↓
+  #   external vocab   ←──  liftInternalToPublicVocab  ──── internal token
+  #   (X3D / game-engine                                     (substrate-private)
+  #    / CG tool API)
+  #
+  # # Internal vocab — closed private namespace
+  #
+  # substrate 가 *내부 결정* 에서 쓰는 토큰. *.px source 안에만 존재.
+  # *wire 절대 나가지 않음* (Round 70 forbidden). 명확한 internal
+  # namespace `iv.*` 로 prefix.
+  #
+  # # 4 directional verdicts
+  #
+  #   "translated-to-internal-vocab"               — 외부 NL → internal
+  #   "lifted-to-public-vocab"                     — internal → 외부
+  #   "held-external-vocab-in-internal-processing" — contamination 검출
+  #   "held-internal-vocab-leak-in-output"         — reverse leak 검출
+  #   "held-unknown-internal-token"                — closed list 밖
+  #   "held-unknown-direction"                     — 방향 미명시
+
+  stepKind = "internal-vocab-translation";
+  framework_step =
+    "external NL ↔ internal token 양방향 번역 + contamination 차단";
+
+  # ===================================================================
+  # === Internal vocab tokens (closed, substrate-private) ============
+  # ===================================================================
+  #
+  # 모든 internal token 은 `iv.<namespace>.<concept>` shape.
+  # *wire 절대 X*. substrate 내부 결정 처리에만 사용.
+
+  internalVocabTokens = [
+    # iv.intent.* — 외부 입력 의도 해석 (Round 53/56 mapping)
+    "iv.intent.bind"               # 외부 "binding / attach / link"
+    "iv.intent.read"               # 외부 "show / list / read"
+    "iv.intent.write"              # 외부 "create / make / write"
+    "iv.intent.modify"             # 외부 "change / update / fix"
+    "iv.intent.remove"             # 외부 "delete / remove / unbind"
+    "iv.intent.query"              # 외부 "find / where / search"
+
+    # iv.subject.* — 의도가 향하는 대상 카테고리
+    "iv.subject.scene-node"        # 외부 X3D node
+    "iv.subject.channel-binding"   # 외부 channel
+    "iv.subject.code-symbol"       # 외부 함수/변수/심볼
+    "iv.subject.formula-slot"      # 외부 @[N] / @[N].x
+    "iv.subject.diff-segment"      # 외부 diff hunk
+    "iv.subject.test-suite"        # 외부 test
+
+    # iv.modality.* — NL 의 서법 / 양태 (한글 조사 lifting 결과)
+    "iv.modality.declarative"      # "...한다"
+    "iv.modality.interrogative"    # "...왜?"
+    "iv.modality.imperative"       # "...해줘"
+    "iv.modality.held-for-context" # "어떻게?" — 맥락 필요
+
+    # iv.constraint.* — 사용자가 emit 한 제약 조건
+    "iv.constraint.preserve-property"   # "axiom 유지"
+    "iv.constraint.under-time-budget"   # "빨리"
+    "iv.constraint.minimal-change"      # "최소 패치"
+    "iv.constraint.full-verification"   # "완전 검증"
+
+    # iv.outcome.* — substrate 가 내린 결정의 internal label
+    "iv.outcome.proceed"           # 진행
+    "iv.outcome.held"              # 보류
+    "iv.outcome.reject"            # 거부
+    "iv.outcome.escalate"          # 사용자 confirmation 필요
+  ];
+
+  # ===================================================================
+  # === External vocab source registry =================================
+  # ===================================================================
+  #
+  # 사용자 directive: "freecat 식 = 외부 인터넷 개발 커뮤니티 자주
+  # 사용 용어. X3D 3D 개념 + Rhino / FreeCAD 의 3D 개념들 +
+  # 개발 용어 = 인터넷 개발 용어."
+  #
+  # 즉 externalToInternalMap 의 외부 vocab 은 *광범위*. 새 source 추가
+  # = 이 registry 에 한 row + 같은 namespace 의 vocab 보강.
+
+  knownExternalVocabSources = [
+    "x3d-w3c-spec"          # Scene / Transform / Shape / Material / ...
+    "rhino-rhinocommon"     # curve / surface / brep / layer / ...
+    "freecad"               # sketch / pad / fillet / body / ...
+    "general-dev"           # build / compile / test / debug / deploy
+    "game-engine-standard"  # collider / rigidbody / animator / prefab
+    "cg-tool-api"           # render / material / shader / camera
+    "korean-particle-modality"  # ko.rs 한글 조사 lifting
+  ];
+
+  # ===================================================================
+  # === External-vocab ⇄ internal-token mapping ======================
+  # ===================================================================
+  #
+  # 외부 chat prompt 에서 나타나는 단어 → internal token.
+  # *closed list*. 모르는 외부 단어는 ko.rs 한글 조사 분석 / English
+  # tokenizer 의 보강 대상 — Round 74 candidate.
+
+  externalToInternalMap = {
+    # === source: general-dev (verb vocab) → iv.intent.* ============
+    "bind"      = "iv.intent.bind";
+    "binding"   = "iv.intent.bind";
+    "attach"    = "iv.intent.bind";
+    "link"      = "iv.intent.bind";
+    "show"      = "iv.intent.read";
+    "list"      = "iv.intent.read";
+    "read"      = "iv.intent.read";
+    "display"   = "iv.intent.read";
+    "create"    = "iv.intent.write";
+    "make"      = "iv.intent.write";
+    "write"     = "iv.intent.write";
+    "build"     = "iv.intent.write";
+    "compile"   = "iv.intent.write";
+    "change"    = "iv.intent.modify";
+    "update"    = "iv.intent.modify";
+    "fix"       = "iv.intent.modify";
+    "modify"    = "iv.intent.modify";
+    "edit"      = "iv.intent.modify";
+    "refactor"  = "iv.intent.modify";
+    "delete"    = "iv.intent.remove";
+    "remove"    = "iv.intent.remove";
+    "unbind"    = "iv.intent.remove";
+    "find"      = "iv.intent.query";
+    "where"     = "iv.intent.query";
+    "search"    = "iv.intent.query";
+    "query"     = "iv.intent.query";
+    "lookup"    = "iv.intent.query";
+
+    # === source: korean-particle-modality (ko.rs hook, Round 74) ==
+    "연결"      = "iv.intent.bind";
+    "묶어"      = "iv.intent.bind";
+    "보여"      = "iv.intent.read";
+    "보여줘"    = "iv.intent.read";
+    "만들어"    = "iv.intent.write";
+    "고쳐"      = "iv.intent.modify";
+    "수정"      = "iv.intent.modify";
+    "삭제"      = "iv.intent.remove";
+    "지워"      = "iv.intent.remove";
+    "찾아"      = "iv.intent.query";
+
+    # === source: x3d-w3c-spec → iv.subject.scene-node ==============
+    "scene-node" = "iv.subject.scene-node";
+    "node"       = "iv.subject.scene-node";
+    "Scene"      = "iv.subject.scene-node";
+    "Transform"  = "iv.subject.scene-node";
+    "Shape"      = "iv.subject.scene-node";
+    "Material"   = "iv.subject.scene-node";
+    "Light"      = "iv.subject.scene-node";
+    "Camera"     = "iv.subject.scene-node";
+
+    # === source: generic-cg-tool → iv.subject.scene-node ===========
+    "object"     = "iv.subject.scene-node";
+    "mesh"       = "iv.subject.scene-node";
+    "modifier"   = "iv.subject.scene-node";
+    "armature"   = "iv.subject.scene-node";
+    "material"   = "iv.subject.scene-node";
+
+    # === source: rhino-rhinocommon → iv.subject.scene-node =========
+    "curve"      = "iv.subject.scene-node";
+    "surface"    = "iv.subject.scene-node";
+    "brep"       = "iv.subject.scene-node";
+    "layer"      = "iv.subject.scene-node";
+
+    # === source: freecad → iv.subject.scene-node ===================
+    "sketch"     = "iv.subject.scene-node";
+    "pad"        = "iv.subject.scene-node";
+    "fillet"     = "iv.subject.scene-node";
+    "body"       = "iv.subject.scene-node";
+
+    # === source: game-engine-standard → iv.subject.scene-node ======
+    "collider"   = "iv.subject.scene-node";
+    "rigidbody"  = "iv.subject.scene-node";
+    "animator"   = "iv.subject.scene-node";
+    "prefab"     = "iv.subject.scene-node";
+
+    # === channels / formulas / symbols =============================
+    "channel"    = "iv.subject.channel-binding";
+    "function"   = "iv.subject.code-symbol";
+    "변수"       = "iv.subject.code-symbol";
+    "함수"       = "iv.subject.code-symbol";
+    "test"       = "iv.subject.test-suite";
+    "테스트"     = "iv.subject.test-suite";
+
+    # === modality (Korean 한글 조사 sentence-final) =================
+    "왜"         = "iv.modality.interrogative";
+    "어떻게"     = "iv.modality.held-for-context";
+    "해줘"       = "iv.modality.imperative";
+
+    # === constraints ===============================================
+    "axiom 유지"          = "iv.constraint.preserve-property";
+    "preserve"            = "iv.constraint.preserve-property";
+    "빨리"                = "iv.constraint.under-time-budget";
+    "최소"                = "iv.constraint.minimal-change";
+    "minimal"             = "iv.constraint.minimal-change";
+    "fully verified"      = "iv.constraint.full-verification";
+  };
+
+  # ===================================================================
+  # === Internal-token → external-vocab emit (sanitised) =============
+  # ===================================================================
+  #
+  # 내부 결정 결과를 외부 게임엔진/CG vocab 으로 변환. 같은 internal
+  # token 이 *항상 같은 외부 단어* — deterministic.
+
+  internalToExternalMap = {
+    "iv.outcome.proceed"   = "ok";
+    "iv.outcome.held"      = "waiting-input";
+    "iv.outcome.reject"    = "rejected";
+    "iv.outcome.escalate"  = "needs-confirmation";
+
+    "iv.intent.bind"       = "bind";
+    "iv.intent.read"       = "read";
+    "iv.intent.write"      = "create";
+    "iv.intent.modify"     = "update";
+    "iv.intent.remove"     = "remove";
+    "iv.intent.query"      = "query";
+
+    "iv.subject.scene-node"      = "scene-node";
+    "iv.subject.channel-binding" = "channel";
+    "iv.subject.code-symbol"     = "symbol";
+    "iv.subject.formula-slot"    = "formula-slot";
+    "iv.subject.diff-segment"    = "diff-hunk";
+    "iv.subject.test-suite"      = "test";
+
+    "iv.modality.declarative"      = "statement";
+    "iv.modality.interrogative"    = "question";
+    "iv.modality.imperative"       = "command";
+    "iv.modality.held-for-context" = "needs-context";
+
+    "iv.constraint.preserve-property"   = "preserve";
+    "iv.constraint.under-time-budget"   = "time-budget";
+    "iv.constraint.minimal-change"      = "minimal";
+    "iv.constraint.full-verification"   = "full-verify";
+  };
+
+  # ===================================================================
+  # === Helpers ======================================================
+  # ===================================================================
+
+  hasKey = attrs: key: builtins.elem key (builtins.attrNames attrs);
+  isInClosedList = list: v: builtins.elem v list;
+
+  # NOTE: `attrs."${key}"` 가 함수 안에서 evaluator 의 *dot-path* 해석을
+  # 트리거할 수 있음 (`iv.intent.bind` → `attrs.iv.intent.bind`).
+  # `builtins.getAttr` 이 single-string attribute name 으로 안전.
+  lookupOrNull = attrs: key:
+    if hasKey attrs key then builtins.getAttr key attrs else null;
+
+  isInternalToken = tok:
+    let prefix = builtins.substring 0 3 tok;
+    in prefix == "iv.";
+
+  # ===================================================================
+  # === Main contract functions ======================================
+  # ===================================================================
+
+  # external → internal (lowering)
+  lowerExternalNLToInternal = req:
+    let
+      hasWord = hasKey req "external_word";
+      ext = if hasWord then req.external_word else "";
+      mapped = lookupOrNull externalToInternalMap ext;
+      isInternal = isInternalToken ext;
+
+      verdict =
+        if !hasWord then "held-malformed-request"
+        else if isInternal then "held-internal-vocab-in-external-input"
+        else if mapped == null then "held-unmapped-external-word"
+        else "translated-to-internal-vocab";
+
+      isHeld = verdict != "translated-to-internal-vocab";
+    in {
+      kind = "internal-vocab-translation-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      direction = "lowering";
+      verdict = verdict;
+      is_held = isHeld;
+      external_word = if hasWord then ext else null;
+      # internal_token 은 *wire 안 나감* — internal processing 용
+      # NOTE: 진짜 응답에서는 substrate 가 이걸 *consume only*
+      _internal_token_for_substrate_only =
+        if !isHeld then mapped else null;
+      derived_from = [
+        "mcp-capability-contract (Round 69)"
+        "wire-shape-opacity-contract (Round 70)"
+        "ko.rs (Korean particle analysis)"
+      ];
+    };
+
+  # internal → external (sanitise emit)
+  liftInternalToPublicVocab = req:
+    let
+      hasTok = hasKey req "internal_token";
+      tok = if hasTok then req.internal_token else "";
+      isInternal = isInternalToken tok;
+      knownTok = isInClosedList internalVocabTokens tok;
+      mapped = lookupOrNull internalToExternalMap tok;
+
+      verdict =
+        if !hasTok then "held-malformed-request"
+        else if !isInternal then "held-not-internal-token"
+        else if !knownTok then "held-unknown-internal-token"
+        else if mapped == null then "held-no-public-mapping"
+        else "lifted-to-public-vocab";
+
+      isHeld = verdict != "lifted-to-public-vocab";
+    in {
+      kind = "internal-vocab-translation-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      direction = "lifting";
+      verdict = verdict;
+      is_held = isHeld;
+      # internal_token 의도적으로 응답 envelope 에 *포함 안 함*
+      # (Round 70 wire opacity). public_vocab 만 emit.
+      public_vocab = if !isHeld then mapped else null;
+      derived_from = [
+        "mcp-capability-contract (Round 69)"
+        "wire-shape-opacity-contract (Round 70)"
+        "x3d-coding-process-replay-contract (Round 72)"
+      ];
+    };
+
+  # 응답 텍스트 안에 internal token 흘러 들어갔는지 감지 — *substrate
+  # output guard*. 마지막 line of defense.
+  detectInternalVocabLeak = text:
+    let
+      tokenHits = builtins.filter (t:
+        let
+          parts = builtins.split t text;
+        in (builtins.length parts) > 1
+      ) internalVocabTokens;
+    in {
+      leak_count = builtins.length tokenHits;
+      leaked_tokens = tokenHits;
+      is_clean = (builtins.length tokenHits) == 0;
+    };
+
+  # ===================================================================
+  # === Inventory summary ============================================
+  # ===================================================================
+
+  inventorySummary = {
+    owner = ownerName;
+    step_kind = stepKind;
+    internal_token_count = builtins.length internalVocabTokens;
+    external_to_internal_mapping_count =
+      builtins.length (builtins.attrNames externalToInternalMap);
+    internal_to_external_mapping_count =
+      builtins.length (builtins.attrNames internalToExternalMap);
+    translation_directions = [ "lowering" "lifting" ];
+    internal_token_prefix = "iv.*";
+    wire_visible_internal_token_count = 0;
+    bidirectional_guard = "external→internal + internal→external + leak detection";
+    external_vocab_source_count = builtins.length knownExternalVocabSources;
+    external_vocab_sources = knownExternalVocabSources;
+  };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit internalVocabTokens knownExternalVocabSources;
+  inherit externalToInternalMap internalToExternalMap;
+  inherit lowerExternalNLToInternal liftInternalToPublicVocab;
+  inherit detectInternalVocabLeak inventorySummary;
+  inherit isInternalToken;
+}

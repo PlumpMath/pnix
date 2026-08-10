@@ -1,0 +1,8 @@
+# boundary	status	replay_policy	sandbox_policy	conflict_policy	note
+local-client	DONE	clean-process-replay	env-cleared	fail-closed	client entrypoints replay through bootstrap subprocesses with cleared ambient environment
+local-server	DONE	deterministic-transcript	source-date-epoch	fail-closed	server side is represented by a deterministic command transcript receipt
+session-store	DONE	canonical-receipt	no-boundary-leak	fail-closed	session comparisons use canonical JSON receipts rather than rendered logs
+sandbox-env	DONE	local-only	path-soft-observed	fail-closed	SOURCE_DATE_EPOCH is hard fixed and PATH is only soft observed for rustc lookup
+github-actions	DISABLED	no-remote-replay	disabled	fail-closed	remote workflow verification remains disabled and cannot promote checks
+network	HELD	explicit-enable-required	no-network	fail-closed	networked replay is outside the local proof boundary
+external-sandbox	HELD	receipt-required	explicit-enable-required	fail-closed	nonlocal sandbox providers require explicit adapter receipts

@@ -1,0 +1,85 @@
+# stdlib.lib.ontology.korean-compound-space-policy
+#
+# OWNER-LAW (2026-05-31): Korean compound term space-insertion policy.
+#
+# # What this is for
+#
+# 한국어 복합 용어에서 *한글 + 숫자* boundary 에 공백을 삽입할지 결정.
+# 예: "열역학제2법칙" → "열역학 제2법칙" (한글 다음 숫자, but "제"는 예외).
+#
+# # Design discipline — declarative ordinal-prefix exception registry
+#
+# 이전 doghouse-core::retrieval::insert_compound_spaces 는 hardcoded
+# "제" character check. 이 owner-law 는 declarative ordinal-prefix
+# registry + per-boundary insertion rule.
+#
+# # Boundary rule
+#
+#   if previous_char is_hangul AND next_char is_ascii_digit:
+#     if previous_char in ordinalPrefixChars: no space (e.g. "제2")
+#     else: insert space (e.g. "역학" + "2" → "역학 2")
+#
+# # Inputs (caller resolves char queries to typed input)
+#
+#   boundaries = [{ previous_char ; next_char ;
+#                   prev_is_hangul ; next_is_digit ; }, ...]
+#                — per-boundary typed shape
+#
+# # Output
+#
+#   verdict          : "boundaries-resolved"
+#   per_boundary_actions: list of { boundary_index, action }
+#                         action ∈ "insert-space" | "no-space"
+
+let
+  ownerName = "stdlib/lib/ontology/korean-compound-space-policy.px";
+
+  # ─── declarative ordinal-prefix registry ───────────────────────────────
+  #
+  # 새 ordinal prefix char 추가 = 한 row. (e.g. "초" if needed)
+
+  ordinalPrefixChars = [ "제" ];
+
+  validVerdicts = [ "boundaries-resolved" ];
+
+  asAttrs = v: if builtins.isAttrs v then v else {};
+  asList = v: if builtins.isList v then v else [];
+  asBool = v: if builtins.isBool v then v else false;
+  asString = v: if builtins.isString v then v else "";
+
+  decideBoundary = b:
+    let
+      ba = asAttrs b;
+      prevChar = asString (ba.previous_char or "");
+      prevIsHangul = asBool (ba.prev_is_hangul or false);
+      nextIsDigit = asBool (ba.next_is_digit or false);
+      isOrdinal = builtins.elem prevChar ordinalPrefixChars;
+    in
+      if prevIsHangul && nextIsDigit && !isOrdinal then "insert-space"
+      else "no-space";
+
+  applyKoreanCompoundSpacePolicy = request:
+    let
+      boundaries = asList (request.boundaries or []);
+      actions = builtins.genList
+        (i:
+          let b = builtins.elemAt boundaries i; in
+          { boundary_index = i;
+            action = decideBoundary b; })
+        (builtins.length boundaries);
+      insertions = builtins.length
+        (builtins.filter (a: a.action == "insert-space") actions);
+    in {
+      verdict = "boundaries-resolved";
+      per_boundary_actions = actions;
+      total_boundaries = builtins.length boundaries;
+      total_insertions = insertions;
+      ordinal_prefix_chars = ordinalPrefixChars;
+      lens_owner = ownerName;
+      candidate_only = true;
+    };
+
+in {
+  inherit ownerName ordinalPrefixChars validVerdicts
+          applyKoreanCompoundSpacePolicy;
+}

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Primary gate for rs-meta: build + self-check + tv-check (interp==rustc floor).
+# Full ladder: $BIN check / stage-status (budget-gated stage3-full etc.).
+set -euo pipefail
+META_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$META_DIR"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/rs-meta-target}"
+export PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
+
+MODE="${1:-primary}"
+cargo build
+BIN="${CARGO_TARGET_DIR}/debug/bootstrap"
+case "$MODE" in
+  primary)
+    "$BIN" self-check
+    "$BIN" tv-check
+    echo "rs-meta-gate (primary: self-check + tv-check): PASS"
+    ;;
+  self-check)
+    "$BIN" self-check
+    echo "rs-meta-gate (self-check): PASS"
+    ;;
+  tv-check)
+    "$BIN" tv-check
+    echo "rs-meta-gate (tv-check): PASS"
+    ;;
+  check)
+    "$BIN" check
+    echo "rs-meta-gate (check): PASS"
+    ;;
+  *)
+    echo "usage: rs-meta-gate [primary|self-check|tv-check|check]" >&2
+    exit 2
+    ;;
+esac

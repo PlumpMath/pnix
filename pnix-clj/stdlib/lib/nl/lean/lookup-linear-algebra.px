@@ -1,0 +1,2249 @@
+# AUTO-GENERATED — linear-algebra
+# Entries: 320
+let
+  ownerName = "stdlib.nl.lean.lookup-linear-algebra";
+  category = "linear-algebra";
+  entries = [
+    {
+      full_name = "Submodule.span_coe_eq_restrictScalars";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 47;
+      code_preview = "@[simp] theorem span_coe_eq_restrictScalars [Semiring S] [SMul S R] [Module S M] [IsScalarTower S R M] :     span S (p : Set M) = p.restrictScalars S";
+    }
+    {
+      full_name = "Submodule.image_span_subset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 54;
+      code_preview = "theorem image_span_subset (f : F) (s : Set M) (N : Submodule R₂ M₂) :     f '' span R s ⊆ N ↔ ∀ m ∈ s, f m ∈ N";
+    }
+    {
+      full_name = "Submodule.image_span_subset_span";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 60;
+      code_preview = "theorem image_span_subset_span (f : F) (s : Set M) : f '' span R s ⊆ span R₂ (f '' s)";
+    }
+    {
+      full_name = "Submodule.map_span";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 63;
+      code_preview = "theorem map_span [RingHomSurjective σ₁₂] (f : F) (s : Set M) :     (span R s).map f = span R₂ (f '' s)";
+    }
+    {
+      full_name = "Submodule.map_span_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 69;
+      code_preview = "theorem map_span_le [RingHomSurjective σ₁₂] (f : F) (s : Set M) (N : Submodule R₂ M₂) :     map f (span R s) ≤ N ↔ ∀ m ∈ s, f m ∈ N";
+    }
+    {
+      full_name = "Submodule.span_preimage_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 75;
+      code_preview = "theorem span_preimage_le (f : F) (s : Set M₂) :     span R (f ⁻¹' s) ≤ (span R₂ s).comap f";
+    }
+    {
+      full_name = "Submodule.linearMap_eq_iff_of_eq_span";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 86;
+      code_preview = "lemma linearMap_eq_iff_of_eq_span {V : Submodule R M} (f g : V →ₗ[R] N)     {S : Set M} (hV : V = span R S) :     f = g ↔ ∀ (s : S), f ⟨s, by simpa only [hV] using subset_span (by simp)⟩ =       g ⟨s, by simpa only [hV] using subset_span (by simp)⟩ := by   constructor   · rintro rfl _     rfl   · in";
+    }
+    {
+      full_name = "Submodule.linearMap_eq_iff_of_span_eq_top";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 109;
+      code_preview = "lemma linearMap_eq_iff_of_span_eq_top (f g : M →ₗ[R] N)     {S : Set M} (hM : span R S = ⊤) :     f = g ↔ ∀ (s : S), f s = g s := by   convert linearMap_eq_iff_of_eq_span (f.comp (Submodule.subtype _))     (g.comp (Submodule.subtype _)) hM.symm   constructor   · rintro rfl     rfl   · intro h     ex";
+    }
+    {
+      full_name = "Submodule.linearMap_eq_zero_iff_of_span_eq_top";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 121;
+      code_preview = "lemma linearMap_eq_zero_iff_of_span_eq_top (f : M →ₗ[R] N)     {S : Set M} (hM : span R S = ⊤) :     f = 0 ↔ ∀ (s : S), f s = 0 :=   linearMap_eq_iff_of_span_eq_top f 0 hM";
+    }
+    {
+      full_name = "Submodule.linearMap_eq_zero_iff_of_eq_span";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 126;
+      code_preview = "lemma linearMap_eq_zero_iff_of_eq_span {V : Submodule R M} (f : V →ₗ[R] N)     {S : Set M} (hV : V = span R S) :     f = 0 ↔ ∀ (s : S), f ⟨s, by simpa only [hV] using subset_span (by simp)⟩ = 0 :=   linearMap_eq_iff_of_eq_span f 0 hV";
+    }
+    {
+      full_name = "Submodule.span_smul_eq_of_isUnit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 133;
+      code_preview = "theorem span_smul_eq_of_isUnit (s : Set M) (r : R) (hr : IsUnit r) : span R (r • s) = span R s";
+    }
+    {
+      full_name = "Submodule.coe_scott_continuous";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 141;
+      code_preview = "theorem coe_scott_continuous :     OmegaCompletePartialOrder.ωScottContinuous ((↑) : Submodule R M → Set M)";
+    }
+    {
+      full_name = "Submodule.inclusionSpan";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 154;
+      code_preview = "@[simps] def inclusionSpan :     p →ₗ[R] span S (p : Set M) where   toFun x := ⟨x, subset_span x.property⟩   map_add' x y := by simp   map_smul' t x := by simp";
+    }
+    {
+      full_name = "Submodule.injective_inclusionSpan";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 161;
+      code_preview = "lemma injective_inclusionSpan :     Injective (p.inclusionSpan S) := by   intro x y hxy   rw [Subtype.ext_iff] at hxy   simpa using hxy";
+    }
+    {
+      full_name = "Submodule.span_range_inclusionSpan";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 167;
+      code_preview = "lemma span_range_inclusionSpan :     span S (range <| p.inclusionSpan S) = ⊤ := by   have : (span S (p : Set M)).subtype '' range (inclusionSpan S p) = p := by     ext; simpa [Subtype.ext_iff] using fun h ↦ subset_span h   apply map_injective_of_injective (span S (p : Set M)).injective_subtype   rw ";
+    }
+    {
+      full_name = "Submodule.span_le_restrictScalars";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 176;
+      code_preview = "theorem span_le_restrictScalars :     span R s ≤ (span S s).restrictScalars R";
+    }
+    {
+      full_name = "Submodule.span_subset_span";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 181;
+      code_preview = "@[simp] theorem span_subset_span :     ↑(span R s) ⊆ (span S s : Set M)";
+    }
+    {
+      full_name = "Submodule.span_span_of_tower";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 187;
+      code_preview = "@[simp] theorem span_span_of_tower :     span S (span R s : Set M) = span S s";
+    }
+    {
+      full_name = "Submodule.span_eq_top_of_span_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 194;
+      code_preview = "theorem span_eq_top_of_span_eq_top (s : Set M) (hs : span R s = ⊤) : span S s = ⊤";
+    }
+    {
+      full_name = "Submodule.span_range_inclusion_eq_top";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 198;
+      code_preview = "lemma span_range_inclusion_eq_top (p : Submodule R M) (q : Submodule S M)     (h₁ : p ≤ q.restrictScalars R) (h₂ : q ≤ span S p) :     span S (range (inclusion h₁)) = ⊤ := by   suffices (span S (range (inclusion h₁))).map q.subtype = q by     apply map_injective_of_injective q.injective_subtype     ";
+    }
+    {
+      full_name = "Submodule.span_range_inclusion_restrictScalars_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 211;
+      code_preview = "@[simp] theorem span_range_inclusion_restrictScalars_eq_top :     span S (range (inclusion <| span_le_restrictScalars R S s)) = ⊤";
+    }
+    {
+      full_name = "Submodule.span_singleton_eq_span_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 218;
+      code_preview = "theorem span_singleton_eq_span_singleton {R M : Type*} [Ring R] [AddCommGroup M] [Module R M]     [NoZeroSMulDivisors R M] {x y : M} : ((R ∙ x) = R ∙ y) ↔ ∃ z : Rˣ, z • x = y";
+    }
+    {
+      full_name = "Submodule.span_image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 234;
+      code_preview = "theorem span_image [RingHomSurjective σ₁₂] (f : F) :     span R₂ (f '' s) = map f (span R s)";
+    }
+    {
+      full_name = "Submodule.span_image'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 238;
+      code_preview = "@[simp] theorem span_image' [RingHomSurjective σ₁₂] (f : M →ₛₗ[σ₁₂] M₂) :     span R₂ (f '' s) = map f (span R s)";
+    }
+    {
+      full_name = "Submodule.apply_mem_span_image_of_mem_span";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 243;
+      code_preview = "theorem apply_mem_span_image_of_mem_span [RingHomSurjective σ₁₂] (f : F) {x : M}     {s : Set M} (h : x ∈ Submodule.span R s) : f x ∈ Submodule.span R₂ (f '' s)";
+    }
+    {
+      full_name = "Submodule.apply_mem_span_image_iff_mem_span";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 248;
+      code_preview = "theorem apply_mem_span_image_iff_mem_span [RingHomSurjective σ₁₂] {f : F} {x : M}     {s : Set M} (hf : Function.Injective f) :     f x ∈ Submodule.span R₂ (f '' s) ↔ x ∈ Submodule.span R s";
+    }
+    {
+      full_name = "Submodule.map_subtype_span_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 253;
+      code_preview = "@[simp] theorem map_subtype_span_singleton {p : Submodule R M} (x : p) :     map p.subtype (R ∙ x) = R ∙ (x : M)";
+    }
+    {
+      full_name = "Submodule.not_mem_span_of_apply_not_mem_span_image";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 257;
+      code_preview = "theorem not_mem_span_of_apply_not_mem_span_image [RingHomSurjective σ₁₂] (f : F) {x : M}     {s : Set M} (h : f x ∉ Submodule.span R₂ (f '' s)) : x ∉ Submodule.span R s";
+    }
+    {
+      full_name = "Submodule.iSup_toAddSubmonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 262;
+      code_preview = "theorem iSup_toAddSubmonoid {ι : Sort*} (p : ι → Submodule R M) :     (⨆ i, p i).toAddSubmonoid = ⨆ i, (p i).toAddSubmonoid";
+    }
+    {
+      full_name = "Submodule.iSup_induction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 282;
+      code_preview = "@[elab_as_elim] theorem iSup_induction {ι : Sort*} (p : ι → Submodule R M) {motive : M → Prop} {x : M}     (hx : x ∈ ⨆ i, p i) (mem : ∀ (i), ∀ x ∈ p i, motive x) (zero : motive 0)     (add : ∀ x y, motive x → motive y → motive (x + y)) : motive x";
+    }
+    {
+      full_name = "Submodule.iSup_induction'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 292;
+      code_preview = "@[elab_as_elim] theorem iSup_induction' {ι : Sort*} (p : ι → Submodule R M) {motive : ∀ x, (x ∈ ⨆ i, p i) → Prop}     (mem : ∀ (i) (x) (hx : x ∈ p i), motive x (mem_iSup_of_mem i hx)) (zero : motive 0 (zero_mem _))     (add : ∀ x y hx hy, motive x hx → motive y hy → motive (x + y) (add_mem ‹_› ‹_›))";
+    }
+    {
+      full_name = "Submodule.singleton_span_isCompactElement";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 306;
+      code_preview = "theorem singleton_span_isCompactElement (x : M) :     CompleteLattice.IsCompactElement (span R {x} : Submodule R M)";
+    }
+    {
+      full_name = "Submodule.finset_span_isCompactElement";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 314;
+      code_preview = "theorem finset_span_isCompactElement (S : Finset M) :     CompleteLattice.IsCompactElement (span R S : Submodule R M)";
+    }
+    {
+      full_name = "Submodule.finite_span_isCompactElement";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 323;
+      code_preview = "theorem finite_span_isCompactElement (S : Set M) (h : S.Finite) :     CompleteLattice.IsCompactElement (span R S : Submodule R M)";
+    }
+    {
+      full_name = "Submodule.prod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 338;
+      code_preview = "def prod : Submodule R (M × M') :=   { p.toAddSubmonoid.prod q₁.toAddSubmonoid with     carrier := p ×ˢ q₁     smul_mem' := by rintro a ⟨x, y⟩ ⟨hx, hy⟩; exact ⟨smul_mem _ a hx, smul_mem _ a hy⟩ }";
+    }
+    {
+      full_name = "Submodule.prod_coe";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 344;
+      code_preview = "@[simp] theorem prod_coe : (prod p q₁ : Set (M × M')) = (p : Set M) ×ˢ (q₁ : Set M')";
+    }
+    {
+      full_name = "Submodule.mem_prod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 348;
+      code_preview = "@[simp] theorem mem_prod {p : Submodule R M} {q : Submodule R M'} {x : M × M'} :     x ∈ prod p q ↔ x.1 ∈ p ∧ x.2 ∈ q";
+    }
+    {
+      full_name = "Submodule.span_prod_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 353;
+      code_preview = "theorem span_prod_le (s : Set M) (t : Set M') : span R (s ×ˢ t) ≤ prod (span R s) (span R t)";
+    }
+    {
+      full_name = "Submodule.prod_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 356;
+      code_preview = "@[simp] theorem prod_top : (prod ⊤ ⊤ : Submodule R (M × M')) = ⊤";
+    }
+    {
+      full_name = "Submodule.prod_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 359;
+      code_preview = "@[simp] theorem prod_bot : (prod ⊥ ⊥ : Submodule R (M × M')) = ⊥";
+    }
+    {
+      full_name = "Submodule.prod_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 362;
+      code_preview = "theorem prod_mono {p p' : Submodule R M} {q q' : Submodule R M'} :     p ≤ p' → q ≤ q' → prod p q ≤ prod p' q'";
+    }
+    {
+      full_name = "Submodule.prod_inf_prod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 366;
+      code_preview = "@[simp] theorem prod_inf_prod : prod p q₁ ⊓ prod p' q₁' = prod (p ⊓ p') (q₁ ⊓ q₁')";
+    }
+    {
+      full_name = "Submodule.prod_sup_prod";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 370;
+      code_preview = "@[simp] theorem prod_sup_prod : prod p q₁ ⊔ prod p' q₁' = prod (p ⊔ p') (q₁ ⊔ q₁')";
+    }
+    {
+      full_name = "LinearMap.BilinMap.apply_apply_mem_of_mem_span";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 379;
+      code_preview = "lemma _root_.LinearMap.BilinMap.apply_apply_mem_of_mem_span {R M N P : Type*} [CommSemiring R]     [AddCommMonoid M] [AddCommMonoid N] [AddCommMonoid P] [Module R M] [Module R N] [Module R P]     (P' : Submodule R P) (s : Set M) (t : Set N)     (B : M →ₗ[R] N →ₗ[R] P) (hB : ∀ x ∈ s, ∀ y ∈ t, B x y ∈";
+    }
+    {
+      full_name = "Submodule.biSup_comap_subtype_eq_top";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 396;
+      code_preview = "@[simp] lemma biSup_comap_subtype_eq_top {ι : Type*} (s : Set ι) (p : ι → Submodule R M) :     ⨆ i ∈ s, (p i).comap (⨆ i ∈ s, p i).subtype = ⊤ := by   refine eq_top_iff.mpr fun ⟨x, hx⟩ _ ↦ ?_   suffices x ∈ (⨆ i ∈ s, (p i).comap (⨆ i ∈ s, p i).subtype).map (⨆ i ∈ s, (p i)).subtype by     obtain ⟨y, ";
+    }
+    {
+      full_name = "LinearMap.exists_ne_zero_of_sSup_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 409;
+      code_preview = "theorem _root_.LinearMap.exists_ne_zero_of_sSup_eq {N : Submodule R M} {f : N →ₛₗ[σ₁₂] M₂}     (h : f ≠ 0) (s : Set (Submodule R M)) (hs : sSup s = N):     ∃ m, ∃ h : m ∈ s, f ∘ₛₗ inclusion ((le_sSup h).trans_eq hs) ≠ 0";
+    }
+    {
+      full_name = "Submodule.span_neg";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 422;
+      code_preview = "@[simp] theorem span_neg (s : Set M) : span R (-s) = span R s";
+    }
+    {
+      full_name = "Submodule.isCompl_comap_subtype_of_isCompl_of_le";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 438;
+      code_preview = "lemma isCompl_comap_subtype_of_isCompl_of_le {p q r : Submodule R M}     (h₁ : IsCompl q r) (h₂ : q ≤ p) :     IsCompl (q.comap p.subtype) (r.comap p.subtype) := by   simpa [p.mapIic.isCompl_iff, Iic.isCompl_iff] using Iic.isCompl_inf_inf_of_isCompl_of_le h₁ h₂";
+    }
+    {
+      full_name = "Submodule.comap_map_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 452;
+      code_preview = "theorem comap_map_eq (f : F) (p : Submodule R M) : comap f (map f p) = p ⊔ LinearMap.ker f";
+    }
+    {
+      full_name = "Submodule.comap_map_eq_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Span/Basic.lean";
+      start_line = 457;
+      code_preview = "theorem comap_map_eq_self {f : F} {p : Submodule R M} (h : LinearMap.ker f ≤ p) :     comap f (map f p) = p";
+    }
+    {
+      full_name = "TensorProduct.Eqv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 62;
+      code_preview = "inductive Eqv : FreeAddMonoid (M × N) → FreeAddMonoid (M × N) → Prop   | of_zero_left : ∀ n : N, Eqv (.of (0, n)) 0   | of_zero_right : ∀ m : M, Eqv (.of (m, 0)) 0   | of_add_left : ∀ (m₁ m₂ : M) (n : N), Eqv (.of (m₁, n) + .of (m₂, n)) (.of (m₁ + m₂, n))   | of_add_right : ∀ (m : M) (n₁ n₂ : N), Eq";
+    }
+    {
+      full_name = "TensorProduct";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 77;
+      code_preview = "def TensorProduct : Type _ :=   (addConGen (TensorProduct.Eqv R M N)).Quotient";
+    }
+    {
+      full_name = "TensorProduct.zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 91;
+      code_preview = "protected instance zero : Zero (M ⊗[R] N) :=   (addConGen (TensorProduct.Eqv R M N)).zero";
+    }
+    {
+      full_name = "TensorProduct.add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 94;
+      code_preview = "protected instance add : Add (M ⊗[R] N) :=   (addConGen (TensorProduct.Eqv R M N)).hasAdd";
+    }
+    {
+      full_name = "TensorProduct.addZeroClass";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 97;
+      code_preview = "instance addZeroClass : AddZeroClass (M ⊗[R] N) :=   { (addConGen (TensorProduct.Eqv R M N)).addMonoid with          toAdd := TensorProduct.add _ _     toZero := TensorProduct.zero _ _ }";
+    }
+    {
+      full_name = "TensorProduct.addSemigroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 105;
+      code_preview = "instance addSemigroup : AddSemigroup (M ⊗[R] N) :=   { (addConGen (TensorProduct.Eqv R M N)).addMonoid with     toAdd := TensorProduct.add _ _ }";
+    }
+    {
+      full_name = "TensorProduct.addCommSemigroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 109;
+      code_preview = "instance addCommSemigroup : AddCommSemigroup (M ⊗[R] N) :=   { (addConGen (TensorProduct.Eqv R M N)).addMonoid with     toAddSemigroup := TensorProduct.addSemigroup _ _     add_comm := fun x y =>       AddCon.induction_on₂ x y fun _ _ =>         Quotient.sound' <| AddConGen.Rel.of _ _ <| Eqv.add_com";
+    }
+    {
+      full_name = "TensorProduct.tmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 122;
+      code_preview = "def tmul (m : M) (n : N) : M ⊗[R] N :=   AddCon.mk' _ <| FreeAddMonoid.of (m, n)";
+    }
+    {
+      full_name = "TensorProduct.induction_on";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 133;
+      code_preview = "@[elab_as_elim, induction_eliminator] protected theorem induction_on {motive : M ⊗[R] N → Prop} (z : M ⊗[R] N)     (zero : motive 0)     (tmul : ∀ x y, motive <| x ⊗ₜ[R] y)     (add : ∀ x y, motive x → motive y → motive (x + y)) : motive z";
+    }
+    {
+      full_name = "TensorProduct.liftAddHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 143;
+      code_preview = "def liftAddHom (f : M →+ N →+ P)     (hf : ∀ (r : R) (m : M) (n : N), f (r • m) n = f m (r • n)) :     M ⊗[R] N →+ P :=   (addConGen (TensorProduct.Eqv R M N)).lift (FreeAddMonoid.lift (fun mn : M × N => f mn.1 mn.2)) <|     AddCon.addConGen_le fun x y hxy =>       match x, y, hxy with       | _, _,";
+    }
+    {
+      full_name = "TensorProduct.liftAddHom_tmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 173;
+      code_preview = "@[simp] theorem liftAddHom_tmul (f : M →+ N →+ P)     (hf : ∀ (r : R) (m : M) (n : N), f (r • m) n = f m (r • n)) (m : M) (n : N) :     liftAddHom f hf (m ⊗ₜ n) = f m n";
+    }
+    {
+      full_name = "TensorProduct.zero_tmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 180;
+      code_preview = "@[simp] theorem zero_tmul (n : N) : (0 : M) ⊗ₜ[R] n = 0";
+    }
+    {
+      full_name = "TensorProduct.add_tmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 184;
+      code_preview = "theorem add_tmul (m₁ m₂ : M) (n : N) : (m₁ + m₂) ⊗ₜ n = m₁ ⊗ₜ n + m₂ ⊗ₜ[R] n";
+    }
+    {
+      full_name = "TensorProduct.tmul_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 188;
+      code_preview = "@[simp] theorem tmul_zero (m : M) : m ⊗ₜ[R] (0 : N) = 0";
+    }
+    {
+      full_name = "TensorProduct.tmul_add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 192;
+      code_preview = "theorem tmul_add (m : M) (n₁ n₂ : N) : m ⊗ₜ (n₁ + n₂) = m ⊗ₜ n₁ + m ⊗ₜ[R] n₂";
+    }
+    {
+      full_name = "TensorProduct.uniqueLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 195;
+      code_preview = "instance uniqueLeft [Subsingleton M] : Unique (M ⊗[R] N) where   default := 0   uniq z := z.induction_on rfl (fun x y ↦ by rw [Subsingleton.elim x 0, zero_tmul]) <| by     rintro _ _ rfl rfl; apply add_zero";
+    }
+    {
+      full_name = "TensorProduct.uniqueRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 200;
+      code_preview = "instance uniqueRight [Subsingleton N] : Unique (M ⊗[R] N) where   default := 0   uniq z := z.induction_on rfl (fun x y ↦ by rw [Subsingleton.elim y 0, tmul_zero]) <| by     rintro _ _ rfl rfl; apply add_zero";
+    }
+    {
+      full_name = "TensorProduct.CompatibleSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 209;
+      code_preview = "class CompatibleSMul [DistribMulAction R' N] : Prop where   smul_tmul : ∀ (r : R') (m : M) (n : N), (r • m) ⊗ₜ n = m ⊗ₜ[R] (r • n)";
+    }
+    {
+      full_name = "TensorProduct.CompatibleSMul.isScalarTower";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 224;
+      code_preview = "instance (priority := 100) CompatibleSMul.isScalarTower [SMul R' R] [IsScalarTower R' R M]     [DistribMulAction R' N] [IsScalarTower R' R N] : CompatibleSMul R R' M N :=   ⟨fun r m n => by     conv_lhs => rw [← one_smul R m]     conv_rhs => rw [← one_smul R n]     rw [← smul_assoc, ← smul_assoc]   ";
+    }
+    {
+      full_name = "TensorProduct.smul_tmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 234;
+      code_preview = "theorem smul_tmul [DistribMulAction R' N] [CompatibleSMul R R' M N] (r : R') (m : M) (n : N) :     (r • m) ⊗ₜ n = m ⊗ₜ[R] (r • n)";
+    }
+    {
+      full_name = "TensorProduct.addMonoidWithWrongNSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 239;
+      code_preview = "private def addMonoidWithWrongNSMul : AddMonoid (M ⊗[R] N) :=   { (addConGen (TensorProduct.Eqv R M N)).addMonoid with }";
+    }
+    {
+      full_name = "TensorProduct.SMul.aux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 243;
+      code_preview = "def SMul.aux {R' : Type*} [SMul R' M] (r : R') : FreeAddMonoid (M × N) →+ M ⊗[R] N :=   FreeAddMonoid.lift fun p : M × N => (r • p.1) ⊗ₜ p.2";
+    }
+    {
+      full_name = "TensorProduct.SMul.aux_of";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 247;
+      code_preview = "theorem SMul.aux_of {R' : Type*} [SMul R' M] (r : R') (m : M) (n : N) :     SMul.aux r (.of (m, n)) = (r • m) ⊗ₜ[R] n";
+    }
+    {
+      full_name = "TensorProduct.leftHasSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 253;
+      code_preview = "instance leftHasSMul : SMul R' (M ⊗[R] N) :=   ⟨fun r =>     (addConGen (TensorProduct.Eqv R M N)).lift (SMul.aux r : _ →+ M ⊗[R] N) <|       AddCon.addConGen_le fun x y hxy =>         match x, y, hxy with         | _, _, .of_zero_left n =>           (AddCon.ker_rel _).2 <| by simp_rw [map_zero, SMu";
+    }
+    {
+      full_name = "TensorProduct.smul_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 286;
+      code_preview = "protected theorem smul_zero (r : R') : r • (0 : M ⊗[R] N) = 0";
+    }
+    {
+      full_name = "TensorProduct.smul_add";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 289;
+      code_preview = "protected theorem smul_add (r : R') (x y : M ⊗[R] N) : r • (x + y) = r • x + r • y";
+    }
+    {
+      full_name = "TensorProduct.zero_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 292;
+      code_preview = "protected theorem zero_smul (x : M ⊗[R] N) : (0 : R'') • x = 0";
+    }
+    {
+      full_name = "TensorProduct.one_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 298;
+      code_preview = "protected theorem one_smul (x : M ⊗[R] N) : (1 : R') • x = x";
+    }
+    {
+      full_name = "TensorProduct.add_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 304;
+      code_preview = "protected theorem add_smul (r s : R'') (x : M ⊗[R] N) : (r + s) • x = r • x + s • x";
+    }
+    {
+      full_name = "TensorProduct.addMonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 311;
+      code_preview = "instance addMonoid : AddMonoid (M ⊗[R] N) :=   { TensorProduct.addZeroClass _ _ with     toAddSemigroup := TensorProduct.addSemigroup _ _     toZero := TensorProduct.zero _ _     nsmul := fun n v => n • v     nsmul_zero := by simp [TensorProduct.zero_smul]     nsmul_succ := by simp only [TensorProdu";
+    }
+    {
+      full_name = "TensorProduct.addCommMonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 320;
+      code_preview = "instance addCommMonoid : AddCommMonoid (M ⊗[R] N) :=   { TensorProduct.addCommSemigroup _ _ with     toAddMonoid := TensorProduct.addMonoid }";
+    }
+    {
+      full_name = "TensorProduct.leftDistribMulAction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 324;
+      code_preview = "instance leftDistribMulAction : DistribMulAction R' (M ⊗[R] N) :=   have : ∀ (r : R') (m : M) (n : N), r • m ⊗ₜ[R] n = (r • m) ⊗ₜ n := fun _ _ _ => rfl   { smul_add := fun r x y => TensorProduct.smul_add r x y     mul_smul := fun r s x =>       x.induction_on (by simp_rw [TensorProduct.smul_zero])  ";
+    }
+    {
+      full_name = "TensorProduct.smul_tmul'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 338;
+      code_preview = "theorem smul_tmul' (r : R') (m : M) (n : N) : r • m ⊗ₜ[R] n = (r • m) ⊗ₜ n";
+    }
+    {
+      full_name = "TensorProduct.tmul_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 341;
+      code_preview = "@[simp] theorem tmul_smul [DistribMulAction R' N] [CompatibleSMul R R' M N] (r : R') (x : M) (y : N) :     x ⊗ₜ (r • y) = r • x ⊗ₜ[R] y";
+    }
+    {
+      full_name = "TensorProduct.smul_tmul_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 346;
+      code_preview = "theorem smul_tmul_smul (r s : R) (m : M) (n : N) : (r • m) ⊗ₜ[R] (s • n) = (r * s) • m ⊗ₜ[R] n";
+    }
+    {
+      full_name = "TensorProduct.leftModule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 349;
+      code_preview = "instance leftModule : Module R'' (M ⊗[R] N) :=   { add_smul := TensorProduct.add_smul     zero_smul := TensorProduct.zero_smul }";
+    }
+    {
+      full_name = "TensorProduct.smulCommClass_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 368;
+      code_preview = "instance smulCommClass_left [SMulCommClass R' R'₂ M] : SMulCommClass R' R'₂ (M ⊗[R] N) where   smul_comm r' r'₂ x :=     TensorProduct.induction_on x (by simp_rw [TensorProduct.smul_zero])       (fun m n => by simp_rw [smul_tmul', smul_comm]) fun x y ihx ihy => by       simp_rw [TensorProduct.smul_a";
+    }
+    {
+      full_name = "TensorProduct.isScalarTower_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 377;
+      code_preview = "instance isScalarTower_left [IsScalarTower R'₂ R' M] : IsScalarTower R'₂ R' (M ⊗[R] N) :=   ⟨fun s r x =>     x.induction_on (by simp)       (fun m n => by rw [smul_tmul', smul_tmul', smul_tmul', smul_assoc]) fun x y ihx ihy => by       rw [smul_add, smul_add, smul_add, ihx, ihy]⟩";
+    }
+    {
+      full_name = "TensorProduct.isScalarTower_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 387;
+      code_preview = "instance isScalarTower_right [IsScalarTower R'₂ R' N] : IsScalarTower R'₂ R' (M ⊗[R] N) :=   ⟨fun s r x =>     x.induction_on (by simp)       (fun m n => by rw [← tmul_smul, ← tmul_smul, ← tmul_smul, smul_assoc]) fun x y ihx ihy => by       rw [smul_add, smul_add, smul_add, ihx, ihy]⟩";
+    }
+    {
+      full_name = "TensorProduct.isScalarTower";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 396;
+      code_preview = "instance isScalarTower [SMul R' R] [IsScalarTower R' R M] : IsScalarTower R' R (M ⊗[R] N) :=   TensorProduct.isScalarTower_left";
+    }
+    {
+      full_name = "TensorProduct.mk";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 403;
+      code_preview = "def mk : M →ₗ[R] N →ₗ[R] M ⊗[R] N :=   LinearMap.mk₂ R (· ⊗ₜ ·) add_tmul (fun c m n => by simp_rw [smul_tmul, tmul_smul])     tmul_add tmul_smul";
+    }
+    {
+      full_name = "TensorProduct.mk_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 408;
+      code_preview = "@[simp] theorem mk_apply (m : M) (n : N) : mk R M N m n = m ⊗ₜ n";
+    }
+    {
+      full_name = "TensorProduct.ite_tmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 412;
+      code_preview = "theorem ite_tmul (x₁ : M) (x₂ : N) (P : Prop) [Decidable P] :     (if P then x₁ else 0) ⊗ₜ[R] x₂ = if P then x₁ ⊗ₜ x₂ else 0";
+    }
+    {
+      full_name = "TensorProduct.tmul_ite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 415;
+      code_preview = "theorem tmul_ite (x₁ : M) (x₂ : N) (P : Prop) [Decidable P] :     (x₁ ⊗ₜ[R] if P then x₂ else 0) = if P then x₁ ⊗ₜ x₂ else 0";
+    }
+    {
+      full_name = "TensorProduct.tmul_single";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 418;
+      code_preview = "lemma tmul_single {ι : Type*} [DecidableEq ι] {M : ι → Type*} [∀ i, AddCommMonoid (M i)]     [∀ i, Module R (M i)] (i : ι) (x : N) (m : M i) (j : ι) :     x ⊗ₜ[R] Pi.single i m j = (Pi.single i (x ⊗ₜ[R] m) : ∀ i, N ⊗[R] M i) j := by   by_cases h : i = j <;> aesop";
+    }
+    {
+      full_name = "TensorProduct.single_tmul";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 423;
+      code_preview = "lemma single_tmul {ι : Type*} [DecidableEq ι] {M : ι → Type*} [∀ i, AddCommMonoid (M i)]     [∀ i, Module R (M i)] (i : ι) (x : N) (m : M i) (j : ι) :     Pi.single i m j ⊗ₜ[R] x = (Pi.single i (m ⊗ₜ[R] x) : ∀ i, M i ⊗[R] N) j := by   by_cases h : i = j <;> aesop";
+    }
+    {
+      full_name = "TensorProduct.sum_tmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 430;
+      code_preview = "theorem sum_tmul {α : Type*} (s : Finset α) (m : α → M) (n : N) :     (∑ a ∈ s, m a) ⊗ₜ[R] n = ∑ a ∈ s, m a ⊗ₜ[R] n";
+    }
+    {
+      full_name = "TensorProduct.tmul_sum";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 437;
+      code_preview = "theorem tmul_sum (m : M) {α : Type*} (s : Finset α) (n : α → N) :     (m ⊗ₜ[R] ∑ a ∈ s, n a) = ∑ a ∈ s, m ⊗ₜ[R] n a";
+    }
+    {
+      full_name = "TensorProduct.span_tmul_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 448;
+      code_preview = "theorem span_tmul_eq_top : Submodule.span R { t : M ⊗[R] N | ∃ m n, m ⊗ₜ n = t } = ⊤";
+    }
+    {
+      full_name = "TensorProduct.map₂_mk_top_top_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/TensorProduct/Basic.lean";
+      start_line = 459;
+      code_preview = "@[simp] theorem map₂_mk_top_top_eq_top : Submodule.map₂ (mk R M N) ⊤ ⊤ = ⊤";
+    }
+    {
+      full_name = "rank_le_card";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 67;
+      code_preview = "theorem rank_le_card : Module.rank R M ≤ #M";
+    }
+    {
+      full_name = "nonempty_linearIndependent_set";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 70;
+      code_preview = "lemma nonempty_linearIndependent_set : Nonempty {s : Set M // LinearIndepOn R id s } :=   ⟨⟨∅, linearIndepOn_empty _ _⟩⟩";
+    }
+    {
+      full_name = "LinearIndependent.cardinal_lift_le_rank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 80;
+      code_preview = "theorem cardinal_lift_le_rank {ι : Type w} {v : ι → M}     (hv : LinearIndependent R v) :     Cardinal.lift.{v} #ι ≤ Cardinal.lift.{w} (Module.rank R M)";
+    }
+    {
+      full_name = "LinearIndependent.aleph0_le_rank";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 87;
+      code_preview = "lemma aleph0_le_rank {ι : Type w} [Infinite ι] {v : ι → M}     (hv : LinearIndependent R v) : ℵ₀ ≤ Module.rank R M :=   aleph0_le_lift.mp <| (aleph0_le_lift.mpr <| aleph0_le_mk ι).trans hv.cardinal_lift_le_rank";
+    }
+    {
+      full_name = "LinearIndependent.cardinal_le_rank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 91;
+      code_preview = "theorem cardinal_le_rank {ι : Type v} {v : ι → M}     (hv : LinearIndependent R v) : #ι ≤ Module.rank R M";
+    }
+    {
+      full_name = "LinearIndependent.cardinal_le_rank'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 95;
+      code_preview = "theorem cardinal_le_rank' {s : Set M}     (hs : LinearIndependent R (fun x => x : s → M)) : #s ≤ Module.rank R M";
+    }
+    {
+      full_name = "LinearIndepOn.encard_le_toENat_rank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 99;
+      code_preview = "theorem _root_.LinearIndepOn.encard_le_toENat_rank {ι : Type*} {v : ι → M} {s : Set ι}     (hs : LinearIndepOn R v s) : s.encard ≤ (Module.rank R M).toENat";
+    }
+    {
+      full_name = "lift_rank_le_of_injective_injectiveₛ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 113;
+      code_preview = "theorem lift_rank_le_of_injective_injectiveₛ (i : R' → R) (j : M →+ M')     (hi : Injective i) (hj : Injective j)     (hc : ∀ (r : R') (m : M), j (i r • m) = r • j m) :     lift.{v'} (Module.rank R M) ≤ lift.{v} (Module.rank R' M')";
+    }
+    {
+      full_name = "lift_rank_le_of_surjective_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 127;
+      code_preview = "theorem lift_rank_le_of_surjective_injective (i : R → R') (j : M →+ M')     (hi : Surjective i) (hj : Injective j) (hc : ∀ (r : R) (m : M), j (r • m) = i r • j m) :     lift.{v'} (Module.rank R M) ≤ lift.{v} (Module.rank R' M')";
+    }
+    {
+      full_name = "lift_rank_eq_of_equiv_equiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 140;
+      code_preview = "theorem lift_rank_eq_of_equiv_equiv (i : R → R') (j : M ≃+ M')     (hi : Bijective i) (hc : ∀ (r : R) (m : M), j (r • m) = i r • j m) :     lift.{v'} (Module.rank R M) = lift.{v} (Module.rank R' M')";
+    }
+    {
+      full_name = "rank_le_of_injective_injectiveₛ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 155;
+      code_preview = "theorem rank_le_of_injective_injectiveₛ (i : R' → R) (j : M →+ M₁)     (hi : Injective i) (hj : Injective j)     (hc : ∀ (r : R') (m : M), j (i r • m) = r • j m) :     Module.rank R M ≤ Module.rank R' M₁";
+    }
+    {
+      full_name = "rank_le_of_surjective_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 162;
+      code_preview = "theorem rank_le_of_surjective_injective (i : R → R') (j : M →+ M₁)     (hi : Surjective i) (hj : Injective j)     (hc : ∀ (r : R) (m : M), j (r • m) = i r • j m) :     Module.rank R M ≤ Module.rank R' M₁";
+    }
+    {
+      full_name = "rank_eq_of_equiv_equiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 169;
+      code_preview = "theorem rank_eq_of_equiv_equiv (i : R → R') (j : M ≃+ M₁)     (hi : Bijective i) (hc : ∀ (r : R) (m : M), j (r • m) = i r • j m) :     Module.rank R M = Module.rank R' M₁";
+    }
+    {
+      full_name = "lift_rank_le_of_injective_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 181;
+      code_preview = "theorem lift_rank_le_of_injective_injective [AddCommGroup M'] [Module R' M']     (i : R' → R) (j : M →+ M') (hi : ∀ r, i r = 0 → r = 0) (hj : Injective j)     (hc : ∀ (r : R') (m : M), j (i r • m) = r • j m) :     lift.{v'} (Module.rank R M) ≤ lift.{v} (Module.rank R' M')";
+    }
+    {
+      full_name = "rank_le_of_injective_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 196;
+      code_preview = "theorem rank_le_of_injective_injective [AddCommGroup M₁] [Module R' M₁]     (i : R' → R) (j : M →+ M₁) (hi : ∀ r, i r = 0 → r = 0) (hj : Injective j)     (hc : ∀ (r : R') (m : M), j (i r • m) = r • j m) :     Module.rank R M ≤ Module.rank R' M₁";
+    }
+    {
+      full_name = "Algebra.lift_rank_le_of_injective_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 210;
+      code_preview = "theorem lift_rank_le_of_injective_injective     (i : R' →+* R) (j : S →+* S') (hi : Injective i) (hj : Injective j)     (hc : (j.comp (algebraMap R S)).comp i = algebraMap R' S') :     lift.{v'} (Module.rank R S) ≤ lift.{v} (Module.rank R' S')";
+    }
+    {
+      full_name = "Algebra.lift_rank_le_of_surjective_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 222;
+      code_preview = "theorem lift_rank_le_of_surjective_injective     (i : R →+* R') (j : S →+* S') (hi : Surjective i) (hj : Injective j)     (hc : (algebraMap R' S').comp i = j.comp (algebraMap R S)) :     lift.{v'} (Module.rank R S) ≤ lift.{v} (Module.rank R' S')";
+    }
+    {
+      full_name = "Algebra.lift_rank_eq_of_equiv_equiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 234;
+      code_preview = "theorem lift_rank_eq_of_equiv_equiv (i : R ≃+* R') (j : S ≃+* S')     (hc : (algebraMap R' S').comp i.toRingHom = j.toRingHom.comp (algebraMap R S)) :     lift.{v'} (Module.rank R S) = lift.{v} (Module.rank R' S')";
+    }
+    {
+      full_name = "Algebra.rank_le_of_injective_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 247;
+      code_preview = "theorem rank_le_of_injective_injective     (i : R' →+* R) (j : S →+* S') (hi : Injective i) (hj : Injective j)     (hc : (j.comp (algebraMap R S)).comp i = algebraMap R' S') :     Module.rank R S ≤ Module.rank R' S'";
+    }
+    {
+      full_name = "Algebra.rank_le_of_surjective_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 254;
+      code_preview = "theorem rank_le_of_surjective_injective     (i : R →+* R') (j : S →+* S') (hi : Surjective i) (hj : Injective j)     (hc : (algebraMap R' S').comp i = j.comp (algebraMap R S)) :     Module.rank R S ≤ Module.rank R' S'";
+    }
+    {
+      full_name = "Algebra.rank_eq_of_equiv_equiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 261;
+      code_preview = "theorem rank_eq_of_equiv_equiv (i : R ≃+* R') (j : S ≃+* S')     (hc : (algebraMap R' S').comp i.toRingHom = j.toRingHom.comp (algebraMap R S)) :     Module.rank R S = Module.rank R' S'";
+    }
+    {
+      full_name = "LinearMap.lift_rank_le_of_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 277;
+      code_preview = "theorem LinearMap.lift_rank_le_of_injective (f : M →ₗ[R] M') (i : Injective f) :     Cardinal.lift.{v'} (Module.rank R M) ≤ Cardinal.lift.{v} (Module.rank R M')";
+    }
+    {
+      full_name = "LinearMap.rank_le_of_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 281;
+      code_preview = "theorem LinearMap.rank_le_of_injective (f : M →ₗ[R] M₁) (i : Injective f) :     Module.rank R M ≤ Module.rank R M₁";
+    }
+    {
+      full_name = "lift_rank_range_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 285;
+      code_preview = "theorem lift_rank_range_le (f : M →ₗ[R] M') : Cardinal.lift.{v}     (Module.rank R (LinearMap.range f)) ≤ Cardinal.lift.{v'} (Module.rank R M)";
+    }
+    {
+      full_name = "rank_range_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 302;
+      code_preview = "theorem rank_range_le (f : M →ₗ[R] M₁) : Module.rank R (LinearMap.range f) ≤ Module.rank R M";
+    }
+    {
+      full_name = "lift_rank_map_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 305;
+      code_preview = "theorem lift_rank_map_le (f : M →ₗ[R] M') (p : Submodule R M) :     Cardinal.lift.{v} (Module.rank R (p.map f)) ≤ Cardinal.lift.{v'} (Module.rank R p)";
+    }
+    {
+      full_name = "rank_map_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 310;
+      code_preview = "theorem rank_map_le (f : M →ₗ[R] M₁) (p : Submodule R M) :     Module.rank R (p.map f) ≤ Module.rank R p";
+    }
+    {
+      full_name = "Submodule.rank_mono";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 313;
+      code_preview = "lemma Submodule.rank_mono {s t : Submodule R M} (h : s ≤ t) : Module.rank R s ≤ Module.rank R t :=   (Submodule.inclusion h).rank_le_of_injective fun ⟨x, _⟩ ⟨y, _⟩ eq =>     Subtype.eq <| show x = y from Subtype.ext_iff_val.1 eq";
+    }
+    {
+      full_name = "LinearEquiv.lift_rank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 317;
+      code_preview = "theorem LinearEquiv.lift_rank_eq (f : M ≃ₗ[R] M') :     Cardinal.lift.{v'} (Module.rank R M) = Cardinal.lift.{v} (Module.rank R M')";
+    }
+    {
+      full_name = "LinearEquiv.rank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 325;
+      code_preview = "theorem LinearEquiv.rank_eq (f : M ≃ₗ[R] M₁) : Module.rank R M = Module.rank R M₁";
+    }
+    {
+      full_name = "lift_rank_range_of_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 329;
+      code_preview = "theorem lift_rank_range_of_injective (f : M →ₗ[R] M') (h : Injective f) :     lift.{v} (Module.rank R (LinearMap.range f)) = lift.{v'} (Module.rank R M)";
+    }
+    {
+      full_name = "rank_range_of_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 333;
+      code_preview = "theorem rank_range_of_injective (f : M →ₗ[R] M₁) (h : Injective f) :     Module.rank R (LinearMap.range f) = Module.rank R M";
+    }
+    {
+      full_name = "LinearEquiv.lift_rank_map_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 337;
+      code_preview = "theorem LinearEquiv.lift_rank_map_eq (f : M ≃ₗ[R] M') (p : Submodule R M) :     lift.{v} (Module.rank R (p.map (f : M →ₗ[R] M'))) = lift.{v'} (Module.rank R p)";
+    }
+    {
+      full_name = "LinearEquiv.rank_map_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 341;
+      code_preview = "theorem LinearEquiv.rank_map_eq (f : M ≃ₗ[R] M₁) (p : Submodule R M) :     Module.rank R (p.map (f : M →ₗ[R] M₁)) = Module.rank R p";
+    }
+    {
+      full_name = "rank_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 348;
+      code_preview = "@[simp] theorem rank_top : Module.rank R (⊤ : Submodule R M) = Module.rank R M";
+    }
+    {
+      full_name = "rank_range_of_surjective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 354;
+      code_preview = "theorem rank_range_of_surjective (f : M →ₗ[R] M') (h : Surjective f) :     Module.rank R (LinearMap.range f) = Module.rank R M'";
+    }
+    {
+      full_name = "Submodule.rank_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 358;
+      code_preview = "theorem Submodule.rank_le (s : Submodule R M) : Module.rank R s ≤ Module.rank R M";
+    }
+    {
+      full_name = "LinearMap.lift_rank_le_of_surjective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 362;
+      code_preview = "theorem LinearMap.lift_rank_le_of_surjective (f : M →ₗ[R] M') (h : Surjective f) :     lift.{v} (Module.rank R M') ≤ lift.{v'} (Module.rank R M)";
+    }
+    {
+      full_name = "LinearMap.rank_le_of_surjective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 367;
+      code_preview = "theorem LinearMap.rank_le_of_surjective (f : M →ₗ[R] M₁) (h : Surjective f) :     Module.rank R M₁ ≤ Module.rank R M";
+    }
+    {
+      full_name = "rank_subsingleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 372;
+      code_preview = "@[nontriviality, simp] theorem rank_subsingleton [Subsingleton R] : Module.rank R M = 1";
+    }
+    {
+      full_name = "rank_le_of_isSMulRegular";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Basic.lean";
+      start_line = 383;
+      code_preview = "lemma rank_le_of_isSMulRegular {S : Type*} [CommSemiring S] [Algebra S R] [Module S M]     [IsScalarTower S R M] (L L' : Submodule R M) {s : S} (hr : IsSMulRegular M s)     (h : ∀ x ∈ L, s • x ∈ L') :     Module.rank R L ≤ Module.rank R L' :=   ((Algebra.lsmul S R M s).restrict h).rank_le_of_injecti";
+    }
+    {
+      full_name = "lift_rank_mul_lift_rank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 36;
+      code_preview = "theorem lift_rank_mul_lift_rank :     Cardinal.lift.{w} (Module.rank F K) * Cardinal.lift.{v} (Module.rank K A) =       Cardinal.lift.{v} (Module.rank F A)";
+    }
+    {
+      full_name = "rank_mul_rank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 49;
+      code_preview = "@[stacks 09G9] theorem rank_mul_rank (A : Type v) [AddCommMonoid A]     [Module K A] [Module F A] [IsScalarTower F K A] [Module.Free K A] :     Module.rank F K * Module.rank K A = Module.rank F A";
+    }
+    {
+      full_name = "Module.finrank_mul_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 59;
+      code_preview = "theorem Module.finrank_mul_finrank : finrank F K * finrank K A = finrank F A";
+    }
+    {
+      full_name = "Module.Free.rank_eq_card_chooseBasisIndex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 78;
+      code_preview = "theorem rank_eq_card_chooseBasisIndex : Module.rank R M = #(ChooseBasisIndex R M)";
+    }
+    {
+      full_name = "Module.finrank_eq_card_chooseBasisIndex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 82;
+      code_preview = "theorem _root_.Module.finrank_eq_card_chooseBasisIndex [Module.Finite R M] :     finrank R M = Fintype.card (ChooseBasisIndex R M)";
+    }
+    {
+      full_name = "Module.Free.rank_eq_mk_of_infinite_lt";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 87;
+      code_preview = "lemma rank_eq_mk_of_infinite_lt [Infinite R] (h_lt : lift.{v} #R < lift.{u} #M) :     Module.rank R M = #M := by   have : Infinite M := infinite_iff.mpr <| lift_le.mp <| le_trans (by simp) h_lt.le   have h : lift #M = lift #(ChooseBasisIndex R M →₀ R) := lift_mk_eq'.mpr ⟨(chooseBasis R M).repr⟩   si";
+    }
+    {
+      full_name = "nonempty_linearEquiv_of_lift_rank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 104;
+      code_preview = "theorem nonempty_linearEquiv_of_lift_rank_eq     (cnd : Cardinal.lift.{v'} (Module.rank R M) = Cardinal.lift.{v} (Module.rank R M')) :     Nonempty (M ≃ₗ[R] M')";
+    }
+    {
+      full_name = "nonempty_linearEquiv_of_rank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 114;
+      code_preview = "theorem nonempty_linearEquiv_of_rank_eq (cond : Module.rank R M = Module.rank R M₁) :     Nonempty (M ≃ₗ[R] M₁)";
+    }
+    {
+      full_name = "LinearEquiv.ofLiftRankEq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 123;
+      code_preview = "def LinearEquiv.ofLiftRankEq     (cond : Cardinal.lift.{v'} (Module.rank R M) = Cardinal.lift.{v} (Module.rank R M')) :     M ≃ₗ[R] M' :=   Classical.choice (nonempty_linearEquiv_of_lift_rank_eq cond)";
+    }
+    {
+      full_name = "LinearEquiv.ofRankEq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 129;
+      code_preview = "def LinearEquiv.ofRankEq (cond : Module.rank R M = Module.rank R M₁) : M ≃ₗ[R] M₁ :=   Classical.choice (nonempty_linearEquiv_of_rank_eq cond)";
+    }
+    {
+      full_name = "LinearEquiv.nonempty_equiv_iff_lift_rank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 135;
+      code_preview = "theorem LinearEquiv.nonempty_equiv_iff_lift_rank_eq : Nonempty (M ≃ₗ[R] M') ↔     Cardinal.lift.{v'} (Module.rank R M) = Cardinal.lift.{v} (Module.rank R M')";
+    }
+    {
+      full_name = "LinearEquiv.nonempty_equiv_iff_rank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 140;
+      code_preview = "theorem LinearEquiv.nonempty_equiv_iff_rank_eq :     Nonempty (M ≃ₗ[R] M₁) ↔ Module.rank R M = Module.rank R M₁";
+    }
+    {
+      full_name = "FiniteDimensional.nonempty_linearEquiv_of_finrank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 145;
+      code_preview = "theorem FiniteDimensional.nonempty_linearEquiv_of_finrank_eq     [Module.Finite R M] [Module.Finite R M'] (cond : finrank R M = finrank R M') :     Nonempty (M ≃ₗ[R] M')";
+    }
+    {
+      full_name = "FiniteDimensional.nonempty_linearEquiv_iff_finrank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 151;
+      code_preview = "theorem FiniteDimensional.nonempty_linearEquiv_iff_finrank_eq [Module.Finite R M]     [Module.Finite R M'] : Nonempty (M ≃ₗ[R] M') ↔ finrank R M = finrank R M'";
+    }
+    {
+      full_name = "LinearEquiv.ofFinrankEq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 158;
+      code_preview = "noncomputable def LinearEquiv.ofFinrankEq [Module.Finite R M] [Module.Finite R M']     (cond : finrank R M = finrank R M') : M ≃ₗ[R] M' :=   Classical.choice <| FiniteDimensional.nonempty_linearEquiv_of_finrank_eq cond";
+    }
+    {
+      full_name = "Module.subsingleton_of_rank_zero";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 167;
+      code_preview = "lemma subsingleton_of_rank_zero (h : Module.rank R M = 0) : Subsingleton M := by   rw [← Basis.mk_eq_rank'' (Module.Free.chooseBasis R M), Cardinal.mk_eq_zero_iff] at h   exact (Module.Free.repr R M).subsingleton";
+    }
+    {
+      full_name = "Module.rank_lt_aleph0_iff";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 172;
+      code_preview = "lemma rank_lt_aleph0_iff : Module.rank R M < ℵ₀ ↔ Module.Finite R M := by   rw [Free.rank_eq_card_chooseBasisIndex, mk_lt_aleph0_iff]   exact ⟨fun h ↦ Finite.of_basis (Free.chooseBasis R M),     fun I ↦ Finite.of_fintype (Free.ChooseBasisIndex R M)⟩";
+    }
+    {
+      full_name = "Module.finrank_of_not_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 178;
+      code_preview = "theorem finrank_of_not_finite (h : ¬Module.Finite R M) : finrank R M = 0";
+    }
+    {
+      full_name = "Module.finite_of_finrank_pos";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 182;
+      code_preview = "theorem finite_of_finrank_pos (h : 0 < finrank R M) : Module.Finite R M";
+    }
+    {
+      full_name = "Module.finite_of_finrank_eq_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 186;
+      code_preview = "theorem finite_of_finrank_eq_succ {n : ℕ} (hn : finrank R M = n.succ) : Module.Finite R M";
+    }
+    {
+      full_name = "Module.finite_iff_of_rank_eq_nsmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 189;
+      code_preview = "theorem finite_iff_of_rank_eq_nsmul {W} [AddCommMonoid W] [Module R W] [Module.Free R W] {n : ℕ}     (hn : n ≠ 0) (hVW : Module.rank R M = n • Module.rank R W) :     Module.Finite R M ↔ Module.Finite R W";
+    }
+    {
+      full_name = "Module.finBasis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 196;
+      code_preview = "noncomputable def finBasis [Module.Finite R M] :     Basis (Fin (finrank R M)) R M :=   (Module.Free.chooseBasis R M).reindex (Fintype.equivFinOfCardEq     (finrank_eq_card_chooseBasisIndex R M).symm)";
+    }
+    {
+      full_name = "Module.finBasisOfFinrankEq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 202;
+      code_preview = "noncomputable def finBasisOfFinrankEq [Module.Finite R M] {n : ℕ} (hn : finrank R M = n) :     Basis (Fin n) R M := (finBasis R M).reindex (finCongr hn)";
+    }
+    {
+      full_name = "Module.basisUnique";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 208;
+      code_preview = "noncomputable def basisUnique (ι : Type*) [Unique ι]     (h : finrank R M = 1) :     Basis ι R M :=   haveI : Module.Finite R M :=     Module.finite_of_finrank_pos (_root_.zero_lt_one.trans_le h.symm.le)   (finBasisOfFinrankEq R M h).reindex (Equiv.ofUnique _ _)";
+    }
+    {
+      full_name = "Module.basisUnique_repr_eq_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Free.lean";
+      start_line = 216;
+      code_preview = "@[simp] theorem basisUnique_repr_eq_zero_iff {ι : Type*} [Unique ι]     {h : finrank R M = 1} {v : M} {i : ι} :     (basisUnique ι h).repr v i = 0 ↔ v = 0";
+    }
+    {
+      full_name = "linearIndependent_bounded_of_finset_linearIndependent_bounded";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 30;
+      code_preview = "theorem linearIndependent_bounded_of_finset_linearIndependent_bounded {n : ℕ}     (H : ∀ s : Finset M, (LinearIndependent R fun i : s => (i : M)) → s.card ≤ n) :     ∀ s : Set M, LinearIndependent R ((↑) : s → M) → #s ≤ n";
+    }
+    {
+      full_name = "rank_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 43;
+      code_preview = "theorem rank_le {n : ℕ}     (H : ∀ s : Finset M, (LinearIndependent R fun i : s => (i : M)) → s.card ≤ n) :     Module.rank R M ≤ n";
+    }
+    {
+      full_name = "rank_eq_zero_iff";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 53;
+      code_preview = "lemma rank_eq_zero_iff :     Module.rank R M = 0 ↔ ∀ x : M, ∃ a : R, a ≠ 0 ∧ a • x = 0 := by   nontriviality R   constructor   · contrapose!     rintro ⟨x, hx⟩     rw [← Cardinal.one_le_iff_ne_zero]     have : LinearIndependent R (fun _ : Unit ↦ x) :=       linearIndependent_iff.mpr (fun l hl ↦ Fins";
+    }
+    {
+      full_name = "rank_pos_of_free";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 75;
+      code_preview = "theorem rank_pos_of_free [Module.Free R M] [Nontrivial M] :     0 < Module.rank R M";
+    }
+    {
+      full_name = "rank_zero_iff_forall_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 86;
+      code_preview = "theorem rank_zero_iff_forall_zero :     Module.rank R M = 0 ↔ ∀ x : M, x = 0";
+    }
+    {
+      full_name = "rank_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 91;
+      code_preview = "theorem rank_zero_iff : Module.rank R M = 0 ↔ Subsingleton M";
+    }
+    {
+      full_name = "rank_pos_iff_exists_ne_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 96;
+      code_preview = "theorem rank_pos_iff_exists_ne_zero : 0 < Module.rank R M ↔ ∃ x : M, x ≠ 0";
+    }
+    {
+      full_name = "rank_pos_iff_nontrivial";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 100;
+      code_preview = "theorem rank_pos_iff_nontrivial : 0 < Module.rank R M ↔ Nontrivial M";
+    }
+    {
+      full_name = "rank_pos";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 103;
+      code_preview = "theorem rank_pos [Nontrivial M] : 0 < Module.rank R M";
+    }
+    {
+      full_name = "rank_subsingleton'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 110;
+      code_preview = "@[nontriviality] theorem rank_subsingleton' [Subsingleton M] : Module.rank R M = 0";
+    }
+    {
+      full_name = "rank_punit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 115;
+      code_preview = "@[simp] theorem rank_punit : Module.rank R PUnit = 0";
+    }
+    {
+      full_name = "rank_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 118;
+      code_preview = "@[simp] theorem rank_bot : Module.rank R (⊥ : Submodule R M) = 0";
+    }
+    {
+      full_name = "exists_mem_ne_zero_of_rank_pos";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 123;
+      code_preview = "theorem exists_mem_ne_zero_of_rank_pos {s : Submodule R M} (h : 0 < Module.rank R s) :     ∃ b : M, b ∈ s ∧ b ≠ 0";
+    }
+    {
+      full_name = "Module.finite_of_rank_eq_nat";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 131;
+      code_preview = "theorem Module.finite_of_rank_eq_nat [Module.Free R M] {n : ℕ} (h : Module.rank R M = n) :     Module.Finite R M";
+    }
+    {
+      full_name = "Module.finite_of_rank_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 139;
+      code_preview = "theorem Module.finite_of_rank_eq_zero [NoZeroSMulDivisors R M]     (h : Module.rank R M = 0) :     Module.Finite R M";
+    }
+    {
+      full_name = "Module.finite_of_rank_eq_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 146;
+      code_preview = "theorem Module.finite_of_rank_eq_one [Module.Free R M] (h : Module.rank R M = 1) :     Module.Finite R M";
+    }
+    {
+      full_name = "Basis.nonempty_fintype_index_of_rank_lt_aleph0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 153;
+      code_preview = "theorem Basis.nonempty_fintype_index_of_rank_lt_aleph0 {ι : Type*} (b : Basis ι R M)     (h : Module.rank R M < ℵ₀) : Nonempty (Fintype ι)";
+    }
+    {
+      full_name = "Basis.fintypeIndexOfRankLtAleph0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 159;
+      code_preview = "noncomputable def Basis.fintypeIndexOfRankLtAleph0 {ι : Type*} (b : Basis ι R M)     (h : Module.rank R M < ℵ₀) : Fintype ι :=   Classical.choice (b.nonempty_fintype_index_of_rank_lt_aleph0 h)";
+    }
+    {
+      full_name = "Basis.finite_index_of_rank_lt_aleph0";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 164;
+      code_preview = "theorem Basis.finite_index_of_rank_lt_aleph0 {ι : Type*} {s : Set ι} (b : Basis s R M)     (h : Module.rank R M < ℵ₀) : s.Finite";
+    }
+    {
+      full_name = "LinearIndependent.cardinalMk_le_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 174;
+      code_preview = "theorem cardinalMk_le_finrank [Module.Finite R M]     {ι : Type w} {b : ι → M} (h : LinearIndependent R b) : #ι ≤ finrank R M";
+    }
+    {
+      full_name = "LinearIndependent.fintype_card_le_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 181;
+      code_preview = "theorem fintype_card_le_finrank [Module.Finite R M]     {ι : Type*} [Fintype ι] {b : ι → M} (h : LinearIndependent R b) :     Fintype.card ι ≤ finrank R M";
+    }
+    {
+      full_name = "LinearIndependent.finset_card_le_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 186;
+      code_preview = "theorem finset_card_le_finrank [Module.Finite R M]     {b : Finset M} (h : LinearIndependent R (fun x => x : b → M)) :     b.card ≤ finrank R M";
+    }
+    {
+      full_name = "LinearIndependent.lt_aleph0_of_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 192;
+      code_preview = "theorem lt_aleph0_of_finite {ι : Type w}     [Module.Finite R M] {v : ι → M} (h : LinearIndependent R v) : #ι < ℵ₀";
+    }
+    {
+      full_name = "LinearIndependent.finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 200;
+      code_preview = "theorem finite [Module.Finite R M] {ι : Type*} {f : ι → M}     (h : LinearIndependent R f) : Finite ι";
+    }
+    {
+      full_name = "LinearIndependent.setFinite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 204;
+      code_preview = "theorem setFinite [Module.Finite R M] {b : Set M}     (h : LinearIndependent R fun x : b => (x : M)) : b.Finite";
+    }
+    {
+      full_name = "exists_set_linearIndependent_of_lt_rank";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 210;
+      code_preview = "lemma exists_set_linearIndependent_of_lt_rank {n : Cardinal} (hn : n < Module.rank R M) :     ∃ s : Set M, #s = n ∧ LinearIndepOn R id s := by   obtain ⟨⟨s, hs⟩, hs'⟩ := exists_lt_of_lt_ciSup' (hn.trans_eq (Module.rank_def R M))   obtain ⟨t, ht, ht'⟩ := le_mk_iff_exists_subset.mp hs'.le   exact ⟨t, ";
+    }
+    {
+      full_name = "exists_finset_linearIndependent_of_le_rank";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 216;
+      code_preview = "lemma exists_finset_linearIndependent_of_le_rank {n : ℕ} (hn : n ≤ Module.rank R M) :     ∃ s : Finset M, s.card = n ∧ LinearIndepOn R id (s : Set M) := by   have := nonempty_linearIndependent_set   rcases hn.eq_or_lt with h | h   · obtain ⟨⟨s, hs⟩, hs'⟩ := Cardinal.exists_eq_natCast_of_iSup_eq _   ";
+    }
+    {
+      full_name = "exists_linearIndependent_of_le_rank";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 230;
+      code_preview = "lemma exists_linearIndependent_of_le_rank {n : ℕ} (hn : n ≤ Module.rank R M) :     ∃ f : Fin n → M, LinearIndependent R f :=   have ⟨_, hs, hs'⟩ := exists_finset_linearIndependent_of_le_rank hn   ⟨_, (linearIndependent_equiv (Finset.equivFinOfCardEq hs).symm).mpr hs'⟩";
+    }
+    {
+      full_name = "natCast_le_rank_iff";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 235;
+      code_preview = "lemma natCast_le_rank_iff [Nontrivial R] {n : ℕ} :     n ≤ Module.rank R M ↔ ∃ f : Fin n → M, LinearIndependent R f :=   ⟨exists_linearIndependent_of_le_rank,     fun H ↦ by simpa using H.choose_spec.cardinal_lift_le_rank⟩";
+    }
+    {
+      full_name = "natCast_le_rank_iff_finset";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 240;
+      code_preview = "lemma natCast_le_rank_iff_finset [Nontrivial R] {n : ℕ} :     n ≤ Module.rank R M ↔ ∃ s : Finset M, s.card = n ∧ LinearIndependent R ((↑) : s → M) :=   ⟨exists_finset_linearIndependent_of_le_rank,     fun ⟨s, h₁, h₂⟩ ↦ by simpa [h₁] using h₂.cardinal_le_rank⟩";
+    }
+    {
+      full_name = "exists_finset_linearIndependent_of_le_finrank";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 245;
+      code_preview = "lemma exists_finset_linearIndependent_of_le_finrank {n : ℕ} (hn : n ≤ finrank R M) :     ∃ s : Finset M, s.card = n ∧ LinearIndependent R ((↑) : s → M) := by   by_cases h : finrank R M = 0   · rw [le_zero_iff.mp (hn.trans_eq h)]     exact ⟨∅, rfl, by convert linearIndependent_empty R M using 2 <;> a";
+    }
+    {
+      full_name = "exists_linearIndependent_of_le_finrank";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 253;
+      code_preview = "lemma exists_linearIndependent_of_le_finrank {n : ℕ} (hn : n ≤ finrank R M) :     ∃ f : Fin n → M, LinearIndependent R f :=   have ⟨_, hs, hs'⟩ := exists_finset_linearIndependent_of_le_finrank hn   ⟨_, (linearIndependent_equiv (Finset.equivFinOfCardEq hs).symm).mpr hs'⟩";
+    }
+    {
+      full_name = "Module.Finite.not_linearIndependent_of_infinite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 259;
+      code_preview = "theorem Module.Finite.not_linearIndependent_of_infinite {ι : Type*} [Infinite ι]     (v : ι → M) : ¬LinearIndependent R v";
+    }
+    {
+      full_name = "iSupIndep.subtype_ne_bot_le_rank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 265;
+      code_preview = "theorem iSupIndep.subtype_ne_bot_le_rank [Nontrivial R]     {V : ι → Submodule R M} (hV : iSupIndep V) :     Cardinal.lift.{v} #{ i : ι // V i ≠ ⊥ } ≤ Cardinal.lift.{w} (Module.rank R M)";
+    }
+    {
+      full_name = "iSupIndep.subtype_ne_bot_le_finrank_aux";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 282;
+      code_preview = "theorem iSupIndep.subtype_ne_bot_le_finrank_aux     {p : ι → Submodule R M} (hp : iSupIndep p) :     #{ i // p i ≠ ⊥ } ≤ (finrank R M : Cardinal.{w})";
+    }
+    {
+      full_name = "iSupIndep.fintypeNeBotOfFiniteDimensional";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 293;
+      code_preview = "noncomputable def iSupIndep.fintypeNeBotOfFiniteDimensional     {p : ι → Submodule R M} (hp : iSupIndep p) :     Fintype { i : ι // p i ≠ ⊥ } := by   suffices #{ i // p i ≠ ⊥ } < (ℵ₀ : Cardinal.{w}) by     rw [Cardinal.lt_aleph0_iff_fintype] at this     exact this.some   refine lt_of_le_of_lt hp.sub";
+    }
+    {
+      full_name = "iSupIndep.subtype_ne_bot_le_finrank";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 304;
+      code_preview = "theorem iSupIndep.subtype_ne_bot_le_finrank     {p : ι → Submodule R M} (hp : iSupIndep p) [Fintype { i // p i ≠ ⊥ }] :     Fintype.card { i // p i ≠ ⊥ } ≤ finrank R M";
+    }
+    {
+      full_name = "Module.exists_nontrivial_relation_of_finrank_lt_card";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 321;
+      code_preview = "theorem Module.exists_nontrivial_relation_of_finrank_lt_card {t : Finset M}     (h : finrank R M < t.card) : ∃ f : M → R, ∑ e ∈ t, f e • e = 0 ∧ ∃ x ∈ t, f x ≠ 0";
+    }
+    {
+      full_name = "Module.exists_nontrivial_relation_sum_zero_of_finrank_succ_lt_card";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 330;
+      code_preview = "theorem Module.exists_nontrivial_relation_sum_zero_of_finrank_succ_lt_card     {t : Finset M} (h : finrank R M + 1 < t.card) :     ∃ f : M → R, ∑ e ∈ t, f e • e = 0 ∧ ∑ e ∈ t, f e = 0 ∧ ∃ x ∈ t, f x ≠ 0";
+    }
+    {
+      full_name = "Module.finrank_zero_of_subsingleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 374;
+      code_preview = "@[nontriviality] theorem Module.finrank_zero_of_subsingleton [Subsingleton M] :     finrank R M = 0";
+    }
+    {
+      full_name = "LinearIndependent.finrank_eq_zero_of_infinite";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 380;
+      code_preview = "lemma LinearIndependent.finrank_eq_zero_of_infinite {ι} [Infinite ι] {v : ι → M}     (hv : LinearIndependent R v) : finrank R M = 0 := toNat_eq_zero.mpr <| .inr hv.aleph0_le_rank";
+    }
+    {
+      full_name = "Module.nontrivial_of_finrank_pos";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 386;
+      code_preview = "theorem Module.nontrivial_of_finrank_pos (h : 0 < finrank R M) : Nontrivial M";
+    }
+    {
+      full_name = "Module.nontrivial_of_finrank_eq_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 390;
+      code_preview = "theorem Module.nontrivial_of_finrank_eq_succ {n : ℕ}     (hn : finrank R M = n.succ) : Nontrivial M";
+    }
+    {
+      full_name = "finrank_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 400;
+      code_preview = "@[simp] theorem finrank_bot : finrank R (⊥ : Submodule R M) = 0";
+    }
+    {
+      full_name = "Module.finrank_pos_iff_exists_ne_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 410;
+      code_preview = "theorem Module.finrank_pos_iff_exists_ne_zero [NoZeroSMulDivisors R M] :     0 < finrank R M ↔ ∃ x : M, x ≠ 0";
+    }
+    {
+      full_name = "Module.finrank_pos_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 416;
+      code_preview = "theorem Module.finrank_pos_iff [NoZeroSMulDivisors R M] :     0 < finrank R M ↔ Nontrivial M";
+    }
+    {
+      full_name = "Module.finrank_pos";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 422;
+      code_preview = "theorem Module.finrank_pos [NoZeroSMulDivisors R M] [h : Nontrivial M] :     0 < finrank R M";
+    }
+    {
+      full_name = "Module.finrank_eq_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 427;
+      code_preview = "theorem Module.finrank_eq_zero_iff :     finrank R M = 0 ↔ ∀ x : M, ∃ a : R, a ≠ 0 ∧ a • x = 0";
+    }
+    {
+      full_name = "Module.finrank_zero_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 434;
+      code_preview = "theorem Module.finrank_zero_iff [NoZeroSMulDivisors R M] :     finrank R M = 0 ↔ Subsingleton M";
+    }
+    {
+      full_name = "Module.finrank_quotient_add_finrank_le";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Dimension/Finite.lean";
+      start_line = 441;
+      code_preview = "lemma Module.finrank_quotient_add_finrank_le (N : Submodule R M) :     finrank R (M ⧸ N) + finrank R N ≤ finrank R M := by   haveI := nontrivial_of_invariantBasisNumber R   have := rank_quotient_add_rank_le N   rw [← finrank_eq_rank R M, ← finrank_eq_rank R, ← N.finrank_eq_rank] at this   exact mod_";
+    }
+    {
+      full_name = "FiniteDimensional";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 68;
+      code_preview = "abbrev FiniteDimensional (K V : Type*) [DivisionRing K] [AddCommGroup V] [Module K V] :=   Module.Finite K V";
+    }
+    {
+      full_name = "FiniteDimensional.of_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 79;
+      code_preview = "theorem of_injective (f : V →ₗ[K] V₂) (w : Function.Injective f) [FiniteDimensional K V₂] :     FiniteDimensional K V";
+    }
+    {
+      full_name = "FiniteDimensional.of_surjective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 84;
+      code_preview = "theorem of_surjective (f : V →ₗ[K] V₂) (w : Function.Surjective f) [FiniteDimensional K V] :     FiniteDimensional K V₂";
+    }
+    {
+      full_name = "FiniteDimensional.finiteDimensional_pi";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 91;
+      code_preview = "instance finiteDimensional_pi {ι : Type*} [Finite ι] : FiniteDimensional K (ι → K) :=   Finite.pi";
+    }
+    {
+      full_name = "FiniteDimensional.finiteDimensional_pi'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 94;
+      code_preview = "instance finiteDimensional_pi' {ι : Type*} [Finite ι] (M : ι → Type*) [∀ i, AddCommGroup (M i)]     [∀ i, Module K (M i)] [∀ i, FiniteDimensional K (M i)] : FiniteDimensional K (∀ i, M i) :=   Finite.pi";
+    }
+    {
+      full_name = "FiniteDimensional.of_fintype_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 100;
+      code_preview = "theorem of_fintype_basis {ι : Type w} [Finite ι] (h : Basis ι K V) : FiniteDimensional K V";
+    }
+    {
+      full_name = "FiniteDimensional.fintypeBasisIndex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 104;
+      code_preview = "noncomputable def fintypeBasisIndex {ι : Type*} [FiniteDimensional K V] (b : Basis ι K V) :     Fintype ι :=   @Fintype.ofFinite _ (Module.Finite.finite_basis b)";
+    }
+    {
+      full_name = "FiniteDimensional.of_finite_basis";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 114;
+      code_preview = "theorem of_finite_basis {ι : Type w} {s : Set ι} (h : Basis s K V) (hs : Set.Finite s) :     FiniteDimensional K V";
+    }
+    {
+      full_name = "FiniteDimensional.finiteDimensional_submodule";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 121;
+      code_preview = "instance finiteDimensional_submodule [FiniteDimensional K V] (S : Submodule K V) :     FiniteDimensional K S := by   infer_instance";
+    }
+    {
+      full_name = "FiniteDimensional.finiteDimensional_quotient";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 129;
+      code_preview = "instance finiteDimensional_quotient [FiniteDimensional K V] (S : Submodule K V) :     FiniteDimensional K (V ⧸ S) :=   Module.Finite.quotient K S";
+    }
+    {
+      full_name = "FiniteDimensional.of_finrank_pos";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 134;
+      code_preview = "theorem of_finrank_pos (h : 0 < finrank K V) : FiniteDimensional K V";
+    }
+    {
+      full_name = "FiniteDimensional.of_finrank_eq_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 137;
+      code_preview = "theorem of_finrank_eq_succ {n : ℕ} (hn : finrank K V = n.succ) :     FiniteDimensional K V";
+    }
+    {
+      full_name = "FiniteDimensional.of_fact_finrank_eq_succ";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 141;
+      code_preview = "theorem of_fact_finrank_eq_succ (n : ℕ) [hn : Fact (finrank K V = n + 1)] :     FiniteDimensional K V";
+    }
+    {
+      full_name = "Module.finrank_eq_rank'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 154;
+      code_preview = "theorem finrank_eq_rank' [FiniteDimensional K V] : (finrank K V : Cardinal.{v}) = Module.rank K V";
+    }
+    {
+      full_name = "Module.finrank_of_infinite_dimensional";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 161;
+      code_preview = "theorem finrank_of_infinite_dimensional (h : ¬FiniteDimensional K V) : finrank K V = 0";
+    }
+    {
+      full_name = "Module.finiteDimensional_iff_of_rank_eq_nsmul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 164;
+      code_preview = "theorem finiteDimensional_iff_of_rank_eq_nsmul {W} [AddCommGroup W] [Module K W] {n : ℕ}     (hn : n ≠ 0) (hVW : Module.rank K V = n • Module.rank K W) :     FiniteDimensional K V ↔ FiniteDimensional K W";
+    }
+    {
+      full_name = "Module.finrank_eq_card_basis'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 169;
+      code_preview = "theorem finrank_eq_card_basis' [FiniteDimensional K V] {ι : Type w} (h : Basis ι K V) :     (finrank K V : Cardinal.{w}) = #ι";
+    }
+    {
+      full_name = "FiniteDimensional.finiteDimensional_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 184;
+      code_preview = "instance finiteDimensional_self : FiniteDimensional K K := inferInstance";
+    }
+    {
+      full_name = "FiniteDimensional.span_of_finite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 186;
+      code_preview = "theorem span_of_finite {A : Set V} (hA : Set.Finite A) : FiniteDimensional K (Submodule.span K A)";
+    }
+    {
+      full_name = "FiniteDimensional.span_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 190;
+      code_preview = "instance span_singleton (x : V) : FiniteDimensional K (K ∙ x) :=   Module.Finite.span_singleton K x";
+    }
+    {
+      full_name = "FiniteDimensional.span_finset";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 194;
+      code_preview = "instance span_finset (s : Finset V) : FiniteDimensional K (span K (s : Set V)) :=   Module.Finite.span_finset K s";
+    }
+    {
+      full_name = "FiniteDimensional.trans";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 210;
+      code_preview = "theorem trans [FiniteDimensional F K] [FiniteDimensional K A] : FiniteDimensional F A";
+    }
+    {
+      full_name = "Submodule.fg_iff_finiteDimensional";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 223;
+      code_preview = "theorem fg_iff_finiteDimensional (s : Submodule K V) : s.FG ↔ FiniteDimensional K s";
+    }
+    {
+      full_name = "LinearEquiv.finiteDimensional";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Defs.lean";
+      start_line = 236;
+      code_preview = "protected theorem finiteDimensional (f : V ≃ₗ[K] V₂) [FiniteDimensional K V] :     FiniteDimensional K V₂";
+    }
+    {
+      full_name = "LinearIndependent.lt_aleph0_of_finiteDimensional";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 48;
+      code_preview = "theorem _root_.LinearIndependent.lt_aleph0_of_finiteDimensional {ι : Type w} [FiniteDimensional K V]     {v : ι → V} (h : LinearIndependent K v) : #ι < ℵ₀";
+    }
+    {
+      full_name = "Submodule.eq_top_of_finrank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 52;
+      code_preview = "theorem _root_.Submodule.eq_top_of_finrank_eq [FiniteDimensional K V] {S : Submodule K V}     (h : finrank K S = finrank K V) : S = ⊤";
+    }
+    {
+      full_name = "FiniteDimensional.exists_relation_sum_zero_pos_coefficient_of_finrank_succ_lt_card";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 86;
+      code_preview = "theorem exists_relation_sum_zero_pos_coefficient_of_finrank_succ_lt_card [FiniteDimensional L W]     {t : Finset W} (h : finrank L W + 1 < t.card) :     ∃ f : W → L, ∑ e ∈ t, f e • e = 0 ∧ ∑ e ∈ t, f e = 0 ∧ ∃ x ∈ t, 0 < f x";
+    }
+    {
+      full_name = "FiniteDimensional.basisSingleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 100;
+      code_preview = "@[simps repr_apply] noncomputable def basisSingleton (ι : Type*) [Unique ι] (h : finrank K V = 1) (v : V)     (hv : v ≠ 0) : Basis ι K V :=   let b := Module.basisUnique ι h   let h : b.repr v default ≠ 0 := mt Module.basisUnique_repr_eq_zero_iff.mp hv   Basis.ofRepr     { toFun := fun w => Finsupp.";
+    }
+    {
+      full_name = "FiniteDimensional.basisSingleton_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 123;
+      code_preview = "@[simp] theorem basisSingleton_apply (ι : Type*) [Unique ι] (h : finrank K V = 1) (v : V) (hv : v ≠ 0)     (i : ι) : basisSingleton ι h v hv i = v";
+    }
+    {
+      full_name = "FiniteDimensional.range_basisSingleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 129;
+      code_preview = "@[simp] theorem range_basisSingleton (ι : Type*) [Unique ι] (h : finrank K V = 1) (v : V) (hv : v ≠ 0) :     Set.range (basisSingleton ι h v hv) = {v}";
+    }
+    {
+      full_name = "FiniteDimensional.of_rank_eq_nat";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 141;
+      code_preview = "theorem FiniteDimensional.of_rank_eq_nat {n : ℕ} (h : Module.rank K V = n) :     FiniteDimensional K V";
+    }
+    {
+      full_name = "FiniteDimensional.of_rank_eq_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 145;
+      code_preview = "theorem FiniteDimensional.of_rank_eq_zero (h : Module.rank K V = 0) : FiniteDimensional K V";
+    }
+    {
+      full_name = "FiniteDimensional.of_rank_eq_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 148;
+      code_preview = "theorem FiniteDimensional.of_rank_eq_one (h : Module.rank K V = 1) : FiniteDimensional K V";
+    }
+    {
+      full_name = "finiteDimensional_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 153;
+      code_preview = "instance finiteDimensional_bot : FiniteDimensional K (⊥ : Submodule K V) :=   .of_rank_eq_zero <| by simp";
+    }
+    {
+      full_name = "Submodule.finiteDimensional_of_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 168;
+      code_preview = "theorem finiteDimensional_of_le {S₁ S₂ : Submodule K V} [FiniteDimensional K S₂] (h : S₁ ≤ S₂) :     FiniteDimensional K S₁";
+    }
+    {
+      full_name = "Submodule.finiteDimensional_inf_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 174;
+      code_preview = "instance finiteDimensional_inf_left (S₁ S₂ : Submodule K V) [FiniteDimensional K S₁] :     FiniteDimensional K (S₁ ⊓ S₂ : Submodule K V) :=   finiteDimensional_of_le inf_le_left";
+    }
+    {
+      full_name = "Submodule.finiteDimensional_inf_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 180;
+      code_preview = "instance finiteDimensional_inf_right (S₁ S₂ : Submodule K V) [FiniteDimensional K S₂] :     FiniteDimensional K (S₁ ⊓ S₂ : Submodule K V) :=   finiteDimensional_of_le inf_le_right";
+    }
+    {
+      full_name = "Submodule.finiteDimensional_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 186;
+      code_preview = "instance finiteDimensional_sup (S₁ S₂ : Submodule K V) [h₁ : FiniteDimensional K S₁]     [h₂ : FiniteDimensional K S₂] : FiniteDimensional K (S₁ ⊔ S₂ : Submodule K V) := by   unfold FiniteDimensional at *   rw [finite_def] at *   exact (fg_top _).2 (((fg_top S₁).1 h₁).sup ((fg_top S₂).1 h₂))";
+    }
+    {
+      full_name = "Submodule.finiteDimensional_finset_sup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 194;
+      code_preview = "instance finiteDimensional_finset_sup {ι : Type*} (s : Finset ι) (S : ι → Submodule K V)     [∀ i, FiniteDimensional K (S i)] : FiniteDimensional K (s.sup S : Submodule K V) := by   refine     @Finset.sup_induction _ _ _ _ s S (fun i => FiniteDimensional K ↑i) (finiteDimensional_bot K V)       ?_ fu";
+    }
+    {
+      full_name = "Submodule.finiteDimensional_iSup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 207;
+      code_preview = "instance finiteDimensional_iSup {ι : Sort*} [Finite ι] (S : ι → Submodule K V)     [∀ i, FiniteDimensional K (S i)] : FiniteDimensional K ↑(⨆ i, S i) := by   cases nonempty_fintype (PLift ι)   rw [← iSup_plift_down, ← Finset.sup_univ_eq_iSup]   exact Submodule.finiteDimensional_finset_sup _ _";
+    }
+    {
+      full_name = "finiteDimensional_finsupp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 223;
+      code_preview = "instance finiteDimensional_finsupp {ι : Type*} [Finite ι] [FiniteDimensional K V] :     FiniteDimensional K (ι →₀ V) :=   Module.Finite.finsupp";
+    }
+    {
+      full_name = "Submodule.eq_of_le_of_finrank_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 232;
+      code_preview = "theorem eq_of_le_of_finrank_le {S₁ S₂ : Submodule K V} [FiniteDimensional K S₂] (hle : S₁ ≤ S₂)     (hd : finrank K S₂ ≤ finrank K S₁) : S₁ = S₂";
+    }
+    {
+      full_name = "Submodule.eq_of_le_of_finrank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 240;
+      code_preview = "theorem eq_of_le_of_finrank_eq {S₁ S₂ : Submodule K V} [FiniteDimensional K S₂] (hle : S₁ ≤ S₂)     (hd : finrank K S₁ = finrank K S₂) : S₁ = S₂";
+    }
+    {
+      full_name = "Subalgebra.eq_of_le_of_finrank_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 253;
+      code_preview = "theorem eq_of_le_of_finrank_le (h_le : F ≤ E) (h_finrank : finrank K E ≤ finrank K F) : F = E";
+    }
+    {
+      full_name = "Subalgebra.eq_of_le_of_finrank_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 259;
+      code_preview = "theorem eq_of_le_of_finrank_eq (h_le : F ≤ E) (h_finrank : finrank K F = finrank K E) : F = E";
+    }
+    {
+      full_name = "LinearMap.surjective_of_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 275;
+      code_preview = "theorem surjective_of_injective [FiniteDimensional K V] {f : V →ₗ[K] V} (hinj : Injective f) :     Surjective f";
+    }
+    {
+      full_name = "LinearMap.finiteDimensional_of_surjective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 282;
+      code_preview = "theorem finiteDimensional_of_surjective [FiniteDimensional K V] (f : V →ₗ[K] V₂)     (hf : LinearMap.range f = ⊤) : FiniteDimensional K V₂";
+    }
+    {
+      full_name = "LinearMap.finiteDimensional_range";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 287;
+      code_preview = "instance finiteDimensional_range [FiniteDimensional K V] (f : V →ₗ[K] V₂) :     FiniteDimensional K (LinearMap.range f) :=   Module.Finite.range f";
+    }
+    {
+      full_name = "LinearMap.injective_iff_surjective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 292;
+      code_preview = "theorem injective_iff_surjective [FiniteDimensional K V] {f : V →ₗ[K] V} :     Injective f ↔ Surjective f";
+    }
+    {
+      full_name = "LinearMap.injOn_iff_surjOn";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 301;
+      code_preview = "lemma injOn_iff_surjOn {p : Submodule K V} [FiniteDimensional K p]     {f : V →ₗ[K] V} (h : ∀ x ∈ p, f x ∈ p) :     Set.InjOn f p ↔ Set.SurjOn f p p := by   rw [Set.injOn_iff_injective, ← Set.MapsTo.restrict_surjective_iff h]   change Injective (f.domRestrict p) ↔ Surjective (f.restrict h)   simp [d";
+    }
+    {
+      full_name = "LinearMap.ker_eq_bot_iff_range_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 308;
+      code_preview = "theorem ker_eq_bot_iff_range_eq_top [FiniteDimensional K V] {f : V →ₗ[K] V} :     LinearMap.ker f = ⊥ ↔ LinearMap.range f = ⊤";
+    }
+    {
+      full_name = "LinearMap.mul_eq_one_of_mul_eq_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 312;
+      code_preview = "theorem mul_eq_one_of_mul_eq_one [FiniteDimensional K V] {f g : V →ₗ[K] V} (hfg : f * g = 1) :     g * f = 1";
+    }
+    {
+      full_name = "LinearMap.mul_eq_one_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 323;
+      code_preview = "theorem mul_eq_one_comm [FiniteDimensional K V] {f g : V →ₗ[K] V} : f * g = 1 ↔ g * f = 1";
+    }
+    {
+      full_name = "LinearMap.comp_eq_id_comm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 328;
+      code_preview = "theorem comp_eq_id_comm [FiniteDimensional K V] {f g : V →ₗ[K] V} : f.comp g = id ↔ g.comp f = id";
+    }
+    {
+      full_name = "LinearMap.comap_eq_sup_ker_of_disjoint";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 333;
+      code_preview = "theorem comap_eq_sup_ker_of_disjoint {p : Submodule K V} [FiniteDimensional K p] {f : V →ₗ[K] V}     (h : ∀ x ∈ p, f x ∈ p) (h' : Disjoint p (ker f)) :     p.comap f = p ⊔ ker f";
+    }
+    {
+      full_name = "LinearMap.ker_comp_eq_of_commute_of_disjoint_ker";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 342;
+      code_preview = "theorem ker_comp_eq_of_commute_of_disjoint_ker [FiniteDimensional K V] {f g : V →ₗ[K] V}     (h : Commute f g) (h' : Disjoint (ker f) (ker g)) :     ker (f ∘ₗ g) = ker f ⊔ ker g";
+    }
+    {
+      full_name = "LinearMap.ker_noncommProd_eq_of_supIndep_ker";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 349;
+      code_preview = "theorem ker_noncommProd_eq_of_supIndep_ker [FiniteDimensional K V] {ι : Type*} {f : ι → V →ₗ[K] V}     (s : Finset ι) (comm) (h : s.SupIndep fun i ↦ ker (f i)) :     ker (s.noncommProd f comm) = ⨆ i ∈ s, ker (f i)";
+    }
+    {
+      full_name = "LinearEquiv.ofInjectiveEndo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 377;
+      code_preview = "noncomputable def ofInjectiveEndo (f : V →ₗ[K] V) (h_inj : Injective f) : V ≃ₗ[K] V :=   LinearEquiv.ofBijective f ⟨h_inj, LinearMap.injective_iff_surjective.mp h_inj⟩";
+    }
+    {
+      full_name = "LinearEquiv.coe_ofInjectiveEndo";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 381;
+      code_preview = "@[simp] theorem coe_ofInjectiveEndo (f : V →ₗ[K] V) (h_inj : Injective f) :     ⇑(ofInjectiveEndo f h_inj) = f";
+    }
+    {
+      full_name = "LinearEquiv.ofInjectiveEndo_right_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 386;
+      code_preview = "@[simp] theorem ofInjectiveEndo_right_inv (f : V →ₗ[K] V) (h_inj : Injective f) :     f * (ofInjectiveEndo f h_inj).symm = 1";
+    }
+    {
+      full_name = "LinearEquiv.ofInjectiveEndo_left_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 391;
+      code_preview = "@[simp] theorem ofInjectiveEndo_left_inv (f : V →ₗ[K] V) (h_inj : Injective f) :     ((ofInjectiveEndo f h_inj).symm : V →ₗ[K] V) * f = 1";
+    }
+    {
+      full_name = "LinearMap.isUnit_iff_ker_eq_bot";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 402;
+      code_preview = "theorem isUnit_iff_ker_eq_bot [FiniteDimensional K V] (f : V →ₗ[K] V) :     IsUnit f ↔ (LinearMap.ker f) = ⊥";
+    }
+    {
+      full_name = "LinearMap.isUnit_iff_range_eq_top";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 413;
+      code_preview = "theorem isUnit_iff_range_eq_top [FiniteDimensional K V] (f : V →ₗ[K] V) :     IsUnit f ↔ (LinearMap.range f) = ⊤";
+    }
+    {
+      full_name = "finrank_zero_iff_forall_zero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 425;
+      code_preview = "theorem finrank_zero_iff_forall_zero [FiniteDimensional K V] : finrank K V = 0 ↔ ∀ x : V, x = 0";
+    }
+    {
+      full_name = "basisOfFinrankZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 428;
+      code_preview = "noncomputable def basisOfFinrankZero [FiniteDimensional K V] {ι : Type*} [IsEmpty ι]     (hV : finrank K V = 0) : Basis ι K V :=   haveI : Subsingleton V := finrank_zero_iff.1 hV   Basis.empty _";
+    }
+    {
+      full_name = "FiniteDimensional.exists_mul_eq_one";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 438;
+      code_preview = "lemma FiniteDimensional.exists_mul_eq_one (F : Type*) {K : Type*} [Field F] [Ring K] [IsDomain K]     [Algebra F K] [FiniteDimensional F K] {x : K} (H : x ≠ 0) : ∃ y, x * y = 1 := by   have : Function.Surjective (LinearMap.mulLeft F x) :=     LinearMap.injective_iff_surjective.1 fun y z => ((mul_rig";
+    }
+    {
+      full_name = "divisionRingOfFiniteDimensional";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 444;
+      code_preview = "noncomputable def divisionRingOfFiniteDimensional (F K : Type*) [Field F] [Ring K] [IsDomain K]     [Algebra F K] [FiniteDimensional F K] : DivisionRing K where   __ := ‹IsDomain K›   inv x :=     letI := Classical.decEq K     if H : x = 0 then 0 else Classical.choose <| FiniteDimensional.exists_mul";
+    }
+    {
+      full_name = "FiniteDimensional.isUnit";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 460;
+      code_preview = "lemma FiniteDimensional.isUnit (F : Type*) {K : Type*} [Field F] [Ring K] [IsDomain K]     [Algebra F K] [FiniteDimensional F K] {x : K} (H : x ≠ 0) : IsUnit x :=   let _ := divisionRingOfFiniteDimensional F K; H.isUnit";
+    }
+    {
+      full_name = "fieldOfFiniteDimensional";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 464;
+      code_preview = "noncomputable def fieldOfFiniteDimensional (F K : Type*) [Field F] [h : CommRing K] [IsDomain K]     [Algebra F K] [FiniteDimensional F K] : Field K :=   { divisionRingOfFiniteDimensional F K with     toCommRing := h }";
+    }
+    {
+      full_name = "finrank_span_singleton";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 479;
+      code_preview = "theorem finrank_span_singleton {v : V} (hv : v ≠ 0) : finrank K (K ∙ v) = 1";
+    }
+    {
+      full_name = "exists_smul_eq_of_finrank_eq_one";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 487;
+      code_preview = "lemma exists_smul_eq_of_finrank_eq_one     (h : finrank K V = 1) {x : V} (hx : x ≠ 0) (y : V) :     ∃ (c : K), c • x = y := by   have : Submodule.span K {x} = ⊤ := by     have : FiniteDimensional K V := .of_finrank_eq_succ h     apply eq_top_of_finrank_eq     rw [h]     exact finrank_span_singleton ";
+    }
+    {
+      full_name = "Set.finrank_mono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 499;
+      code_preview = "theorem Set.finrank_mono [FiniteDimensional K V] {s t : Set V} (h : s ⊆ t) :     s.finrank K ≤ t.finrank K";
+    }
+    {
+      full_name = "finrank_eq_one_iff_of_nonzero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 512;
+      code_preview = "theorem finrank_eq_one_iff_of_nonzero (v : V) (nz : v ≠ 0) :     finrank K V = 1 ↔ span K ({v} : Set V) = ⊤";
+    }
+    {
+      full_name = "finrank_eq_one_iff_of_nonzero'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/FiniteDimensional/Basic.lean";
+      start_line = 521;
+      code_preview = "theorem finrank_eq_one_iff_of_nonzero' (v : V) (nz : v ≠ 0) :     finrank K V = 1 ↔ ∀ w : V, ∃ c : K, c • v = w";
+    }
+    {
+      full_name = "Basis.toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 48;
+      code_preview = "def Basis.toMatrix (e : Basis ι R M) (v : ι' → M) : Matrix ι ι' R := fun i j => e.repr (v j) i";
+    }
+    {
+      full_name = "Basis.toMatrix_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 56;
+      code_preview = "theorem toMatrix_apply : e.toMatrix v i j = e.repr (v j) i";
+    }
+    {
+      full_name = "Basis.toMatrix_transpose_apply";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 59;
+      code_preview = "theorem toMatrix_transpose_apply : (e.toMatrix v)ᵀ j = e.repr (v j)";
+    }
+    {
+      full_name = "Basis.toMatrix_eq_toMatrix_constr";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 62;
+      code_preview = "theorem toMatrix_eq_toMatrix_constr [Fintype ι] [DecidableEq ι] (v : ι → M) :     e.toMatrix v = LinearMap.toMatrix e e (e.constr ℕ v)";
+    }
+    {
+      full_name = "Basis.coePiBasisFun.toMatrix_eq_transpose";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 68;
+      code_preview = "theorem coePiBasisFun.toMatrix_eq_transpose [Finite ι] :     ((Pi.basisFun R ι).toMatrix : Matrix ι ι R → Matrix ι ι R) = Matrix.transpose";
+    }
+    {
+      full_name = "Basis.toMatrix_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 73;
+      code_preview = "@[simp] theorem toMatrix_self [DecidableEq ι] : e.toMatrix e = 1";
+    }
+    {
+      full_name = "Basis.toMatrix_update";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 79;
+      code_preview = "theorem toMatrix_update [DecidableEq ι'] (x : M) :     e.toMatrix (Function.update v j x) = Matrix.updateCol (e.toMatrix v) j (e.repr x)";
+    }
+    {
+      full_name = "Basis.toMatrix_unitsSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 87;
+      code_preview = "@[simp] theorem toMatrix_unitsSMul [DecidableEq ι] (e : Basis ι R₂ M₂) (w : ι → R₂ˣ) :     e.toMatrix (e.unitsSMul w) = diagonal ((↑) ∘ w)";
+    }
+    {
+      full_name = "Basis.toMatrix_isUnitSMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 96;
+      code_preview = "@[simp] theorem toMatrix_isUnitSMul [DecidableEq ι] (e : Basis ι R₂ M₂) {w : ι → R₂}     (hw : ∀ i, IsUnit (w i)) : e.toMatrix (e.isUnitSMul hw) = diagonal w";
+    }
+    {
+      full_name = "Basis.toMatrix_smul_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 102;
+      code_preview = "theorem toMatrix_smul_left {G} [Group G] [DistribMulAction G M] [SMulCommClass G R M] (g : G) :     (g • e).toMatrix v = e.toMatrix (g⁻¹ • v)";
+    }
+    {
+      full_name = "Basis.sum_toMatrix_smul_self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 105;
+      code_preview = "@[simp] theorem sum_toMatrix_smul_self [Fintype ι] : ∑ i : ι, e.toMatrix v i j • e i = v j";
+    }
+    {
+      full_name = "Basis.toMatrix_smul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 109;
+      code_preview = "theorem toMatrix_smul {R₁ S : Type*} [CommSemiring R₁] [Semiring S] [Algebra R₁ S] [Fintype ι]     [DecidableEq ι] (x : S) (b : Basis ι R₁ S) (w : ι → S) :     (b.toMatrix (x • w)) = (Algebra.leftMulMatrix b x) * (b.toMatrix w)";
+    }
+    {
+      full_name = "Basis.toMatrix_map_vecMul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 116;
+      code_preview = "theorem toMatrix_map_vecMul {S : Type*} [Semiring S] [Algebra R S] [Fintype ι] (b : Basis ι R S)     (v : ι' → S) : b ᵥ* ((b.toMatrix v).map <| algebraMap R S) = v";
+    }
+    {
+      full_name = "Basis.toLin_toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 122;
+      code_preview = "@[simp] theorem toLin_toMatrix [Finite ι] [Fintype ι'] [DecidableEq ι'] (v : Basis ι' R M) :     Matrix.toLin v e (e.toMatrix v) = LinearMap.id";
+    }
+    {
+      full_name = "Basis.toMatrixEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 127;
+      code_preview = "def toMatrixEquiv [Fintype ι] (e : Basis ι R M) : (ι → M) ≃ₗ[R] Matrix ι ι R where   toFun := e.toMatrix   map_add' v w := by     ext i j     rw [Matrix.add_apply, e.toMatrix_apply, Pi.add_apply, LinearEquiv.map_add]     rfl   map_smul' := by     intro c v     ext i j     dsimp only []     rw [e.toM";
+    }
+    {
+      full_name = "Basis.restrictScalars_toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 153;
+      code_preview = "theorem restrictScalars_toMatrix [Fintype ι] [DecidableEq ι] {S : Type*} [CommRing S] [Nontrivial S]     [Algebra R₂ S] [Module S M₂] [IsScalarTower R₂ S M₂] [NoZeroSMulDivisors R₂ S]     (b : Basis ι S M₂) (v : ι → span R₂ (Set.range b)) :     (algebraMap R₂ S).mapMatrix ((b.restrictScalars R₂).toM";
+    }
+    {
+      full_name = "LinearMap.toMatrix_id_eq_basis_toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 174;
+      code_preview = "@[simp] theorem LinearMap.toMatrix_id_eq_basis_toMatrix [Fintype ι] [DecidableEq ι] [Finite ι'] :     LinearMap.toMatrix b b' id = b'.toMatrix b";
+    }
+    {
+      full_name = "basis_toMatrix_mul_linearMap_toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 183;
+      code_preview = "@[simp] theorem basis_toMatrix_mul_linearMap_toMatrix [Finite κ] [Fintype κ'] [DecidableEq ι'] :     c.toMatrix c' * LinearMap.toMatrix b' c' f = LinearMap.toMatrix b' c f";
+    }
+    {
+      full_name = "basis_toMatrix_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 190;
+      code_preview = "theorem basis_toMatrix_mul [Fintype κ] [Finite ι] [DecidableEq κ]     (b₁ : Basis ι R M) (b₂ : Basis ι' R M) (b₃ : Basis κ R N) (A : Matrix ι' κ R) :     b₁.toMatrix b₂ * A = LinearMap.toMatrix b₃ b₁ (toLin b₃ b₂ A)";
+    }
+    {
+      full_name = "linearMap_toMatrix_mul_basis_toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 198;
+      code_preview = "@[simp] theorem linearMap_toMatrix_mul_basis_toMatrix [Finite κ'] [DecidableEq ι] [DecidableEq ι'] :     LinearMap.toMatrix b' c' f * b'.toMatrix b = LinearMap.toMatrix b c' f";
+    }
+    {
+      full_name = "basis_toMatrix_mul_linearMap_toMatrix_mul_basis_toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 204;
+      code_preview = "theorem basis_toMatrix_mul_linearMap_toMatrix_mul_basis_toMatrix     [Fintype κ'] [DecidableEq ι] [DecidableEq ι'] :     c.toMatrix c' * LinearMap.toMatrix b' c' f * b'.toMatrix b = LinearMap.toMatrix b c f";
+    }
+    {
+      full_name = "mul_basis_toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 210;
+      code_preview = "theorem mul_basis_toMatrix [DecidableEq ι] [DecidableEq ι'] (b₁ : Basis ι R M) (b₂ : Basis ι' R M)     (b₃ : Basis κ R N) (A : Matrix κ ι R) :     A * b₁.toMatrix b₂ = LinearMap.toMatrix b₂ b₃ (toLin b₁ b₃ A)";
+    }
+    {
+      full_name = "basis_toMatrix_basisFun_mul";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 217;
+      code_preview = "theorem basis_toMatrix_basisFun_mul (b : Basis ι R (ι → R)) (A : Matrix ι ι R) :     b.toMatrix (Pi.basisFun R ι) * A = of fun i j => b.repr (Aᵀ j) i";
+    }
+    {
+      full_name = "Basis.toMatrix_reindex'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 225;
+      code_preview = "theorem Basis.toMatrix_reindex' [DecidableEq ι] [DecidableEq ι'] (b : Basis ι R M) (v : ι' → M)     (e : ι ≃ ι') : (b.reindex e).toMatrix v =     Matrix.reindexAlgEquiv R R e (b.toMatrix (v ∘ e))";
+    }
+    {
+      full_name = "Basis.toMatrix_mulVec_repr";
+      kind = "lemma";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 235;
+      code_preview = "@[simp] lemma Basis.toMatrix_mulVec_repr [Finite ι'] (m : M) :     b'.toMatrix b *ᵥ b.repr m = b'.repr m := by   classical   cases nonempty_fintype ι'   simp [← LinearMap.toMatrix_id_eq_basis_toMatrix, LinearMap.toMatrix_mulVec_repr]";
+    }
+    {
+      full_name = "Basis.toMatrix_mul_toMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 244;
+      code_preview = "@[simp] theorem Basis.toMatrix_mul_toMatrix {ι'' : Type*} [Fintype ι'] (b'' : ι'' → M) :     b.toMatrix b' * b'.toMatrix b'' = b.toMatrix b''";
+    }
+    {
+      full_name = "Basis.toMatrix_mul_toMatrix_flip";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 254;
+      code_preview = "theorem Basis.toMatrix_mul_toMatrix_flip [DecidableEq ι] [Fintype ι'] :     b.toMatrix b' * b'.toMatrix b = 1";
+    }
+    {
+      full_name = "Basis.invertibleToMatrix";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 258;
+      code_preview = "def Basis.invertibleToMatrix [DecidableEq ι] [Fintype ι] (b b' : Basis ι R₂ M₂) :     Invertible (b.toMatrix b') :=   ⟨b'.toMatrix b, Basis.toMatrix_mul_toMatrix_flip _ _, Basis.toMatrix_mul_toMatrix_flip _ _⟩";
+    }
+    {
+      full_name = "Basis.toMatrix_reindex";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 263;
+      code_preview = "@[simp] theorem Basis.toMatrix_reindex (b : Basis ι R M) (v : ι' → M) (e : ι ≃ ι') :     (b.reindex e).toMatrix v = (b.toMatrix v).submatrix e.symm _root_.id";
+    }
+    {
+      full_name = "Basis.toMatrix_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/LinearAlgebra/Matrix/Basis.lean";
+      start_line = 270;
+      code_preview = "@[simp] theorem Basis.toMatrix_map (b : Basis ι R M) (f : M ≃ₗ[R] N) (v : ι → N) :     (b.map f).toMatrix v = b.toMatrix (f.symm ∘ v)";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

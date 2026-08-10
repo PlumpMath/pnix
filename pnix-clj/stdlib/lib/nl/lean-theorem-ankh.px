@@ -1,0 +1,337 @@
+let
+  ownerName = "stdlib.nl.lean-theorem-ankh";
+
+  subset_mapping = import nl/lean-mathlib-subset-mapping.px;
+
+  # === Lean theorem ankh (agent-NL-193, additive only) ==============
+  #
+  # 사용자 directive (2026-05-29):
+  # > "기존 깨지 말고, 동일 영역만 교체 — LeanDojo static dump 흡수"
+  #
+  # 정합성 (CLAUDE.md):
+  #   - external = LeanDojo CC-BY-4.0 dataset (Apache 2.0 호환, GPL-family 없음)
+  #   - candidate = Lean theorem 은 *Accepted truth 가 아님*, 5-gate firewall
+  #     통과 후 Accepted ankh entry
+  #   - mirror-only = Lean external compute, pnix interpretation = mirror plate
+  #   - replace 0 = 기존 14 cohomology files 깨지 않음
+  #
+  # Schema (LeanDojo corpus.jsonl 의 light subset):
+  #   {
+  #     full_name: theorem 이름 (e.g. "IsGalois.self")
+  #     kind: "commanddeclaration" | "lemma" | ...
+  #     file_path: source 위치 (e.g. "Mathlib/FieldTheory/Galois/Basic.lean")
+  #     start_line: line number
+  #     code_preview: 처음 200 char 의 Lean source preview
+  #   }
+  #
+  # Storage:
+  #   data/leandojo/substrate_relevant_index.json
+  #   ~3.4 MB, 10,058 entries, 우리 14 cohomology 영역의 직접 매칭
+  #
+  # mirror plate 6-slot mapping (per Lean theorem):
+  #   facts            = file_path + imports (전역 substrate level dependency)
+  #   lens             = lean-theorem-ankh.px
+  #   owner_law        = Lean type signature / code_preview
+  #   capability_route = ankh lookup query
+  #   parameters       = { theorem_name; query_kind; }
+  #   receipts         = { mathlib_commit; statement_text; kind; file_path; }
+
+  stepKind = "lean-theorem-ankh";
+  framework_step =
+    "LeanDojo corpus → pnix ankh entries → mirror plate lookup lens";
+
+  # =================================================================
+  # === Dataset metadata =============================================
+  # =================================================================
+
+  datasetMetadata = {
+    dataset_name = "LeanDojo Benchmark 4";
+    license = "CC-BY-4.0";
+    license_compatible_with_pnix = true;  # CC-BY-4.0 = permissive (attribution only)
+    leandojo_version = "4.19.0";
+    mathlib_commit = "c44e0c8ee63ca166450922a373c7409c5d26b00b";
+    mathlib_dataset_creation_time = "2025-05-08";
+    full_corpus_theorem_count = 122517;
+    substrate_relevant_subset_count = 10058;
+    substrate_relevant_subset_file_count = 431;
+    subset_size_mb = 3.4;
+    dataset_path = "data/leandojo/substrate_relevant_index.json";
+    zenodo_url = "https://zenodo.org/records/15382959";
+    upstream_repo = "https://github.com/lean-dojo/LeanDojo";
+    attribution_required = ''
+      Yang, K. et al. "LeanDojo: Theorem Proving with Retrieval-
+      Augmented Language Models." NeurIPS 2023.
+    '';
+  };
+
+  # =================================================================
+  # === Theorem entry constructor ====================================
+  # =================================================================
+  #
+  # 한 Lean theorem → 한 ankh entry (mirror plate instance shape).
+
+  mkLeanTheoremAnkhEntry =
+    { full_name, kind, file_path, start_line, code_preview, }:
+    {
+      # 6-slot mapping
+      facts = {
+        file_path = file_path;
+        leandojo_corpus_origin = true;
+        mathlib_commit = datasetMetadata.mathlib_commit;
+      };
+      lens = ownerName;
+      owner_law = {
+        type_signature_preview = code_preview;
+        kernel_verified = true;  # LeanDojo dataset = Mathlib kernel-verified
+        substrate_owner_law = "Lean kernel verifies type-correctness";
+      };
+      capability_route = {
+        route_kind = "ankh-lookup";
+        query_target = "lean-theorem";
+      };
+      parameters = {
+        theorem_name = full_name;
+        kind = kind;
+      };
+      receipts = {
+        mathlib_commit = datasetMetadata.mathlib_commit;
+        statement_text = code_preview;
+        kind = kind;
+        file_path = file_path;
+        start_line = start_line;
+        leandojo_dataset_version = datasetMetadata.leandojo_version;
+      };
+      # 추가 ankh metadata (CLAUDE.md ankh semantics)
+      ankh_status = "candidate";  # 5-gate firewall 후에 Accepted
+      ankh_kind = "lean-theorem-reference";
+      ankh_lineage = "leandojo-corpus-jsonl-extraction";
+    };
+
+  # =================================================================
+  # === Substrate cross-reference query =============================
+  # =================================================================
+  #
+  # 우리 substrate concept → 매칭 Lean theorem candidate 검색
+  # (이름 substring + module prefix 매칭).
+  #
+  # NOTE: 실제 검색은 Rust loader 가 substrate_relevant_index.json
+  # 위에서 수행 (이 .px 안에서는 *envelope shape* 만 정의).
+
+  searchLeanByConceptShape = conceptKeywords: moduleHints: {
+    query_kind = "substrate-concept-to-lean-search";
+    inputs = {
+      concept_keywords = conceptKeywords;  # ["galois", "field"] 등
+      module_hints = moduleHints;  # ["Mathlib/FieldTheory/Galois"] 등
+    };
+    expected_envelope = {
+      matched_count = "number";  # 0 = held-no-mathlib-match
+      matched_entries = "list of mkLeanTheoremAnkhEntry";
+      held_kind = "null | held-no-mathlib-match | held-too-many-matches";
+    };
+    runtime_owner = "Rust loader at data/leandojo/substrate_relevant_index.json";
+  };
+
+  # =================================================================
+  # === Sample entries (manual probe, 3 examples) ====================
+  # =================================================================
+  #
+  # 실제 corpus 에서 manually verified 3 entries — schema 검증 용.
+
+  sampleEntries = [
+    (mkLeanTheoremAnkhEntry {
+      full_name = "IsGalois";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 50;
+      code_preview = "@[stacks 09I0] class IsGalois : Prop where   [to_isSeparable : Algebra.IsSeparable F E]   [to_normal : Normal F E]";
+    })
+    (mkLeanTheoremAnkhEntry {
+      full_name = "isGalois_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 59;
+      code_preview = "theorem isGalois_iff : IsGalois F E ↔ Algebra.IsSeparable F E ∧ Normal F E";
+    })
+    (mkLeanTheoremAnkhEntry {
+      full_name = "IsGalois.self";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/FieldTheory/Galois/Basic.lean";
+      start_line = 71;
+      code_preview = "instance self : IsGalois F F :=   ⟨⟩";
+    })
+  ];
+
+  # =================================================================
+  # === Substrate cross-reference for the 14 cohomology files =======
+  # =================================================================
+  #
+  # 우리 14 substrate files 각각의 *주요 concept* 에 대한
+  # *candidate cross-reference query* (실제 lookup 은 future runtime).
+  # 매칭 없으면 정직히 held-no-direct-mathlib-correspondence.
+
+  substrateCrossRefQueries = [
+    {
+      substrate_file = "category-sheaf-cohomology-substrate.px";
+      concept = "sheaf cohomology H^*(X, F)";
+      query = searchLeanByConceptShape ["sheaf" "cohomology"] [
+        "Mathlib/CategoryTheory/Sheaf/"
+        "Mathlib/Topology/Sheaves/"
+      ];
+      expected_match_quality = "direct";
+    }
+    {
+      substrate_file = "category-galois-substrate.px";
+      concept = "G_pnix substrate Galois";
+      query = searchLeanByConceptShape ["galois" "field"] [
+        "Mathlib/FieldTheory/Galois"
+      ];
+      expected_match_quality = "direct";
+    }
+    {
+      substrate_file = "category-motivic-substrate.px";
+      concept = "motivic category DM";
+      query = searchLeanByConceptShape ["motivic"] [];
+      expected_match_quality = "held-no-direct-mathlib-correspondence";
+    }
+    {
+      substrate_file = "category-motivic-galois-substrate.px";
+      concept = "G_mot Tannakian fiber functor";
+      query = searchLeanByConceptShape ["tannakian" "fiber functor"] [
+        "Mathlib/CategoryTheory/Monoidal/"
+      ];
+      expected_match_quality = "held-no-direct-mathlib-correspondence";
+    }
+    {
+      substrate_file = "category-crystalline-and-period-rings-substrate.px";
+      concept = "Fontaine periods B_dR / B_crys";
+      query = searchLeanByConceptShape ["fontaine" "period"] [
+        "Mathlib/NumberTheory/Padics/"
+      ];
+      expected_match_quality = "held-no-direct-mathlib-correspondence";
+    }
+    {
+      substrate_file = "category-higher-chow-bloch-substrate.px";
+      concept = "Higher Chow groups CH^q(X, n)";
+      query = searchLeanByConceptShape ["chow" "bloch"] [];
+      expected_match_quality = "held-no-direct-mathlib-correspondence";
+    }
+    {
+      substrate_file = "category-mixed-tate-motives-and-mzv-substrate.px";
+      concept = "multiple zeta values / MZV";
+      query = searchLeanByConceptShape ["zeta"] [
+        "Mathlib/NumberTheory/LSeries/"
+      ];
+      expected_match_quality = "weak (zeta basic 만)";
+    }
+    {
+      substrate_file = "category-de-rham-hodge-substrate.px";
+      concept = "de Rham complex Omega^*";
+      query = searchLeanByConceptShape ["de rham" "differential form"] [
+        "Mathlib/Geometry/Manifold/DifferentialForms"
+      ];
+      expected_match_quality = "partial (de Rham 일부, Hodge 0)";
+    }
+    {
+      substrate_file = "category-hochschild-serre-substrate.px";
+      concept = "Hochschild-Serre spectral seq";
+      query = searchLeanByConceptShape ["group" "cohomology"] [
+        "Mathlib/RepresentationTheory/GroupCohomology/"
+      ];
+      expected_match_quality = "partial (low-degree 박힘)";
+    }
+    {
+      substrate_file = "category-spectral-sequences-substrate.px";
+      concept = "spectral sequence general";
+      query = searchLeanByConceptShape ["spectral"] [
+        "Mathlib/Algebra/Homology/"
+      ];
+      expected_match_quality = "partial";
+    }
+    {
+      substrate_file = "category-derived-etale-and-l-adic-substrate.px";
+      concept = "l-adic cohomology lim H^*_et";
+      query = searchLeanByConceptShape ["adic" "etale"] [
+        "Mathlib/AlgebraicGeometry/EtaleMorphism"
+      ];
+      expected_match_quality = "weak";
+    }
+    {
+      substrate_file = "category-etale-cohomology-and-derived-substrate.px";
+      concept = "étale cohomology + derived";
+      query = searchLeanByConceptShape ["etale" "derived" "triangulated"] [
+        "Mathlib/CategoryTheory/Triangulated/"
+        "Mathlib/AlgebraicGeometry/EtaleMorphism"
+      ];
+      expected_match_quality = "partial";
+    }
+    {
+      substrate_file = "category-substrate-k-theory.px";
+      concept = "algebraic K-theory K_n";
+      query = searchLeanByConceptShape ["k-theory" "vector bundle"] [];
+      expected_match_quality = "weak (K_0 partial, higher K 0)";
+    }
+    {
+      substrate_file = "category-motivic-stable-homotopy.px";
+      concept = "Voevodsky motivic SH";
+      query = searchLeanByConceptShape ["voevodsky" "stable homotopy"] [
+        "Mathlib/AlgebraicTopology/"
+      ];
+      expected_match_quality = "held-no-direct-mathlib-correspondence";
+    }
+  ];
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    dataset_license = datasetMetadata.license;
+    dataset_license_compatible = datasetMetadata.license_compatible_with_pnix;
+    substrate_relevant_entry_count = datasetMetadata.substrate_relevant_subset_count;
+    substrate_relevant_file_count = datasetMetadata.substrate_relevant_subset_file_count;
+    sample_entry_count = 3;  # hardcoded; verified manually from corpus
+    substrate_cross_ref_query_count = 14;  # one per cohomology file
+    has_dataset_metadata = true;
+    has_mkLeanTheoremAnkhEntry_constructor = true;
+    has_searchLeanByConceptShape = true;
+    additive_only_no_replace = true;  # 기존 14 files 안 깨짐
+    five_gate_firewall_required_for_promotion = true;
+    subset_mapping_owner_inherited = subset_mapping.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyLeanTheoremAnkhPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "lean-theorem-ankh-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "metadata" request then {
+      outcome = "dataset-metadata-emitted"; receipt = datasetMetadata;
+    }
+    else if builtins.hasAttr "samples" request then {
+      outcome = "sample-entries-emitted"; receipt = sampleEntries;
+    }
+    else if builtins.hasAttr "cross_ref_queries" request then {
+      outcome = "substrate-cross-ref-queries-emitted"; receipt = substrateCrossRefQueries;
+    }
+    else if builtins.hasAttr "mk_entry" request then
+      let r = request.mk_entry;
+      in { outcome = "lean-theorem-ankh-entry-emitted";
+           receipt = mkLeanTheoremAnkhEntry r; }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "metadata" "samples" "cross_ref_queries" "mk_entry"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit datasetMetadata mkLeanTheoremAnkhEntry;
+  inherit searchLeanByConceptShape sampleEntries;
+  inherit substrateCrossRefQueries;
+  inherit inventorySummary applyLeanTheoremAnkhPlate;
+}

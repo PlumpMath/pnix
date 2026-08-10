@@ -1,0 +1,27 @@
+# stdlib/lib/nl/korean-when-hole-test.px — when=? hole(시간 연속성) lock = where=?의 시간 아날로그.
+#
+# tense(과거/현재/미래)는 모든 용언에 늘 있으나, *시점 anchor*(어제/오늘/그때…)는 선택적이다. anchor 없는 문장은
+# 서사 시간틀(narrative time frame)을 직전 문장서 물려받는다 = when=? hole 의 담화완성. where=? 와 동형이되,
+# 처소는 valency-trigger(있/가)인 반면 시간은 *연속성-trigger*(anchor 부재)이므로 droppedSlots/recovered 가 아닌
+# 별개 필드 temporal_recovered 로 둔다(기존 pro-drop/recovered 의미 무손상, dc 무수정).
+# 메커니즘: liftDiscourse 가 processed[].introduced 의 temporal entity 를 역순 스캔. 자체 anchor 있으면 복원 불요.
+# antecedent 없으면 null=미완(fail-closed, candidate≠truth). 복원은 담화층 binding(코덱 단방향, 단문 term 미주입).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  temp = sents: idx: let d = knm.liftDiscourse sents; s = B.elemAt d idx;
+                     in if s.temporal_recovered == null then "none" else s.temporal_recovered.name;
+in {
+  inherit_s1   = temp [ "어제 학교에 갔다" "잤다" ] 1;        # 어제 (서사 시간틀 물려받음)
+  self_anchor  = temp [ "어제 학교에 갔다" "잤다" ] 0;        # none (자체 시점 anchor 있음)
+  no_antecedent= temp [ "철수가 잔다" "사과를 먹었다" ] 1;    # none (앞에 temporal 없음)
+  three_chain  = temp [ "어제 갔다" "밥을 먹었다" "잤다" ] 2; # 어제 (2칸 전서도 물려받음)
+  reanchor     = temp [ "어제 갔다" "오늘 왔다" ] 1;          # none (둘째가 자체 anchor=오늘 → 복원 불요)
+  all_ok =
+       (temp [ "어제 학교에 갔다" "잤다" ] 1 == "어제")
+    && (temp [ "어제 학교에 갔다" "잤다" ] 0 == "none")
+    && (temp [ "철수가 잔다" "사과를 먹었다" ] 1 == "none")
+    && (temp [ "어제 갔다" "밥을 먹었다" "잤다" ] 2 == "어제")
+    # ★re-anchor: 둘째 문장이 자체 시점(오늘) 가지면 복원 안 함(자기 anchor 우선)
+    && (temp [ "어제 갔다" "오늘 왔다" ] 1 == "none")
+    # 회귀: temporal_recovered 는 별개 필드 — recovered(pro-drop) 무손상(철수가 잔다 단문=recovered 무관)
+    && ((knm.convergeGate "철수가 잤다").verdict == "math-keep");
+}

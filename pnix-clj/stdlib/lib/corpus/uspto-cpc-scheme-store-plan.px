@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/uspto-cpc-scheme-store-plan.px — CPC scheme/title/symbol metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# Patent documents/CPC definitions prose/MCF assignment payloads/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./uspto-cpc-scheme.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "patent.uspto_cpc.scheme.v1";
+    source = { name = "CPC scheme metadata"; license = "CPC official open data / public classification scheme"; scope = "empty seed fallback"; };
+    summary = { section_count = 0; patent_documents_ingested = false; mirror_graph_wiring = false; };
+    source_files = [ ]; sections = [ ]; level_counts = [ ]; status_counts = [ ]; flag_counts = [ ]; title_counts_by_section = [ ]; symbol_rows = [ ]; title_rows = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "uspto-cpc-scheme-load-v0";
+      source_lens = "stdlib/lib/corpus/uspto-cpc-scheme-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "patent.uspto_cpc.scheme.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "uspto-cpc-scheme-query-v0";
+      source_lens = "stdlib/lib/corpus/uspto-cpc-scheme-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "patent.uspto_cpc.scheme.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

@@ -1,0 +1,146 @@
+# stdlib.lib.math.pascal-triangle
+#
+# OWNER-LAW (v0.12-AAT, div-math, 2026-05-21): Pascal's triangle.
+#
+# combinatorics.px computes a binomial coefficient C(n,k) on its
+# own. This owner builds the whole triangular ARRAY of them --
+# Pascal's triangle -- the way it is actually constructed: each
+# row from the one above, every interior entry the sum of the two
+# entries over it.
+#
+# # Built by the addition rule, not by the formula
+#
+# `pascalRow` starts from [1] and repeatedly applies the rule
+# `next = [1] ++ pairwise-sums ++ [1]`. So row 4 is [1 4 6 4 1],
+# computed by additions alone -- no factorials. `pascalEntry` then
+# reads a single C(row,col) off the built row; `rowSum` confirms
+# the n-th row sums to exactly 2^n.
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT memoised across calls -- each row is rebuilt from [1].
+#   - NOT the generalised (negative / fractional) binomial.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/pascal-triangle.px";
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # The row below `row`: a leading 1, the pairwise sums of
+  # adjacent entries, a trailing 1.
+  nextRow = row:
+    let
+      n = builtins.length row;
+      inner =
+        builtins.map
+          (i:
+            (builtins.elemAt row i) + (builtins.elemAt row (i + 1)))
+          (rangeList 0 (n - 2));
+    in [ 1 ] ++ inner ++ [ 1 ];
+
+  # Row n of Pascal's triangle (row 0 = [1]). Built by applying
+  # the addition rule n times.
+  pascalRow = n:
+    let
+      go = k: row:
+        if k >= n then row else go (k + 1) (nextRow row);
+    in if n < 0 then [] else go 0 [ 1 ];
+
+  # The first n rows (rows 0 .. n-1).
+  pascalTriangle = n:
+    if n < 1 then []
+    else builtins.map pascalRow (rangeList 0 (n - 1));
+
+  # The single entry C(row, col).
+  pascalEntry = row: col:
+    let r = pascalRow row;
+    in
+      if col < 0 || col >= builtins.length r then 0
+      else builtins.elemAt r col;
+
+  # The sum of row n -- always exactly 2^n.
+  rowSum = n:
+    builtins.foldl' (acc: x: acc + x) 0 (pascalRow n);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [ "row" "triangle" "entry" "row-sum" ];
+
+  triangleLimit = 60;
+
+  applyPascal = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      row = if request ? row then request.row else 0;
+      col = if request ? col then request.col else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if (op == "row" || op == "triangle" || op == "row-sum")
+              && n < 0 then {
+        outcome = "held-negative-row";
+        operation = op;
+        n = n;
+      }
+      else if (op == "row" || op == "triangle" || op == "row-sum")
+              && n > triangleLimit then {
+        outcome = "held-row-too-large";
+        operation = op;
+        n = n;
+        limit = triangleLimit;
+      }
+      else if op == "entry" && (row < 0 || row > triangleLimit) then {
+        outcome = "held-row-too-large";
+        operation = op;
+        row = row;
+        limit = triangleLimit;
+      }
+      else if op == "row" then {
+        outcome = "pascal-computed";
+        operation = op; n = n;
+        row = pascalRow n;
+      }
+      else if op == "triangle" then {
+        outcome = "pascal-computed";
+        operation = op; n = n;
+        triangle = pascalTriangle n;
+      }
+      else if op == "entry" then {
+        outcome = "pascal-computed";
+        operation = op; row = row; col = col;
+        value = pascalEntry row col;
+      }
+      else {
+        # op == "row-sum"
+        outcome = "pascal-computed";
+        operation = op; n = n;
+        value = rowSum n;
+      };
+
+in {
+  inherit
+    ownerName
+    nextRow
+    pascalRow
+    pascalTriangle
+    pascalEntry
+    rowSum
+    knownOperations
+    applyPascal;
+  meta = {
+    source = "stdlib math pascal triangle";
+    owner = ownerName;
+    base = "parametric-math-pascal-triangle-v0";
+    rev_note = "v0.12-AAT (div-math): Pascal's triangle owner. pascalRow builds row n from [1] by the addition rule (next = [1] ++ pairwise-sums ++ [1]) -- no factorials; pascalTriangle assembles the first n rows; pascalEntry reads a single C(row,col); rowSum confirms each row sums to 2^n. Exact integers. Standalone. NOT memoised across calls, NOT the generalised binomial, NOT yet a registered lens.";
+  };
+}

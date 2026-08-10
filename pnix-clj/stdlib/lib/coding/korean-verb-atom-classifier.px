@@ -1,0 +1,372 @@
+let
+  ownerName = "stdlib.coding.korean-verb-atom-classifier";
+
+  # v0.16-BR: Korean verb stem → atom kind classifier.
+  # Owner thesis (BL/BM/BN/BO/BP/BQ/BR dialogue):
+  #
+  # BQ closed the noun-with-postposition forward direction
+  # (token → noun + role candidates). BR closes the verb-side
+  # forward direction (verb form → atom kind candidates).
+  # Together BQ + BR cover both POS pillars of a Korean
+  # utterance — once a verb is classified to an atom kind and
+  # the noun phrases are role-tagged, a future slice (BS+) can
+  # compose them into a full atom (verb determines atom kind;
+  # noun + 조사 fills the slots per BM role algebra).
+  #
+  # 100% substrate-native — uses only pnix-eval byte-level UTF-8
+  # substring + closed lookup table. No external NLP libraries
+  # (mecab-ko / lindera / rustkorean / hangeul-rs forbidden per
+  # owner-law constitution).
+  #
+  # ── Conjugation strategy ──
+  # Korean verbs conjugate by attaching endings (다, 한다, 했다,
+  # 하면, 해서, 해라, 하고, 하지, 해야, ...) to a stem. We use
+  # PREFIX-MATCH against the stem table: "출력하다" / "출력해라"
+  # / "출력하면" all start with the stem "출력하" (or "출력해"
+  # which collapses 하+ㅏ→해), so a longest-prefix scan against
+  # the table catches every conjugation that preserves the
+  # stem-initial substring. Hap-irregular collapse (하+ㅏ→해) is
+  # handled by registering both "출력하" and "출력해" surface
+  # variants — substrate honest about Korean phonology rather
+  # than inventing an algebraic conjugator.
+
+  # Closed registry of Korean verb stems mapped to atom kinds.
+  # ORDER MATTERS — longest-match takes priority in
+  # `classifyVerbFromForm`, so the registry is sorted with
+  # longest stems first to avoid premature shorter matches
+  # (e.g. "바인딩하" 12바이트가 "하" 3바이트보다 먼저).
+  #
+  # Each row carries:
+  #   stem            — Korean verb stem (raw bytes; conjugation
+  #                     endings attach after)
+  #   stem_byte_length — UTF-8 byte count (3 bytes/Korean syllable)
+  #   atom_kinds      — BM/behavior-atom atom kind(s) this verb
+  #                     signals. Some verbs are 1:n (e.g. 출력하
+  #                     → print-line OR print-variable; downstream
+  #                     disambiguation by target slot type:
+  #                     string literal → print-line, variable name
+  #                     → print-variable).
+  #   ko_note         — short Korean linguistic note for inventory
+  #                     and documentation surfaces.
+  knownVerbAtomMappings = [
+    # === 4-syllable stems (longest first) ===
+    # 하- 활용형은 4가지 surface root 로 갈라짐:
+    #   바인딩하  — 바인딩하다 / 바인딩하면 / 바인딩하고
+    #   바인딩해  — 바인딩해 / 바인딩해라 / 바인딩해서
+    #   바인딩한  — 바인딩한다 / 바인딩한
+    #   바인딩했  — 바인딩했다 / 바인딩했어
+    # 모두 같은 atom kind 매핑을 carry. 음운변화 (하+ㄴ→한, 하+았→했)
+    # 를 algebraic conjugator 로 invent 하지 않고 surface variant 들을
+    # 정직하게 enumerate.
+    {
+      stem = "바인딩하";
+      stem_byte_length = 12;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "바인딩 (binding) — 변수에 값 묶기";
+    }
+    {
+      stem = "바인딩해";
+      stem_byte_length = 12;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "바인딩 (binding; 해- 활용형)";
+    }
+    {
+      stem = "바인딩한";
+      stem_byte_length = 12;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "바인딩 (binding; 한- 현재 평서 활용형)";
+    }
+    {
+      stem = "바인딩했";
+      stem_byte_length = 12;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "바인딩 (binding; 했- 과거 평서 활용형)";
+    }
+    # === 3-syllable stems ===
+    {
+      stem = "출력하";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "출력 (output) — 문자열 리터럴이면 print-line, 변수면 print-variable";
+    }
+    {
+      stem = "출력해";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "출력 (output; 해- 활용형)";
+    }
+    {
+      stem = "출력한";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "출력 (output; 한- 현재 평서 활용형)";
+    }
+    {
+      stem = "출력했";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "출력 (output; 했- 과거 평서 활용형)";
+    }
+    {
+      stem = "표시하";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "표시 (display) — 출력과 동의";
+    }
+    {
+      stem = "표시해";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "표시 (display; 해- 활용형)";
+    }
+    {
+      stem = "표시한";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "표시 (display; 한- 활용형)";
+    }
+    {
+      stem = "표시했";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "표시 (display; 했- 활용형)";
+    }
+    {
+      stem = "인쇄하";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "인쇄 (print) — 출력과 동의";
+    }
+    {
+      stem = "인쇄해";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "인쇄 (print; 해- 활용형)";
+    }
+    {
+      stem = "인쇄한";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "인쇄 (print; 한- 활용형)";
+    }
+    {
+      stem = "인쇄했";
+      stem_byte_length = 9;
+      atom_kinds = [ "print-line" "print-variable" ];
+      ko_note = "인쇄 (print; 했- 활용형)";
+    }
+    {
+      stem = "종료하";
+      stem_byte_length = 9;
+      atom_kinds = [ "exit-with-code" ];
+      ko_note = "종료 (terminate)";
+    }
+    {
+      stem = "종료해";
+      stem_byte_length = 9;
+      atom_kinds = [ "exit-with-code" ];
+      ko_note = "종료 (terminate; 해- 활용형)";
+    }
+    {
+      stem = "종료한";
+      stem_byte_length = 9;
+      atom_kinds = [ "exit-with-code" ];
+      ko_note = "종료 (terminate; 한- 활용형)";
+    }
+    {
+      stem = "종료했";
+      stem_byte_length = 9;
+      atom_kinds = [ "exit-with-code" ];
+      ko_note = "종료 (terminate; 했- 활용형)";
+    }
+    {
+      stem = "입력받";
+      stem_byte_length = 9;
+      atom_kinds = [ "read-line" ];
+      ko_note = "입력 받기 (read input) — 받- 어간은 음운변화 없이 통일";
+    }
+    {
+      stem = "정의하";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "정의 (definition) — 변수 정의";
+    }
+    {
+      stem = "정의해";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "정의 (definition; 해- 활용형)";
+    }
+    {
+      stem = "정의한";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "정의 (definition; 한- 활용형)";
+    }
+    {
+      stem = "정의했";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "정의 (definition; 했- 활용형)";
+    }
+    {
+      stem = "할당하";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "할당 (assignment)";
+    }
+    {
+      stem = "할당해";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "할당 (assignment; 해- 활용형)";
+    }
+    {
+      stem = "할당한";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "할당 (assignment; 한- 활용형)";
+    }
+    {
+      stem = "할당했";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "할당 (assignment; 했- 활용형)";
+    }
+    {
+      stem = "저장하";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "저장 (storage)";
+    }
+    {
+      stem = "저장해";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "저장 (storage; 해- 활용형)";
+    }
+    {
+      stem = "저장한";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "저장 (storage; 한- 활용형)";
+    }
+    {
+      stem = "저장했";
+      stem_byte_length = 9;
+      atom_kinds = [ "bind-variable" ];
+      ko_note = "저장 (storage; 했- 활용형)";
+    }
+    # === 2-syllable stems ===
+    # 끝내- 어간은 ㅐ + ㄴ → ㅐㄴ 결합으로 끝낸- / 끝냈- 변종 분기
+    {
+      stem = "끝내";
+      stem_byte_length = 6;
+      atom_kinds = [ "exit-with-code" ];
+      ko_note = "끝내기 (end)";
+    }
+    {
+      stem = "끝낸";
+      stem_byte_length = 6;
+      atom_kinds = [ "exit-with-code" ];
+      ko_note = "끝내기 (end; 끝낸- 활용형)";
+    }
+    {
+      stem = "끝냈";
+      stem_byte_length = 6;
+      atom_kinds = [ "exit-with-code" ];
+      ko_note = "끝내기 (end; 끝냈- 과거 활용형)";
+    }
+    # === 1-syllable stems (last — shortest) ===
+    {
+      stem = "읽";
+      stem_byte_length = 3;
+      atom_kinds = [ "read-line" ];
+      ko_note = "읽기 (read) — ㄱ 받침은 음운변화 없이 통일 (읽다/읽었다/읽는다)";
+    }
+  ];
+
+  # Helper: check if a verb form starts with a specific stem.
+  # Returns true iff form has ≥ stem_byte_length bytes AND the
+  # first stem_byte_length bytes equal `stem`.
+  verbFormStartsWithStem = verbForm: cand:
+    let
+      formLen = builtins.stringLength verbForm;
+    in
+      if formLen < cand.stem_byte_length then false
+      else
+        (builtins.substring 0 cand.stem_byte_length verbForm)
+          == cand.stem;
+
+  # Core classifier: scan `knownVerbAtomMappings` in declared
+  # order (longest-match first) and return the first matching
+  # stem's analysis. Returns null if no stem found at the
+  # verb form's start.
+  #
+  # Return shape (when match):
+  #   { matched_stem, stem_byte_length, atom_kinds, suffix,
+  #     ko_note }
+  #
+  # `suffix` carries everything after the matched stem (the
+  # raw conjugation ending — "다", "한다", "했다", "하면",
+  # "해서", "해라", etc.). Downstream slices can analyze the
+  # suffix for tense/mood/imperative information; this slice
+  # is honest about NOT classifying the suffix itself.
+  classifyVerbFromForm = verbForm:
+    let
+      findFirstMatch = candidates:
+        if candidates == [] then null
+        else
+          let head_cand = builtins.head candidates; in
+            if verbFormStartsWithStem verbForm head_cand then
+              let
+                formLen = builtins.stringLength verbForm;
+                suffixLen = formLen - head_cand.stem_byte_length;
+              in {
+                matched_stem = head_cand.stem;
+                stem_byte_length = head_cand.stem_byte_length;
+                atom_kinds = head_cand.atom_kinds;
+                suffix = builtins.substring head_cand.stem_byte_length
+                  suffixLen verbForm;
+                ko_note = head_cand.ko_note;
+              }
+            else findFirstMatch (builtins.tail candidates);
+    in
+      findFirstMatch knownVerbAtomMappings;
+
+  # ── inventory ──
+
+  inventorySummary = _:
+    let
+      atomKinds =
+        builtins.concatMap (r: r.atom_kinds) knownVerbAtomMappings;
+      dedup = list:
+        builtins.foldl'
+          (acc: x: if builtins.elem x acc then acc else acc ++ [x])
+          []
+          list;
+    in {
+      owner = ownerName;
+      verb_stem_count = builtins.length knownVerbAtomMappings;
+      verb_stems =
+        builtins.map (r: r.stem) knownVerbAtomMappings;
+      atom_kind_coverage_set =
+        builtins.sort (a: b: a < b) (dedup atomKinds);
+      atom_kind_coverage_count =
+        builtins.length (dedup atomKinds);
+    };
+
+in {
+  inherit
+    ownerName
+    knownVerbAtomMappings
+    verbFormStartsWithStem
+    classifyVerbFromForm
+    inventorySummary;
+  meta = {
+    source = "stdlib coding korean verb atom classifier";
+    owner = ownerName;
+    base = "korean-verb-atom-classifier-v0";
+    rev_note = "v0.16-BR: Korean verb stem → atom kind classifier closes the forward direction's verb side. Pairs with BQ (forward noun+조사 → role candidates) to cover both POS pillars of a Korean utterance. 37 stem rows × 5 atom kinds (print-line, print-variable, exit-with-code, read-line, bind-variable). 한국어 음운변화 (하+ㄴ→한, 하+았→했, 하+ㅏ→해, 내+ㄴ→낸, 내+었→냈) algebraic conjugator 로 invent 하지 않고 surface variant 4개 (하/해/한/했) 를 verb 마다 정직하게 enumerate. Longest-prefix-match scan handles every conjugation that preserves one of these surface roots (다/면/서/라/고/지/야 등의 ending 들). 4 atom kinds intentionally NOT covered: comment (no Korean verb maps cleanly), if-true-then (handled by AC nested NL surface), repeat-n-times (handled by BH count-before-trigger), loop-while-true (deferred). 1:n verbs (출력하 → [print-line, print-variable]) preserve substrate ambiguity until downstream slot fill disambiguates. No external NLP (mecab-ko / lindera / rustkorean / hangeul-rs forbidden per owner-law constitution). Full Korean utterance → atom forward parsing (BQ + BR + slot composer) = BS+ slices.";
+  };
+}

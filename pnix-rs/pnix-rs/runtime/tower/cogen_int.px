@@ -1,0 +1,25 @@
+# tower 0004: a HAND-WRITTEN generating extension (cogen) for the arithmetic
+# object language (num/arg/add/mul), expressed IN px.
+#
+# deep-research finding [3] (Leuschel et al.): "reap the benefits of
+# self-application without a self-applicable specialiser" — instead of the
+# intractable self-application of the online mix (m6c~m8: polyvariance
+# explosion), HAND-WRITE the compiler generator. cogen is a px function that
+# takes an object program and returns the tower-ENCODED residual (the compiled
+# code) — the specialization of `int` to that program, produced directly.
+#
+# The interpretive layer is gone by construction: cogen emits bare arithmetic
+# (kind int/var/binary) with the interpreter's dispatch (prog.tag / recursion)
+# fully consumed at generation time. Bounded to this object language — NOT the
+# full 3rd Futamura projection (self-application of a feature-rich specialiser
+# remains a research horizon).
+#
+# The whole file evaluates to `cogen`, a lambda: prog -> encoded residual.
+let
+  cogen = prog:
+    if prog.tag == "num" then { kind = "int"; value = prog.value; }
+    else if prog.tag == "arg" then { kind = "var"; name = "input"; }
+    else if prog.tag == "add"
+    then { kind = "binary"; op = "+"; lhs = cogen prog.l; rhs = cogen prog.r; }
+    else { kind = "binary"; op = "*"; lhs = cogen prog.l; rhs = cogen prog.r; };
+in cogen

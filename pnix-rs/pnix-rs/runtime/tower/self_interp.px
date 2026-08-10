@@ -1,0 +1,103 @@
+# tower milestone-2: a px-written interpreter for reified px programs, with
+# RECURSIVE let semantics (audit A4: bindings form a recursive scope — siblings
+# and self-references resolve, and within one frame the LATER binding shadows
+# the earlier one).
+#
+# Input encoding (produced by src/tower.rs reify): attrsets with a `kind` tag —
+#   { kind = "int"; value = 5; }            { kind = "bool"; value = true; }
+#   { kind = "var"; name = "x"; }
+#   { kind = "lambda"; param = "x"; body = <node>; }
+#   { kind = "apply"; func = <node>; arg = <node>; }
+#   { kind = "if"; cond = <node>; then_e = <node>; else_e = <node>; }
+#   { kind = "binary"; op = "+"; lhs = <node>; rhs = <node>; }
+#   { kind = "let"; bindings = [ { name = "a"; value = <node>; } ]; body = <node>; }
+#
+# Environment entries are either evaluated binds { name; value; } (lambda
+# parameters) or recursive frames { rec = true; bindings = [...]; }. A hit in a
+# recursive frame evaluates the binding NODE in the environment that still
+# starts at that frame (call-by-name recursive scope), scanning the frame
+# back-to-front so later bindings shadow earlier ones.
+#
+# SCOPE (through milestone-4): int/bool/var/lambda/apply/if/binary(incl.
+# ++ //)/RECURSIVE let/str(+interpolation)/list/attrs/select, and HIGHER-ORDER
+# builtins: encoded programs see `gbuiltins` (host builtins with map/filter/
+# sort/foldl' overridden by guest wrappers), so guest closures flow into the
+# higher-order builtins through `gapply` — the bridge is pure guest code, the
+# px runtime is unchanged. Observable edge (documented): printing `builtins`
+# itself from an encoded program shows the wrapper lambdas. A real cogen and
+# full S = L are not claimed.
+#
+# Closures are attrsets { closure = true; param; body; env; }. The whole file
+# evaluates to `eval`, a curried lambda: env: node: value.
+let
+  scanrev = bs: n:
+    if builtins.length bs == 0
+    then { found = false; }
+    else (let rest = scanrev (builtins.tail bs) n;
+          in if rest.found
+             then rest
+             else if (builtins.head bs).name == n
+             then { found = true; node = (builtins.head bs).value; }
+             else { found = false; });
+
+  lookup = env: n:
+    (let e = builtins.head env;
+     in if builtins.hasAttr "rec" e
+        then (let hit = scanrev e.bindings n;
+              in if hit.found
+                 then eval env hit.node
+                 else lookup (builtins.tail env) n)
+        else if e.name == n
+        then e.value
+        else lookup (builtins.tail env) n);
+
+  gapply = f: a:
+    if builtins.isAttrs f
+    then (if builtins.hasAttr "closure" f
+          then eval ([ { name = f.param; value = a; } ] ++ f.env) f.body
+          else f a)
+    else f a;
+
+  gbuiltins = builtins // {
+    map = f: xs: builtins.map (x: gapply f x) xs;
+    filter = f: xs: builtins.filter (x: gapply f x) xs;
+    sort = f: xs: builtins.sort (a: b: gapply (gapply f a) b) xs;
+    foldl' = f: acc: xs: builtins.foldl' (ac: x: gapply (gapply f ac) x) acc xs;
+  };
+
+  eval = env: node:
+    if node.kind == "int" then node.value
+    else if node.kind == "bool" then node.value
+    else if node.kind == "var" then
+      (if node.name == "builtins" then gbuiltins else lookup env node.name)
+    else if node.kind == "lambda" then { closure = true; param = node.param; body = node.body; env = env; }
+    else if node.kind == "apply" then
+      gapply (eval env node.func) (eval env node.arg)
+    else if node.kind == "if" then
+      (if eval env node.cond then eval env node.then_e else eval env node.else_e)
+    else if node.kind == "binary" then
+      (let l = eval env node.lhs; r = eval env node.rhs;
+       in if node.op == "+" then l + r
+          else if node.op == "-" then l - r
+          else if node.op == "*" then l * r
+          else if node.op == "/" then l / r
+          else if node.op == "==" then l == r
+          else if node.op == "!=" then l != r
+          else if node.op == "<" then l < r
+          else if node.op == "<=" then l <= r
+          else if node.op == ">" then l > r
+          else if node.op == ">=" then l >= r
+          else if node.op == "++" then l ++ r
+          else l // r)
+    else if node.kind == "str" then
+      builtins.concatStringsSep ""
+        (builtins.map (p: if p.kind == "lit" then p.text else eval env p.node) node.parts)
+    else if node.kind == "list" then
+      builtins.map (x: eval env x) node.items
+    else if node.kind == "attrs" then
+      builtins.listToAttrs
+        (builtins.map (f: { name = f.name; value = eval env f.value; }) node.fields)
+    else if node.kind == "select" then
+      builtins.getAttr node.name (eval env node.base)
+    else eval ([ { rec = true; bindings = node.bindings; } ] ++ env) node.body;
+in eval

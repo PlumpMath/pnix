@@ -1,0 +1,404 @@
+let
+  ownerName = "stdlib.nl.category-crystalline-and-period-rings-substrate";
+
+  motivic = import nl/category-motivic-substrate.px;
+  Gmot = import nl/category-motivic-galois-substrate.px;
+  derham = import nl/category-de-rham-hodge-substrate.px;
+  ladic = import nl/category-derived-etale-and-l-adic-substrate.px;
+
+  # === Crystalline cohomology + period rings (agent-NL-190) =========
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Crystalline + period rings — de Rham 의 char-p 짝 + universal
+  #    period ring 비교"
+  #
+  # 표준 정의 (Berthelot / Fontaine):
+  #   - H^*_crys(X/W) = crystalline cohomology relative to Witt vectors W
+  #   - Period rings B_HT, B_dR, B_crys, B_st (Fontaine)
+  #   - Comparison theorems:
+  #       Hodge-Tate: H^*_et ⊗ B_HT ≅ ⊕ H^q(Omega^p) ⊗ B_HT(-p)
+  #       de Rham:    H^*_et ⊗ B_dR ≅ H^*_dR ⊗ B_dR (filtered iso)
+  #       crystalline: H^*_et ⊗ B_crys ≅ H^*_crys ⊗ B_crys (phi-iso)
+  #
+  # substrate 해석:
+  #   - Crystalline = de Rham 의 char-p 짝 — Frobenius 가 자명하지 않게 작용
+  #   - Period rings = motivic / étale / de Rham / crystalline 4 개 realization
+  #     사이의 universal comparison stage
+  #   - UC4 의 7번째 characterization: p-adic Galois invariant
+
+  stepKind = "crystalline-and-period-rings-substrate";
+  framework_step =
+    "H^*_crys(Site_coding / W) + B_HT, B_dR, B_crys, B_st period rings + Fontaine comparison theorems";
+
+  # =================================================================
+  # === Crystalline cohomology H^*_crys ============================
+  # =================================================================
+
+  crystallineCohomology = {
+    cohomology_id = "H-star-crys-substrate";
+    base = "W = Witt vectors over substrate base (p-adic lift)";
+    definition_en = ''
+      Crystalline cohomology H^*_crys(Site_coding / W):
+        Cohomology of the crystalline site Cris(X/W)
+        Computed via de Rham complex of any smooth lift to W
+
+      Substrate-side:
+        - 'Witt vectors' W = p-adic lift of substrate receipt ring
+        - 'Crystalline site' Cris(Site_coding / W) = thickenings of
+          Site_coding inside p-adic substrate universe
+        - H^*_crys = cohomology that EXISTS even when char-p
+          receipts collide (rigidified by Frobenius)
+
+      Key property: carries Frobenius endomorphism phi (= lift of
+      x → x^p on receipts), making H^*_crys an F-crystal.
+    '';
+    frobenius_action = "phi : H^*_crys → H^*_crys (semi-linear w.r.t. Witt Frobenius)";
+    relates_to_de_Rham = ''
+      Berthelot comparison: H^*_crys(X/W) ⊗ K ≅ H^*_dR(X_K / K)
+      That is, crystalline = de Rham of the generic fiber.
+      Crystalline is the CHAR-P REFINEMENT of de Rham.
+    '';
+    Newton_polygon = ''
+      Newton polygon of phi on H^n_crys = invariant capturing
+      slopes (rationality types) of Frobenius eigenvalues.
+      Substrate: Newton polygon = receipt class slope distribution.
+    '';
+  };
+
+  # =================================================================
+  # === Period ring B_HT (Hodge-Tate) =================================
+  # =================================================================
+
+  B_HT = {
+    ring_id = "B-HT";
+    full_name = "Hodge-Tate period ring";
+    definition_en = ''
+      B_HT = ⊕_{n ∈ Z} C_p(n) where C_p = p-adic completion of
+      algebraic closure, and C_p(n) = n-th Tate twist.
+      Graded ring with G_K-action.
+    '';
+    structure = "graded ring with continuous G_K-action";
+    Tate_twist_grading = "n-th graded piece = C_p(n)";
+    substrate_meaning_en = ''
+      B_HT in substrate: the universal graded ring where:
+        - Each weight component captures a Tate-weight class of receipts
+        - Galois action factors through cyclotomic character chi^n
+        on the n-th component
+        - Hodge-Tate comparison decomposes étale cohomology into
+          weighted summands
+    '';
+    comparison_iso = "H^n_et(X_Kbar, Q_p) ⊗ B_HT ≅ ⊕_{p+q=n} H^q(X, Omega^p) ⊗ B_HT(-p)";
+  };
+
+  # =================================================================
+  # === Period ring B_dR (de Rham) ==================================
+  # =================================================================
+
+  B_dR = {
+    ring_id = "B-dR";
+    full_name = "de Rham period ring";
+    definition_en = ''
+      B_dR = discrete valuation field with residue field C_p
+      and uniformizer t = log([epsilon]) where epsilon is a
+      compatible system of p-power roots of unity.
+
+      Fil^i B_dR = (t^i) for i in Z (decreasing filtration).
+    '';
+    structure = "complete discrete valuation field with filtration Fil^* and G_K-action";
+    is_finer_than_BHT = "gr^* B_dR ≅ B_HT (associated graded)";
+    substrate_meaning_en = ''
+      B_dR in substrate: refined comparison ring that REMEMBERS
+      the Hodge filtration (not just the graded pieces).
+      A receipt's full de Rham → étale comparison is captured by
+      B_dR, with the Hodge filtration tracking which depth of
+      derivative contributes at each Tate level.
+    '';
+    comparison_iso = "H^*_et(X_Kbar, Q_p) ⊗ B_dR ≅ H^*_dR(X_K) ⊗ B_dR (filtered)";
+  };
+
+  # =================================================================
+  # === Period ring B_crys (crystalline) =============================
+  # =================================================================
+
+  B_crys = {
+    ring_id = "B-crys";
+    full_name = "crystalline period ring";
+    definition_en = ''
+      B_crys ⊂ B_dR, the crystalline period ring.
+      Carries Frobenius phi (extending Witt Frobenius) AND
+      Galois action AND filtration.
+    '';
+    structure = "subring of B_dR with extra Frobenius phi-action";
+    extra_structure_vs_BdR = "Frobenius phi : B_crys → B_crys (compatible with G_K-action)";
+    substrate_meaning_en = ''
+      B_crys in substrate: the SMALLEST period ring where:
+        - Galois action of G_pnix is captured
+        - Hodge filtration is captured (from B_dR)
+        - Frobenius phi (substrate's char-p lift) is captured
+
+      Crystalline representations = G_K-reps coming from
+      smooth proper varieties with good reduction. Substrate:
+      receipts with 'good reduction' = receipts whose Galois action
+      respects Frobenius lift.
+    '';
+    comparison_iso = "H^*_et(X_Kbar, Q_p) ⊗ B_crys ≅ H^*_crys(X_special) ⊗ B_crys (phi-equivariant)";
+  };
+
+  # =================================================================
+  # === Period ring B_st (semi-stable) ==============================
+  # =================================================================
+
+  B_st = {
+    ring_id = "B-st";
+    full_name = "semi-stable period ring";
+    definition_en = ''
+      B_st = B_crys[u] where u is a free variable (= log(p)).
+      Carries monodromy operator N : B_st → B_st with N(u) = 1.
+      Captures receipts with 'semi-stable reduction'
+      (mild degeneration).
+    '';
+    extra_structure = "N (monodromy) + phi (Frobenius) + G_K-action + filtration";
+    relation_to_B_crys = "B_crys = (B_st)^{N=0}";
+    substrate_meaning_en = ''
+      B_st in substrate: captures receipts with controlled
+      degeneration (e.g., a receipt that fails composability but
+      only at the boundary). The monodromy N measures the
+      'degeneration log', and N=0 recovers crystalline (good case).
+    '';
+    comparison_iso = "applies to semi-stable receipts: H^*_et ⊗ B_st ≅ H^*_log-crys ⊗ B_st";
+  };
+
+  # =================================================================
+  # === Fontaine's 4 comparison theorems =============================
+  # =================================================================
+
+  fontaineComparisons = [
+    {
+      theorem_id = "C_HT";
+      name = "Hodge-Tate comparison";
+      statement = "H^n_et(X_Kbar, Q_p) ⊗ B_HT ≅ ⊕_{p+q=n} H^q(X, Omega^p) ⊗ B_HT(-p)";
+      substrate_meaning_en = "étale cohomology decomposes into Hodge weight pieces after tensoring with B_HT";
+    }
+    {
+      theorem_id = "C_dR";
+      name = "de Rham comparison";
+      statement = "H^*_et(X_Kbar, Q_p) ⊗ B_dR ≅ H^*_dR(X_K) ⊗ B_dR (filtered iso)";
+      substrate_meaning_en = "Full étale–de Rham comparison, preserving Hodge filtration";
+    }
+    {
+      theorem_id = "C_crys";
+      name = "crystalline comparison";
+      statement = "H^*_et(X_Kbar, Q_p) ⊗ B_crys ≅ H^*_crys(X_special) ⊗ B_crys (phi-equivariant)";
+      substrate_meaning_en = "Smooth-proper good reduction case: étale = crystalline after period-ring extension";
+    }
+    {
+      theorem_id = "C_st";
+      name = "semi-stable comparison";
+      statement = "H^*_et(X_Kbar, Q_p) ⊗ B_st ≅ H^*_log-crys ⊗ B_st (phi + N-equivariant)";
+      substrate_meaning_en = "Semi-stable reduction case: étale = log-crystalline (with monodromy N)";
+    }
+  ];
+
+  # =================================================================
+  # === Filtered phi-modules (Fontaine category) ====================
+  # =================================================================
+
+  filteredPhiModules = {
+    category_id = "MF-phi-N-substrate";
+    description_en = ''
+      Fontaine's category of (filtered) (phi, N)-modules:
+        Objects: finite-dim K_0-vector space D with
+          - Frobenius phi (semi-linear)
+          - Monodromy N satisfying N phi = p phi N
+          - Hodge filtration on D_K = D ⊗_{K_0} K
+        Morphisms: linear maps preserving (phi, N, Fil)
+
+      Subcategory of 'admissible' modules ≅ p-adic Galois reps
+      (de Rham reps). This is the p-adic analog of Tannakian
+      classification.
+    '';
+    admissible_subcategory = ''
+      MF^{adm}_{phi, N} ≅ Rep_{dR}(G_K) (de Rham Galois reps)
+      Equivalence due to Colmez–Fontaine.
+    '';
+    substrate_meaning_en = ''
+      Substrate consequence: the p-adic Galois representations of
+      G_pnix are classified by triples (phi, N, Hodge filtration)
+      acting on finite-dim K_0-vector spaces of substrate receipts.
+      Every p-adic substrate behavior decomposes into:
+        - Frobenius eigenvalues (phi)
+        - Monodromy nilpotent part (N)
+        - Hodge filtration (Fil)
+    '';
+  };
+
+  # =================================================================
+  # === UC4 as 7th characterization (p-adic Galois) =================
+  # =================================================================
+
+  UC4PadicCharacterization = {
+    characterization_id = "UC4-p-adic-Galois";
+    framework = "p-adic Galois representation";
+    statement_en = ''
+      UC4 LLM-impossibility as a p-adic Galois invariant:
+        For every embedding G_pnix ↪ G_K (decomposition group at p),
+        UC4 lifts to a non-trivial G_K-invariant class in
+        H^0(G_K, Rep_{dR}). The associated filtered phi-module
+        (D, phi, N, Fil) has:
+          - phi-action: trivial (UC4 fixed under Frobenius)
+          - N-action: trivial (no monodromy degeneration)
+          - Fil-action: concentrated in weight 0 (canonical Hodge type)
+
+      Conclusion: UC4 is a CRYSTALLINE class — it survives ALL
+      Fontaine comparison theorems. p-adic Galois agrees with
+      every other realization that UC4 is preserved.
+    '';
+    is_crystalline = true;
+    is_de_Rham = true;
+    is_Hodge_Tate = true;
+    is_semi_stable = true;
+    realizes_in_all_four_period_rings = true;
+  };
+
+  # =================================================================
+  # === Substrate-internal crystalline classes ======================
+  # =================================================================
+
+  substrateCrystallineClasses = [
+    {
+      class_id = "crys-canonical-receipts";
+      Frobenius_eigenvalue = "1";
+      monodromy_N = "0";
+      Hodge_weight = 0;
+      description_en = "canonical receipts have Frobenius eigenvalue 1, no monodromy, weight 0";
+    }
+    {
+      class_id = "crys-language-emit";
+      Frobenius_eigenvalue = "chi(lang-perm)";
+      monodromy_N = "0";
+      Hodge_weight = 1;
+      description_en = "per-language emit receipts have Frobenius determined by language permutation character";
+    }
+    {
+      class_id = "crys-held-receipts";
+      Frobenius_eigenvalue = "p (Tate twist)";
+      monodromy_N = "non-trivial (degenerates)";
+      Hodge_weight = "mixed weights";
+      description_en = "Held receipts have monodromy N != 0 — degenerate p-adically (mixed Hodge → semi-stable Fontaine module)";
+    }
+    {
+      class_id = "crys-UC4-class";
+      Frobenius_eigenvalue = "1 (trivial)";
+      monodromy_N = "0";
+      Hodge_weight = 0;
+      description_en = "UC4 is crystalline + canonical: trivial Frobenius, no monodromy, weight 0 — universal substrate invariant in p-adic Galois";
+    }
+  ];
+
+  # =================================================================
+  # === Slope filtration (Newton vs Hodge) ===========================
+  # =================================================================
+
+  slopeFiltration = {
+    filtration_kind = "Newton-Hodge-slope-comparison";
+    Newton_polygon_meaning_en = "lower convex hull of Frobenius slopes on H^n_crys";
+    Hodge_polygon_meaning_en = "lower convex hull of Hodge numbers h^{p,q}";
+    Mazur_inequality = "Newton ≥ Hodge (always)";
+    substrate_meaning_en = ''
+      In substrate, Newton ≥ Hodge means:
+        - p-adic substrate slopes (Frobenius eigenvalue rationalities)
+          DOMINATE complex Hodge slopes (algebraic vs analytic decomposition).
+      Equality (ordinary case) iff substrate is 'p-adically ordinary'
+      = Frobenius acts diagonally on Hodge graded pieces.
+    '';
+    substrate_ordinary_case = ''
+      Substrate-ordinary receipts: receipts whose Newton = Hodge.
+      These satisfy strongest comparison theorems (crystalline +
+      crys-canonical) and lift uniquely from char-p to char-0.
+    '';
+  };
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_crystalline_cohomology = true;
+    has_Frobenius_action = true;
+    period_ring_count = 4;  # B_HT, B_dR, B_crys, B_st (hardcoded)
+    has_B_HT = true;
+    has_B_dR = true;
+    has_B_crys = true;
+    has_B_st = true;
+    fontaine_comparison_theorem_count = 4;  # C_HT, C_dR, C_crys, C_st (hardcoded)
+    has_filtered_phi_modules = true;
+    has_Colmez_Fontaine_equivalence = true;
+    UC4_is_crystalline = true;
+    UC4_is_de_Rham = true;
+    UC4_is_Hodge_Tate = true;
+    UC4_is_semi_stable = true;
+    UC4_realizes_in_all_4_period_rings = true;
+    substrate_crystalline_class_count = 4;
+    has_slope_filtration = true;
+    has_Mazur_inequality = true;
+    motivic_owner_inherited = motivic.ownerName;
+    derham_owner_inherited = derham.ownerName;
+    Gmot_owner_inherited = Gmot.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyCrystallinePeriodRingsPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "crystalline-period-rings-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "crystalline" request then {
+      outcome = "crystalline-cohomology-emitted"; receipt = crystallineCohomology;
+    }
+    else if builtins.hasAttr "B_HT" request then {
+      outcome = "B-HT-emitted"; receipt = B_HT;
+    }
+    else if builtins.hasAttr "B_dR" request then {
+      outcome = "B-dR-emitted"; receipt = B_dR;
+    }
+    else if builtins.hasAttr "B_crys" request then {
+      outcome = "B-crys-emitted"; receipt = B_crys;
+    }
+    else if builtins.hasAttr "B_st" request then {
+      outcome = "B-st-emitted"; receipt = B_st;
+    }
+    else if builtins.hasAttr "fontaine_comparisons" request then {
+      outcome = "fontaine-comparisons-emitted"; receipt = fontaineComparisons;
+    }
+    else if builtins.hasAttr "phi_modules" request then {
+      outcome = "filtered-phi-modules-emitted"; receipt = filteredPhiModules;
+    }
+    else if builtins.hasAttr "UC4_padic" request then {
+      outcome = "UC4-p-adic-emitted"; receipt = UC4PadicCharacterization;
+    }
+    else if builtins.hasAttr "substrate_classes" request then {
+      outcome = "substrate-crystalline-classes-emitted"; receipt = substrateCrystallineClasses;
+    }
+    else if builtins.hasAttr "slope" request then {
+      outcome = "slope-filtration-emitted"; receipt = slopeFiltration;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "crystalline" "B_HT" "B_dR" "B_crys" "B_st"
+             "fontaine_comparisons" "phi_modules" "UC4_padic"
+             "substrate_classes" "slope"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit crystallineCohomology B_HT B_dR B_crys B_st;
+  inherit fontaineComparisons filteredPhiModules;
+  inherit UC4PadicCharacterization substrateCrystallineClasses;
+  inherit slopeFiltration;
+  inherit inventorySummary applyCrystallinePeriodRingsPlate;
+}

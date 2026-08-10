@@ -1,0 +1,94 @@
+{:kind :rust-grounded-oracle-set
+ :source-revision {:repo "~/pnix-old"
+                   :commit "f5ce48fe9a1f7a371d7c9f96a8e0c7366e232437"
+                   :runtime-dependency false
+                   :captured-at "2026-06-29"}
+ :generated-from {:binary "~/pnix-old/target/release/pnixc-meta"
+                  :corpus "pnix_clj/rust_grounded/invariance_corpus"
+                  :binary-runtime-dependency false
+                  :captured-at "2026-06-29"}
+ :oracles
+ {:rust-grounded/c01_arith
+  {:status :ok
+   :value {"div" 10
+           "flt" 7.0
+           "mixed" 44
+           "modv" 1
+           "prod" 42
+           "sum" 23}}
+
+  :rust-grounded/c02_strings
+  {:status :ok
+   :value {"hello" "hello, pnix!"
+           "interp" "n=7 sq=49"
+           "joined" "a-b-c-pnix"
+           "len" 4
+           "sub" "abc"}}
+
+  :rust-grounded/c03_list
+  {:status :ok
+   :value {"filtered" [11 12 13 14 15 16 17 18 19 20]
+           "len" 20
+           "mapped" [1 4 9 16 25 36 49 64 81 100
+                     121 144 169 196 225 256 289 324 361 400]
+           "total" 210}}
+
+  :rust-grounded/c04_attr
+  {:status :ok
+   :value {"has" true
+           "m" {"a" 1 "b" 20 "c" 3}
+           "names" ["a" "b" "c"]
+           "pick" 3}}
+
+  :rust-grounded/c05_recurse
+  {:status :ok
+   :value {"fib" 6765
+           "sum" 125250}}
+
+  :rust-grounded/c06_nested
+  {:status :ok
+   :value "[{\"id\":1,\"sq\":1,\"tags\":[\"t1\",\"x\"]},{\"id\":2,\"sq\":4,\"tags\":[\"t2\",\"x\"]},{\"id\":3,\"sq\":9,\"tags\":[\"t3\",\"x\"]},{\"id\":4,\"sq\":16,\"tags\":[\"t4\",\"x\"]},{\"id\":5,\"sq\":25,\"tags\":[\"t5\",\"x\"]},{\"id\":6,\"sq\":36,\"tags\":[\"t6\",\"x\"]},{\"id\":7,\"sq\":49,\"tags\":[\"t7\",\"x\"]},{\"id\":8,\"sq\":64,\"tags\":[\"t8\",\"x\"]},{\"id\":9,\"sq\":81,\"tags\":[\"t9\",\"x\"]},{\"id\":10,\"sq\":100,\"tags\":[\"t10\",\"x\"]},{\"id\":11,\"sq\":121,\"tags\":[\"t11\",\"x\"]},{\"id\":12,\"sq\":144,\"tags\":[\"t12\",\"x\"]}]"}
+
+  :rust-grounded/c07_builtins
+  {:status :ok
+   :value {"at" 8
+           "head" 5
+           "member" true
+           "sorted" [1 2 3 5 8 9]
+           "tail" [2 8 1 9 3]}}
+
+  :rust-grounded/c08_bool
+  {:status :ok
+   :value ["neg" "zero" "small" "big"]}
+
+  :rust-grounded/c09_lambda
+  {:status :ok
+   :value {"a" 3
+           "c" 21
+           "curry" 6}}
+
+  :rust-grounded/c10_mixed
+  {:status :ok
+   :authority :pnix-clj-all-lanes-agree
+   :value {"count" 15
+           "label" "evens-15"
+           "squares" {"k2" 4
+                      "k4" 16
+                      "k6" 36
+                      "k8" 64
+                      "k10" 100
+                      "k12" 144
+                      "k14" 196
+                      "k16" 256
+                      "k18" 324
+                      "k20" 400
+                      "k22" 484
+                      "k24" 576
+                      "k26" 676
+                      "k28" 784
+                      "k30" 900}
+           "total" 240}
+   :rust-oracle {:status :held
+                 :reason :rust-grounded-oracle-unsupported
+                 :stdout "{\"error\":\"parse error: expected identifier in let binding\",\"status\":\"error\"}"}
+   :note "The captured Rust pnixc-meta binary returns a parse-error JSON row for this dynamic attr-key fixture. The expected value is admitted from pnix-clj evaluator, clj-meta, internal .px runtime, and pnix mirror all-lane agreement; the Rust parse error is preserved as historical source evidence, not as a semantic frontier."}}}

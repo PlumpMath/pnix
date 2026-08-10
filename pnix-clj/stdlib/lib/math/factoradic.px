@@ -1,0 +1,181 @@
+# stdlib.lib.math.factoradic
+#
+# OWNER-LAW (v0.12-AAU, div-math, 2026-05-21): the factorial
+# number system, and the k-th permutation.
+#
+# base-conversion.px renders integers in a fixed positional base.
+# The factoradic (factorial base) is a MIXED-radix system: the
+# place values are the factorials 1!, 2!, 3!, ..., and the digit
+# in place i lies in 0 .. i. This owner adds it -- and with it the
+# classic payoff: indexing directly into the list of permutations.
+#
+# # Two exact inverses
+#
+#   toFactoradic n     -> the factoradic digits of n, MSB first
+#   fromFactoradic ds  -> the integer those digits denote
+#
+# `fromFactoradic (toFactoradic n)` is n for every n >= 0.
+#
+# # The k-th permutation
+#
+# A factoradic of length size IS a Lehmer code: it names the k-th
+# permutation of 0 .. size-1 directly, by repeatedly choosing the
+# digit-th still-available element. `nthPermutation k size` does
+# exactly that -- the 0-th permutation is the identity, the last
+# is the full reversal.
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT negative numbers.
+#   - NOT permutations of arbitrary values -- nthPermutation
+#     permutes 0 .. size-1.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/factoradic.px";
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  factorial = m: if m <= 1 then 1 else m * factorial (m - 1);
+
+  # Drop the element at index `idx` from a list.
+  removeAt = lst: idx:
+    let n = builtins.length lst;
+    in
+      builtins.foldl'
+        (acc: i:
+          if i == idx then acc
+          else acc ++ [ (builtins.elemAt lst i) ])
+        []
+        (rangeList 0 (n - 1));
+
+  # The factoradic digits of n (n >= 0), most significant first.
+  # Digit for place value k! is taken by dividing successively by
+  # 2, 3, 4, ...; the result is reversed to be MSB-first.
+  toFactoradic = n:
+    let
+      go = remaining: divisor: acc:
+        if remaining == 0 then acc
+        else
+          go (remaining / divisor) (divisor + 1)
+             ([ (remaining - divisor * (remaining / divisor)) ] ++ acc);
+    in if n == 0 then [ 0 ] else go n 2 [];
+
+  # The integer denoted by a factoradic digit list (MSB first).
+  # With k digits the place values are k!, (k-1)!, ..., 1!.
+  fromFactoradic = digits:
+    let
+      k = builtins.length digits;
+    in
+      builtins.foldl'
+        (acc: i:
+          acc
+          + (builtins.elemAt digits i) * (factorial (k - i)))
+        0
+        (rangeList 0 (k - 1));
+
+  # The k-th permutation (0-indexed) of 0 .. size-1, via the
+  # Lehmer code. For each factorial place, the digit selects --
+  # and removes -- an element from the still-available list.
+  nthPermutation = k: size:
+    let
+      # Lehmer digits: digit i = k / (size-1-i)!, MSB first.
+      lehmer =
+        let
+          go = i: rem: acc:
+            if i >= size then acc
+            else
+              let
+                f = factorial (size - 1 - i);
+                d = rem / f;
+              in go (i + 1) (rem - d * f) (acc ++ [ d ]);
+        in go 0 k [];
+      # Decode: pick the digit-th available element each step.
+      decode =
+        let
+          go = idx: avail: result:
+            if idx >= size then result
+            else
+              let d = builtins.elemAt lehmer idx;
+              in go (idx + 1)
+                    (removeAt avail d)
+                    (result ++ [ (builtins.elemAt avail d) ]);
+        in go 0 (rangeList 0 (size - 1)) [];
+    in decode;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "to-factoradic"
+    "from-factoradic"
+    "nth-permutation"
+  ];
+
+  permutationLimit = 10;
+
+  applyFactoradic = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      digits = if request ? digits then request.digits else [];
+      k  = if request ? k then request.k else 0;
+      size = if request ? size then request.size else 1;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "to-factoradic" then
+        if n < 0 then {
+          outcome = "held-negative-number"; operation = op; n = n;
+        }
+        else {
+          outcome = "factoradic-computed";
+          operation = op; n = n;
+          digits = toFactoradic n;
+        }
+      else if op == "from-factoradic" then {
+        outcome = "factoradic-computed";
+        operation = op;
+        value = fromFactoradic digits;
+      }
+      else
+        # op == "nth-permutation"
+        if size < 1 || size > permutationLimit then {
+          outcome = "held-size-out-of-range";
+          operation = op; size = size;
+          limit = permutationLimit;
+        }
+        else if k < 0 || k >= factorial size then {
+          outcome = "held-index-out-of-range";
+          operation = op; k = k; size = size;
+          permutation_count = factorial size;
+        }
+        else {
+          outcome = "factoradic-computed";
+          operation = op; k = k; size = size;
+          permutation = nthPermutation k size;
+        };
+
+in {
+  inherit
+    ownerName
+    factorial
+    toFactoradic
+    fromFactoradic
+    nthPermutation
+    knownOperations
+    applyFactoradic;
+  meta = {
+    source = "stdlib math factoradic";
+    owner = ownerName;
+    base = "parametric-math-factoradic-v0";
+    rev_note = "v0.12-AAU (div-math): the factorial number system. toFactoradic / fromFactoradic are exact inverses in the mixed-radix factorial base; nthPermutation uses a factoradic as a Lehmer code to name the k-th permutation of 0..size-1 directly (0-th = identity, last = reversal). Standalone. NOT negative numbers, NOT permutations of arbitrary values, NOT yet a registered lens.";
+  };
+}

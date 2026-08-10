@@ -1,0 +1,90 @@
+# stdlib.nl.nl-operation-dispatch-slow-transport — transport preextract lane (O-008-slow P3).
+let
+  slen = s: builtins.stringLength s;
+  sub = start: len: s: builtins.substring start len s;
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+  containsAny = utterance: cues:
+    builtins.any (cue: hasInfix cue utterance) cues;
+
+  attrOr = attrs: key: fallback:
+    if (builtins.isAttrs attrs) && (builtins.hasAttr key attrs)
+    then builtins.getAttr key attrs else fallback;
+
+  nonEmptyString = value:
+    builtins.isString value && value != "";
+
+  mkResult = kind: to: classification: result: {
+    operation_kind = kind;
+    outcome = "dispatched";
+    dispatched_to = to;
+    classification = classification;
+    result = result;
+  };
+
+  arithmeticResultFromExpression = utterance: via: expr:
+    let
+      numOwner = import ../math/numeric-evaluator.px;
+      evaluated = numOwner.evaluateNumericExpression expr { };
+      rational =
+        if evaluated.ok then null
+        else numOwner.evaluateRationalExpression expr { };
+    in
+      if evaluated.ok
+      then mkResult "arithmetic" "numeric-evaluator"
+             { via = via; expression = expr; }
+             { outcome = "evaluated"; value = evaluated.value; input = utterance; }
+      else if rational != null && rational.ok
+      then mkResult "arithmetic" "numeric-evaluator"
+             { via = via; expression = expr; exact = "rational"; }
+             {
+               outcome = "evaluated";
+               value = if rational.is_integer then rational.value else rational.text;
+               value_text = rational.text;
+               exact_rational = rational.rational;
+               input = utterance;
+             }
+      else null;
+
+  factorCues = [ "인수분해" "factorize" "factorise" "factor x" "factor y" "factor it" "factor polynomial" "factor expression" ];
+  diffCues = [ "미분" "differentiate" "derivative of" "take derivative" ];
+in {
+  name = "stdlib.nl.nl-operation-dispatch-slow-transport";
+
+  dispatchFromTransportPreextract = utterance: context:
+    let
+      tp = attrOr context "transport_preextract" null;
+      symCode = import ../math/symbolic-code-witness.px;
+    in
+      if tp == null || !(builtins.isAttrs tp) then null
+      else if symCode.deferFastMathForCodeEmit utterance then null
+      else if nonEmptyString (attrOr tp "arithmetic_expression" "") then
+        arithmeticResultFromExpression utterance "transport-preextract" tp.arithmetic_expression
+      else if nonEmptyString (attrOr tp "equation_expression" "") then
+        let
+          expr = tp.equation_expression;
+          eqOwner = import ../math/equation-solving-procedure.px;
+        in mkResult "equation" "equation-solving-procedure"
+             { via = "transport-preextract"; expression = expr; }
+             (eqOwner.beginSolveProcedureWithContext utterance expr)
+      else if nonEmptyString (attrOr tp "symbolic_expression" "") then
+        let expr = tp.symbolic_expression;
+        in
+          if containsAny utterance factorCues then
+            let factorOwner = import ../math/factor-executor-bridge.px;
+            in mkResult "math-factor" "factor-executor-bridge"
+                 { via = "transport-preextract"; expression = expr; }
+                 (factorOwner.factorEquation expr)
+          else if containsAny utterance diffCues then
+            let derivOwner = import ../math/derivative-executor-bridge.px;
+            in mkResult "math-diff" "derivative-executor-bridge"
+                 { via = "transport-preextract"; expression = expr; }
+                 (derivOwner.differentiateExpression {
+                   utterance = utterance;
+                   expression = expr;
+                 })
+          else null
+      else null;
+}

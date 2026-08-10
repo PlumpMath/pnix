@@ -1,0 +1,219 @@
+{:schema :pnix.clr-meta.compiler-selfhost-executable-contract.v1
+ :id :pnix.clr-meta.compiler-kernel-c2.v1
+ :family :pnix.clr-meta.compiler-kernel.v1
+ :checkpoint :c2-executable-compiler-stage1
+ :extends {:contract "contract.edn"
+           :schema :pnix.clr-meta.compiler-selfhost-contract.v1
+           :profile "profile.edn"
+           :plan "plan.edn"
+           :source "compiler_kernel.clj"}
+ :bootstrap
+ {:id :bootstrap-b0
+  :implementation :pinned-host-clojureclr
+  :host-compiler-use :seed-only
+  :host-load-use :exact-canonical-source-seed-only
+  :host-eval-use false
+  :generated-artifact-host-compiler-use false
+  :generated-artifact-host-source-load-use false
+  :generated-artifact-host-eval-use false
+  :generated-artifact-clojureclr-reference false}
+ :runtime
+ {:project "../compiler-selfhost-runtime/Pnix.ClrMeta.CompilerSupport.csproj"
+  :assembly "Pnix.ClrMeta.CompilerSupport"
+  :target-framework "net10.0"
+  :support-abi-id "pnix.clr-meta.compiler-support.v1"
+  :responsibility [:strict-reader :tagged-source-data :persistent-environment
+                   :structured-rejection :transactional-managed-pe-sink
+                   :strict-generated-artifact-inspection
+                   :declared-entry-invocation :no-replace-bundle-publication]
+  :forbidden [:clojure-compiler :clojure-eval :pnix-semantics
+              :process-spawn :network :embedded-artifact-payload
+              :source-replay-fallback]}
+ :generated-abi
+ {:assembly "Pnix.ClrMeta.Generated.CompilerKernel"
+  :type "Pnix.ClrMeta.Generated.CompilerKernel"
+  :method-naming :exact-source-definition-name
+  :entry "compile-source"
+  :method-shape {:attributes [:public :static]
+                 :return :system-object
+                 :parameters :system-object-fixed-arity
+                 :max-arity 5}
+  :constant-shape {:attributes [:private :static]
+                   :type :system-object}
+  :local-type :system-object
+  :runtime-references ["Pnix.ClrMeta.CompilerSupport" "System.Private.CoreLib"]
+  :resources []}
+ :value-abi
+ {:nil :system-null
+  :boolean :boxed-system-boolean
+  :int64 :boxed-system-int64
+  :string :system-string
+  :symbol :compiler-support-symbol-form
+  :list :compiler-support-sequence-form-list
+  :vector :compiler-support-sequence-form-vector
+  :environment :persistent-opaque-environment
+  :binding [:system-string-kind :opaque-target :boxed-system-int64-arity]
+  :missing-binding :system-null
+  :local-handle :sink-owned-opaque-local
+  :label-handle :sink-owned-opaque-label
+  :pe-sink :transactional-opaque-handle
+  :artifact-descriptor :compiler-support-artifact-descriptor}
+ :expression-semantics
+ {:call-result :one-system-object-on-stack
+  :nil-return :system-null-on-stack
+  :truthiness {:false-values [:system-null :boxed-system-false]
+               :other-values :true}
+  :closed-equality [:nil :boolean :int64 :string]
+  :add {:input :boxed-system-int64 :instruction :add-ovf :result :boxed-system-int64}
+  :subtract {:input :boxed-system-int64 :instruction :sub-ovf :result :boxed-system-int64}
+  :less-than {:input :boxed-system-int64 :instruction :clt :result :boxed-system-boolean}}
+ :reader
+ {:limits-id "pnix.clr-meta.compiler-kernel-source-limits.v1"
+  :encoding :strict-utf8
+  :max-source-bytes 65536
+  :max-top-level-forms 37
+  :max-nodes 8192
+  :max-depth 128
+  :max-parameters 5
+  :max-bindings-per-let 64
+  :forms [:list :vector :symbol :nil :boolean :system-int64 :string]
+  :simple-binding-symbol-pattern "[A-Za-z_*!+?<>=$%-][A-Za-z0-9_*!+?<>=$%-]*"
+  :keywords false
+  :invalid-numeric-looking-token false
+  :reader-sugar false
+  :metadata false
+  :maps false
+  :tagged-literals false
+  :reader-eval false}
+ :environment
+ {:comparison :ordinal-string
+  :persistence :parent-chain
+  :bind :returns-new-environment
+  :shadowing {:global-by-lexical :allowed
+              :duplicate-parameter :reject
+              :local-over-argument-or-local :reject}
+  :missing :system-null}
+ :pesink
+ {:lifecycle [:new :begun :definitions :initializer :methods :finished]
+  :declarations-before-bodies true
+  :initializer-exactly-once true
+  :method-body-exactly-once true
+  :foreign-handle-use :reject
+  :handle-ownership :method-body
+  :stack-height-verification :every-emission-and-join
+  :unmarked-label :reject
+  :emission-after-return :reject
+  :finish-only-publication true
+  :publication :same-directory-temporary-then-atomic-rename
+  :existing-output :reject-preserve
+  :partial-requested-output :forbidden
+  :artifact-metadata ["GeneratedBy" "KernelEntry" "KernelIdentity"
+                      "KernelNamespace" "SourceProfileId" "SupportAbiId"]}
+ :builder
+ {:command ["bin/clr-meta" "--build-compiler-selfhost-stage1" "OUTPUT"]
+  :c1-admission :mandatory-before-bootstrap-b0
+  :environment :clear-then-allowlist
+  :bootstrap-runtime-closure :all-regular-files-hashed-before-and-after
+  :publication :same-filesystem-directory-move-no-replace
+  :existing-output [:file-preserve :directory-preserve :symlink-preserve]
+  :bundle-source-inclusion false}
+ :clr-map
+ [{:symbol pnix.clr-meta.compiler-support.reader.v1/read-all
+   :type "Pnix.ClrMeta.CompilerSupport.ReaderAbi" :method "ReadAll" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/kind-is?
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "KindIs" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/count
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "Count" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/nth
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "Nth" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/symbol-name
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "SymbolName" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/string-equal?
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "StringEqual" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/env-new
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "EnvNew" :arity 0}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/env-bind
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "EnvBind" :arity 5}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/env-lookup
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "EnvLookup" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.data.v1/reject
+   :type "Pnix.ClrMeta.CompilerSupport.DataAbi" :method "Reject" :arity 3}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/begin
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "Begin" :arity 5}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/define-constant
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "DefineConstant" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/define-method
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "DefineMethod" :arity 3}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/begin-initializer
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "BeginInitializer" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/end-initializer
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EndInitializer" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/begin-method
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "BeginMethod" :arity 3}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/end-method
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EndMethod" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/allocate-local
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "AllocateLocal" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/new-label
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "NewLabel" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/mark-label
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "MarkLabel" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-literal
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitLiteral" :arity 3}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-load-arg
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitLoadArg" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-load-local
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitLoadLocal" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-load-field
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitLoadField" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-store-local
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitStoreLocal" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-store-field
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitStoreField" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-call
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitCall" :arity 3}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-opcode
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitOpcode" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-branch-false
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitBranchFalse" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-branch
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitBranch" :arity 2}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-pop
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitPop" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-ret
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "EmitRet" :arity 1}
+  {:symbol pnix.clr-meta.compiler-support.pesink.v1/finish
+   :type "Pnix.ClrMeta.CompilerSupport.PeSinkAbi" :method "Finish" :arity 1}]
+ :artifact-descriptor
+ {:schema "pnix.clr-meta.compiler-selfhost-artifact-descriptor.v1"
+  :fields ["kernel_entry" "kernel_identity" "kernel_namespace" "path"
+           "schema" "sha256" "source_profile_id"]}
+ :required-evidence
+ {:canonical-stage1 {:fields 9 :methods 27 :entry-arity 2}
+  :unseen-targets
+  [{:source "unseen_add.clj" :arguments [20 22] :expected 42}
+   {:source "unseen_subtract.clj" :arguments [20 22] :expected -2}
+   {:source "unseen_equal.clj" :arguments [42 42] :expected true}
+   {:source "unseen_truthy.clj" :arguments [0 9] :expected 9}]
+  :source-hidden-process true
+  :fresh-post-stage1-nonce-target true
+  :prepare-all-generated-methods true
+  :mutation-propagation
+  [{:id :identity-literal
+    :source-change :replace-identity-string
+    :required-observation :generated-artifact-metadata-change
+    :requested-output :published}
+   {:id :add-lowering-rule
+    :source-change :replace-add-opcode-with-subtract-opcode
+    :required-observation {:phase "validate" :class "bad-def-arity"}
+    :requested-output :absent}
+   {:id :subtract-lowering-rule
+    :source-change :replace-subtract-opcode-with-add-opcode
+    :required-observation {:phase "validate" :class "call-arity"}
+    :requested-output :absent}]}
+ :claims {:stage1_artifact :gate-required
+          :stage2 false
+          :self_reproduction false
+          :fixed_point false
+          :raw_reproducibility false
+          :clojureclr_replacement false}}

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+plan="$root/pnix-clr/runtime-artifact.edn"
+source_root="$root/pnix-clr/src"
+output="${1:-$root/pnix-clr/target/runtime-artifact}"
+
+if [[ "$#" -gt 1 ]]; then
+  echo "usage: build-pnix-clr-artifact [OUTPUT]" >&2
+  exit 2
+fi
+
+exec "$root/bin/clr-meta" --build-runtime "$plan" "$output" "$source_root"

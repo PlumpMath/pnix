@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Primary gate for hy-meta: self-check + stage7-check (practical peer floor).
+# Full ladder (stage8..stagen) is available via bootstrap.py; not default here.
+set -euo pipefail
+META_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$META_DIR/.." && pwd)"
+cd "$ROOT"
+
+PY="${HY_META_PYTHON:-}"
+if [[ -z "$PY" ]]; then
+  for candidate in \
+    /tmp/pnix-hy-py311-venv/bin/python \
+    /tmp/pnix-hy-py314-venv/bin/python \
+    /usr/local/bin/python3.11 \
+    /usr/local/opt/python@3.14/bin/python3.14; do
+    if [[ -x "$candidate" ]]; then
+      PY="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "${PY:-}" ]]; then
+  echo "hy-meta-gate: no Python 3.11/3.14 found; set HY_META_PYTHON" >&2
+  exit 2
+fi
+
+# Ensure Hy 1.3.0 snapshot + deps are importable.
+export PYTHONPATH="${ROOT}/hy-1.3.0${PYTHONPATH:+:$PYTHONPATH}"
+if ! "$PY" -c 'import hy, funcparserlib' 2>/dev/null; then
+  echo "hy-meta-gate: need hy + funcparserlib on $PY" >&2
+  echo "  e.g. $PY -m pip install 'funcparserlib~=1.0' && PYTHONPATH=$ROOT/hy-1.3.0" >&2
+  echo "  or: /usr/local/bin/python3.11 -m venv /tmp/pnix-hy-py311-venv && ..." >&2
+  exit 2
+fi
+
+MODE="${1:-primary}"
+case "$MODE" in
+  primary|self-check)
+    "$PY" hy-meta/bootstrap.py self-check
+    if [[ "$MODE" == "primary" ]]; then
+      "$PY" hy-meta/bootstrap.py stage7-check
+    fi
+    echo "hy-meta-gate ($MODE): PASS"
+    ;;
+  stage7)
+    "$PY" hy-meta/bootstrap.py stage7-check
+    echo "hy-meta-gate (stage7): PASS"
+    ;;
+  full)
+    # Documented high ladder subset; still not claiming Stage15 replacement.
+    for cmd in self-check chain-check stage7-check self-host-check bootstrap-fixedpoint-check; do
+      echo "[hy-meta-gate] $cmd"
+      "$PY" hy-meta/bootstrap.py "$cmd"
+    done
+    echo "hy-meta-gate (full subset): PASS"
+    ;;
+  *)
+    echo "usage: hy-meta-gate [primary|self-check|stage7|full]" >&2
+    exit 2
+    ;;
+esac

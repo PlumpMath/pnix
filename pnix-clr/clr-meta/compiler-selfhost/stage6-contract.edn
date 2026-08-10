@@ -1,0 +1,76 @@
+{:schema :pnix.clr-meta.compiler-selfhost-stage6-contract.v1
+ :id :pnix.clr-meta.compiler-kernel-stage6.v1
+ :family :pnix.clr-meta.compiler-kernel.v1
+ :checkpoint :stage6-executable-compiler-stage6
+ :extends
+ {:contract "contract.edn"
+  :profile "profile.edn"
+  :plan "plan.edn"
+  :canonical-source "compiler_kernel.clj"
+  :stage5-contract "stage5-contract.edn"
+  :stage5-checkpoint :stage5-executable-compiler-stage5}
+ :canonical-source
+ {:path "compiler-selfhost/compiler_kernel.clj"
+  :sha256 "e3c4f082b20f784f4dd2730b8e2af3d6aecb3f1a0ea0ece2f6519b69578dc7e1"
+  :language :pnix.clr-meta.compiler-kernel-source.v1
+  :compiled-language :pnix.clr-meta.compiler-kernel-source.v1
+  :same-source-required true
+  :alternate-source-argument false}
+ :parent-stage5
+ {:artifact-schema "pnix.clr-meta.compiler-selfhost-stage5-artifact.v1"
+  :checkpoint :stage5-executable-compiler-stage5
+  :stage 5
+  :bundle-file-set
+  ["compiler/CompilerStage5.dll"
+   "manifest.json"
+   "runtime/Pnix.ClrMeta.CompilerSupport.deps.json"
+   "runtime/Pnix.ClrMeta.CompilerSupport.dll"
+   "runtime/Pnix.ClrMeta.CompilerSupport.runtimeconfig.json"]
+  :required-claims
+  {:compiler-stage5 true
+   :compiler-executable true
+   :same-source-recompile true
+   :stage6 false
+   :self-reproduction false
+   :fixed-point false
+   :raw-artifact-reproducibility false
+   :clojureclr-replacement false}}
+ :compilation
+ {:command
+  ["dotnet" "STAGE5/runtime/Pnix.ClrMeta.CompilerSupport.dll" "compile"
+   "STAGE5/compiler/CompilerStage5.dll"
+   "compiler-selfhost/compiler_kernel.clj" "CompilerStage6.dll"]
+  :compiler :generated-compiler-stage5
+  :host :pnix.clr-meta.compiler-support.v1
+  :same-dotnet-toolchain-as-parent-required false
+  :transition-source-visibility :present-and-explicit
+  :canonical-source-freeze
+  {:directory-mode "0700"
+   :source :regular-non-symlink
+   :frozen-copy :regular-read-only
+   :byte-equality true}}
+ :generated-stage6
+ {:assembly "Pnix.ClrMeta.Generated.CompilerKernel"
+  :type "Pnix.ClrMeta.Generated.CompilerKernel"
+  :fields 9
+  :methods 27
+  :entry "compile-source"
+  :structural-description-equal-to-stage5 true}
+ :claims
+ {:compiler-stage6 true
+  :same-source-recompile true
+  :stage6-fresh-target-replay :gate-owned
+  :self-reproduction false
+  :stage7 false
+  :stage15-n false
+  :fixed-point false
+  :raw-artifact-reproducibility false
+  :promotion-allowed false
+  :clojureclr-replacement false}
+ :non-claims
+ [:compiler-self-reproduction
+  :il-fixed-point
+  :full-clojure-surface
+  :pnix-semantics
+  :cross-host-canonical-equivalence
+  :trusting-trust-defense]}

@@ -1,0 +1,142 @@
+let
+  ownerName = "stdlib.nl.remaining-domain-nl-lifters";
+
+  # === Remaining-domain NL lifters (Axioms #63-#66) ================
+  #
+  # #63 gate-sub NL (Axiom #29 — relation-extraction / tool-action / verify-action / reasoning)
+  # #64 core-utility NL (Axiom #34 — 33 utilities × 6 families)
+  # #65 api-capability NL (Axiom #26 — direct surface, not via #38)
+  # #66 closed-loop integration NL (Axiom #21 — agent loop integration)
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  # === Axiom #63 gate-sub NL ========================================
+  knownGateSubNLPatterns = [
+    { sub_area = "relation-extraction"; en_keywords = [ "causality" "comparison" "definition extract" "formula extract" "negation" "cause and effect" ]; ko_keywords = [ "인과관계" "비교 추출" "정의 추출" "공식 추출" "부정" "원인 결과" "인과 관계 추출" ]; }
+    { sub_area = "tool-action"; en_keywords = [ "tool materialization" "tool action gate" "execute tool" ]; ko_keywords = [ "도구 실체화" "도구 액션 게이트" "도구 실행" "툴 실행" ]; }
+    { sub_area = "verify-action"; en_keywords = [ "bounded runner" "verify action" "verification gate" "sandbox run" ]; ko_keywords = [ "bounded runner" "검증 액션" "검증 게이트" "샌드박스 실행" ]; }
+    { sub_area = "reasoning"; en_keywords = [ "relation composition" "reasoning chain" "Tarski algebra" "inference chain" ]; ko_keywords = [ "관계 합성" "추론 체인" "Tarski 대수" "추론 사슬" ]; }
+  ];
+
+  liftToGateSub = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownGateSubNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-gate-sub-matched"; known_sub_areas = builtins.map (p: p.sub_area) knownGateSubNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-gate-sub"; candidates = builtins.map (x: x.sub_area) m; }
+      else { outcome = "gate-sub-lifted"; sub_area = (builtins.head m).sub_area; axiom_origin = "axiom-29-gate-sub-registries"; };
+
+  # === Axiom #64 core-utility NL ====================================
+  knownCoreUtilityFamilyNLPatterns = [
+    { family = "collection"; en_keywords = [ "attrset" "list utility" "string utility" "format utility" "data utility" ]; ko_keywords = [ "attrset" "리스트 유틸" "문자열 유틸" "포맷 유틸" "데이터 유틸" "컬렉션 유틸" ]; }
+    { family = "functional"; en_keywords = [ "composition" "fx" "FRP" "state machine" "function composition" ]; ko_keywords = [ "함수 합성" "fx" "FRP" "상태 머신" "함수형" "함수 조합" ]; }
+    { family = "spec-language"; en_keywords = [ "DSL" "schema" "policy engine" "evaluation rule" "rule engine" ]; ko_keywords = [ "DSL" "스키마" "정책 엔진" "평가 규칙" "규칙 엔진" ]; }
+    { family = "meta"; en_keywords = [ "introspection" "intelligence" "learning" "self-reference" "feedback" "problem-solver" "semantic-space" "entity-db" "trace" "sim" "meta-circular" ]; ko_keywords = [ "내성" "인텔리전스" "학습" "자기참조" "피드백" "문제해결사" "의미공간" "엔티티 DB" "트레이스" "시뮬레이션" "메타 순환" ]; }
+    { family = "preset"; en_keywords = [ "default preset" "UI preset" "config preset" ]; ko_keywords = [ "기본 프리셋" "UI 프리셋" "설정 프리셋" ]; }
+    { family = "domain-entry"; en_keywords = [ "agent entry" "freecat entry" "fyrox entry" "host entry" "ontology entry" "ui entry" "wgpu entry" "world entry" "entry point" ]; ko_keywords = [ "에이전트 입구" "freecat 입구" "fyrox 입구" "호스트 입구" "온톨로지 입구" "UI 입구" "wgpu 입구" "월드 입구" "진입점" ]; }
+  ];
+
+  liftToCoreUtilityFamily = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownCoreUtilityFamilyNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-core-utility-matched"; known_families = builtins.map (p: p.family) knownCoreUtilityFamilyNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-core-utility"; candidates = builtins.map (x: x.family) m; }
+      else { outcome = "core-utility-family-lifted"; family = (builtins.head m).family; axiom_origin = "axiom-34-top-level-core-utility-registry"; };
+
+  # === Axiom #65 api-capability NL ==================================
+  knownApiCapabilityCategoryNLPatterns = [
+    { category = "3d-cad-creation"; en_keywords = [ "Blender" "FreeCAD" "Rhino" "CAD modeling" ]; ko_keywords = [ "블렌더" "프리캐드" "라이노" "CAD 모델링" "3D 모델링" ]; }
+    { category = "math-data"; en_keywords = [ "numpy" "scipy" "pandas" "matplotlib" "data analysis" ]; ko_keywords = [ "numpy" "scipy" "pandas" "matplotlib" "데이터 분석" ]; }
+    { category = "version-control"; en_keywords = [ "git operations" "git workflow" "version control" ]; ko_keywords = [ "git 작업" "git 워크플로" "버전 관리" ]; }
+    { category = "shell-utilities"; en_keywords = [ "ripgrep" "rg search" "sed replace" "find files" "jq" "tree" "tar archive" "grep search" ]; ko_keywords = [ "ripgrep" "sed 치환" "파일 찾기" "jq" "tree" "tar" "grep 검색" ]; }
+    { category = "dev-workflow"; en_keywords = [ "github CLI" "gh command" "docker container" "kubectl" "helm" "npm install" "cargo build" "make target" "package-manager" "pytest" "vim" "nvim" "VS Code" ]; ko_keywords = [ "GitHub CLI" "도커 컨테이너" "kubectl" "helm" "npm" "cargo" "make" "패키지 매니저" "pytest" "vim" "VS Code" "에디터" ]; }
+    { category = "cloud-cli"; en_keywords = [ "AWS CLI" "gcloud" "az CLI" "Azure CLI" "cloud command" ]; ko_keywords = [ "AWS CLI" "gcloud" "Azure CLI" "클라우드 명령" ]; }
+    { category = "os-platform"; en_keywords = [ "macOS clipboard" "systemd" "ssh" "shell platform" ]; ko_keywords = [ "macOS 클립보드" "systemd" "ssh" "쉘 플랫폼" "맥북" ]; }
+  ];
+
+  liftToApiCapabilityCategory = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownApiCapabilityCategoryNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-api-category-matched"; known_categories = builtins.map (p: p.category) knownApiCapabilityCategoryNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-api-category"; candidates = builtins.map (x: x.category) m; }
+      else { outcome = "api-capability-category-lifted"; category = (builtins.head m).category; axiom_origin = "axiom-26-api-library-taxonomy-registry"; };
+
+  # === Axiom #66 closed-loop integration NL =========================
+  knownClosedLoopScenarioNLPatterns = [
+    { scenario = "korean-nl-git"; en_keywords = [ "Korean NL git" "한국어 git" "Korean git workflow" ]; ko_keywords = [ "한국어 git" "한글 git 명령" "한국말로 git" ]; }
+    { scenario = "rename-symbol-flow"; en_keywords = [ "rename symbol full flow" "rename across files" "global rename" ]; ko_keywords = [ "심볼 이름 전체 흐름" "파일 전체 rename" "전체 심볼 변경" ]; }
+    { scenario = "destructive-blocked"; en_keywords = [ "destructive blocked" "approval required for destruction" "destructive operation halted" ]; ko_keywords = [ "파괴 차단" "파괴 승인 필요" "위험 작업 차단" ]; }
+    { scenario = "test-failure-repair-loop"; en_keywords = [ "test failure repair" "auto repair loop" "fix failing test" "self-healing tests" ]; ko_keywords = [ "테스트 실패 수정" "자동 수정 루프" "실패 테스트 수정" "테스트 자가복구" ]; }
+    { scenario = "ambiguous-held"; en_keywords = [ "ambiguous utterance held" "ambiguous intent" "follow-up needed" "clarification needed" ]; ko_keywords = [ "모호한 발화 보류" "모호한 의도" "후속 질문 필요" "추가 정보 필요" ]; }
+  ];
+
+  liftToClosedLoopScenario = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownClosedLoopScenarioNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-closed-loop-matched"; known_scenarios = builtins.map (p: p.scenario) knownClosedLoopScenarioNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-closed-loop"; candidates = builtins.map (x: x.scenario) m; }
+      else { outcome = "closed-loop-scenario-lifted"; scenario = (builtins.head m).scenario; axiom_origin = "axiom-21-closed-loop-integration-registry"; };
+
+  # === Dispatcher entry ============================================
+
+  applyRemainingDomainNlLifterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then { outcome = "held-missing-utterance-field"; }
+    else if !(builtins.hasAttr "lifter_kind" request) then { outcome = "held-missing-lifter-kind"; known_kinds = [ "gate-sub" "core-utility" "api-capability" "closed-loop" ]; }
+    else
+      let k = request.lifter_kind; u = request.utterance;
+      in
+        if k == "gate-sub" then liftToGateSub u
+        else if k == "core-utility" then liftToCoreUtilityFamily u
+        else if k == "api-capability" then liftToApiCapabilityCategory u
+        else if k == "closed-loop" then liftToClosedLoopScenario u
+        else { outcome = "held-unknown-lifter-kind"; kind = k; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axioms-63-to-66";
+    lifter_count = 4;
+    lifters = [
+      { id = "gate-sub"; axiom = 29; patterns = builtins.length knownGateSubNLPatterns; }
+      { id = "core-utility"; axiom = 34; patterns = builtins.length knownCoreUtilityFamilyNLPatterns; }
+      { id = "api-capability"; axiom = 26; patterns = builtins.length knownApiCapabilityCategoryNLPatterns; }
+      { id = "closed-loop"; axiom = 21; patterns = builtins.length knownClosedLoopScenarioNLPatterns; }
+    ];
+    new_decision_count = 0;
+    bilingual = true;
+  };
+
+in {
+  inherit
+    ownerName containsAny
+    knownGateSubNLPatterns knownCoreUtilityFamilyNLPatterns
+    knownApiCapabilityCategoryNLPatterns knownClosedLoopScenarioNLPatterns
+    liftToGateSub liftToCoreUtilityFamily
+    liftToApiCapabilityCategory liftToClosedLoopScenario
+    applyRemainingDomainNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL remaining domain lifters (Axioms #63-66)";
+    owner = ownerName;
+    base = "remaining-domain-nl-lifters-v0";
+    rev_note = "사용자 directive (2026-05-28). 4 remaining substrates "
+      + "(gate-sub / core-utility / api-capability / closed-loop) NL surface "
+      + "추가. 박힌 37 architectural axioms 중 29 NL surface = 78%+ coverage.";
+  };
+}

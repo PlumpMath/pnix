@@ -1,0 +1,325 @@
+let
+  ownerName = "stdlib.nl.implicit-explicit-reconstruction";
+
+  # === Implicit-Explicit Reconstruction Axiom (4-piece 동급) ========
+  #
+  # 사용자 directive (2026-05-28):
+  # "인간은 '삼각형 SSS 변 3 4 5 와 변 5 4 3' 이런식으로 교과서처럼
+  # 요청하지 않는다. 무언가 나사 빠지듯, 대수화된 (implicit) 부분이
+  # 존재함. NL extract & transform 의 법칙에 아주 중요한, 4-piece 와
+  # 동급의 새 axiom."
+  #
+  # # The axiom (substrate 의 새 헌법)
+  #
+  # **인간 NL 발화는 항상 implicit 부분을 가진다.** 교과서 surface 가
+  # 아니다. substrate 는 (a) implicit slot 을 detect (b) 가능한 한
+  # reconstruction (c) reconstruct 불가능 → 명시적 Hold + follow-up.
+  #
+  # 단순 controlled NL (Naproche / ACE / 사용자 v0 lifter) 는
+  # paraphrase coverage 좁아서 실제 인간 발화에 안 맞음. *implicit
+  # extraction* 이 NL → algorithm 변환의 진짜 mechanism.
+  #
+  # # 학술 근거 (엄밀)
+  #
+  # - Gricean implicature (Grice 1975) — 발화에 *말하지 않은 의미*
+  #   가 있음. 4 maxim (quantity / quality / relation / manner).
+  # - Anaphora resolution (Hobbs 1978~, Centering theory) — "그것/
+  #   이것" 의 referent 추적.
+  # - Argument structure (Levin 1993, FrameNet) — verb 의 implicit
+  #   arguments (theme / instrument / location).
+  # - Ellipsis (Sag 1976, VP-ellipsis, gapping) — 생략된 구문 복원.
+  # - Pragmatic enrichment — 발화 + context → fuller proposition.
+  #
+  # 사용자 substrate 의 자리: 이 학계 분야들을 *deterministic + Hold-
+  # honest* 형태로 통일. silent guess 금지.
+
+  # === Categories of implicit information ===========================
+  #
+  # NL 발화의 implicit dimension 분류. 학계 표준 + substrate 의 4-piece
+  # 와 평행한 5 axis.
+
+  knownImplicitDimensions = [
+    {
+      id = "context-reference";
+      description = "어느 객체 / 문장 / atom 을 가리키는가 (anaphora)";
+      example_implicit =
+        "이 두 삼각형 합동이야? — '이' 가 어느 두 triangle 인가";
+      reconstruction_strategy =
+        "최근 turn 의 atom list 에서 가장 가까운 triangle-mention 추출";
+      academic_origin =
+        "Centering theory (Grosz, Joshi, Weinstein 1983/95)";
+    }
+    {
+      id = "predicate-argument-completion";
+      description = "verb 가 받는 argument set 의 빠진 slot";
+      example_implicit =
+        "합동이야? — 합동(of, what?). 두 객체 implicit";
+      reconstruction_strategy =
+        "verb 의 selectional preference (frame) 에서 빠진 slot 추론";
+      academic_origin =
+        "FrameNet / VerbNet — Levin verb classes";
+    }
+    {
+      id = "criterion-inference";
+      description = "어떤 criterion (SSS/SAS/...) 인지 명시 안 함";
+      example_implicit =
+        "변 길이 3, 4, 5 와 5, 4, 3 가진 두 삼각형 — 'SSS' 단어 없음";
+      reconstruction_strategy =
+        "주어진 constraint set (변 3개 / 변+각 / ...) 으로부터 매핑";
+      academic_origin =
+        "Selectional preference (Resnik 1996) + frame matching";
+    }
+    {
+      id = "ambient-context";
+      description = "어느 공간 / 도메인 / 시대인가 (4-piece Piece 1 의 NL 측)";
+      example_implicit =
+        "삼각형 — R-2 인가 S-2 인가; 'sphere 위' 같은 명시 없으면 default R-2 가정?";
+      reconstruction_strategy =
+        "substrate-honest: NL 에서 ambient 명시 안 됐으면 R-2 default 적용 안 함 — Hold + follow-up";
+      academic_origin =
+        "4-piece axiom (사용자 ontology-ai.md §19) — Cyc trap 회피";
+    }
+    {
+      id = "purpose-inference";
+      description = "발화의 *목적* (질문/명령/주장)";
+      example_implicit =
+        "합동이야? — 의문문 (확인 요청). 'verify 해줘' implicit";
+      reconstruction_strategy =
+        "한국어: 종결어미 (-야 / -자 / -해라) / 영어: question mark / verb form";
+      academic_origin =
+        "Speech act theory (Austin 1962, Searle 1969)";
+    }
+  ];
+
+  findDimension = id:
+    let
+      matches = builtins.filter
+        (d: d.id == id) knownImplicitDimensions;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # === Implicit detection ==========================================
+  #
+  # Utterance 받아 어느 dimension 에서 implicit 한지 분류.
+
+  detectImplicitDimensions = utterance:
+    if !(builtins.isString utterance) then [ ]
+    else
+      let
+        # Substring presence checks — substrate-honest: pattern 검출.
+        # v0 simple heuristics (학계 표준 axis 의 minimal indicators).
+        # 정직히 이건 heuristic. Hold 시점이 결정적.
+        contains = needle:
+          builtins.match (".*" + needle + ".*") utterance != null;
+
+        # context-reference: 대명사 / "이것" / "this" / "그것"
+        hasAnaphora =
+          contains "this" || contains "that"
+          || contains "이것" || contains "그것" || contains "저것"
+          || contains "그|그게|그건|이건|이게";
+
+        # criterion-inference: criterion 단어 (SSS/SAS/...) 명시 안 됨
+        hasCriterion =
+          contains "SSS" || contains "SAS"
+          || contains "ASA" || contains "AAS" || contains "RHS";
+        # criterion 이 빠져 있고 triangle 만 언급
+        criterionMissing =
+          (contains "triangle" || contains "삼각형")
+          && !hasCriterion;
+
+        # ambient-context: R-2/S-2/H-2 명시 안 됨
+        hasAmbientWord =
+          contains "R-2" || contains "S-2" || contains "H-2"
+          || contains "Euclidean" || contains "spherical"
+          || contains "hyperbolic"
+          || contains "평면" || contains "구면";
+        ambientMissing =
+          (contains "triangle" || contains "삼각형")
+          && !hasAmbientWord;
+
+        # purpose: 의문문 / 명령문 detection
+        hasQuestion =
+          contains "\\?"
+          || contains "야$" || contains "냐$" || contains "까$";
+        hasCommand =
+          contains "해줘" || contains "해라"
+          || contains "verify" || contains "check" || contains "solve";
+        purposeMissing = !hasQuestion && !hasCommand;
+
+        # predicate-argument: verb 가 있는데 argument 가 분명히 빠짐
+        hasCongruentVerb =
+          contains "congruent" || contains "합동";
+        hasArguments =
+          contains " and " || contains "와 " || contains "과 ";
+        argMissing = hasCongruentVerb && !hasArguments;
+
+        detected = [ ]
+          ++ (if hasAnaphora then
+              [{ dimension = "context-reference";
+                 trigger = "anaphoric pronoun detected"; }] else [])
+          ++ (if criterionMissing then
+              [{ dimension = "criterion-inference";
+                 trigger = "triangle mentioned without criterion word"; }] else [])
+          ++ (if ambientMissing then
+              [{ dimension = "ambient-context";
+                 trigger = "geometry term without ambient space declared"; }] else [])
+          ++ (if purposeMissing then
+              [{ dimension = "purpose-inference";
+                 trigger = "no clear question/command marker"; }] else [])
+          ++ (if argMissing then
+              [{ dimension = "predicate-argument-completion";
+                 trigger = "congruence verb with missing arguments"; }] else []);
+      in
+        detected;
+
+  # === Reconstruct attempt =========================================
+  #
+  # Implicit detection 결과 받아 reconstruction 시도. v0 substrate-
+  # honest:
+  # - context-reference 는 turn history 필요 (caller 가 supply)
+  # - criterion-inference 는 constraint set 으로부터 추론
+  # - ambient-context 는 명시 안 됐으면 Hold (4-piece axiom 보존)
+  # - purpose 는 default = "verify" (factual question 가정)
+  # - predicate-argument 는 anaphora resolution + turn history
+
+  inferCriterionFromConstraints = constraints:
+    if !(builtins.isList constraints) then null
+    else
+      let
+        n = builtins.length constraints;
+        hasSides = builtins.elem "sides" constraints
+                   || builtins.elem "변" constraints;
+        hasAngles = builtins.elem "angles" constraints
+                    || builtins.elem "각" constraints;
+        hasHypotenuse = builtins.elem "hypotenuse" constraints
+                        || builtins.elem "빗변" constraints;
+        # 3 sides → SSS
+        # 2 sides + 1 angle → SAS (heuristic, included 가정)
+        # 2 angles + 1 side → ASA (heuristic, included 가정)
+        # hypotenuse mentioned → RHS
+      in
+        if hasHypotenuse then "RHS"
+        else if hasSides && !hasAngles && n >= 3 then "SSS"
+        else if hasSides && hasAngles then "SAS"
+        else if hasAngles && hasSides then "ASA"
+        else null;
+
+  reconstructFromImplicit = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else
+      let
+        utterance =
+          if request ? utterance then request.utterance else "";
+        detected = detectImplicitDimensions utterance;
+        # Caller 가 supply 한 explicit hints
+        explicitAmbient =
+          if request ? hint_ambient_space
+          then request.hint_ambient_space else null;
+        explicitConstraints =
+          if request ? hint_constraints
+          then request.hint_constraints else [];
+        # Reconstruct
+        inferredCriterion =
+          if explicitConstraints != []
+          then inferCriterionFromConstraints explicitConstraints
+          else null;
+      in
+        if detected == [] then {
+          outcome = "no-implicit-detected";
+          utterance = utterance;
+          reason =
+            "이 발화는 충분히 explicit 함 (또는 substrate v0 heuristic "
+            + "가 implicit 을 detect 못 함). 직접 lift 시도 가능.";
+        }
+        else if explicitAmbient == null
+                && builtins.any
+                     (d: d.dimension == "ambient-context") detected
+        then {
+          outcome = "held-ambient-required";
+          implicit_dimensions = detected;
+          reason =
+            "ambient-context implicit detected — 4-piece axiom 보존: "
+            + "ambient 명시 안 됐으면 default 적용 금지. "
+            + "follow-up: '어느 공간 (R-2/S-2/H-2) 에서?' 물어야 함.";
+          follow_up_hint =
+            "Specify ambient_space — substrate refuses implicit "
+            + "Euclidean default (Cyc trap 회피).";
+        }
+        else {
+          outcome = "partially-reconstructed";
+          utterance = utterance;
+          implicit_dimensions = detected;
+          reconstructed = {
+            ambient_space = explicitAmbient;
+            criterion_id = inferredCriterion;
+            purpose = "verify";  # default
+            constraints_given = explicitConstraints;
+          };
+          # 남은 implicit dimension 명시 (silent guess 안 함)
+          remaining_implicit =
+            builtins.filter (d:
+              !(d.dimension == "ambient-context" && explicitAmbient != null)
+              && !(d.dimension == "criterion-inference" && inferredCriterion != null)
+              && !(d.dimension == "purpose-inference"))  # default applied
+              detected;
+        };
+
+  # === Mirror plate lens entry =======================================
+
+  applyImplicitExplicitReconstructionPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(request ? operation) then {
+      outcome = "held-operation-required";
+      known_operations = [ "detect" "reconstruct" ];
+    }
+    else if request.operation == "detect" then {
+      outcome = "detection-result";
+      utterance = request.utterance;
+      implicit_dimensions = detectImplicitDimensions request.utterance;
+    }
+    else if request.operation == "reconstruct" then
+      reconstructFromImplicit request
+    else {
+      outcome = "held-unknown-operation";
+      operation = request.operation;
+    };
+
+  # === Introspection ================================================
+
+  dimensionCount = builtins.length knownImplicitDimensions;
+  dimensionIds = builtins.map (d: d.id) knownImplicitDimensions;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    implicit_dimension_count = dimensionCount;
+    implicit_dimension_ids = dimensionIds;
+    axiom_class = "fundamental";  # 4-piece 동급
+    correspondence_with_4piece =
+      "Piece 1 (ambient-space mandate) 의 NL 측 = ambient-context "
+      + "implicit detection. 4-piece 의 헌법 'context 미명시 → Hold' "
+      + "이 NL 측에서는 'ambient implicit detection → follow-up' 으로 "
+      + "구현. 같은 axiom, 다른 surface.";
+  };
+
+in {
+  inherit
+    ownerName
+    knownImplicitDimensions
+    findDimension
+    detectImplicitDimensions
+    inferCriterionFromConstraints
+    reconstructFromImplicit
+    applyImplicitExplicitReconstructionPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib nl implicit-explicit reconstruction axiom";
+    owner = ownerName;
+    base = "implicit-explicit-reconstruction-v0";
+    rev_note = "사용자 directive (2026-05-28): '인간은 교과서처럼 요청하지 않는다. 무언가 나사 빠지듯 대수화 (implicit) 부분이 존재. 4-piece 와 동급의 새 axiom.' 5 implicit dimensions (context-reference / predicate-argument-completion / criterion-inference / ambient-context / purpose-inference) — 학술 origin (Grice / Centering / FrameNet / Speech act / 4-piece). detectImplicitDimensions: heuristic-based v0. reconstructFromImplicit: explicit hint 받아 partial reconstruction + 남은 implicit 명시. ambient implicit → Held + follow-up (4-piece axiom 보존). NL extract & transform 의 core mechanism.";
+  };
+}

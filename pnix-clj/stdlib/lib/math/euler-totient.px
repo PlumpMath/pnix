@@ -1,0 +1,142 @@
+# stdlib.lib.math.euler-totient
+#
+# OWNER-LAW (v0.12-AAX, div-math, 2026-05-22): Euler's totient
+# function.
+#
+# number-theory.px answers divisor / primality questions about a
+# single integer. This owner adds one more classical function of
+# n: Euler's totient phi(n) -- the count of integers in 1..n that
+# are coprime to n. phi(1) = 1, phi(10) = 4 (1, 3, 7, 9),
+# phi(p) = p-1 for a prime p.
+#
+# # Computed by counting coprimes -- exact
+#
+# `totient` counts directly: how many k in 1..n have gcd(k, n) = 1.
+# Exact integer arithmetic, no factorisation shortcut. From it
+# fall out the cototient (n - phi(n)) and a totient-based
+# primality test (n is prime exactly when phi(n) = n-1).
+#
+# # Kernel layering
+#
+# euler-totient -> number-theory (gcd supplies the coprimality
+# test).
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT the product-formula phi(n) = n * prod(1 - 1/p) -- the
+#     direct count is used (exact, and clear).
+#   - NOT the Carmichael / Jordan generalisations.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/euler-totient.px";
+
+  numberTheory = import ./number-theory.px;
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  # Euler's totient: the count of k in 1..n coprime to n.
+  totient = n:
+    if n < 1 then 0
+    else
+      builtins.length
+        (builtins.filter
+          (k: numberTheory.gcd k n == 1)
+          (rangeList 1 n));
+
+  # The cototient: n - phi(n), the count of k in 1..n that SHARE a
+  # factor with n.
+  cototient = n: n - totient n;
+
+  # [ phi(1), phi(2), ..., phi(n) ].
+  totientList = n:
+    if n < 1 then []
+    else builtins.map totient (rangeList 1 n);
+
+  # n is prime exactly when phi(n) = n - 1 (every smaller positive
+  # integer is coprime to it).
+  isPrimeByTotient = n: n >= 2 && totient n == n - 1;
+
+  # Sum of phi(1) .. phi(n) -- the totient summatory function.
+  totientSum = n:
+    builtins.foldl' (acc: x: acc + x) 0 (totientList n);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "totient"
+    "cototient"
+    "totient-list"
+    "totient-sum"
+    "is-prime"
+  ];
+
+  totientLimit = 2000;
+
+  applyEulerTotient = request:
+    let
+      op = request.operation;
+      n  = request.n;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 1 then {
+        outcome = "held-non-positive-number";
+        operation = op;
+        n = n;
+      }
+      else if n > totientLimit then {
+        outcome = "held-argument-too-large";
+        operation = op;
+        n = n;
+        limit = totientLimit;
+        reason = "totient counts coprimes one by one; n is capped";
+      }
+      else if op == "totient" then {
+        outcome = "euler-totient-computed";
+        operation = op; n = n;
+        value = totient n;
+      }
+      else if op == "cototient" then {
+        outcome = "euler-totient-computed";
+        operation = op; n = n;
+        value = cototient n;
+      }
+      else if op == "totient-list" then {
+        outcome = "euler-totient-computed";
+        operation = op; n = n;
+        list = totientList n;
+      }
+      else if op == "totient-sum" then {
+        outcome = "euler-totient-computed";
+        operation = op; n = n;
+        value = totientSum n;
+      }
+      else {
+        # op == "is-prime"
+        outcome = "euler-totient-computed";
+        operation = op; n = n;
+        holds = isPrimeByTotient n;
+      };
+
+in {
+  inherit
+    ownerName
+    totient
+    cototient
+    totientList
+    totientSum
+    isPrimeByTotient
+    knownOperations
+    applyEulerTotient;
+  meta = {
+    source = "stdlib math euler totient";
+    owner = ownerName;
+    base = "parametric-math-euler-totient-v0";
+    rev_note = "v0.12-AAX (div-math): Euler's totient owner. totient phi(n) by direct coprime counting (exact); cototient n - phi(n); totientList; totientSum (the summatory function); a totient-based primality test (n prime iff phi(n) = n-1). Kernel layering: euler-totient -> number-theory (gcd). NOT the product formula, NOT the Carmichael/Jordan generalisations, NOT yet a registered lens.";
+  };
+}

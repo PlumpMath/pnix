@@ -1,0 +1,5 @@
+# Type-test builtins (Nix semantics; present in the pnix-hy runtime — demanded
+# by the px-expressed specializer's wrap/fold and decode/encode, tower m5/m6).
+{ i = builtins.isInt 3; ib = builtins.isInt true; b = builtins.isBool false;
+  bs = builtins.isBool "x"; s = builtins.isString "x"; si = builtins.isString 3;
+  l = builtins.isList [ 1 ]; lb = builtins.isList 3; }

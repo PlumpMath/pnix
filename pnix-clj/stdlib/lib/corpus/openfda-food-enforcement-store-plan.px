@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/openfda-food-enforcement-store-plan.px — openFDA food enforcement token metadata.
+# redb corpus_source_records에 pnix attrset source(JSON 아님)로 append한다.
+# narrative/product/address/firm details, food/medical advice, graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./openfda-food-enforcement.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "food.openfda_food_enforcement.v1";
+    source = { name = "openFDA Food Enforcement"; license = "CC0-1.0 / FDA public domain unless otherwise noted"; scope = "empty seed fallback"; };
+    summary = { last_updated = ""; api_total = 0; stored_count = 0; narrative_prose_ingested = false; product_details_ingested = false; address_firm_details_ingested = false; food_medical_advice_ingested = false; mirror_graph_wiring = false; };
+    enforcements = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "openfda-food-enforcement-load-v0";
+      source_lens = "stdlib/lib/corpus/openfda-food-enforcement-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "food.openfda_food_enforcement.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "openfda-food-enforcement-query-v0";
+      source_lens = "stdlib/lib/corpus/openfda-food-enforcement-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "food.openfda_food_enforcement.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

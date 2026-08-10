@@ -1,0 +1,1857 @@
+# AUTO-GENERATED — monoidal
+# Entries: 264
+let
+  ownerName = "stdlib.nl.lean.lookup-monoidal";
+  category = "monoidal";
+  entries = [
+    {
+      full_name = "CategoryTheory.MonoidalCategoryStruct";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 79;
+      code_preview = "class MonoidalCategoryStruct (C : Type u) [𝒞 : Category.{v} C] where      tensorObj : C → C → C      whiskerLeft (X : C) {Y₁ Y₂ : C} (f : Y₁ ⟶ Y₂) : tensorObj X Y₁ ⟶ tensorObj X Y₂      whiskerRight {X₁ X₂ : C} (f : X₁ ⟶ X₂) (Y : C) : tensorObj X₁ Y ⟶ tensorObj X₂ Y      tensorHom {X₁ Y₁ X₂ Y₂ : C} ";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.Pentagon";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 134;
+      code_preview = "def Pentagon {C : Type u} [Category.{v} C] [MonoidalCategoryStruct C]     (Y₁ Y₂ Y₃ Y₄ : C) : Prop :=   (α_ Y₁ Y₂ Y₃).hom ▷ Y₄ ≫ (α_ Y₁ (Y₂ ⊗ Y₃) Y₄).hom ≫ Y₁ ◁ (α_ Y₂ Y₃ Y₄).hom =     (α_ (Y₁ ⊗ Y₂) Y₃ Y₄).hom ≫ (α_ Y₁ Y₂ (Y₃ ⊗ Y₄)).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 145;
+      code_preview = "@[stacks 0FFK] class MonoidalCategory (C : Type u) [𝒞 : Category.{v} C] extends MonoidalCategoryStruct C where   tensorHom_def {X₁ Y₁ X₂ Y₂ : C} (f : X₁ ⟶ Y₁) (g : X₂ ⟶ Y₂) :     f ⊗ g = (f ▷ X₂) ≫ (Y₁ ◁ g) := by       aesop_cat      tensor_id : ∀ X₁ X₂ : C, 𝟙 X₁ ⊗ 𝟙 X₂ = 𝟙 (X₁ ⊗ X₂) := by aesop_cat";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.id_tensorHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 218;
+      code_preview = "@[simp] theorem id_tensorHom (X : C) {Y₁ Y₂ : C} (f : Y₁ ⟶ Y₂) :     𝟙 X ⊗ f = X ◁ f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorHom_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 223;
+      code_preview = "@[simp] theorem tensorHom_id {X₁ X₂ : C} (f : X₁ ⟶ X₂) (Y : C) :     f ⊗ 𝟙 Y = f ▷ Y";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 228;
+      code_preview = "@[reassoc, simp] theorem whiskerLeft_comp (W : C) {X Y Z : C} (f : X ⟶ Y) (g : Y ⟶ Z) :     W ◁ (f ≫ g) = W ◁ f ≫ W ◁ g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.id_whiskerLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 233;
+      code_preview = "@[reassoc, simp] theorem id_whiskerLeft {X Y : C} (f : X ⟶ Y) :     𝟙_ C ◁ f = (λ_ X).hom ≫ f ≫ (λ_ Y).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_whiskerLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 238;
+      code_preview = "@[reassoc, simp] theorem tensor_whiskerLeft (X Y : C) {Z Z' : C} (f : Z ⟶ Z') :     (X ⊗ Y) ◁ f = (α_ X Y Z).hom ≫ X ◁ Y ◁ f ≫ (α_ X Y Z').inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.comp_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 245;
+      code_preview = "@[reassoc, simp] theorem comp_whiskerRight {W X Y : C} (f : W ⟶ X) (g : X ⟶ Y) (Z : C) :     (f ≫ g) ▷ Z = f ▷ Z ≫ g ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRight_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 250;
+      code_preview = "@[reassoc, simp] theorem whiskerRight_id {X Y : C} (f : X ⟶ Y) :     f ▷ 𝟙_ C = (ρ_ X).hom ≫ f ≫ (ρ_ Y).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRight_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 255;
+      code_preview = "@[reassoc, simp] theorem whiskerRight_tensor {X X' : C} (f : X ⟶ X') (Y Z : C) :     f ▷ (Y ⊗ Z) = (α_ X Y Z).inv ≫ f ▷ Y ▷ Z ≫ (α_ X' Y Z).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whisker_assoc";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 262;
+      code_preview = "@[reassoc, simp] theorem whisker_assoc (X : C) {Y Y' : C} (f : Y ⟶ Y') (Z : C) :     (X ◁ f) ▷ Z = (α_ X Y Z).hom ≫ X ◁ f ▷ Z ≫ (α_ X Y' Z).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whisker_exchange";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 269;
+      code_preview = "@[reassoc] theorem whisker_exchange {W X Y Z : C} (f : W ⟶ X) (g : Y ⟶ Z) :     W ◁ g ≫ f ▷ Z = f ▷ Y ≫ X ◁ g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorHom_def'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 274;
+      code_preview = "@[reassoc] theorem tensorHom_def' {X₁ Y₁ X₂ Y₂ : C} (f : X₁ ⟶ Y₁) (g : X₂ ⟶ Y₂) :     f ⊗ g = X₁ ◁ g ≫ f ▷ Y₂";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_hom_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 279;
+      code_preview = "@[reassoc (attr := simp)] theorem whiskerLeft_hom_inv (X : C) {Y Z : C} (f : Y ≅ Z) :     X ◁ f.hom ≫ X ◁ f.inv = 𝟙 (X ⊗ Y)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.hom_inv_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 284;
+      code_preview = "@[reassoc (attr := simp)] theorem hom_inv_whiskerRight {X Y : C} (f : X ≅ Y) (Z : C) :     f.hom ▷ Z ≫ f.inv ▷ Z = 𝟙 (X ⊗ Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_inv_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 289;
+      code_preview = "@[reassoc (attr := simp)] theorem whiskerLeft_inv_hom (X : C) {Y Z : C} (f : Y ≅ Z) :     X ◁ f.inv ≫ X ◁ f.hom = 𝟙 (X ⊗ Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.inv_hom_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 294;
+      code_preview = "@[reassoc (attr := simp)] theorem inv_hom_whiskerRight {X Y : C} (f : X ≅ Y) (Z : C) :     f.inv ▷ Z ≫ f.hom ▷ Z = 𝟙 (Y ⊗ Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_hom_inv'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 299;
+      code_preview = "@[reassoc (attr := simp)] theorem whiskerLeft_hom_inv' (X : C) {Y Z : C} (f : Y ⟶ Z) [IsIso f] :     X ◁ f ≫ X ◁ inv f = 𝟙 (X ⊗ Y)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.hom_inv_whiskerRight'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 304;
+      code_preview = "@[reassoc (attr := simp)] theorem hom_inv_whiskerRight' {X Y : C} (f : X ⟶ Y) [IsIso f] (Z : C) :     f ▷ Z ≫ inv f ▷ Z = 𝟙 (X ⊗ Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_inv_hom'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 309;
+      code_preview = "@[reassoc (attr := simp)] theorem whiskerLeft_inv_hom' (X : C) {Y Z : C} (f : Y ⟶ Z) [IsIso f] :     X ◁ inv f ≫ X ◁ f = 𝟙 (X ⊗ Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.inv_hom_whiskerRight'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 314;
+      code_preview = "@[reassoc (attr := simp)] theorem inv_hom_whiskerRight' {X Y : C} (f : X ⟶ Y) [IsIso f] (Z : C) :     inv f ▷ Z ≫ f ▷ Z = 𝟙 (Y ⊗ Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeftIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 319;
+      code_preview = "@[simps] def whiskerLeftIso (X : C) {Y Z : C} (f : Y ≅ Z) : X ⊗ Y ≅ X ⊗ Z where   hom := X ◁ f.hom   inv := X ◁ f.inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_isIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 325;
+      code_preview = "instance whiskerLeft_isIso (X : C) {Y Z : C} (f : Y ⟶ Z) [IsIso f] : IsIso (X ◁ f) :=   (whiskerLeftIso X (asIso f)).isIso_hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.inv_whiskerLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 328;
+      code_preview = "@[simp] theorem inv_whiskerLeft (X : C) {Y Z : C} (f : Y ⟶ Z) [IsIso f] :     inv (X ◁ f) = X ◁ inv f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeftIso_refl";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 333;
+      code_preview = "@[simp] lemma whiskerLeftIso_refl (W X : C) :     whiskerLeftIso W (Iso.refl X) = Iso.refl (W ⊗ X) :=   Iso.ext (whiskerLeft_id W X)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeftIso_trans";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 338;
+      code_preview = "@[simp] lemma whiskerLeftIso_trans (W : C) {X Y Z : C} (f : X ≅ Y) (g : Y ≅ Z) :     whiskerLeftIso W (f ≪≫ g) = whiskerLeftIso W f ≪≫ whiskerLeftIso W g :=   Iso.ext (whiskerLeft_comp W f.hom g.hom)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeftIso_symm";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 343;
+      code_preview = "@[simp] lemma whiskerLeftIso_symm (W : C) {X Y : C} (f : X ≅ Y) :     (whiskerLeftIso W f).symm = whiskerLeftIso W f.symm := rfl";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRightIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 347;
+      code_preview = "@[simps!] def whiskerRightIso {X Y : C} (f : X ≅ Y) (Z : C) : X ⊗ Z ≅ Y ⊗ Z where   hom := f.hom ▷ Z   inv := f.inv ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRight_isIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 353;
+      code_preview = "instance whiskerRight_isIso {X Y : C} (f : X ⟶ Y) (Z : C) [IsIso f] : IsIso (f ▷ Z) :=   (whiskerRightIso (asIso f) Z).isIso_hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.inv_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 356;
+      code_preview = "@[simp] theorem inv_whiskerRight {X Y : C} (f : X ⟶ Y) (Z : C) [IsIso f] :     inv (f ▷ Z) = inv f ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRightIso_refl";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 361;
+      code_preview = "@[simp] lemma whiskerRightIso_refl (X W : C) :     whiskerRightIso (Iso.refl X) W = Iso.refl (X ⊗ W) :=   Iso.ext (id_whiskerRight X W)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRightIso_trans";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 366;
+      code_preview = "@[simp] lemma whiskerRightIso_trans {X Y Z : C} (f : X ≅ Y) (g : Y ≅ Z) (W : C) :     whiskerRightIso (f ≪≫ g) W = whiskerRightIso f W ≪≫ whiskerRightIso g W :=   Iso.ext (comp_whiskerRight f.hom g.hom W)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRightIso_symm";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 371;
+      code_preview = "@[simp] lemma whiskerRightIso_symm {X Y : C} (f : X ≅ Y) (W : C) :     (whiskerRightIso f W).symm = whiskerRightIso f.symm W := rfl";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 375;
+      code_preview = "@[simps] def tensorIso {X Y X' Y' : C} (f : X ≅ Y)     (g : X' ≅ Y') : X ⊗ X' ≅ Y ⊗ Y' where   hom := f.hom ⊗ g.hom   inv := f.inv ⊗ g.inv   hom_inv_id := by rw [← tensor_comp, Iso.hom_inv_id, Iso.hom_inv_id, ← tensor_id]   inv_hom_id := by rw [← tensor_comp, Iso.inv_hom_id, Iso.inv_hom_id, ← tensor";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorIso_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 387;
+      code_preview = "theorem tensorIso_def {X Y X' Y' : C} (f : X ≅ Y) (g : X' ≅ Y') :     f ⊗ g = whiskerRightIso f X' ≪≫ whiskerLeftIso Y g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorIso_def'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 391;
+      code_preview = "theorem tensorIso_def' {X Y X' Y' : C} (f : X ≅ Y) (g : X' ≅ Y') :     f ⊗ g = whiskerLeftIso X g ≪≫ whiskerRightIso f Y'";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_isIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 395;
+      code_preview = "instance tensor_isIso {W X Y Z : C} (f : W ⟶ X) [IsIso f] (g : Y ⟶ Z) [IsIso g] : IsIso (f ⊗ g) :=   (asIso f ⊗ asIso g).isIso_hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.inv_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 398;
+      code_preview = "@[simp] theorem inv_tensor {W X Y Z : C} (f : W ⟶ X) [IsIso f] (g : Y ⟶ Z) [IsIso g] :     inv (f ⊗ g) = inv f ⊗ inv g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_dite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 405;
+      code_preview = "theorem whiskerLeft_dite {P : Prop} [Decidable P]     (X : C) {Y Z : C} (f : P → (Y ⟶ Z)) (f' : ¬P → (Y ⟶ Z)) :       X ◁ (if h : P then f h else f' h) = if h : P then X ◁ f h else X ◁ f' h";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.dite_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 410;
+      code_preview = "theorem dite_whiskerRight {P : Prop} [Decidable P]     {X Y : C} (f : P → (X ⟶ Y)) (f' : ¬P → (X ⟶ Y)) (Z : C) :       (if h : P then f h else f' h) ▷ Z = if h : P then f h ▷ Z else f' h ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_dite";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 415;
+      code_preview = "theorem tensor_dite {P : Prop} [Decidable P] {W X Y Z : C} (f : W ⟶ X) (g : P → (Y ⟶ Z))     (g' : ¬P → (Y ⟶ Z)) : (f ⊗ if h : P then g h else g' h) =     if h : P then f ⊗ g h else f ⊗ g' h";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.dite_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 419;
+      code_preview = "theorem dite_tensor {P : Prop} [Decidable P] {W X Y Z : C} (f : W ⟶ X) (g : P → (Y ⟶ Z))     (g' : ¬P → (Y ⟶ Z)) : (if h : P then g h else g' h) ⊗ f =     if h : P then g h ⊗ f else g' h ⊗ f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_eqToHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 423;
+      code_preview = "@[simp] theorem whiskerLeft_eqToHom (X : C) {Y Z : C} (f : Y = Z) :     X ◁ eqToHom f = eqToHom (congr_arg₂ tensorObj rfl f)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.eqToHom_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 429;
+      code_preview = "@[simp] theorem eqToHom_whiskerRight {X Y : C} (f : X = Y) (Z : C) :     eqToHom f ▷ Z = eqToHom (congr_arg₂ tensorObj f rfl)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_naturality_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 435;
+      code_preview = "@[reassoc] theorem associator_naturality_left {X X' : C} (f : X ⟶ X') (Y Z : C) :     f ▷ Y ▷ Z ≫ (α_ X' Y Z).hom = (α_ X Y Z).hom ≫ f ▷ (Y ⊗ Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_inv_naturality_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 439;
+      code_preview = "@[reassoc] theorem associator_inv_naturality_left {X X' : C} (f : X ⟶ X') (Y Z : C) :     f ▷ (Y ⊗ Z) ≫ (α_ X' Y Z).inv = (α_ X Y Z).inv ≫ f ▷ Y ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRight_tensor_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 443;
+      code_preview = "@[reassoc] theorem whiskerRight_tensor_symm {X X' : C} (f : X ⟶ X') (Y Z : C) :     f ▷ Y ▷ Z = (α_ X Y Z).hom ≫ f ▷ (Y ⊗ Z) ≫ (α_ X' Y Z).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_naturality_middle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 447;
+      code_preview = "@[reassoc] theorem associator_naturality_middle (X : C) {Y Y' : C} (f : Y ⟶ Y') (Z : C) :     (X ◁ f) ▷ Z ≫ (α_ X Y' Z).hom = (α_ X Y Z).hom ≫ X ◁ f ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_inv_naturality_middle";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 451;
+      code_preview = "@[reassoc] theorem associator_inv_naturality_middle (X : C) {Y Y' : C} (f : Y ⟶ Y') (Z : C) :     X ◁ f ▷ Z ≫ (α_ X Y' Z).inv = (α_ X Y Z).inv ≫ (X ◁ f) ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whisker_assoc_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 455;
+      code_preview = "@[reassoc] theorem whisker_assoc_symm (X : C) {Y Y' : C} (f : Y ⟶ Y') (Z : C) :     X ◁ f ▷ Z = (α_ X Y Z).inv ≫ (X ◁ f) ▷ Z ≫ (α_ X Y' Z).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_naturality_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 459;
+      code_preview = "@[reassoc] theorem associator_naturality_right (X Y : C) {Z Z' : C} (f : Z ⟶ Z') :     (X ⊗ Y) ◁ f ≫ (α_ X Y Z').hom = (α_ X Y Z).hom ≫ X ◁ Y ◁ f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_inv_naturality_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 463;
+      code_preview = "@[reassoc] theorem associator_inv_naturality_right (X Y : C) {Z Z' : C} (f : Z ⟶ Z') :     X ◁ Y ◁ f ≫ (α_ X Y Z').inv = (α_ X Y Z).inv ≫ (X ⊗ Y) ◁ f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_whiskerLeft_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 467;
+      code_preview = "@[reassoc] theorem tensor_whiskerLeft_symm (X Y : C) {Z Z' : C} (f : Z ⟶ Z') :     X ◁ Y ◁ f = (α_ X Y Z).inv ≫ (X ⊗ Y) ◁ f ≫ (α_ X Y Z').hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftUnitor_inv_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 471;
+      code_preview = "@[reassoc] theorem leftUnitor_inv_naturality {X Y : C} (f : X ⟶ Y) :     f ≫ (λ_ Y).inv = (λ_ X).inv ≫ _ ◁ f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.id_whiskerLeft_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 475;
+      code_preview = "@[reassoc] theorem id_whiskerLeft_symm {X X' : C} (f : X ⟶ X') :     f = (λ_ X).inv ≫ 𝟙_ C ◁ f ≫ (λ_ X').hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.rightUnitor_inv_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 480;
+      code_preview = "@[reassoc] theorem rightUnitor_inv_naturality {X X' : C} (f : X ⟶ X') :     f ≫ (ρ_ X').inv = (ρ_ X).inv ≫ f ▷ _";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRight_id_symm";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 484;
+      code_preview = "@[reassoc] theorem whiskerRight_id_symm {X Y : C} (f : X ⟶ Y) :     f = (ρ_ X).inv ≫ f ▷ 𝟙_ C ≫ (ρ_ Y).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 489;
+      code_preview = "theorem whiskerLeft_iff {X Y : C} (f g : X ⟶ Y) : 𝟙_ C ◁ f = 𝟙_ C ◁ g ↔ f = g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerRight_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 491;
+      code_preview = "theorem whiskerRight_iff {X Y : C} (f g : X ⟶ Y) : f ▷ 𝟙_ C = g ▷ 𝟙_ C ↔ f = g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 498;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_inv :     W ◁ (α_ X Y Z).inv ≫ (α_ W (X ⊗ Y) Z).inv ≫ (α_ W X Y).inv ▷ Z =       (α_ W X (Y ⊗ Z)).inv ≫ (α_ (W ⊗ X) Y Z).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_inv_inv_hom_hom_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 504;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_inv_inv_hom_hom_inv :     (α_ W (X ⊗ Y) Z).inv ≫ (α_ W X Y).inv ▷ Z ≫ (α_ (W ⊗ X) Y Z).hom =       W ◁ (α_ X Y Z).hom ≫ (α_ W X (Y ⊗ Z)).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_inv_hom_hom_hom_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 511;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_inv_hom_hom_hom_inv :     (α_ (W ⊗ X) Y Z).inv ≫ (α_ W X Y).hom ▷ Z ≫ (α_ W (X ⊗ Y) Z).hom =       (α_ W X (Y ⊗ Z)).hom ≫ W ◁ (α_ X Y Z).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_hom_inv_inv_inv_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 517;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_hom_inv_inv_inv_inv :     W ◁ (α_ X Y Z).hom ≫ (α_ W X (Y ⊗ Z)).inv ≫ (α_ (W ⊗ X) Y Z).inv =       (α_ W (X ⊗ Y) Z).inv ≫ (α_ W X Y).inv ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_hom_hom_inv_hom_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 523;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_hom_hom_inv_hom_hom :     (α_ (W ⊗ X) Y Z).hom ≫ (α_ W X (Y ⊗ Z)).hom ≫ W ◁ (α_ X Y Z).inv =       (α_ W X Y).hom ▷ Z ≫ (α_ W (X ⊗ Y) Z).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_hom_inv_inv_inv_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 529;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_hom_inv_inv_inv_hom :     (α_ W X (Y ⊗ Z)).hom ≫ W ◁ (α_ X Y Z).inv ≫ (α_ W (X ⊗ Y) Z).inv =       (α_ (W ⊗ X) Y Z).inv ≫ (α_ W X Y).hom ▷ Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_hom_hom_inv_inv_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 536;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_hom_hom_inv_inv_hom :     (α_ W (X ⊗ Y) Z).hom ≫ W ◁ (α_ X Y Z).hom ≫ (α_ W X (Y ⊗ Z)).inv =       (α_ W X Y).inv ▷ Z ≫ (α_ (W ⊗ X) Y Z).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_inv_hom_hom_hom_hom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 542;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_inv_hom_hom_hom_hom :     (α_ W X Y).inv ▷ Z ≫ (α_ (W ⊗ X) Y Z).hom ≫ (α_ W X (Y ⊗ Z)).hom =       (α_ W (X ⊗ Y) Z).hom ≫ W ◁ (α_ X Y Z).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.pentagon_inv_inv_hom_inv_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 548;
+      code_preview = "@[reassoc (attr := simp)] theorem pentagon_inv_inv_hom_inv_inv :     (α_ W X (Y ⊗ Z)).inv ≫ (α_ (W ⊗ X) Y Z).inv ≫ (α_ W X Y).hom ▷ Z =       W ◁ (α_ X Y Z).inv ≫ (α_ W (X ⊗ Y) Z).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.triangle_assoc_comp_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 554;
+      code_preview = "@[reassoc (attr := simp)] theorem triangle_assoc_comp_right (X Y : C) :     (α_ X (𝟙_ C) Y).inv ≫ ((ρ_ X).hom ▷ Y) = X ◁ (λ_ Y).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.triangle_assoc_comp_right_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 559;
+      code_preview = "@[reassoc (attr := simp)] theorem triangle_assoc_comp_right_inv (X Y : C) :     (ρ_ X).inv ▷ Y ≫ (α_ X (𝟙_ C) Y).hom = X ◁ (λ_ Y).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.triangle_assoc_comp_left_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 564;
+      code_preview = "@[reassoc (attr := simp)] theorem triangle_assoc_comp_left_inv (X Y : C) :     (X ◁ (λ_ Y).inv) ≫ (α_ X (𝟙_ C) Y).inv = (ρ_ X).inv ▷ Y";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftUnitor_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 569;
+      code_preview = "@[reassoc, simp] theorem leftUnitor_whiskerRight (X Y : C) :     (λ_ X).hom ▷ Y = (α_ (𝟙_ C) X Y).hom ≫ (λ_ (X ⊗ Y)).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftUnitor_inv_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 579;
+      code_preview = "@[reassoc, simp] theorem leftUnitor_inv_whiskerRight (X Y : C) :     (λ_ X).inv ▷ Y = (λ_ (X ⊗ Y)).inv ≫ (α_ (𝟙_ C) X Y).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_rightUnitor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 584;
+      code_preview = "@[reassoc, simp] theorem whiskerLeft_rightUnitor (X Y : C) :     X ◁ (ρ_ Y).hom = (α_ X Y (𝟙_ C)).inv ≫ (ρ_ (X ⊗ Y)).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.whiskerLeft_rightUnitor_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 592;
+      code_preview = "@[reassoc, simp] theorem whiskerLeft_rightUnitor_inv (X Y : C) :     X ◁ (ρ_ Y).inv = (ρ_ (X ⊗ Y)).inv ≫ (α_ X Y (𝟙_ C)).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftUnitor_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 597;
+      code_preview = "@[reassoc] theorem leftUnitor_tensor (X Y : C) :     (λ_ (X ⊗ Y)).hom = (α_ (𝟙_ C) X Y).inv ≫ (λ_ X).hom ▷ Y";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftUnitor_tensor_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 601;
+      code_preview = "@[reassoc] theorem leftUnitor_tensor_inv (X Y : C) :     (λ_ (X ⊗ Y)).inv = (λ_ X).inv ▷ Y ≫ (α_ (𝟙_ C) X Y).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.rightUnitor_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 605;
+      code_preview = "@[reassoc] theorem rightUnitor_tensor (X Y : C) :     (ρ_ (X ⊗ Y)).hom = (α_ X Y (𝟙_ C)).hom ≫ X ◁ (ρ_ Y).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.rightUnitor_tensor_inv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 609;
+      code_preview = "@[reassoc] theorem rightUnitor_tensor_inv (X Y : C) :     (ρ_ (X ⊗ Y)).inv = X ◁ (ρ_ Y).inv ≫ (α_ X Y (𝟙_ C)).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_inv_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 615;
+      code_preview = "@[reassoc] theorem associator_inv_naturality {X Y Z X' Y' Z' : C} (f : X ⟶ X') (g : Y ⟶ Y') (h : Z ⟶ Z') :     (f ⊗ g ⊗ h) ≫ (α_ X' Y' Z').inv = (α_ X Y Z).inv ≫ ((f ⊗ g) ⊗ h)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_conjugation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 620;
+      code_preview = "@[reassoc, simp] theorem associator_conjugation {X X' Y Y' Z Z' : C} (f : X ⟶ X') (g : Y ⟶ Y') (h : Z ⟶ Z') :     (f ⊗ g) ⊗ h = (α_ X Y Z).hom ≫ (f ⊗ g ⊗ h) ≫ (α_ X' Y' Z').inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associator_inv_conjugation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 625;
+      code_preview = "@[reassoc] theorem associator_inv_conjugation {X X' Y Y' Z Z' : C} (f : X ⟶ X') (g : Y ⟶ Y') (h : Z ⟶ Z') :     f ⊗ g ⊗ h = (α_ X Y Z).inv ≫ ((f ⊗ g) ⊗ h) ≫ (α_ X' Y' Z').hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.id_tensor_associator_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 632;
+      code_preview = "@[reassoc] theorem id_tensor_associator_naturality {X Y Z Z' : C} (h : Z ⟶ Z') :     (𝟙 (X ⊗ Y) ⊗ h) ≫ (α_ X Y Z').hom = (α_ X Y Z).hom ≫ (𝟙 X ⊗ 𝟙 Y ⊗ h)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.id_tensor_associator_inv_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 637;
+      code_preview = "@[reassoc] theorem id_tensor_associator_inv_naturality {X Y Z X' : C} (f : X ⟶ X') :     (f ⊗ 𝟙 (Y ⊗ Z)) ≫ (α_ X' Y Z).inv = (α_ X Y Z).inv ≫ ((f ⊗ 𝟙 Y) ⊗ 𝟙 Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.hom_inv_id_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 642;
+      code_preview = "@[reassoc (attr := simp)] theorem hom_inv_id_tensor {V W X Y Z : C} (f : V ≅ W) (g : X ⟶ Y) (h : Y ⟶ Z) :     (f.hom ⊗ g) ≫ (f.inv ⊗ h) = (𝟙 V ⊗ g) ≫ (𝟙 V ⊗ h)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.inv_hom_id_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 647;
+      code_preview = "@[reassoc (attr := simp)] theorem inv_hom_id_tensor {V W X Y Z : C} (f : V ≅ W) (g : X ⟶ Y) (h : Y ⟶ Z) :     (f.inv ⊗ g) ≫ (f.hom ⊗ h) = (𝟙 W ⊗ g) ≫ (𝟙 W ⊗ h)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_hom_inv_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 652;
+      code_preview = "@[reassoc (attr := simp)] theorem tensor_hom_inv_id {V W X Y Z : C} (f : V ≅ W) (g : X ⟶ Y) (h : Y ⟶ Z) :     (g ⊗ f.hom) ≫ (h ⊗ f.inv) = (g ⊗ 𝟙 V) ≫ (h ⊗ 𝟙 V)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_inv_hom_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 657;
+      code_preview = "@[reassoc (attr := simp)] theorem tensor_inv_hom_id {V W X Y Z : C} (f : V ≅ W) (g : X ⟶ Y) (h : Y ⟶ Z) :     (g ⊗ f.inv) ≫ (h ⊗ f.hom) = (g ⊗ 𝟙 W) ≫ (h ⊗ 𝟙 W)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.hom_inv_id_tensor'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 662;
+      code_preview = "@[reassoc (attr := simp)] theorem hom_inv_id_tensor' {V W X Y Z : C} (f : V ⟶ W) [IsIso f] (g : X ⟶ Y) (h : Y ⟶ Z) :     (f ⊗ g) ≫ (inv f ⊗ h) = (𝟙 V ⊗ g) ≫ (𝟙 V ⊗ h)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.inv_hom_id_tensor'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 667;
+      code_preview = "@[reassoc (attr := simp)] theorem inv_hom_id_tensor' {V W X Y Z : C} (f : V ⟶ W) [IsIso f] (g : X ⟶ Y) (h : Y ⟶ Z) :     (inv f ⊗ g) ≫ (f ⊗ h) = (𝟙 W ⊗ g) ≫ (𝟙 W ⊗ h)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_hom_inv_id'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 672;
+      code_preview = "@[reassoc (attr := simp)] theorem tensor_hom_inv_id' {V W X Y Z : C} (f : V ⟶ W) [IsIso f] (g : X ⟶ Y) (h : Y ⟶ Z) :     (g ⊗ f) ≫ (h ⊗ inv f) = (g ⊗ 𝟙 V) ≫ (h ⊗ 𝟙 V)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_inv_hom_id'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 677;
+      code_preview = "@[reassoc (attr := simp)] theorem tensor_inv_hom_id' {V W X Y Z : C} (f : V ⟶ W) [IsIso f] (g : X ⟶ Y) (h : Y ⟶ Z) :     (g ⊗ inv f) ≫ (h ⊗ f) = (g ⊗ 𝟙 W) ≫ (h ⊗ 𝟙 W)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.ofTensorHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 682;
+      code_preview = "abbrev ofTensorHom [MonoidalCategoryStruct C]     (tensor_id : ∀ X₁ X₂ : C, tensorHom (𝟙 X₁) (𝟙 X₂) = 𝟙 (tensorObj X₁ X₂) := by       aesop_cat)     (id_tensorHom : ∀ (X : C) {Y₁ Y₂ : C} (f : Y₁ ⟶ Y₂), tensorHom (𝟙 X) f = whiskerLeft X f := by       aesop_cat)     (tensorHom_id : ∀ {X₁ X₂ : C} (f : ";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.comp_tensor_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 728;
+      code_preview = "@[reassoc] theorem comp_tensor_id (f : W ⟶ X) (g : X ⟶ Y) : f ≫ g ⊗ 𝟙 Z = (f ⊗ 𝟙 Z) ≫ (g ⊗ 𝟙 Z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.id_tensor_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 732;
+      code_preview = "@[reassoc] theorem id_tensor_comp (f : W ⟶ X) (g : X ⟶ Y) : 𝟙 Z ⊗ f ≫ g = (𝟙 Z ⊗ f) ≫ (𝟙 Z ⊗ g)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.id_tensor_comp_tensor_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 736;
+      code_preview = "@[reassoc] theorem id_tensor_comp_tensor_id (f : W ⟶ X) (g : Y ⟶ Z) : (𝟙 Y ⊗ f) ≫ (g ⊗ 𝟙 X) = g ⊗ f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_id_comp_id_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 741;
+      code_preview = "@[reassoc] theorem tensor_id_comp_id_tensor (f : W ⟶ X) (g : Y ⟶ Z) : (g ⊗ 𝟙 W) ≫ (𝟙 Z ⊗ f) = g ⊗ f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_left_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 746;
+      code_preview = "theorem tensor_left_iff {X Y : C} (f g : X ⟶ Y) : 𝟙 (𝟙_ C) ⊗ f = 𝟙 (𝟙_ C) ⊗ g ↔ f = g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor_right_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 748;
+      code_preview = "theorem tensor_right_iff {X Y : C} (f g : X ⟶ Y) : f ⊗ 𝟙 (𝟙_ C) = g ⊗ 𝟙 (𝟙_ C) ↔ f = g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 756;
+      code_preview = "@[simps] def tensor : C × C ⥤ C where   obj X := X.1 ⊗ X.2   map {X Y : C × C} (f : X ⟶ Y) := f.1 ⊗ f.2";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftAssocTensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 762;
+      code_preview = "def leftAssocTensor : C × C × C ⥤ C where   obj X := (X.1 ⊗ X.2.1) ⊗ X.2.2   map {X Y : C × C × C} (f : X ⟶ Y) := (f.1 ⊗ f.2.1) ⊗ f.2.2";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftAssocTensor_obj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 767;
+      code_preview = "@[simp] theorem leftAssocTensor_obj (X) : (leftAssocTensor C).obj X = (X.1 ⊗ X.2.1) ⊗ X.2.2";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftAssocTensor_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 771;
+      code_preview = "@[simp] theorem leftAssocTensor_map {X Y} (f : X ⟶ Y) : (leftAssocTensor C).map f = (f.1 ⊗ f.2.1) ⊗ f.2.2";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.rightAssocTensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 775;
+      code_preview = "def rightAssocTensor : C × C × C ⥤ C where   obj X := X.1 ⊗ X.2.1 ⊗ X.2.2   map {X Y : C × C × C} (f : X ⟶ Y) := f.1 ⊗ f.2.1 ⊗ f.2.2";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.rightAssocTensor_obj";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 780;
+      code_preview = "@[simp] theorem rightAssocTensor_obj (X) : (rightAssocTensor C).obj X = X.1 ⊗ X.2.1 ⊗ X.2.2";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.rightAssocTensor_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 784;
+      code_preview = "@[simp] theorem rightAssocTensor_map {X Y} (f : X ⟶ Y) : (rightAssocTensor C).map f = f.1 ⊗ f.2.1 ⊗ f.2.2";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.curriedTensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 788;
+      code_preview = "@[simps] def curriedTensor : C ⥤ C ⥤ C where   obj X :=     { obj := fun Y => X ⊗ Y       map := fun g => X ◁ g }   map f :=     { app := fun Y => f ▷ Y }";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 799;
+      code_preview = "@[simps!] def tensorLeft (X : C) : C ⥤ C := (curriedTensor C).obj X";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 803;
+      code_preview = "@[simps!] def tensorRight (X : C) : C ⥤ C := (curriedTensor C).flip.obj X";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorUnitLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 809;
+      code_preview = "abbrev tensorUnitLeft : C ⥤ C := tensorLeft (𝟙_ C)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorUnitRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 812;
+      code_preview = "abbrev tensorUnitRight : C ⥤ C := tensorRight (𝟙_ C)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.associatorNatIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 817;
+      code_preview = "@[simps!] def associatorNatIso : leftAssocTensor C ≅ rightAssocTensor C :=   NatIso.ofComponents (fun _ => MonoidalCategory.associator _ _ _)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.leftUnitorNatIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 822;
+      code_preview = "@[simps!] def leftUnitorNatIso : tensorUnitLeft C ≅ 𝟭 C :=   NatIso.ofComponents MonoidalCategory.leftUnitor";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.rightUnitorNatIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 827;
+      code_preview = "@[simps!] def rightUnitorNatIso : tensorUnitRight C ≅ 𝟭 C :=   NatIso.ofComponents MonoidalCategory.rightUnitor";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.curriedAssociatorNatIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 832;
+      code_preview = "@[simps!] def curriedAssociatorNatIso :     bifunctorComp₁₂ (curriedTensor C) (curriedTensor C) ≅       bifunctorComp₂₃ (curriedTensor C) (curriedTensor C) :=   NatIso.ofComponents (fun X₁ => NatIso.ofComponents (fun X₂ => NatIso.ofComponents     (fun X₃ => α_ X₁ X₂ X₃)))";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorLeftTensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 844;
+      code_preview = "def tensorLeftTensor (X Y : C) : tensorLeft (X ⊗ Y) ≅ tensorLeft Y ⋙ tensorLeft X :=   NatIso.ofComponents (associator _ _) fun {Z} {Z'} f => by simp";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorLeftTensor_hom_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 850;
+      code_preview = "@[simp] theorem tensorLeftTensor_hom_app (X Y Z : C) :     (tensorLeftTensor X Y).hom.app Z = (associator X Y Z).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorLeftTensor_inv_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 855;
+      code_preview = "@[simp] theorem tensorLeftTensor_inv_app (X Y Z : C) :     (tensorLeftTensor X Y).inv.app Z = (associator X Y Z).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensoringLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 861;
+      code_preview = "abbrev tensoringLeft : C ⥤ C ⥤ C := curriedTensor C";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensoringRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 873;
+      code_preview = "abbrev tensoringRight : C ⥤ C ⥤ C := (curriedTensor C).flip";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorRightTensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 887;
+      code_preview = "def tensorRightTensor (X Y : C) : tensorRight (X ⊗ Y) ≅ tensorRight X ⋙ tensorRight Y :=   NatIso.ofComponents (fun Z => (associator Z X Y).symm) fun {Z} {Z'} f => by simp";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorRightTensor_hom_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 893;
+      code_preview = "@[simp] theorem tensorRightTensor_hom_app (X Y Z : C) :     (tensorRightTensor X Y).hom.app Z = (associator Z X Y).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.tensorRightTensor_inv_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 898;
+      code_preview = "@[simp] theorem tensorRightTensor_inv_app (X Y Z : C) :     (tensorRightTensor X Y).inv.app Z = (associator Z X Y).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 915;
+      code_preview = "@[simps! tensorObj tensorHom tensorUnit whiskerLeft whiskerRight associator] instance prodMonoidal : MonoidalCategory (C₁ × C₂) where   tensorObj X Y := (X.1 ⊗ Y.1, X.2 ⊗ Y.2)   tensorHom f g := (f.1 ⊗ g.1, f.2 ⊗ g.2)   whiskerLeft X _ _ f := (whiskerLeft X.1 f.1, whiskerLeft X.2 f.2)   whiskerRight";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal_leftUnitor_hom_fst";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 927;
+      code_preview = "@[simp] theorem prodMonoidal_leftUnitor_hom_fst (X : C₁ × C₂) :     ((λ_ X).hom : 𝟙_ _ ⊗ X ⟶ X).1 = (λ_ X.1).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal_leftUnitor_hom_snd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 933;
+      code_preview = "@[simp] theorem prodMonoidal_leftUnitor_hom_snd (X : C₁ × C₂) :     ((λ_ X).hom : 𝟙_ _ ⊗ X ⟶ X).2 = (λ_ X.2).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal_leftUnitor_inv_fst";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 939;
+      code_preview = "@[simp] theorem prodMonoidal_leftUnitor_inv_fst (X : C₁ × C₂) :     ((λ_ X).inv : X ⟶ 𝟙_ _ ⊗ X).1 = (λ_ X.1).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal_leftUnitor_inv_snd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 945;
+      code_preview = "@[simp] theorem prodMonoidal_leftUnitor_inv_snd (X : C₁ × C₂) :     ((λ_ X).inv : X ⟶ 𝟙_ _ ⊗ X).2 = (λ_ X.2).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal_rightUnitor_hom_fst";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 951;
+      code_preview = "@[simp] theorem prodMonoidal_rightUnitor_hom_fst (X : C₁ × C₂) :     ((ρ_ X).hom : X ⊗ 𝟙_ _ ⟶ X).1 = (ρ_ X.1).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal_rightUnitor_hom_snd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 957;
+      code_preview = "@[simp] theorem prodMonoidal_rightUnitor_hom_snd (X : C₁ × C₂) :     ((ρ_ X).hom : X ⊗ 𝟙_ _ ⟶ X).2 = (ρ_ X.2).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal_rightUnitor_inv_fst";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 963;
+      code_preview = "@[simp] theorem prodMonoidal_rightUnitor_inv_fst (X : C₁ × C₂) :     ((ρ_ X).inv : X ⟶ X ⊗ 𝟙_ _).1 = (ρ_ X.1).inv";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalCategory.prodMonoidal_rightUnitor_inv_snd";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 969;
+      code_preview = "@[simp] theorem prodMonoidal_rightUnitor_inv_snd (X : C₁ × C₂) :     ((ρ_ X).inv : X ⟶ X ⊗ 𝟙_ _).2 = (ρ_ X.2).inv";
+    }
+    {
+      full_name = "CategoryTheory.NatTrans.tensor_naturality";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 984;
+      code_preview = "@[reassoc] lemma tensor_naturality {X Y X' Y' : J} (f : X ⟶ Y) (g : X' ⟶ Y') :     (F.map f ⊗ G.map g) ≫ (α.app Y ⊗ β.app Y') =       (α.app X ⊗ β.app X') ≫ (F'.map f ⊗ G'.map g) := by   simp only [← tensor_comp, naturality]";
+    }
+    {
+      full_name = "CategoryTheory.NatTrans.whiskerRight_app_tensor_app";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 990;
+      code_preview = "@[reassoc] lemma whiskerRight_app_tensor_app {X Y : J} (f : X ⟶ Y) (X' : J) :     F.map f ▷ G.obj X' ≫ (α.app Y ⊗ β.app X') =       (α.app X ⊗ β.app X') ≫ F'.map f ▷ (G'.obj X') := by   simpa using tensor_naturality α β f (𝟙 X')";
+    }
+    {
+      full_name = "CategoryTheory.NatTrans.whiskerLeft_app_tensor_app";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Category.lean";
+      start_line = 996;
+      code_preview = "@[reassoc] lemma whiskerLeft_app_tensor_app {X' Y' : J} (f : X' ⟶ Y') (X : J) :     F.obj X ◁ G.map f ≫ (α.app X ⊗ β.app Y') =       (α.app X ⊗ β.app X') ≫ F'.obj X ◁ G'.map f := by   simpa using tensor_naturality α β (𝟙 X) f";
+    }
+    {
+      full_name = "CategoryTheory.Closed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 32;
+      code_preview = "class Closed {C : Type u} [Category.{v} C] [MonoidalCategory.{v} C] (X : C) where      rightAdj : C ⥤ C      adj : tensorLeft X ⊣ rightAdj";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 39;
+      code_preview = "class MonoidalClosed (C : Type u) [Category.{v} C] [MonoidalCategory.{v} C] where   closed (X : C) : Closed X := by infer_instance";
+    }
+    {
+      full_name = "CategoryTheory.tensorClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 47;
+      code_preview = "def tensorClosed {X Y : C} (hX : Closed X) (hY : Closed Y) : Closed (X ⊗ Y) where   rightAdj := Closed.rightAdj X ⋙ Closed.rightAdj Y   adj := (hY.adj.comp hX.adj).ofNatIsoLeft (MonoidalCategory.tensorLeftTensor X Y).symm";
+    }
+    {
+      full_name = "CategoryTheory.unitClosed";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 55;
+      code_preview = "def unitClosed : Closed (𝟙_ C) where   rightAdj := 𝟭 C   adj := Adjunction.id.ofNatIsoLeft (MonoidalCategory.leftUnitorNatIso C).symm";
+    }
+    {
+      full_name = "CategoryTheory.ihom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 66;
+      code_preview = "def ihom : C ⥤ C :=   Closed.rightAdj (X := A)";
+    }
+    {
+      full_name = "CategoryTheory.ihom.adjunction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 73;
+      code_preview = "def adjunction : tensorLeft A ⊣ ihom A :=   Closed.adj";
+    }
+    {
+      full_name = "CategoryTheory.ihom.ev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 80;
+      code_preview = "def ev : ihom A ⋙ tensorLeft A ⟶ 𝟭 C :=   (ihom.adjunction A).counit";
+    }
+    {
+      full_name = "CategoryTheory.ihom.coev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 84;
+      code_preview = "def coev : 𝟭 C ⟶ tensorLeft A ⋙ ihom A :=   (ihom.adjunction A).unit";
+    }
+    {
+      full_name = "CategoryTheory.ihom.ihom_adjunction_counit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 88;
+      code_preview = "@[simp] theorem ihom_adjunction_counit : (ihom.adjunction A).counit = ev A";
+    }
+    {
+      full_name = "CategoryTheory.ihom.ihom_adjunction_unit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 92;
+      code_preview = "@[simp] theorem ihom_adjunction_unit : (ihom.adjunction A).unit = coev A";
+    }
+    {
+      full_name = "CategoryTheory.ihom.ev_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 96;
+      code_preview = "@[reassoc (attr := simp)] theorem ev_naturality {X Y : C} (f : X ⟶ Y) :     A ◁ (ihom A).map f ≫ (ev A).app Y = (ev A).app X ≫ f";
+    }
+    {
+      full_name = "CategoryTheory.ihom.coev_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 101;
+      code_preview = "@[reassoc (attr := simp)] theorem coev_naturality {X Y : C} (f : X ⟶ Y) :     f ≫ (coev A).app Y = (coev A).app X ≫ (ihom A).map (A ◁ f)";
+    }
+    {
+      full_name = "CategoryTheory.ihom.ev_coev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 110;
+      code_preview = "@[reassoc (attr := simp)] theorem ev_coev : (A ◁ (coev A).app B) ≫ (ev A).app (A ⊗ B) = 𝟙 (A ⊗ B)";
+    }
+    {
+      full_name = "CategoryTheory.ihom.coev_ev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 114;
+      code_preview = "@[reassoc (attr := simp)] theorem coev_ev : (coev A).app (A ⟶[C] B) ≫ (ihom A).map ((ev A).app B) = 𝟙 (A ⟶[C] B)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 130;
+      code_preview = "def curry : (A ⊗ Y ⟶ X) → (Y ⟶ A ⟶[C] X) :=   (ihom.adjunction A).homEquiv _ _";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 134;
+      code_preview = "def uncurry : (Y ⟶ A ⟶[C] X) → (A ⊗ Y ⟶ X) :=   ((ihom.adjunction A).homEquiv _ _).symm";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.homEquiv_apply_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 138;
+      code_preview = "theorem homEquiv_apply_eq (f : A ⊗ Y ⟶ X) : (ihom.adjunction A).homEquiv _ _ f = curry f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.homEquiv_symm_apply_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 141;
+      code_preview = "theorem homEquiv_symm_apply_eq (f : Y ⟶ A ⟶[C] X) :     ((ihom.adjunction A).homEquiv _ _).symm f = uncurry f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry_natural_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 145;
+      code_preview = "@[reassoc] theorem curry_natural_left (f : X ⟶ X') (g : A ⊗ X' ⟶ Y) : curry (_ ◁ f ≫ g) = f ≫ curry g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry_natural_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 149;
+      code_preview = "@[reassoc] theorem curry_natural_right (f : A ⊗ X ⟶ Y) (g : Y ⟶ Y') :     curry (f ≫ g) = curry f ≫ (ihom _).map g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_natural_right";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 154;
+      code_preview = "@[reassoc] theorem uncurry_natural_right (f : X ⟶ A ⟶[C] Y) (g : Y ⟶ Y') :     uncurry (f ≫ (ihom _).map g) = uncurry f ≫ g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_natural_left";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 159;
+      code_preview = "@[reassoc] theorem uncurry_natural_left (f : X ⟶ X') (g : X' ⟶ A ⟶[C] Y) :     uncurry (f ≫ g) = _ ◁ f ≫ uncurry g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_curry";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 164;
+      code_preview = "@[simp] theorem uncurry_curry (f : A ⊗ X ⟶ Y) : uncurry (curry f) = f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry_uncurry";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 168;
+      code_preview = "@[simp] theorem curry_uncurry (f : X ⟶ A ⟶[C] Y) : curry (uncurry f) = f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry_eq_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 172;
+      code_preview = "theorem curry_eq_iff (f : A ⊗ Y ⟶ X) (g : Y ⟶ A ⟶[C] X) : curry f = g ↔ f = uncurry g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.eq_curry_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 175;
+      code_preview = "theorem eq_curry_iff (f : A ⊗ Y ⟶ X) (g : Y ⟶ A ⟶[C] X) : g = curry f ↔ uncurry g = f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 179;
+      code_preview = "theorem uncurry_eq (g : Y ⟶ A ⟶[C] X) : uncurry g = (A ◁ g) ≫ (ihom.ev A).app X";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry_eq";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 182;
+      code_preview = "theorem curry_eq (g : A ⊗ Y ⟶ X) : curry g = (ihom.coev A).app Y ≫ (ihom A).map g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 185;
+      code_preview = "theorem curry_injective : Function.Injective (curry : (A ⊗ Y ⟶ X) → (Y ⟶ A ⟶[C] X))";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_injective";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 188;
+      code_preview = "theorem uncurry_injective : Function.Injective (uncurry : (Y ⟶ A ⟶[C] X) → (A ⊗ Y ⟶ X))";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_id_eq_ev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 193;
+      code_preview = "theorem uncurry_id_eq_ev : uncurry (𝟙 (A ⟶[C] X)) = (ihom.ev A).app X";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry_id_eq_coev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 196;
+      code_preview = "theorem curry_id_eq_coev : curry (𝟙 _) = (ihom.coev A).app X";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.whiskerLeft_curry_ihom_ev_app";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 200;
+      code_preview = "@[reassoc (attr := simp)] lemma whiskerLeft_curry_ihom_ev_app (g : A ⊗ Y ⟶ X) :     A ◁ curry g ≫ (ihom.ev A).app X = g := by   simp [curry_eq]";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_ihom_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 205;
+      code_preview = "theorem uncurry_ihom_map (g : Y ⟶ Y') :     uncurry ((ihom A).map g) = (ihom.ev A).app Y ≫ g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.unitNatIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 210;
+      code_preview = "def unitNatIso [Closed (𝟙_ C)] : 𝟭 C ≅ ihom (𝟙_ C) :=   conjugateIsoEquiv (Adjunction.id (C := C)) (ihom.adjunction (𝟙_ C))     (leftUnitorNatIso C)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.pre";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 219;
+      code_preview = "def pre (f : B ⟶ A) : ihom A ⟶ ihom B :=   conjugateEquiv (ihom.adjunction _) (ihom.adjunction _) ((tensoringLeft C).map f)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.id_tensor_pre_app_comp_ev";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 223;
+      code_preview = "@[reassoc (attr := simp)] theorem id_tensor_pre_app_comp_ev (f : B ⟶ A) (X : C) :     B ◁ (pre f).app X ≫ (ihom.ev B).app X = f ▷ (A ⟶[C] X) ≫ (ihom.ev A).app X";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_pre";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 228;
+      code_preview = "@[simp] theorem uncurry_pre (f : B ⟶ A) (X : C) :     MonoidalClosed.uncurry ((pre f).app X) = f ▷ _ ≫ (ihom.ev A).app X";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry_pre_app";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 233;
+      code_preview = "@[reassoc] lemma curry_pre_app (f : B ⟶ A) {X Y : C} (g : A ⊗ Y ⟶ X) :     curry g ≫ (pre f).app X = curry (f ▷ _ ≫ g) := uncurry_injective (by   rw [uncurry_curry, uncurry_eq, MonoidalCategory.whiskerLeft_comp, assoc,     id_tensor_pre_app_comp_ev, whisker_exchange_assoc, whiskerLeft_curry_ihom_ev_";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.coev_app_comp_pre_app";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 239;
+      code_preview = "@[reassoc (attr := simp)] theorem coev_app_comp_pre_app (f : B ⟶ A) :     (ihom.coev A).app X ≫ (pre f).app (A ⊗ X) = (ihom.coev B).app X ≫ (ihom B).map (f ▷ _)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry_pre_app";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 244;
+      code_preview = "@[reassoc] lemma uncurry_pre_app (f : Y ⟶ A ⟶[C] X) (g : B ⟶ A) :     uncurry (f ≫ (pre g).app X) = g ▷ _ ≫ uncurry f :=   curry_injective (by     rw [curry_uncurry, ← curry_pre_app, curry_uncurry])";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.pre_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 250;
+      code_preview = "@[simp] theorem pre_id (A : C) [Closed A] : pre (𝟙 A) = 𝟙 _";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.pre_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 255;
+      code_preview = "@[simp] theorem pre_map {A₁ A₂ A₃ : C} [Closed A₁] [Closed A₂] [Closed A₃] (f : A₁ ⟶ A₂) (g : A₂ ⟶ A₃) :     pre (f ≫ g) = pre g ≫ pre f";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.pre_comm_ihom_map";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 260;
+      code_preview = "theorem pre_comm_ihom_map {W X Y Z : C} [Closed W] [Closed X] (f : W ⟶ X) (g : Y ⟶ Z) :     (pre f).app Y ≫ (ihom W).map g = (ihom X).map g ≫ (pre f).app Z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.internalHom";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 265;
+      code_preview = "@[simps] def internalHom [MonoidalClosed C] : Cᵒᵖ ⥤ C ⥤ C where   obj X := ihom X.unop   map f := pre f.unop";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.ofEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 278;
+      code_preview = "noncomputable def ofEquiv : MonoidalClosed C where   closed X :=     { rightAdj := F ⋙ ihom (F.obj X) ⋙ G       adj := (adj.comp ((ihom.adjunction (F.obj X)).comp           adj.toEquivalence.symm.toAdjunction)).ofNatIsoLeft             (Iso.compInverseIso (H := adj.toEquivalence) (Functor.Monoidal.c";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.ofEquiv_curry_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 286;
+      code_preview = "theorem ofEquiv_curry_def {X Y Z : C} (f : X ⊗ Y ⟶ Z) :     letI := ofEquiv F adj     MonoidalClosed.curry f =       adj.homEquiv Y ((ihom (F.obj X)).obj (F.obj Z))         (MonoidalClosed.curry (adj.toEquivalence.symm.toAdjunction.homEquiv (F.obj X ⊗ F.obj Y) Z         ((Iso.compInverseIso (H := ad";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.ofEquiv_uncurry_def";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 307;
+      code_preview = "theorem ofEquiv_uncurry_def {X Y Z : C} :     letI := ofEquiv F adj     ∀ (f : Y ⟶ (ihom X).obj Z), MonoidalClosed.uncurry f =       ((Iso.compInverseIso (H := adj.toEquivalence)           (Functor.Monoidal.commTensorLeft F X)).inv.app Y) ≫             (adj.toEquivalence.symm.toAdjunction.homEquiv _";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 338;
+      code_preview = "def id (x : C) [Closed x] : 𝟙_ C ⟶ (ihom x).obj x := curry (ρ_ x).hom";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.compTranspose";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 343;
+      code_preview = "def compTranspose (x y z : C) [Closed x] [Closed y] : x ⊗ (ihom x).obj y ⊗ (ihom y).obj z ⟶ z :=   (α_ x ((ihom x).obj y) ((ihom y).obj z)).inv ≫     (ihom.ev x).app y ▷ ((ihom y).obj z) ≫ (ihom.ev y).app z";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 350;
+      code_preview = "def comp (x y z : C) [Closed x] [Closed y] : (ihom x).obj y ⊗ (ihom y).obj z ⟶ (ihom x).obj z :=   curry (compTranspose x y z)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.id_eq";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 356;
+      code_preview = "lemma id_eq (x : C) [Closed x] : id x = curry (ρ_ x).hom := rfl";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.compTranspose_eq";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 360;
+      code_preview = "lemma compTranspose_eq (x y z : C) [Closed x] [Closed y] :     compTranspose x y z = (α_ _ _ _).inv ≫ (ihom.ev x).app y ▷ _ ≫ (ihom.ev y).app z :=   rfl";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.comp_eq";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 366;
+      code_preview = "lemma comp_eq (x y z : C) [Closed x] [Closed y] : comp x y z = curry (compTranspose x y z) := rfl";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.id_comp";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 377;
+      code_preview = "@[reassoc (attr := simp)] lemma id_comp (x y : C) [Closed x] :     (λ_ ((ihom x).obj y)).inv ≫ id x ▷ _ ≫ comp x x y = 𝟙 _:= by   apply uncurry_injective   rw [uncurry_natural_left, uncurry_natural_left, comp_eq, uncurry_curry, id_eq, compTranspose_eq,       associator_inv_naturality_middle_assoc, ←";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.comp_id";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 387;
+      code_preview = "@[reassoc (attr := simp)] lemma comp_id (x y : C) [Closed x] [Closed y] :     (ρ_ ((ihom x).obj y)).inv ≫ _ ◁ id y ≫ comp x y y = 𝟙 _ := by   apply uncurry_injective   rw [uncurry_natural_left, uncurry_natural_left, comp_eq, uncurry_curry, compTranspose_eq,     associator_inv_naturality_right_assoc,";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.assoc";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 399;
+      code_preview = "@[reassoc] lemma assoc (w x y z : C) [Closed w] [Closed x] [Closed y] :     (α_ _ _ _).inv ≫ comp w x y ▷ _ ≫ comp w y z = _ ◁ comp x y z ≫ comp w x z := by   apply uncurry_injective   simp only [uncurry_natural_left, comp_eq]   rw [uncurry_curry, uncurry_curry]; simp only [compTranspose_eq, Categor";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 416;
+      code_preview = "def curry' {X Y : C} [Closed X] (f : X ⟶ Y) : 𝟙_ C ⟶ (ihom X).obj Y :=   curry ((ρ_ _).hom ≫ f)";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 420;
+      code_preview = "def uncurry' {X Y : C} [Closed X] (g : 𝟙_ C ⟶ (ihom X).obj Y) : X ⟶ Y :=   (ρ_ _).inv ≫ uncurry g";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry'_uncurry'";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 424;
+      code_preview = "@[simp] lemma curry'_uncurry' {X Y : C} [Closed X] (g : 𝟙_ C ⟶ (ihom X).obj Y) :     curry' (uncurry' g) = g := by   simp [curry', uncurry']";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry'_curry'";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 430;
+      code_preview = "@[simp] lemma uncurry'_curry' {X Y : C} [Closed X] (f : X ⟶ Y) :     uncurry' (curry' f) = f := by   simp [curry', uncurry']";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curryHomEquiv'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 436;
+      code_preview = "@[simps] def curryHomEquiv' {X Y : C} [Closed X] :     (X ⟶ Y) ≃ (𝟙_ C ⟶ (ihom X).obj Y) where   toFun := curry'   invFun := uncurry'   left_inv _ := by simp   right_inv _ := by simp";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry'_injective";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 445;
+      code_preview = "lemma curry'_injective {X Y : C} [Closed X] {f f' : X ⟶ Y} (h : curry' f = curry' f') :     f = f' :=   curryHomEquiv'.injective h";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.uncurry'_injective";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 449;
+      code_preview = "lemma uncurry'_injective {X Y : C} [Closed X] {f f' : 𝟙_ C ⟶ (ihom X).obj Y}     (h : uncurry' f = uncurry' f') : f = f' :=   curryHomEquiv'.symm.injective h";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry'_id";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 453;
+      code_preview = "@[simp] lemma curry'_id (X : C) [Closed X] : curry' (𝟙 X) = id X := by   dsimp [curry']   rw [Category.comp_id]   rfl";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.whiskerLeft_curry'_ihom_ev_app";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 459;
+      code_preview = "@[reassoc] lemma whiskerLeft_curry'_ihom_ev_app {X Y : C} [Closed X] (f : X ⟶ Y) :     X ◁ curry' f ≫ (ihom.ev X).app Y = (ρ_ _).hom ≫ f := by   dsimp [curry']   simp only [whiskerLeft_curry_ihom_ev_app]";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry'_whiskerRight_comp";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 465;
+      code_preview = "@[reassoc] lemma curry'_whiskerRight_comp {X Y Z : C} [Closed X] [Closed Y] (f : X ⟶ Y) :     curry' f ▷ _ ≫ comp X Y Z = (λ_ _).hom ≫ (pre f).app Z := by   rw [← cancel_epi (λ_ _).inv, Iso.inv_hom_id_assoc]   apply uncurry_injective   rw [uncurry_pre, comp_eq, ← curry_natural_left, ← curry_natural_";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.whiskerLeft_curry'_comp";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 475;
+      code_preview = "@[reassoc] lemma whiskerLeft_curry'_comp {X Y Z : C} [Closed X] [Closed Y] (f : Y ⟶ Z) :     _ ◁ curry' f ≫ comp X Y Z = (ρ_ _).hom ≫ (ihom X).map f := by   rw [← cancel_epi (ρ_ _).inv, Iso.inv_hom_id_assoc]   apply uncurry_injective   rw [uncurry_ihom_map, comp_eq, ← curry_natural_left, ← curry_nat";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry'_ihom_map";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 487;
+      code_preview = "lemma curry'_ihom_map {X Y Z : C} [Closed X] (f : X ⟶ Y) (g : Y ⟶ Z) :     curry' f ≫ (ihom X).map g = curry' (f ≫ g) := by   simp only [curry', ← curry_natural_right, Category.assoc]";
+    }
+    {
+      full_name = "CategoryTheory.MonoidalClosed.curry'_comp";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Closed/Monoidal.lean";
+      start_line = 491;
+      code_preview = "lemma curry'_comp {X Y Z : C} [Closed X] [Closed Y] (f : X ⟶ Y) (g : Y ⟶ Z) :     curry' (f ≫ g) = (λ_ (𝟙_ C)).inv ≫ (curry' f ⊗ curry' g) ≫ comp X Y Z := by   rw [tensorHom_def_assoc, whiskerLeft_curry'_comp, MonoidalCategory.whiskerRight_id,     Category.assoc, Category.assoc, Iso.inv_hom_id_assoc";
+    }
+    {
+      full_name = "CategoryTheory.ExactPairing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 71;
+      code_preview = "class ExactPairing (X Y : C) where      coevaluation' : 𝟙_ C ⟶ X ⊗ Y      evaluation' : Y ⊗ X ⟶ 𝟙_ C   coevaluation_evaluation' :     Y ◁ coevaluation' ≫ (α_ _ _ _).inv ≫ evaluation' ▷ Y = (ρ_ Y).hom ≫ (λ_ Y).inv := by     aesop_cat   evaluation_coevaluation' :     coevaluation' ▷ X ≫ (α_ _ _ _).hom";
+    }
+    {
+      full_name = "CategoryTheory.ExactPairing.coevaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 98;
+      code_preview = "def coevaluation : 𝟙_ C ⟶ X ⊗ Y := @coevaluation' _ _ _ X Y _";
+    }
+    {
+      full_name = "CategoryTheory.ExactPairing.evaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 101;
+      code_preview = "def evaluation : Y ⊗ X ⟶ 𝟙_ C := @evaluation' _ _ _ X Y _";
+    }
+    {
+      full_name = "CategoryTheory.ExactPairing.coevaluation_evaluation";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 107;
+      code_preview = "lemma coevaluation_evaluation :     Y ◁ η_ _ _ ≫ (α_ _ _ _).inv ≫ ε_ X _ ▷ Y = (ρ_ Y).hom ≫ (λ_ Y).inv :=   coevaluation_evaluation'";
+    }
+    {
+      full_name = "CategoryTheory.ExactPairing.evaluation_coevaluation";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 111;
+      code_preview = "lemma evaluation_coevaluation :     η_ _ _ ▷ X ≫ (α_ _ _ _).hom ≫ X ◁ ε_ _ Y = (λ_ X).hom ≫ (ρ_ X).inv :=   evaluation_coevaluation'";
+    }
+    {
+      full_name = "CategoryTheory.ExactPairing.coevaluation_evaluation''";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 115;
+      code_preview = "lemma coevaluation_evaluation'' :     Y ◁ η_ X Y ⊗≫ ε_ X Y ▷ Y = ⊗𝟙.hom := by   convert coevaluation_evaluation X Y <;> simp [monoidalComp]";
+    }
+    {
+      full_name = "CategoryTheory.ExactPairing.evaluation_coevaluation''";
+      kind = "lemma";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 119;
+      code_preview = "lemma evaluation_coevaluation'' :     η_ X Y ▷ X ⊗≫ X ◁ ε_ X Y = ⊗𝟙.hom := by   convert evaluation_coevaluation X Y <;> simp [monoidalComp]";
+    }
+    {
+      full_name = "CategoryTheory.exactPairingUnit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 128;
+      code_preview = "instance exactPairingUnit : ExactPairing (𝟙_ C) (𝟙_ C) where   coevaluation' := (ρ_ _).inv   evaluation' := (ρ_ _).hom   coevaluation_evaluation' := by monoidal_coherence   evaluation_coevaluation' := by monoidal_coherence";
+    }
+    {
+      full_name = "CategoryTheory.HasRightDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 134;
+      code_preview = "class HasRightDual (X : C) where      rightDual : C   [exact : ExactPairing X rightDual]";
+    }
+    {
+      full_name = "CategoryTheory.HasLeftDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 140;
+      code_preview = "class HasLeftDual (Y : C) where      leftDual : C   [exact : ExactPairing leftDual Y]";
+    }
+    {
+      full_name = "CategoryTheory.hasRightDualUnit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 159;
+      code_preview = "instance hasRightDualUnit : HasRightDual (𝟙_ C) where   rightDual := 𝟙_ C";
+    }
+    {
+      full_name = "CategoryTheory.hasLeftDualUnit";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 162;
+      code_preview = "instance hasLeftDualUnit : HasLeftDual (𝟙_ C) where   leftDual := 𝟙_ C";
+    }
+    {
+      full_name = "CategoryTheory.hasRightDualLeftDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 165;
+      code_preview = "instance hasRightDualLeftDual {X : C} [HasLeftDual X] : HasRightDual ᘁX where   rightDual := X";
+    }
+    {
+      full_name = "CategoryTheory.hasLeftDualRightDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 168;
+      code_preview = "instance hasLeftDualRightDual {X : C} [HasRightDual X] : HasLeftDual Xᘁ where   leftDual := X";
+    }
+    {
+      full_name = "CategoryTheory.leftDual_rightDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 171;
+      code_preview = "@[simp] theorem leftDual_rightDual {X : C} [HasRightDual X] : ᘁXᘁ = X";
+    }
+    {
+      full_name = "CategoryTheory.rightDual_leftDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 175;
+      code_preview = "@[simp] theorem rightDual_leftDual {X : C} [HasLeftDual X] : (ᘁX)ᘁ = X";
+    }
+    {
+      full_name = "CategoryTheory.rightAdjointMate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 179;
+      code_preview = "def rightAdjointMate {X Y : C} [HasRightDual X] [HasRightDual Y] (f : X ⟶ Y) : Yᘁ ⟶ Xᘁ :=   (ρ_ _).inv ≫ _ ◁ η_ _ _ ≫ _ ◁ f ▷ _ ≫ (α_ _ _ _).inv ≫ ε_ _ _ ▷ _ ≫ (λ_ _).hom";
+    }
+    {
+      full_name = "CategoryTheory.leftAdjointMate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 183;
+      code_preview = "def leftAdjointMate {X Y : C} [HasLeftDual X] [HasLeftDual Y] (f : X ⟶ Y) : ᘁY ⟶ ᘁX :=   (λ_ _).inv ≫ η_ (ᘁX) X ▷ _ ≫ (_ ◁ f) ▷ _ ≫ (α_ _ _ _).hom ≫ _ ◁ ε_ _ _ ≫ (ρ_ _).hom";
+    }
+    {
+      full_name = "CategoryTheory.rightAdjointMate_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 190;
+      code_preview = "@[simp] theorem rightAdjointMate_id {X : C} [HasRightDual X] : (𝟙 X)ᘁ = 𝟙 (Xᘁ)";
+    }
+    {
+      full_name = "CategoryTheory.leftAdjointMate_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 194;
+      code_preview = "@[simp] theorem leftAdjointMate_id {X : C} [HasLeftDual X] : (ᘁ(𝟙 X)) = 𝟙 (ᘁX)";
+    }
+    {
+      full_name = "CategoryTheory.rightAdjointMate_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 198;
+      code_preview = "theorem rightAdjointMate_comp {X Y Z : C} [HasRightDual X] [HasRightDual Y] {f : X ⟶ Y}     {g : Xᘁ ⟶ Z} :     fᘁ ≫ g =       (ρ_ (Yᘁ)).inv ≫         _ ◁ η_ X (Xᘁ) ≫ _ ◁ (f ⊗ g) ≫ (α_ (Yᘁ) Y Z).inv ≫ ε_ Y (Yᘁ) ▷ _ ≫ (λ_ Z).hom";
+    }
+    {
+      full_name = "CategoryTheory.leftAdjointMate_comp";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 209;
+      code_preview = "theorem leftAdjointMate_comp {X Y Z : C} [HasLeftDual X] [HasLeftDual Y] {f : X ⟶ Y}     {g : (ᘁX) ⟶ Z} :     (ᘁf) ≫ g =       (λ_ _).inv ≫         η_ (ᘁX : C) X ▷ _ ≫ (g ⊗ f) ▷ _ ≫ (α_ _ _ _).hom ≫ _ ◁ ε_ _ _ ≫ (ρ_ _).hom";
+    }
+    {
+      full_name = "CategoryTheory.comp_rightAdjointMate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 220;
+      code_preview = "@[reassoc] theorem comp_rightAdjointMate {X Y Z : C} [HasRightDual X] [HasRightDual Y] [HasRightDual Z]     {f : X ⟶ Y} {g : Y ⟶ Z} : (f ≫ g)ᘁ = gᘁ ≫ fᘁ";
+    }
+    {
+      full_name = "CategoryTheory.comp_leftAdjointMate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 241;
+      code_preview = "@[reassoc] theorem comp_leftAdjointMate {X Y Z : C} [HasLeftDual X] [HasLeftDual Y] [HasLeftDual Z] {f : X ⟶ Y}     {g : Y ⟶ Z} : (ᘁf ≫ g) = (ᘁg) ≫ ᘁf";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftHomEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 262;
+      code_preview = "def tensorLeftHomEquiv (X Y Y' Z : C) [ExactPairing Y Y'] : (Y' ⊗ X ⟶ Z) ≃ (X ⟶ Y ⊗ Z) where   toFun f := (λ_ _).inv ≫ η_ _ _ ▷ _ ≫ (α_ _ _ _).hom ≫ _ ◁ f   invFun f := Y' ◁ f ≫ (α_ _ _ _).inv ≫ ε_ _ _ ▷ _ ≫ (λ_ _).hom   left_inv f := by     calc       _ = 𝟙 _ ⊗≫ Y' ◁ η_ Y Y' ▷ X ⊗≫ ((Y' ⊗ Y) ◁ f ≫ ";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightHomEquiv";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 291;
+      code_preview = "def tensorRightHomEquiv (X Y Y' Z : C) [ExactPairing Y Y'] : (X ⊗ Y ⟶ Z) ≃ (X ⟶ Z ⊗ Y') where   toFun f := (ρ_ _).inv ≫ _ ◁ η_ _ _ ≫ (α_ _ _ _).inv ≫ f ▷ _   invFun f := f ▷ _ ≫ (α_ _ _ _).hom ≫ _ ◁ ε_ _ _ ≫ (ρ_ _).hom   left_inv f := by     calc       _ = 𝟙 _ ⊗≫ X ◁ η_ Y Y' ▷ Y ⊗≫ (f ▷ (Y' ⊗ Y) ≫ Z";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftHomEquiv_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 315;
+      code_preview = "theorem tensorLeftHomEquiv_naturality {X Y Y' Z Z' : C} [ExactPairing Y Y'] (f : Y' ⊗ X ⟶ Z)     (g : Z ⟶ Z') :     (tensorLeftHomEquiv X Y Y' Z') (f ≫ g) = (tensorLeftHomEquiv X Y Y' Z) f ≫ Y ◁ g";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftHomEquiv_symm_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 320;
+      code_preview = "theorem tensorLeftHomEquiv_symm_naturality {X X' Y Y' Z : C} [ExactPairing Y Y'] (f : X ⟶ X')     (g : X' ⟶ Y ⊗ Z) :     (tensorLeftHomEquiv X Y Y' Z).symm (f ≫ g) =       _ ◁ f ≫ (tensorLeftHomEquiv X' Y Y' Z).symm g";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightHomEquiv_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 326;
+      code_preview = "theorem tensorRightHomEquiv_naturality {X Y Y' Z Z' : C} [ExactPairing Y Y'] (f : X ⊗ Y ⟶ Z)     (g : Z ⟶ Z') :     (tensorRightHomEquiv X Y Y' Z') (f ≫ g) = (tensorRightHomEquiv X Y Y' Z) f ≫ g ▷ Y'";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightHomEquiv_symm_naturality";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 331;
+      code_preview = "theorem tensorRightHomEquiv_symm_naturality {X X' Y Y' Z : C} [ExactPairing Y Y'] (f : X ⟶ X')     (g : X' ⟶ Z ⊗ Y') :     (tensorRightHomEquiv X Y Y' Z).symm (f ≫ g) =       f ▷ Y ≫ (tensorRightHomEquiv X' Y Y' Z).symm g";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftAdjunction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 337;
+      code_preview = "def tensorLeftAdjunction (Y Y' : C) [ExactPairing Y Y'] : tensorLeft Y' ⊣ tensorLeft Y :=   Adjunction.mkOfHomEquiv     { homEquiv := fun X Z => tensorLeftHomEquiv X Y Y' Z       homEquiv_naturality_left_symm := fun f g => tensorLeftHomEquiv_symm_naturality f g       homEquiv_naturality_right := fun";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightAdjunction";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 346;
+      code_preview = "def tensorRightAdjunction (Y Y' : C) [ExactPairing Y Y'] : tensorRight Y ⊣ tensorRight Y' :=   Adjunction.mkOfHomEquiv     { homEquiv := fun X Z => tensorRightHomEquiv X Y Y' Z       homEquiv_naturality_left_symm := fun f g => tensorRightHomEquiv_symm_naturality f g       homEquiv_naturality_right :";
+    }
+    {
+      full_name = "CategoryTheory.closedOfHasLeftDual";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 355;
+      code_preview = "def closedOfHasLeftDual (Y : C) [HasLeftDual Y] : Closed Y where   rightAdj := tensorLeft (ᘁY)   adj := tensorLeftAdjunction (ᘁY) Y";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftHomEquiv_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 370;
+      code_preview = "theorem tensorLeftHomEquiv_tensor {X X' Y Y' Z Z' : C} [ExactPairing Y Y'] (f : X ⟶ Y ⊗ Z)     (g : X' ⟶ Z') :     (tensorLeftHomEquiv (X ⊗ X') Y Y' (Z ⊗ Z')).symm ((f ⊗ g) ≫ (α_ _ _ _).hom) =       (α_ _ _ _).inv ≫ ((tensorLeftHomEquiv X Y Y' Z).symm f ⊗ g)";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightHomEquiv_tensor";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 377;
+      code_preview = "theorem tensorRightHomEquiv_tensor {X X' Y Y' Z Z' : C} [ExactPairing Y Y'] (f : X ⟶ Z ⊗ Y')     (g : X' ⟶ Z') :     (tensorRightHomEquiv (X' ⊗ X) Y Y' (Z' ⊗ Z)).symm ((g ⊗ f) ≫ (α_ _ _ _).inv) =       (α_ _ _ _).hom ≫ (g ⊗ (tensorRightHomEquiv X Y Y' Z).symm f)";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftHomEquiv_symm_coevaluation_comp_whiskerLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 384;
+      code_preview = "@[simp] theorem tensorLeftHomEquiv_symm_coevaluation_comp_whiskerLeft {Y Y' Z : C} [ExactPairing Y Y']     (f : Y' ⟶ Z) : (tensorLeftHomEquiv _ _ _ _).symm (η_ _ _ ≫ Y ◁ f) = (ρ_ _).hom ≫ f";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftHomEquiv_symm_coevaluation_comp_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 394;
+      code_preview = "@[simp] theorem tensorLeftHomEquiv_symm_coevaluation_comp_whiskerRight {X Y : C} [HasRightDual X]     [HasRightDual Y] (f : X ⟶ Y) :     (tensorLeftHomEquiv _ _ _ _).symm (η_ _ _ ≫ f ▷ (Xᘁ)) = (ρ_ _).hom ≫ fᘁ";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightHomEquiv_symm_coevaluation_comp_whiskerLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 401;
+      code_preview = "@[simp] theorem tensorRightHomEquiv_symm_coevaluation_comp_whiskerLeft {X Y : C} [HasLeftDual X]     [HasLeftDual Y] (f : X ⟶ Y) :     (tensorRightHomEquiv _ (ᘁY) _ _).symm (η_ (ᘁX : C) X ≫ (ᘁX : C) ◁ f) = (λ_ _).hom ≫ ᘁf";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightHomEquiv_symm_coevaluation_comp_whiskerRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 408;
+      code_preview = "@[simp] theorem tensorRightHomEquiv_symm_coevaluation_comp_whiskerRight {Y Y' Z : C} [ExactPairing Y Y']     (f : Y ⟶ Z) : (tensorRightHomEquiv _ Y _ _).symm (η_ Y Y' ≫ f ▷ Y') = (λ_ _).hom ≫ f";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftHomEquiv_whiskerLeft_comp_evaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 419;
+      code_preview = "@[simp] theorem tensorLeftHomEquiv_whiskerLeft_comp_evaluation {Y Z : C} [HasLeftDual Z] (f : Y ⟶ ᘁZ) :     (tensorLeftHomEquiv _ _ _ _) (Z ◁ f ≫ ε_ _ _) = f ≫ (ρ_ _).inv";
+    }
+    {
+      full_name = "CategoryTheory.tensorLeftHomEquiv_whiskerRight_comp_evaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 430;
+      code_preview = "@[simp] theorem tensorLeftHomEquiv_whiskerRight_comp_evaluation {X Y : C} [HasLeftDual X] [HasLeftDual Y]     (f : X ⟶ Y) : (tensorLeftHomEquiv _ _ _ _) (f ▷ _ ≫ ε_ _ _) = (ᘁf) ≫ (ρ_ _).inv";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightHomEquiv_whiskerLeft_comp_evaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 436;
+      code_preview = "@[simp] theorem tensorRightHomEquiv_whiskerLeft_comp_evaluation {X Y : C} [HasRightDual X] [HasRightDual Y]     (f : X ⟶ Y) : (tensorRightHomEquiv _ _ _ _) ((Yᘁ : C) ◁ f ≫ ε_ _ _) = fᘁ ≫ (λ_ _).inv";
+    }
+    {
+      full_name = "CategoryTheory.tensorRightHomEquiv_whiskerRight_comp_evaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 442;
+      code_preview = "@[simp] theorem tensorRightHomEquiv_whiskerRight_comp_evaluation {X Y : C} [HasRightDual X] (f : Y ⟶ Xᘁ) :     (tensorRightHomEquiv _ _ _ _) (f ▷ X ≫ ε_ X (Xᘁ)) = f ≫ (λ_ _).inv";
+    }
+    {
+      full_name = "CategoryTheory.coevaluation_comp_rightAdjointMate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 454;
+      code_preview = "@[reassoc] theorem coevaluation_comp_rightAdjointMate {X Y : C} [HasRightDual X] [HasRightDual Y] (f : X ⟶ Y) :     η_ Y (Yᘁ) ≫ _ ◁ (fᘁ) = η_ _ _ ≫ f ▷ _";
+    }
+    {
+      full_name = "CategoryTheory.leftAdjointMate_comp_evaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 460;
+      code_preview = "@[reassoc] theorem leftAdjointMate_comp_evaluation {X Y : C} [HasLeftDual X] [HasLeftDual Y] (f : X ⟶ Y) :     X ◁ (ᘁf) ≫ ε_ _ _ = f ▷ _ ≫ ε_ _ _";
+    }
+    {
+      full_name = "CategoryTheory.coevaluation_comp_leftAdjointMate";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 466;
+      code_preview = "@[reassoc] theorem coevaluation_comp_leftAdjointMate {X Y : C} [HasLeftDual X] [HasLeftDual Y] (f : X ⟶ Y) :     η_ (ᘁY) Y ≫ (ᘁf) ▷ Y = η_ (ᘁX) X ≫ (ᘁX) ◁ f";
+    }
+    {
+      full_name = "CategoryTheory.rightAdjointMate_comp_evaluation";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 472;
+      code_preview = "@[reassoc] theorem rightAdjointMate_comp_evaluation {X Y : C} [HasRightDual X] [HasRightDual Y] (f : X ⟶ Y) :     (fᘁ ▷ X) ≫ ε_ X (Xᘁ) = ((Yᘁ) ◁ f) ≫ ε_ Y (Yᘁ)";
+    }
+    {
+      full_name = "CategoryTheory.exactPairingCongrLeft";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 478;
+      code_preview = "def exactPairingCongrLeft {X X' Y : C} [ExactPairing X' Y] (i : X ≅ X') : ExactPairing X Y where   evaluation' := Y ◁ i.hom ≫ ε_ _ _   coevaluation' := η_ _ _ ≫ i.inv ▷ Y   evaluation_coevaluation' :=     calc       _ = η_ X' Y ▷ X ⊗≫ (i.inv ▷ (Y ⊗ X) ≫ X ◁ (Y ◁ i.hom)) ⊗≫ X ◁ ε_ X' Y := by         ";
+    }
+    {
+      full_name = "CategoryTheory.exactPairingCongrRight";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 506;
+      code_preview = "def exactPairingCongrRight {X Y Y' : C} [ExactPairing X Y'] (i : Y ≅ Y') : ExactPairing X Y where   evaluation' := i.hom ▷ X ≫ ε_ _ _   coevaluation' := η_ _ _ ≫ X ◁ i.inv   evaluation_coevaluation' := by     calc       _ = η_ X Y' ▷ X ⊗≫ X ◁ (i.inv ≫ i.hom) ▷ X ≫ X ◁ ε_ X Y' := by         monoidal ";
+    }
+    {
+      full_name = "CategoryTheory.exactPairingCongr";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 534;
+      code_preview = "def exactPairingCongr {X X' Y Y' : C} [ExactPairing X' Y'] (i : X ≅ X') (j : Y ≅ Y') :     ExactPairing X Y :=   haveI : ExactPairing X' Y := exactPairingCongrRight j   exactPairingCongrLeft i";
+    }
+    {
+      full_name = "CategoryTheory.rightDualIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 540;
+      code_preview = "def rightDualIso {X Y₁ Y₂ : C} (p₁ : ExactPairing X Y₁) (p₂ : ExactPairing X Y₂) : Y₁ ≅ Y₂ where   hom := @rightAdjointMate C _ _ X X ⟨Y₂⟩ ⟨Y₁⟩ (𝟙 X)   inv := @rightAdjointMate C _ _ X X ⟨Y₁⟩ ⟨Y₂⟩ (𝟙 X)   hom_inv_id := by     rw [← @comp_rightAdjointMate C _ _ X X X ⟨Y₁⟩ ⟨Y₂⟩ ⟨Y₁⟩, Category.comp_id,";
+    }
+    {
+      full_name = "CategoryTheory.leftDualIso";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 554;
+      code_preview = "def leftDualIso {X₁ X₂ Y : C} (p₁ : ExactPairing X₁ Y) (p₂ : ExactPairing X₂ Y) : X₁ ≅ X₂ where   hom := @leftAdjointMate C _ _ Y Y ⟨X₂⟩ ⟨X₁⟩ (𝟙 Y)   inv := @leftAdjointMate C _ _ Y Y ⟨X₁⟩ ⟨X₂⟩ (𝟙 Y)   hom_inv_id := by     rw [← @comp_leftAdjointMate C _ _ Y Y Y ⟨X₁⟩ ⟨X₂⟩ ⟨X₁⟩, Category.comp_id,    ";
+    }
+    {
+      full_name = "CategoryTheory.rightDualIso_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 568;
+      code_preview = "@[simp] theorem rightDualIso_id {X Y : C} (p : ExactPairing X Y) : rightDualIso p p = Iso.refl Y";
+    }
+    {
+      full_name = "CategoryTheory.leftDualIso_id";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 573;
+      code_preview = "@[simp] theorem leftDualIso_id {X Y : C} (p : ExactPairing X Y) : leftDualIso p p = Iso.refl X";
+    }
+    {
+      full_name = "CategoryTheory.RightRigidCategory";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 578;
+      code_preview = "class RightRigidCategory (C : Type u) [Category.{v} C] [MonoidalCategory.{v} C] where   [rightDual : ∀ X : C, HasRightDual X]";
+    }
+    {
+      full_name = "CategoryTheory.LeftRigidCategory";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 582;
+      code_preview = "class LeftRigidCategory (C : Type u) [Category.{v} C] [MonoidalCategory.{v} C] where   [leftDual : ∀ X : C, HasLeftDual X]";
+    }
+    {
+      full_name = "CategoryTheory.monoidalClosedOfLeftRigidCategory";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 589;
+      code_preview = "def monoidalClosedOfLeftRigidCategory (C : Type u) [Category.{v} C] [MonoidalCategory.{v} C]     [LeftRigidCategory C] : MonoidalClosed C where   closed X := closedOfHasLeftDual X";
+    }
+    {
+      full_name = "CategoryTheory.RigidCategory";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/CategoryTheory/Monoidal/Rigid/Basic.lean";
+      start_line = 601;
+      code_preview = "class RigidCategory (C : Type u) [Category.{v} C] [MonoidalCategory.{v} C] extends     RightRigidCategory C, LeftRigidCategory C";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

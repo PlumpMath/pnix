@@ -1,0 +1,253 @@
+# stdlib.nl.nl-operation-dispatch-slow-keyword
+# Keyword/ambient fallback dispatch — lazy-imported from cheap slow path only.
+let
+in
+rec {
+  name = "stdlib.nl.nl-operation-dispatch-slow-keyword";
+
+  mkResult = kind: to: classification: result: {
+    operation_kind = kind;
+    outcome = "dispatched";
+    dispatched_to = to;
+    classification = classification;
+    result = result;
+  };
+  arithmeticResultFromExpression = utterance: via: expr:
+    let
+      numOwner = import ../math/numeric-evaluator.px;
+      evaluated = numOwner.evaluateNumericExpression expr { };
+      rational =
+        if evaluated.ok then null
+        else numOwner.evaluateRationalExpression expr { };
+    in
+      if evaluated.ok
+      then mkResult "arithmetic" "numeric-evaluator"
+             { via = via; expression = expr; }
+             { outcome = "evaluated"; value = evaluated.value; input = utterance; }
+      else if rational != null && rational.ok
+      then mkResult "arithmetic" "numeric-evaluator"
+             { via = via; expression = expr; exact = "rational"; }
+             {
+               outcome = "evaluated";
+               value = if rational.is_integer then rational.value else rational.text;
+               value_text = rational.text;
+               exact_rational = rational.rational;
+               input = utterance;
+             }
+      else null;
+
+  # === Fallback: ambient (intent mode + math sub-domain) classification =====
+  # Reached when no keyword DOMAIN fired. Uses the canonical agent-NL-101
+  # classifier to decide intent. math-procedure/verification/timeless → math
+  # lane; everything else → honest general classification (NO fabricated answer
+  # — LLM-free constitution: 모름은 도전, 날조 답 금지).
+  isHeldOutcome = r:
+    (builtins.isAttrs r) && (r ? outcome) && (builtins.isString r.outcome)
+    && ((builtins.substring 0 4 r.outcome) == "held");
+
+  dispatchCodeTransformFromCodingIntent = utterance: classification:
+    let
+      cdisp = import ../coding/coding-candidate-dispatcher.px;
+    in
+      mkResult "code-transform" "coding-candidate-dispatcher" classification
+        (cdisp.dispatch {
+          path = "/coding/candidate";
+          method = "POST";
+          body = { utterance = utterance; };
+        });
+
+  # Same gate as slow-coding: explicit edit surfaces only. Bare nouns like
+  # "symbol" and nominal "이름 변경" are explanation/domain mentions until a
+  # concrete edit verb or object appears.
+  refactorIntentCues = [
+    "rename " "rename symbol" "rename function" "rename variable" "rename identifier"
+    "refactor" "import " "unused"
+    "이름 바꿔" "이름 바꾸" "이름 변경해" "심볼 이름" "심볼 변경"
+    "함수 이름 " "변수 이름 " "미분 함수로 바꿔" "함수로 바꿔"
+  ];
+
+  tryCodingIntentCodeTransform = utterance:
+    if !containsAny utterance refactorIntentCues then null
+    else
+      let
+        lifter = import ../coding/coding-intent-lifter.px;
+        classified = lifter.classifyCodingIntent utterance;
+      in
+        if (builtins.isAttrs classified)
+          && classified.outcome == "coding-intent-classified"
+          && classified.intent_kind == "refactor"
+        then dispatchCodeTransformFromCodingIntent utterance classified
+        else null;
+
+  slen = s: builtins.stringLength s;
+  sub = start: len: s: builtins.substring start len s;
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false else if (sub i n hay) == needle then true else go (i + 1);
+    in if n == 0 then false else go 0;
+  containsAny = utterance: cues:
+    builtins.any (cue: hasInfix cue utterance) cues;
+
+  attrOr = attrs: key: fallback:
+    if (builtins.isAttrs attrs) && (builtins.hasAttr key attrs)
+    then builtins.getAttr key attrs else fallback;
+
+  nonEmptyString = value:
+    builtins.isString value && value != "";
+
+  factorCues = [ "인수분해" "factorize" "factorise" "factor x" "factor y" "factor it" "factor polynomial" "factor expression" ];
+  diffCues = [ "미분" "differentiate" "derivative of" "take derivative" ];
+
+  # Cues that require heavy domain classification (pipeline / ambient / frame).
+  domainHeavyCues = [
+    "=" "+" "-" "*" "/" "^" "%" "(" ")"
+    "print" "println" "def " "fn " "class " "import " "let " "var "
+    "코드" "출력" "방정식" "풀어" "계산" "더하기" "곱하기" "나누" "미분" "인수분해"
+    "factorize" "factorise" "factor x" "factor y" "factor it" "differentiate" "derivative of" "solve" "equation" "eval" "emit"
+    "설명해줘" "이게 뭐야" "뭐야" "무엇인지" "무슨 뜻" "why" "what is" "what does"
+    "rust" "python" "javascript" "typescript" "go " "java" "kotlin"
+    "world3d" "rotate" "blender" "rhino" "freecat" "mesh" "cone" "sphere"
+    "rename " "refactor" "patch" "build" "test " "pytest" "cargo"
+    "x=" "y=" "z=" " x " " y " " z "
+  ];
+
+  quickGeneralIfBenign = utterance:
+    if !(builtins.isString utterance) || (builtins.stringLength utterance) == 0 then null
+    else if containsAny utterance domainHeavyCues then null
+    else {
+      operation_kind = "general";
+      outcome = "classified-general";
+      dispatched_to = "nl-operation-dispatch-slow";
+      classification = { ambient = "intent-statement"; family = "nl"; via = "quick-general"; };
+      result = { ambient = "intent-statement"; family = "nl"; };
+      receipt = { kind = "general-utterance-classified"; via = "quick-general"; };
+      note = "도메인 cue 없음 — 경량 일반 분류 (symbolic frame/graph 생략).";
+    };
+
+  # Host transport-only pre-extract (arithmetic/symbolic/equation text) — no
+  # semantic routing in Rust. This owner consumes `context.transport_preextract`
+  # before the heavy symbolic graph/frame path.
+  dispatchFromTransportPreextract = utterance: context:
+    let tp = attrOr context "transport_preextract" null;
+    in
+      if tp == null || !(builtins.isAttrs tp) then null
+      else if nonEmptyString (attrOr tp "arithmetic_expression" "") then
+        arithmeticResultFromExpression utterance "transport-preextract" tp.arithmetic_expression
+      else if nonEmptyString (attrOr tp "equation_expression" "") then
+        let
+          expr = tp.equation_expression;
+          eqOwner = import ../math/equation-solving-procedure.px;
+        in mkResult "equation" "equation-solving-procedure"
+             { via = "transport-preextract"; expression = expr; }
+             (eqOwner.beginSolveProcedureWithContext utterance expr)
+      else if nonEmptyString (attrOr tp "symbolic_expression" "") then
+        let expr = tp.symbolic_expression;
+        in
+          if containsAny utterance factorCues then
+            let factorOwner = import ../math/factor-executor-bridge.px;
+            in mkResult "math-factor" "factor-executor-bridge"
+                 { via = "transport-preextract"; expression = expr; }
+                 (factorOwner.factorEquation expr)
+          else if containsAny utterance diffCues then
+            let derivOwner = import ../math/derivative-executor-bridge.px;
+            in mkResult "math-diff" "derivative-executor-bridge"
+                 { via = "transport-preextract"; expression = expr; }
+                 (derivOwner.differentiateExpression {
+                   utterance = utterance;
+                   expression = expr;
+                 })
+          else null
+      else null;
+
+  dispatchByAmbient = utterance:
+    let
+      decompOwner =
+        import ./sentence-decomposition-substrate.px;
+      arithmetic = arithmeticResultFromExpression utterance "arithmetic" utterance;
+    in
+      # (1) pure arithmetic ("1 + 1", "2 * (3 + 4)") → evaluate. No "=", no var.
+      if arithmetic != null then
+        arithmetic
+      else
+      let
+        amb = decompOwner.classifyAmbient utterance;
+        a = if amb ? ambient_id then amb.ambient_id else "intent-statement";
+        famAmb = if amb ? family then amb.family else "";
+        m = import ../math/nl-conjecture-lifter.px;
+      in
+      if a == "math-procedure" then
+        let
+          eq = import ../math/equation-solving-procedure.px;
+          solved = eq.beginSolveProcedure utterance;
+        in
+          if solved.outcome == "solved"
+          then mkResult "equation" "equation-solving-procedure" amb solved
+          else mkResult "math-judge" "nl-conjecture-lifter" amb (m.liftAndJudge utterance)
+      else if (a == "math-timeless") || (a == "math-verification") then
+        mkResult "math-judge" "nl-conjecture-lifter" amb (m.liftAndJudge utterance)
+      else
+        # Try the math NL judge (it knows ko/en conjecture patterns like
+        # "0 더하기 n 은 n"). Non-held verdict → math-judge; else honest general.
+        let judged = m.liftAndJudge utterance;
+        in
+          if !(isHeldOutcome judged)
+          then mkResult "math-judge" "nl-conjecture-lifter" amb judged
+          else {
+        # intent-question / statement / confirmation / clarification / meta /
+        # conditional / instruction-without-code-keyword.
+        operation_kind = "general";
+        outcome = "classified-general";
+        dispatched_to = "sentence-decomposition-substrate";
+        classification = amb;
+        result = { ambient = a; family = famAmb; };
+        receipt = { kind = "general-utterance-classified"; ambient = a; };
+        note = "코드/수학 연산이 아닌 일반 발화 — ambient 분류 + receipt. 날조된 답 없음 (모름은 도전).";
+      };
+
+  # === Keyword/domain FALLBACK dispatcher (scaffold) ========================
+  # Used when the symbolic 4-piece chain cannot decompose (e.g. a bare
+  # "x + 1 = 0" with no sentence terminator). classifyDomain keyword routing.
+  dispatchByKeyword = utterance:
+    if !(builtins.isString utterance) then { operation_kind = "none"; outcome = "held-non-string"; }
+    else if (builtins.stringLength utterance) == 0 then { operation_kind = "none"; outcome = "held-empty"; }
+    else
+      let
+        pipelineOwner =
+          import ./nl-universal-pipeline.px;
+        domain = pipelineOwner.classifyDomain utterance;
+        dc = domain.outcome;
+      in
+        if dc == "domain-classified" then
+          let d = domain.domain;
+          in
+            if d == "math-equation" then
+              let eq = import ../math/equation-solving-procedure.px;
+              in mkResult "equation" "equation-solving-procedure" domain (eq.beginSolveProcedure utterance)
+            else if d == "code-emission" then
+              let dec = import ../coding/utterance-decomposer.px;
+              in mkResult "code-generation" "utterance-decomposer" domain (dec.decomposeUtterance utterance)
+            else if d == "api-call" then
+              let dec = import ../coding/utterance-decomposer.px;
+              in mkResult "api-call" "utterance-decomposer" domain (dec.parseExternalApiCallUtterance utterance)
+            else if d == "math-congruence" then
+              let cong = import ./math-congruence-nl-lifter.px;
+              in mkResult "math-congruence" "math-congruence-nl-lifter" domain (cong.liftCongruenceUtterance utterance)
+            else {
+              # shell-dev-tool — capability lane not executed here.
+              operation_kind = "shell-dev-tool";
+              outcome = "held-shell-not-dispatched";
+              classification = domain;
+              reason = "shell/dev-tool 명령 인식됨 — 실행 capability는 별 lane (여기서 미실행).";
+            }
+        else if dc == "held-multi-domain-candidates" then {
+          operation_kind = "ambiguous";
+          outcome = "held-multi-domain";
+          classification = domain;
+          challenge = "여러 도메인이 동시에 매치되었습니다 — 더 구체적으로 말해 주세요.";
+        }
+        else
+          let coding = tryCodingIntentCodeTransform utterance;
+          in
+            if coding != null then coding
+            else dispatchByAmbient utterance;
+}

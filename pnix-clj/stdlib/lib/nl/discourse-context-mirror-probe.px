@@ -1,0 +1,39 @@
+# stdlib/lib/nl/discourse-context-mirror-probe.px
+#
+# S99-7: discourse-context-mirror processDiscourse probe for connected MSV metadata.
+# Steps carry entity names/kinds only; host persists counts/hashes, not raw prose.
+let
+  dc = import ../agent/discourse-context-mirror.px;
+  B = builtins;
+
+  runProbe = args:
+    let steps = if args ? steps then args.steps else [ ];
+        processed = dc.processDiscourse steps;
+        bindings = dc.referenceBindings steps;
+        boundCount = B.length (B.filter (x: x.entity != null) bindings);
+        danglingCount = B.length (B.filter (x: x.entity == null) bindings);
+        entityCount = B.foldl' (acc: s: acc + (B.length s.introduced)) 0 processed;
+        recoveredCount = B.foldl' (acc: s:
+          acc + (B.length (B.filter (r: r.entity != null) s.recovered))) 0 processed;
+    in {
+      status = "ok";
+      step_count = B.length steps;
+      entity_count = entityCount;
+      reference_count = B.length bindings;
+      resolved_count = boundCount;
+      dangling_count = danglingCount;
+      recovered_count = recoveredCount;
+      has_discourse_context = entityCount > 0;
+    };
+
+  probeSelfTest = _:
+    let r = runProbe {
+          steps = [
+            { introduces = [ { name = "철수"; kind = "agent"; } { name = "사과"; kind = "object"; } ];
+              references = [ ]; droppedSlots = [ ]; }
+            { introduces = [ ]; references = [ "그것" ]; refKinds = { "그것" = "object"; }; droppedSlots = [ ]; }
+          ];
+        };
+    in (r.status == "ok") && (r.entity_count >= 2) && (r.resolved_count >= 1);
+
+in { inherit runProbe probeSelfTest; }

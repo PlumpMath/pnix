@@ -1,0 +1,239 @@
+# stdlib.lib.math.geometry
+#
+# OWNER-LAW (v0.12-AAA, div-math, 2026-05-21): exact 2D geometry
+# over integer-coordinate points.
+#
+# The div-math kernel reaches arithmetic, algebra, and discrete
+# math but had no *geometry* owner. This one adds plane geometry
+# for points with integer coordinates.
+#
+# # Honest about irrationality
+#
+# The Euclidean distance between two integer points is almost
+# always irrational (the distance from (0,0) to (1,1) is sqrt 2).
+# A substrate that answers "1.414..." is lying about exactness. So
+# this owner returns the SQUARED distance -- an exact integer --
+# and names it as such. The caller who wants a bound can take
+# `isqrt` of it. Manhattan distance, by contrast, is always an
+# exact integer and is returned directly.
+#
+# # Orientation and area without trigonometry
+#
+# The signed cross product `(p2-p1) x (p3-p1)` decides triangle
+# orientation (clockwise / counter-clockwise / collinear) and,
+# in absolute value, gives twice the triangle's area -- all exact
+# integers, no angles, no trig. Polygon area is the shoelace
+# formula, which likewise yields exactly twice the area as an
+# integer; `polygonArea` then halves it into an exact rational.
+#
+# # Points
+#
+# A point is the attrset `{ x; y; }` with integer x and y.
+#
+# # Kernel layering
+#
+# geometry -> rational -> number-theory. Rational is used only
+# where a result is genuinely a half-integer (midpoint, the
+# halved polygon area).
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT 3D, NOT non-integer coordinates.
+#   - NOT a trigonometry engine -- no angles, no sin/cos.
+#   - NOT a constructive-geometry / intersection solver.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/geometry.px";
+
+  rational = import ./rational.px;
+
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  intAbs = n: if n < 0 then 0 - n else n;
+
+  # Squared Euclidean distance -- exact, because the distance
+  # itself is irrational for almost every integer point pair.
+  distanceSquared = p1: p2:
+    let
+      dx = p2.x - p1.x;
+      dy = p2.y - p1.y;
+    in dx * dx + dy * dy;
+
+  # Manhattan (taxicab) distance -- always an exact integer.
+  manhattanDistance = p1: p2:
+    (intAbs (p2.x - p1.x)) + (intAbs (p2.y - p1.y));
+
+  # Chebyshev (chessboard) distance -- max of the axis gaps.
+  chebyshevDistance = p1: p2:
+    let
+      dx = intAbs (p2.x - p1.x);
+      dy = intAbs (p2.y - p1.y);
+    in if dx > dy then dx else dy;
+
+  # Midpoint -- a genuine half-integer point, so each coordinate
+  # is an exact rational.
+  midpoint = p1: p2: {
+    x = rational.mkRational (p1.x + p2.x) 2;
+    y = rational.mkRational (p1.y + p2.y) 2;
+  };
+
+  # Signed cross product (p2-p1) x (p3-p1). Its sign is the
+  # orientation of the ordered triple; its absolute value is
+  # twice the triangle's area.
+  signedCross = p1: p2: p3:
+    (p2.x - p1.x) * (p3.y - p1.y)
+    - (p2.y - p1.y) * (p3.x - p1.x);
+
+  # Triangle orientation: 1 counter-clockwise, -1 clockwise,
+  # 0 collinear.
+  triangleOrientation = p1: p2: p3:
+    let s = signedCross p1 p2 p3;
+    in if s > 0 then 1 else if s < 0 then (0 - 1) else 0;
+
+  orientationName = p1: p2: p3:
+    let o = triangleOrientation p1 p2 p3;
+    in if o == 1 then "counter-clockwise"
+       else if o == 0 - 1 then "clockwise"
+       else "collinear";
+
+  isCollinear = p1: p2: p3: (signedCross p1 p2 p3) == 0;
+
+  # Twice the area of a triangle -- exact integer.
+  triangleAreaDoubled = p1: p2: p3:
+    intAbs (signedCross p1 p2 p3);
+
+  # Twice the area of a simple polygon by the shoelace formula --
+  # exact integer for integer vertices.
+  polygonAreaDoubled = vertices:
+    let
+      n = builtins.length vertices;
+      at = i: builtins.elemAt vertices (i - n * (i / n));
+      term = i:
+        let
+          a = at i;
+          b = at (i + 1);
+        in a.x * b.y - b.x * a.y;
+    in
+      if n < 3 then 0
+      else
+        intAbs
+          (builtins.foldl' (acc: i: acc + term i) 0
+            (rangeList 0 (n - 1)));
+
+  # The polygon area as an exact rational (the doubled area / 2).
+  polygonArea = vertices:
+    rational.mkRational (polygonAreaDoubled vertices) 2;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "distance-squared"
+    "manhattan"
+    "chebyshev"
+    "midpoint"
+    "orientation"
+    "collinear"
+    "triangle-area"
+    "polygon-area"
+  ];
+
+  applyGeometry = request:
+    let
+      op = request.operation;
+      p1 = if request ? p1 then request.p1 else { x = 0; y = 0; };
+      p2 = if request ? p2 then request.p2 else { x = 0; y = 0; };
+      p3 = if request ? p3 then request.p3 else { x = 0; y = 0; };
+      vertices =
+        if request ? vertices then request.vertices else [];
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "distance-squared" then {
+        outcome = "geometry-computed";
+        operation = op;
+        value = distanceSquared p1 p2;
+      }
+      else if op == "manhattan" then {
+        outcome = "geometry-computed";
+        operation = op;
+        value = manhattanDistance p1 p2;
+      }
+      else if op == "chebyshev" then {
+        outcome = "geometry-computed";
+        operation = op;
+        value = chebyshevDistance p1 p2;
+      }
+      else if op == "midpoint" then
+        let m = midpoint p1 p2;
+        in {
+          outcome = "geometry-computed";
+          operation = op;
+          x_text = rational.ratToString m.x;
+          y_text = rational.ratToString m.y;
+        }
+      else if op == "orientation" then {
+        outcome = "geometry-computed";
+        operation = op;
+        orientation = triangleOrientation p1 p2 p3;
+        orientation_name = orientationName p1 p2 p3;
+      }
+      else if op == "collinear" then {
+        outcome = "geometry-computed";
+        operation = op;
+        holds = isCollinear p1 p2 p3;
+      }
+      else if op == "triangle-area" then
+        let dbl = triangleAreaDoubled p1 p2 p3;
+        in {
+          outcome = "geometry-computed";
+          operation = op;
+          area_doubled = dbl;
+          area_text =
+            rational.ratToString (rational.mkRational dbl 2);
+        }
+      else
+        # op == "polygon-area"
+        if builtins.length vertices < 3 then {
+          outcome = "held-degenerate-polygon";
+          operation = op;
+          vertex_count = builtins.length vertices;
+          reason = "a polygon needs at least three vertices";
+        }
+        else
+          let dbl = polygonAreaDoubled vertices;
+          in {
+            outcome = "geometry-computed";
+            operation = op;
+            area_doubled = dbl;
+            area_text =
+              rational.ratToString (rational.mkRational dbl 2);
+          };
+
+in {
+  inherit
+    ownerName
+    distanceSquared
+    manhattanDistance
+    chebyshevDistance
+    midpoint
+    signedCross
+    triangleOrientation
+    orientationName
+    isCollinear
+    triangleAreaDoubled
+    polygonAreaDoubled
+    polygonArea
+    knownOperations
+    applyGeometry;
+  meta = {
+    source = "stdlib math geometry";
+    owner = ownerName;
+    base = "parametric-math-geometry-v0";
+    rev_note = "v0.12-AAA (div-math): exact 2D integer-coordinate geometry owner. Squared Euclidean distance (the distance itself is irrational -- the owner returns the exact square, never a rounded decimal), Manhattan and Chebyshev distance, midpoint (exact rational), signed cross product, triangle orientation (CW / CCW / collinear), triangle and shoelace polygon area (exact, doubled integer plus halved rational). Kernel layering: geometry -> rational. NOT 3D, NOT trigonometry, NOT a constructive-geometry solver, NOT yet a registered lens.";
+  };
+}

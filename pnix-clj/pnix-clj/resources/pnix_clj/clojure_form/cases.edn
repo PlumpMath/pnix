@@ -1,0 +1,139 @@
+{:kind :clojure-form-fixture-set
+ :schema-version 1
+ :lineage
+ {:source "pnix-clj host-local Clojure form semantics first slice"
+  :captured-at "2026-06-30"
+  :note "Closed Clojure forms are checked against host Clojure and clj-meta compile/eval, then projected to pnix-clj.clojure-projection.v0 terms."}
+ :cases
+ [{:name "fn-apply" :form-source "((fn [x] (+ x 1)) 41)" :expected-value 42}
+  {:name "let-bind" :form-source "(let [x 20 y 22] (+ x y))" :expected-value 42}
+  {:name "if-branch" :form-source "(if false 1 2)" :expected-value 2}
+  {:name "do-form" :form-source "(do 1 2 3)" :expected-value 3}
+  {:name "try-catch" :form-source "(try (/ 1 0) (catch ArithmeticException e :divzero))" :expected-value :divzero}
+  {:name "letfn-mutual" :form-source "(letfn [(even? [n] (if (zero? n) true (odd? (dec n)))) (odd? [n] (if (zero? n) false (even? (dec n))))] (even? 4))" :expected-value true}
+  {:name "loop-recur" :form-source "(loop [i 0 acc 0] (if (< i 5) (recur (inc i) (+ acc i)) acc))" :expected-value 10}
+  {:name "case-keyword" :form-source "(case :b :a 1 :b 2 0)" :expected-value 2}
+  {:name "try-finally" :form-source "(let [a (atom 0)] [(try 1 (finally (swap! a inc))) @a])" :expected-value [1 1]}
+  {:name "macroexpand-when" :form-source "(let [x (macroexpand-1 '(when true 1))] [(first x) (second x)])" :expected-value [if true]}
+  {:name "namespace-object-name" :form-source "(str (the-ns 'clojure.core))" :expected-value "clojure.core"}
+  {:name "var-object-name" :form-source "(str (var clojure.core/+))" :expected-value "#'clojure.core/+"}
+  {:name "dynamic-binding" :form-source "(binding [*print-length* 1] *print-length*)" :expected-value 1}
+  {:name "java-instance-call" :form-source "(.length \"hello\")" :expected-value 5}
+  {:name "java-static-call" :form-source "(Math/sqrt 16.0)" :expected-value 4.0}
+  {:name "multi-arity-fn"
+   :form-source "((fn ([] 0) ([x] x) ([x y] (+ x y))) 20 22)"
+   :expected-value 42}
+  {:name "variadic-rest-fn"
+   :form-source "((fn [a & r] [a (count r)]) 1 2 3)"
+   :expected-value [1 2]}
+  {:name "vector-destructuring"
+   :form-source "(let [[a b & more] [1 2 3 4]] [a b more])"
+   :expected-value [1 2 (3 4)]}
+  {:name "map-destructuring-default"
+   :form-source "(let [{:keys [a b] :or {b 2}} {:a 40}] (+ a b))"
+   :expected-value 42}
+  {:name "locking-monitor"
+   :form-source "(let [sb (StringBuilder.)] (locking sb (.append sb \"x\")) (str sb))"
+   :expected-value "x"}
+  {:name "reduce-sequence"
+   :form-source "(reduce + [1 2 3 4])"
+   :expected-value 10}
+  {:name "mapv-closure"
+   :form-source "(mapv (fn [x] (* x 2)) [1 2 3])"
+   :expected-value [2 4 6]}
+  {:name "filterv-predicate"
+   :form-source "(filterv odd? [1 2 3 4])"
+   :expected-value [1 3]}
+  {:name "into-transducer"
+   :form-source "(into [] (map inc) [1 2 3])"
+   :expected-value [2 3 4]}
+  {:name "transduce-map"
+   :form-source "(transduce (map inc) + 0 [1 2 3])"
+   :expected-value 9}
+  {:name "sequence-comp"
+   :form-source "(sequence (comp (map inc) (filter odd?)) [1 2 3 4])"
+   :expected-value (3 5)}
+  {:name "transient-vector-roundtrip"
+   :form-source "(let [v (transient []) v (conj! v 1) v (conj! v 2)] (persistent! v))"
+   :expected-value [1 2]}
+  {:name "deftype-object-form"
+   :form-source "(do (deftype FBox [x] Object (toString [_] (str \"FBox:\" x))) (str (->FBox 7)))"
+   :expected-value "FBox:7"}
+  {:name "defrecord-map-form"
+   :form-source "(do (defrecord FRec [x y]) (let [r (->FRec 1 2)] [(:x r) (:y r) (record? r)]))"
+   :expected-value [1 2 true]}
+  {:name "reify-callable-form"
+   :form-source "(let [c (reify java.util.concurrent.Callable (call [_] \"ok\"))] (.call c))"
+   :expected-value "ok"}
+  {:name "proxy-runnable-form"
+   :form-source "(let [r (proxy [java.lang.Runnable] [] (run [] nil))] (instance? Runnable r))"
+   :expected-value true}
+  {:name "defmulti-dispatch-form"
+   :form-source "(do (defmulti fm :kind) (defmethod fm :a [m] (:x m)) (defmethod fm :default [_] 0) (fm {:kind :a :x 42}))"
+   :expected-value 42}
+  {:name "java-field-read"
+   :form-source "(let [p (java.awt.Point. 7 9)] (.-x p))"
+   :expected-value 7}
+  {:name "java-field-set"
+   :form-source "(let [p (java.awt.Point.)] (set! (.-x p) 8) (.-x p))"
+   :expected-value 8}
+  {:name "java-instance-predicate"
+   :form-source "(instance? String \"x\")"
+   :expected-value true}
+  {:name "java-char-array-overload"
+   :form-source "(String/valueOf (.toCharArray \"ab\"))"
+   :expected-value "ab"}
+  {:name "java-static-overload"
+   :form-source "(Integer/toString 42)"
+   :expected-value "42"}
+  {:name "java-arg-constructor"
+   :form-source "(.size (java.util.ArrayList. 4))"
+   :expected-value 0}
+  {:name "bigint-literal-class"
+   :form-source "[(.getName (class 5N)) 5N]"
+   :expected-value ["clojure.lang.BigInt" 5N]}
+  {:name "bigint-out-of-long-literal"
+   :form-source "[(.getName (class 10000000000000000000N)) 10000000000000000000N]"
+   :expected-value ["clojure.lang.BigInt" 10000000000000000000N]}
+  {:name "bigdecimal-literal"
+   :form-source "[(.getName (class 1.5M)) 1.5M]"
+   :expected-value ["java.math.BigDecimal" 1.5M]}
+  {:name "ratio-literal"
+   :form-source "[(.getName (class 1/3)) 1/3]"
+   :expected-value ["clojure.lang.Ratio" 1/3]}
+  {:name "regex-literal"
+   :form-source "[(.getName (class #\"a+\")) (boolean (re-find #\"a+\" \"aa\"))]"
+   :expected-value ["java.util.regex.Pattern" true]}
+  {:name "quoted-list-literal"
+   :form-source "(quote (1 2 sym))"
+   :expected-value (1 2 sym)}
+  {:name "set-literal"
+   :form-source "#{1 3 2}"
+   :expected-value #{1 2 3}}
+  {:name "nested-collection-literal"
+   :form-source "{:x [1 2], :y :z}"
+   :expected-value {:x [1 2], :y :z}}
+  {:name "requiring-resolve-join"
+   :form-source "((requiring-resolve 'clojure.string/join) \",\" [\"a\" \"b\"])"
+   :expected-value "a,b"}
+  {:name "find-var-core-plus"
+   :form-source "(str (find-var 'clojure.core/+))"
+   :expected-value "#'clojure.core/+"}
+  {:name "resolve-core-plus"
+   :form-source "(str (resolve 'clojure.core/+))"
+   :expected-value "#'clojure.core/+"}
+  {:name "find-ns-core"
+   :form-source "(str (ns-name (find-ns 'clojure.core)))"
+   :expected-value "clojure.core"}
+  {:name "intern-local-var"
+   :form-source "(let [v (intern *ns* 'local-i 7)] [(:name (meta v)) (var-get v)])"
+   :expected-value [local-i 7]}
+  {:name "alter-var-root-local"
+   :form-source "(let [v (intern *ns* 'local-root 1)] (alter-var-root v + 41) (var-get v))"
+   :expected-value 42}
+  {:name "ns-publics-core-plus"
+   :form-source "(contains? (ns-publics 'clojure.core) '+)"
+   :expected-value true}
+  {:name "all-ns-core-present"
+   :form-source "(boolean (some (fn [n] (= (ns-name n) 'clojure.core)) (all-ns)))"
+   :expected-value true}]}

@@ -1,0 +1,160 @@
+# stdlib.lib.math.chinese-remainder
+#
+# OWNER-LAW (v0.12-AAI, div-math, 2026-05-21): the Chinese
+# Remainder Theorem -- solving systems of congruences.
+#
+# modular-arithmetic.px works in one ring Z/mZ at a time. This
+# owner answers the cross-ring question: given several congruences
+#
+#   x ≡ a_1 (mod m_1),  x ≡ a_2 (mod m_2),  ...
+#
+# with pairwise-coprime moduli, find the unique x modulo
+# M = m_1 * m_2 * ... that satisfies all of them at once.
+#
+# # The construction is exact and classic
+#
+# For each congruence let M_i = M / m_i and y_i = the inverse of
+# M_i modulo m_i (which exists exactly because the moduli are
+# coprime). Then
+#
+#   x = ( sum of  a_i * M_i * y_i )  mod M
+#
+# is the unique solution. Every step is exact integer arithmetic.
+#
+# # Pairwise coprimality is required, and checked
+#
+# CRT only applies when the moduli are pairwise coprime. The owner
+# checks this first; a non-coprime system is Held, not answered
+# with a wrong number.
+#
+# # Kernel layering
+#
+# chinese-remainder -> modular-arithmetic -> number-theory.
+# modInverse supplies the y_i; gcd checks coprimality.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT the general (non-coprime) CRT -- coprime moduli only.
+#   - NOT a Diophantine-system solver.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/chinese-remainder.px";
+
+  modular = import ./modular-arithmetic.px;
+  numberTheory = import ./number-theory.px;
+
+  # Whether every pair of moduli in the list is coprime.
+  pairwiseCoprime = moduli:
+    let
+      n = builtins.length moduli;
+      checkFrom = i: j:
+        if i >= n then true
+        else if j >= n then checkFrom (i + 1) (i + 2)
+        else if numberTheory.gcd
+                  (builtins.elemAt moduli i)
+                  (builtins.elemAt moduli j) != 1
+        then false
+        else checkFrom i (j + 1);
+    in checkFrom 0 1;
+
+  # Solve a list of congruences `{ a; m; }`. Assumes the moduli
+  # are pairwise coprime and each m > 0 (the plate guards both).
+  # Returns `{ solution; modulus; }`.
+  crtSolve = congruences:
+    let
+      moduli = builtins.map (c: c.m) congruences;
+      bigM = builtins.foldl' (acc: m: acc * m) 1 moduli;
+      termOf = c:
+        let
+          partialM = bigM / c.m;
+          reduced = modular.normalizeMod partialM c.m;
+          inv = modular.modInverse reduced c.m;
+        in c.a * partialM * inv.inverse;
+      total =
+        builtins.foldl'
+          (acc: c: acc + termOf c) 0 congruences;
+    in {
+      solution = modular.normalizeMod total bigM;
+      modulus = bigM;
+    };
+
+  # Verify that `x` satisfies every congruence.
+  verifySolution = x: congruences:
+    builtins.all
+      (c: modular.normalizeMod x c.m == modular.normalizeMod c.a c.m)
+      congruences;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [ "solve" "check-coprime" ];
+
+  # Parse the request's congruences (each a two-element list
+  # [a m]) into `{ a; m; }` records.
+  parseCongruences = pairs:
+    builtins.map
+      (p: { a = builtins.elemAt p 0; m = builtins.elemAt p 1; })
+      pairs;
+
+  applyCRT = request:
+    let
+      op = request.operation;
+      pairs =
+        if request ? congruences then request.congruences else [];
+      congruences = parseCongruences pairs;
+      moduli = builtins.map (c: c.m) congruences;
+      anyNonPositive =
+        builtins.any (m: m <= 0) moduli;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if congruences == [] then {
+        outcome = "held-empty-system";
+        operation = op;
+        reason = "a congruence system needs at least one congruence";
+      }
+      else if anyNonPositive then {
+        outcome = "held-non-positive-modulus";
+        operation = op;
+      }
+      else if op == "check-coprime" then {
+        outcome = "crt-computed";
+        operation = op;
+        holds = pairwiseCoprime moduli;
+      }
+      else
+        # op == "solve"
+        if !(pairwiseCoprime moduli) then {
+          outcome = "held-moduli-not-coprime";
+          operation = op;
+          reason = "CRT requires the moduli to be pairwise coprime";
+        }
+        else
+          let r = crtSolve congruences;
+          in {
+            outcome = "crt-computed";
+            operation = op;
+            solution = r.solution;
+            modulus = r.modulus;
+            verified = verifySolution r.solution congruences;
+          };
+
+in {
+  inherit
+    ownerName
+    pairwiseCoprime
+    crtSolve
+    verifySolution
+    parseCongruences
+    knownOperations
+    applyCRT;
+  meta = {
+    source = "stdlib math chinese remainder";
+    owner = ownerName;
+    base = "parametric-math-chinese-remainder-v0";
+    rev_note = "v0.12-AAI (div-math): Chinese Remainder Theorem owner. Solves a system of congruences x ≡ a_i (mod m_i) with pairwise-coprime moduli into the unique x modulo the product M, by the classic construction x = sum(a_i M_i y_i) mod M where M_i = M/m_i and y_i = modInverse(M_i, m_i). Pairwise coprimality is checked first -- a non-coprime system is Held. The solution is verified by back-substitution. Kernel layering: chinese-remainder -> modular-arithmetic -> number-theory. NOT the general non-coprime CRT, NOT a Diophantine-system solver, NOT yet a registered lens.";
+  };
+}

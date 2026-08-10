@@ -1,0 +1,218 @@
+# stdlib.lib.math.set-theory
+#
+# OWNER-LAW (v0.12-UU, div-math, 2026-05-21): finite set theory
+# over integers.
+#
+# The math lane has number theory, algebra, linear algebra, and
+# sequences. It had no *set* owner -- union, intersection, the
+# subset relation, the power set. This owner adds finite set
+# theory over integer elements.
+#
+# # Representation: the canonical sorted-deduped list
+#
+# A set is stored as a strictly ascending list with no repeats.
+# `mkSet` normalises any integer list into that canonical form, so
+# two sets are equal IFF their lists are byte-identical -- set
+# equality needs no special comparison. Every operation returns a
+# canonical set.
+#
+# # Power set
+#
+# `powerSet` enumerates all 2^n subsets of an n-element set. It is
+# exact and deterministic. Because the result has 2^n members it
+# is only sensible for small sets; the plate Held-guards it above
+# a cardinality bound.
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a set of arbitrary values -- integer elements only.
+#   - NOT an infinite / symbolic set engine.
+#   - NOT a multiset (repeats are collapsed by mkSet).
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/set-theory.px";
+
+  # Normalise an integer list into a canonical set: sorted
+  # ascending, duplicates removed.
+  mkSet = xs:
+    let
+      sorted = builtins.sort (a: b: a < b) xs;
+      dedup = seen: rest:
+        if rest == [] then seen
+        else
+          let h = builtins.head rest;
+          in if builtins.elem h seen
+             then dedup seen (builtins.tail rest)
+             else dedup (seen ++ [ h ]) (builtins.tail rest);
+    in dedup [] sorted;
+
+  setCardinality = s: builtins.length (mkSet s);
+  setContains = s: x: builtins.elem x s;
+
+  emptySet = [];
+
+  # Union: every element of either set.
+  setUnion = a: b: mkSet (a ++ b);
+
+  # Intersection: elements in both sets.
+  setIntersection = a: b:
+    mkSet (builtins.filter (x: builtins.elem x b) a);
+
+  # Difference a \ b: elements of a not in b.
+  setDifference = a: b:
+    mkSet (builtins.filter (x: !(builtins.elem x b)) a);
+
+  # Symmetric difference: elements in exactly one of the two sets.
+  setSymmetricDifference = a: b:
+    setUnion (setDifference a b) (setDifference b a);
+
+  # a subset of b: every element of a is in b.
+  isSubset = a: b:
+    builtins.all (x: builtins.elem x b) a;
+
+  # Proper subset: subset and not equal.
+  isProperSubset = a: b:
+    isSubset a b && !(isSubset b a);
+
+  setEquals = a: b: (mkSet a) == (mkSet b);
+
+  isDisjoint = a: b: (setIntersection a b) == [];
+
+  # Power set: all 2^n subsets of the n-element set. Each subset
+  # is itself canonical (ascending). The recursion adds element
+  # elems[i] to every subset of elems[i+1 ..].
+  powerSet = s:
+    let
+      elems = mkSet s;
+      n = builtins.length elems;
+      go = i:
+        if i >= n then [ [] ]
+        else
+          let
+            rest = go (i + 1);
+            x = builtins.elemAt elems i;
+          in rest ++ builtins.map (sub: [ x ] ++ sub) rest;
+    in go 0;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "union"
+    "intersection"
+    "difference"
+    "symmetric-difference"
+    "subset"
+    "proper-subset"
+    "equals"
+    "disjoint"
+    "cardinality"
+    "power-set"
+  ];
+
+  # Power set above this cardinality is refused (2^n explosion).
+  powerSetCardinalityLimit = 12;
+
+  applySet = request:
+    let
+      op = request.operation;
+      a  = if request ? a then request.a else [];
+      b  = if request ? b then request.b else [];
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "union" then {
+        outcome = "set-computed";
+        operation = op;
+        set = setUnion a b;
+        cardinality = setCardinality (setUnion a b);
+      }
+      else if op == "intersection" then {
+        outcome = "set-computed";
+        operation = op;
+        set = setIntersection a b;
+        cardinality = setCardinality (setIntersection a b);
+      }
+      else if op == "difference" then {
+        outcome = "set-computed";
+        operation = op;
+        set = setDifference a b;
+      }
+      else if op == "symmetric-difference" then {
+        outcome = "set-computed";
+        operation = op;
+        set = setSymmetricDifference a b;
+      }
+      else if op == "subset" then {
+        outcome = "set-computed";
+        operation = op;
+        holds = isSubset a b;
+      }
+      else if op == "proper-subset" then {
+        outcome = "set-computed";
+        operation = op;
+        holds = isProperSubset a b;
+      }
+      else if op == "equals" then {
+        outcome = "set-computed";
+        operation = op;
+        holds = setEquals a b;
+      }
+      else if op == "disjoint" then {
+        outcome = "set-computed";
+        operation = op;
+        holds = isDisjoint a b;
+      }
+      else if op == "cardinality" then {
+        outcome = "set-computed";
+        operation = op;
+        cardinality = setCardinality a;
+      }
+      else
+        # op == "power-set"
+        if setCardinality a > powerSetCardinalityLimit then {
+          outcome = "held-power-set-too-large";
+          operation = op;
+          cardinality = setCardinality a;
+          limit = powerSetCardinalityLimit;
+          reason = "the power set has 2^cardinality members";
+        }
+        else {
+          outcome = "set-computed";
+          operation = op;
+          subsets = powerSet a;
+          subset_count = builtins.length (powerSet a);
+        };
+
+in {
+  inherit
+    ownerName
+    mkSet
+    emptySet
+    setCardinality
+    setContains
+    setUnion
+    setIntersection
+    setDifference
+    setSymmetricDifference
+    isSubset
+    isProperSubset
+    setEquals
+    isDisjoint
+    powerSet
+    knownOperations
+    applySet;
+  meta = {
+    source = "stdlib math set theory";
+    owner = ownerName;
+    base = "parametric-math-set-theory-v0";
+    rev_note = "v0.12-UU (div-math): finite set theory owner over integers. Canonical sorted-deduped list representation -- set equality is byte equality. Union, intersection, difference, symmetric difference, subset / proper-subset / equality / disjointness relations, cardinality, and power set (2^n subsets, Held above a cardinality limit). Standalone. NOT arbitrary-value sets, NOT infinite/symbolic, NOT a multiset, NOT yet a registered lens.";
+  };
+}

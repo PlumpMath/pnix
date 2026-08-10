@@ -1,0 +1,511 @@
+let
+  ownerName = "stdlib.nl.branch-tree-substrate";
+
+  decomposer =
+    import ./sentence-decomposition-substrate.px;
+
+  # === Branch Tree Substrate (agent-NL-110) =========================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "삼각형의 합동법칙? 3가지가 수학에 axiom? 이라고 치면, 사용자가
+  # >  문장에 한가지만 대답하면 1/3 로 의도를 파악할수있다. 합동법칙을
+  # >  의미하는지 알수있다. (다른법칙이 있을경우) 즉, 애매한 방향을
+  # >  이야기하고있을때, Y/N 를 물어볼수있다.
+  # >  ...
+  # >  N=2 → Y/N, N=3+ → multi-choice, N=1 → continue, N=0 → held.
+  # >  substrate 들의 트리들은 선택하는순간 베이지안 추론? 같은
+  # >  freecat-cli 사용자가 어떤 의도를 제대로 언급을안하거나
+  # >  제대로 파악할때, 갈림길이 완전히 복잡할때(목표는 대략정해줘서)
+  # >  그럴때,~* 정확히는 이게 맞는 interactive Y/N 이나 선택"
+  #
+  # mental model:
+  #   - substrate algorithm step 에서 multiple discriminating branches
+  #   - user 부분 정보 → active branches subset (posterior)
+  #   - question format = f(N):
+  #       N=0 → held (no path applies)
+  #       N=1 → continue (path decided)
+  #       N=2 → Y/N (binary discriminate)
+  #       N=3+ → multi-choice (enumerate options)
+  #   - user choice → tree pruning → sub-tree of chosen branch becomes
+  #     next step's branch set
+  #   - Bayesian-like: each turn narrows the candidate path
+  #
+  # # branch node shape
+  #
+  #   {
+  #     branch_id            — "br-NNN" or user-supplied
+  #     name                 — short label ("SSS", "SAS", "ASA")
+  #     hypothesis           — what this branch represents
+  #     activation_cues      — list of keywords/phrases that activate it
+  #     sub_branches         — list of child branch nodes (recursion)
+  #     terminal             — bool; if true, branch is a leaf step
+  #   }
+  #
+  # # tree shape (recursive)
+  #
+  #   { node_label; branches = [ branch_node ... ] }
+
+  stepKind = "branch-tree-fan-out";
+  framework_step =
+    "interactive — partial info → active branches → question format (continue / Y-N / multi-choice / held)";
+
+  containsAny = decomposer.containsAny;
+
+  # === Generic tree constructors (2026-05-29 add) ==================
+  #
+  # 사용자 directive: ".px 정본으로 두면 generic 하지 않고 매번
+  # 작성하게 되니 안좋은거 아닌가? session 에서 메모리로 generic
+  # (axiom tree)생성자가 존재하는게 낫지?"
+  #
+  # ✓ 정답: lattice preservation rule. 새 도메인 (Blender/FreeCAD/
+  # Rhino/HAnim 등) 은 격자 안의 *데이터* 이지 격자 자체가 아니다.
+  # 도메인별 .px owner 박지 말고 이 generic constructor 위에서 *런타임
+  # 합성* 또는 *session memory 에 누적* 한다.
+  #
+  # mechanism = generic, policy = data 패턴 — LLVM PassManager / ROS
+  # behavior tree / sklearn Tree / PDDL operator schema 와 동일 형태.
+
+  # mkLeaf: terminal branch (no sub-branches). 가장 짧은 form.
+  mkLeaf = { name, hypothesis ? "", cues ? [] }: {
+    branch_id = "br-" + name;
+    inherit name hypothesis;
+    activation_cues = cues;
+    sub_branches = [];
+    terminal = true;
+  };
+
+  # mkBranch: non-terminal branch with sub-tree.
+  mkBranch = { name, hypothesis ? "", cues ? [], sub_branches ? [] }: {
+    branch_id = "br-" + name;
+    inherit name hypothesis;
+    activation_cues = cues;
+    inherit sub_branches;
+    terminal = false;
+  };
+
+  # mkTree: a tree node = label + branches.
+  mkTree = { node_label, branches }: {
+    inherit node_label branches;
+  };
+
+  # mkSubTree: convenience — same as mkTree but expresses intent that
+  # this tree will be reached as sub_branches of a parent's branch.
+  mkSubTree = mkTree;
+
+  # composeBranchTree: build a tree from a flat list of branch specs.
+  # Each spec is { name; cues; sub_specs ? []; terminal ? false; hypothesis ? "" }.
+  # Recursively materializes sub-trees from sub_specs.
+  composeBranchTree = nodeLabel: specs:
+    let
+      specToBranch = spec:
+        if (spec.terminal or false) || (spec ? sub_specs == false)
+           || spec.sub_specs == [] then
+          mkLeaf {
+            name = spec.name;
+            hypothesis = spec.hypothesis or "";
+            cues = spec.cues or [];
+          }
+        else
+          mkBranch {
+            name = spec.name;
+            hypothesis = spec.hypothesis or "";
+            cues = spec.cues or [];
+            sub_branches = builtins.map specToBranch spec.sub_specs;
+          };
+    in
+      mkTree {
+        node_label = nodeLabel;
+        branches = builtins.map specToBranch specs;
+      };
+
+  # mergeBranches: combine two branch lists (e.g. user customizes
+  # baseline). Same-name branches get deep-merged (cues + sub_branches
+  # union); fresh names append.
+  mergeBranches = baseList: overrideList:
+    let
+      baseByName = builtins.foldl'
+        (acc: b: acc // { ${b.name} = b; }) {} baseList;
+      overrideByName = builtins.foldl'
+        (acc: b: acc // { ${b.name} = b; }) {} overrideList;
+      allNames =
+        let union = baseByName // overrideByName; in
+        builtins.attrNames union;
+      mergeOne = name:
+        let
+          inBase = builtins.hasAttr name baseByName;
+          inOverride = builtins.hasAttr name overrideByName;
+        in
+          if inBase && inOverride then
+            let b = baseByName.${name}; o = overrideByName.${name}; in
+            b // o // {
+              activation_cues =
+                (b.activation_cues or []) ++ (o.activation_cues or []);
+              sub_branches = mergeBranches
+                (b.sub_branches or []) (o.sub_branches or []);
+            }
+          else if inBase then baseByName.${name}
+          else overrideByName.${name};
+    in
+      builtins.map mergeOne allNames;
+
+  # === Branch activation ===========================================
+  #
+  # A branch is "active" iff any of its activation_cues appears in the
+  # user input. If input is empty/missing, ALL branches are active
+  # (substrate has no signal yet to narrow).
+
+  isBranchActive = branch: userInput:
+    if !(builtins.isString userInput) then true
+    else if userInput == "" then true
+    else
+      let
+        cues = branch.activation_cues or [];
+      in
+        if cues == [] then true
+        else containsAny userInput cues;
+
+  activeBranches = tree: userInput:
+    builtins.filter (b: isBranchActive b userInput) tree.branches;
+
+  # === Question format dispatch ====================================
+  #
+  # f(N) → question shape
+
+  questionFormat = activeBs:
+    let n = builtins.length activeBs; in
+    if n == 0 then {
+      kind = "held";
+      n = 0;
+      reason_en = "No branch matches user input — algorithm cannot advance.";
+      reason_ko = "사용자 입력에 일치하는 갈림길 없음 — 알고리즘 진행 불가.";
+    }
+    else if n == 1 then {
+      kind = "continue";
+      n = 1;
+      sole_branch = builtins.head activeBs;
+      reason_en = "Single branch active — substrate can continue without asking.";
+      reason_ko = "갈림길 하나로 좁혀짐 — 묻지 않고 진행.";
+    }
+    else if n == 2 then {
+      kind = "yes-no";
+      n = 2;
+      first_branch = builtins.head activeBs;
+      second_branch = builtins.elemAt activeBs 1;
+      reason_en = "Two branches active — Y/N picks between them.";
+      reason_ko = "갈림길 두 개 — Y/N 으로 선택.";
+    }
+    else {
+      kind = "multi-choice";
+      n = n;
+      choices = activeBs;
+      reason_en =
+        "Three or more branches active — enumerate as multiple choice.";
+      reason_ko =
+        "갈림길 셋 이상 — 선택지 enumeration.";
+    };
+
+  # === Generate question text ======================================
+
+  generateQuestionEn = format: tree:
+    let nodeLabel = tree.node_label or "step"; in
+    if format.kind == "held" then
+      "Unable to advance at \"" + nodeLabel
+        + "\" — none of the substrate's branches match the input. "
+        + "Please supply more context."
+    else if format.kind == "continue" then
+      "Continuing through branch \""
+        + (format.sole_branch.name or "unnamed")
+        + "\" at \"" + nodeLabel + "\"."
+    else if format.kind == "yes-no" then
+      "At \"" + nodeLabel + "\", is the intent \""
+        + (format.first_branch.name or "first")
+        + "\"? (yes → that branch / no → "
+        + (format.second_branch.name or "second")
+        + ")"
+    else
+      let
+        names = builtins.map (b: b.name or "unnamed") format.choices;
+        joined = builtins.concatStringsSep " | " names;
+      in
+        "At \"" + nodeLabel + "\", which branch fits the intent? "
+          + "Choose one: " + joined;
+
+  generateQuestionKo = format: tree:
+    let nodeLabel = tree.node_label or "step"; in
+    if format.kind == "held" then
+      "\"" + nodeLabel
+        + "\" 에서 진행 불가 — 어느 갈림길도 입력과 맞지 않음. "
+        + "추가 맥락 필요."
+    else if format.kind == "continue" then
+      "\"" + nodeLabel + "\" 에서 \""
+        + (format.sole_branch.name or "unnamed")
+        + "\" 갈래로 진행."
+    else if format.kind == "yes-no" then
+      "\"" + nodeLabel + "\" 에서 의도가 \""
+        + (format.first_branch.name or "첫")
+        + "\" 인가? (예 → 그 갈래 / 아니오 → "
+        + (format.second_branch.name or "두번째")
+        + ")"
+    else
+      let
+        names = builtins.map (b: b.name or "unnamed") format.choices;
+        joined = builtins.concatStringsSep " | " names;
+      in
+        "\"" + nodeLabel + "\" 에서 어느 갈래가 의도와 맞나? "
+          + "선택: " + joined;
+
+  # === Main entry: evaluate tree at a step =========================
+
+  evaluateBranchTree = tree: userInput:
+    if !(builtins.isAttrs tree) then {
+      outcome = "held-non-attrs-tree";
+    }
+    else if !(builtins.hasAttr "branches" tree) then {
+      outcome = "held-no-branches-field";
+    }
+    else if !(builtins.isList tree.branches) then {
+      outcome = "held-branches-not-list";
+    }
+    else
+      let
+        actives = activeBranches tree userInput;
+        format = questionFormat actives;
+      in {
+        outcome =
+          if format.kind == "held" then "held-no-active-branch"
+          else if format.kind == "continue" then "branch-decided"
+          else if format.kind == "yes-no" then "ask-yes-no"
+          else "ask-multi-choice";
+        public = {
+          node_label = tree.node_label or "step";
+          question_format = format.kind;
+          active_branch_count = format.n;
+          question_en = generateQuestionEn format tree;
+          question_ko = generateQuestionKo format tree;
+          message_en = format.reason_en;
+          message_ko = format.reason_ko;
+        };
+        carry = {
+          active_branches = actives;
+          format = format;
+          tree = tree;
+          axiom_origin =
+            "axiom-98-nl-branch-tree (composes axiom-94-nl-chain)";
+        };
+      };
+
+  # === Apply user choice → prune tree to chosen sub-tree ===========
+
+  applyChoice = tree: userInput: choice:
+    let
+      actives = activeBranches tree userInput;
+      format = questionFormat actives;
+    in
+      if format.kind == "held" then {
+        outcome = "held-no-active-branch-to-choose";
+      }
+      else if format.kind == "continue" then
+        # Only one branch — choice is moot but valid.
+        let chosen = format.sole_branch; in {
+          outcome = "branch-chosen";
+          public = {
+            chosen_name = chosen.name or "unnamed";
+            chosen_hypothesis = chosen.hypothesis or "";
+            terminal = chosen.terminal or false;
+            sub_branch_count =
+              builtins.length (chosen.sub_branches or []);
+          };
+          carry = {
+            chosen_branch = chosen;
+            next_tree = {
+              node_label = chosen.name or "step";
+              branches = chosen.sub_branches or [];
+            };
+            axiom_origin =
+              "axiom-98-nl-branch-tree (composes axiom-94-nl-chain)";
+          };
+        }
+      else
+        # yes-no or multi-choice — find branch by name
+        let
+          hits = builtins.filter
+            (b: (b.name or "") == choice) actives;
+        in
+          if hits == [] then {
+            outcome = "held-choice-not-among-actives";
+            choice = choice;
+            active_names =
+              builtins.map (b: b.name or "unnamed") actives;
+          }
+          else
+            let chosen = builtins.head hits; in {
+              outcome = "branch-chosen";
+              public = {
+                chosen_name = chosen.name or "unnamed";
+                chosen_hypothesis = chosen.hypothesis or "";
+                terminal = chosen.terminal or false;
+                sub_branch_count =
+                  builtins.length (chosen.sub_branches or []);
+              };
+              carry = {
+                chosen_branch = chosen;
+                next_tree = {
+                  node_label = chosen.name or "step";
+                  branches = chosen.sub_branches or [];
+                };
+                axiom_origin =
+                  "axiom-98-nl-branch-tree (composes axiom-94-nl-chain)";
+              };
+            };
+
+  # === Yes/No flow shortcut (for N=2 case) =========================
+  #
+  # Convenience: instead of supplying choice name, the user gave a
+  # Y/N answer. Y picks first_branch, N picks second_branch.
+
+  applyYesNoChoice = tree: userInput: answer:
+    let
+      actives = activeBranches tree userInput;
+      format = questionFormat actives;
+      class =
+        if !(builtins.isString answer) then "non-string"
+        else
+          let t = decomposer.trim answer; in
+          if containsAny t [
+            "yes" "Yes" "YES" "y" "Y" "네" "예" "맞아" "맞다"
+          ] then "yes"
+          else if containsAny t [
+            "no" "No" "NO" "n" "N" "아니" "아닙"
+          ] then "no"
+          else "ambiguous";
+    in
+      if format.kind != "yes-no" then {
+        outcome = "held-not-binary-step";
+        actual_format = format.kind;
+        n = format.n;
+      }
+      else if class == "ambiguous" then {
+        outcome = "held-ambiguous-yes-no";
+      }
+      else if class == "non-string" then {
+        outcome = "held-non-string-answer";
+      }
+      else
+        let
+          chosen =
+            if class == "yes" then format.first_branch
+            else format.second_branch;
+        in {
+          outcome = "branch-chosen";
+          public = {
+            chosen_name = chosen.name or "unnamed";
+            yes_or_no = class;
+            chosen_hypothesis = chosen.hypothesis or "";
+            terminal = chosen.terminal or false;
+            sub_branch_count =
+              builtins.length (chosen.sub_branches or []);
+          };
+          carry = {
+            chosen_branch = chosen;
+            next_tree = {
+              node_label = chosen.name or "step";
+              branches = chosen.sub_branches or [];
+            };
+            axiom_origin =
+              "axiom-98-nl-branch-tree (composes axiom-94-nl-chain)";
+          };
+        };
+
+  # === Plate entry =================================================
+
+  applyBranchTreePlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "evaluate_tree" request then
+      evaluateBranchTree request.evaluate_tree
+        (request.user_input or "")
+    else if (builtins.hasAttr "apply_choice" request)
+         && (builtins.hasAttr "tree" request) then
+      applyChoice request.tree
+        (request.user_input or "")
+        request.apply_choice
+    else if (builtins.hasAttr "yes_no_answer" request)
+         && (builtins.hasAttr "tree" request) then
+      applyYesNoChoice request.tree
+        (request.user_input or "")
+        request.yes_no_answer
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { evaluate_tree, user_input? } or "
+        + "{ tree, apply_choice, user_input? } or "
+        + "{ tree, yes_no_answer, user_input? }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-branch-tree-axiom-98";
+    question_format_map = {
+      n_0 = "held";
+      n_1 = "continue";
+      n_2 = "yes-no";
+      n_3_plus = "multi-choice";
+    };
+    composes = "axiom-94-nl-chain";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    primary_outcomes = [
+      "branch-decided"
+      "ask-yes-no"
+      "ask-multi-choice"
+      "branch-chosen"
+      "held-no-active-branch"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-non-attrs-tree"
+      "held-no-branches-field"
+      "held-branches-not-list"
+      "held-missing-input-field"
+      "held-no-active-branch-to-choose"
+      "held-choice-not-among-actives"
+      "held-not-binary-step"
+      "held-ambiguous-yes-no"
+      "held-non-string-answer"
+    ];
+    bayesian_note =
+      "partial info → active subset → discriminating question → "
+      + "sub-tree pruning. Recursive: chosen branch's sub_branches "
+      + "become next step's tree.";
+  };
+
+in {
+  inherit
+    ownerName
+    isBranchActive activeBranches questionFormat
+    generateQuestionEn generateQuestionKo
+    evaluateBranchTree applyChoice applyYesNoChoice
+    applyBranchTreePlate
+    mkLeaf mkBranch mkTree mkSubTree composeBranchTree mergeBranches
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL branch tree substrate (agent-NL-110)";
+    owner = ownerName;
+    base = "nl-branch-tree-substrate-v0";
+    rev_note = "agent-NL-110 (2026-05-29): 사용자 directive — Bayesian-"
+      + "style decision tree. partial info 로 active subset, N에 따라 "
+      + "question format (held/continue/Y-N/multi-choice). 사용자 선택 "
+      + "→ sub-tree pruning. 합동법칙 (SSS/SAS/ASA) 같은 axiom tree 의 "
+      + "interactive 탐색. DO NOT REBUILD — decomposer containsAny 재사용. "
+      + "POST-FEEDBACK (2026-05-29 same day): 사용자가 도메인별 .px 정본 "
+      + "owner 박는 안티패턴 지적. generic constructor 추가 "
+      + "(mkLeaf/mkBranch/mkTree/composeBranchTree/mergeBranches). "
+      + "도메인 tree (Blender/FreeCAD/Rhino/HAnim) 는 *데이터* 로 session "
+      + "memory 또는 user ankh 에 누적, 정본 .px 박지 않음. "
+      + "mechanism=generic, policy=data 패턴.";
+  };
+}

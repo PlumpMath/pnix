@@ -1,0 +1,54 @@
+# stdlib/lib/nl/korean-josa-rules-store-plan.px — josa 데이터 마디를 redb 에 materialize 하는 store-plan
+#
+# ★(b): korean-josa-rules.px(데이터 마디)를 redb `morph_rules` 테이블에 *pnix attrset 으로* 올린다(JSON 아님).
+#   거울 헌법: 이 .px 가 plan(의미)의 정본 — Rust(executor.rs)는 plan 을 받아 redb 바이트로 *실행만*(ferry).
+#
+# ★일치(sync) 메커니즘 = content-hash 키:
+#   key = "<schema>/<sha256(value)>".  같은 내용 → 같은 해시 → 같은 key+value → idempotent no-op.
+#   .px 마디가 바뀌면 → 해시 바뀜 → 새 엔트리. load 측은 *현재 .px 마디 해시*와 일치하는 엔트리를 읽음
+#   → redb 내용이 .px 와 항상 일치 보장(드리프트 0). .px = 정본, redb = 동기 사본.
+#
+# ⚠ pnix-source 직렬화기는 *인라인* (자립). 기존 corpus/substrate-store-value-literal.px 는 line 23 `'"'`
+#   (잘못된 Nix 따옴표)로 Stage-1 파싱 실패 = 기존 버그(CODEX c5a62eb5b, corpus materialize 도 함께 깨짐).
+#   여기선 올바른 `"\""` 로 직렬화(중첩 attrset/list 재귀). 그 corpus 파일 수정은 그쪽 소유라 미수정.
+let
+  rules = import ./korean-josa-rules.px;
+  ser = import ./pnix-value-literal.px;   # 공유 pnix-소스 직렬화기 (단일 source)
+  B = builtins;
+  valueSrc = ser.toPnixSource rules;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = rules.schema + "/" + contentHash;
+in {
+  # mkPlan args: { built_at_ms } (caller=Rust ferry 주입; .px 는 시계 없음)
+  mkPlan = args: {
+    plan = {
+      plan_id = "morph-josa-rules-load-v0";
+      source_lens = "stdlib/lib/nl/korean-josa-rules-store-plan.px";
+      source_verdict = "materialize-morph-rules";
+      operations = [
+        { op_kind = "append"; table = "morph_rules"; key = key; value_bytes = valueSrc; }
+      ];
+      receipt_owner = "morph.josa.rules.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = rules.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+
+  # mkQuery: morph_rules 에서 이 schema 의 엔트리들을 prefix-scan (load/round-trip 일치 검증용)
+  mkQuery = args: {
+    plan = {
+      plan_id = "morph-josa-rules-query-v0";
+      source_lens = "stdlib/lib/nl/korean-josa-rules-store-plan.px";
+      source_verdict = "query-morph-rules";
+      operations = [
+        { op_kind = "scan-prefix"; table = "morph_rules"; key = ""; key_prefix = rules.schema + "/"; }
+      ];
+      receipt_owner = "morph.josa.rules.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;            # 현재 .px 마디가 만들 키(=현재 해시) — 일치 검증 기준
+    expected_hash = contentHash;
+  };
+}

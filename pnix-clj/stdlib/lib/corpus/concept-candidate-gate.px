@@ -1,0 +1,167 @@
+# stdlib.corpus.concept-candidate-gate
+#
+# concept-resolution (post-C′): surface/key/lemma → concept candidate → verified concept.
+# C′(microtheory-contradiction)의 *항원 식별층* — "무엇을 같은 concept 으로 볼지" 정한다.
+# 틀린 verified 는 하류(C′ 모순검사·기억·추론)를 전부 오염시키므로 verified 둘레가 핵심.
+#
+# ★tier (fail-closed 헌법):
+#   verified  ← 공유 exact canonical key 로만:
+#                (a) authority = { source; key } 가 인식된 source(allow-list) + 비빈 key, 또는
+#                (b) curated predicate concept(predicate-concepts, kind=predicate = 언어중립 spine).
+#   candidate ← clue(unit/quantity surface → canonical key 제안) · ★개체 동음이의(curated entity) ·
+#                표면만 있는 미해결. concept_id 를 가리키되 verified 아님.
+#   held      ← surface 없음/비문자 · 근거 없는 cross-surface · cross-namespace(cross-walk 없음).
+#   ★verified 전에는 strong_for_mutex=false. concept_resolved 명시 보존.
+#
+# ★concept_id 는 namespace-tagged 구조키(fix wm9swm7wc): { ns="authority"|"curated"; ... }.
+#   flat 문자열이면 authority "ingest" 와 curated label "ingest" 가 충돌(over-merge)·경로별 split.
+#   자매 owner microtheory-contradiction.px 가 microtheoryKey 에서 고친 flat-key 안티패턴과 동일 →
+#   구조키로 keyspace 경계 보존. authority/clue 는 ns="authority"(같은 key space, tier 가 강도 구분).
+#
+# ★authority 는 검증된 출처만(fix wm9swm7wc): bare 문자열/빈/숫자/미인식 source = verified 아님(거부).
+#   risk #2(source 별 domain tier)도 여기서: QUDT/SI/OM=unit-quantity, wikidata=entity, ROR=org, OEWN=sense.
+#
+# 내부 근거: cross-lingual ontology alignment = Held frontier(OAEI). exact-key join = sound CORE.
+#   predicate-concepts 재사용(새 registry/거울 0). ★defer: concept_candidate redb materialize(write 0).
+#
+# 불변식: read-only · candidate/held only · truth 승급 0 · .redb write 0 · 새 거울 0 ·
+#   verified 는 인식된 authority 또는 curated predicate 로만(clue/fuzzy/개체/미검증 authority 절대 verified 금지).
+let
+  B = builtins;
+  pc = import ../nl/predicate-concepts.px;   # 큐레이트 concept registry + conceptKindOf 재사용
+
+  # authority source allow-list (검증 + risk #2 domain). 인식된 source 만 verified 자격.
+  authoritySources = [
+    { source = "QUDT"; domain = "unit-quantity"; }
+    { source = "SI"; domain = "unit-quantity"; }
+    { source = "OM"; domain = "unit-quantity"; }
+    { source = "wikidata"; domain = "entity"; }
+    { source = "ROR"; domain = "organization"; }
+    { source = "OEWN"; domain = "lexical-sense"; }
+  ];
+  authorityDomainOf = src:
+    let m = B.filter (a: a.source == src) authoritySources;
+    in if m == [ ] then null else (B.head m).domain;
+  # 유효 authority = { source(인식됨); key(비빈 문자열) } attrset. bare 문자열/빈/숫자/미인식 = 무효.
+  validAuthority = a:
+    (B.isAttrs a) && (a ? source) && (a ? key)
+    && (B.isString a.key) && (a.key != "")
+    && ((authorityDomainOf a.source) != null);
+
+  # surface 추출 — ★비문자(null/숫자/list)는 "" 로 강등(→ held, fix wm9swm7wc).
+  surfaceOf = r:
+    let s = if r ? surface then r.surface
+            else if r ? lemma then r.lemma
+            else if r ? key then r.key else "";
+    in if B.isString s then s else "";
+
+  # unit/quantity clue seed → canonical authority key {source;key} 제안(candidate).
+  unitClues = [
+    { src = "QUDT"; k = "HZ"; surfaces = [ "Hz" "hertz" "헤르츠" ]; }
+    { src = "QUDT"; k = "BQ"; surfaces = [ "Bq" "becquerel" "베크렐" ]; }
+    { src = "QUDT"; k = "Frequency"; surfaces = [ "frequency" "주파수" ]; }
+    { src = "QUDT"; k = "Activity"; surfaces = [ "activity" "radioactivity" "방사능" ]; }
+  ];
+  clueOf = surf:
+    let m = B.filter (c: B.elem surf c.surfaces) unitClues;
+    in if m == [ ] then null else { source = (B.head m).src; key = (B.head m).k; };
+
+  # namespace-tagged concept_id. authority/clue → ns="authority"(같은 canonical key space).
+  cidAuth = a: { ns = "authority"; source = a.source; key = a.key; };
+  cidCurated = label: { ns = "curated"; key = label; };
+
+  mk = a: {
+    tier = a.tier; basis = a.basis;
+    concept_id = if a ? concept_id then a.concept_id else null;
+    authority_domain = if a ? authority_domain then a.authority_domain else null;
+    concept_resolved = a.concept_resolved;
+    strong_for_mutex = a.strong_for_mutex;
+    surface = if a ? surface then a.surface else "";
+    durable_truth = false; accepted_as_truth = false;
+    ontology_assert_allowed = false; promotion_allowed = false; proposer_only = true;
+  };
+  v = a: {
+    verdict = a.verdict;
+    concept_id = if a ? concept_id then a.concept_id else null;
+    concept_resolved = a.concept_resolved;
+    strong_for_mutex = a.strong_for_mutex;
+    held_reason = if a ? held_reason then a.held_reason else "";
+    durable_truth = false; accepted_as_truth = false; promotion_allowed = false;
+  };
+in
+rec {
+  name = "stdlib.corpus.concept-candidate-gate";
+  inherit clueOf validAuthority authorityDomainOf;
+
+  # 단일 ref → concept tier. ref = { surface?|lemma?|key?; authority?={source;key}; lang? }.
+  resolve = ref:
+    let surf = surfaceOf ref;
+        auth = if ref ? authority then ref.authority else null;
+        authOk = (auth != null) && (validAuthority auth);
+        curated = if surf == "" then null else pc.conceptOf surf;
+        curatedKind = if curated == null then null else pc.conceptKindOf curated;
+        clue = if surf == "" then null else clueOf surf;
+    in
+    # (1) 인식된 authority → verified
+    if authOk
+    then mk { tier = "verified"; basis = "authority-key"; concept_id = cidAuth auth;
+              authority_domain = authorityDomainOf auth.source;
+              concept_resolved = true; strong_for_mutex = true; surface = surf; }
+    # (2) curated predicate → verified (언어중립 술어 spine = 진성 동의어, sound)
+    else if (curated != null) && (curatedKind == "predicate")
+    then mk { tier = "verified"; basis = "curated-predicate"; concept_id = cidCurated curated;
+              concept_resolved = true; strong_for_mutex = true; surface = surf; }
+    # (3) ★curated entity → candidate (동음이의 word-sense 위험, verified 금지)
+    else if curated != null
+    then mk { tier = "candidate"; basis = "curated-entity-word-sense"; concept_id = cidCurated curated;
+              concept_resolved = false; strong_for_mutex = false; surface = surf; }
+    # (4) clue → candidate (canonical key 제안, verified 아님)
+    else if clue != null
+    then mk { tier = "candidate"; basis = "clue:unit-quantity"; concept_id = cidAuth clue;
+              concept_resolved = false; strong_for_mutex = false; surface = surf; }
+    # (5) 표면만 → candidate (concept_id 없음)
+    else if surf != ""
+    then mk { tier = "candidate"; basis = "surface-only-no-clue"; concept_id = null;
+              concept_resolved = false; strong_for_mutex = false; surface = surf; }
+    # (6) surface 없음/비문자 → held
+    else mk { tier = "held"; basis = "no-surface"; concept_id = null;
+              concept_resolved = false; strong_for_mutex = false; surface = ""; };
+
+  # 두 ref 가 같은 concept 인가? concept_id 구조키(ns+key)로 비교.
+  #   같은 id + 양쪽 verified → verified-same(strong). 같은 id + 한쪽 candidate → candidate-same.
+  #   같은 ns + 다른 key → verified/candidate-distinct. ★다른 ns(cross-walk 없음) → held(fail-closed).
+  #   id 없음 → 표면동일=candidate-same, 그밖=held.
+  sameConcept = a: b:
+    let ra = resolve a; rb = resolve b;
+        idA = ra.concept_id; idB = rb.concept_id;
+        bothVerified = (ra.tier == "verified") && (rb.tier == "verified");
+        haveIds = (idA != null) && (idB != null);
+        sameNs = haveIds && (idA.ns == idB.ns);
+        sameId = haveIds && (idA == idB);
+    in
+    if sameId
+    then (if bothVerified
+          then v { verdict = "verified-same"; concept_id = idA; concept_resolved = true; strong_for_mutex = true; }
+          else v { verdict = "candidate-same"; concept_id = idA; concept_resolved = false; strong_for_mutex = false; held_reason = "shared-key-unverified"; })
+    else if haveIds && sameNs
+    then (if bothVerified
+          then v { verdict = "verified-distinct"; concept_id = null; concept_resolved = true; strong_for_mutex = true; }
+          else v { verdict = "candidate-distinct"; concept_id = null; concept_resolved = false; strong_for_mutex = false; held_reason = "distinct-keys-unverified"; })
+    else if haveIds
+    then v { verdict = "held"; concept_id = null; concept_resolved = false; strong_for_mutex = false; held_reason = "cross-namespace-no-crosswalk"; }
+    else if (ra.surface == rb.surface) && (ra.surface != "")
+    then v { verdict = "candidate-same"; concept_id = null; concept_resolved = false; strong_for_mutex = false; held_reason = "surface-match-no-concept"; }
+    else v { verdict = "held"; concept_id = null; concept_resolved = false; strong_for_mutex = false; held_reason = "no-shared-concept"; };
+
+  # leak-safe public projection: surface 원문 비노출, tier/resolved/strong/domain 메타만.
+  publicProjection = r: {
+    tier = r.tier;
+    basis = if r ? basis then r.basis else "";
+    authority_domain = if r ? authority_domain then r.authority_domain else null;
+    concept_resolved = r.concept_resolved;
+    strong_for_mutex = r.strong_for_mutex;
+    has_concept_id = (if r ? concept_id then r.concept_id else null) != null;
+    durable_truth = r.durable_truth;
+    promotion_allowed = if r ? promotion_allowed then r.promotion_allowed else false;
+  };
+}

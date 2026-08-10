@@ -1,0 +1,150 @@
+{
+  name = "pnixc.ast.px";
+  schema = "pnix-ast-v1";
+  subset = "pnix-subset-v1";
+  description = "Data-only Pnix AST schema for pnixc-in-pnix.";
+
+  nodes = [
+    { tag = "Int"; fields = [ { name = "value"; type = "i64"; } ]; }
+    { tag = "Float"; fields = [ { name = "value"; type = "f64"; } ]; }
+    { tag = "Bool"; fields = [ { name = "value"; type = "bool"; } ]; }
+    { tag = "Null"; fields = [ ]; }
+    { tag = "String"; fields = [ { name = "value"; type = "string"; } ]; }
+    { tag = "StringInterp"; fields = [ { name = "parts"; type = "StringInterpPart[]"; } ]; }
+    { tag = "Path"; fields = [ { name = "value"; type = "PnixPath"; } ]; }
+    { tag = "Var"; fields = [ { name = "name"; type = "string"; } ]; }
+    { tag = "Let"; fields = [ { name = "bindings"; type = "PnixLetBinding[]"; } { name = "body"; type = "PnixExpr"; } ]; }
+    { tag = "If"; fields = [ { name = "cond"; type = "PnixExpr"; } { name = "then"; type = "PnixExpr"; } { name = "else"; type = "PnixExpr"; } ]; }
+    { tag = "Lambda"; fields = [ { name = "param"; type = "PnixParamPattern"; } { name = "body"; type = "PnixExpr"; } ]; }
+    { tag = "Apply"; fields = [ { name = "func"; type = "PnixExpr"; } { name = "arg"; type = "PnixExpr"; } ]; }
+    { tag = "AttrSet"; fields = [ { name = "items"; type = "PnixAttrItem[]"; } { name = "recursive"; type = "bool"; } ]; }
+    { tag = "List"; fields = [ { name = "items"; type = "PnixExpr[]"; } ]; }
+    { tag = "Select"; fields = [ { name = "base"; type = "PnixExpr"; } { name = "attr"; type = "string"; } ]; }
+    { tag = "SelectOrDefault"; fields = [ { name = "base"; type = "PnixExpr"; } { name = "attr"; type = "string"; } { name = "default"; type = "PnixExpr"; } ]; }
+    { tag = "Index"; fields = [ { name = "base"; type = "PnixExpr"; } { name = "index"; type = "PnixExpr"; } ]; }
+    { tag = "Binary"; fields = [ { name = "op"; type = "string"; } { name = "lhs"; type = "PnixExpr"; } { name = "rhs"; type = "PnixExpr"; } ]; }
+    { tag = "Unary"; fields = [ { name = "op"; type = "string"; } { name = "arg"; type = "PnixExpr"; } ]; }
+    { tag = "Construct"; fields = [ { name = "variant"; type = "string"; } { name = "args"; type = "PnixExpr[]"; } ]; }
+    { tag = "Match"; fields = [ { name = "scrutinee"; type = "PnixExpr"; } { name = "arms"; type = "PnixMatchArm[]"; } ]; }
+    { tag = "Import"; fields = [ { name = "path"; type = "PnixExpr"; } ]; }
+    { tag = "With"; fields = [ { name = "env"; type = "PnixExpr"; } { name = "body"; type = "PnixExpr"; } ]; }
+    { tag = "Assert"; fields = [ { name = "cond"; type = "PnixExpr"; } { name = "body"; type = "PnixExpr"; } ]; }
+    { tag = "HasAttr"; fields = [ { name = "base"; type = "PnixExpr"; } { name = "attr"; type = "string"; } ]; }
+    { tag = "DynamicHasAttr"; fields = [ { name = "base"; type = "PnixExpr"; } { name = "attr_expr"; type = "PnixExpr"; } ]; }
+    { tag = "DynamicSelect"; fields = [ { name = "base"; type = "PnixExpr"; } { name = "attr_expr"; type = "PnixExpr"; } ]; }
+    { tag = "DynamicSelectOrDefault"; fields = [ { name = "base"; type = "PnixExpr"; } { name = "attr_expr"; type = "PnixExpr"; } { name = "default"; type = "PnixExpr"; } ]; }
+  ];
+
+  types = [
+    {
+      name = "StringInterpPart";
+      variants = [
+        { tag = "Lit"; fields = [ { name = "value"; type = "string"; } ]; }
+        { tag = "Expr"; fields = [ { name = "expr"; type = "PnixExpr"; } ]; }
+      ];
+    }
+    {
+      name = "PnixPath";
+      variants = [
+        { tag = "Relative"; fields = [ { name = "value"; type = "string"; } ]; }
+        { tag = "Absolute"; fields = [ { name = "value"; type = "string"; } ]; }
+        { tag = "Search"; fields = [ { name = "value"; type = "string"; } ]; }
+        { tag = "Home"; fields = [ { name = "value"; type = "string"; } ]; }
+      ];
+    }
+    {
+      name = "PnixParamPattern";
+      variants = [
+        { tag = "Ident"; fields = [ { name = "name"; type = "string"; } ]; }
+        { tag = "AttrSet"; fields = [ { name = "fields"; type = "PnixPatternField[]"; } { name = "ellipsis"; type = "bool"; } ]; }
+        { tag = "List"; fields = [ { name = "pattern"; type = "PnixListPattern"; } ]; }
+        { tag = "AttrSetWithBind"; fields = [ { name = "bind_name"; type = "string"; } { name = "fields"; type = "PnixPatternField[]"; } { name = "ellipsis"; type = "bool"; } ]; }
+      ];
+    }
+    {
+      name = "PnixPatternField";
+      fields = [
+        { name = "name"; type = "string"; }
+        { name = "default"; type = "PnixExpr"; optional = true; }
+      ];
+    }
+    {
+      name = "PnixListPattern";
+      fields = [
+        { name = "items"; type = "string[]"; }
+        { name = "tail"; type = "string"; optional = true; }
+      ];
+    }
+    {
+      name = "PnixLetBinding";
+      variants = [
+        { tag = "Binding"; fields = [ { name = "pattern"; type = "PnixParamPattern"; } { name = "value"; type = "PnixExpr"; } ]; }
+        { tag = "Inherit"; fields = [ { name = "from"; type = "PnixExpr"; optional = true; } { name = "names"; type = "string[]"; } ]; }
+      ];
+    }
+    {
+      name = "AttrKeySegment";
+      variants = [
+        { tag = "Static"; fields = [ { name = "name"; type = "string"; } ]; }
+        { tag = "Dynamic"; fields = [ { name = "expr"; type = "PnixExpr"; } ]; }
+      ];
+    }
+    {
+      name = "PnixAttrItem";
+      variants = [
+        { tag = "Assign"; fields = [ { name = "key_path"; type = "string[]"; } { name = "value"; type = "PnixExpr"; } ]; }
+        { tag = "DynamicAssign"; fields = [ { name = "key_path"; type = "AttrKeySegment[]"; } { name = "value"; type = "PnixExpr"; } ]; }
+        { tag = "Inherit"; fields = [ { name = "from"; type = "PnixExpr"; optional = true; } { name = "names"; type = "string[]"; } ]; }
+      ];
+    }
+    {
+      name = "PnixMatchArm";
+      fields = [
+        { name = "pattern"; type = "PnixPattern"; }
+        { name = "guard"; type = "PnixExpr"; optional = true; }
+        { name = "body"; type = "PnixExpr"; }
+      ];
+    }
+    {
+      name = "PnixPattern";
+      variants = [
+        { tag = "Wildcard"; fields = [ ]; }
+        { tag = "Var"; fields = [ { name = "name"; type = "string"; } ]; }
+        { tag = "Literal"; fields = [ { name = "value"; type = "PnixLiteralPattern"; } ]; }
+        { tag = "AttrSet"; fields = [ { name = "fields"; type = "PnixMatchAttrField[]"; } { name = "ellipsis"; type = "bool"; } ]; }
+        { tag = "List"; fields = [ { name = "pattern"; type = "PnixMatchListPattern"; } ]; }
+        { tag = "Constructor"; fields = [ { name = "variant"; type = "string"; } { name = "args"; type = "PnixPattern[]"; } ]; }
+      ];
+    }
+    {
+      name = "PnixMatchAttrField";
+      fields = [
+        { name = "name"; type = "string"; }
+        { name = "pattern"; type = "PnixPattern"; optional = true; }
+      ];
+    }
+    {
+      name = "PnixMatchListPattern";
+      fields = [
+        { name = "items"; type = "PnixPattern[]"; }
+        { name = "tail"; type = "string"; optional = true; }
+      ];
+    }
+    {
+      name = "PnixLiteralPattern";
+      variants = [
+        { tag = "Int"; fields = [ { name = "value"; type = "i64"; } ]; }
+        { tag = "Float"; fields = [ { name = "value"; type = "f64"; } ]; }
+        { tag = "Bool"; fields = [ { name = "value"; type = "bool"; } ]; }
+        { tag = "String"; fields = [ { name = "value"; type = "string"; } ]; }
+        { tag = "Null"; fields = [ ]; }
+      ];
+    }
+  ];
+
+  notes = [
+    "data-only schema (no spans required for subset)"
+    "attrset dynamic keys are explicit via AttrKeySegment"
+    "Import tag exists but is banned in Stage0 subset rules"
+  ];
+}

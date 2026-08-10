@@ -1,0 +1,162 @@
+let
+  ownerName = "stdlib.nl.meta-domain-nl-lifters";
+
+  # === Meta-domain NL lifters (Axioms #58-#62) =====================
+  #
+  # 사용자 directive: "NL super-set... 모든 곳에 스며들어".
+  #
+  # #58 second-order-lift NL (Axiom #4)
+  # #59 lifecycle NL (Axiom #16 provenance + supersede)
+  # #60 replay-determinism NL (Axiom #17)
+  # #61 router NL (Axiom #33)
+  # #62 ankh-language NL (Axiom #31)
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  # === Axiom #58 second-order-lift NL ===============================
+  knownSecondOrderRelationNLPatterns = [
+    { relation = "fact-of-fact"; en_keywords = [ "fact of fact" "meta-fact" "fact about" "second-order fact" "predicate-as-subject" "fact about fact" ]; ko_keywords = [ "사실의 사실" "메타 사실" "이차 사실" "predicate-as-subject" "사실에 대한 사실" ]; }
+    { relation = "fact-narrowing"; en_keywords = [ "narrow the fact" "constrain the fact" "fact narrowing" "specialization" "fact refinement" ]; ko_keywords = [ "사실 좁히기" "사실 제약" "특수화" "사실 정제" ]; }
+    { relation = "fact-as-subject"; en_keywords = [ "fact as subject" "predicate becomes subject" "elevate fact" "promote fact" ]; ko_keywords = [ "사실이 주어" "술어가 주어 되기" "사실이 술어 됨" ]; }
+    { relation = "context-bound-truth"; en_keywords = [ "truth in context" "ambient-bound truth" "context bound" "context-dependent truth" ]; ko_keywords = [ "맥락 안 진리" "ambient 결합 진리" "맥락 결합 진리" "맥락 의존 진리" ]; }
+  ];
+
+  liftToSecondOrderRelation = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownSecondOrderRelationNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-second-order-matched"; known_relations = builtins.map (p: p.relation) knownSecondOrderRelationNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-second-order"; candidates = builtins.map (x: x.relation) m; }
+      else { outcome = "second-order-relation-lifted"; relation = (builtins.head m).relation; axiom_origin = "axiom-4-second-order-recursive-lift (Tarski meta-language)"; };
+
+  # === Axiom #59 lifecycle NL =======================================
+  knownLifecycleStateNLPatterns = [
+    { state = "active"; en_keywords = [ "active receipt" "still valid" "current state" "live receipt" ]; ko_keywords = [ "활성 receipt" "현재 상태" "유효함" "살아있는 receipt" "현재 유효" ]; }
+    { state = "superseded"; en_keywords = [ "superseded by" "replaced by" "newer version" "deprecated by" ]; ko_keywords = [ "대체됨" "신버전으로 교체" "supersede" "새 버전으로" "이전 receipt" ]; }
+    { state = "rejected"; en_keywords = [ "rejected" "verdict rejected" "disapproved" "verdict denied" ]; ko_keywords = [ "거절됨" "rejected" "기각" "거부됨" "승인 거부" ]; }
+    { state = "held"; en_keywords = [ "held for evidence" "needs more evidence" "pending decision" "on hold" ]; ko_keywords = [ "보류" "증거 추가 필요" "결정 대기" "보류 중" "Held 상태" ]; }
+    { state = "reopened"; en_keywords = [ "reopened" "reopen the case" "revisit decision" "re-examine" ]; ko_keywords = [ "재오픈" "재개" "결정 재검토" "다시 열기" "재심" ]; }
+  ];
+
+  liftToLifecycleState = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownLifecycleStateNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-lifecycle-state-matched"; known_states = builtins.map (p: p.state) knownLifecycleStateNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-lifecycle-state"; candidates = builtins.map (x: x.state) m; }
+      else { outcome = "lifecycle-state-lifted"; state = (builtins.head m).state; axiom_origin = "axiom-16-provenance-supersede-substrate (Lampson, W3C PROV-O)"; };
+
+  # === Axiom #60 replay-determinism NL ==============================
+  knownReplayConcernNLPatterns = [
+    { concern = "verify-replay"; en_keywords = [ "verify replay" "reproduce result" "deterministic check" "rerun same input" ]; ko_keywords = [ "재현 검증" "결과 재현" "결정성 확인" "같은 입력 재실행" "동일 결과 검증" ]; }
+    { concern = "nondeterminism-source"; en_keywords = [ "nondeterminism" "non-deterministic" "random seed" "wall clock" "network race" "race condition" ]; ko_keywords = [ "비결정성" "랜덤 시드" "wall clock" "네트워크 레이스" "경합 조건" "race condition" ]; }
+    { concern = "explicit-input"; en_keywords = [ "explicit input" "all inputs declared" "no hidden state" "input transparency" ]; ko_keywords = [ "명시적 입력" "모든 입력 선언" "숨김 상태 없음" "입력 투명성" ]; }
+    { concern = "receipt-hash"; en_keywords = [ "receipt hash" "canonical hash" "content-addressed" "SHA256 hash" ]; ko_keywords = [ "receipt 해시" "정규 해시" "content-addressed" "SHA256 해시" "콘텐츠 주소" ]; }
+  ];
+
+  liftToReplayConcern = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownReplayConcernNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-replay-concern-matched"; known_concerns = builtins.map (p: p.concern) knownReplayConcernNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-replay-concern"; candidates = builtins.map (x: x.concern) m; }
+      else { outcome = "replay-concern-lifted"; concern = (builtins.head m).concern; axiom_origin = "axiom-17-replay-determinism-substrate (Lamport, LeBlanc)"; };
+
+  # === Axiom #61 router NL ==========================================
+  knownRouterTargetNLPatterns = [
+    { router = "cognition"; en_keywords = [ "cognition router" "thinking routing" "reasoning step" "cognitive dispatch" ]; ko_keywords = [ "인지 라우터" "사고 라우팅" "추론 단계" "인지 디스패치" ]; }
+    { router = "discovery"; en_keywords = [ "discovery routing" "find pattern" "discovery substrate" "pattern discovery" ]; ko_keywords = [ "발견 라우팅" "패턴 찾기" "발견 substrate" "패턴 발견" ]; }
+    { router = "engine"; en_keywords = [ "engine router" "engine routing" "engine dispatch" "runtime engine" ]; ko_keywords = [ "엔진 라우터" "엔진 디스패치" "런타임 엔진" ]; }
+    { router = "ontology"; en_keywords = [ "ontology router" "ontology lookup" "OWL routing" "ontology dispatch" ]; ko_keywords = [ "온톨로지 라우터" "온톨로지 조회" "온톨로지 디스패치" ]; }
+    { router = "presentation"; en_keywords = [ "presentation router" "render routing" "display dispatch" "view router" ]; ko_keywords = [ "프리젠테이션 라우터" "렌더 라우팅" "뷰 라우터" ]; }
+    { router = "reactive"; en_keywords = [ "reactive router" "FRP routing" "stream routing" "event stream" ]; ko_keywords = [ "리액티브 라우터" "FRP 라우팅" "스트림 라우팅" "이벤트 스트림" ]; }
+    { router = "world"; en_keywords = [ "world router" "world dispatch" "scene routing" "world dispatch" ]; ko_keywords = [ "월드 라우터" "씬 라우팅" "월드 디스패치" ]; }
+    { router = "introspect"; en_keywords = [ "introspect router" "self-inspection" "reflection routing" "self-reflect" ]; ko_keywords = [ "내성 라우터" "자기 조사" "리플렉션" "자기 성찰" ]; }
+  ];
+
+  liftToRouterTarget = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownRouterTargetNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-router-matched"; known_routers = builtins.map (p: p.router) knownRouterTargetNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-router"; candidates = builtins.map (x: x.router) m; }
+      else { outcome = "router-target-lifted"; router = (builtins.head m).router; axiom_origin = "axiom-33-top-level-router-registry"; };
+
+  # === Axiom #62 ankh-language NL ===================================
+  knownAnkhHostLangNLPatterns = [
+    { host_lang = "default"; en_keywords = [ "default ankh" "default host" "no language specified" "ankh default" ]; ko_keywords = [ "기본 ankh" "기본 호스트" "언어 미지정" "ankh 기본" ]; }
+    { host_lang = "python"; en_keywords = [ "python ankh" "ankh in python" "execute as python" "python binding" "py ankh" ]; ko_keywords = [ "파이썬 ankh" "파이썬으로 실행" "파이썬 바인딩" "파이썬 ankh 실행" ]; }
+    { host_lang = "rust"; en_keywords = [ "rust ankh" "ankh in rust" "execute as rust" "rust binding" "rs ankh" ]; ko_keywords = [ "러스트 ankh" "러스트로 실행" "러스트 바인딩" "러스트 ankh 실행" ]; }
+  ];
+
+  liftToAnkhHostLang = utterance:
+    let m = builtins.filter (p: (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords)) knownAnkhHostLangNLPatterns;
+    in
+      if !(builtins.isString utterance) then { outcome = "held-non-string"; }
+      else if (builtins.stringLength utterance) == 0 then { outcome = "held-empty"; }
+      else if m == [] then { outcome = "held-no-ankh-host-matched"; known_hosts = builtins.map (p: p.host_lang) knownAnkhHostLangNLPatterns; }
+      else if (builtins.length m) > 1 then { outcome = "held-multi-ankh-host"; candidates = builtins.map (x: x.host_lang) m; }
+      else { outcome = "ankh-host-lang-lifted"; host_lang = (builtins.head m).host_lang; axiom_origin = "axiom-31-ankh-language-and-universal-nl-registry"; };
+
+  applyMetaDomainNlLifterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then { outcome = "held-missing-utterance-field"; }
+    else if !(builtins.hasAttr "lifter_kind" request) then { outcome = "held-missing-lifter-kind"; known_kinds = [ "second-order" "lifecycle" "replay" "router" "ankh-lang" ]; }
+    else
+      let k = request.lifter_kind; u = request.utterance;
+      in
+        if k == "second-order" then liftToSecondOrderRelation u
+        else if k == "lifecycle" then liftToLifecycleState u
+        else if k == "replay" then liftToReplayConcern u
+        else if k == "router" then liftToRouterTarget u
+        else if k == "ankh-lang" then liftToAnkhHostLang u
+        else { outcome = "held-unknown-lifter-kind"; kind = k; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axioms-58-to-62";
+    lifter_count = 5;
+    lifters = [
+      { id = "second-order"; axiom = 4; patterns = builtins.length knownSecondOrderRelationNLPatterns; }
+      { id = "lifecycle"; axiom = 16; patterns = builtins.length knownLifecycleStateNLPatterns; }
+      { id = "replay"; axiom = 17; patterns = builtins.length knownReplayConcernNLPatterns; }
+      { id = "router"; axiom = 33; patterns = builtins.length knownRouterTargetNLPatterns; }
+      { id = "ankh-lang"; axiom = 31; patterns = builtins.length knownAnkhHostLangNLPatterns; }
+    ];
+    new_decision_count = 0;
+    bilingual = true;
+  };
+
+in {
+  inherit
+    ownerName containsAny
+    knownSecondOrderRelationNLPatterns knownLifecycleStateNLPatterns
+    knownReplayConcernNLPatterns knownRouterTargetNLPatterns
+    knownAnkhHostLangNLPatterns
+    liftToSecondOrderRelation liftToLifecycleState
+    liftToReplayConcern liftToRouterTarget
+    liftToAnkhHostLang
+    applyMetaDomainNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL meta-domain lifters (Axioms #58-62)";
+    owner = ownerName;
+    base = "meta-domain-nl-lifters-v0";
+    rev_note = "사용자 directive (2026-05-28). 5 meta-layer lifters "
+      + "(second-order / lifecycle / replay / router / ankh-lang) "
+      + "bilingual en + ko. DO NOT REBUILD.";
+  };
+}

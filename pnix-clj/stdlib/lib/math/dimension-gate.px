@@ -1,0 +1,101 @@
+# stdlib/lib/math/dimension-gate.px
+#
+# P7-c 결정론 차원 gate: QUDT 8-slot rational dimension vector 위 *결정가능·건전* 판정.
+#   = "redb에 지식이 있다"(P7-b)에서 "pnix가 그 지식으로 *수학적으로 판단한다*"로 넘어가는 핵심.
+#   106-agent deep-research(reference_math_generic_intelligence_p7_verdict) SOUND CORE:
+#
+# ★단위 = base dimension(8-slot: A E L I M H T D = AmountOfSubstance/ElectricCurrent/Length/LuminousIntensity/
+#   Mass/ThermodynamicTemperature/Time/Dimensionless) 위 free abelian group. equality/곱셈은 정수/유리 지수 벡터 대수.
+# ★지수 = rational(float; QUDT 실 row에 ±0.5/±1.5 — integer 가정 금지, research#1+P7-b 확증). half-integer는 binary-exact.
+# ★Bridgman 동질성: +/−/=/≤ 양변 같은 차원. 곱셈=지수 더하기, 나눗셈=빼기, 거듭제곱=스칼라배.
+#   transcendental(log/sin/exp) 인자는 dimensionless 필수.
+# ★HELD carve-out(차원서 도출 불가, fail-closed): concept-ambiguous(N·m torque vs energy, 같은 차원)·affine(°C/°F)·
+#   log-scale(dB)·angle-dimensionless(rad↔Hz)·unit-vs-dimension(수치변환) — gate가 *판정 안 함*, held_reason로만.
+# ★row≠truth·promotion 0: 판정은 candidate(dimension-consistent/mismatch). proposer/durable 분리는 math_evidence가.
+let
+  B = builtins;
+  slen = B.stringLength;
+  sub = B.substring;
+
+  # parse "qkdv:A0E0L1I0M0H0T-1D0" (또는 prefix 없는 코드) → { A E L I M H T D ; valid }. dynamic-key 회피.
+  #   ★float 지수: 실 QUDT 지수는 전부 binary-exact({정수,±0.5,±1.5,±2.5})이고 곱셈/나눗셈 합성도 binary-exact 유지
+  #     → dimEqual의 float `==`는 *실데이터 범위서 건전*(적대검증 확인). 비-binary-exact 유리수 유입 시만 위험(미발생).
+  #   ★fail-closed: 허용 문자(A E L I M H T D 0-9 - .) 외가 있으면 valid=false → 소비측(gate/solver)이 held 처리(malformed).
+  parseDimCode = raw:
+    let code = if (slen raw >= 5) && (sub 0 5 raw == "qkdv:") then sub 5 (slen raw) raw else raw;
+        n = slen code;
+        isLetter = c: B.elem c [ "A" "E" "L" "I" "M" "H" "T" "D" ];
+        isNumChar = c: B.elem c [ "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" "-" "." ];
+        # ★Fix #5(적대검증): valid = *well-formed 8-slot qkdv 구조*. 문자-클래스만으론 "123"·"D"·"A0" garbage가
+        #   recognized로 새어 채팅에 가짜 출처-attribution 노출(HIGH). 요건: A E L I M H T D 8슬롯 *순서대로* +
+        #   각 슬롯 exponent가 well-formed rational(정수/반정수). 아니면 valid=false(fail-closed, malformed → 소비측 held).
+        numRe = "-?[0-9]+(\\.[0-9]+)?";                       # crash 회피: fromJSON 전 구조 검사.
+        isNumStr = s: (s != "") && ((B.match numRe s) != null);
+        allowedAt = i: let c = sub i 1 code; in (isLetter c) || (isNumChar c);
+        checkChars = i: if i >= n then true else (allowedAt i) && (checkChars (i + 1));
+        validChars = (n > 0) && (checkChars 0);
+        walk = i: curL: curN: acc:
+          if i >= n then (if curL == "" then acc else acc ++ [ { l = curL; raw = curN; } ])
+          else let c = sub i 1 code;
+               in if isLetter c
+                  then (if curL == "" then walk (i + 1) c "" acc
+                        else walk (i + 1) c "" (acc ++ [ { l = curL; raw = curN; } ]))
+                  else walk (i + 1) curL (curN + c) acc;
+        pairs = if validChars then walk 0 "" "" [ ] else [ ];
+        letters = B.map (p: p.l) pairs;
+        expectedSlots = [ "A" "E" "L" "I" "M" "H" "T" "D" ];   # 고정 순서·전체 8슬롯
+        badNums = B.filter (p: (isNumStr p.raw) == false) pairs;
+        valid = validChars && (letters == expectedSlots) && (badNums == [ ]);   # ★well-formed 8-slot
+        valueFor = letter: let m = B.filter (p: p.l == letter) pairs;
+                           in if m == [ ] then 0
+                              else (let r = (B.head m).raw; in if isNumStr r then B.fromJSON r else 0);
+    in { A = valueFor "A"; E = valueFor "E"; L = valueFor "L"; I = valueFor "I";
+         M = valueFor "M"; H = valueFor "H"; T = valueFor "T"; D = valueFor "D"; valid = valid; };
+
+  # 모든 8슬롯 보장(없으면 0). (bare `.attr or 0` — 괄호+or 함정 회피.)
+  canon = d: {
+    A = d.A or 0; E = d.E or 0; L = d.L or 0; I = d.I or 0;
+    M = d.M or 0; H = d.H or 0; T = d.T or 0; D = d.D or 0;
+  };
+
+  dimEqual = d1: d2:
+    let a = canon d1; b = canon d2;
+    in (a.A == b.A) && (a.E == b.E) && (a.L == b.L) && (a.I == b.I)
+       && (a.M == b.M) && (a.H == b.H) && (a.T == b.T) && (a.D == b.D);
+  dimAdd = d1: d2:
+    let a = canon d1; b = canon d2;
+    in { A = a.A + b.A; E = a.E + b.E; L = a.L + b.L; I = a.I + b.I;
+         M = a.M + b.M; H = a.H + b.H; T = a.T + b.T; D = a.D + b.D; };
+  dimSub = d1: d2:
+    let a = canon d1; b = canon d2;
+    in { A = a.A - b.A; E = a.E - b.E; L = a.L - b.L; I = a.I - b.I;
+         M = a.M - b.M; H = a.H - b.H; T = a.T - b.T; D = a.D - b.D; };
+  dimScale = d: r:
+    let a = canon d;
+    in { A = a.A * r; E = a.E * r; L = a.L * r; I = a.I * r;
+         M = a.M * r; H = a.H * r; T = a.T * r; D = a.D * r; };
+  isDimensionless = d:
+    let a = canon d;
+    in (a.A == 0) && (a.E == 0) && (a.L == 0) && (a.I == 0)
+       && (a.M == 0) && (a.H == 0) && (a.T == 0) && (a.D == 0);
+
+  # ── gate 연산(SOUND CORE) ──
+  # 덧셈/뺄셈: Bridgman 동질성 — 같은 차원만. 다르면 mismatch=invalid-candidate.
+  gateAdd = args:
+    let a = args.a; b = args.b;
+    in if dimEqual a b
+       then { status = "consistent"; dimension = canon a; }
+       else { status = "mismatch"; reason = "dimension-mismatch"; left = canon a; right = canon b; };
+  # 곱셈/나눗셈: 항상 consistent(지수 더/빼기).
+  gateMul = args: { status = "consistent"; dimension = dimAdd args.a args.b; };
+  gateDiv = args: { status = "consistent"; dimension = dimSub args.a args.b; };
+  gatePow = args: { status = "consistent"; dimension = dimScale args.d args.exp; };
+  # transcendental: 인자 dimensionless 필수. 아니면 invalid.
+  gateTranscendental = args:
+    if isDimensionless args.d
+    then { status = "consistent"; dimension = canon args.d; }
+    else { status = "mismatch"; reason = "transcendental-argument-not-dimensionless"; };
+in {
+  inherit parseDimCode canon dimEqual dimAdd dimSub dimScale isDimensionless
+          gateAdd gateMul gateDiv gatePow gateTranscendental;
+}

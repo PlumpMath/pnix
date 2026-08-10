@@ -1,0 +1,7 @@
+# gate	status	command	marker	promotion_policy	fail_policy	note
+local-verification	DONE	stage11-adapter-replay-check	stage11-adapter-replay-check	local-proof-gate	fail-closed	local verification gate must replay the latest adapter closure receipt
+candidate-intake	DONE	manifest-check	manifest-check	no-auto-promotion	fail-closed	new self-improvement candidates must enter through the checked manifest before promotion
+github-actions	DISABLED	actions-disabled	actions_disabled=ok	no-remote-promotion	fail-closed	remote CI is disabled and cannot promote quarantine candidates
+manual-promotion	HELD	held	explicit-human-approval	explicit-human-approval	fail-closed	manual promotion remains held until an explicit reviewed receipt exists
+self-modification	HELD	held	quarantine-required	quarantine-required	fail-closed	self-modification cannot bypass quarantine or local proof gates
+external-evidence	HELD	held	offline-approval-required	offline-approval-required	fail-closed	external evidence cannot promote claims without offline approval receipt

@@ -1,0 +1,147 @@
+# MR20 -- effect-route-install + command-group translation (the gate
+# effect-routes-bound names as receipt.next_gate). First installed route:
+# route/proc.run, bound to the puncheetah client-command-group lane -- the
+# shared sandbox both pnixc-meta servers serve (puck-cli is a TEST client of
+# the same protocol, not a separate execution surface). pnixc-meta NEVER runs
+# a subprocess here: translation emits the public client_command_group
+# artifact (client-command-ast.v0 family) and the CLIENT executes inside its
+# sandbox, returning a client-command-group-result observation receipt.
+# Safe project automation only -- the actual test command comes from the
+# project manifest server-side; no command string is invented in this owner.
+# Condition-check steps are observations (the client confirms the condition),
+# never host effects; only action steps need an installed route.
+# Outcomes:
+#   held-missing-bound / held-not-routes-bound -- wrong or missing input
+#   held-awaiting-effect-grant  -- no operator effect grant (never auto-run)
+#   held-invalid-grant-identity -- grant actor not an operator/ principal
+#   held-stale-effect-grant     -- grant fingerprint != bound plan (TOCTOU)
+#   held-expired-effect-grant   -- grant TTL passed (caller-supplied time)
+#   held-route-not-installed    -- >=1 action step's route has no install
+#                                  receipt (per-command detail preserved)
+#   effect-command-group-translated -- the public executable artifact
+let
+  routeInstalls = {
+    "route/proc.run" = {
+      installed = true;
+      executor = "puncheetah-client-command-group";
+      sandbox = "puncheetah-shared-sandbox";
+      command_op = "run-project-test-command";
+      command_source = "project-manifest.test_command";
+      effect_scope = "safe-project-automation-only";
+      install_receipt = "MR20";
+    };
+  };
+in
+{
+  knownRouteInstalls = routeInstalls;
+
+  translateEffectExecution = request:
+    let
+      bound = if request ? bound then request.bound else null;
+      grant = if request ? effect_grant then request.effect_grant else null;
+      now = if request ? current_time_ms then request.current_time_ms else null;
+      held = outcome: reason: extra: ({
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/effect-route-install.px";
+      } // extra);
+      actorOk = actor:
+        builtins.isString actor
+        && builtins.stringLength actor > 9
+        && builtins.substring 0 9 actor == "operator/";
+      fingerprint =
+        if bound != null && bound ? plan_fingerprint && bound.plan_fingerprint != null
+        then bound.plan_fingerprint
+        else "";
+      steps = if bound != null && bound ? steps then bound.steps else [];
+      translateStep = step:
+        if step ? role && step.role == "condition-check" then {
+          index = step.index;
+          op = "confirm-condition";
+          kind = "observation";
+          arguments = { event = step.event; stem = step.stem; };
+          result_contract = "condition-observation.v1";
+        }
+        else
+          let
+            route = if step ? route then step.route else "";
+            # builtins.getAttr (not dynamic select): route ids contain '.'
+            # and the evaluator splits dynamic select paths on dots.
+            install =
+              if builtins.hasAttr route routeInstalls
+              then builtins.getAttr route routeInstalls
+              else null;
+          in
+          if install == null then {
+            index = step.index;
+            kind = "held-route-not-installed";
+            route = route;
+            reason = "no install receipt for this route; execution stays closed";
+          }
+          else {
+            index = step.index;
+            op = install.command_op;
+            kind = "effect";
+            arguments = {
+              event = step.event;
+              stem = step.stem;
+              obligation = if step ? obligation then step.obligation else false;
+            };
+            execution_contract = {
+              executor = install.executor;
+              sandbox = install.sandbox;
+              effect_scope = install.effect_scope;
+              command_source = install.command_source;
+            };
+            result_contract = "command-status.v1";
+          };
+      commands = builtins.map translateStep steps;
+      uninstalled =
+        builtins.filter (c: c.kind == "held-route-not-installed") commands;
+    in
+    if bound == null || !(bound ? outcome) then
+      held "held-missing-bound"
+        "an effect-routes-bound verdict is required input" {}
+    else if bound.outcome != "effect-routes-bound" then
+      held "held-not-routes-bound"
+        ("only effect-routes-bound may translate; got " + bound.outcome) {}
+    else if grant == null then
+      held "held-awaiting-effect-grant"
+        "no operator effect grant; surface the bound plan to the operator (never auto-run)" {}
+    else if !(grant ? actor) || !(actorOk grant.actor) then
+      held "held-invalid-grant-identity"
+        "effect grant actor must be an operator/ principal" {}
+    else if !(grant ? plan_fingerprint) || fingerprint == ""
+            || grant.plan_fingerprint != fingerprint then
+      held "held-stale-effect-grant"
+        "effect grant was given for a different plan (fingerprint mismatch; TOCTOU guard)" {}
+    else if grant ? ttl_ms && grant.ttl_ms != null
+            && grant ? granted_at_ms && grant.granted_at_ms != null
+            && now != null
+            && now > grant.granted_at_ms + grant.ttl_ms then
+      held "held-expired-effect-grant"
+        "effect grant TTL passed; re-grant required" {}
+    else if builtins.length uninstalled > 0 then
+      held "held-route-not-installed"
+        "at least one action step's route has no install receipt"
+        { commands = commands; uninstalled_count = builtins.length uninstalled; }
+    else {
+      outcome = "effect-command-group-translated";
+      group_command_id = "ccg/" + builtins.substring 0 16 fingerprint;
+      plan_fingerprint = fingerprint;
+      commands = commands;
+      # The first place effect_allowed turns true -- and only here: behind
+      # plan approval (MR15) + this operator effect grant, scoped to client-
+      # sandbox safe automation. pnixc-meta itself still executes nothing.
+      effect_allowed = true;
+      effect_scope = "safe-project-automation-only";
+      host_effect = "client-sandbox-only";
+      candidate_only = false;
+      executor = "puncheetah-client-command-group";
+      sandbox = "puncheetah-shared-sandbox";
+      granted_by = grant.actor;
+      result_return_contract = "client-command-group-result";
+      owner = "stdlib/lib/nl/effect-route-install.px";
+    };
+}

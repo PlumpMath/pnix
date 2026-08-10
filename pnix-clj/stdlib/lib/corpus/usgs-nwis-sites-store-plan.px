@@ -1,0 +1,44 @@
+# stdlib/lib/corpus/usgs-nwis-sites-store-plan.px — USGS NWIS site metadata snapshot.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# observations/time-series/water-quality/private wells/water-rights/safety judgments는 포함하지 않는다. graph/mirror 연결도 하지 않는다.
+let
+  B = builtins;
+  genPath = ./usgs-nwis-sites.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "science.usgs.nwis_sites.v1";
+    source = { name = "USGS NWIS Site Service monitoring-location metadata"; license = "US Government public domain"; scope = "empty seed fallback"; };
+    summary = { site_count = 0; };
+    fields = [ ];
+    sites = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "usgs-nwis-sites-load-v0";
+      source_lens = "stdlib/lib/corpus/usgs-nwis-sites-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "science.usgs.nwis_sites.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "usgs-nwis-sites-query-v0";
+      source_lens = "stdlib/lib/corpus/usgs-nwis-sites-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "science.usgs.nwis_sites.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

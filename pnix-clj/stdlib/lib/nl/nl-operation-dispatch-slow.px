@@ -1,0 +1,44 @@
+# stdlib.nl.nl-operation-dispatch-slow — thin import shell (O-008-slow P3).
+# Cheap / keyword / heavy bodies live in sibling owners; import here stays shallow.
+let
+  quickPath = ./nl-operation-dispatch-slow-quick.px;
+  cheapPath = ./nl-operation-dispatch-slow-cheap.px;
+  heavyPath = ./nl-operation-dispatch-slow-heavy.px;
+  keywordPath = ./nl-operation-dispatch-slow-keyword.px;
+in {
+  name = "stdlib.nl.nl-operation-dispatch-slow";
+  import_shell = "thin-delegate";
+  cheap_owner_path = cheapPath;
+  heavy_owner_path = heavyPath;
+  keyword_owner_path = keywordPath;
+
+  tryCheapSlowPath = utterance: context:
+    (import cheapPath).tryCheapSlowPath utterance context;
+
+  cheapSlowPathTerminal = result:
+    (import cheapPath).cheapSlowPathTerminal result;
+
+  dispatchSlowPath = utterance: context:
+    let
+      quickMod = import quickPath;
+      quick = quickMod.quickGeneralIfBenign utterance;
+    in if quickMod.cheapSlowPathTerminal quick then quick
+    else
+      let
+        cheapMod = import cheapPath;
+        cheap = cheapMod.tryCheapSlowPath utterance context;
+      in if cheapMod.cheapSlowPathTerminal cheap then cheap
+      else (import heavyPath).runSymbolicSlowPath utterance context;
+
+  dispatchByKeyword = utterance:
+    (import keywordPath).dispatchByKeyword utterance;
+
+  dispatchSymbolicFirst = utterance:
+    (import heavyPath).dispatchSymbolicFirst utterance;
+
+  dispatchFrame = frame:
+    (import heavyPath).dispatchFrame frame;
+
+  dispatchContextGraph = graph:
+    (import heavyPath).dispatchContextGraph graph;
+}

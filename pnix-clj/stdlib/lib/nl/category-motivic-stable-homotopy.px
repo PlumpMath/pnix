@@ -1,0 +1,350 @@
+let
+  ownerName = "stdlib.nl.category-motivic-stable-homotopy";
+
+  motivic = import nl/category-motivic-substrate.px;
+  ktheory = import nl/category-substrate-k-theory.px;
+
+  # === Voevodsky Motivic Stable Homotopy (agent-NL-188) =============
+  #
+  # 사용자 directive (2026-05-29):
+  # > "Substrate motivic homotopy theory (Voevodsky's motivic stable
+  # >  homotopy)"
+  #
+  # 표준 정의:
+  #   SH(S) = stable motivic homotopy category over base S
+  #   - objects: motivic spectra (P^1-spectra)
+  #   - bi-graded stabilization: invert both S^1 (topological) and
+  #     P^1 (algebraic / motivic)
+  #   - represents bi-graded motivic cohomology theories
+  #
+  # substrate 해석:
+  #   SH_substrate = bi-graded stable homotopy category of substrate
+  #     - topological S^1 = mode chain extension (mode 1 → mode 16)
+  #     - algebraic P^1 = Tate twist (Z(1))
+  #     - bi-graded receipt classes: indexed by (n, q) where n is
+  #       homotopical degree, q is Tate weight
+
+  stepKind = "voevodsky-motivic-stable-homotopy";
+  framework_step =
+    "SH(Site_coding) — bi-graded stable homotopy of substrate spectra";
+
+  # =================================================================
+  # === Bi-graded structure: S^1 vs P^1 =============================
+  # =================================================================
+
+  biGradedSpheres = {
+    topological_sphere = {
+      symbol = "S^1";
+      grading = "(1, 0)";
+      description_en = ''
+        Topological 1-sphere — homotopical degree.
+        Substrate-side: S^1 corresponds to *receipt chain extension*
+        in the homotopical direction. Inverting S^1 gives the
+        topological stabilization (passing from spaces to spectra).
+      '';
+    };
+    motivic_sphere = {
+      symbol = "P^1 (or G_m smash S^1)";
+      grading = "(1, 1)";
+      description_en = ''
+        Motivic 1-sphere — projective-line direction.
+        Substrate-side: P^1 ≅ Tate twist Z(1) shift.
+        Inverting P^1 gives the motivic / Tate stabilization.
+      '';
+    };
+    bi_graded_invariants = ''
+      Every spectrum E in SH(S) carries bi-graded invariants:
+        pi_{p,q}(E) — homotopy groups indexed by (cohomological p, Tate weight q)
+      So SH(S) is *bi-graded* — finer than topological SH which is
+      single-graded.
+    '';
+  };
+
+  # =================================================================
+  # === Motivic spectra =============================================
+  # =================================================================
+
+  motivicSpectra = {
+    spectrum_kind = "P^1-spectrum";
+    definition_en = ''
+      A motivic spectrum E in SH(S) is a sequence
+        E_0, E_1, E_2, ... of pointed motivic spaces
+      with structure maps
+        sigma_n : P^1 smash E_n → E_{n+1}
+      inverting P^1 and S^1.
+
+      Substrate spectrum E represents:
+        bi-graded cohomology theory E^{p,q} on substrate sites.
+    '';
+    primary_examples = [
+      {
+        spectrum_id = "S (sphere spectrum)";
+        description = "Stable motivic homotopy spheres - building block";
+        substrate_meaning = "represents 'trivial receipt' — base of all substrate cohomology";
+      }
+      {
+        spectrum_id = "HZ (motivic Eilenberg-MacLane)";
+        description = "represents motivic cohomology";
+        substrate_meaning = "HZ-cohomology classes = motivic cohomology classes of substrate";
+      }
+      {
+        spectrum_id = "KGL (algebraic K-theory spectrum)";
+        description = "represents algebraic K-theory";
+        substrate_meaning = "KGL-cohomology = substrate K-theory (#187 already박힘)";
+      }
+      {
+        spectrum_id = "MGL (algebraic cobordism)";
+        description = "represents algebraic cobordism";
+        substrate_meaning = "MGL-class = receipt cobordism class — receipts deformable into one another";
+      }
+      {
+        spectrum_id = "HFp (mod-p Eilenberg-MacLane)";
+        description = "represents mod-p motivic cohomology";
+        substrate_meaning = "HFp class = mod-p receipt invariants";
+      }
+    ];
+  };
+
+  # =================================================================
+  # === Motivic homotopy groups pi_{p,q} ============================
+  # =================================================================
+
+  motivicHomotopyGroupsAt = p: q: {
+    bi_degree = { p = p; q = q; };
+    name = "pi_{" + builtins.toString p + "," + builtins.toString q + "}(E)";
+    description_en = ''
+      pi_{p,q}(E) = [S^{p,q}, E] in SH(S)
+      where S^{p,q} = S^{p-q} smash G_m^smash_q is the bi-graded
+      motivic sphere.
+
+      Substrate meaning: classes of receipt-maps from a 'thin shell'
+      of degree (p,q) into the spectrum E.
+    '';
+    realizes_to_classical_at_q_eq_0 = if q == 0 then "= pi_p(E) classical topological homotopy" else null;
+    relates_to_K_theory_when = "p = q (diagonal): pi_{q,q}(KGL) recovers K_0 contributions";
+  };
+
+  # Canonical bi-graded homotopy groups
+  canonicalMotivicHomotopyGroups = [
+    (motivicHomotopyGroupsAt 0 0)
+    (motivicHomotopyGroupsAt 1 0)
+    (motivicHomotopyGroupsAt 0 1)
+    (motivicHomotopyGroupsAt 1 1)
+    (motivicHomotopyGroupsAt 2 1)
+  ];
+
+  # =================================================================
+  # === Adams-Novikov spectral sequence (motivic version) ===========
+  # =================================================================
+  #
+  # Motivic Adams-Novikov: E_2 = Ext_{MGL^* MGL}^{*,*}(MGL^*, MGL^*(E))
+  #   ⇒ MGL^*_*-completion of pi_*_*(E)
+
+  motivicAdamsNovikov = {
+    spectral_sequence_kind = "motivic-Adams-Novikov";
+    E_2_page = "Ext_{MGL_* MGL}(MGL_*, MGL_*(E))";
+    converges_to = "MGL-completion of pi_{*,*}(E)";
+    substrate_meaning_en = ''
+      Adams-Novikov uses motivic cobordism (MGL) to compute
+      motivic stable homotopy groups via successive approximation.
+
+      Substrate: receipts arranged into cobordism classes via MGL,
+      then refined to obtain pi_{p,q} via SS pages.
+    '';
+    relates_to_K_theory = ''
+      Motivic Adams-Novikov SS for KGL recovers K-theory groups —
+      same K_n as in #187 substrate K-theory but via
+      homotopical / spectral framework.
+    '';
+  };
+
+  # =================================================================
+  # === Slice filtration (Voevodsky) =================================
+  # =================================================================
+  #
+  # Voevodsky's slice filtration on SH(S):
+  #   ... ⊂ Sigma^{q+1}_T SH^{eff}(S) ⊂ Sigma^q_T SH^{eff}(S) ⊂ SH(S)
+  # Slices: s_q E = fib(f_{q+1} E → f_q E) (q-th slice)
+
+  sliceFiltration = {
+    filtration_id = "Voevodsky-slice-filtration";
+    description_en = ''
+      Slice filtration filters SH(S) by Tate weight:
+        Sigma^q_T SH^{eff} ⊂ SH(S)
+      = subcategory generated by Tate twists Z(q)[*].
+
+      Slices s_q E = q-th associated graded piece.
+      Slice spectral sequence:
+        E_1^{p,q} = pi_{p+q, q}(s_q E) ⇒ pi_{p+q, q}(E)
+    '';
+    consequence_substrate_en = ''
+      Substrate consequence: every receipt class has a *slice
+      decomposition* — separating into contributions by Tate weight.
+      Lower slices = receipts dominated by lower Tate weights
+      (less twisted); higher slices = higher Tate weights.
+    '';
+    has_slice_spectral_sequence = true;
+  };
+
+  # =================================================================
+  # === Six functor formalism in SH(S) ===============================
+  # =================================================================
+  #
+  # For morphism f : X → Y, six functors:
+  #   f_*, f^*, f_!, f^!, smash, RHom
+
+  sixFunctorFormalismSH = {
+    functor_count = 6;
+    operations = [
+      { name = "f_*";  description = "pushforward (Lannes' theorem in motivic context)"; }
+      { name = "f^*";  description = "pullback"; }
+      { name = "f_!";  description = "exceptional pushforward (compact support)"; }
+      { name = "f^!";  description = "exceptional pullback"; }
+      { name = "smash"; description = "smash product (motivic tensor)"; }
+      { name = "RHom"; description = "internal hom (motivic morphism space)"; }
+    ];
+    base_change_compatibility = "六-functor formalism satisfies base-change isomorphisms";
+    substrate_meaning_en = ''
+      6-functor formalism gives substrate a *complete* operational
+      calculus on motivic spectra:
+      - f_* : compose receipts along morphisms (mode chain transitions)
+      - f^* : pull back receipts (mode chain restrictions)
+      - f_! / f^! : compact-support refinements (bounded receipts)
+      - smash : combine independent receipt streams
+      - RHom : receipt-morphism space (universe of receipt-transformations)
+    '';
+  };
+
+  # =================================================================
+  # === Substrate-internal motivic spectra ==========================
+  # =================================================================
+
+  substrateInternalSpectra = [
+    {
+      spectrum_id = "S_substrate";
+      name = "sphere spectrum on Site_coding";
+      description_en = "the trivial substrate spectrum — represents identity receipt class";
+    }
+    {
+      spectrum_id = "HZ_substrate";
+      name = "motivic Eilenberg-MacLane on Site_coding";
+      description_en = "represents motivic cohomology classes — bi-graded H^{p,q}_M";
+      relates_to = "category-motivic-substrate #185";
+    }
+    {
+      spectrum_id = "KGL_substrate";
+      name = "K-theory spectrum on Site_coding";
+      description_en = "represents substrate K-theory K_*(Site_coding)";
+      relates_to = "category-substrate-k-theory #187";
+    }
+    {
+      spectrum_id = "MGL_substrate";
+      name = "algebraic cobordism on Site_coding";
+      description_en = "represents receipt cobordism — receipt classes deformable into one another";
+    }
+    {
+      spectrum_id = "UC4_spectrum";
+      name = "UC4 LLM-impossibility spectrum";
+      description_en = ''
+        UC4-impossibility class lifts to a motivic spectrum that is
+        non-trivial in EVERY pi_{p,q} for all (p,q). This is the
+        spectral-homotopy expression of UC4 universality.
+      '';
+      relates_to = "UC4 across all cohomology theories";
+    }
+  ];
+
+  # =================================================================
+  # === Realization functors to other theories =======================
+  # =================================================================
+
+  realizationFunctorsToHomotopy = [
+    {
+      target = "topological stable homotopy SH_top";
+      functor_id = "complex realization";
+      description_en = "Forget motivic structure; recover classical stable homotopy";
+    }
+    {
+      target = "etale realization";
+      functor_id = "étale realization";
+      description_en = "Map to étale homotopy theory (Friedlander, ARGAR)";
+    }
+    {
+      target = "motivic Galois G_mot";
+      functor_id = "G_mot-action realization";
+      description_en = "Realize as G_mot-equivariant homotopy class";
+      relates_to = "category-motivic-galois-substrate #186";
+    }
+  ];
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_bi_graded_spheres = true;
+    has_motivic_spectra = true;
+    primary_spectra_count = 5;  # S, HZ, KGL, MGL, HFp
+    has_motivic_homotopy_groups = true;
+    canonical_bi_graded_groups = 5;  # (0,0), (1,0), (0,1), (1,1), (2,1)
+    has_motivic_adams_novikov = true;
+    has_slice_filtration = true;
+    six_functor_count = 6;
+    substrate_internal_spectra_count = 5;  # S, HZ, KGL, MGL, UC4
+    realization_functor_count = 3;
+    UC4_has_spectrum_level_form = true;
+    motivic_owner_inherited = motivic.ownerName;
+    ktheory_owner_inherited = ktheory.ownerName;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyMotivicStableHomotopyPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "motivic-stable-homotopy-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "spheres" request then {
+      outcome = "bi-graded-spheres-emitted"; receipt = biGradedSpheres;
+    }
+    else if builtins.hasAttr "spectra" request then {
+      outcome = "motivic-spectra-emitted"; receipt = motivicSpectra;
+    }
+    else if builtins.hasAttr "homotopy_groups" request then
+      let r = request.homotopy_groups;
+      in { outcome = "motivic-homotopy-groups-emitted";
+           receipt = motivicHomotopyGroupsAt r.p r.q; }
+    else if builtins.hasAttr "adams_novikov" request then {
+      outcome = "motivic-adams-novikov-emitted"; receipt = motivicAdamsNovikov;
+    }
+    else if builtins.hasAttr "slice" request then {
+      outcome = "slice-filtration-emitted"; receipt = sliceFiltration;
+    }
+    else if builtins.hasAttr "six_functor" request then {
+      outcome = "six-functor-formalism-emitted"; receipt = sixFunctorFormalismSH;
+    }
+    else if builtins.hasAttr "substrate_spectra" request then {
+      outcome = "substrate-internal-spectra-emitted"; receipt = substrateInternalSpectra;
+    }
+    else if builtins.hasAttr "realizations" request then {
+      outcome = "realization-functors-emitted"; receipt = realizationFunctorsToHomotopy;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "spheres" "spectra" "homotopy_groups"
+             "adams_novikov" "slice" "six_functor" "substrate_spectra"
+             "realizations"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit biGradedSpheres motivicSpectra motivicHomotopyGroupsAt;
+  inherit canonicalMotivicHomotopyGroups motivicAdamsNovikov;
+  inherit sliceFiltration sixFunctorFormalismSH;
+  inherit substrateInternalSpectra realizationFunctorsToHomotopy;
+  inherit inventorySummary applyMotivicStableHomotopyPlate;
+}

@@ -1,0 +1,7 @@
+# source	status	command	marker	evidence_schema	approval_policy	conflict_policy	note
+local-proof	DONE	stage14-cross-impl-replay-check	stage14-cross-impl-replay-check	receipt-v1	local-check-required	fail-closed	local proof evidence is represented by the latest checked cross-implementation replay
+stage-manifest	DONE	manifest-check	manifest-check	manifest-tsv-v1	machine-readable-required	fail-closed	stage claims federate through the checked manifest index
+github-actions	DISABLED	actions-disabled	actions_disabled=ok	workflow-yml-v1	no-remote-approval	fail-closed	remote GitHub Actions evidence is disabled and cannot promote claims
+external-web	HELD	held	offline-approval-required	evidence-json-v1	offline-approval-required	fail-closed	web evidence requires explicit offline capture before use
+external-tool	HELD	held	offline-approval-required	tool-receipt-v1	offline-approval-required	fail-closed	external tool evidence remains held until a checked receipt exists
+human-note	HELD	held	explicit-review-required	review-note-v1	explicit-review-required	fail-closed	human notes cannot replace machine-checked receipts

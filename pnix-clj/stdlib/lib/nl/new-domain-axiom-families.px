@@ -1,0 +1,740 @@
+let
+  ownerName = "stdlib.nl.new-domain-axiom-families";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer = import nl/sentence-decomposition-substrate.px;
+
+  # === 7 New-Domain Axiom Families (agent-NL-142..148) ===========
+  #
+  # 박힌 14 axiom family 의 패턴 그대로 — 5 sub-family × ~4 top
+  # branches per family. 통합 owner 로 효율.
+  #
+  # Families:
+  #   1. security
+  #   2. database
+  #   3. api-design
+  #   4. frontend
+  #   5. data-pipeline
+  #   6. devops
+  #   7. ml
+
+  stepKind = "new-domain-axiom-data";
+  framework_step = "axiom content — 7 미박힘 도메인 family";
+
+  # =================================================================
+  # === 1. Security =================================================
+  # =================================================================
+
+  securityAxiomTree = bt.composeBranchTree "security axiom" [
+    {
+      name = "authn-authz";
+      cues = [ "authentication" "authorization" "auth" "OAuth" "JWT" "인증" "권한" ];
+      sub_specs = [
+        { name = "oauth-flow"; cues = [ "OAuth" "OIDC" ]; terminal = true; }
+        { name = "jwt-tokens"; cues = [ "JWT" "token" ]; terminal = true; }
+        { name = "rbac"; cues = [ "RBAC" "role" "역할" ]; terminal = true; }
+        { name = "abac"; cues = [ "ABAC" "attribute" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "input-validation";
+      cues = [ "sanitize" "validate input" "input validation" "입력 검증" ];
+      sub_specs = [
+        { name = "whitelist-pattern"; cues = [ "whitelist" "allowlist" ]; terminal = true; }
+        { name = "blacklist-pattern"; cues = [ "blacklist" "denylist" ]; terminal = true; }
+        { name = "schema-based"; cues = [ "schema" "스키마" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "injection-prevention";
+      cues = [ "XSS" "SQL injection" "command injection" "주입" ];
+      sub_specs = [
+        { name = "xss-output-escape"; cues = [ "XSS" "escape" ]; terminal = true; }
+        { name = "sqli-parameterized"; cues = [ "SQL injection" "parameterize" ]; terminal = true; }
+        { name = "csrf-token"; cues = [ "CSRF" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "crypto-and-secrets";
+      cues = [ "encryption" "crypto" "secrets" "vault" "암호화" "비밀" ];
+      sub_specs = [
+        { name = "at-rest"; cues = [ "at rest" ]; terminal = true; }
+        { name = "in-transit"; cues = [ "TLS" "in transit" ]; terminal = true; }
+        { name = "key-rotation"; cues = [ "rotate" "rotation" ]; terminal = true; }
+        { name = "secret-vault"; cues = [ "vault" "HSM" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "audit-and-compliance";
+      cues = [ "audit log" "compliance" "GDPR" "SOC2" "감사 로그" ];
+      sub_specs = [
+        { name = "tamper-evident"; cues = [ "tamper" ]; terminal = true; }
+        { name = "retention-policy"; cues = [ "retention" "보존" ]; terminal = true; }
+        { name = "privacy-policy"; cues = [ "PII" "GDPR" "개인정보" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 정밀화 (#150) ─────────────────────────────────
+    {
+      name = "threat-modeling";
+      cues = [ "threat model" "STRIDE" "attack tree" "위협 모델" ];
+      sub_specs = [
+        { name = "spoofing"; cues = [ "spoof" ]; terminal = true; }
+        { name = "tampering"; cues = [ "tampering" ]; terminal = true; }
+        { name = "repudiation"; cues = [ "repudiation" ]; terminal = true; }
+        { name = "info-disclosure"; cues = [ "info disclosure" "information leak" ]; terminal = true; }
+        { name = "denial-of-service"; cues = [ "DoS" "denial of service" ]; terminal = true; }
+        { name = "elevation-of-privilege"; cues = [ "privilege escalation" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "supply-chain";
+      cues = [ "supply chain" "SBOM" "package signing" "공급망" ];
+      sub_specs = [
+        { name = "dep-pinning"; cues = [ "pin" ]; terminal = true; }
+        { name = "package-signing"; cues = [ "sign package" "sigstore" ]; terminal = true; }
+        { name = "sbom-generation"; cues = [ "SBOM" ]; terminal = true; }
+        { name = "vuln-scanning"; cues = [ "vuln scan" "snyk" "dependabot" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === 2. Database =================================================
+  # =================================================================
+
+  databaseAxiomTree = bt.composeBranchTree "database axiom" [
+    {
+      name = "schema-management";
+      cues = [ "schema" "migration" "DDL" "스키마" "마이그레이션" ];
+      sub_specs = [
+        { name = "forward-migration"; cues = [ "up" "forward" ]; terminal = true; }
+        { name = "rollback-migration"; cues = [ "down" "rollback" ]; terminal = true; }
+        { name = "online-schema-change"; cues = [ "online" "zero downtime" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "indexing-strategy";
+      cues = [ "index" "btree" "hash index" "인덱스" ];
+      sub_specs = [
+        { name = "btree-index"; cues = [ "btree" "b-tree" ]; terminal = true; }
+        { name = "hash-index"; cues = [ "hash" ]; terminal = true; }
+        { name = "gin-gist"; cues = [ "GIN" "GiST" "full text" ]; terminal = true; }
+        { name = "composite-index"; cues = [ "composite" "multi-column" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "transactional-semantics";
+      cues = [ "transaction" "ACID" "isolation" "트랜잭션" ];
+      sub_specs = [
+        { name = "read-committed"; cues = [ "read committed" ]; terminal = true; }
+        { name = "repeatable-read"; cues = [ "repeatable read" ]; terminal = true; }
+        { name = "serializable"; cues = [ "serializable" ]; terminal = true; }
+        { name = "mvcc"; cues = [ "MVCC" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "scalability";
+      cues = [ "sharding" "partition" "replication" "샤딩" "복제" ];
+      sub_specs = [
+        { name = "horizontal-shard"; cues = [ "shard" ]; terminal = true; }
+        { name = "partition-by-range"; cues = [ "range partition" ]; terminal = true; }
+        { name = "read-replicas"; cues = [ "read replica" "복제본" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "query-optimization";
+      cues = [ "EXPLAIN" "query plan" "denormalize" "쿼리 계획" ];
+      sub_specs = [
+        { name = "use-index"; cues = []; terminal = true; }
+        { name = "join-order"; cues = [ "join" ]; terminal = true; }
+        { name = "materialized-view"; cues = [ "materialized" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 정밀화 (#150) ─────────────────────────────────
+    {
+      name = "replication-and-ha";
+      cues = [ "replication" "high availability" "failover" "복제" "고가용성" ];
+      sub_specs = [
+        { name = "primary-replica"; cues = [ "primary" "leader" ]; terminal = true; }
+        { name = "multi-master"; cues = [ "multi master" "multi-primary" ]; terminal = true; }
+        { name = "synchronous-vs-async"; cues = [ "sync replication" "async replication" ]; terminal = true; }
+        { name = "automatic-failover"; cues = [ "failover" "자동 failover" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "backup-recovery";
+      cues = [ "backup" "restore" "PITR" "point in time" "백업" "복구" ];
+      sub_specs = [
+        { name = "full-backup"; cues = [ "full backup" ]; terminal = true; }
+        { name = "incremental-backup"; cues = [ "incremental" ]; terminal = true; }
+        { name = "wal-archiving"; cues = [ "WAL" "transaction log" ]; terminal = true; }
+        { name = "disaster-recovery"; cues = [ "DR" "disaster recovery" "재해 복구" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "cdc-and-streaming";
+      cues = [ "CDC" "change data capture" "debezium" "outbox" ];
+      sub_specs = [
+        { name = "log-based-cdc"; cues = [ "log-based" "WAL CDC" ]; terminal = true; }
+        { name = "trigger-based-cdc"; cues = [ "trigger" ]; terminal = true; }
+        { name = "outbox-pattern"; cues = [ "outbox" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === 3. API Design ===============================================
+  # =================================================================
+
+  apiDesignAxiomTree = bt.composeBranchTree "api-design axiom" [
+    {
+      name = "rest-design";
+      cues = [ "REST" "RESTful" "resource oriented" "리소스 지향" ];
+      sub_specs = [
+        { name = "resource-naming"; cues = []; terminal = true; }
+        { name = "http-verbs"; cues = [ "GET" "POST" "PUT" "DELETE" ]; terminal = true; }
+        { name = "hateoas"; cues = [ "HATEOAS" "hypermedia" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "versioning";
+      cues = [ "API version" "v1" "v2" "API 버전" ];
+      sub_specs = [
+        { name = "url-versioning"; cues = [ "/v1/" "/v2/" "url version" ]; terminal = true; }
+        { name = "header-versioning"; cues = [ "Accept" "X-API-Version" ]; terminal = true; }
+        { name = "media-type-versioning"; cues = [ "media type" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "rpc-styles";
+      cues = [ "gRPC" "GraphQL" "JSON-RPC" "RPC" ];
+      sub_specs = [
+        { name = "grpc-proto"; cues = [ "gRPC" "protobuf" ]; terminal = true; }
+        { name = "graphql-schema"; cues = [ "GraphQL" "SDL" ]; terminal = true; }
+        { name = "jsonrpc"; cues = [ "JSON-RPC" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "rate-limiting-and-quotas";
+      cues = [ "rate limit" "quota" "throttle" "API 속도 제한" ];
+      sub_specs = [
+        { name = "token-bucket"; cues = [ "token bucket" ]; terminal = true; }
+        { name = "leaky-bucket"; cues = [ "leaky bucket" ]; terminal = true; }
+        { name = "fixed-window"; cues = [ "fixed window" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "pagination-and-filtering";
+      cues = [ "pagination" "cursor" "offset" "filter" "페이지네이션" ];
+      sub_specs = [
+        { name = "cursor-based"; cues = [ "cursor" ]; terminal = true; }
+        { name = "offset-based"; cues = [ "offset" "page" ]; terminal = true; }
+        { name = "keyset-pagination"; cues = [ "keyset" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 정밀화 (#150) ─────────────────────────────────
+    {
+      name = "api-authentication";
+      cues = [ "API auth" "API key" "bearer token" "API 인증" ];
+      sub_specs = [
+        { name = "api-key"; cues = [ "API key" ]; terminal = true; }
+        { name = "bearer-token"; cues = [ "bearer" ]; terminal = true; }
+        { name = "mtls"; cues = [ "mTLS" "mutual TLS" ]; terminal = true; }
+        { name = "oauth-flows"; cues = [ "OAuth" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "api-error-handling";
+      cues = [ "error response" "problem details" "RFC 7807" ];
+      sub_specs = [
+        { name = "http-status-codes"; cues = [ "status code" "4xx" "5xx" ]; terminal = true; }
+        { name = "problem-json"; cues = [ "problem json" "RFC 7807" ]; terminal = true; }
+        { name = "idempotency-keys"; cues = [ "idempotency key" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === 4. Frontend =================================================
+  # =================================================================
+
+  frontendAxiomTree = bt.composeBranchTree "frontend axiom" [
+    {
+      name = "component-model";
+      cues = [ "component" "widget" "render tree" "컴포넌트" ];
+      sub_specs = [
+        { name = "stateless"; cues = [ "pure" "stateless" ]; terminal = true; }
+        { name = "stateful"; cues = [ "state" "stateful" ]; terminal = true; }
+        { name = "composition"; cues = [ "compose" "props" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "state-management";
+      cues = [ "state management" "redux" "zustand" "context" "상태 관리" ];
+      sub_specs = [
+        { name = "global-store"; cues = [ "global store" "redux" ]; terminal = true; }
+        { name = "local-state"; cues = [ "useState" "local" ]; terminal = true; }
+        { name = "server-state"; cues = [ "react-query" "swr" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "rendering-pipeline";
+      cues = [ "render" "reconciliation" "diff" "렌더링" ];
+      sub_specs = [
+        { name = "virtual-dom"; cues = [ "virtual dom" "VDOM" ]; terminal = true; }
+        { name = "memoization-frontend"; cues = [ "memo" "useMemo" ]; terminal = true; }
+        { name = "virtualization"; cues = [ "virtualize" "windowing" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "accessibility";
+      cues = [ "accessibility" "a11y" "aria" "접근성" ];
+      sub_specs = [
+        { name = "aria-roles"; cues = [ "aria" ]; terminal = true; }
+        { name = "keyboard-nav"; cues = [ "keyboard" "tab" "키보드" ]; terminal = true; }
+        { name = "screen-reader"; cues = [ "screen reader" "스크린 리더" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "internationalization";
+      cues = [ "i18n" "internationalization" "locale" "국제화" ];
+      sub_specs = [
+        { name = "string-catalog"; cues = [ "catalog" "po file" ]; terminal = true; }
+        { name = "rtl-support"; cues = [ "RTL" "right to left" ]; terminal = true; }
+        { name = "locale-fallback"; cues = [ "fallback" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 정밀화 (#150) ─────────────────────────────────
+    {
+      name = "css-and-styling";
+      cues = [ "CSS" "styled-components" "tailwind" "스타일링" ];
+      sub_specs = [
+        { name = "css-modules"; cues = [ "CSS modules" ]; terminal = true; }
+        { name = "css-in-js"; cues = [ "CSS-in-JS" "styled" ]; terminal = true; }
+        { name = "utility-first"; cues = [ "tailwind" "utility" ]; terminal = true; }
+        { name = "design-tokens"; cues = [ "design token" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "bundling-and-build";
+      cues = [ "webpack" "vite" "rollup" "esbuild" "번들링" ];
+      sub_specs = [
+        { name = "code-splitting"; cues = [ "code splitting" "dynamic import" ]; terminal = true; }
+        { name = "tree-shaking"; cues = [ "tree shaking" "tree-shake" ]; terminal = true; }
+        { name = "ssr-hydration"; cues = [ "SSR" "hydration" ]; terminal = true; }
+        { name = "minification"; cues = [ "minify" "terser" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "ui-testing";
+      cues = [ "UI test" "playwright" "cypress" "storybook" ];
+      sub_specs = [
+        { name = "e2e-browser"; cues = [ "playwright" "cypress" "selenium" ]; terminal = true; }
+        { name = "component-snapshot"; cues = [ "storybook" "snapshot UI" ]; terminal = true; }
+        { name = "visual-regression"; cues = [ "visual regression" "percy" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === 5. Data Pipeline ============================================
+  # =================================================================
+
+  dataPipelineAxiomTree = bt.composeBranchTree "data-pipeline axiom" [
+    {
+      name = "extract-source";
+      cues = [ "extract" "source connector" "CDC" "추출" "소스 커넥터" ];
+      sub_specs = [
+        { name = "batch-extract"; cues = [ "batch" "ETL extract" ]; terminal = true; }
+        { name = "cdc-streaming"; cues = [ "CDC" "change data capture" ]; terminal = true; }
+        { name = "api-poll"; cues = [ "poll" "polling" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "transform";
+      cues = [ "transform" "data transform" "데이터 변환" ];
+      sub_specs = [
+        { name = "schema-mapping"; cues = [ "schema map" ]; terminal = true; }
+        { name = "enrichment"; cues = [ "enrich" "lookup" ]; terminal = true; }
+        { name = "deduplication"; cues = [ "dedup" "중복 제거" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "load-sink";
+      cues = [ "load" "sink" "warehouse" "lakehouse" "데이터 웨어하우스" ];
+      sub_specs = [
+        { name = "warehouse-load"; cues = [ "warehouse" "BigQuery" "Snowflake" ]; terminal = true; }
+        { name = "lake-write"; cues = [ "lake" "S3" "parquet" ]; terminal = true; }
+        { name = "stream-sink"; cues = [ "Kafka sink" "Kinesis" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "data-quality";
+      cues = [ "data quality" "validation" "great expectations" "데이터 품질" ];
+      sub_specs = [
+        { name = "schema-check"; cues = [ "schema check" ]; terminal = true; }
+        { name = "anomaly-detection"; cues = [ "anomaly" "이상치" ]; terminal = true; }
+        { name = "freshness-check"; cues = [ "freshness" "신선도" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "orchestration";
+      cues = [ "orchestration" "Airflow" "Prefect" "Dagster" "오케스트레이션" ];
+      sub_specs = [
+        { name = "dag-definition"; cues = [ "DAG" ]; terminal = true; }
+        { name = "retry-and-backfill"; cues = [ "backfill" "재시도" ]; terminal = true; }
+        { name = "lineage-tracking"; cues = [ "lineage" "계보" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 정밀화 (#150) ─────────────────────────────────
+    {
+      name = "partitioning-strategy";
+      cues = [ "partition" "shard data" "데이터 파티션" ];
+      sub_specs = [
+        { name = "time-partition"; cues = [ "time partition" ]; terminal = true; }
+        { name = "hash-partition"; cues = [ "hash partition" ]; terminal = true; }
+        { name = "range-partition"; cues = [ "range partition" ]; terminal = true; }
+        { name = "list-partition"; cues = [ "list partition" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "streaming-pipeline";
+      cues = [ "streaming" "Kafka" "Kinesis" "Flink" "스트리밍" ];
+      sub_specs = [
+        { name = "exactly-once"; cues = [ "exactly once" ]; terminal = true; }
+        { name = "windowing"; cues = [ "tumbling" "sliding" "session window" ]; terminal = true; }
+        { name = "watermarks"; cues = [ "watermark" ]; terminal = true; }
+        { name = "stateful-processing"; cues = [ "stateful stream" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "data-governance";
+      cues = [ "data governance" "catalog" "data contract" "거버넌스" ];
+      sub_specs = [
+        { name = "data-catalog"; cues = [ "data catalog" "Atlas" "DataHub" ]; terminal = true; }
+        { name = "data-contracts"; cues = [ "data contract" ]; terminal = true; }
+        { name = "schema-registry"; cues = [ "schema registry" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === 6. DevOps ===================================================
+  # =================================================================
+
+  devopsAxiomTree = bt.composeBranchTree "devops axiom" [
+    {
+      name = "containerization";
+      cues = [ "docker" "container" "podman" "도커" "컨테이너" ];
+      sub_specs = [
+        { name = "dockerfile"; cues = [ "Dockerfile" ]; terminal = true; }
+        { name = "multi-stage-build"; cues = [ "multi stage" "multi-stage" ]; terminal = true; }
+        { name = "image-registry"; cues = [ "registry" "ECR" "GCR" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "orchestration-platform";
+      cues = [ "kubernetes" "k8s" "ECS" "쿠버네티스" ];
+      sub_specs = [
+        { name = "deployment-and-service"; cues = [ "deployment" "service" ]; terminal = true; }
+        { name = "statefulset"; cues = [ "stateful" ]; terminal = true; }
+        { name = "ingress"; cues = [ "ingress" ]; terminal = true; }
+        { name = "helm-chart"; cues = [ "helm" "헬름" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "iac";
+      cues = [ "terraform" "pulumi" "cloudformation" "IaC" "인프라 코드" ];
+      sub_specs = [
+        { name = "modules"; cues = [ "module" ]; terminal = true; }
+        { name = "state-backend"; cues = [ "state backend" "remote state" ]; terminal = true; }
+        { name = "plan-and-apply"; cues = [ "plan" "apply" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "ci-cd";
+      cues = [ "CI" "CD" "github actions" "gitlab" "circleci" "CI/CD" ];
+      sub_specs = [
+        { name = "pipeline-stages"; cues = [ "stage" ]; terminal = true; }
+        { name = "caching-strategy-devops"; cues = [ "cache" "캐시" ]; terminal = true; }
+        { name = "deployment-strategy"; cues = [ "blue-green" "canary" "rolling" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "monitoring-and-alerting";
+      cues = [ "monitoring" "prometheus" "grafana" "alert" "모니터링" ];
+      sub_specs = [
+        { name = "metrics-pipeline"; cues = [ "prometheus" "metrics" ]; terminal = true; }
+        { name = "log-pipeline"; cues = [ "loki" "ELK" "log" ]; terminal = true; }
+        { name = "alert-routing"; cues = [ "alertmanager" "PagerDuty" "라우팅" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 정밀화 (#150) ─────────────────────────────────
+    {
+      name = "secrets-management";
+      cues = [ "vault" "secrets manager" "KMS" "비밀 관리" ];
+      sub_specs = [
+        { name = "hashicorp-vault"; cues = [ "vault" ]; terminal = true; }
+        { name = "cloud-kms"; cues = [ "KMS" "cloud kms" ]; terminal = true; }
+        { name = "sealed-secrets"; cues = [ "sealed secrets" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "service-mesh";
+      cues = [ "service mesh" "istio" "linkerd" "envoy" "서비스 메시" ];
+      sub_specs = [
+        { name = "sidecar-pattern"; cues = [ "sidecar" ]; terminal = true; }
+        { name = "mtls-mesh"; cues = [ "mTLS mesh" ]; terminal = true; }
+        { name = "traffic-shaping"; cues = [ "traffic shaping" "canary mesh" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "incident-response";
+      cues = [ "incident" "postmortem" "runbook" "사후 분석" ];
+      sub_specs = [
+        { name = "oncall-rotation"; cues = [ "on-call" "oncall" ]; terminal = true; }
+        { name = "blameless-postmortem"; cues = [ "postmortem" "blameless" ]; terminal = true; }
+        { name = "runbook-authoring"; cues = [ "runbook" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === 7. ML =======================================================
+  # =================================================================
+
+  mlAxiomTree = bt.composeBranchTree "ml axiom" [
+    {
+      name = "data-preparation";
+      cues = [ "dataset" "data prep" "feature engineering" "데이터 준비" ];
+      sub_specs = [
+        { name = "train-test-split"; cues = [ "split" ]; terminal = true; }
+        { name = "feature-engineering"; cues = [ "feature" "특성 공학" ]; terminal = true; }
+        { name = "data-augmentation"; cues = [ "augmentation" "증강" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "model-architecture";
+      cues = [ "architecture" "neural net" "transformer" "CNN" "RNN" "모델 아키텍처" ];
+      sub_specs = [
+        { name = "transformer"; cues = [ "transformer" "attention" ]; terminal = true; }
+        { name = "cnn"; cues = [ "CNN" "convolutional" ]; terminal = true; }
+        { name = "rnn-lstm"; cues = [ "RNN" "LSTM" "GRU" ]; terminal = true; }
+        { name = "tree-ensemble"; cues = [ "xgboost" "random forest" "GBM" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "training";
+      cues = [ "training" "optimizer" "SGD" "Adam" "훈련" ];
+      sub_specs = [
+        { name = "optimizer-choice"; cues = [ "optimizer" "Adam" "SGD" ]; terminal = true; }
+        { name = "learning-rate-schedule"; cues = [ "learning rate" "schedule" ]; terminal = true; }
+        { name = "regularization"; cues = [ "dropout" "L2" "정규화" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "evaluation";
+      cues = [ "evaluation" "metrics" "accuracy" "precision" "recall" "평가" ];
+      sub_specs = [
+        { name = "classification-metrics"; cues = [ "precision" "recall" "F1" ]; terminal = true; }
+        { name = "regression-metrics"; cues = [ "MSE" "MAE" "R2" ]; terminal = true; }
+        { name = "ranking-metrics"; cues = [ "NDCG" "MAP" "MRR" ]; terminal = true; }
+        { name = "cross-validation"; cues = [ "cross validation" "k-fold" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "deployment-and-monitoring";
+      cues = [ "model serving" "inference" "model registry" "모델 배포" ];
+      sub_specs = [
+        { name = "online-inference"; cues = [ "online" "real time" ]; terminal = true; }
+        { name = "batch-inference"; cues = [ "batch inference" ]; terminal = true; }
+        { name = "drift-detection"; cues = [ "drift" "data drift" "model drift" ]; terminal = true; }
+        { name = "a-b-experimentation"; cues = [ "A/B" "experiment" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 정밀화 (#150) ─────────────────────────────────
+    {
+      name = "mlops";
+      cues = [ "MLOps" "model registry" "model versioning" ];
+      sub_specs = [
+        { name = "model-versioning"; cues = [ "model version" ]; terminal = true; }
+        { name = "ci-for-models"; cues = [ "CI/CD for models" "ml pipeline" ]; terminal = true; }
+        { name = "auto-retraining"; cues = [ "retrain" "auto-retrain" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "feature-store";
+      cues = [ "feature store" "feast" "tecton" "피처 스토어" ];
+      sub_specs = [
+        { name = "online-store"; cues = [ "online store" ]; terminal = true; }
+        { name = "offline-store"; cues = [ "offline store" ]; terminal = true; }
+        { name = "feature-versioning"; cues = [ "feature version" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "explainability";
+      cues = [ "explainable" "interpretability" "SHAP" "LIME" "설명 가능" ];
+      sub_specs = [
+        { name = "shap-values"; cues = [ "SHAP" ]; terminal = true; }
+        { name = "lime-explanation"; cues = [ "LIME" ]; terminal = true; }
+        { name = "attention-visualization"; cues = [ "attention viz" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "responsible-ai";
+      cues = [ "responsible AI" "fairness" "bias" "공정성" ];
+      sub_specs = [
+        { name = "fairness-metrics"; cues = [ "fairness" "demographic parity" ]; terminal = true; }
+        { name = "bias-audit"; cues = [ "bias audit" "편향 감사" ]; terminal = true; }
+        { name = "privacy-preserving"; cues = [ "differential privacy" "federated learning" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # =================================================================
+  # === Registry of 7 new-domain families ==========================
+  # =================================================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-security-001"; name = "security"; domain = "new-domain";
+      activation_cues = [ "security" "auth" "OAuth" "encryption" "XSS" "SQL injection" "audit" "vault" "GDPR" "STRIDE" "threat model" "SBOM" "supply chain" "보안" "인증" "암호화" "감사" "권한" "위협 모델" "공급망" ];
+      tree = securityAxiomTree;
+      sub_count = builtins.length securityAxiomTree.branches;
+      tool_role = "보안 + auth + crypto + audit";
+    }
+    {
+      axiom_id = "axiom-database-001"; name = "database"; domain = "new-domain";
+      activation_cues = [ "database" "schema" "migration" "index" "transaction" "sharding" "ACID" "MVCC" "replication" "failover" "backup" "restore" "PITR" "CDC" "change data capture" "debezium" "데이터베이스" "스키마" "마이그레이션" "트랜잭션" "샤딩" "복제" "백업" ];
+      tree = databaseAxiomTree;
+      sub_count = builtins.length databaseAxiomTree.branches;
+      tool_role = "DB schema + index + tx + scaling";
+    }
+    {
+      axiom_id = "axiom-api-design-001"; name = "api-design"; domain = "new-domain";
+      activation_cues = [ "REST" "gRPC" "GraphQL" "API version" "pagination" "rate limit" "HATEOAS" "API key" "bearer token" "mTLS" "RFC 7807" "problem json" "idempotency key" "API 버전" "API 디자인" "RPC" ];
+      tree = apiDesignAxiomTree;
+      sub_count = builtins.length apiDesignAxiomTree.branches;
+      tool_role = "API surface design";
+    }
+    {
+      axiom_id = "axiom-frontend-001"; name = "frontend"; domain = "new-domain";
+      activation_cues = [ "frontend" "component" "react" "vue" "svelte" "state management" "a11y" "aria" "i18n" "rendering" "CSS" "tailwind" "styled-components" "webpack" "vite" "tree shaking" "code splitting" "playwright" "cypress" "storybook" "프론트엔드" "컴포넌트" "접근성" "스타일링" "번들링" ];
+      tree = frontendAxiomTree;
+      sub_count = builtins.length frontendAxiomTree.branches;
+      tool_role = "UI component + state + a11y + i18n";
+    }
+    {
+      axiom_id = "axiom-data-pipeline-001"; name = "data-pipeline"; domain = "new-domain";
+      activation_cues = [ "ETL" "ELT" "data pipeline" "CDC" "Airflow" "Dagster" "Prefect" "data quality" "lineage" "DAG" "backfill" "Kafka" "Kinesis" "Flink" "exactly once" "watermark" "data contract" "data catalog" "schema registry" "partition" "데이터 파이프라인" "데이터 품질" "계보" "스트리밍" "거버넌스" "파티션" ];
+      tree = dataPipelineAxiomTree;
+      sub_count = builtins.length dataPipelineAxiomTree.branches;
+      tool_role = "extract + transform + load + orchestrate";
+    }
+    {
+      axiom_id = "axiom-devops-001"; name = "devops"; domain = "new-domain";
+      activation_cues = [ "docker" "kubernetes" "terraform" "helm" "CI" "CD" "monitoring" "alert" "prometheus" "service mesh" "istio" "linkerd" "envoy" "incident" "postmortem" "runbook" "oncall" "sidecar" "도커" "쿠버네티스" "테라폼" "모니터링" "서비스 메시" "사후 분석" ];
+      tree = devopsAxiomTree;
+      sub_count = builtins.length devopsAxiomTree.branches;
+      tool_role = "container + k8s + IaC + CI/CD + monitoring";
+    }
+    {
+      axiom_id = "axiom-ml-001"; name = "ml"; domain = "new-domain";
+      activation_cues = [ "ML" "machine learning" "model" "training" "inference" "feature" "transformer" "CNN" "LSTM" "drift" "cross validation" "k-fold" "MLOps" "model registry" "model versioning" "feature store" "feast" "tecton" "SHAP" "LIME" "interpretability" "explainable" "fairness" "bias" "differential privacy" "데이터셋" "모델" "훈련" "공정성" "설명 가능" "피처 스토어" ];
+      tree = mlAxiomTree;
+      sub_count = builtins.length mlAxiomTree.branches;
+      tool_role = "data + model + training + eval + serve";
+    }
+  ];
+
+  # === Activation ==================================================
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple new-domain axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "apply " + ax.name + " axiom";
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  applyNewDomainAxiomPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1 then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names = builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+        };
+      }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-new-domain-axiom-families-126";
+    composes = "axiom-98-tree (data on generic substrate)";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = true;
+    family_count = 7;
+    families = [
+      "security (authn-authz / input-validation / injection-prevention / crypto / audit)"
+      "database (schema / index / transaction / scalability / query-opt)"
+      "api-design (REST / versioning / RPC / rate-limit / pagination)"
+      "frontend (component / state / rendering / a11y / i18n)"
+      "data-pipeline (extract / transform / load / quality / orchestration)"
+      "devops (container / k8s / IaC / CI/CD / monitoring)"
+      "ml (data-prep / architecture / training / evaluation / deployment)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+  };
+
+in {
+  inherit ownerName
+    securityAxiomTree databaseAxiomTree apiDesignAxiomTree
+    frontendAxiomTree dataPipelineAxiomTree devopsAxiomTree mlAxiomTree
+    knownAxioms axiomsActivatedBy compositeTreeFromActivations
+    applyNewDomainAxiomPlate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL new-domain axiom families (agent-NL-142..148)";
+    owner = ownerName;
+  };
+}

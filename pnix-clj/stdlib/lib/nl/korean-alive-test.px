@@ -1,0 +1,33 @@
+# stdlib/lib/nl/korean-alive-test.px — 한글 거울 aliveness 회귀 하니스 (Phase 0)
+#
+# 거대 math(term-dag/pnix-lisp-ct/genesis) 위에 얹힌 한글 owner 가 살아있는지
+# (= reflection roundTrip=id, 음절=수 산술) 를 *자동* 재확인하는 회귀 도구.
+# 한글 Rust→.px 마이그레이션의 매 step 마다 이 하니스를 재실행해 "거대 math + 한글이
+# 깨지지 않았나" 를 fail-closed 로 검출한다 (운영자: "계속 검토").
+#
+# one-mirror: 새 거울 0개. 기존 hangul-mirror / korean-nl-mirror 를 import 해 verdict 만 emit.
+let
+  hg  = import ../math/hangul-mirror.px;
+  knl = import ./korean-nl-mirror.px;
+
+  ga   = hg.mkSound 0 0 0;                         # 가 (ㄱㅏ, 종성 없음)
+  word = [ (hg.mkSound 0 0 0) (hg.mkSound 18 20 0) ];  # 두 음절 단어 (소리 골격)
+  wr   = hg.wordRoundTrip word;
+
+  prop = knl.mkProposition
+           [ { entity = "철수"; role = "agent"; } { entity = "사과"; role = "object"; } ]
+           "먹" "present" "declarative";
+  pr   = knl.roundTrip prop;
+in {
+  # ── hangul-mirror: 음절 = 0xAC00 혼합기수 정수 (의미=수) ──
+  hg_compose_ga    = hg.compose ga;                   # 44032 (0xAC00)
+  hg_decompose_ok  = (hg.decompose 44032) == ga;      # true (bijection 역)
+  hg_charToCode_ga = hg.charToCode "가";               # 44032 (실제 글자 → code)
+  hg_word_verdict  = wr.verdict;                       # "sound-word-are-one"
+  hg_word_ok       = wr.structure_preserved;           # true
+
+  # ── korean-nl-mirror: 문장 ⟷ 명제 reflection (조사=받침수, 어미=mood) ──
+  knl_sentence     = pr.sentence;                      # 발산된 한글 문장
+  knl_verdict      = pr.verdict;                        # "nl-meaning-surface-are-one"
+  knl_ok           = pr.structure_preserved;            # true (counit iso)
+}

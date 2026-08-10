@@ -1,0 +1,442 @@
+let
+  ownerName = "stdlib.nl.applied-math-cs-intelligence-substrate";
+
+  # Convergence note (2026-06-03): these are metadata/defer references here.
+  # Do not top-level import the heavy math/Lean stacks just to expose owner
+  # names.  Runtime latest-engine calls should go through converged-engine-entry.
+  defer_math_axioms = "stdlib/lib/nl/math-axioms-nl-layer.px";
+  defer_lean_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+  defer_converged_engine = "stdlib/lib/nl/converged-engine-entry.px";
+  defer_lean_axiom_dep = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+  defer_lean_korean_binding = "stdlib/lib/nl/lean/substrate-axiom-korean-binding.px";
+
+  # === Applied Math for CS Intelligence Substrate (agent-NL-204) =====
+  #
+  # 사용자 vision (2026-05-29):
+  # > "알고리즘과 알고리즘 사이를 연결하는 알고리즘 문장이 왜 생겨나는지.
+  #    사용자가 어떤 문장(의도/목표)을 이야기하면 알아서 알고리즘 문장들이
+  #    생성되고, 그 사이를 가기 위해 수학이 끼워진다. 세세하게 검증, 그리고
+  #    무엇을 선택해야되는지 전부 다."
+  # > "응용수학 — CS 를 하기 위한. AI 분야쪽. 지능 생성 부분."
+  #
+  # 이게 *진짜 substrate-internal 지능 생성*:
+  #   사용자 의도 → algorithm step sequence 자동 생성
+  #     → 각 step pair (A, B) 사이의 *bridging applied math axiom*
+  #     → 응용수학이 *접합제* 로서 invariant + complexity + correctness
+  #     → 결정론적 algorithm selection
+  #
+  # Round 0-36 의 cohomology / Lean reference 는 *foundation*.
+  # 이 owner = 그 위에서 *algorithm 사이 의 수학 자동 끼워짐*.
+
+  stepKind = "applied-math-cs-intelligence-substrate";
+  framework_step =
+    "algorithm step pair 의 bridging applied math 자동 매핑 + 결정론적 선택";
+
+  # =================================================================
+  # === 12 응용수학 family (for CS / AI / 지능 생성) ===================
+  # =================================================================
+
+  appliedMathFamilies = [
+    {
+      family_id = "applied-math-001";
+      name = "complexity-analysis";
+      domain = "applied-cs";
+      concept_keywords = [ "Big-O" "O(n)" "복잡도" "시간 복잡도" "공간 복잡도"
+                           "recurrence" "amortized" "asymptotic" "worst case"
+                           "average case" "T(n)" "Theta" "Omega" ];
+      bridge_role = "두 algorithm step 사이의 *비용 분석* 접합제";
+      example_pair = {
+        step_a = "sort the data";
+        step_b = "find k-th element in sorted";
+        bridging_math = "binary search T(n) = T(n/2) + O(1) = O(log n)";
+        invariant_preserved = "sorted order invariant";
+        selection_criterion = "T(n log n) + T(log n) < O(n^2) naive";
+      };
+      defer_to_substrate_axiom = "composability-qed";  # paper-QED Lemma 1
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-002";
+      name = "probability-theory";
+      domain = "applied-cs";
+      concept_keywords = [ "확률" "기대값" "분산" "randomized" "Monte Carlo"
+                           "Bernoulli" "Gaussian" "concentration" "Chernoff"
+                           "expected" "variance" "probability" "random" ];
+      bridge_role = "확률적 algorithm 사이 의 *기대값 / 집중* 접합제";
+      example_pair = {
+        step_a = "sample subset randomly";
+        step_b = "estimate global stat from sample";
+        bridging_math = "Hoeffding bound P(|X̄ - μ| ≥ ε) ≤ 2e^{-2nε²}";
+        invariant_preserved = "sample mean concentrates around true mean";
+        selection_criterion = "sample size n = O(1/ε²) sufficient";
+      };
+      defer_to_substrate_axiom = "uniqueness-qed";
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-003";
+      name = "graph-theory";
+      domain = "applied-cs";
+      concept_keywords = [ "그래프" "graph" "노드" "edge" "BFS" "DFS" "depth"
+                           "connected" "shortest path" "MST" "flow" "matching"
+                           "topological sort" "강한 연결" "강결합" ];
+      bridge_role = "그래프 algorithm 사이 의 *경로 / 연결성* 접합제";
+      example_pair = {
+        step_a = "model relationships as graph";
+        step_b = "find shortest path or MST";
+        bridging_math = "Dijkstra invariant: dist[v] = shortest from source after relaxation";
+        invariant_preserved = "monotone relaxation (non-increasing dist)";
+        selection_criterion = "Dijkstra O((V+E) log V) for non-negative weights, Bellman-Ford for negative";
+      };
+      defer_to_substrate_axiom = "ac3-kan-extension";  # paper-QED Lemma 4 (Kan extension = colim over paths)
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-004";
+      name = "optimization-theory";
+      domain = "applied-cs";
+      concept_keywords = [ "최적화" "optimization" "greedy" "DP" "dynamic programming"
+                           "LP" "linear programming" "convex" "gradient" "objective"
+                           "constraint" "feasible" "optimal" "subproblem" "memoize" ];
+      bridge_role = "최적화 algorithm 사이 의 *목적함수 / 제약* 접합제";
+      example_pair = {
+        step_a = "decompose problem into subproblems";
+        step_b = "combine optimal subsolutions";
+        bridging_math = "DP optimality: f(n) = min over choices of (g(choice) + f(n - choice))";
+        invariant_preserved = "subproblem optimality (Bellman principle)";
+        selection_criterion = "DP O(n*S) when subproblems overlap, greedy O(n log n) when matroid";
+      };
+      defer_to_substrate_axiom = "mode-11-yoneda-canonicalization";  # universal/optimal = Yoneda universal property
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-005";
+      name = "information-theory";
+      domain = "applied-cs";
+      concept_keywords = [ "엔트로피" "entropy" "Shannon" "compression" "encoding"
+                           "channel" "mutual information" "KL divergence" "bit"
+                           "Huffman" "정보량" "code length" "최소 평균 부호어 길이" ];
+      bridge_role = "정보 algorithm 사이 의 *엔트로피 / 압축* 접합제";
+      example_pair = {
+        step_a = "estimate symbol probabilities";
+        step_b = "build optimal prefix code";
+        bridging_math = "Huffman: avg length L̄ ≥ H(X) = -Σ p_i log p_i (Shannon bound)";
+        invariant_preserved = "prefix-free + L̄ within 1 bit of H(X)";
+        selection_criterion = "Huffman achieves L̄ ≤ H(X) + 1 (optimal among prefix codes)";
+      };
+      defer_to_substrate_axiom = "uc4-llm-impossibility";  # information channel = canonical
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-006";
+      name = "automata-formal-language";
+      domain = "applied-cs";
+      concept_keywords = [ "정규식" "regex" "automaton" "DFA" "NFA" "PDA" "Turing"
+                           "Chomsky" "context-free" "parse" "grammar"
+                           "regular" "pumping lemma" "language" "alphabet" ];
+      bridge_role = "parsing algorithm 사이 의 *언어 인식 / 구조* 접합제";
+      example_pair = {
+        step_a = "tokenize string by regex";
+        step_b = "parse token stream by CFG";
+        bridging_math = "regex = DFA = right-linear CFG; CFG = PDA";
+        invariant_preserved = "language hierarchy (Chomsky)";
+        selection_criterion = "regex for tokens (O(n)), LL(k) parser for CFG (O(n)), Earley for general (O(n³))";
+      };
+      defer_to_substrate_axiom = "mode-13-context-flow";  # parsing = context flow (state machine)
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-007";
+      name = "discrete-math";
+      domain = "applied-cs";
+      concept_keywords = [ "조합" "combinatorics" "permutation" "이항" "binomial"
+                           "생성함수" "generating function" "inclusion-exclusion"
+                           "pigeonhole" "counting" "recurrence" "Catalan" ];
+      bridge_role = "이산 algorithm 사이 의 *cases 분류 / 카운팅* 접합제";
+      example_pair = {
+        step_a = "enumerate possible configurations";
+        step_b = "count valid configurations";
+        bridging_math = "inclusion-exclusion: |A∪B| = |A| + |B| - |A∩B|";
+        invariant_preserved = "disjoint case partition";
+        selection_criterion = "I-E for overlap-cases, generating function for recurrence";
+      };
+      defer_to_substrate_axiom = "mode-12-temporal-consistency";  # enumeration = temporal order
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-008";
+      name = "numerical-analysis";
+      domain = "applied-cs";
+      concept_keywords = [ "수치" "numerical" "precision" "stability" "rounding"
+                           "epsilon" "floating point" "condition number" "convergence"
+                           "iteration" "approximation" "수렴" "오차" "조건수" ];
+      bridge_role = "수치 algorithm 사이 의 *오차 / 안정성* 접합제";
+      example_pair = {
+        step_a = "iterate to refine approximation";
+        step_b = "stop when error below tolerance";
+        bridging_math = "Newton: x_{n+1} = x_n - f(x_n)/f'(x_n), quadratic convergence";
+        invariant_preserved = "monotone error reduction (|x_n - x*| ≤ C|x_{n-1} - x*|²)";
+        selection_criterion = "Newton O(log log(1/ε)) iterations, bisection O(log(1/ε)) but robust";
+      };
+      defer_to_substrate_axiom = "sc4-substrate-topos";  # numerical convergence = sheaf condition
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-009";
+      name = "linear-algebra-ml";
+      domain = "applied-cs";
+      concept_keywords = [ "선형대수" "matrix" "vector" "eigenvalue" "SVD" "PCA"
+                           "rank" "norm" "inner product" "orthogonal" "projection"
+                           "행렬" "벡터" "고유값" "정규직교" "tensor" ];
+      bridge_role = "ML algorithm 사이 의 *행렬 / 차원* 접합제";
+      example_pair = {
+        step_a = "represent data as matrix X";
+        step_b = "reduce dimension to top-k principal components";
+        bridging_math = "SVD: X = UΣV^T, top-k = U[:,:k] Σ[:k,:k] V[:,:k]^T";
+        invariant_preserved = "rank ≤ min(m, n); Eckart-Young optimal under Frobenius norm";
+        selection_criterion = "SVD O(min(mn², m²n)), randomized SVD O(mnk) for k ≪ n";
+      };
+      defer_to_substrate_axiom = "uniqueness-qed";  # eigenvector = unique (up to sign)
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-010";
+      name = "decision-theory";
+      domain = "applied-cs";
+      concept_keywords = [ "결정" "decision" "utility" "regret" "MDP" "Bellman"
+                           "policy" "reward" "expected value" "minimax" "Pareto"
+                           "trade-off" "선택" "효용" "보상" "정책" ];
+      bridge_role = "선택 algorithm 사이 의 *효용 / 후회 최소화* 접합제";
+      example_pair = {
+        step_a = "evaluate alternatives' expected utilities";
+        step_b = "pick argmax (or maximin under uncertainty)";
+        bridging_math = "Bellman: V*(s) = max_a (R(s,a) + γΣ_{s'} P(s'|s,a) V*(s'))";
+        invariant_preserved = "Bellman optimality (V* = T V*)";
+        selection_criterion = "value iteration converges (γ < 1 contraction); policy iteration finite";
+      };
+      defer_to_substrate_axiom = "mode-11-yoneda-canonicalization";  # optimal policy = Yoneda universal
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-011";
+      name = "learning-theory";
+      domain = "applied-cs";
+      concept_keywords = [ "학습" "learning" "VC dimension" "PAC" "generalization"
+                           "bias" "variance" "overfitting" "regularization" "training"
+                           "test error" "hypothesis class" "sample complexity" ];
+      bridge_role = "학습 algorithm 사이 의 *일반화 / 샘플 복잡도* 접합제";
+      example_pair = {
+        step_a = "train hypothesis on training data";
+        step_b = "evaluate on held-out test data";
+        bridging_math = "PAC: m = O((VC(H) + log(1/δ))/ε) samples suffice for (ε,δ)-PAC";
+        invariant_preserved = "true risk ≤ empirical risk + sqrt((VC log m + log(1/δ))/m)";
+        selection_criterion = "low VC class (linear) for small data, high VC (deep) for large data";
+      };
+      defer_to_substrate_axiom = "uc4-motivic-galois-invariance";  # generalization = motivic invariance
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+    {
+      family_id = "applied-math-012";
+      name = "type-theory-verification";
+      domain = "applied-cs";
+      concept_keywords = [ "타입" "type" "refinement" "invariant" "precondition"
+                           "postcondition" "Hoare" "termination" "dependent type"
+                           "타입검증" "불변" "전제" "사후조건" "안전성" ];
+      bridge_role = "검증 algorithm 사이 의 *invariant / 안전성* 접합제";
+      example_pair = {
+        step_a = "design algorithm with loop";
+        step_b = "prove correctness via loop invariant";
+        bridging_math = "Hoare: {P} S {Q}; loop inv I s.t. {I ∧ B} S {I}, terminates by well-founded R";
+        invariant_preserved = "I holds before/after each iteration; partial correctness + termination";
+        selection_criterion = "structural induction for recursion, loop invariant for iteration";
+      };
+      defer_to_substrate_axiom = "mode-14-subobject-classifier";  # invariant = subobject classifier
+      defer_to_lean_path = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+      defer_to_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+    }
+  ];
+
+  # =================================================================
+  # === Bridge primitive: 두 algorithm step 사이 의 응용수학 자동 매핑 ===
+  # =================================================================
+  #
+  # 사용자 vision 의 핵심:
+  # > "알고리즘 사이를 가기 위해 수학이 끼워진다.
+  #    세세하게 검증, 그리고 무엇을 선택해야 되는지 전부 다."
+
+  bridgeMathBetweenSteps = stepA: stepB:
+    let
+      # 두 step 의 keyword union 으로 가장 적합한 family 찾기
+      combinedDesc = stepA + " | " + stepB;
+      lowerDesc =
+        let
+          # naive lowercase via builtins (pnixc-meta evaluator subset)
+          go = i: acc:
+            if i >= builtins.stringLength combinedDesc then acc
+            else go (i + 1) (acc + builtins.substring i 1 combinedDesc);
+        in combinedDesc;  # placeholder (lowercase deferred to host)
+      contains = haystack: needle:
+        let
+          hLen = builtins.stringLength haystack;
+          nLen = builtins.stringLength needle;
+          go = i:
+            if i + nLen > hLen then false
+            else if builtins.substring i nLen haystack == needle then true
+            else go (i + 1);
+        in if nLen == 0 then true
+           else if hLen < nLen then false
+           else go 0;
+      familyMatchScore = family:
+        builtins.foldl'
+          (acc: kw: if contains lowerDesc kw then acc + 1 else acc)
+          0 family.concept_keywords;
+      # 최고 score family
+      scored = builtins.map
+        (f: { family = f; score = familyMatchScore f; })
+        appliedMathFamilies;
+      best =
+        builtins.foldl'
+          (acc: s: if s.score > acc.score then s else acc)
+          { family = null; score = 0; }
+          scored;
+    in
+      if best.score == 0
+      then {
+        outcome = "held-no-bridging-applied-math-family";
+        step_a = stepA;
+        step_b = stepB;
+        held_reason = "두 step 의 keyword 가 등록된 12 응용수학 family 와 매칭 없음";
+      }
+      else {
+        outcome = "bridge-applied-math-emitted";
+        step_a = stepA;
+        step_b = stepB;
+        bridging_family = best.family.name;
+        bridging_family_id = best.family.family_id;
+        bridge_role = best.family.bridge_role;
+        bridge_math_pattern = best.family.example_pair.bridging_math;
+        invariant_preserved = best.family.example_pair.invariant_preserved;
+        selection_criterion = best.family.example_pair.selection_criterion;
+        match_score = best.score;
+        # Defer chain: 응용수학 family → substrate axiom (paper-QED) → Lean reference → Mathlib
+        defer_substrate_axiom = best.family.defer_to_substrate_axiom;
+        defer_lean_path = best.family.defer_to_lean_path;
+        defer_unified_path = best.family.defer_to_unified;
+        # 한글 응답 (지능 생성)
+        korean_response =
+          "step '" + stepA + "' 와 '" + stepB + "' 사이의 응용수학 접합제: " +
+          best.family.name + ". invariant: " + best.family.example_pair.invariant_preserved +
+          ". 선택 criterion: " + best.family.example_pair.selection_criterion + ".";
+      };
+
+  # =================================================================
+  # === Demonstration sessions =======================================
+  # =================================================================
+
+  demoBridgeSessions = [
+    { step_a = "sort the data"; step_b = "find k-th element"; expected = "complexity-analysis"; }
+    { step_a = "sample subset randomly"; step_b = "estimate global stat"; expected = "probability-theory"; }
+    { step_a = "model relationships as graph"; step_b = "find shortest path"; expected = "graph-theory"; }
+    { step_a = "decompose problem"; step_b = "combine optimal subsolutions"; expected = "optimization-theory"; }
+    { step_a = "estimate symbol probabilities"; step_b = "build optimal prefix code"; expected = "information-theory"; }
+    { step_a = "tokenize string by regex"; step_b = "parse token stream"; expected = "automata-formal-language"; }
+    { step_a = "enumerate configurations"; step_b = "count valid"; expected = "discrete-math"; }
+    { step_a = "iterate to refine"; step_b = "stop when error below tolerance"; expected = "numerical-analysis"; }
+    { step_a = "represent data as matrix"; step_b = "reduce dimension to top-k"; expected = "linear-algebra-ml"; }
+    { step_a = "evaluate alternatives utilities"; step_b = "pick argmax"; expected = "decision-theory"; }
+    { step_a = "train hypothesis on data"; step_b = "evaluate on held-out test"; expected = "learning-theory"; }
+    { step_a = "design algorithm with loop"; step_b = "prove correctness via invariant"; expected = "type-theory-verification"; }
+  ];
+
+  runBridgeDemo = session:
+    let r = bridgeMathBetweenSteps session.step_a session.step_b;
+    in {
+      inherit (session) step_a step_b expected;
+      actual_outcome = r.outcome;
+      actual_family =
+        if r ? bridging_family then r.bridging_family else null;
+      success =
+        r.outcome == "bridge-applied-math-emitted"
+        && r ? bridging_family
+        && r.bridging_family == session.expected;
+    };
+
+  allBridgeResults = builtins.map runBridgeDemo demoBridgeSessions;
+  demoSuccessCount =
+    builtins.length (builtins.filter (r: r.success) allBridgeResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_appliedMathFamilies = true;
+    has_bridgeMathBetweenSteps = true;
+    applied_math_family_count = 12;
+    demo_bridge_session_count = builtins.length demoBridgeSessions;
+    demo_bridge_success_count = demoSuccessCount;
+    math_axioms_owner_inherited = "stdlib.nl.math-axioms-nl-layer";
+    lean_unified_owner_inherited = "stdlib.nl.lean.unified-query-entry";
+    lean_axiom_dep_owner_inherited = "stdlib.nl.lean.substrate-axiom-dependency-chain";
+    lean_korean_binding_owner_inherited = "stdlib.nl.lean.substrate-axiom-korean-binding";
+    converged_engine_owner_inherited = "stdlib.nl.converged-engine-entry";
+    defer_math_axioms_path = defer_math_axioms;
+    defer_lean_unified_path = defer_lean_unified;
+    defer_converged_engine_path = defer_converged_engine;
+    defer_lean_axiom_dep_path = defer_lean_axiom_dep;
+    defer_lean_korean_binding_path = defer_lean_korean_binding;
+    heavy_lean_import_policy = "path-manifest-only; use converged-engine-entry for runtime routing";
+    deterministic = true;  # LLM 없음 — 결정론적 지능 생성
+    is_intelligence_generation_layer = true;  # 사용자 vision 직접
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyAppliedMathPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "applied-math-cs-intelligence-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "families" request then {
+      outcome = "applied-math-families-emitted"; receipt = appliedMathFamilies;
+    }
+    else if builtins.hasAttr "bridge" request then
+      let b = request.bridge;
+      in bridgeMathBetweenSteps b.step_a b.step_b
+    else if builtins.hasAttr "demo_sessions" request then {
+      outcome = "bridge-demo-sessions-emitted"; receipt = demoBridgeSessions;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "bridge-demo-results-emitted";
+      receipt = {
+        total = builtins.length demoBridgeSessions;
+        success = demoSuccessCount;
+        results = allBridgeResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "families" "bridge" "demo_sessions" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit appliedMathFamilies bridgeMathBetweenSteps;
+  inherit demoBridgeSessions runBridgeDemo allBridgeResults demoSuccessCount;
+  inherit inventorySummary applyAppliedMathPlate;
+}

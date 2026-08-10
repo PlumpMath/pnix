@@ -1,0 +1,548 @@
+let
+  ownerName = "stdlib.nl.bayesian-session-plane";
+
+  instanceMemory =
+    import nl/sentence-instance-memory.px;
+  branchTree =
+    import nl/branch-tree-substrate.px;
+  chainOwner =
+    import nl/sentence-substrate-mapping.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Bayesian Session Plane (agent-NL-112) =======================
+  #
+  # 사용자 directive (2026-05-29):
+  # > "이 베이지안 추론(보통 문장을 인간이 의도를 주고 그 문장(증명=
+  # >  문장들의 의미(4 peace 로 수렴되는)) oop 이름들과 그 의미(문장=
+  # >  증명들)메모리들의 axiom tree 들만 계산한다."
+  #
+  # mental model:
+  #   Bayesian inference operates over four primitives joined here:
+  #   - sentence instances  (#109)  → named meaning (OOP)
+  #   - 4-piece meaning     (#105 chain)
+  #   - axiom trees         (#110)  → discrimination structure
+  #   - all live in session memory as named instances
+  #
+  # # session shape (this owner adds tree instance store)
+  #
+  #   {
+  #     sentence_memory = #109.emptyMemory  (instances of sentences)
+  #     tree_memory = {
+  #       trees = [ { tree_id; tree; bound_to_intent_kind; ... } ];
+  #     }
+  #     active_tree_id = null | "tree-NNN"      # currently walked
+  #     active_tree_path = [ branch_name ... ]  # cursor in tree
+  #   }
+  #
+  # # Bayesian step (one turn)
+  #
+  #   1. utterance arrives
+  #   2. identifyUtterance → sentence instance id (matched or fresh)
+  #   3. meaning_vector tells us intent_kind (ambient)
+  #   4. lookup tree bound to that intent_kind in tree_memory
+  #      - if exists → walk that tree with utterance as input
+  #      - if not → emit need-tree-binding (substrate has no tree yet)
+  #   5. evaluateBranchTree on current cursor
+  #      - 0 active → held
+  #      - 1 active → continue (advance cursor)
+  #      - 2 active → Y/N pending
+  #      - 3+ active → multi-choice pending
+  #   6. emit unified receipt + updated session
+
+  stepKind = "bayesian-session-walk";
+  framework_step =
+    "joint — 4 primitives 위 Bayesian walk (instance memory × tree position)";
+
+  # === Empty session ==============================================
+
+  emptySession = {
+    sentence_memory = instanceMemory.emptyMemory;
+    tree_memory = {
+      trees = [];
+    };
+    active_tree_id = null;
+    active_tree_path = [];
+  };
+
+  nextTreeId = treeMemory:
+    let
+      n = builtins.length treeMemory.trees;
+      pad = i:
+        if i < 10 then "00" + builtins.toString i
+        else if i < 100 then "0" + builtins.toString i
+        else builtins.toString i;
+    in "tree-" + pad (n + 1);
+
+  # === Tree registration ==========================================
+  #
+  # The user (or another substrate) supplies a tree + the intent_kind
+  # it discriminates. This owner stores it as a named instance.
+
+  registerTree = session: tree: boundIntentKind:
+    let
+      newId = nextTreeId session.tree_memory;
+      row = {
+        tree_id = newId;
+        tree = tree;
+        bound_to_intent_kind = boundIntentKind;
+        registered_at_turn = session.sentence_memory.turn_count + 1;
+      };
+    in session // {
+      tree_memory = session.tree_memory // {
+        trees = session.tree_memory.trees ++ [ row ];
+      };
+    };
+
+  findTreeForIntent = session: intentKind:
+    let
+      hits = builtins.filter
+        (t: t.bound_to_intent_kind == intentKind)
+        session.tree_memory.trees;
+    in
+      if hits == [] then null else builtins.head hits;
+
+  # === Tree cursor walk ===========================================
+  #
+  # Walk the active tree along the path. Returns the sub-tree at the
+  # current cursor position.
+
+  walkTreeAlongPath = tree: path:
+    if path == [] then tree
+    else
+      let
+        first = builtins.head path;
+        rest = builtins.tail path;
+        matchingBranches = builtins.filter
+          (b: (b.name or "") == first) tree.branches;
+      in
+        if matchingBranches == [] then null
+        else
+          let chosen = builtins.head matchingBranches; in
+          walkTreeAlongPath {
+            node_label = chosen.name or "step";
+            branches = chosen.sub_branches or [];
+          } rest;
+
+  # === Main entry: process one utterance ==========================
+  #
+  # Returns full receipt with all four primitives surfaced.
+
+  processUtterance = session: utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else
+      # Step 1+2: identify sentence instance
+      let
+        idResult = instanceMemory.identifyUtterance utterance
+          session.sentence_memory;
+      in
+        if idResult.outcome == "held-non-string-utterance"
+           || idResult.outcome == "held-empty-utterance"
+           || idResult.outcome == "held-meaning-vector-not-extracted" then
+          { outcome = idResult.outcome; reason = "instance identification held"; }
+        else
+          let
+            mv = idResult.carry.meaning_vector;
+            intentKind = mv.ambient;
+            updatedSession = session // {
+              sentence_memory = idResult.carry.updated_memory;
+            };
+            # Context preservation: if user already has an active tree
+            # and the new utterance's intent_kind doesn't bind to a
+            # registered tree, fall back to the active tree. This is
+            # the substrate-side instance-memory attention rule —
+            # short hint utterances ("베벨") stay within current
+            # algorithm step's tree.
+            intentMatch = findTreeForIntent updatedSession intentKind;
+            activeMatch =
+              if updatedSession.active_tree_id != null then
+                let
+                  hits = builtins.filter
+                    (t: t.tree_id == updatedSession.active_tree_id)
+                    updatedSession.tree_memory.trees;
+                in if hits == [] then null else builtins.head hits
+              else null;
+            treeRow =
+              if intentMatch != null then intentMatch
+              else activeMatch;
+          in
+            if treeRow == null then {
+              outcome = "need-tree-binding";
+              public = {
+                instance_id = idResult.instance_id;
+                intent_kind = intentKind;
+                instance_outcome = idResult.outcome;
+                message_en =
+                  "Sentence recognized (instance " + idResult.instance_id
+                    + ", intent=" + intentKind
+                    + "), but no axiom tree is bound to this intent yet. "
+                    + "Register a tree via registerTree.";
+                message_ko =
+                  "문장 인식됨 (instance " + idResult.instance_id
+                    + ", intent=" + intentKind
+                    + "). 이 intent 에 binding 된 axiom tree 없음. "
+                    + "registerTree 로 등록 필요.";
+              };
+              carry = {
+                updated_session = updatedSession;
+                meaning_vector = mv;
+                instance_row = idResult.carry.instance_row;
+                axiom_origin =
+                  "axiom-99-nl-bayesian-session-plane "
+                  + "(composes axiom-97-instance + axiom-98-tree)";
+              };
+            }
+            else
+              # Step 3-5: walk active tree
+              let
+                # If a different tree was active, switch to this one
+                # and reset path.
+                switchingTree = updatedSession.active_tree_id != treeRow.tree_id;
+                sessionWithActive = updatedSession // {
+                  active_tree_id = treeRow.tree_id;
+                  active_tree_path =
+                    if switchingTree then [] else updatedSession.active_tree_path;
+                };
+                cursorTree = walkTreeAlongPath treeRow.tree
+                  sessionWithActive.active_tree_path;
+              in
+                if cursorTree == null then {
+                  outcome = "held-cursor-path-broken";
+                  public = {
+                    instance_id = idResult.instance_id;
+                    intent_kind = intentKind;
+                    tree_id = treeRow.tree_id;
+                    broken_path = sessionWithActive.active_tree_path;
+                  };
+                  carry = {
+                    updated_session = sessionWithActive;
+                    axiom_origin =
+                      "axiom-99-nl-bayesian-session-plane "
+                      + "(composes axiom-97-instance + axiom-98-tree)";
+                  };
+                }
+                else
+                  let
+                    treeEval = branchTree.evaluateBranchTree
+                      cursorTree utterance;
+                    format = treeEval.public.question_format or "held";
+                    activeBranches =
+                      treeEval.carry.active_branches or [];
+                    activeN = treeEval.public.active_branch_count or 0;
+                  in {
+                    outcome = "bayesian-step-emitted";
+                    public = {
+                      instance_id = idResult.instance_id;
+                      intent_kind = intentKind;
+                      tree_id = treeRow.tree_id;
+                      tree_position = sessionWithActive.active_tree_path;
+                      cursor_label = cursorTree.node_label or "step";
+                      question_format = format;
+                      active_branch_count = activeN;
+                      question_en =
+                        treeEval.public.question_en or "";
+                      question_ko =
+                        treeEval.public.question_ko or "";
+                      next_step_kind =
+                        if format == "continue" then "auto-advance"
+                        else if format == "yes-no" then "await-yes-no"
+                        else if format == "multi-choice" then "await-multi-choice"
+                        else "held-no-active-branch";
+                    };
+                    carry = {
+                      updated_session = sessionWithActive;
+                      instance_row = idResult.carry.instance_row;
+                      meaning_vector = mv;
+                      cursor_tree = cursorTree;
+                      active_branches = activeBranches;
+                      tree_evaluation = treeEval;
+                      bayesian_primitives = {
+                        sentence_instance = idResult.instance_id;
+                        four_piece = mv;
+                        named_axiom_tree = treeRow.tree_id;
+                        tree_position = sessionWithActive.active_tree_path;
+                      };
+                      axiom_origin =
+                        "axiom-99-nl-bayesian-session-plane "
+                        + "(composes axiom-97-instance + axiom-98-tree)";
+                    };
+                  };
+
+  # === Peek current step (no new utterance) =======================
+  #
+  # After cursor advance, substrate can emit the next discriminating
+  # question *without* a new utterance. This is substrate-side
+  # initiative — Bayesian inference asks the next narrowing question.
+
+  peekCurrentStep = session:
+    let activeId = session.active_tree_id; in
+    if activeId == null then {
+      outcome = "held-no-active-tree";
+    }
+    else
+      let
+        treeRow = builtins.head (
+          builtins.filter (t: t.tree_id == activeId)
+            session.tree_memory.trees
+        );
+        cursorTree = walkTreeAlongPath treeRow.tree
+          session.active_tree_path;
+      in
+        if cursorTree == null then {
+          outcome = "held-cursor-path-broken";
+          broken_path = session.active_tree_path;
+        }
+        else if (cursorTree.branches or []) == [] then {
+          outcome = "cursor-at-terminal";
+          public = {
+            tree_id = treeRow.tree_id;
+            tree_position = session.active_tree_path;
+            message_en =
+              "Cursor reached a terminal — algorithm path complete.";
+            message_ko =
+              "cursor 가 terminal 도달 — algorithm path 완료.";
+          };
+          carry = {
+            session = session;
+            axiom_origin =
+              "axiom-99-nl-bayesian-session-plane "
+              + "(composes axiom-97-instance + axiom-98-tree)";
+          };
+        }
+        else
+          let
+            treeEval = branchTree.evaluateBranchTree cursorTree "";
+            format = treeEval.public.question_format or "held";
+            activeN = treeEval.public.active_branch_count or 0;
+          in {
+            outcome = "step-peeked";
+            public = {
+              tree_id = treeRow.tree_id;
+              tree_position = session.active_tree_path;
+              cursor_label = cursorTree.node_label or "step";
+              question_format = format;
+              active_branch_count = activeN;
+              question_en = treeEval.public.question_en or "";
+              question_ko = treeEval.public.question_ko or "";
+              next_step_kind =
+                if format == "continue" then "auto-advance"
+                else if format == "yes-no" then "await-yes-no"
+                else if format == "multi-choice" then "await-multi-choice"
+                else "held-no-active-branch";
+            };
+            carry = {
+              session = session;
+              cursor_tree = cursorTree;
+              active_branches = treeEval.carry.active_branches or [];
+              tree_evaluation = treeEval;
+              axiom_origin =
+                "axiom-99-nl-bayesian-session-plane "
+                + "(composes axiom-97-instance + axiom-98-tree)";
+            };
+          };
+
+  # === Apply user choice: advance cursor =========================
+  #
+  # User provided Y/N or multi-choice answer; advance tree cursor.
+
+  advanceWithAnswer = session: utterance: answer:
+    let
+      activeId = session.active_tree_id;
+    in
+      if activeId == null then {
+        outcome = "held-no-active-tree";
+      }
+      else
+        let
+          treeRow = builtins.head (
+            builtins.filter (t: t.tree_id == activeId) session.tree_memory.trees
+          );
+          cursorTree = walkTreeAlongPath treeRow.tree session.active_tree_path;
+          treeEval = branchTree.evaluateBranchTree cursorTree utterance;
+          format = treeEval.public.question_format or "held";
+        in
+          if format == "continue" then
+            let
+              sole = (treeEval.carry.format).sole_branch;
+              advancedSession = session // {
+                active_tree_path = session.active_tree_path
+                  ++ [ (sole.name or "step") ];
+              };
+            in {
+              outcome = "cursor-advanced-auto";
+              public = {
+                advanced_to = sole.name or "step";
+                terminal = sole.terminal or false;
+                new_depth = builtins.length advancedSession.active_tree_path;
+              };
+              carry = {
+                updated_session = advancedSession;
+                chosen_branch = sole;
+                axiom_origin =
+                  "axiom-99-nl-bayesian-session-plane "
+                  + "(composes axiom-97-instance + axiom-98-tree)";
+              };
+            }
+          else if format == "yes-no" then
+            let
+              ynResult = branchTree.applyYesNoChoice cursorTree utterance answer;
+            in
+              if ynResult.outcome == "branch-chosen" then
+                let
+                  chosenName = ynResult.public.chosen_name;
+                  advancedSession = session // {
+                    active_tree_path = session.active_tree_path
+                      ++ [ chosenName ];
+                  };
+                in {
+                  outcome = "cursor-advanced-yes-no";
+                  public = {
+                    advanced_to = chosenName;
+                    yes_or_no = ynResult.public.yes_or_no;
+                    terminal = ynResult.public.terminal;
+                    new_depth = builtins.length advancedSession.active_tree_path;
+                  };
+                  carry = {
+                    updated_session = advancedSession;
+                    chosen_branch = ynResult.carry.chosen_branch;
+                    axiom_origin =
+                      "axiom-99-nl-bayesian-session-plane "
+                      + "(composes axiom-97-instance + axiom-98-tree)";
+                  };
+                }
+              else ynResult
+          else if format == "multi-choice" then
+            let
+              chResult = branchTree.applyChoice cursorTree utterance answer;
+            in
+              if chResult.outcome == "branch-chosen" then
+                let
+                  advancedSession = session // {
+                    active_tree_path = session.active_tree_path
+                      ++ [ chResult.public.chosen_name ];
+                  };
+                in {
+                  outcome = "cursor-advanced-multi-choice";
+                  public = {
+                    advanced_to = chResult.public.chosen_name;
+                    terminal = chResult.public.terminal;
+                    new_depth = builtins.length advancedSession.active_tree_path;
+                  };
+                  carry = {
+                    updated_session = advancedSession;
+                    chosen_branch = chResult.carry.chosen_branch;
+                    axiom_origin =
+                      "axiom-99-nl-bayesian-session-plane "
+                      + "(composes axiom-97-instance + axiom-98-tree)";
+                  };
+                }
+              else chResult
+          else {
+            outcome = "held-not-advanceable";
+            format = format;
+          };
+
+  # === Plate entry =================================================
+
+  applyBayesianSessionPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if (builtins.hasAttr "register_tree" request)
+         && (builtins.hasAttr "intent_kind" request) then
+      let
+        session = request.session or emptySession;
+        newSession = registerTree session
+          request.register_tree request.intent_kind;
+      in {
+        outcome = "tree-registered";
+        public = {
+          tree_id = nextTreeId session.tree_memory;
+          intent_kind = request.intent_kind;
+          tree_count = builtins.length newSession.tree_memory.trees;
+        };
+        carry = {
+          updated_session = newSession;
+          axiom_origin =
+            "axiom-99-nl-bayesian-session-plane "
+            + "(composes axiom-97-instance + axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "process_utterance" request then
+      processUtterance (request.session or emptySession)
+        request.process_utterance
+    else if (builtins.hasAttr "peek_current_step" request)
+         && (builtins.hasAttr "session" request) then
+      peekCurrentStep request.session
+    else if (builtins.hasAttr "advance_answer" request)
+         && (builtins.hasAttr "utterance" request)
+         && (builtins.hasAttr "session" request) then
+      advanceWithAnswer request.session
+        request.utterance request.advance_answer
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { register_tree, intent_kind, session? } or "
+        + "{ process_utterance, session? } or "
+        + "{ utterance, advance_answer, session }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bayesian-session-plane-axiom-99";
+    composes = "axiom-97-instance + axiom-98-tree + axiom-94-chain";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    bayesian_primitives = [
+      "sentence-instance (named OOP)"
+      "4-piece meaning vector"
+      "named axiom tree"
+      "tree cursor position"
+    ];
+    domain_owner_policy =
+      "FORBIDDEN — no domain .px owners (blender-tree.px etc). Trees "
+      + "are session data registered via registerTree, bound to intent_kind.";
+    primary_outcomes = [
+      "tree-registered"
+      "bayesian-step-emitted"
+      "cursor-advanced-auto"
+      "cursor-advanced-yes-no"
+      "cursor-advanced-multi-choice"
+      "need-tree-binding"
+    ];
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-no-active-tree"
+      "held-cursor-path-broken"
+      "held-not-advanceable"
+    ];
+  };
+
+in {
+  inherit
+    ownerName
+    emptySession nextTreeId
+    registerTree findTreeForIntent walkTreeAlongPath
+    processUtterance peekCurrentStep advanceWithAnswer
+    applyBayesianSessionPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL Bayesian session plane (agent-NL-112)";
+    owner = ownerName;
+    base = "nl-bayesian-session-plane-v0";
+    rev_note = "agent-NL-112 (2026-05-29): 사용자 vision 의 *유일한* "
+      + "Bayesian compute surface. 4 primitives (sentence instance / "
+      + "4-piece meaning / named axiom tree / tree cursor) 가 한 session "
+      + "안에서 walk. 도메인 tree 는 데이터로 registerTree 로 등록 — "
+      + ".px 정본 owner 안 만듦. utterance → 4-piece → tree lookup → "
+      + "cursor eval → question format. DO NOT REBUILD — #109 + #110 + "
+      + "#105 모두 재사용, 새 evaluator/parser 0.";
+  };
+}

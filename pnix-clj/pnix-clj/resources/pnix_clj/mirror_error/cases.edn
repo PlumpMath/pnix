@@ -1,0 +1,48 @@
+{:kind :mirror-error-fixture-set
+ :schema-version 1
+ :lineage
+ {:source "pnix-clj curated internal runtime error basics"
+  :captured-at "2026-06-30"
+  :note "Expected error/held cases. Accepted here means the Clojure evaluator and internal .px runtime mirror agree on the error boundary."}
+ :cases
+ [{:name "unknown-var"
+   :source "missing"
+   :expected-reason :unbound-var
+   :expected-eval-reason :unbound-var
+   :expected-runtime-reason :px-runtime-run-error
+   :expected-runtime-phase "eval"
+   :expected-runtime-ast-tag "Var"
+   :expected-error-contains "unknown variable"}
+  {:name "missing-select"
+   :source "{ a = 1; }.b"
+   :expected-reason :missing-attr
+   :expected-eval-reason :missing-attr
+   :expected-runtime-reason :px-runtime-run-error
+   :expected-runtime-phase "eval"
+   :expected-runtime-ast-tag "Select"
+   :expected-error-contains "Select missing attr"}
+  {:name "assertion-failed"
+   :source "assert false; 1"
+   :expected-reason :assertion-failed
+   :expected-eval-reason :assertion-failed
+   :expected-runtime-reason :px-runtime-run-error
+   :expected-runtime-phase "eval"
+   :expected-runtime-ast-tag "Assert"
+   :expected-error-contains "assertion failed"}
+  {:name "interpolation-int-coercion"
+   :source "\"value=${1}\""
+   :expected-reason :string-interpolation-coercion-failed
+   :expected-eval-reason :string-interpolation-coercion-failed
+   :expected-runtime-reason :px-runtime-run-error
+   :expected-runtime-phase "eval"
+   :expected-runtime-ast-tag "Binary"
+   :expected-error-contains "cannot coerce value to string in interpolation"}]}
+;; NOTE (reclassification, see rec-forward-reference-taxonomy.md):
+;; `rec { x = y; y = 1; }.x` used to live here as an "error" case, but it is a
+;; VALID forward reference (Nix = 1). It only appeared to be an accepted error
+;; because every lane held: the evaluator held on a rec forward-reference BUG
+;; (:unbound-var), while the clj-meta/px-runtime lanes held at their forward-ref
+;; frontier (they also hold on the valid `let a = b + 1; b = 10; in a`). Once the
+;; evaluator resolves rec forward references correctly, the lanes no longer agree
+;; on an error, so this case no longer belongs in the error-agreement corpus. It
+;; is now covered by the forward-reference frontier corpus.

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+stale_identity='\bpnix-clj\b|\bpnix_clj\b|\bclj-meta\b|\bclj_meta\b'
+if rg -n --hidden --pcre2 "$stale_identity" . \
+    -g '!.git/**' \
+    -g '!clojure-clr-clojure-1.12.3-alpha8/**' \
+    -g '!clr-bootstrap/bin/**' \
+    -g '!clr-bootstrap/obj/**' \
+    -g '!bin/pnix-clr-identity-gate'; then
+  echo "pnix-clr identity gate: stale JVM-host identity" >&2
+  exit 1
+fi
+
+jvm_api='clojure\.java\.|clojure\.tools\.analyzer\.jvm|org\.objectweb\.asm|\bjava\.|\bjavax\.|System/(getenv|getProperty|nanoTime|exit)\b'
+if rg -n --pcre2 "$jvm_api" clr-meta/src pnix-clr/src; then
+  echo "pnix-clr identity gate: JVM API in admitted CLR source" >&2
+  exit 1
+fi
+
+host_evaluator='\((?:clojure\.core/)?(?:eval|load-string|load-file|compile)(?=[[:space:]\)])'
+if rg -n --pcre2 "$host_evaluator" pnix-clr/src; then
+  echo "pnix-clr identity gate: host evaluator fallback in PNIX runtime" >&2
+  exit 1
+fi
+
+if rg -n --pcre2 '\bload-string\b' clr-meta/src/pnix/clr_meta/main.clj; then
+  echo "pnix-clr identity gate: clr-meta product tool fell back to host eval" >&2
+  exit 1
+fi
+
+if rg -n --pcre2 'bin/(?:clojure-clr|build-clr|build-pnix-clr-artifact)' \
+    bin/pnix-clr; then
+  echo "pnix-clr identity gate: product runner has a bootstrap/source fallback" >&2
+  exit 1
+fi
+
+if ! rg -n 'CLOJURE_LOAD_PATH="\$artifact"' bin/pnix-clr >/dev/null; then
+  echo "pnix-clr identity gate: product runner does not isolate the AOT artifact" >&2
+  exit 1
+fi
+
+if ! rg -n 'cd "\$artifact"' bin/pnix-clr >/dev/null; then
+  echo "pnix-clr identity gate: product runner leaves cwd source lookup active" >&2
+  exit 1
+fi
+
+if ! rg -n ':deps \{pnix/clr-meta \{:local/root "\.\./clr-meta"\}\}' \
+    pnix-clr/deps.edn >/dev/null; then
+  echo "pnix-clr identity gate: clr-meta dependency declaration is missing" >&2
+  exit 1
+fi
+
+if rg -n --pcre2 '(:held\b|"held"|\bHeld\b)' pnix-clr/src; then
+  echo "pnix-clr identity gate: language errors must be Failed, not Held" >&2
+  exit 1
+fi
+
+for stale_path in \
+  clr-meta/src/pnix/clj_meta \
+  pnix-clr/src/pnix_clj \
+  pnix-clr/test/pnix_clj \
+  pnix-clr/resources/pnix_clj; do
+  if [[ -e "$stale_path" ]]; then
+    echo "pnix-clr identity gate: stale path $stale_path" >&2
+    exit 1
+  fi
+done
+
+echo "pnix-clr identity gate: PASS"

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Materialize the clojure `.clj`/`.cljc` sources that upstream ClojureCLR ships
+# as embedded resources inside Clojure.Source.dll.
+#
+# The resource names are flat and dot-separated (`clojure.core.clj`,
+# `clojure.core_deftype.clj`, `clojure.clr.io.clj`), while the load path wants
+# directories (`clojure/core.clj`, `clojure/clr/io.clj`). Only the extension is
+# kept as a suffix; every other dot becomes a directory separator.
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: extract-clojure-sources SOURCE_DLL OUT_DIR" >&2
+  exit 2
+fi
+
+source_dll="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+out_dir="$2"
+mkdir -p "$out_dir"
+
+python3 - "$source_dll" "$out_dir" <<'PY'
+import os
+import re
+import sys
+
+source_dll, out_dir = sys.argv[1], sys.argv[2]
+
+with open(source_dll, "rb") as handle:
+    blob = handle.read()
+
+# Resource names appear as length-prefixed UTF-8 in the managed resource
+# section; locating them by pattern is enough to drive the CLR extraction below.
+names = sorted({
+    m.decode("ascii")
+    for m in re.findall(rb"clojure[A-Za-z0-9_.]*\.clj[c]?", blob)
+})
+if not names:
+    sys.exit("extract-clojure-sources: no clojure resources in %s" % source_dll)
+
+script = []
+for name in names:
+    stem, ext = name.rsplit(".clj", 1)
+    rel = stem.replace(".", "/") + ".clj" + ext
+    script.append((name, rel))
+
+with open(os.path.join(out_dir, ".resource-map"), "w") as handle:
+    for name, rel in script:
+        handle.write("%s\t%s\n" % (name, rel))
+PY
+
+# Do the actual read through the runtime that owns the assembly.
+dll_dir="$(dirname "$source_dll")"
+dotnet "$dll_dir/Clojure.Main.dll" -e "
+(let [asm (System.Reflection.Assembly/LoadFrom \"$source_dll\")
+      out \"$out_dir\"]
+  (doseq [line (System.IO.File/ReadAllLines (str out \"/.resource-map\"))
+          :when (seq line)]
+    (let [[res rel] (clojure.string/split line #\"\t\")
+          target (System.IO.Path/Combine out rel)]
+      (System.IO.Directory/CreateDirectory
+        (System.IO.Path/GetDirectoryName target))
+      (with-open [stream (.GetManifestResourceStream asm res)]
+        (when stream
+          (with-open [file (System.IO.File/Create target)]
+            (.CopyTo stream file))))))
+  (println \"clojure sources extracted\"))"
+
+rm -f "$out_dir/.resource-map"

@@ -1,0 +1,90 @@
+# stdlib.nl.definition-meaning-map
+#
+# **K3 in .px (one-mirror 정본): 사전 정의문장 → meaning map.**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): ingest 의미 매핑은 Rust
+# (`nl_corpus/dictionary_sense_sheet.rs` K3)가 아니라 거울(.px) 하나에. 이 owner 가
+# 그 K3 DefinitionMeaningMap 의 .px 정본이다.
+#
+# 무엇: 사전의 모든 정의문장도 그 자체로 한 문장이다 → ① 구조 정규화(CSF, 위
+# canonical-sentence-form.px 재사용) + ② frame 증거(역할/mood) + ③ **재귀 dict 후보**:
+# 정의 안에 나타나는 *다른 lemma* 들(≥2자 normalized containment)을 찾아 K6
+# `definition.mentions` relation seed 로 삼는다(사전→뜻풀이→사전 재귀 검색의 씨앗).
+#
+# 재구현 0: CSF/역할/mood 는 canonical-sentence-form(→korean-taxonomy-lift) 재사용.
+# 여기 새 조각은 **언급-lemma 검출**(substring 후보) 한 가지뿐.
+#
+# 경계(host): map_id/sense_id digest(sha) = host; 이 owner 는 구조/언급만 내놓는다.
+# definition_normalized(char 정규화)도 본격 정규화는 host/lexeme 몫 — 여기선 surface
+# 기준 후보 검출(정렬·확정은 host batch). v0: ≥2자, 정확 substring.
+let
+  csf = import nl/canonical-sentence-form.px;
+
+  stringLength = builtins.stringLength;
+  substring = builtins.substring;
+  filter = builtins.filter;
+  map = builtins.map;
+  len = builtins.length;
+
+  # needle 가 haystack 의 부분문자열인가 (.px 순수 구현)
+  hasInfix = needle: haystack:
+    let nl = stringLength needle; hl = stringLength haystack;
+    in
+      if nl == 0 then true
+      else if nl > hl then false
+      else
+        let go = i:
+          if i > (hl - nl) then false
+          else if (substring i nl haystack) == needle then true
+          else go (i + 1);
+        in go 0;
+
+  # ★ 정의 안에 나타나는 다른 lemma 후보 (재귀 dict walk seed) ★
+  #   self(=이 sense 의 lemma)는 제외, 1음절 lemma 오탐 방지(정직 bounded).
+  #   ※ pnix stringLength=byte 기준. 한글 1음절=정확히 3byte(가-힣·jamo 전부 3byte)
+  #     라 byteLength>=4 ⟺ 한글 >=2음절(6byte+; pure 한글은 byte가 3의 배수). ASCII
+  #     lemma 는 더 보수적으로 skip. 정확 codepoint count 는 char-aware builtin 별 슬라이스.
+  minMentionBytes = 4;
+  mentionedLemmas = selfLemma: definition: knownLemmas:
+    filter
+      (lem: (stringLength lem >= minMentionBytes) && (lem != selfLemma) && (hasInfix lem definition))
+      knownLemmas;
+
+  # ★ 정의문장 → meaning map ★
+  meaningMap = selfLemma: definition: knownLemmas:
+    let
+      c = csf.canonicalize definition;
+      lifted = c.outcome == "canonical";
+      mentions = mentionedLemmas selfLemma definition knownLemmas;
+    in {
+      schema = "pnixc-meta.definition-meaning-map.v0";
+      self_lemma = selfLemma;
+      definition = definition;
+      csf_outcome = c.outcome;
+      # 구조 정규형 (정의가 SVO 로 lift 될 때만; noun-phrase 정의는 held 정직 노출)
+      canonical_text = if lifted then c.canonical_text else null;
+      sentence_mood = if lifted then c.sentence_mood else "unlifted";
+      structure_signature = if lifted then c.structure_signature else null;
+      # K6 definition.mentions seed
+      mentioned_lemmas = mentions;
+      mention_count = len mentions;
+    };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.definition-meaning-map";
+    consumes = "canonical-sentence-form.canonicalize (CSF/역할/mood; 재구현 0)";
+    role = "사전 정의문장 → meaning map(CSF + mood + 언급 lemma 후보). 재귀 dict walk(K6 definition.mentions) seed. ingest 의미 매핑 .px 정본.";
+    boundary = "map_id/sense_id digest(sha)·본격 char 정규화 = host; 이 owner 는 구조+언급 후보만.";
+    note = "새 조각=언급-lemma 검출(≥2자 substring, self 제외) 한 가지. Rust nl_corpus/dictionary_sense_sheet.rs K3 = Phase 2/3 삭제 대상.";
+  };
+
+in {
+  inherit hasInfix mentionedLemmas meaningMap inventorySummary;
+  ownerName = "stdlib.nl.definition-meaning-map";
+  meta = {
+    source = "stdlib nl definition-meaning-map (.px K3: 사전 정의문장 → meaning map; one-mirror 정본)";
+    owner = "stdlib.nl.definition-meaning-map";
+    base = "definition-meaning-map-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1: ingest K3 의미 매핑(definition meaning map)의 .px 정본화. canonical-sentence-form.canonicalize 재사용(CSF/mood; 재구현0) + 새 조각=mentionedLemmas(정의 안 ≥2자 다른 lemma substring 검출 = 재귀 dict walk / K6 definition.mentions seed, self 제외 1자 skip 정직 bounded). digest(map_id)·char 정규화=host 경계. Rust dictionary_sense_sheet.rs K3(246줄)=Phase 2/3 삭제. noun-phrase 정의는 csf_outcome held 정직 노출.";
+  };
+}

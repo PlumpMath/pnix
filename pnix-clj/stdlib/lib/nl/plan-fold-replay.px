@@ -1,0 +1,85 @@
+# MR17 -- plan-fold-replay (the lane that plan-authorized-candidate names as
+# authorization.next_lane). Consumes an AUTHORIZED plan candidate and folds it
+# into a replay-stable ordered step sequence. Folding is still NOT execution:
+# every outcome keeps candidate_only=true / effect_allowed=false; the actual
+# effect lane has its own owners and gates (next_gate=execution-effect-gate).
+# Outcomes:
+#   held-missing-authorization -- no approval-gate verdict supplied
+#   held-not-authorized        -- verdict outcome is anything but
+#                                 plan-authorized-candidate (rejected/held
+#                                 plans never fold)
+#   held-stale-plan            -- recomputed plan fingerprint differs from the
+#                                 authorized one (TOCTOU guard, same family as
+#                                 the approval gate's stale check)
+#   held-authorization-expired -- authorization TTL passed (caller supplies
+#                                 current_time_ms; hidden now() is forbidden)
+#   held-unknown-plan-kind     -- no fold law registered for this plan kind
+#   plan-replay-folded         -- ordered steps emitted, deterministic replay
+{
+  foldAuthorizedPlan = request:
+    let
+      authorized = if request ? authorized then request.authorized else null;
+      fingerprint =
+        if request ? plan_fingerprint then request.plan_fingerprint else "";
+      now = if request ? current_time_ms then request.current_time_ms else null;
+      held = outcome: reason: {
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/plan-fold-replay.px";
+      };
+      auth =
+        if authorized != null && authorized ? authorization
+        then authorized.authorization
+        else null;
+    in
+    if authorized == null || !(authorized ? outcome) then
+      held "held-missing-authorization"
+        "an approval-gate verdict is required input (authorization is the entry ticket)"
+    else if authorized.outcome != "plan-authorized-candidate" then
+      held "held-not-authorized"
+        ("only plan-authorized-candidate may fold; got " + authorized.outcome)
+    else if fingerprint == "" || !(authorized ? plan_fingerprint)
+            || authorized.plan_fingerprint != fingerprint then
+      held "held-stale-plan"
+        "recomputed plan fingerprint differs from the authorized one (TOCTOU guard)"
+    else if auth != null
+            && auth ? ttl_ms && auth.ttl_ms != null
+            && auth ? granted_at_ms && auth.granted_at_ms != null
+            && now != null
+            && now > auth.granted_at_ms + auth.ttl_ms then
+      held "held-authorization-expired"
+        "authorization TTL passed; the plan must go back through the approval gate"
+    else if !(authorized ? plan) || !(authorized.plan ? kind)
+            || authorized.plan.kind != "if-then" then
+      held "held-unknown-plan-kind"
+        "only if-then plans have a fold law registered (new kinds need their own law row)"
+    else {
+      outcome = "plan-replay-folded";
+      plan_fingerprint = fingerprint;
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/plan-fold-replay.px";
+      steps = [
+        {
+          index = 0;
+          role = "condition-check";
+          event = authorized.plan.condition.event;
+          stem = authorized.plan.condition.stem;
+        }
+        {
+          index = 1;
+          role = "action";
+          event = authorized.plan.action.event;
+          stem = authorized.plan.action.stem;
+          obligation = authorized.plan.action.obligation;
+        }
+      ];
+      replay = {
+        deterministic = true;
+        next_gate = "execution-effect-gate";
+        authorized_by =
+          if auth != null && auth ? actor then auth.actor else null;
+      };
+    };
+}

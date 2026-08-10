@@ -1,0 +1,150 @@
+# stdlib.lib.math.figurate-numbers
+#
+# OWNER-LAW (v0.12-AAS, div-math, 2026-05-21): figurate (polygonal)
+# numbers.
+#
+# sequence-series.px has the triangular numbers as one figurate
+# family. This owner generalises: the polygonal numbers for ANY
+# number of sides, by the single closed formula
+#
+#   P(s, n) = ((s-2) n^2 - (s-4) n) / 2
+#
+# which yields the triangular (s=3), square (s=4), pentagonal
+# (s=5), hexagonal (s=6), ... families as instances of one rule.
+# It also adds the centered polygonal numbers and the inverse test
+# `isPolygonal` -- given x, is it an s-gonal number at all.
+#
+# # Exact
+#
+# Every result is an exact integer; the division by 2 in the
+# formula is always exact (the numerator is provably even).
+#
+# # Standalone
+#
+# Imports nothing. sides >= 3, n >= 1. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT 3D figurate numbers (no tetrahedral / pyramidal).
+#   - NOT a generating-function engine.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/figurate-numbers.px";
+
+  # The n-th s-gonal number, by the general polygonal formula.
+  polygonalNumber = sides: n:
+    ((sides - 2) * n * n - (sides - 4) * n) / 2;
+
+  # Named families -- instances of the general formula.
+  triangularNumber = n: polygonalNumber 3 n;
+  squareNumber     = n: polygonalNumber 4 n;
+  pentagonalNumber = n: polygonalNumber 5 n;
+  hexagonalNumber  = n: polygonalNumber 6 n;
+  heptagonalNumber = n: polygonalNumber 7 n;
+  octagonalNumber  = n: polygonalNumber 8 n;
+
+  # The n-th centered s-gonal number: s*n*(n-1)/2 + 1.
+  centeredPolygonalNumber = sides: n:
+    (sides * n * (n - 1)) / 2 + 1;
+
+  # Whether x is an s-gonal number -- walk P(s, 1), P(s, 2), ...
+  # until it meets or passes x.
+  isPolygonal = sides: x:
+    let
+      go = n:
+        let p = polygonalNumber sides n;
+        in
+          if p == x then true
+          else if p > x then false
+          else go (n + 1);
+    in x >= 1 && go 1;
+
+  # The index n for which P(s, n) = x, or -1 when x is not s-gonal.
+  polygonalIndex = sides: x:
+    let
+      go = n:
+        let p = polygonalNumber sides n;
+        in
+          if p == x then n
+          else if p > x then (0 - 1)
+          else go (n + 1);
+    in if x < 1 then (0 - 1) else go 1;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "polygonal"
+    "centered-polygonal"
+    "is-polygonal"
+    "polygonal-index"
+  ];
+
+  applyFigurate = request:
+    let
+      op = request.operation;
+      sides = if request ? sides then request.sides else 3;
+      n  = if request ? n then request.n else 1;
+      x  = if request ? x then request.x else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if sides < 3 then {
+        outcome = "held-too-few-sides";
+        operation = op;
+        sides = sides;
+        reason = "a polygon needs at least 3 sides";
+      }
+      else if (op == "polygonal" || op == "centered-polygonal")
+              && n < 1 then {
+        outcome = "held-non-positive-index";
+        operation = op;
+        n = n;
+      }
+      else if op == "polygonal" then {
+        outcome = "figurate-computed";
+        operation = op; sides = sides; n = n;
+        value = polygonalNumber sides n;
+      }
+      else if op == "centered-polygonal" then {
+        outcome = "figurate-computed";
+        operation = op; sides = sides; n = n;
+        value = centeredPolygonalNumber sides n;
+      }
+      else if op == "is-polygonal" then {
+        outcome = "figurate-computed";
+        operation = op; sides = sides; x = x;
+        holds = isPolygonal sides x;
+      }
+      else {
+        # op == "polygonal-index"
+        outcome = "figurate-computed";
+        operation = op; sides = sides; x = x;
+        value = polygonalIndex sides x;
+      };
+
+in {
+  inherit
+    ownerName
+    polygonalNumber
+    triangularNumber
+    squareNumber
+    pentagonalNumber
+    hexagonalNumber
+    heptagonalNumber
+    octagonalNumber
+    centeredPolygonalNumber
+    isPolygonal
+    polygonalIndex
+    knownOperations
+    applyFigurate;
+  meta = {
+    source = "stdlib math figurate numbers";
+    owner = ownerName;
+    base = "parametric-math-figurate-numbers-v0";
+    rev_note = "v0.12-AAS (div-math): figurate (polygonal) number owner. The general formula P(s,n) = ((s-2)n^2 - (s-4)n)/2 yields the triangular / square / pentagonal / hexagonal / ... families as instances of one rule; plus centered polygonal numbers and the inverse tests isPolygonal / polygonalIndex. Exact integers. Standalone. NOT 3D figurate numbers, NOT a generating-function engine, NOT yet a registered lens.";
+  };
+}

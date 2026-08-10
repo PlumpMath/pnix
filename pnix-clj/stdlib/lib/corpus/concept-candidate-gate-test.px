@@ -1,0 +1,85 @@
+# stdlib/lib/corpus/concept-candidate-gate-test.px
+#
+# concept-resolution lock (slice-1 gate + slice-2 clue + fix wm9swm7wc 3 HIGH 반증).
+#   verified = 인식된 authority{source;key} 또는 curated *predicate* 만. 개체/clue/미검증 authority = candidate.
+#   concept_id = namespace 구조키 → authority "ingest" != curated "ingest"(over-merge 봉인) · cross-ns = held(split 봉인).
+#   동음이의 개체(사과=apple|apology) = candidate(verified 금지). 비문자 surface = held. truth 승급 0.
+let
+  cg = import ./concept-candidate-gate.px;
+  B = builtins;
+  aHz = { source = "QUDT"; key = "HZ"; };
+  aBq = { source = "QUDT"; key = "BQ"; };
+
+  # resolve tiers
+  rAuth = cg.resolve { authority = aHz; surface = "Hz"; };       # 인식된 authority → verified
+  rPred = cg.resolve { surface = "먹"; };                         # curated predicate → verified
+  rEntity = cg.resolve { surface = "사과"; };                     # ★curated 개체 → candidate(word-sense)
+  rClue = cg.resolve { surface = "Hz"; };                         # clue → candidate(canonical key 제안)
+  rFakeAuth = cg.resolve { surface = "z"; authority = "TOTALLY_FAKE"; };  # ★bare authority → 거부 → candidate
+  rEmptyAuth = cg.resolve { surface = "z"; authority = { source = "QUDT"; key = ""; }; };  # ★빈 key → 거부
+  rNullSurf = cg.resolve { surface = null; };                     # ★비문자 surface → held
+  rHeld = cg.resolve { };                                         # surface 없음 → held
+
+  # sameConcept — good cases
+  scPred = cg.sameConcept { surface = "먹"; } { surface = "eat"; };  # 술어 cross-lingual → verified-same
+  scAuth = cg.sameConcept { authority = aHz; surface = "Hz"; } { authority = aHz; surface = "hertz"; };  # authority → verified-same
+  scClueSame = cg.sameConcept { surface = "frequency"; } { surface = "주파수"; };  # clue 같음 → candidate-same
+  scClueDistinct = cg.sameConcept { surface = "Hz"; } { surface = "Bq"; };  # clue 다름 → candidate-distinct
+  scVerDistinct = cg.sameConcept { authority = aHz; surface = "Hz"; } { authority = aBq; surface = "Bq"; };  # authority 다름 → verified-distinct
+  scCrossTier = cg.sameConcept { surface = "Hz"; } { authority = aHz; surface = "Hz"; };  # clue+authority 같은 key → candidate-same
+  scPredDistinct = cg.sameConcept { surface = "먹"; } { surface = "주"; };  # ingest vs give → verified-distinct
+  scHeld = cg.sameConcept { surface = "엔트로피"; } { surface = "entropy"; };  # 무근거 cross-surface → held
+
+  # ★3 HIGH 반증
+  scOverMergeBare = cg.sameConcept { surface = "먹"; } { authority = "ingest"; surface = "kafka-data-ingest"; };  # #1: bare authority "ingest" 거부 → held(was verified-same)
+  scOverMergeStruct = cg.sameConcept { surface = "먹"; } { authority = { source = "wikidata"; key = "ingest"; }; surface = "x"; };  # #1: curated ns != authority ns → held
+  scSplit = cg.sameConcept { surface = "eat"; } { surface = "eat"; authority = { source = "wikidata"; key = "Q213449"; }; };  # #1 SPLIT: cross-ns → held(was verified-distinct)
+  scEntityHomonym = cg.sameConcept { surface = "사과"; } { surface = "apple"; };  # #3: 개체 동음이의 → candidate-same(was verified-same+strong)
+
+  proj = cg.publicProjection rPred;
+  projKeys = B.attrNames proj;
+in {
+  auth_tier = rAuth.tier;
+  pred_verdict = scPred.verdict;
+  entity_verdict = scEntityHomonym.verdict;
+  overmerge_verdict = scOverMergeBare.verdict;
+  split_verdict = scSplit.verdict;
+  fake_auth_tier = rFakeAuth.tier;
+  all_ok =
+    # resolve tiers
+       (rAuth.tier == "verified") && (rAuth.basis == "authority-key")
+    && (rAuth.concept_id.ns == "authority") && (rAuth.concept_id.key == "HZ") && (rAuth.authority_domain == "unit-quantity")
+    && (rPred.tier == "verified") && (rPred.basis == "curated-predicate") && (rPred.concept_id.ns == "curated") && (rPred.concept_id.key == "ingest")
+    # ★Fix C: 개체 → candidate(verified 아님)
+    && (rEntity.tier == "candidate") && (rEntity.basis == "curated-entity-word-sense") && (rEntity.strong_for_mutex == false)
+    && (rClue.tier == "candidate") && (rClue.basis == "clue:unit-quantity") && (rClue.concept_id.ns == "authority") && (rClue.concept_id.key == "HZ")
+    # ★Fix B: 미검증 authority → verified 아님
+    && (rFakeAuth.tier == "candidate") && (rFakeAuth.basis == "surface-only-no-clue")
+    && (rEmptyAuth.tier == "candidate")
+    && (rNullSurf.tier == "held") && (rHeld.tier == "held")
+    # sameConcept good
+    && (scPred.verdict == "verified-same") && (scPred.concept_id.key == "ingest") && (scPred.strong_for_mutex == true)
+    && (scAuth.verdict == "verified-same") && (scAuth.concept_id.key == "HZ")
+    && (scClueSame.verdict == "candidate-same") && (scClueSame.concept_id.key == "Frequency") && (scClueSame.strong_for_mutex == false)
+    && (scClueDistinct.verdict == "candidate-distinct") && (scClueDistinct.strong_for_mutex == false)
+    && (scVerDistinct.verdict == "verified-distinct") && (scVerDistinct.strong_for_mutex == true)
+    && (scCrossTier.verdict == "candidate-same") && (scCrossTier.concept_id.key == "HZ") && (scCrossTier.strong_for_mutex == false)
+    && (scPredDistinct.verdict == "verified-distinct")
+    && (scHeld.verdict == "held") && (scHeld.held_reason == "no-shared-concept")
+    # ★3 HIGH 반증
+    && (scOverMergeBare.verdict == "held")                                   # #1 over-merge(bare)
+    && (scOverMergeStruct.verdict == "held") && (scOverMergeStruct.held_reason == "cross-namespace-no-crosswalk")  # #1 over-merge(struct, cross-ns)
+    && (scSplit.verdict == "held") && (scSplit.held_reason == "cross-namespace-no-crosswalk")  # #1 SPLIT
+    && (scEntityHomonym.verdict == "candidate-same") && (scEntityHomonym.strong_for_mutex == false)  # #3 동음이의
+    # ★fail-closed: candidate/held 는 절대 strong_for_mutex=true 아님
+    && (rEntity.strong_for_mutex == false) && (rClue.strong_for_mutex == false) && (rFakeAuth.strong_for_mutex == false)
+    && (scOverMergeBare.strong_for_mutex == false) && (scSplit.strong_for_mutex == false) && (scEntityHomonym.strong_for_mutex == false)
+    # 불변식 전수(truth 승급 0)
+    && (rAuth.durable_truth == false) && (rAuth.accepted_as_truth == false) && (rAuth.promotion_allowed == false)
+    && (rAuth.ontology_assert_allowed == false) && (rAuth.proposer_only == true)
+    && (scPred.durable_truth == false) && (scEntityHomonym.promotion_allowed == false)
+    # ★leak-safe projection: surface 원문 비노출
+    && ((B.elem "surface" projKeys) == false)
+    && (B.elem "tier" projKeys) && (B.elem "strong_for_mutex" projKeys)
+    && (proj.has_concept_id == true);
+}

@@ -1,0 +1,210 @@
+# stdlib.lib.math.interval-arithmetic
+#
+# OWNER-LAW (v0.12-AAF, div-math, 2026-05-21): exact interval
+# arithmetic over integer bounds.
+#
+# Every other div-math owner computes with single exact numbers.
+# This owner computes with *ranges*: a closed integer interval
+# `[lo, hi]` standing for every value between lo and hi. Interval
+# arithmetic is the foundation of rigorous numerics -- the result
+# interval is guaranteed to contain the true result whatever the
+# operands were inside their intervals.
+#
+# # The enclosure guarantee
+#
+#   intervalAdd  [a,b] [c,d] = [a+c, b+d]
+#   intervalSub  [a,b] [c,d] = [a-d, b-c]
+#   intervalMul  [a,b] [c,d] = [min of the 4 corner products,
+#                               max of the 4 corner products]
+#
+# Each result interval is the *tightest* one that still contains
+# every possible product/sum -- exact, no rounding.
+#
+# # Kernel layering
+#
+# interval-arithmetic -> rational. Rational is used only for the
+# midpoint, which is a genuine half-integer.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT floating-point interval arithmetic -- integer bounds.
+#   - NOT interval division (the result can split into two pieces
+#     when the divisor straddles zero) -- a later slice.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/interval-arithmetic.px";
+
+  rational = import ./rational.px;
+
+  min2 = a: b: if a < b then a else b;
+  max2 = a: b: if a > b then a else b;
+
+  # Construct an interval; the plate guards lo <= hi before this.
+  mkInterval = lo: hi: { inherit lo hi; };
+
+  intervalWidth = iv: iv.hi - iv.lo;
+
+  # x lies in [lo, hi].
+  intervalContains = iv: x: iv.lo <= x && x <= iv.hi;
+
+  # iv is a single point (lo == hi).
+  intervalIsPoint = iv: iv.lo == iv.hi;
+
+  # [a,b] + [c,d] = [a+c, b+d].
+  intervalAdd = a: b:
+    mkInterval (a.lo + b.lo) (a.hi + b.hi);
+
+  # [a,b] - [c,d] = [a-d, b-c].
+  intervalSub = a: b:
+    mkInterval (a.lo - b.hi) (a.hi - b.lo);
+
+  # [a,b] * [c,d] = [min, max] of the four corner products. This
+  # is exact and tightest -- the extreme of a bilinear form on a
+  # box is attained at a corner.
+  intervalMul = a: b:
+    let
+      p1 = a.lo * b.lo;
+      p2 = a.lo * b.hi;
+      p3 = a.hi * b.lo;
+      p4 = a.hi * b.hi;
+      lo = min2 (min2 p1 p2) (min2 p3 p4);
+      hi = max2 (max2 p1 p2) (max2 p3 p4);
+    in mkInterval lo hi;
+
+  # Negation: [a,b] -> [-b,-a].
+  intervalNegate = a: mkInterval (0 - a.hi) (0 - a.lo);
+
+  # Two intervals overlap iff neither lies entirely beyond the
+  # other.
+  intervalsOverlap = a: b:
+    a.lo <= b.hi && b.lo <= a.hi;
+
+  # The convex hull: the smallest interval containing both.
+  intervalHull = a: b:
+    mkInterval (min2 a.lo b.lo) (max2 a.hi b.hi);
+
+  # Midpoint -- a genuine half-integer, returned as an exact
+  # rational.
+  intervalMidpoint = iv:
+    rational.mkRational (iv.lo + iv.hi) 2;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "make"
+    "add"
+    "subtract"
+    "multiply"
+    "negate"
+    "width"
+    "contains"
+    "overlap"
+    "intersection"
+    "hull"
+    "midpoint"
+  ];
+
+  # Operations that read a second interval [bl, bh].
+  binaryOps = [ "add" "subtract" "multiply" "overlap"
+                "intersection" "hull" ];
+
+  ivEnvelope = op: iv: {
+    outcome = "interval-computed";
+    operation = op;
+    lo = iv.lo;
+    hi = iv.hi;
+    width = intervalWidth iv;
+  };
+
+  applyInterval = request:
+    let
+      op = request.operation;
+      al = if request ? al then request.al else 0;
+      ah = if request ? ah then request.ah else 0;
+      bl = if request ? bl then request.bl else 0;
+      bh = if request ? bh then request.bh else 0;
+      x  = if request ? x then request.x else 0;
+      binary = builtins.elem op binaryOps;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if al > ah then {
+        outcome = "held-inverted-interval";
+        operation = op;
+        which = "a";
+        reason = "an interval needs lo <= hi";
+      }
+      else if binary && bl > bh then {
+        outcome = "held-inverted-interval";
+        operation = op;
+        which = "b";
+        reason = "an interval needs lo <= hi";
+      }
+      else
+        let
+          a = mkInterval al ah;
+          b = mkInterval bl bh;
+        in
+          if op == "make" then ivEnvelope op a
+          else if op == "add" then ivEnvelope op (intervalAdd a b)
+          else if op == "subtract" then ivEnvelope op (intervalSub a b)
+          else if op == "multiply" then ivEnvelope op (intervalMul a b)
+          else if op == "negate" then ivEnvelope op (intervalNegate a)
+          else if op == "hull" then ivEnvelope op (intervalHull a b)
+          else if op == "width" then {
+            outcome = "interval-computed";
+            operation = op;
+            value = intervalWidth a;
+          }
+          else if op == "contains" then {
+            outcome = "interval-computed";
+            operation = op;
+            holds = intervalContains a x;
+          }
+          else if op == "overlap" then {
+            outcome = "interval-computed";
+            operation = op;
+            holds = intervalsOverlap a b;
+          }
+          else if op == "midpoint" then {
+            outcome = "interval-computed";
+            operation = op;
+            text = rational.ratToString (intervalMidpoint a);
+          }
+          else
+            # op == "intersection"
+            if !(intervalsOverlap a b) then {
+              outcome = "held-disjoint-intervals";
+              operation = op;
+              reason = "the intervals do not overlap; intersection is empty";
+            }
+            else ivEnvelope op
+                   (mkInterval (max2 a.lo b.lo) (min2 a.hi b.hi));
+
+in {
+  inherit
+    ownerName
+    mkInterval
+    intervalWidth
+    intervalContains
+    intervalIsPoint
+    intervalAdd
+    intervalSub
+    intervalMul
+    intervalNegate
+    intervalsOverlap
+    intervalHull
+    intervalMidpoint
+    knownOperations
+    applyInterval;
+  meta = {
+    source = "stdlib math interval arithmetic";
+    owner = ownerName;
+    base = "parametric-math-interval-arithmetic-v0";
+    rev_note = "v0.12-AAF (div-math): exact integer interval arithmetic owner. Closed integer intervals [lo,hi]; add / subtract / multiply each return the tightest interval still containing every possible result (multiply takes min/max of the four corner products); plus negate, width, membership, overlap, intersection, convex hull, and exact-rational midpoint. Kernel layering: interval-arithmetic -> rational. NOT floating-point intervals, NOT interval division, NOT yet a registered lens.";
+  };
+}

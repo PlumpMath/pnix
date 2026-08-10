@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/nasa-donki-store-plan.px — NASA DONKI event metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# experimental refs only; mitigation/warning replacement/graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./nasa-donki.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "science.nasa_donki_events.v1";
+    source = { name = "NASA DONKI space weather event API metadata"; license = "NASA public data API"; scope = "empty seed fallback"; };
+    summary = { event_count = 0; experimental_accepted_truth_false = true; };
+    events = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "nasa-donki-load-v0";
+      source_lens = "stdlib/lib/corpus/nasa-donki-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "science.nasa_donki_events.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "nasa-donki-query-v0";
+      source_lens = "stdlib/lib/corpus/nasa-donki-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "science.nasa_donki_events.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

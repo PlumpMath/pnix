@@ -1,0 +1,28 @@
+# where=location 서브프레임 lock (운영자 통찰): 에-처소에 at/goal subtype 부여(role 노드 탈락 복원).
+#   술어 valency: 있/계시/없→at·가/오→goal·미상→hole. 분석층 metadata only(propToTerm 미독→term_key·math-keep 불변).
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  locSub = s: let p = knm.liftToProposition s; locs = B.filter (r: r.role=="location") p.roles;
+              in if locs==[] then "none" else let loc=B.head locs; in if loc ? subtype then loc.subtype else "none";
+  # 비-agent role+subtype (로/칼로 대조용)
+  whereRole = s: let p = knm.liftToProposition s; na = B.filter (r: r.role != "agent") p.roles;
+              in if na==[] then "none" else let r=B.head na; in r.role + (if r ? subtype then "/"+r.subtype else "");
+in {
+  ga = locSub "철수가 학교에 갔다"; iss = locSub "철수가 학교에 있다";
+  ro = whereRole "철수가 학교로 갔다"; kal = whereRole "철수가 칼로 잘랐다";
+  all_ok =
+       (locSub "철수가 학교에 갔다" == "goal")
+    && (locSub "철수가 학교에 있다" == "at")
+    # ★에서: 활동동사→location/at(정적 처소), 이동(가/오)→source 유지
+    && (whereRole "철수가 학교에서 먹었다" == "location/at")
+    && (whereRole "철수가 도서관에서 공부했다" == "location/at")
+    && (whereRole "철수가 학교에서 왔다" == "source")
+    # ★로/으로 + 이동 = 방향/goal 처소(instrument 오분류 교정); 비이동 로=instrument 유지
+    && (whereRole "철수가 학교로 갔다" == "location/goal")
+    && (whereRole "철수가 집으로 왔다" == "location/goal")
+    && (whereRole "철수가 칼로 잘랐다" == "instrument")
+    # ★term_key/verdict: location 문장 math-keep(로·에서 교정 포함), 비-location 회귀
+    && ((knm.convergeGate "철수가 학교에 갔다").verdict == "math-keep")
+    && ((knm.convergeGate "철수가 학교로 갔다").verdict == "math-keep")
+    && ((knm.convergeGate "철수가 학교에서 먹었다").verdict == "math-keep")
+    && ((knm.convergeGate "철수가 사과를 먹었다").verdict == "math-keep");
+}

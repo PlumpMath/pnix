@@ -1,0 +1,386 @@
+let
+  ownerName = "stdlib.nl.lean.multi-turn-conversation";
+
+  bridge = import nl/lean/nl-to-mathlib-bridge.px;
+  reverse = import nl/lean/lean-to-korean-reverse.px;
+  e2e = import nl/lean/end-to-end-chain-demo.px;
+  lookup = import nl/lean/lookup-aggregate.px;
+  paired = import nl/lean/paired-claim-aggregate.px;
+
+  # === Multi-turn conversational query (agent-NL-200) ================
+  #
+  # Round 11 사용자 vision 의 발전된 form:
+  # > "두 query 이어서 — 첫 query 의 context 가 두번째 query 에 사용"
+  #
+  # 진짜 한글 conversation 구조:
+  #   turn 1: "갈루아군 알려줘"
+  #     → context = { topic="갈루아", category="galois",
+  #                   matched_lean_name="IsGalois",
+  #                   substrate_concept="Galois extension" }
+  #   turn 2: "더 자세히" or "관련된 정리는?" or "한글 동의어는?"
+  #     → context 활용해서 deeper / sibling / synonym 응답
+  #
+  # Conversational follow-up kind:
+  #   - "more-detail" — 같은 topic 의 deeper content
+  #   - "siblings" — 같은 category 의 다른 정리들
+  #   - "synonyms" — 한글 동의어들
+  #   - "substrate-deeper" — 그 substrate concept 의 dependency chain
+  #   - "verify-coverage" — paper-qed dependency 확인
+  #
+  # 모든 turn 결정론적 + LLM 없음 + byte-stable.
+
+  stepKind = "multi-turn-conversation";
+  framework_step =
+    "first query → context → follow-up query → enriched receipt";
+
+  # =================================================================
+  # === Conversation context schema ==================================
+  # =================================================================
+
+  emptyContext = {
+    has_context = false;
+    last_utterance = null;
+    topic = null;  # 한글 keyword
+    english_keyword = null;
+    category = null;
+    matched_lean_name = null;
+    substrate_concept = null;
+    turn_count = 0;
+  };
+
+  # turn 1: 초기 query 로부터 context 추출
+  initialContext = utterance:
+    let q = e2e.fullQuery utterance;
+    in
+      if q.outcome != "end-to-end-chain-emitted"
+      then emptyContext // {
+        last_utterance = utterance;
+        turn_count = 1;
+        held_at_initial = true;
+        initial_outcome = q.outcome;
+      }
+      else {
+        has_context = true;
+        last_utterance = utterance;
+        topic = q.step_1_korean_match;
+        english_keyword = q.step_2_english_keyword;
+        category = q.step_3_category;
+        matched_lean_name = q.step_5_top_lean_name;
+        substrate_concept = q.step_6_substrate_concept;
+        turn_count = 1;
+        last_response = q.step_7_korean_response;
+      };
+
+  # =================================================================
+  # === Follow-up kind detection (deterministic) =====================
+  # =================================================================
+  #
+  # 한글 follow-up keyword → kind.
+
+  followUpKeywords = [
+    { pattern = "더 자세히"; kind = "more-detail"; }
+    { pattern = "자세히"; kind = "more-detail"; }
+    { pattern = "더 알려"; kind = "more-detail"; }
+    { pattern = "관련된"; kind = "siblings"; }
+    { pattern = "비슷한"; kind = "siblings"; }
+    { pattern = "같은 영역"; kind = "siblings"; }
+    { pattern = "동의어"; kind = "synonyms"; }
+    { pattern = "다른 이름"; kind = "synonyms"; }
+    { pattern = "다른 표현"; kind = "synonyms"; }
+    { pattern = "depend"; kind = "substrate-deeper"; }
+    { pattern = "의존"; kind = "substrate-deeper"; }
+    { pattern = "기반"; kind = "substrate-deeper"; }
+    { pattern = "증명"; kind = "verify-coverage"; }
+    { pattern = "검증"; kind = "verify-coverage"; }
+    { pattern = "verify"; kind = "verify-coverage"; }
+  ];
+
+  detectFollowUpKind = utterance:
+    let
+      contains = haystack: needle:
+        let
+          hLen = builtins.stringLength haystack;
+          nLen = builtins.stringLength needle;
+          go = i:
+            if i + nLen > hLen then false
+            else if builtins.substring i nLen haystack == needle then true
+            else go (i + 1);
+        in if nLen == 0 then true
+           else if hLen < nLen then false
+           else go 0;
+      matchingEntry =
+        builtins.filter (e: contains utterance e.pattern) followUpKeywords;
+    in
+      if matchingEntry == [] then "unknown-follow-up-kind"
+      else (builtins.head matchingEntry).kind;
+
+  # =================================================================
+  # === Follow-up dispatch ===========================================
+  # =================================================================
+
+  followUp = context: utterance:
+    if !(context.has_context or false)
+    then {
+      outcome = "held-no-context-for-follow-up";
+      utterance = utterance;
+      held_reason = "first turn 이 Held 거나 unset — context 없음";
+    }
+    else
+      let kind = detectFollowUpKind utterance;
+      in
+        if kind == "unknown-follow-up-kind"
+        then {
+          outcome = "held-unrecognized-follow-up";
+          utterance = utterance;
+          context_topic = context.topic;
+          held_reason = "follow-up 의 종류 인식 못함";
+        }
+        else if kind == "more-detail"
+        then
+          # 같은 lean entry 의 더 깊은 정보 (file_path, code_preview)
+          let entry = lookup.lookupByName context.matched_lean_name;
+          in {
+            outcome = "follow-up-more-detail-emitted";
+            inherit utterance kind;
+            context_topic = context.topic;
+            target_lean_name = context.matched_lean_name;
+            lean_file = entry.file_path;
+            lean_line = entry.start_line;
+            lean_kind = entry.kind;
+            lean_preview = entry.code_preview;
+            korean_response =
+              "'" + context.topic + "' (" + context.matched_lean_name +
+              ") 의 더 자세한 내용: " + entry.file_path + ":" +
+              builtins.toString entry.start_line + " — " + entry.code_preview;
+          }
+        else if kind == "siblings"
+        then
+          # 같은 category 의 다른 entries
+          let siblings = lookup.byCategory context.category;
+              # 상위 5만
+              take = n: lst:
+                if n == 0 || lst == [] then []
+                else [(builtins.head lst)] ++ take (n - 1) (builtins.tail lst);
+              topSiblings = take 5 siblings;
+          in {
+            outcome = "follow-up-siblings-emitted";
+            inherit utterance kind;
+            context_topic = context.topic;
+            category = context.category;
+            sibling_count = builtins.length siblings;
+            top_siblings = builtins.map (e: { name = e.full_name; kind = e.kind; }) topSiblings;
+            korean_response =
+              "'" + context.category + "' 카테고리의 다른 정리들 (" +
+              builtins.toString (builtins.length siblings) + " 개): " +
+              builtins.concatStringsSep ", "
+                (builtins.map (e: e.full_name) topSiblings);
+          }
+        else if kind == "synonyms"
+        then
+          let synonyms = reverse.reverseEnglishToKorean context.english_keyword;
+          in {
+            outcome = "follow-up-synonyms-emitted";
+            inherit utterance kind;
+            context_topic = context.topic;
+            english_keyword = context.english_keyword;
+            synonyms = synonyms;
+            synonym_count = builtins.length synonyms;
+            korean_response =
+              "'" + context.english_keyword + "' 의 한글 동의어들: " +
+              (if synonyms == [] then "(등록 없음)"
+               else builtins.concatStringsSep ", "
+                      (builtins.map (s: s.ko) synonyms));
+          }
+        else if kind == "substrate-deeper"
+        then
+          # substrate concept 이 있으면 substrate file 표시
+          if context.substrate_concept == null
+          then {
+            outcome = "held-no-substrate-paired-for-context";
+            inherit utterance kind;
+            context_topic = context.topic;
+          }
+          else {
+            outcome = "follow-up-substrate-deeper-emitted";
+            inherit utterance kind;
+            context_topic = context.topic;
+            substrate_concept = context.substrate_concept;
+            korean_response =
+              "'" + context.topic + "' 는 substrate '" +
+              context.substrate_concept +
+              "' 와 paired (외부 verification proxy).";
+          }
+        else if kind == "verify-coverage"
+        then
+          # paired claim 의 verification 상태
+          if context.matched_lean_name == null
+          then {
+            outcome = "held-no-lean-name-for-verify";
+            inherit utterance kind;
+            context_topic = context.topic;
+          }
+          else
+            let
+              verifications = builtins.filter
+                (c: c.lean_full_name == context.matched_lean_name)
+                paired.pairedClaims;
+              hasPaired = verifications != [];
+            in {
+              outcome = "follow-up-verify-coverage-emitted";
+              inherit utterance kind;
+              context_topic = context.topic;
+              lean_name = context.matched_lean_name;
+              paired_present = hasPaired;
+              paired_substrate_concept =
+                if hasPaired
+                then (builtins.head verifications).substrate_concept
+                else null;
+              korean_response =
+                if hasPaired
+                then "'" + context.matched_lean_name +
+                     "' 는 substrate paired claim 박혀 있음. " +
+                     "외부 Mathlib kernel-verified."
+                else "'" + context.matched_lean_name +
+                     "' 는 Mathlib 에 등록 (kernel-verified) 이지만 substrate paired claim 미박힘.";
+            }
+        else { outcome = "held-internal-error"; inherit utterance kind; };
+
+  # =================================================================
+  # === Demonstration sessions ========================================
+  # =================================================================
+  #
+  # 각 demo session 은 turn 1 + turn 2 로 conversation 박음.
+
+  demoSessions = [
+    {
+      label = "session-galois-detail";
+      turn_1_utterance = "갈루아군";
+      turn_2_utterance = "더 자세히";
+      expected_kind = "more-detail";
+    }
+    {
+      label = "session-sheaf-siblings";
+      turn_1_utterance = "층";
+      turn_2_utterance = "관련된";
+      expected_kind = "siblings";
+    }
+    {
+      label = "session-padic-synonyms";
+      turn_1_utterance = "p진";
+      turn_2_utterance = "다른 이름";
+      expected_kind = "synonyms";
+    }
+    {
+      label = "session-galois-substrate";
+      turn_1_utterance = "갈루아군";
+      turn_2_utterance = "기반";
+      expected_kind = "substrate-deeper";
+    }
+    {
+      label = "session-fdrep-verify";
+      turn_1_utterance = "유한차원표현";
+      turn_2_utterance = "검증";
+      expected_kind = "verify-coverage";
+    }
+    {
+      label = "session-unknown-follow-up";
+      turn_1_utterance = "갈루아군";
+      turn_2_utterance = "asdf 모르는말";
+      expected_kind = "unknown-follow-up-kind";
+      expected_outcome = "held-unrecognized-follow-up";
+    }
+  ];
+
+  runDemoSession = session:
+    let
+      ctx = initialContext session.turn_1_utterance;
+      followResult = followUp ctx session.turn_2_utterance;
+    in {
+      inherit (session) label turn_1_utterance turn_2_utterance expected_kind;
+      turn_1_context = ctx;
+      turn_2_result = followResult;
+      success =
+        if session ? expected_outcome
+        then followResult.outcome == session.expected_outcome
+        else followResult.outcome != null
+             && !(builtins.isString followResult.outcome
+                  && builtins.substring 0 5 followResult.outcome == "held-");
+    };
+
+  allDemoResults = builtins.map runDemoSession demoSessions;
+  demoSuccessCount =
+    builtins.length (builtins.filter (r: r.success) allDemoResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_initialContext = true;
+    has_followUp = true;
+    has_detectFollowUpKind = true;
+    follow_up_kind_count = 5;
+    follow_up_keyword_pattern_count = 15;  # hardcoded
+    demo_session_count = builtins.length demoSessions;
+    demo_success_count = demoSuccessCount;
+    bridge_owner_inherited = bridge.ownerName;
+    reverse_owner_inherited = reverse.ownerName;
+    e2e_owner_inherited = e2e.ownerName;
+    multi_turn_supported = true;
+    deterministic = true;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyMultiTurnPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "multi-turn-conversation-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "initial" request then {
+      outcome = "initial-context-emitted";
+      receipt = initialContext request.initial;
+    }
+    else if builtins.hasAttr "session" request then
+      let s = request.session;
+          ctx = initialContext s.turn_1;
+          fu = followUp ctx s.turn_2;
+      in {
+        outcome = "session-emitted";
+        receipt = {
+          turn_1_context = ctx;
+          turn_2_result = fu;
+        };
+      }
+    else if builtins.hasAttr "detect_kind" request then {
+      outcome = "follow-up-kind-detected";
+      receipt = { kind = detectFollowUpKind request.detect_kind; };
+    }
+    else if builtins.hasAttr "demo_cases" request then {
+      outcome = "demo-sessions-emitted"; receipt = demoSessions;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "demo-results-emitted";
+      receipt = {
+        total = builtins.length demoSessions;
+        success = demoSuccessCount;
+        results = allDemoResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "initial" "session" "detect_kind"
+             "demo_cases" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit emptyContext initialContext detectFollowUpKind followUp;
+  inherit followUpKeywords demoSessions runDemoSession allDemoResults;
+  inherit demoSuccessCount;
+  inherit inventorySummary applyMultiTurnPlate;
+}

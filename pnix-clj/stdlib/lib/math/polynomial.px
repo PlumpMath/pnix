@@ -1,0 +1,236 @@
+# stdlib.lib.math.polynomial
+#
+# OWNER-LAW (v0.12-PP, div-math, 2026-05-21): exact univariate
+# polynomial algebra over integer coefficients.
+#
+# The math lane can evaluate scalar arithmetic, factor integers,
+# do exact fractions, solve linear equations, count, and work in
+# Z/mZ. It had no representation for a *polynomial* -- the bridge
+# object between arithmetic and algebra. This owner adds it.
+#
+# # Representation
+#
+# A polynomial is the coefficient list `[a0 a1 a2 ...]`, ascending
+# by power: `a0 + a1*x + a2*x^2 + ...`. `[2 3 1]` is
+# `2 + 3*x + x^2`. The empty list and the all-zeros list both mean
+# the zero polynomial.
+#
+# # Operations
+#
+#   - polyEval   -- Horner's method: O(degree) mul/add, no powers
+#   - polyDegree -- highest index carrying a non-zero coefficient
+#   - polyAdd    -- coefficient-wise, length-padded
+#   - polyScale  -- multiply by an integer scalar
+#   - polyMul    -- convolution (the Cauchy product)
+#   - polyDerivative -- formal derivative, `d/dx`
+#   - polyToString   -- canonical text with proper +/- signs
+#
+# Every result is exact integer data. Same input -> same receipt.
+#
+# # Standalone
+#
+# Imports nothing -- integer coefficients only.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT multivariate.
+#   - NOT a root finder (a quadratic-root slice could build on it).
+#   - NOT polynomial division / gcd (a later slice).
+#   - NOT rational-coefficient (a later slice could lift the
+#     coefficient ring to rational.px).
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/polynomial.px";
+
+  # Inclusive integer range [lo .. hi] -- pnixc-meta has no genList.
+  rangeList = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeList (lo + 1) hi;
+
+  intAbs = n: if n < 0 then 0 - n else n;
+
+  # Coefficient at `idx`, with out-of-range treated as 0 (a
+  # polynomial has infinitely many trailing zero coefficients).
+  coeffAt = lst: idx:
+    if idx >= 0 && idx < builtins.length lst
+    then builtins.elemAt lst idx
+    else 0;
+
+  # Evaluate the polynomial at integer `x` by Horner's method:
+  # a0 + x*(a1 + x*(a2 + ...)). O(degree), no exponentiation.
+  polyEval = coeffs: x:
+    let
+      go = i: acc:
+        if i < 0 then acc
+        else go (i - 1) (acc * x + builtins.elemAt coeffs i);
+    in go (builtins.length coeffs - 1) 0;
+
+  # Degree = highest index with a non-zero coefficient. The zero
+  # polynomial has degree -1 (the conventional "below 0" marker).
+  polyDegree = coeffs:
+    let
+      go = i:
+        if i < 0 then (0 - 1)
+        else if builtins.elemAt coeffs i != 0 then i
+        else go (i - 1);
+    in go (builtins.length coeffs - 1);
+
+  # Coefficient-wise sum, padded to the longer operand.
+  polyAdd = p: q:
+    let
+      np = builtins.length p;
+      nq = builtins.length q;
+      n  = if np > nq then np else nq;
+    in
+      if n == 0 then []
+      else builtins.map
+             (i: (coeffAt p i) + (coeffAt q i))
+             (rangeList 0 (n - 1));
+
+  # Multiply every coefficient by an integer scalar.
+  polyScale = k: p: builtins.map (c: k * c) p;
+
+  # Polynomial product (convolution): the coefficient of x^i in
+  # p*q is sum_{j} p[j] * q[i-j].
+  polyMul = p: q:
+    let
+      np = builtins.length p;
+      nq = builtins.length q;
+      nr = np + nq - 1;
+      termAt = i:
+        builtins.foldl'
+          (acc: j: acc + (coeffAt p j) * (coeffAt q (i - j)))
+          0
+          (rangeList 0 i);
+    in
+      if np == 0 || nq == 0 then []
+      else builtins.map termAt (rangeList 0 (nr - 1));
+
+  # Formal derivative. d/dx of a0 + a1*x + a2*x^2 + ... is
+  # a1 + 2*a2*x + 3*a3*x^2 + ... -- drop a0, scale each remaining
+  # coefficient by its power. The derivative of a constant is [0].
+  polyDerivative = p:
+    let n = builtins.length p;
+    in
+      if n <= 1 then [ 0 ]
+      else builtins.map
+             (i: i * (builtins.elemAt p i))
+             (rangeList 1 (n - 1));
+
+  # Canonical text. Ascending powers, zero terms skipped, signs
+  # rendered as ` + ` / ` - `. The zero polynomial prints as "0".
+  polyToString = coeffs:
+    let
+      n = builtins.length coeffs;
+      termBody = c: p:
+        let a = builtins.toString (intAbs c);
+        in
+          if p == 0 then a
+          else if p == 1 then a + "x"
+          else a + "x^" + builtins.toString p;
+      go = i: acc:
+        if i >= n then acc
+        else
+          let c = builtins.elemAt coeffs i;
+          in
+            if c == 0 then go (i + 1) acc
+            else
+              let
+                body = termBody c i;
+                entry =
+                  if acc == ""
+                  then (if c < 0 then "-" + body else body)
+                  else (if c < 0
+                        then acc + " - " + body
+                        else acc + " + " + body);
+              in go (i + 1) entry;
+      r = go 0 "";
+    in if r == "" then "0" else r;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "evaluate"
+    "degree"
+    "add"
+    "scale"
+    "multiply"
+    "derivative"
+    "to-string"
+  ];
+
+  applyPolynomial = request:
+    let
+      op = request.operation;
+      p  = request.p;
+      q  = if request ? q then request.q else [];
+      x  = if request ? x then request.x else 0;
+      k  = if request ? k then request.k else 1;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "evaluate" then {
+        outcome = "polynomial-computed";
+        operation = op; p = p; x = x;
+        value = polyEval p x;
+      }
+      else if op == "degree" then {
+        outcome = "polynomial-computed";
+        operation = op; p = p;
+        degree = polyDegree p;
+      }
+      else if op == "add" then {
+        outcome = "polynomial-computed";
+        operation = op;
+        coefficients = polyAdd p q;
+        text = polyToString (polyAdd p q);
+      }
+      else if op == "scale" then {
+        outcome = "polynomial-computed";
+        operation = op; k = k;
+        coefficients = polyScale k p;
+        text = polyToString (polyScale k p);
+      }
+      else if op == "multiply" then {
+        outcome = "polynomial-computed";
+        operation = op;
+        coefficients = polyMul p q;
+        text = polyToString (polyMul p q);
+      }
+      else if op == "derivative" then {
+        outcome = "polynomial-computed";
+        operation = op;
+        coefficients = polyDerivative p;
+        text = polyToString (polyDerivative p);
+      }
+      else {
+        # op == "to-string"
+        outcome = "polynomial-computed";
+        operation = op; p = p;
+        text = polyToString p;
+      };
+
+in {
+  inherit
+    ownerName
+    rangeList
+    coeffAt
+    polyEval
+    polyDegree
+    polyAdd
+    polyScale
+    polyMul
+    polyDerivative
+    polyToString
+    knownOperations
+    applyPolynomial;
+  meta = {
+    source = "stdlib math polynomial";
+    owner = ownerName;
+    base = "parametric-math-polynomial-v0";
+    rev_note = "v0.12-PP (div-math): exact univariate polynomial algebra owner. Coefficient-list representation [a0 a1 a2 ...]. Horner evaluation, degree, coefficient-wise add, scalar scale, convolution multiply, formal derivative, canonical-text projection with proper +/- signs. Standalone, integer coefficients, exact. NOT multivariate, NOT a root finder, NOT polynomial division, NOT rational-coefficient, NOT yet a registered lens.";
+  };
+}

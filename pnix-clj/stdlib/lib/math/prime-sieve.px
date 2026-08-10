@@ -1,0 +1,151 @@
+# stdlib.lib.math.prime-sieve
+#
+# OWNER-LAW (v0.12-AAK, div-math, 2026-05-21): the Sieve of
+# Eratosthenes -- generating primes in bulk.
+#
+# number-theory.px answers "is this one number prime" by trial
+# division. This owner answers the bulk questions -- "what are ALL
+# the primes up to n", "how many are there", "what is the k-th
+# one" -- by the Sieve of Eratosthenes, a genuinely different and
+# classic algorithm.
+#
+# # The recursive functional sieve
+#
+# `sieveUpTo` works the textbook way: take the smallest remaining
+# candidate as a prime, strike out every multiple of it from the
+# rest, recurse. Starting from the list 2 .. n this yields exactly
+# the primes up to n, in order, exact and deterministic.
+#
+# From the sieve fall out:
+#
+#   primeCount n   = pi(n), the prime-counting function
+#   nthPrime k     = the k-th prime (nthPrime 1 = 2)
+#   primesBetween  = the primes in a closed range
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a segmented or wheel-factorised sieve -- the simple
+#     recursive sieve, fine for the modest n this substrate uses.
+#   - NOT probabilistic primality (that is number-theory.px's
+#     trial division; this is exact too, just bulk).
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/prime-sieve.px";
+
+  intMod = a: b: a - b * (a / b);
+
+  rangeFrom = lo: hi:
+    if lo > hi then [] else [ lo ] ++ rangeFrom (lo + 1) hi;
+
+  # The Sieve of Eratosthenes: the head of the candidate list is
+  # prime; strike its multiples from the tail; recurse.
+  sieveUpTo = n:
+    let
+      sieve = cands:
+        if cands == [] then []
+        else
+          let p = builtins.head cands;
+          in [ p ]
+             ++ sieve
+                  (builtins.filter
+                    (x: intMod x p != 0)
+                    (builtins.tail cands));
+    in if n < 2 then [] else sieve (rangeFrom 2 n);
+
+  # pi(n): the number of primes not exceeding n.
+  primeCount = n: builtins.length (sieveUpTo n);
+
+  # The k-th prime (1-indexed: nthPrime 1 = 2). The sieve bound
+  # k*13 + 15 comfortably exceeds the k-th prime for the modest k
+  # this substrate uses (p_k grows like k ln k).
+  nthPrime = k:
+    let primes = sieveUpTo (k * 13 + 15);
+    in
+      if k < 1 || k > builtins.length primes then null
+      else builtins.elemAt primes (k - 1);
+
+  # The primes in the closed range [lo, hi].
+  primesBetween = lo: hi:
+    builtins.filter (p: p >= lo) (sieveUpTo hi);
+
+  # Exact primality via the sieve (n appears in the sieve up to n).
+  isPrimeBySieve = n:
+    n >= 2 && builtins.elem n (sieveUpTo n);
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "sieve"
+    "count"
+    "nth-prime"
+    "primes-between"
+    "is-prime"
+  ];
+
+  applyPrimeSieve = request:
+    let
+      op = request.operation;
+      n  = if request ? n then request.n else 0;
+      k  = if request ? k then request.k else 1;
+      lo = if request ? lo then request.lo else 0;
+      hi = if request ? hi then request.hi else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "sieve" then {
+        outcome = "prime-sieve-computed";
+        operation = op; n = n;
+        primes = sieveUpTo n;
+      }
+      else if op == "count" then {
+        outcome = "prime-sieve-computed";
+        operation = op; n = n;
+        value = primeCount n;
+      }
+      else if op == "nth-prime" then
+        if k < 1 then {
+          outcome = "held-non-positive-index";
+          operation = op; k = k;
+        }
+        else {
+          outcome = "prime-sieve-computed";
+          operation = op; k = k;
+          value = nthPrime k;
+        }
+      else if op == "primes-between" then {
+        outcome = "prime-sieve-computed";
+        operation = op; lo = lo; hi = hi;
+        primes = primesBetween lo hi;
+      }
+      else {
+        # op == "is-prime"
+        outcome = "prime-sieve-computed";
+        operation = op; n = n;
+        holds = isPrimeBySieve n;
+      };
+
+in {
+  inherit
+    ownerName
+    sieveUpTo
+    primeCount
+    nthPrime
+    primesBetween
+    isPrimeBySieve
+    knownOperations
+    applyPrimeSieve;
+  meta = {
+    source = "stdlib math prime sieve";
+    owner = ownerName;
+    base = "parametric-math-prime-sieve-v0";
+    rev_note = "v0.12-AAK (div-math): Sieve of Eratosthenes owner. Bulk prime generation -- sieveUpTo (the recursive functional sieve), primeCount (pi(n)), nthPrime (the k-th prime), primesBetween, and exact sieve-based primality. A different algorithm from number-theory.px's per-number trial division. Standalone. NOT a segmented/wheel sieve, NOT probabilistic, NOT yet a registered lens.";
+  };
+}

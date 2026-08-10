@@ -1,0 +1,209 @@
+# stdlib.lib.math.narcissistic-numbers
+#
+# OWNER-LAW (v0.12-ABL, div-math, 2026-05-22): narcissistic
+# (Armstrong) numbers and Munchausen numbers.
+#
+# # Narcissistic numbers
+#
+# A d-digit number is NARCISSISTIC when it equals the sum of its
+# own digits each raised to the d-th power:
+#
+#     153  = 1^3 + 5^3 + 3^3
+#     9474 = 9^4 + 4^4 + 7^4 + 4^4
+#
+# Every single digit is trivially narcissistic (d = d^1). The
+# first non-trivial ones are 153, 370, 371, 407, then 1634, 8208,
+# 9474, then 54748, 92727, 93084. There are only finitely many --
+# above 60 digits the digit-power sum can no longer reach a
+# d-digit number -- so this is a genuinely finite family.
+#
+# # Munchausen numbers
+#
+# A MUNCHAUSEN number equals the sum of its digits each raised to
+# the power of ITSELF, with the convention 0^0 = 0:
+#
+#     3435 = 3^3 + 4^4 + 3^3 + 5^5 = 27 + 256 + 27 + 3125
+#
+# In base 10 only 0, 1, and 3435 are Munchausen below 10^8 (the
+# fourth, 438579088, is larger).
+#
+# # Standalone, exact
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT base-independent -- base 10 only.
+#   - The single-number tests reach 16-digit inputs; the
+#     up-to-limit scans are linear and capped lower.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/narcissistic-numbers.px";
+
+  # Divide-and-conquer range builder: the recursion depth is
+  # logarithmic in (hi - lo), so the linear scans below stay well
+  # inside the evaluator's recursion budget even at the cap.
+  rangeList = lo: hi:
+    if lo > hi then []
+    else if lo == hi then [ lo ]
+    else
+      let mid = (lo + hi) / 2;
+      in (rangeList lo mid) ++ (rangeList (mid + 1) hi);
+
+  # The base-10 digits of n, most-significant-first (0 -> [0]).
+  digitsList = n:
+    let
+      go = m: acc:
+        if m == 0 then acc
+        else go (m / 10) ([ (m - (m / 10) * 10) ] ++ acc);
+    in if n == 0 then [ 0 ] else go n [];
+
+  digitCount = n: builtins.length (digitsList n);
+
+  # base^exp for exp >= 0 (intPow b 0 = 1).
+  intPow = b: e: if e <= 0 then 1 else b * intPow b (e - 1);
+
+  # Does n equal the sum of its digits each raised to the
+  # digit-count power?
+  isNarcissistic = n:
+    if n < 0 then false
+    else
+      let
+        ds = digitsList n;
+        d  = builtins.length ds;
+      in (builtins.foldl' (acc: x: acc + intPow x d) 0 ds) == n;
+
+  # Sum of the digits of n each raised to an explicit power p.
+  digitPowerSum = n: p:
+    builtins.foldl' (acc: x: acc + intPow x p) 0 (digitsList n);
+
+  # Does n equal the sum of its digits each raised to itself, with
+  # the convention 0^0 = 0?
+  isMunchausen = n:
+    if n < 0 then false
+    else
+      let ds = digitsList n;
+      in (builtins.foldl'
+            (acc: x: acc + (if x == 0 then 0 else intPow x x))
+            0 ds) == n;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [
+    "is-narcissistic"
+    "narcissistic-up-to"
+    "digit-power-sum"
+    "is-munchausen"
+    "munchausen-up-to"
+  ];
+
+  # Single-number tests: a 16-digit cap keeps every digit-power sum
+  # (at most 17 * 9^17) inside 64-bit range.
+  numberLimit = 10000000000000000;
+  # `digit-power-sum`'s explicit power.
+  powerLimit = 18;
+  # The up-to-limit scans are linear; this cap bounds them.
+  listLimit = 200000;
+
+  applyNarcissisticNumbers = request:
+    let
+      op = request.operation;
+      n     = if request ? n then request.n else 0;
+      p     = if request ? p then request.p else 0;
+      limit = if request ? limit then request.limit else 0;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if op == "narcissistic-up-to" || op == "munchausen-up-to" then
+        if limit < 0 then {
+          outcome = "held-negative-number";
+          operation = op; limit = limit;
+        }
+        else if limit > listLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; limit = limit;
+          cap = listLimit;
+          reason = "the scan is linear in the limit; it is capped to stay bounded";
+        }
+        else
+          let
+            pred = if op == "narcissistic-up-to"
+                   then isNarcissistic else isMunchausen;
+            nums = builtins.filter pred (rangeList 0 limit);
+          in {
+            outcome = "narcissistic-numbers-computed";
+            operation = op; limit = limit;
+            numbers = nums;
+            count = builtins.length nums;
+          }
+      else if op == "digit-power-sum" then
+        if n < 0 then {
+          outcome = "held-negative-number";
+          operation = op; n = n;
+        }
+        else if n > numberLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; n = n;
+          limit = numberLimit;
+        }
+        else if p < 0 then {
+          outcome = "held-negative-power";
+          operation = op; p = p;
+        }
+        else if p > powerLimit then {
+          outcome = "held-argument-too-large";
+          operation = op; p = p;
+          limit = powerLimit;
+          reason = "the power is capped so a digit raised to it stays in 64-bit range";
+        }
+        else {
+          outcome = "narcissistic-numbers-computed";
+          operation = op; n = n; p = p;
+          value = digitPowerSum n p;
+        }
+      # is-narcissistic / is-munchausen, both acting on a single n.
+      else if n < 0 then {
+        outcome = "held-negative-number";
+        operation = op; n = n;
+      }
+      else if n > numberLimit then {
+        outcome = "held-argument-too-large";
+        operation = op; n = n;
+        limit = numberLimit;
+        reason = "n is capped so the digit-power sum stays in 64-bit range";
+      }
+      else if op == "is-narcissistic" then {
+        outcome = "narcissistic-numbers-computed";
+        operation = op; n = n;
+        digit_count = digitCount n;
+        is_narcissistic = isNarcissistic n;
+      }
+      else {
+        # op == "is-munchausen"
+        outcome = "narcissistic-numbers-computed";
+        operation = op; n = n;
+        is_munchausen = isMunchausen n;
+      };
+
+in {
+  inherit
+    ownerName
+    digitsList
+    digitCount
+    intPow
+    isNarcissistic
+    digitPowerSum
+    isMunchausen
+    knownOperations
+    applyNarcissisticNumbers;
+  meta = {
+    source = "stdlib math narcissistic numbers";
+    owner = ownerName;
+    base = "parametric-math-narcissistic-numbers-v0";
+    rev_note = "v0.12-ABL (div-math): narcissistic (Armstrong) numbers and Munchausen numbers. isNarcissistic tests whether a d-digit number equals the sum of its digits each raised to the d-th power (153, 370, 371, 407, 1634, 8208, 9474, ...); digitPowerSum is the same sum with an explicit power; isMunchausen tests the sum of digit^digit with 0^0=0 (0, 1, 3435); narcissistic-up-to and munchausen-up-to enumerate each family. Plate applyNarcissisticNumbers (5 operations). Standalone, base 10, exact integers (single-number tests reach 16 digits, scans capped lower). NOT base-independent, NOT yet a registered lens.";
+  };
+}

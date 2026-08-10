@@ -1,0 +1,128 @@
+# stdlib.lib.nl.nl-service-route-proposer
+#
+# Lightweight fast-cue proposer for the universal AI service route.
+#
+# This module is deliberately not the operation dispatcher. It only emits a
+# ServiceRouteProposed receipt (typed, propose-only, non-durable) so that NL/code/math
+# surfaces can be carried to the right owner without becoming ontology truth.
+# Full dispatch/execute remains with the target owner after dispose.
+let
+  B = builtins;
+  se = import ../agent/session-event.px;
+
+  slen = s: B.stringLength s;
+  sub = start: len: s: B.substring start len s;
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i: if i + n > h then false
+                else if (sub i n hay) == needle then true
+                else go (i + 1);
+    in if n == 0 then false else go 0;
+  containsAny = utterance: cues:
+    B.any (cue: hasInfix cue utterance) cues;
+
+  # Definition/explanation surfaces are grounded concept questions, not route
+  # requests. Keep this narrow enough that "인수분해해서 설명해줘" still reaches
+  # the math route, while "pnix sample input이 무엇인지" stays out of eval.
+  conceptQuestionCues = [
+    "무엇인지" "뭐야" "뜻하는지" "뜻을 설명" "의미를 설명"
+    "을 설명" "를 설명"
+    "what is " "what are " "what does " " mean"
+  ];
+  isConceptQuestionSurface = utterance: containsAny utterance conceptQuestionCues;
+
+  # Coarse cue classes only. Do not store cue surface as ontology data.
+  # `eval`/`evaluate`/`평가`/`샘플` are common domain words in corpus
+  # catalogs. Keep the analysis route tied to the pnix evaluator surface or a
+  # concrete pnix sample artifact.
+  pnixEvalCues = [
+    "pnix" "pnix eval" "pnix evaluate" "pnix 평가" "pnix 샘플"
+    "docs/pnix-sample-inputs.md"
+  ];
+  # Route proposal is cheap evidence, but it must still be an action signal.
+  # Bare nouns like "함수", "파일", "symbol" are concept/domain mentions; they
+  # must not open the coding route by themselves. The autonomous disposer can
+  # still ask for clarification after an explicit code/action cue fires.
+  codeCues = [
+    "rename " "rename symbol" "refactor" "import " "unused"
+    "write code" "generate code" "emit code" "code emit" "write program" "program code"
+    "source code" "function code"
+    "코드로" "코드화" "코드 작성" "코드 만들어" "코드 생성" "소스 코드" "함수 코드" "함수 작성" "함수 만들어"
+    "파일 수정" "파일 변경" "파일 패치" "파일 만들어"
+    "이름 바꿔" "이름 변경해" "이름 변경해줘" "심볼 이름" "심볼 변경"
+  ];
+  mathCues = [
+    "더하기" "빼기" "곱하기" "나누기" "제곱" "나머지"
+    "미분" "적분" "인수분해" "약분" "통분" "행렬"
+    "factorize" "factorise" "factor x" "factor y" "factor polynomial" "factor expression"
+    "differentiate" "derivative of" "take derivative"
+  ];
+
+  classifyUtteranceRoute = utterance:
+    if !(B.isString utterance) || utterance == "" then null
+    else if isConceptQuestionSurface utterance then null
+    else if containsAny utterance pnixEvalCues then {
+      route = "analysis";
+      cue_class = "pnix-eval";
+    }
+    else if containsAny utterance codeCues then {
+      route = "code";
+      cue_class = "code";
+    }
+    else if containsAny utterance mathCues then {
+      route = "math";
+      cue_class = "math";
+    }
+    else null;
+
+  proposeServiceRouteForUtterance =
+    { utterance
+    , proposed_by ? "stdlib.nl.nl-service-route-proposer"
+    , face ? "unknown"
+    , source_ref ? null
+    }:
+    let c = classifyUtteranceRoute utterance;
+    in if c == null then {
+         service_route_proposed = false;
+       }
+       else let receipt = se.mkServiceRouteReceipt {
+                  source_kind = "utterance";
+                  inherit source_ref proposed_by face;
+                  proposed_route = c.route;
+                  reason = "fast-cue:" + c.cue_class;
+                  evidence_refs = [ ("cue-class:" + c.cue_class) ];
+                  obligations = [
+                    "dispose-by-target-owner"
+                    "do-not-promote-route-tag"
+                    "do-not-store-nl-surface-as-ontology"
+                  ];
+                };
+                event = se.mkEvent "ServiceRouteProposed" { receipt = receipt; };
+                routed = (se.handleEvent se.emptyContext event).routed;
+            in {
+              service_route_proposed = routed.decision == "propose-only";
+              receipt = receipt;
+              routed = routed;
+              proposed_route = receipt.proposed_route;
+              cue_class = c.cue_class;
+              decision = routed.decision;
+              # Effect locks live on the receipt. `routeEvent` projects the
+              # decision, but held/known branches need not mirror every lock
+              # field. Read the single canonical receipt shape to avoid
+              # session-event/proposer drift.
+              durable_truth = receipt.durable_truth;
+              dispose_required = receipt.dispose_required;
+              route_execute_allowed = receipt.route_execute_allowed;
+              accepted_as_truth = receipt.accepted_as_truth;
+            };
+in
+{
+  inherit pnixEvalCues codeCues mathCues conceptQuestionCues isConceptQuestionSurface
+          classifyUtteranceRoute proposeServiceRouteForUtterance;
+  ownerName = "stdlib.nl.nl-service-route-proposer";
+  meta = {
+    owner = "stdlib.nl.nl-service-route-proposer";
+    role = "Fast cue → ServiceRouteProposed receipt. Propose-only route evidence for universal AI service faces; no dispatch, no execution, no ontology assertion.";
+    note = "Created after operator stop: classifier must emit typed route receipt, not durable modality tags. Full nl-operation-dispatch remains the fine operation owner but is too heavy for the dialogue loop.";
+  };
+}

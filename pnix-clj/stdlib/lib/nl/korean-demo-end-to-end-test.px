@@ -1,0 +1,26 @@
+# stdlib/lib/nl/korean-demo-end-to-end-test.px — CC5 데모 컷: 한국어 end-to-end 사용가능 검증.
+#
+# 우선순위1(코어 완성)의 종착: (B) 라이브 역전 없이 *현 .px 거울 그대로* 한국어 입력→이해+역생성+한국어 답변이
+# 공개 entry(chatRespond)로 end-to-end 동작함을 고정. 핵심 구문(평서/능력/수혜/되다보어/의도) 전부 understood + 정확 regen.
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  d = s: knm.chatRespond s;
+  ok = s: (d s).understood;
+  regen = s: let r = d s; in if r ? regenerated then r.regenerated else "-";
+  hasAnswer = s: let r = d s; in (r ? answer) && (r.answer != "") && (r.answer != "-");
+in {
+  ex_decl = (d "철수가 사과를 먹었다").answer;
+  ex_become = (d "철수가 의사가 된다").answer;
+  all_ok =
+    # ★핵심 구문 전부 understood + regen 정확(이해↔생성 한 reflection) + 한국어 답변 산출
+       (ok "철수가 사과를 먹었다") && (regen "철수가 사과를 먹었다" == "철수가 사과를 먹었다")
+    && (ok "철수가 갈 수 있다") && (regen "철수가 갈 수 있다" == "철수가 갈 수 있다")
+    && (ok "철수가 영희를 도와 준다") && (regen "철수가 영희를 도와 준다" == "철수가 영희를 도와 준다")
+    && (ok "철수가 의사가 된다") && (regen "철수가 의사가 된다" == "철수가 의사가 된다")
+    && (ok "철수가 학교에 가려고 한다") && (regen "철수가 학교에 가려고 한다" == "철수가 학교에 가려고 한다")
+    && (ok "철수가 학교에 간 적이 있다")
+    && (hasAnswer "철수가 사과를 먹었다") && (hasAnswer "철수가 의사가 된다")
+    # ★복합문 라이브 처리(이어34/35): flatten 없이 understood + 정확 재생성 + complex 그래프
+    && (ok "비가 오면 집에 간다") && (regen "비가 오면 집에 간다" == "비가 오면 집에 간다")
+    && ((d "비가 오면 집에 간다").complex == true)
+    && (ok "철수가 밥을 먹고 학교에 갔다") && (regen "철수가 밥을 먹고 학교에 갔다" == "철수가 밥을 먹고 학교에 갔다");
+}

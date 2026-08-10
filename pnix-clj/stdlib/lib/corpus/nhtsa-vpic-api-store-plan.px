@@ -1,0 +1,45 @@
+# NHTSA vPIC API bounded metadata -> repo-local redb corpus_source_records.
+# Stores pnix attrset source, not JSON. No VIN logs/diagnostics/legal advice/graph wiring.
+let
+  B = builtins;
+  genPath = ./nhtsa-vpic-api.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "transport.nhtsa_vpic.api_schema.v1";
+    source = "NHTSA vPIC Vehicle API bounded metadata";
+    license = "US-PD / US federal public API metadata";
+    summary = { makes = 0; makes_total_seen = 0; manufacturers = 0; manufacturers_page_count = 0; vehicle_types_for_sample_make = 0; models_for_sample_make_year = 0; make_limit = 0; manufacturer_limit = 0; };
+    policy = "bounded make/manufacturer/model/type metadata and schema only";
+    manifest = { };
+    files = [ ]; endpoint_schemas = [ ]; makes = [ ]; manufacturers = [ ]; vehicle_types_for_sample_make = [ ]; models_for_sample_make_year = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "nhtsa-vpic-api-load-v0";
+      source_lens = "stdlib/lib/corpus/nhtsa-vpic-api-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "transport.nhtsa_vpic.api_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "nhtsa-vpic-api-query-v0";
+      source_lens = "stdlib/lib/corpus/nhtsa-vpic-api-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "transport.nhtsa_vpic.api_schema.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

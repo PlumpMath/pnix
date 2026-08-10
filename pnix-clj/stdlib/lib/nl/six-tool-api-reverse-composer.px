@@ -1,0 +1,159 @@
+let
+  ownerName = "stdlib.nl.six-tool-api-reverse-composer";
+
+  # === 6-Tool API Reverse Composer (Axiom #102) ======================
+  #
+  # Axiom #100 의 mirror image. lift envelope → NL utterance reconstruction.
+  # 양방향 100% Coverage Campaign 닫힘.
+  #
+  # # Roundtrip
+  #
+  # This reverse composer handles only project-authored clean-room hint
+  # receipts. It does not depend on full external API/spec inventories,
+  # generated maps, official fixtures, or conformance suites.
+  #
+  # # Unsupported states
+  #
+  # missing outcome → unsupported
+  # non-six-tool outcome → unsupported
+  # missing required field → unsupported
+  # unsupported language → unsupported
+
+  numToStr = n: builtins.toString n;
+
+  composeHAnim = entity: language:
+    if language == "ko" then "HAnim 의 " + entity + " 조인트"
+    else "HAnim joint " + entity;
+
+  composeFreeCAD = api: language:
+    if language == "ko" then "FreeCAD 의 " + api + " API"
+    else "FreeCAD API " + api;
+
+  composeGltf = typeName: language:
+    if language == "ko" then "glTF 의 " + typeName + " 타입"
+    else "glTF type " + typeName;
+
+  composeRhino = entity: language:
+    if language == "ko" then "Rhino 의 " + entity
+    else entity + " in Rhino";
+
+  composeCoverage = scope: language:
+    if language == "ko" then
+      (if scope == "all" then "전체 vetted API 커버리지"
+       else scope + " API 커버리지")
+    else
+      (if scope == "all" then "Aggregate vetted API coverage"
+       else scope + " API coverage");
+
+  # ============= entry ===============================================
+
+  composeReverseForSixToolReceipt = receipt: language:
+    if !(builtins.isAttrs receipt) then {
+      outcome = "unsupported-non-attrs-receipt";
+    }
+    else if !(builtins.hasAttr "outcome" receipt) then {
+      outcome = "unsupported-missing-outcome-field";
+    }
+    else if language != "ko" && language != "en" then {
+      outcome = "unsupported-language";
+      supported_languages = [ "ko" "en" ];
+    }
+    else
+      let
+        out = receipt.outcome;
+        nl =
+          if out == "hanim-query-lifted" then
+            (if builtins.hasAttr "entity" receipt && receipt.entity != null
+             then composeHAnim receipt.entity language else null)
+          else if out == "freecad-query-lifted" then
+            (if builtins.hasAttr "api" receipt && receipt.api != null
+             then composeFreeCAD receipt.api language else null)
+          else if out == "gltf-query-lifted" then
+            (if builtins.hasAttr "type_name" receipt && receipt.type_name != null
+             then composeGltf receipt.type_name language else null)
+          else if out == "rhino-query-lifted" then
+            (if builtins.hasAttr "entity" receipt && receipt.entity != null
+             then composeRhino receipt.entity language else null)
+          else if out == "coverage-query-lifted" then
+            (if builtins.hasAttr "scope" receipt && receipt.scope != null
+             then composeCoverage receipt.scope language else null)
+          else null;
+      in
+        if nl == null then {
+          outcome = "unsupported-non-six-tool-receipt";
+          provided_outcome = out;
+          supported_outcomes = [
+            "hanim-query-lifted"
+            "freecad-query-lifted"
+            "gltf-query-lifted"
+            "rhino-query-lifted"
+            "coverage-query-lifted"
+          ];
+        }
+        else {
+          outcome = "six-tool-reverse-composed";
+          language = language;
+          nl_utterance = nl;
+          source_receipt_outcome = out;
+          source_tool_id =
+            if builtins.hasAttr "tool_id" receipt then receipt.tool_id else "unknown";
+          composer_action =
+            "lift envelope → NL utterance ("
+            + (numToStr (builtins.stringLength nl))
+            + " bytes). roundtrip verifier 가 양방향 일치 검증 가능.";
+        };
+
+  applySixToolApiReverseComposerPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "unsupported-non-attrs-request"; }
+    else if !(builtins.hasAttr "receipt" request) then {
+      outcome = "unsupported-missing-receipt-field";
+    }
+    else if !(builtins.hasAttr "language" request) then {
+      outcome = "unsupported-missing-language-field";
+    }
+    else composeReverseForSixToolReceipt request.receipt request.language;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-102 (6-tool API NL reverse)";
+    supported_languages = [ "ko" "en" ];
+    supported_outcomes = [
+      "hanim-query-lifted"
+      "freecad-query-lifted"
+      "gltf-query-lifted"
+      "rhino-query-lifted"
+      "coverage-query-lifted"
+    ];
+    supported_outcome_count = 5;
+    composer_count = 5;
+    bilingual = true;
+    new_decision_count = 0;
+    do_not_rebuild = true;
+    mirror_of = "axiom-100 six-tool-api-nl-lifter";
+    unsupported_outcomes = [
+      "unsupported-non-attrs-receipt"
+      "unsupported-missing-outcome-field"
+      "unsupported-non-attrs-request"
+      "unsupported-missing-receipt-field"
+      "unsupported-missing-language-field"
+      "unsupported-language"
+      "unsupported-non-six-tool-receipt"
+    ];
+  };
+
+in {
+  inherit
+    ownerName numToStr
+    composeHAnim composeFreeCAD
+    composeGltf composeRhino composeCoverage
+    composeReverseForSixToolReceipt
+    applySixToolApiReverseComposerPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL 6-tool API reverse composer (Axiom #102) — substrate → NL";
+    owner = ownerName;
+    base = "six-tool-api-reverse-composer-v0";
+    rev_note = "Axiom #100 mirror image. lift envelope → NL utterance "
+      + "양방향 완성. roundtrip fixed-point 검증 가능.";
+  };
+}

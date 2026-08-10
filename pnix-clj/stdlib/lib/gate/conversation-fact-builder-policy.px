@@ -1,0 +1,115 @@
+# stdlib.lib.gate.conversation-fact-builder-policy
+#
+# OWNER-LAW (2026-05-31): conversation-layer ContextualFact + SemanticRecord
+# default policy.
+#
+# # What this is for
+#
+# substrate 의 conversation/dialogue builder lane 에서 새 fact / record
+# 를 만들 때의 *default values* — 어느 layer 인가 (L4), 초기 status 는
+# 무엇인가 (Candidate), 기본 confidence 는 (0.95), record_kind 는
+# (ContextualFact) 등.
+#
+# # Design discipline — declarative default-value registry
+#
+# 이전 doghouse-core::conversation::builders::{make_fact, record_for_fact}
+# 는 Rust struct literal 7 fields hardcoded. 이 owner-law 는 declarative
+# default-value table. 새 default 추가/변경 = 한 row.
+#
+# # Default values (conversation builder lane)
+#
+#   fact_layer       = "L4"           — conversation layer (host-extracted)
+#   fact_status      = "Candidate"    — Held-Accepted lifecycle entry point
+#   fact_confidence  = 0.95           — 기본 신뢰도 (hardcoded; future
+#                                        per-tier policy 가능)
+#   fact_proof_refs       = []        — proof 는 별 lane 의 결과
+#   fact_contradiction_refs= []       — contradiction 도 별 lane
+#   fact_loss        = null           — caller 가 명시
+#   fact_timestamp   = null           — caller / host I/O 가 결정
+#
+#   record_kind                       = "ContextualFact"
+#   record_id_template                = "record.fact.{episode}.{index}"
+#
+# # Inputs (build mode 결정)
+#
+#   build_mode = "fact-defaults"  | "record-defaults"
+#
+# # Output
+#
+#   verdict       : "defaults-emitted" | "held-unknown-build-mode"
+#   defaults      : attrset of default values
+#   build_mode    : echo
+
+let
+  ownerName = "stdlib/lib/gate/conversation-fact-builder-policy.px";
+
+  factDefaults = {
+    fact_layer = "L4";
+    fact_status = "Candidate";
+    fact_confidence = 0.95;
+    fact_proof_refs = [];
+    fact_contradiction_refs = [];
+    fact_loss = null;
+    fact_timestamp = null;
+  };
+
+  recordDefaults = {
+    record_kind = "ContextualFact";
+    record_id_template = "record.fact.{episode_id}.{index}";
+  };
+
+  validBuildModes = [
+    "fact-defaults"
+    "record-defaults"
+    "both"
+  ];
+
+  validVerdicts = [
+    "defaults-emitted"
+    "held-unknown-build-mode"
+  ];
+
+  asString = v: if builtins.isString v then v else "";
+
+  # ─── lens entry function ────────────────────────────────────────────────
+
+  applyConversationFactBuilderPolicy = request:
+    let
+      buildMode = asString (request.build_mode or "");
+    in
+      if buildMode == "fact-defaults" then {
+        verdict = "defaults-emitted";
+        defaults = factDefaults;
+        build_mode = buildMode;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if buildMode == "record-defaults" then {
+        verdict = "defaults-emitted";
+        defaults = recordDefaults;
+        build_mode = buildMode;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else if buildMode == "both" then {
+        verdict = "defaults-emitted";
+        defaults = { fact = factDefaults; record = recordDefaults; };
+        build_mode = buildMode;
+        lens_owner = ownerName;
+        candidate_only = true;
+      }
+      else {
+        verdict = "held-unknown-build-mode";
+        defaults = null;
+        build_mode = buildMode;
+        held_reason = "build_mode not in registry";
+        valid_build_modes = validBuildModes;
+        lens_owner = ownerName;
+        candidate_only = true;
+      };
+
+in {
+  inherit ownerName factDefaults recordDefaults
+          validBuildModes validVerdicts
+          applyConversationFactBuilderPolicy;
+}

@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/gnis-feature-classes-store-plan.px — USGS GNIS feature class authority metadata.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# name rows, coordinates, definitions prose, graph wiring 없음.
+let
+  B = builtins;
+  genPath = ./gnis-feature-classes.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "place.gnis_feature_classes.v1";
+    source = { name = "USGS GNIS Domestic Names feature classes"; license = "US-PD"; scope = "empty seed fallback"; };
+    summary = { feature_class_count = 0; name_rows_ingested = false; coordinates_ingested = false; mirror_graph_wiring = false; };
+    feature_classes = [ ]; download_refs = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "gnis-feature-classes-load-v0";
+      source_lens = "stdlib/lib/corpus/gnis-feature-classes-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "place.gnis_feature_classes.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "gnis-feature-classes-query-v0";
+      source_lens = "stdlib/lib/corpus/gnis-feature-classes-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "place.gnis_feature_classes.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

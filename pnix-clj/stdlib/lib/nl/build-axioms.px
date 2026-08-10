@@ -1,0 +1,539 @@
+let
+  ownerName = "stdlib.nl.build-axioms";
+
+  containsAny = haystack: needles:
+    let hl = builtins.stringLength haystack;
+    in builtins.any (n:
+      let nl = builtins.stringLength n;
+          scan = pos:
+            if pos + nl > hl then false
+            else if (builtins.substring pos nl haystack) == n then true
+            else scan (pos + 1);
+      in if nl == 0 then false else scan 0
+    ) needles;
+
+  # === Build Axioms (agent-NL-128) =================================
+  #
+  # 빌드 도구의 손. import / dep / compile / package / build system.
+  #
+  # 5 family:
+  #   1. module-import (import / use / include / require)
+  #   2. dependency (package mgr / lockfile / version / resolution)
+  #   3. compile-link (compile phases / link / static-dynamic)
+  #   4. packaging (bundle / archive / distribute / publish)
+  #   5. build-system (cargo / npm / nix / cmake / build script)
+
+  stepKind = "build-tool-axiom";
+  framework_step =
+    "axiom content — 빌드/패키지/배포 도구 (import / dep / compile / pkg / build-sys)";
+
+  # === 1. Module Import =========================================
+
+  moduleImportSpecs = [
+    {
+      name = "import-statement";
+      cues = [ "import" "from import" "import 문" "임포트" ];
+      sub_specs = [
+        { name = "default-import"; cues = [ "default" "기본" ]; terminal = true; }
+        { name = "named-import"; cues = [ "named" "선택적" ]; terminal = true; }
+        { name = "wildcard-import"; cues = [ "wildcard" "*" "전체" ]; terminal = true; }
+        { name = "aliased-import"; cues = [ "as" "alias" "별칭" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "include-or-use";
+      cues = [ "include" "use" "uses" "include 문" "유즈" ];
+      sub_specs = [
+        { name = "cpp-include"; cues = [ "#include" ]; terminal = true; }
+        { name = "rust-use"; cues = [ "use std" "use crate" ]; terminal = true; }
+        { name = "python-from-import"; cues = [ "from x import y" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "require";
+      cues = [ "require" "require 문" "리콰이어" ];
+      sub_specs = [
+        { name = "commonjs-require"; cues = [ "commonjs" "node" ]; terminal = true; }
+        { name = "ruby-require"; cues = [ "ruby" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "namespace";
+      cues = [ "namespace" "module path" "네임스페이스" "모듈 경로" ];
+      sub_specs = [
+        { name = "nested-namespace"; cues = [ "nested" "중첩" ]; terminal = true; }
+        { name = "fully-qualified"; cues = [ "fully qualified" "완전 한정" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "circular-import";
+      cues = [ "circular import" "cyclic import" "순환 임포트" "순환 의존" ];
+      sub_specs = [
+        { name = "lazy-import"; cues = [ "lazy" "지연" ]; terminal = true; }
+        { name = "restructure-modules"; cues = [ "restructure" "재구조화" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Dependency ============================================
+
+  dependencySpecs = [
+    {
+      name = "package-manager";
+      cues = [ "package manager" "npm" "cargo" "pip" "gem" "패키지 관리자" ];
+      sub_specs = [
+        { name = "npm-yarn-pnpm"; cues = [ "npm" "yarn" "pnpm" ]; terminal = true; }
+        { name = "cargo"; cues = [ "cargo" "crates" ]; terminal = true; }
+        { name = "pip-poetry"; cues = [ "pip" "poetry" "pypi" ]; terminal = true; }
+        { name = "go-modules"; cues = [ "go mod" "go modules" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "lockfile";
+      cues = [ "lockfile" "package-lock" "Cargo.lock" "lock file" "락 파일" ];
+      sub_specs = [
+        { name = "reproducible-builds"; cues = [ "reproducible" "재현 가능" ]; terminal = true; }
+        { name = "lockfile-conflict"; cues = [ "conflict" "충돌" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "version-constraint";
+      cues = [ "version constraint" "semver" "version range" "버전 제약" ];
+      sub_specs = [
+        { name = "caret-range"; cues = [ "caret" "^" ]; terminal = true; }
+        { name = "tilde-range"; cues = [ "tilde" "~" ]; terminal = true; }
+        { name = "pinned-version"; cues = [ "pinned" "exact" "고정" ]; terminal = true; }
+        { name = "wildcard-range"; cues = [ "wildcard" "*" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "dependency-resolution";
+      cues = [ "dependency resolution" "resolve deps" "의존성 해결" ];
+      sub_specs = [
+        { name = "transitive-deps"; cues = [ "transitive" "전이" ]; terminal = true; }
+        { name = "dep-conflict"; cues = [ "conflict" "충돌" ]; terminal = true; }
+        { name = "version-overrides"; cues = [ "override" "오버라이드" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "dev-vs-prod";
+      cues = [ "dev dependency" "dev deps" "production deps" "개발 의존성" ];
+      sub_specs = [
+        { name = "dev-only"; cues = []; terminal = true; }
+        { name = "peer-deps"; cues = [ "peer" "동등" ]; terminal = true; }
+        { name = "optional-deps"; cues = [ "optional" "선택적" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "audit-and-supply-chain";
+      cues = [ "audit" "supply chain" "vulnerability" "공급망" "감사" ];
+      sub_specs = [
+        { name = "cve-scan"; cues = [ "CVE" "취약점" ]; terminal = true; }
+        { name = "license-audit"; cues = [ "license" "라이선스" ]; terminal = true; }
+        { name = "dependency-signing"; cues = [ "signing" "서명" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Compile / Link ========================================
+
+  compileLinkSpecs = [
+    {
+      name = "compile-phases";
+      cues = [ "compile phase" "compilation step" "컴파일 단계" ];
+      sub_specs = [
+        { name = "lexing"; cues = [ "lex" "tokenize" "렉싱" ]; terminal = true; }
+        { name = "parsing"; cues = [ "parse" "파싱" ]; terminal = true; }
+        { name = "type-checking"; cues = [ "type check" "타입 검사" ]; terminal = true; }
+        { name = "codegen"; cues = [ "codegen" "code generation" "코드 생성" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "incremental-compile";
+      cues = [ "incremental" "incremental compile" "증분 컴파일" ];
+      sub_specs = [
+        { name = "file-level"; cues = []; terminal = true; }
+        { name = "function-level"; cues = []; terminal = true; }
+        { name = "watch-mode"; cues = [ "watch" "감시 모드" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "linking";
+      cues = [ "linker" "linking" "static link" "dynamic link" "링크" "링커" ];
+      sub_specs = [
+        { name = "static-linking"; cues = [ "static" "정적" ]; terminal = true; }
+        { name = "dynamic-linking"; cues = [ "dynamic" "shared" "동적" ]; terminal = true; }
+        { name = "linker-script"; cues = [ "linker script" "ld script" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "optimization-level";
+      cues = [ "optimization" "opt level" "O2 O3" "최적화 수준" ];
+      sub_specs = [
+        { name = "debug-O0"; cues = [ "O0" "no opt" ]; terminal = true; }
+        { name = "balanced-O2"; cues = [ "O2" ]; terminal = true; }
+        { name = "aggressive-O3"; cues = [ "O3" "aggressive" ]; terminal = true; }
+        { name = "size-Os"; cues = [ "Os" "size" "크기" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "cross-compile";
+      cues = [ "cross compile" "target triple" "교차 컴파일" ];
+      sub_specs = [
+        { name = "linux-target"; cues = [ "linux" ]; terminal = true; }
+        { name = "windows-target"; cues = [ "windows" "win" ]; terminal = true; }
+        { name = "macos-target"; cues = [ "macos" "darwin" ]; terminal = true; }
+        { name = "wasm-target"; cues = [ "wasm" "webassembly" ]; terminal = true; }
+        { name = "embedded-target"; cues = [ "embedded" "임베디드" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Packaging =============================================
+
+  packagingSpecs = [
+    {
+      name = "archive-bundle";
+      cues = [ "bundle" "archive" "tarball" "zip" "번들" "압축" ];
+      sub_specs = [
+        { name = "tar-gz"; cues = [ "tar" "tgz" ]; terminal = true; }
+        { name = "zip-archive"; cues = [ "zip" ]; terminal = true; }
+        { name = "single-binary"; cues = [ "single binary" "단일 바이너리" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "container-image";
+      cues = [ "container" "docker" "OCI" "image" "컨테이너" "도커" ];
+      sub_specs = [
+        { name = "dockerfile"; cues = [ "dockerfile" ]; terminal = true; }
+        { name = "multi-stage-build"; cues = [ "multi-stage" "multi stage" "다중 단계" ]; terminal = true; }
+        { name = "distroless"; cues = [ "distroless" "scratch" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "release-channel";
+      cues = [ "release channel" "stable" "beta" "nightly" "릴리스 채널" ];
+      sub_specs = [
+        { name = "stable-release"; cues = [ "stable" "안정" ]; terminal = true; }
+        { name = "beta-release"; cues = [ "beta" ]; terminal = true; }
+        { name = "nightly-build"; cues = [ "nightly" "야간" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "publish";
+      cues = [ "publish" "release" "deploy" "퍼블리시" "배포" ];
+      sub_specs = [
+        { name = "registry-publish"; cues = [ "registry" "레지스트리" ]; terminal = true; }
+        { name = "github-release"; cues = [ "github release" "git tag" "태그" ]; terminal = true; }
+        { name = "homebrew-tap"; cues = [ "brew" "homebrew" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "signing-and-attestation";
+      cues = [ "code signing" "attestation" "코드 서명" "서명 인증" ];
+      sub_specs = [
+        { name = "gpg-sign"; cues = [ "gpg" "pgp" ]; terminal = true; }
+        { name = "sigstore"; cues = [ "sigstore" "cosign" ]; terminal = true; }
+        { name = "sbom"; cues = [ "sbom" "software bill of materials" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Build System ==========================================
+
+  buildSystemSpecs = [
+    {
+      name = "make-like";
+      cues = [ "make" "makefile" "ninja" "메이크파일" ];
+      sub_specs = [
+        { name = "rule-based"; cues = []; terminal = true; }
+        { name = "target-dependency"; cues = []; terminal = true; }
+        { name = "phony-targets"; cues = [ "phony" "PHONY" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "language-native";
+      cues = [ "cargo" "go build" "gradle" "maven" "rebar" "stack" ];
+      sub_specs = [
+        { name = "cargo-rust"; cues = [ "cargo" ]; terminal = true; }
+        { name = "go-build"; cues = [ "go build" ]; terminal = true; }
+        { name = "gradle-java"; cues = [ "gradle" ]; terminal = true; }
+        { name = "sbt-scala"; cues = [ "sbt" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "cmake-meta";
+      cues = [ "cmake" "meson" "autotools" "메타 빌드" ];
+      sub_specs = [
+        { name = "cmake-flow"; cues = [ "cmake" ]; terminal = true; }
+        { name = "meson"; cues = [ "meson" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "nix-bazel";
+      cues = [ "nix" "bazel" "buck" "닉스" "바젤" ];
+      sub_specs = [
+        { name = "nix-flakes"; cues = [ "nix flake" "flake" ]; terminal = true; }
+        { name = "bazel-rules"; cues = [ "bazel rules" "BUILD file" ]; terminal = true; }
+        { name = "buck"; cues = [ "buck" "buck2" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "ci-pipeline";
+      cues = [ "CI" "CD" "github actions" "gitlab ci" "CI 파이프라인" ];
+      sub_specs = [
+        { name = "github-actions"; cues = [ "github actions" ]; terminal = true; }
+        { name = "gitlab-ci"; cues = [ "gitlab ci" "gitlab-ci" ]; terminal = true; }
+        { name = "buildkite-circleci"; cues = [ "buildkite" "circleci" ]; terminal = true; }
+        { name = "caching-strategy"; cues = [ "cache" "caching" "캐싱" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "build-script";
+      cues = [ "build script" "build.rs" "prebuild" "빌드 스크립트" ];
+      sub_specs = [
+        { name = "codegen-script"; cues = [ "codegen" "코드 생성" ]; terminal = true; }
+        { name = "asset-pipeline"; cues = [ "asset" "에셋" ]; terminal = true; }
+        { name = "version-injection"; cues = [ "version" "buildinfo" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "reproducible-and-hermetic";
+      cues = [ "reproducible build" "hermetic build" "deterministic build" "재현 가능" ];
+      sub_specs = [
+        { name = "pinned-toolchain"; cues = [ "pin toolchain" "toolchain pin" ]; terminal = true; }
+        { name = "hermetic-sandbox"; cues = [ "hermetic" ]; terminal = true; }
+        { name = "supply-chain-attestation"; cues = [ "SLSA" "attestation" ]; terminal = true; }
+        { name = "deterministic-output"; cues = [ "deterministic" "결정적 출력" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry ===================================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-build-001";
+      name = "module-import";
+      domain = "build";
+      activation_cues = [
+        "import" "use" "include" "require" "namespace" "module path"
+        "임포트" "유즈" "리콰이어" "네임스페이스" "모듈 경로"
+      ];
+      tree_key = "moduleImport";
+      sub_count = 5;
+      tool_role = "빌드 — 모듈 임포트";
+    }
+    {
+      axiom_id = "axiom-build-002";
+      name = "dependency";
+      domain = "build";
+      activation_cues = [
+        "dependency" "dep" "package" "lockfile" "semver"
+        "transitive" "package manager"
+        "의존성" "패키지" "락 파일" "버전"
+      ];
+      tree_key = "dependency";
+      sub_count = 6;
+      tool_role = "빌드 — 의존성";
+    }
+    {
+      axiom_id = "axiom-build-003";
+      name = "compile-link";
+      domain = "build";
+      activation_cues = [
+        "compile" "compiler" "linker" "linking" "codegen"
+        "cross compile" "optimization"
+        "컴파일" "링크" "최적화"
+      ];
+      tree_key = "compileLink";
+      sub_count = 5;
+      tool_role = "빌드 — 컴파일 / 링크";
+    }
+    {
+      axiom_id = "axiom-build-004";
+      name = "packaging";
+      domain = "build";
+      activation_cues = [
+        "package" "bundle" "archive" "container" "docker"
+        "publish" "release" "signing"
+        "패키징" "번들" "컨테이너" "배포" "서명"
+      ];
+      tree_key = "packaging";
+      sub_count = 5;
+      tool_role = "빌드 — 패키징 / 배포";
+    }
+    {
+      axiom_id = "axiom-build-005";
+      name = "build-system";
+      domain = "build";
+      activation_cues = [
+        "make" "cargo" "gradle" "cmake" "nix" "bazel"
+        "build system" "build script" "CI" "CD" "ci" "cd"
+        "github actions" "gitlab"
+        "빌드 시스템" "빌드 스크립트" "닉스" "바젤" "플레이크"
+      ];
+      tree_key = "buildSystem";
+      sub_count = 7;
+      tool_role = "빌드 — 빌드 시스템";
+    }
+  ];
+
+  # === Activation + Plate (boilerplate) ===========================
+
+  treeForKey = key:
+    let bt = import ./branch-tree-substrate.px;
+    in
+      if key == "moduleImport" then bt.composeBranchTree "module import axiom" moduleImportSpecs
+      else if key == "dependency" then bt.composeBranchTree "dependency axiom" dependencySpecs
+      else if key == "compileLink" then bt.composeBranchTree "compile and link axiom" compileLinkSpecs
+      else if key == "packaging" then bt.composeBranchTree "packaging axiom" packagingSpecs
+      else if key == "buildSystem" then bt.composeBranchTree "build system axiom" buildSystemSpecs
+      else null;
+
+  withTrees = activations:
+    builtins.map (ax:
+      ax // { tree = treeForKey ax.tree_key; }
+    ) activations;
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else
+      let enriched = withTrees activations;
+      in if builtins.length enriched == 1 then
+        (builtins.head enriched).tree
+      else
+        let bt = import ./branch-tree-substrate.px;
+        in bt.mkTree {
+          node_label = "multiple build axioms activated";
+          branches = builtins.map (ax: bt.mkBranch {
+            name = ax.name;
+            hypothesis = "use " + ax.name + " build tool";
+            cues = ax.activation_cues;
+            sub_branches = ax.tree.branches;
+          }) enriched;
+        };
+
+  applyBuildAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-114-nl-build (composes axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+              tool_role = ax.tool_role;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason = "Provide { list_axioms } | { activate_for } | { describe }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-build-axiom-114";
+    composes = "axiom-98-tree";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "module-import (import / use / require / namespace / circular)"
+      "dependency (package manager / lockfile / semver / resolution / dev-prod / audit)"
+      "compile-link (phases / incremental / linking / opt-level / cross-compile)"
+      "packaging (archive / container / channel / publish / signing)"
+      "build-system (make / native / cmake / nix-bazel / CI / script)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    tool_metaphor =
+      "빌드 도구의 손. 코드 → 실행 가능 artifact 의 변환 + 배포 도구.";
+  };
+
+in {
+  inherit
+    ownerName
+    knownAxioms
+    treeForKey
+    axiomsActivatedBy compositeTreeFromActivations
+    applyBuildAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL build axioms (agent-NL-128)";
+    owner = ownerName;
+    base = "nl-build-axioms-v0";
+    rev_note = "agent-NL-128 (2026-05-29): 빌드 도구. 5 family. DO NOT REBUILD.";
+  };
+}

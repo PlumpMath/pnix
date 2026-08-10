@@ -1,0 +1,47 @@
+# MR47 -- repeat-each plan owner (the algorithm.repeat-each sibling of
+# sequence-plan.px). A distributive marker (각, corpus row) pairs one
+# action with EVERY item of a collection. Plans are candidates, never
+# execution; the consequence chain is the same one if-then and sequence
+# plans walk (execution-approval-gate onward).
+# Outcomes:
+#   held-unknown-relation -- only algorithm.repeat-each lifts here
+#   held-missing-action   -- the action needs corpus-evidenced event AND
+#                            stem (nothing is invented)
+#   plan-candidate-ready
+{
+  liftRepeatPlan = request:
+    let
+      relation =
+        if request ? relation_kind then request.relation_kind else "";
+      action = if request ? action then request.action else null;
+      held = outcome: reason: {
+        inherit outcome reason;
+        candidate_only = true;
+        effect_allowed = false;
+        owner = "stdlib/lib/nl/repeat-plan.px";
+      };
+      actionOk = a:
+        a != null
+        && a ? event && a.event != ""
+        && a ? stem && a.stem != "";
+    in
+    if relation != "algorithm.repeat-each" then
+      held "held-unknown-relation"
+        ("repeat-plan owns algorithm.repeat-each only; got " + relation)
+    else if !(actionOk action) then
+      held "held-missing-action"
+        "the repeated action needs corpus-evidenced event AND stem (nothing is invented)"
+    else {
+      outcome = "plan-candidate-ready";
+      plan = {
+        kind = "repeat-each";
+        action = action;
+      };
+      candidate_only = true;
+      effect_allowed = false;
+      owner = "stdlib/lib/nl/repeat-plan.px";
+      receipt = {
+        next_gate = "execution-approval-gate";
+      };
+    };
+}

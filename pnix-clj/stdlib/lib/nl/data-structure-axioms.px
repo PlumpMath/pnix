@@ -1,0 +1,461 @@
+let
+  ownerName = "stdlib.nl.data-structure-axioms";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Data Structure Invariant Axioms (agent-NL-120) ==============
+  #
+  # 사용자 vision 의 *피 세 번째 방울* — 자료구조 invariant.
+  #
+  # 5 family:
+  #   1. heap (min/max heap, priority queue)
+  #   2. tree (BST, balanced, segment, trie, fenwick)
+  #   3. hash (hash table, hash set, bloom filter)
+  #   4. graph (adjacency list/matrix, weighted, directed)
+  #   5. sequence (array, list, deque, stack, queue)
+  #
+  # 각 family 가 *invariant + 변종 sub-tree*. control flow + algorithm
+  # pattern 과 cross-family 결합:
+  #   - heap + greedy = priority-queue-based greedy
+  #   - tree + DFS = traversal algorithms
+  #   - hash + DP = memoization
+
+  stepKind = "data-structure-axiom-data";
+  framework_step =
+    "axiom content — 5 자료구조 family 의 invariant + 변종";
+
+  # === 1. Heap ==================================================
+
+  heapAxiomTree = bt.composeBranchTree "heap axiom" [
+    {
+      name = "min-heap";
+      cues = [ "min heap" "minimum heap" "smallest first" "최소 힙" "min-heap" ];
+      sub_specs = [
+        { name = "min-priority-queue"; cues = [ "priority queue" "우선순위" ]; terminal = true; }
+        { name = "k-smallest"; cues = [ "k smallest" "top-k smallest" "k 최소" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "max-heap";
+      cues = [ "max heap" "maximum heap" "largest first" "최대 힙" "max-heap" ];
+      sub_specs = [
+        { name = "max-priority-queue"; cues = []; terminal = true; }
+        { name = "k-largest"; cues = [ "k largest" "top-k" "k 최대" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "heap-invariant";
+      cues = [ "heap property" "heap invariant" "힙 속성" ];
+      sub_specs = [
+        { name = "parent-child-ordering"; cues = []; terminal = true; }
+        { name = "complete-binary-tree-shape"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "heap-operation";
+      cues = [ "push" "pop" "extract" "heapify" "삽입" "추출" ];
+      sub_specs = [
+        { name = "sift-up"; cues = [ "sift up" "bubble up" "위로" ]; terminal = true; }
+        { name = "sift-down"; cues = [ "sift down" "bubble down" "아래로" ]; terminal = true; }
+        { name = "build-heap"; cues = [ "build" "heapify" "구축" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Tree ==================================================
+
+  treeAxiomTree = bt.composeBranchTree "tree axiom" [
+    {
+      name = "binary-search-tree";
+      cues = [ "bst" "binary search tree" "이진 탐색 트리" ];
+      sub_specs = [
+        { name = "bst-property"; cues = [ "left less" "right greater" "왼쪽 작은" ]; terminal = true; }
+        { name = "bst-insert-delete"; cues = [ "insert" "delete" "삽입" "삭제" ]; terminal = true; }
+        { name = "bst-rotation"; cues = [ "rotate" "rotation" "회전" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "balanced-tree";
+      cues = [ "balanced" "avl" "red-black" "균형" "rb tree" ];
+      sub_specs = [
+        { name = "avl-tree"; cues = [ "avl" "height balanced" "높이 균형" ]; terminal = true; }
+        { name = "red-black-tree"; cues = [ "red black" "red-black" "rb" ]; terminal = true; }
+        { name = "b-tree"; cues = [ "b-tree" "b tree" "btree" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "segment-tree";
+      cues = [ "segment tree" "range query" "구간 트리" "범위 쿼리" ];
+      sub_specs = [
+        { name = "range-sum"; cues = [ "range sum" "구간 합" ]; terminal = true; }
+        { name = "range-min-max"; cues = [ "range min" "range max" "구간 최소" ]; terminal = true; }
+        { name = "lazy-propagation"; cues = [ "lazy" "지연" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "trie";
+      cues = [ "trie" "prefix tree" "접두 트리" ];
+      sub_specs = [
+        { name = "string-trie"; cues = [ "string" "word" "문자열" ]; terminal = true; }
+        { name = "binary-trie"; cues = [ "binary" "xor" "비트" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "fenwick-tree";
+      cues = [ "fenwick" "bit tree" "binary indexed" "펜윅" ];
+      sub_specs = [
+        { name = "prefix-sum"; cues = []; terminal = true; }
+        { name = "point-update"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Hash ==================================================
+
+  hashAxiomTree = bt.composeBranchTree "hash axiom" [
+    {
+      name = "hash-table";
+      cues = [ "hash table" "hashmap" "dictionary" "해시 테이블" "해시맵" ];
+      sub_specs = [
+        { name = "chaining"; cues = [ "chain" "linked list" "체이닝" ]; terminal = true; }
+        { name = "open-addressing"; cues = [ "open address" "probing" "선형 탐사" ]; terminal = true; }
+        { name = "robin-hood"; cues = [ "robin hood" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "hash-set";
+      cues = [ "hash set" "hashset" "unique" "중복 제거" "해시 집합" ];
+      sub_specs = [
+        { name = "membership-test"; cues = [ "exist" "contains" "포함" ]; terminal = true; }
+        { name = "set-operations"; cues = [ "union" "intersect" "교집합" "합집합" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "hash-function";
+      cues = [ "hash function" "hash" "해시 함수" ];
+      sub_specs = [
+        { name = "uniform-distribution"; cues = [ "uniform" "균일" ]; terminal = true; }
+        { name = "collision-resistance"; cues = [ "collision" "충돌" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "bloom-filter";
+      cues = [ "bloom" "bloom filter" "블룸 필터" ];
+      sub_specs = [
+        { name = "probabilistic-membership"; cues = []; terminal = true; }
+        { name = "k-hash-functions"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "load-factor";
+      cues = [ "load factor" "load-factor" "rehash" "리해시" "부하율" ];
+      sub_specs = [
+        { name = "resize-trigger"; cues = []; terminal = true; }
+        { name = "amortized-O1"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Graph =================================================
+
+  graphAxiomTree = bt.composeBranchTree "graph axiom" [
+    {
+      name = "representation";
+      cues = [ "adjacency" "graph representation" "그래프 표현" "인접" ];
+      sub_specs = [
+        { name = "adjacency-list"; cues = [ "list" "리스트" ]; terminal = true; }
+        { name = "adjacency-matrix"; cues = [ "matrix" "행렬" ]; terminal = true; }
+        { name = "edge-list"; cues = [ "edge list" "간선 리스트" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "directionality";
+      cues = [ "directed" "undirected" "방향" "무방향" ];
+      sub_specs = [
+        { name = "directed-graph"; cues = [ "directed" "digraph" "방향" ]; terminal = true; }
+        { name = "undirected-graph"; cues = [ "undirected" "무방향" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "weight";
+      cues = [ "weighted" "unweighted" "가중치" ];
+      sub_specs = [
+        { name = "weighted-edges"; cues = [ "weight" "cost" "비용" ]; terminal = true; }
+        { name = "uniform-cost"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "connectivity";
+      cues = [ "connected" "scc" "strongly connected" "연결 성분" ];
+      sub_specs = [
+        { name = "connected-components"; cues = []; terminal = true; }
+        { name = "strongly-connected"; cues = [ "strongly" "강하게 연결" ]; terminal = true; }
+        { name = "bridges-and-articulation"; cues = [ "bridge" "articulation" "단절점" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "special-graph";
+      cues = [ "dag" "tree" "bipartite" "이분" ];
+      sub_specs = [
+        { name = "dag-property"; cues = [ "dag" "acyclic" "비순환" ]; terminal = true; }
+        { name = "bipartite-coloring"; cues = [ "bipartite" "이분" "two color" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Sequence ==============================================
+
+  sequenceAxiomTree = bt.composeBranchTree "sequence axiom" [
+    {
+      name = "array";
+      cues = [ "array" "배열" "contiguous" "연속" ];
+      sub_specs = [
+        { name = "dynamic-array"; cues = [ "dynamic" "resizable" "vector" "동적" ]; terminal = true; }
+        { name = "fixed-array"; cues = [ "fixed" "static" "고정" ]; terminal = true; }
+        { name = "circular-array"; cues = [ "circular" "ring" "원형" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "linked-list";
+      cues = [ "linked list" "연결 리스트" "linkedlist" ];
+      sub_specs = [
+        { name = "singly-linked"; cues = [ "singly" "단일" ]; terminal = true; }
+        { name = "doubly-linked"; cues = [ "doubly" "이중" ]; terminal = true; }
+        { name = "skip-list"; cues = [ "skip list" "스킵 리스트" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "stack";
+      cues = [ "stack" "스택" "lifo" "last in first out" ];
+      sub_specs = [
+        { name = "lifo-property"; cues = []; terminal = true; }
+        { name = "monotonic-stack"; cues = [ "monotonic" "단조" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "queue";
+      cues = [ "queue" "큐" "fifo" "first in first out" ];
+      sub_specs = [
+        { name = "fifo-property"; cues = []; terminal = true; }
+        { name = "double-ended-queue"; cues = [ "deque" "double-ended" "양방향" ]; terminal = true; }
+        { name = "circular-queue"; cues = [ "circular queue" "원형 큐" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "amortized-complexity";
+      cues = [ "amortized" "분할 상환" "average" ];
+      sub_specs = [
+        { name = "doubling-strategy"; cues = []; terminal = true; }
+        { name = "accounting-method"; cues = []; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "persistent-and-probabilistic";
+      cues = [ "persistent" "immutable structure" "probabilistic DS" "영속" ];
+      sub_specs = [
+        { name = "persistent-vector"; cues = [ "persistent vector" "HAMT" ]; terminal = true; }
+        { name = "cuckoo-filter"; cues = [ "cuckoo" ]; terminal = true; }
+        { name = "count-min-sketch"; cues = [ "count-min" "count min sketch" ]; terminal = true; }
+        { name = "hyperloglog"; cues = [ "hyperloglog" "HLL" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry of all 5 families ==================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-ds-001";
+      name = "heap";
+      domain = "data-structure";
+      activation_cues = [ "heap" "priority queue" "힙" "우선순위 큐" "heapify" "min heap" "max heap" ];
+      tree = heapAxiomTree;
+      sub_count = builtins.length heapAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-ds-002";
+      name = "tree";
+      domain = "data-structure";
+      activation_cues = [ "tree" "bst" "avl" "trie" "segment" "fenwick" "트리" "이진 트리" "균형 트리" ];
+      tree = treeAxiomTree;
+      sub_count = builtins.length treeAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-ds-003";
+      name = "hash";
+      domain = "data-structure";
+      activation_cues = [ "hash" "hashmap" "dictionary" "hash set" "bloom" "해시" "딕셔너리" ];
+      tree = hashAxiomTree;
+      sub_count = builtins.length hashAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-ds-004";
+      name = "graph";
+      domain = "data-structure";
+      activation_cues = [ "graph" "adjacency" "edge" "edges" "vertices" "vertex" "node" "그래프" "정점" "간선" "directed" "undirected" ];
+      tree = graphAxiomTree;
+      sub_count = builtins.length graphAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-ds-005";
+      name = "sequence";
+      domain = "data-structure";
+      activation_cues = [ "array" "list" "stack" "queue" "deque" "vector" "배열" "리스트" "스택" "큐" ];
+      tree = sequenceAxiomTree;
+      sub_count = builtins.length sequenceAxiomTree.branches;
+    }
+  ];
+
+  # === Activation logic ===========================================
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple data-structure axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "use " + ax.name + " data structure";
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  # === Plate entry =================================================
+
+  applyDataStructureAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-106-nl-data-structure "
+            + "(composes axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms = true } or { activate_for = \"<NL>\" } "
+        + "or { describe = \"<axiom name>\" }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-data-structure-axiom-106";
+    composes = "axiom-98-tree (data on generic substrate)";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "heap (힙 / 우선순위 큐)"
+      "tree (BST / balanced / segment / trie / fenwick)"
+      "hash (table / set / bloom / hash function)"
+      "graph (adjacency / direction / weight / connectivity)"
+      "sequence (array / list / stack / queue / deque)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    metaphor =
+      "혈관 위 *피의 세 번째 방울*. control flow (#118) + algorithm "
+      + "pattern (#119) 와 cross-family 결합 — heap+greedy, tree+DFS, "
+      + "hash+DP 같은 결합이 substrate-side 에서 자동 활성.";
+  };
+
+in {
+  inherit
+    ownerName
+    heapAxiomTree treeAxiomTree hashAxiomTree
+    graphAxiomTree sequenceAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    applyDataStructureAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL data structure axioms (agent-NL-120)";
+    owner = ownerName;
+    base = "nl-data-structure-axioms-v0";
+    rev_note = "agent-NL-120 (2026-05-29): 자료구조 invariant 5 family "
+      + "(heap/tree/hash/graph/sequence). control flow + algorithm "
+      + "pattern 과 cross-family 결합 가능 (heap+greedy, tree+DFS, "
+      + "hash+DP). NL cue → axiom 활성 → bound_tree. DO NOT REBUILD "
+      + "— branch-tree-substrate generic constructor 위에 데이터로만.";
+  };
+}

@@ -1,0 +1,323 @@
+let
+  ownerName = "stdlib.nl.architecture-axioms";
+  bt = import nl/branch-tree-substrate.px;
+  decomposer = import nl/sentence-decomposition-substrate.px;
+
+  layeredAxiomTree = bt.composeBranchTree "layered architecture axiom" [
+    {
+      name = "n-tier";
+      cues = [ "n-tier" "3-tier" "layered" "계층화" "n-티어" ];
+      sub_specs = [
+        { name = "presentation-layer"; cues = [ "presentation" "ui" "프레젠테이션" ]; terminal = true; }
+        { name = "business-layer"; cues = [ "business" "service" "비즈니스" ]; terminal = true; }
+        { name = "data-layer"; cues = [ "data" "persistence" "데이터" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "mvc";
+      cues = [ "MVC" "model view controller" "엠브이씨" ];
+      sub_specs = [
+        { name = "model"; cues = []; terminal = true; }
+        { name = "view"; cues = []; terminal = true; }
+        { name = "controller"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "mvvm";
+      cues = [ "MVVM" "model view view-model" ];
+      sub_specs = [
+        { name = "view-model"; cues = []; terminal = true; }
+        { name = "data-binding"; cues = [ "binding" "바인딩" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "clean-architecture";
+      cues = [ "clean architecture" "uncle bob" "클린 아키텍처" ];
+      sub_specs = [
+        { name = "entities"; cues = []; terminal = true; }
+        { name = "use-cases"; cues = [ "use case" "유스 케이스" ]; terminal = true; }
+        { name = "interface-adapters"; cues = []; terminal = true; }
+        { name = "frameworks-drivers"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  hexagonalAxiomTree = bt.composeBranchTree "hexagonal architecture axiom" [
+    {
+      name = "ports-and-adapters";
+      cues = [ "ports and adapters" "hexagonal" "헥사고날" "포트 어댑터" ];
+      sub_specs = [
+        { name = "inbound-port"; cues = [ "inbound" "들어오는" ]; terminal = true; }
+        { name = "outbound-port"; cues = [ "outbound" "나가는" ]; terminal = true; }
+        { name = "primary-adapter"; cues = []; terminal = true; }
+        { name = "secondary-adapter"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "domain-core";
+      cues = [ "domain core" "core logic" "도메인 코어" ];
+      sub_specs = [
+        { name = "pure-logic"; cues = []; terminal = true; }
+        { name = "no-infrastructure"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "dependency-inversion";
+      cues = [ "dependency inversion" "DIP" "의존성 역전" ];
+      sub_specs = [
+        { name = "high-level-policy"; cues = []; terminal = true; }
+        { name = "abstract-interface"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "onion-architecture";
+      cues = [ "onion architecture" "어니언 아키텍처" ];
+      sub_specs = [
+        { name = "concentric-layers"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  eventDrivenAxiomTree = bt.composeBranchTree "event-driven architecture axiom" [
+    {
+      name = "event-sourcing";
+      cues = [ "event sourcing" "event store" "이벤트 소싱" ];
+      sub_specs = [
+        { name = "append-only-log"; cues = [ "append only" "추가 전용" ]; terminal = true; }
+        { name = "projection-rebuild"; cues = [ "projection" "재구축" ]; terminal = true; }
+        { name = "snapshot-strategy"; cues = [ "snapshot" "스냅샷" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "cqrs";
+      cues = [ "CQRS" "command query separation" "씨큐알에스" ];
+      sub_specs = [
+        { name = "command-side"; cues = []; terminal = true; }
+        { name = "query-side"; cues = []; terminal = true; }
+        { name = "read-model"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "saga";
+      cues = [ "saga" "long running transaction" "사가" ];
+      sub_specs = [
+        { name = "orchestration"; cues = [ "orchestration" "오케스트레이션" ]; terminal = true; }
+        { name = "choreography"; cues = [ "choreography" "코레오그래피" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "event-bus";
+      cues = [ "event bus" "message broker" "이벤트 버스" "메시지 브로커" ];
+      sub_specs = [
+        { name = "kafka"; cues = [ "kafka" ]; terminal = true; }
+        { name = "rabbitmq"; cues = [ "rabbitmq" "amqp" ]; terminal = true; }
+        { name = "nats"; cues = [ "nats" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "eventual-consistency";
+      cues = [ "eventual consistency" "eventually consistent" "최종 일관성" ];
+      sub_specs = [
+        { name = "outbox-pattern"; cues = [ "outbox" "아웃박스" ]; terminal = true; }
+        { name = "compensation"; cues = [ "compensation" "보상" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  microservicesAxiomTree = bt.composeBranchTree "microservices axiom" [
+    {
+      name = "service-boundary";
+      cues = [ "service boundary" "bounded context" "경계 컨텍스트" "서비스 경계" ];
+      sub_specs = [
+        { name = "single-responsibility"; cues = []; terminal = true; }
+        { name = "data-ownership"; cues = [ "data ownership" "데이터 소유권" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "inter-service-communication";
+      cues = [ "inter service" "rpc" "rest api" "grpc" "서비스 간 통신" ];
+      sub_specs = [
+        { name = "sync-rest"; cues = [ "rest" "http" ]; terminal = true; }
+        { name = "sync-grpc"; cues = [ "grpc" ]; terminal = true; }
+        { name = "async-messaging"; cues = [ "async" "비동기 메시징" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "service-discovery";
+      cues = [ "service discovery" "service registry" "서비스 디스커버리" ];
+      sub_specs = [
+        { name = "client-side-discovery"; cues = []; terminal = true; }
+        { name = "server-side-discovery"; cues = []; terminal = true; }
+        { name = "dns-based"; cues = [ "dns" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "resilience-patterns";
+      cues = [ "circuit breaker" "retry" "bulkhead" "timeout" "회로 차단기" ];
+      sub_specs = [
+        { name = "circuit-breaker"; cues = []; terminal = true; }
+        { name = "retry-with-backoff"; cues = [ "backoff" "백오프" ]; terminal = true; }
+        { name = "bulkhead-isolation"; cues = []; terminal = true; }
+        { name = "timeout-budget"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "observability";
+      cues = [ "observability" "metrics" "tracing" "logging" "관찰성" ];
+      sub_specs = [
+        { name = "metrics"; cues = []; terminal = true; }
+        { name = "distributed-tracing"; cues = []; terminal = true; }
+        { name = "structured-logs"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "deployment-pattern";
+      cues = [ "blue-green" "canary" "rolling deploy" "블루 그린" "카나리" ];
+      sub_specs = [
+        { name = "blue-green"; cues = []; terminal = true; }
+        { name = "canary"; cues = []; terminal = true; }
+        { name = "rolling"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  dddAxiomTree = bt.composeBranchTree "domain-driven design axiom" [
+    {
+      name = "ubiquitous-language";
+      cues = [ "ubiquitous language" "domain language" "유비쿼터스 언어" "도메인 언어" ];
+      sub_specs = [
+        { name = "shared-vocabulary"; cues = []; terminal = true; }
+        { name = "team-domain-alignment"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "bounded-context";
+      cues = [ "bounded context" "context map" "경계 컨텍스트" "컨텍스트 맵" ];
+      sub_specs = [
+        { name = "shared-kernel"; cues = []; terminal = true; }
+        { name = "anti-corruption-layer"; cues = [ "anti corruption" "부패 방지" ]; terminal = true; }
+        { name = "conformist"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "tactical-patterns";
+      cues = [ "aggregate" "entity" "value object" "repository" "전술적 패턴" ];
+      sub_specs = [
+        { name = "aggregate-root"; cues = [ "aggregate root" "애그리거트" ]; terminal = true; }
+        { name = "entity-with-identity"; cues = []; terminal = true; }
+        { name = "value-object-immutable"; cues = []; terminal = true; }
+        { name = "repository-interface"; cues = []; terminal = true; }
+        { name = "domain-event"; cues = [ "domain event" "도메인 이벤트" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "strategic-design";
+      cues = [ "strategic design" "core domain" "subdomain" "전략적 설계" "핵심 도메인" ];
+      sub_specs = [
+        { name = "core-domain"; cues = [ "core" ]; terminal = true; }
+        { name = "supporting-subdomain"; cues = []; terminal = true; }
+        { name = "generic-subdomain"; cues = []; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#153) ─────────────────────────────────
+    {
+      name = "service-discovery-and-broker";
+      cues = [ "service discovery" "service registry" "message broker" "서비스 디스커버리" ];
+      sub_specs = [
+        { name = "consul-etcd"; cues = [ "consul" "etcd" ]; terminal = true; }
+        { name = "broker-kafka"; cues = [ "kafka broker" ]; terminal = true; }
+        { name = "broker-rabbitmq"; cues = [ "rabbitmq broker" "amqp broker" ]; terminal = true; }
+        { name = "broker-nats"; cues = [ "nats broker" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  knownAxioms = [
+    { axiom_id = "axiom-arch-001"; name = "layered"; domain = "architecture";
+      activation_cues = [ "layered" "n-tier" "MVC" "MVVM" "clean architecture" "계층화" "엠브이씨" "클린 아키텍처" ];
+      tree = layeredAxiomTree; sub_count = builtins.length layeredAxiomTree.branches;
+      tool_role = "구조 — 계층화"; }
+    { axiom_id = "axiom-arch-002"; name = "hexagonal"; domain = "architecture";
+      activation_cues = [ "hexagonal" "ports and adapters" "domain core" "dependency inversion" "onion" "헥사고날" "포트 어댑터" "어니언" "의존성 역전" ];
+      tree = hexagonalAxiomTree; sub_count = builtins.length hexagonalAxiomTree.branches;
+      tool_role = "구조 — 헥사고날"; }
+    { axiom_id = "axiom-arch-003"; name = "event-driven"; domain = "architecture";
+      activation_cues = [ "event driven" "event sourcing" "CQRS" "saga" "kafka" "rabbitmq" "eventual consistency" "이벤트 기반" "이벤트 소싱" "최종 일관성" ];
+      tree = eventDrivenAxiomTree; sub_count = builtins.length eventDrivenAxiomTree.branches;
+      tool_role = "구조 — 이벤트 기반"; }
+    { axiom_id = "axiom-arch-004"; name = "microservices"; domain = "architecture";
+      activation_cues = [ "microservice" "service boundary" "service discovery" "circuit breaker" "canary" "blue-green" "마이크로서비스" "서비스 디스커버리" "카나리" ];
+      tree = microservicesAxiomTree; sub_count = builtins.length microservicesAxiomTree.branches;
+      tool_role = "구조 — 마이크로서비스"; }
+    { axiom_id = "axiom-arch-005"; name = "domain-driven-design"; domain = "architecture";
+      activation_cues = [ "DDD" "domain driven" "ubiquitous language" "bounded context" "aggregate" "도메인 주도" "유비쿼터스" "애그리거트" ];
+      tree = dddAxiomTree; sub_count = builtins.length dddAxiomTree.branches;
+      tool_role = "구조 — DDD"; }
+  ];
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else builtins.filter (ax: decomposer.containsAny utterance ax.activation_cues) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then (builtins.head activations).tree
+    else bt.mkTree {
+      node_label = "multiple architecture axioms activated";
+      branches = builtins.map (ax: bt.mkBranch {
+        name = ax.name; hypothesis = "apply " + ax.name;
+        cues = ax.activation_cues; sub_branches = ax.tree.branches;
+      }) activations;
+    };
+
+  applyArchitectureAxiomPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax: acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome = if activations == [] then "no-axiom-activated"
+                  else if builtins.length activations == 1 then "single-axiom-activated"
+                  else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names = builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations; composite_tree = composite;
+          axiom_origin = "axiom-117-nl-architecture (composes axiom-98-tree)";
+        };
+      }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-architecture-axiom-117";
+    composes = "axiom-98-tree";
+    framework_step = "axiom content — 아키텍처 구조 (layered/hexagonal/event-driven/microservices/DDD)";
+    step_kind = "architecture-tool-axiom";
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax: acc + ax.sub_count) 0 knownAxioms;
+  };
+
+in {
+  inherit ownerName layeredAxiomTree hexagonalAxiomTree eventDrivenAxiomTree
+    microservicesAxiomTree dddAxiomTree
+    knownAxioms axiomsActivatedBy compositeTreeFromActivations
+    applyArchitectureAxiomPlate inventorySummary;
+  meta = { source = "stdlib NL architecture axioms (agent-NL-131)"; owner = ownerName; };
+}

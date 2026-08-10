@@ -1,0 +1,350 @@
+# stdlib.lib.ontology.public-response-delivery-receipt
+#
+# Verify a host-provided public response delivery result against the candidate
+# response assembly surface. The host may have delivered the public response;
+# this owner only checks the result receipt and keeps all effects closed.
+let
+  ownerName = "stdlib.lib.ontology.public-response-delivery-receipt";
+
+  responseAssemblyOwner = import ./response-assembly-surface.px;
+  wireOpacity = import ../agent/wire-shape-opacity-contract.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  assemblyFrom = req:
+    if hasAttr req "response_assembly_surface" && builtins.isAttrs req.response_assembly_surface then
+      req.response_assembly_surface
+    else if hasAttr req "response_assembly_surface_contract" && builtins.isAttrs req.response_assembly_surface_contract then
+      req.response_assembly_surface_contract
+    else if hasAttr req "assembly" && builtins.isAttrs req.assembly then
+      req.assembly
+    else if hasAttr req "source" && builtins.isAttrs req.source then
+      req.source
+    else { };
+
+  hostDeliveryResultFrom = req:
+    if hasAttr req "host_public_response_delivery_result" && builtins.isAttrs req.host_public_response_delivery_result then
+      req.host_public_response_delivery_result
+    else if hasAttr req "public_response_delivery_result" && builtins.isAttrs req.public_response_delivery_result then
+      req.public_response_delivery_result
+    else if hasAttr req "host_delivery_result" && builtins.isAttrs req.host_delivery_result then
+      req.host_delivery_result
+    else if hasAttr req "result" && builtins.isAttrs req.result then
+      req.result
+    else { };
+
+  deliveredEnvelopeFrom = result:
+    if hasAttr result "delivered_envelope" && builtins.isAttrs result.delivered_envelope then
+      result.delivered_envelope
+    else if hasAttr result "public_response_envelope" && builtins.isAttrs result.public_response_envelope then
+      result.public_response_envelope
+    else { };
+
+  assemblyOk = assembly:
+    builtins.isAttrs assembly
+    && stringAttrOr assembly "schema" "" == "puncheetah.ontology-response-assembly-surface.v0"
+    && stringAttrOr assembly "outcome" "" == "ontology-response-assembly-surface-built"
+    && getBool assembly "verified" false == true
+    && getBool assembly "is_held" true == false
+    && getBool assembly "response_assembly_surface_built" false == true
+    && getBool assembly "source_discourse_state_projection_verified" false == true
+    && getBool assembly "response_shape_policy_verified" false == true
+    && getBool assembly "public_wire_shape_opaque" false == true
+    && getBool assembly "candidate_only" false == true
+    && getBool assembly "public_response_emit_allowed" true == false
+    && getBool assembly "response_delivery_allowed" true == false
+    && getBool assembly "wire_write_allowed" true == false
+    && getBool assembly "ontology_query_allowed" true == false
+    && getBool assembly "ontology_emit_allowed" true == false
+    && getBool assembly "ontology_promote_allowed" true == false
+    && getBool assembly "accepted_fact_promotion_allowed" true == false
+    && getBool assembly "learning_promotion_allowed" true == false
+    && getBool assembly "memory_write_allowed" true == false
+    && getBool assembly "db_write_allowed" true == false
+    && getBool assembly "policy_persistence_allowed" true == false
+    && hasAttr assembly "public_response_envelope"
+    && builtins.isAttrs assembly.public_response_envelope;
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "response_emit_requested" false
+    || getBool req "public_response_emit_requested" false
+    || getBool req "response_delivery_requested" false
+    || getBool req "public_response_delivery_requested" false
+    || getBool req "wire_write_requested" false
+    || getBool req "public_wire_write_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  hostDeliveryResultOk = result:
+    let deliveredEnvelope = deliveredEnvelopeFrom result;
+    in
+      builtins.isAttrs result
+      && stringAttrOr result "kind" "" == "public-response-delivery-result-v0"
+      && stringAttrOr result "schema" "" == "puncheetah.host.public-response-delivery-result.v0"
+      && stringAttrOr result "outcome" "" == "host-public-response-delivered"
+      && getBool result "verified" false == true
+      && getBool result "host_public_response_delivery_result" false == true
+      && getBool result "public_response_delivered" false == true
+      && getBool result "response_delivery_executed" false == true
+      && getBool result "wire_write_executed" false == true
+      && stringAttrOr result "session_id" "" != ""
+      && stringAttrOr result "exchange_id" "" != ""
+      && builtins.isAttrs deliveredEnvelope
+      && deliveredEnvelope != { }
+      && hasAttr result "receipt"
+      && builtins.isAttrs result.receipt
+      && getBool result.receipt "verified" false == true;
+
+  resultMatchesAssembly = result: assembly:
+    let
+      expected = assembly.public_response_envelope;
+      delivered = deliveredEnvelopeFrom result;
+    in
+      hostDeliveryResultOk result
+      && assemblyOk assembly
+      && delivered == expected
+      && stringAttrOr result "session_id" "" == stringAttrOr expected "session_id" ""
+      && stringAttrOr result "exchange_id" "" == stringAttrOr expected "exchange_id" ""
+      && stringAttrOr result "response_kind" "" == stringAttrOr expected "response_kind" ""
+      && stringAttrOr result "assembly_schema" "" == stringAttrOr assembly "schema" ""
+      && stringAttrOr result "assembly_outcome" "" == stringAttrOr assembly "outcome" ""
+      && stringAttrOr result "assembly_turn_id" "" == stringAttrOr assembly "turn_id" ""
+      && stringAttrOr result "assembly_thread_id" "" == stringAttrOr assembly "thread_id" "";
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.public-response-delivery-receipt.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    source_response_assembly_verified = false;
+    host_public_response_delivery_result_verified = false;
+    public_response_delivered = false;
+    response_delivery_executed = false;
+    wire_write_executed = false;
+    public_wire_shape_opaque = false;
+    candidate_only = true;
+    public_response_emit_allowed = false;
+    response_delivery_allowed = false;
+    wire_write_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    reason = reason;
+    negative_receipt = {
+      kind = "public-response-delivery-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "do not accept public response delivery unless host result echoes the verified public envelope exactly and opacity still holds";
+    };
+    receipt = {
+      kind = "public-response-delivery-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      host_public_response_delivery_result_verified = false;
+      public_response_delivered = false;
+      response_delivery_executed = false;
+      wire_write_executed = false;
+      public_response_emit_allowed = false;
+      response_delivery_allowed = false;
+      wire_write_allowed = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName assemblyOk hostDeliveryResultOk resultMatchesAssembly;
+
+  verifyPublicResponseDeliveryReceipt = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-public-response-delivery-non-attr-request" "Public response delivery verification request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-public-response-delivery-effect-blocked" "Public response delivery verifier consumes host result evidence only; it never emits/delivers responses, writes wire/state, runs effects, or persists policy." { }
+    else
+      let
+        assembly = assemblyFrom req;
+        result = hostDeliveryResultFrom req;
+        deliveredEnvelope = deliveredEnvelopeFrom result;
+        wireCheck = wireOpacity.validateWireEnvelope {
+          direction = "outbound";
+          declared_category = stringAttrOr req "declared_public_category" "sanitised-prose";
+          envelope_attrs = deliveredEnvelope;
+        };
+      in
+        if assembly == { } then
+          mkHeld "held-public-response-delivery-assembly-required" "Public response delivery verifier requires a verified response assembly surface." { }
+        else if !assemblyOk assembly then
+          mkHeld "held-public-response-delivery-assembly-unverified" "Public response delivery verifier requires a verified effect-locked response assembly surface." {
+            response_assembly_surface = assembly;
+          }
+        else if !hostDeliveryResultOk result then
+          mkHeld "held-public-response-delivery-result-required" "Host must provide a verified public-response-delivery-result-v0 receipt." {
+            host_public_response_delivery_result = result;
+          }
+        else if stringAttrOr wireCheck "verdict" "" != "wire-shape-opaque" then
+          mkHeld "held-public-response-delivery-public-opacity" "Delivered public response envelope must still pass the wire shape opacity contract." {
+            public_wire_opacity_check = wireCheck;
+          }
+        else if !resultMatchesAssembly result assembly then
+          mkHeld "held-public-response-delivery-result-mismatch" "Host delivery result does not exactly match the verified response assembly envelope and source ids." {
+            expected = {
+              assembly_schema = stringAttrOr assembly "schema" "";
+              assembly_outcome = stringAttrOr assembly "outcome" "";
+              assembly_turn_id = stringAttrOr assembly "turn_id" "";
+              assembly_thread_id = stringAttrOr assembly "thread_id" "";
+              public_response_envelope = assembly.public_response_envelope;
+            };
+            host_public_response_delivery_result = result;
+          }
+        else {
+          schema = "puncheetah.public-response-delivery-receipt.v0";
+          owner = ownerName;
+          outcome = "public-response-delivery-receipt-verified";
+          is_held = false;
+          verified = true;
+          source_response_assembly_verified = true;
+          host_public_response_delivery_result_verified = true;
+          public_response_delivered = true;
+          response_delivery_executed = true;
+          wire_write_executed = true;
+          public_wire_shape_opaque = true;
+          candidate_only = true;
+          session_id = stringAttrOr result "session_id" "";
+          exchange_id = stringAttrOr result "exchange_id" "";
+          turn_id = stringAttrOr assembly "turn_id" "";
+          thread_id = stringAttrOr assembly "thread_id" "";
+          delivered_envelope = deliveredEnvelope;
+          host_public_response_delivery_result = result;
+          source_response_assembly_surface = {
+            schema = stringAttrOr assembly "schema" "";
+            outcome = stringAttrOr assembly "outcome" "";
+            turn_id = stringAttrOr assembly "turn_id" "";
+            thread_id = stringAttrOr assembly "thread_id" "";
+            public_wire_shape_opaque = getBool assembly "public_wire_shape_opaque" false;
+          };
+          public_wire_opacity_check = wireCheck;
+          source_owner_reuse = {
+            response_assembly_surface_owner = responseAssemblyOwner.ownerName;
+            wire_shape_opacity_contract_owner = wireOpacity.ownerName;
+            response_assembly_surface_replaced = false;
+            wire_opacity_contract_replaced = false;
+            host_delivery_replaced = false;
+            pnix_db_append_gate_replaced = false;
+          };
+          next_gate = "response-delivery-timeline-audit";
+          public_response_emit_allowed = false;
+          response_delivery_allowed = false;
+          wire_write_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "public-response-delivery-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "public-response-delivery-receipt-verified";
+            host_public_response_delivery_result_verified = true;
+            public_response_delivered = true;
+            response_delivery_executed = true;
+            wire_write_executed = true;
+            session_id = stringAttrOr result "session_id" "";
+            exchange_id = stringAttrOr result "exchange_id" "";
+            next_gate = "response-delivery-timeline-audit";
+            invariant = "delivery is accepted only from a host result receipt that echoes the verified public envelope exactly while all .px effects remain closed";
+            public_response_emit_allowed = false;
+            response_delivery_allowed = false;
+            wire_write_allowed = false;
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "public-response-delivery-receipt-v0";
+    role = "verified response assembly surface + host public delivery result -> auditable delivery receipt";
+    source_gate = "ontology-response-assembly-surface";
+    next_gate = "response-delivery-timeline-audit";
+    non_replacement_boundary = "does not replace response assembly, wire opacity, host delivery transport, conversation store, discourse-state, or pnix-db append gates";
+    effect_policy = "result verifier only; host may report delivered response, but .px does not emit/deliver, write wire/state, query/emit/promote ontology facts, accept facts, write memory/DB, persist policy, route, or write code";
+  };
+}

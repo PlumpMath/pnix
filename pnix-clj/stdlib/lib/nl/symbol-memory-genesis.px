@@ -1,0 +1,47 @@
+# stdlib/lib/nl/symbol-memory-genesis.px
+#
+# symbol-memory GENESIS (diverge): 여러 proposition-term의 *공통 추상*(least general generalization)을
+#   anti-unification으로 뽑아 *후보 abstraction symbol*을 생성 = "구조에서 새 typed universal symbol을 만든다"(§16).
+#   read-back(converge: instance 인식)의 *반동형 짝* — 둘을 함께 둬야 meta-mirror-primitive 동형/반동형(converge∘diverge) 유지.
+#
+# ★갈라치기 0: term-dag.antiUnify(LGG)·match를 재사용(새 mechanism 0). pnix-lisp-ct genesis는 RULE *경로합성*(synthesize)이고
+#   여기는 PROPOSITION *일반화*(antiUnify) = 다른 연산·다른 층. = §38 grounded "babble식 e-graph anti-unification" 그 자체.
+# ★§38: genesis는 결정론 CORE(candidate 생성·구조 측정은 결정론) — 그러나 *promotion(durable 승격)은 Held/Arena*
+#   (utility 신호 필수; HipSpec: 겉보기 redundant 자동폐기 금지). 여기는 *후보만* 낸다(proposer_only·durable_truth=false).
+let
+  B = builtins;
+  td = import ../lisp/term-dag.px;
+
+  # proposeAbstraction {terms}: term 리스트의 LGG(antiUnify fold) = 공통 추상 schema(metavar ?g..) + content-key.
+  #   instance가 1개면 일반화 불요(그대로), 2개+면 차이를 metavar로 일반화.
+  proposeAbstraction = args:
+    let terms = if args ? terms then args.terms else [ ];
+    in if terms == [ ] then { abstraction = null; instance_count = 0; proposer_only = true; durable_truth = false; promotion_held = true; }
+       else
+         let pattern = B.foldl' (acc: t: td.antiUnify acc t) (B.head terms) (B.tail terms);
+         in {
+           abstraction = pattern;                       # 일반화 schema (term)
+           abstraction_text = td.serialize pattern;     # 사람읽기 face (regenerable)
+           abstraction_key = td.key pattern;            # content-addressed 신원 (s:...)
+           instance_count = B.length terms;
+           # ★후보일 뿐 — durable 승격(promotion)은 Held/Arena(§38). 자동 KEEP 금지.
+           proposer_only = true;
+           durable_truth = false;
+           promotion_held = true;
+           promotion_owner = "Arena/Held (utility 신호 필수 — §38 promotion-by-utility)";
+         };
+
+  # instancesOf {abstraction, terms}: 추상 schema의 instance인 term들(match 성립) = converge/recognition 짝.
+  #   ★동형/반동형 대칭: antiUnify(instances)=pattern(diverge) ⟹ 각 instance가 match(pattern)(converge).
+  instancesOf = args:
+    let abstraction = if args ? abstraction then args.abstraction else null;
+        terms = if args ? terms then args.terms else [ ];
+        isInstance = t: (td.match abstraction t) != null;
+    in {
+      instances = B.filter isInstance terms;
+      instance_count = B.length (B.filter isInstance terms);
+      total = B.length terms;
+    };
+in {
+  inherit proposeAbstraction instancesOf;
+}

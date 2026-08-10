@@ -1,0 +1,528 @@
+let
+  ownerName = "stdlib.nl.review-axioms";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Review Axioms (agent-NL-126) ================================
+  #
+  # 코드 리뷰 / 분석의 손/도구.
+  #
+  # 5 family:
+  #   1. style-formatting (style guide / linter / formatter)
+  #   2. naming (변수 / 함수 / 타입 이름)
+  #   3. documentation (주석 / docstring / 예제 / README)
+  #   4. commit-pr (커밋 메시지 / PR 설명 / changelog)
+  #   5. code-smell (long method / large class / duplicated / ...)
+
+  stepKind = "review-tool-axiom";
+  framework_step =
+    "axiom content — 코드 리뷰 도구 (style/naming/doc/commit/smell)";
+
+  # === 1. Style & Formatting ===================================
+
+  styleAxiomTree = bt.composeBranchTree "style and formatting axiom" [
+    {
+      name = "indentation";
+      cues = [ "indent" "indentation" "tab" "space" "들여쓰기" "탭" "공백" ];
+      sub_specs = [
+        { name = "tab-vs-space"; cues = [ "tab vs space" "탭 공백" ]; terminal = true; }
+        { name = "indent-size"; cues = [ "2 space" "4 space" "indent size" ]; terminal = true; }
+        { name = "consistent-indent"; cues = [ "consistent" "일관성" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "line-length";
+      cues = [ "line length" "line width" "line too long" "줄 길이" "최대 줄 길이" ];
+      sub_specs = [
+        { name = "80-column"; cues = []; terminal = true; }
+        { name = "100-column"; cues = []; terminal = true; }
+        { name = "120-column"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "naming-convention";
+      cues = [ "naming convention" "snake case" "camel case" "PascalCase" "표기법" ];
+      sub_specs = [
+        { name = "snake-case"; cues = [ "snake" ]; terminal = true; }
+        { name = "camel-case"; cues = [ "camel" ]; terminal = true; }
+        { name = "pascal-case"; cues = [ "pascal" ]; terminal = true; }
+        { name = "kebab-case"; cues = [ "kebab" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "whitespace";
+      cues = [ "whitespace" "blank line" "trailing space" "공백 처리" "빈 줄" ];
+      sub_specs = [
+        { name = "trailing-whitespace"; cues = [ "trailing" ]; terminal = true; }
+        { name = "blank-lines-between-defs"; cues = []; terminal = true; }
+        { name = "around-operators"; cues = [ "around" "연산자 주변" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "import-order";
+      cues = [ "import order" "import sort" "임포트 정렬" "import 순서" ];
+      sub_specs = [
+        { name = "stdlib-first"; cues = [ "stdlib first" "표준 먼저" ]; terminal = true; }
+        { name = "group-by-type"; cues = [ "group" "그룹" ]; terminal = true; }
+        { name = "alphabetical"; cues = [ "alphabetical" "alphabetic" "알파벳" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "bracket-placement";
+      cues = [ "bracket" "brace" "괄호 위치" ];
+      sub_specs = [
+        { name = "same-line"; cues = [ "K&R" "same line" "같은 줄" ]; terminal = true; }
+        { name = "next-line"; cues = [ "allman" "next line" "다음 줄" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Naming ===============================================
+
+  namingAxiomTree = bt.composeBranchTree "naming axiom" [
+    {
+      name = "variable-naming";
+      cues = [ "variable name" "var name" "변수 명명" "변수 이름" ];
+      sub_specs = [
+        { name = "descriptive"; cues = [ "descriptive" "meaningful" "의미 있는" ]; terminal = true; }
+        { name = "avoid-abbreviation"; cues = [ "abbreviation" "abbrev" "축약" ]; terminal = true; }
+        { name = "no-single-letter"; cues = [ "single letter" "한 글자" ]; terminal = true; }
+        { name = "domain-vocabulary"; cues = [ "domain" "도메인 용어" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "function-naming";
+      cues = [ "function name" "method name" "함수 명명" "메소드 이름" ];
+      sub_specs = [
+        { name = "verb-noun"; cues = [ "verb" "동사" ]; terminal = true; }
+        { name = "imperative-mood"; cues = [ "imperative" "명령형" ]; terminal = true; }
+        { name = "boolean-is-has"; cues = [ "is" "has" "boolean" "불리언" ]; terminal = true; }
+        { name = "side-effect-indicator"; cues = [ "side effect" "부작용 표시" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "type-naming";
+      cues = [ "type name" "class name" "struct name" "타입 명명" ];
+      sub_specs = [
+        { name = "noun-form"; cues = [ "noun" "명사" ]; terminal = true; }
+        { name = "no-prefix"; cues = [ "no prefix" "prefix" "접두" ]; terminal = true; }
+        { name = "domain-concept"; cues = [ "domain" "도메인 개념" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "constant-naming";
+      cues = [ "constant name" "const name" "상수 명명" "상수 이름" ];
+      sub_specs = [
+        { name = "all-caps"; cues = [ "all caps" "uppercase" "대문자" ]; terminal = true; }
+        { name = "no-magic-number"; cues = [ "magic number" "매직 넘버" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "consistency";
+      cues = [ "naming consistency" "consistent naming" "일관성" "명명 일관성" ];
+      sub_specs = [
+        { name = "within-file"; cues = []; terminal = true; }
+        { name = "within-project"; cues = []; terminal = true; }
+        { name = "with-language-conventions"; cues = [ "language convention" "언어 관습" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Documentation ========================================
+
+  documentationAxiomTree = bt.composeBranchTree "documentation axiom" [
+    {
+      name = "function-docstring";
+      cues = [ "docstring" "doc comment" "함수 주석" "함수 문서" ];
+      sub_specs = [
+        { name = "summary-line"; cues = [ "summary" "요약" ]; terminal = true; }
+        { name = "params"; cues = [ "params" "parameters" "매개변수" ]; terminal = true; }
+        { name = "returns"; cues = [ "returns" "반환" ]; terminal = true; }
+        { name = "raises"; cues = [ "raises" "throws" "예외" ]; terminal = true; }
+        { name = "examples"; cues = [ "example" "예제" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "inline-comment";
+      cues = [ "inline comment" "// comment" "# comment" "인라인 주석" "주석" ];
+      sub_specs = [
+        { name = "explain-why-not-what"; cues = [ "why this" "why that" "why this change" "왜 이 변경" "왜 이렇게" ]; terminal = true; }
+        { name = "todo-marker"; cues = [ "TODO" "FIXME" "XXX" "할 일" ]; terminal = true; }
+        { name = "warning-comment"; cues = [ "WARNING" "NOTE" "주의" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "readme";
+      cues = [ "README" "readme" "리드미" ];
+      sub_specs = [
+        { name = "overview"; cues = [ "overview" "개요" ]; terminal = true; }
+        { name = "getting-started"; cues = [ "getting started" "시작하기" ]; terminal = true; }
+        { name = "installation"; cues = [ "install" "설치" ]; terminal = true; }
+        { name = "usage-examples"; cues = [ "usage" "사용법" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "api-documentation";
+      cues = [ "API documentation" "API docs" "API 문서" ];
+      sub_specs = [
+        { name = "endpoint-spec"; cues = [ "endpoint" "엔드포인트" ]; terminal = true; }
+        { name = "request-response"; cues = [ "request response" "HTTP request" "request body" "response body" "API request" "API response" "요청/응답" ]; terminal = true; }
+        { name = "openapi-spec"; cues = [ "openapi" "swagger" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "architecture-decision-record";
+      cues = [ "ADR" "architecture decision" "건축 결정" "ADR 기록" ];
+      sub_specs = [
+        { name = "context"; cues = [ "context" "배경" ]; terminal = true; }
+        { name = "decision"; cues = [ "decision" "결정" ]; terminal = true; }
+        { name = "consequences"; cues = [ "consequences" "결과" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Commit & PR =========================================
+
+  commitPrAxiomTree = bt.composeBranchTree "commit and PR axiom" [
+    {
+      name = "commit-message-format";
+      cues = [ "commit message" "conventional commit" "커밋 메시지" "커밋 형식" ];
+      sub_specs = [
+        { name = "subject-50-chars"; cues = [ "50 chars" "subject" ]; terminal = true; }
+        { name = "body-72-chars"; cues = [ "72 chars" "body" ]; terminal = true; }
+        { name = "imperative"; cues = [ "imperative" "명령형" ]; terminal = true; }
+        { name = "type-scope-prefix"; cues = [ "feat" "fix" "chore" "type prefix" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "atomic-commit";
+      cues = [ "atomic commit" "single concern" "원자적 커밋" "단일 관심사" ];
+      sub_specs = [
+        { name = "one-logical-change"; cues = []; terminal = true; }
+        { name = "easy-to-revert"; cues = [ "revert" "되돌리기" ]; terminal = true; }
+        { name = "easy-to-bisect"; cues = [ "bisect" "이등분" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "pr-description";
+      cues = [ "PR description" "pull request" "PR 설명" "풀 리퀘스트" ];
+      sub_specs = [
+        { name = "what-and-why"; cues = [ "what why" "무엇 왜" ]; terminal = true; }
+        { name = "test-plan"; cues = [ "test plan" "테스트 계획" ]; terminal = true; }
+        { name = "screenshots"; cues = [ "screenshot" "스크린샷" ]; terminal = true; }
+        { name = "breaking-changes"; cues = [ "breaking change" "호환성 깨짐" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "changelog";
+      cues = [ "changelog" "release notes" "변경 로그" "릴리스 노트" ];
+      sub_specs = [
+        { name = "keep-a-changelog"; cues = [ "keep a changelog" ]; terminal = true; }
+        { name = "semantic-versioning"; cues = [ "semver" "semantic version" "시맨틱 버전" ]; terminal = true; }
+        { name = "categorized-entries"; cues = [ "added" "changed" "deprecated" "removed" "fixed" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "review-checklist";
+      cues = [ "review checklist" "code review" "리뷰 체크리스트" "코드 리뷰" ];
+      sub_specs = [
+        { name = "correctness"; cues = [ "correctness" "정확성" ]; terminal = true; }
+        { name = "tests-included"; cues = [ "test included" "테스트 포함" ]; terminal = true; }
+        { name = "doc-updated"; cues = [ "doc updated" "문서 갱신" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Code Smell ===========================================
+
+  codeSmellAxiomTree = bt.composeBranchTree "code smell axiom" [
+    {
+      name = "long-method";
+      cues = [ "long method" "long function" "긴 함수" "긴 메소드" ];
+      sub_specs = [
+        { name = "extract-method-fix"; cues = [ "extract method" "추출" ]; terminal = true; }
+        { name = "decompose-conditional"; cues = [ "decompose" "분해" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "large-class";
+      cues = [ "large class" "god object" "god class" "큰 클래스" "갓 객체" ];
+      sub_specs = [
+        { name = "extract-class-fix"; cues = [ "extract class" "클래스 추출" ]; terminal = true; }
+        { name = "extract-subclass"; cues = [ "extract subclass" "하위 클래스" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "duplicated-code";
+      cues = [ "duplicate" "duplication" "DRY" "중복 코드" ];
+      sub_specs = [
+        { name = "extract-helper"; cues = [ "extract" "helper" "추출" ]; terminal = true; }
+        { name = "pull-up-method-fix"; cues = [ "pull up" "상위로" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "feature-envy";
+      cues = [ "feature envy" "기능 시기" ];
+      sub_specs = [
+        { name = "move-method-fix"; cues = [ "move method" "메소드 이동" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "primitive-obsession";
+      cues = [ "primitive obsession" "원시 타입 집착" "string everywhere" ];
+      sub_specs = [
+        { name = "replace-with-value-object"; cues = [ "value object" "값 객체" ]; terminal = true; }
+        { name = "introduce-newtype"; cues = [ "newtype" "wrapper" "래퍼" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "temporal-coupling";
+      cues = [ "temporal coupling" "must call in order" "순서 의존" ];
+      sub_specs = [
+        { name = "introduce-state-machine"; cues = [ "state machine" "상태 기계" ]; terminal = true; }
+        { name = "type-state-pattern"; cues = [ "type state" "타입 상태" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "shotgun-surgery";
+      cues = [ "shotgun surgery" "scattered change" "산탄총 수술" "흩어진 변경" ];
+      sub_specs = [
+        { name = "consolidate-changes"; cues = [ "consolidate" "통합" ]; terminal = true; }
+        { name = "extract-shared-concept"; cues = [ "shared" "공유" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "data-clump";
+      cues = [ "data clump" "always together" "데이터 묶음" ];
+      sub_specs = [
+        { name = "introduce-parameter-object-fix"; cues = [ "parameter object" "매개변수 객체" ]; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#153) ─────────────────────────────────
+    {
+      name = "api-stability-review";
+      cues = [ "api stability" "breaking change" "API 안정성" "호환성 깨짐" ];
+      sub_specs = [
+        { name = "binary-compat"; cues = [ "binary compatibility" "바이너리 호환" ]; terminal = true; }
+        { name = "source-compat"; cues = [ "source compatibility" "소스 호환" ]; terminal = true; }
+        { name = "deprecation-policy"; cues = [ "deprecation" "사용 중단 정책" ]; terminal = true; }
+        { name = "semver-validation"; cues = [ "semver" "시맨틱 버전" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry ===================================================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-rev-001";
+      name = "style-formatting";
+      domain = "review";
+      activation_cues = [
+        "style" "formatting" "linter" "formatter" "indentation" "line length"
+        "import order" "bracket"
+        "스타일" "포매팅" "들여쓰기" "줄 길이" "임포트 순서"
+      ];
+      tree = styleAxiomTree;
+      sub_count = builtins.length styleAxiomTree.branches;
+      tool_role = "리뷰 — 형식";
+    }
+    {
+      axiom_id = "axiom-rev-002";
+      name = "naming";
+      domain = "review";
+      activation_cues = [
+        "naming" "variable name" "function name" "type name" "constant name"
+        "rename for clarity"
+        "명명" "이름 짓기" "변수명" "함수명"
+      ];
+      tree = namingAxiomTree;
+      sub_count = builtins.length namingAxiomTree.branches;
+      tool_role = "리뷰 — 명명";
+    }
+    {
+      axiom_id = "axiom-rev-003";
+      name = "documentation";
+      domain = "review";
+      activation_cues = [
+        "documentation" "doc" "docstring" "comment" "README" "API docs"
+        "ADR"
+        "문서" "주석" "리드미" "API 문서"
+      ];
+      tree = documentationAxiomTree;
+      sub_count = builtins.length documentationAxiomTree.branches;
+      tool_role = "리뷰 — 문서";
+    }
+    {
+      axiom_id = "axiom-rev-004";
+      name = "commit-pr";
+      domain = "review";
+      activation_cues = [
+        "commit message" "PR" "pull request" "changelog" "release notes"
+        "review checklist" "atomic commit"
+        "커밋 메시지" "PR 설명" "변경 로그" "리뷰 체크리스트"
+      ];
+      tree = commitPrAxiomTree;
+      sub_count = builtins.length commitPrAxiomTree.branches;
+      tool_role = "리뷰 — git workflow";
+    }
+    {
+      axiom_id = "axiom-rev-005";
+      name = "code-smell";
+      domain = "review";
+      activation_cues = [
+        "code smell" "smell" "long method" "large class" "duplication" "DRY"
+        "feature envy" "primitive obsession" "god object" "shotgun surgery"
+        "코드 냄새" "긴 메소드" "큰 클래스" "중복 코드"
+      ];
+      tree = codeSmellAxiomTree;
+      sub_count = builtins.length codeSmellAxiomTree.branches;
+      tool_role = "리뷰 — 냄새 인식";
+    }
+  ];
+
+  # === Activation + Plate (boilerplate same as #118-#125) ==========
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple review axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "review via " + ax.name;
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  applyReviewAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-112-nl-review (composes axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+              tool_role = ax.tool_role;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms } | { activate_for } | { describe }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-review-axiom-112";
+    composes = "axiom-98-tree (data on generic substrate)";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "style-formatting (indent / line / naming-convention / whitespace / import / bracket)"
+      "naming (variable / function / type / constant / consistency)"
+      "documentation (docstring / inline / README / API / ADR)"
+      "commit-pr (message / atomic / PR-desc / changelog / checklist)"
+      "code-smell (long-method / large-class / duplication / feature-envy / primitive / temporal / shotgun / data-clump)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    tool_metaphor =
+      "분석/리뷰의 손. 코드 *읽기 + 평가* 도구. edit/refactor (#122) "
+      + "와 결합 — smell 인식 → 어떤 refactor 적용.";
+  };
+
+in {
+  inherit
+    ownerName
+    styleAxiomTree namingAxiomTree documentationAxiomTree
+    commitPrAxiomTree codeSmellAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    applyReviewAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL review axioms (agent-NL-126)";
+    owner = ownerName;
+    base = "nl-review-axioms-v0";
+    rev_note = "agent-NL-126 (2026-05-29): 리뷰의 손. 5 family "
+      + "(style/naming/doc/commit-pr/smell). DO NOT REBUILD.";
+  };
+}

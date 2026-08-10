@@ -1,0 +1,36 @@
+# IANA Service Names and Port Numbers redb store-plan. 적재까지만, graph/mirror/math 연결 없음.
+let
+  B = builtins;
+  genPath = ./iana-service-names-port-numbers.generated.px;
+  seed = if B.pathExists genPath then import genPath else { schema = "registry.iana.service_names_port_numbers.v1"; source = { project = "IANA Service Names and Transport Protocol Port Numbers Registry"; }; registry = { id = "service-names-port-numbers"; records = [ ]; }; registry_count = 1; record_count = 0; };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "registry-iana-service-names-port-numbers-load-v0";
+      source_lens = "stdlib/lib/corpus/iana-service-names-port-numbers-store-plan.px";
+      source_verdict = "materialize-registry-iana-service-names-port-numbers";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "registry.iana.service_names_port_numbers.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "registry-iana-service-names-port-numbers-query-v0";
+      source_lens = "stdlib/lib/corpus/iana-service-names-port-numbers-store-plan.px";
+      source_verdict = "query-registry-iana-service-names-port-numbers";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "registry.iana.service_names_port_numbers.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

@@ -1,0 +1,221 @@
+let
+  ownerName = "stdlib.provenance.provenance-supersede-substrate";
+
+  # === Provenance + supersede chain substrate =========================
+  #
+  # CLAUDE.md 헌법: "append-only judgement log + supersede chain +
+  # provenance/lineage 를 우회하지 않는다. retention / compaction / vacuum
+  # 은 raw evidence 를 대체하지 않는다."
+  #
+  # # Append-only + supersede axiom
+  #
+  # Receipts 는 *immutable*. 의견이 바뀌면 *새 receipt* 가 *옛 receipt*
+  # 를 supersede. 옛 receipt 는 archive 로 reference. silent overwrite
+  # 금지.
+  #
+  # # 학술 근거
+  #
+  # - Append-only log (Lampson 1986, Schneider 1990 state-machine replication)
+  # - Event sourcing (Fowler 2005)
+  # - Bitemporal data (Snodgrass 1995) — valid-time vs transaction-time
+  # - Provenance (W3C PROV-O 2013) — wasGeneratedBy / wasDerivedFrom
+  # - Git object model (Linus Torvalds 2005) — content-addressed immutable
+  # - Append-only file system (ZFS COW, Btrfs)
+
+  # === 5 receipt lifecycle states ===================================
+  #
+  # 옛 receipt 가 가질 수 있는 status. supersede graph 의 node label.
+
+  knownReceiptStates = [
+    {
+      state_id = "active";
+      semantic = "current canonical receipt — referenced by latest pointer";
+      immutable = true;
+      can_be_superseded = true;
+      academic_ref = "event sourcing (Fowler 2005)";
+    }
+    {
+      state_id = "superseded";
+      semantic = "older receipt replaced by newer one; preserved for audit";
+      immutable = true;
+      can_be_superseded = false;
+      academic_ref = "bitemporal data (Snodgrass 1995)";
+    }
+    {
+      state_id = "rejected";
+      semantic = "receipt was created but explicitly rejected; reason kept";
+      immutable = true;
+      can_be_superseded = false;
+      academic_ref = "reverse mathematics + reject lifecycle";
+    }
+    {
+      state_id = "held";
+      semantic = "receipt deferred pending more evidence; kept replayable";
+      immutable = true;
+      can_be_superseded = true;
+      academic_ref = "Held-honest substrate axiom";
+    }
+    {
+      state_id = "reopened";
+      semantic = "previously held receipt has new evidence; back to active";
+      immutable = true;
+      can_be_superseded = false;  # the *envelope* event itself; the underlying claim becomes active
+      academic_ref = "Held + Reopen discipline (CLAUDE.md)";
+    }
+  ];
+
+  stateCount = builtins.length knownReceiptStates;
+  stateIds = builtins.map (s: s.state_id) knownReceiptStates;
+
+  findState = stateId:
+    let
+      matches = builtins.filter (s: s.state_id == stateId) knownReceiptStates;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # === Receipt envelope shape =======================================
+
+  mkReceipt = receiptId: producedAt: payload:
+    {
+      receipt_id = receiptId;
+      produced_at_ms = producedAt;
+      payload = payload;
+      state = "active";
+      supersedes = null;
+      superseded_by = null;
+      provenance_refs = [];
+    };
+
+  # === Supersede operation (creates new receipt referencing old) =====
+
+  supersedeReceipt = oldReceipt: newReceiptId: newProducedAt: newPayload:
+    if !(builtins.isAttrs oldReceipt) then {
+      outcome = "held-non-attrs-old-receipt";
+    }
+    else if oldReceipt.state == "superseded" then {
+      outcome = "held-double-supersede-forbidden";
+      reason =
+        "Old receipt already in superseded state. Cannot supersede a "
+        + "superseded receipt — append-only invariant. Find the active "
+        + "successor and supersede that instead.";
+      old_receipt_id = oldReceipt.receipt_id;
+    }
+    else if oldReceipt.state == "rejected" then {
+      outcome = "held-cannot-supersede-rejected";
+      reason =
+        "Rejected receipt cannot be re-validated by supersede. Create a "
+        + "new active receipt and let it stand on its own evidence.";
+    }
+    else {
+      outcome = "supersede-pair-built";
+      old_receipt_marked_superseded = oldReceipt // {
+        state = "superseded";
+        superseded_by = newReceiptId;
+      };
+      new_receipt = {
+        receipt_id = newReceiptId;
+        produced_at_ms = newProducedAt;
+        payload = newPayload;
+        state = "active";
+        supersedes = oldReceipt.receipt_id;
+        superseded_by = null;
+        provenance_refs = [
+          { kind = "supersedes-receipt-id"; value = oldReceipt.receipt_id; }
+        ];
+      };
+      audit_note =
+        "Both receipts preserved (immutable). Latest pointer should "
+        + "move from old to new. Old kept for replay/audit.";
+    };
+
+  # === Chain walking: from active back through supersedes ===========
+  #
+  # 한 receipt 의 lineage 추적. chain 의 길이 = supersede 횟수.
+
+  walkSupersedeChain = receipts: startId:
+    let
+      findById = id:
+        let
+          m = builtins.filter (r: r.receipt_id == id) receipts;
+        in
+          if m == [] then null else builtins.head m;
+      walk = currentId: acc:
+        let
+          r = findById currentId;
+        in
+          if r == null then acc
+          else if r.supersedes == null then acc ++ [ r.receipt_id ]
+          else walk r.supersedes (acc ++ [ r.receipt_id ]);
+    in
+      {
+        outcome = "supersede-chain-walked";
+        start_id = startId;
+        chain_ids = walk startId [];
+        chain_length =
+          builtins.length (walk startId []);
+      };
+
+  # === Mirror plate lens entry =======================================
+
+  applyProvenancePlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(request ? operation) then {
+      outcome = "held-operation-required";
+      known_operations = [
+        "list-states" "describe-state" "mk-receipt" "supersede"
+        "walk-chain"
+      ];
+    }
+    else if request.operation == "list-states" then {
+      outcome = "states-listed";
+      state_count = stateCount;
+      state_ids = stateIds;
+    }
+    else if request.operation == "describe-state" then
+      let
+        s = findState request.state_id;
+      in
+        if s == null then {
+          outcome = "held-unknown-state";
+          state_id = request.state_id;
+        }
+        else s // { outcome = "state-described"; }
+    else if request.operation == "mk-receipt" then
+      mkReceipt request.receipt_id request.produced_at_ms request.payload
+    else if request.operation == "supersede" then
+      supersedeReceipt request.old_receipt request.new_receipt_id
+        request.new_produced_at_ms request.new_payload
+    else if request.operation == "walk-chain" then
+      walkSupersedeChain request.receipts request.start_id
+    else {
+      outcome = "held-unknown-operation";
+      operation = request.operation;
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    receipt_state_count = stateCount;
+    receipt_state_ids = stateIds;
+    axiom_class = "append-only-supersede-provenance-substrate-axiom";
+    immutability_invariant = true;
+    silent_overwrite_forbidden = true;
+    correspondence_with_claude_md =
+      "CLAUDE.md 'append-only judgement log + supersede chain + provenance/"
+      + "lineage 를 우회하지 않는다' 의 generic substrate.";
+  };
+
+in {
+  inherit
+    ownerName knownReceiptStates stateIds findState
+    mkReceipt supersedeReceipt walkSupersedeChain
+    applyProvenancePlate inventorySummary;
+  meta = {
+    source = "stdlib provenance + supersede substrate (append-only)";
+    owner = ownerName;
+    base = "provenance-supersede-substrate-v0";
+    rev_note = "CLAUDE.md 헌법 (append-only judgement log + supersede chain + provenance/lineage) 의 generic substrate. 5 receipt states (active/superseded/rejected/held/reopened) + immutable invariant + supersedeReceipt (double-supersede 금지, rejected supersede 금지) + walkSupersedeChain (lineage 추적). 학술: Lampson append-only (1986) + Schneider state-machine (1990) + Fowler event sourcing (2005) + Snodgrass bitemporal (1995) + W3C PROV-O (2013) + Git object model (Torvalds 2005).";
+  };
+}

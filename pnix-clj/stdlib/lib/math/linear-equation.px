@@ -1,0 +1,134 @@
+# stdlib.lib.math.linear-equation
+#
+# OWNER-LAW (v0.12-MM, div-math, 2026-05-21): exact linear
+# equation solver over the integers, with rational solutions.
+#
+# The math lane can EVALUATE arithmetic (numeric-evaluator),
+# answer integer-STRUCTURE questions (number-theory), and
+# REPRESENT exact non-integers (rational). What it could not do
+# is SOLVE: given `2 * x + 3 = 11`, find `x`.
+#
+# This owner is the math lane's first solver. It closes the
+# single-variable linear case exactly:
+#
+#   one-sided:  a*x + b = c
+#   two-sided:  a*x + b = d*x + e   (normalised to one-sided)
+#
+# The solution is an exact rational (it reuses rational.px), so
+# `3 * x = 1` solves to `x = 1/3` -- not a rounded float.
+#
+# # Three genuine outcomes, not one
+#
+# A linear equation does NOT always have one solution. The solver
+# distinguishes all three cases mechanically:
+#
+#   unique-solution           a != 0 -> x = (c - b) / a
+#   infinitely-many-solutions a == 0 and b == c  (0 = 0)
+#   no-solution               a == 0 and b != c  (a contradiction)
+#
+# Collapsing these into one answer would be a lie. The substrate
+# surfaces the real shape of the solution set.
+#
+# # Kernel layering
+#
+# linear-equation -> rational -> number-theory -> nothing. Each
+# owner depends only on simpler owners. The solution is verified
+# by substituting it back: `verifySolution` recomputes `a*x + b`
+# in exact rational arithmetic and checks it equals `c`.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT a quadratic / polynomial solver -- linear only.
+#   - NOT a system-of-equations solver (one variable).
+#   - NOT a symbolic simplifier -- the coefficients are integers
+#     supplied directly, not parsed from an expression string.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/linear-equation.px";
+
+  rational = import ./rational.px;
+
+  # Verify a candidate rational solution `x` against `a*x + b = c`
+  # by recomputing the left side in exact rational arithmetic.
+  verifySolution = a: b: c: x:
+    let
+      ax = rational.ratMul (rational.ratFromInt a) x;
+      lhs = rational.ratAdd ax (rational.ratFromInt b);
+    in rational.ratEq lhs (rational.ratFromInt c);
+
+  # Solve `a*x + b = c`. Returns a typed envelope distinguishing
+  # the three solution-set shapes.
+  solveLinear = a: b: c:
+    if a == 0 then
+      if b == c then {
+        outcome = "infinitely-many-solutions";
+        a = a; b = b; c = c;
+        reason = "a = 0 and b = c: the equation reduces to 0 = 0";
+      }
+      else {
+        outcome = "no-solution";
+        a = a; b = b; c = c;
+        reason = "a = 0 and b != c: the equation is a contradiction";
+      }
+    else
+      let
+        x = rational.mkRational (c - b) a;
+      in {
+        outcome = "unique-solution";
+        a = a; b = b; c = c;
+        solution_num = x.num;
+        solution_den = x.den;
+        solution_text = rational.ratToString x;
+        solution_is_integer = rational.ratIsInteger x;
+        verified = verifySolution a b c x;
+      };
+
+  # Solve `a*x + b = d*x + e` by moving every `x` term to the left
+  # and every constant to the right: `(a - d)*x = e - b`, i.e.
+  # `(a - d)*x + b = e`. Then defer to solveLinear.
+  solveLinearTwoSided = a: b: d: e:
+    let env = solveLinear (a - d) b e;
+    in env // {
+      normalised_from = "a*x + b = d*x + e";
+      normalised_a = a - d;
+      normalised_b = b;
+      normalised_c = e;
+    };
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownForms = [ "one-sided" "two-sided" ];
+
+  # `applyLinearEquation request`:
+  #   one-sided: { form = "one-sided"; a; b; c; }
+  #   two-sided: { form = "two-sided"; a; b; d; e; }
+  applyLinearEquation = request:
+    let form = request.form;
+    in
+      if !(builtins.elem form knownForms) then {
+        outcome = "held-unknown-form";
+        form = form;
+        known_forms = knownForms;
+      }
+      else if form == "one-sided" then
+        (solveLinear request.a request.b request.c) // { form = form; }
+      else
+        (solveLinearTwoSided
+          request.a request.b request.d request.e) // { form = form; };
+
+in {
+  inherit
+    ownerName
+    verifySolution
+    solveLinear
+    solveLinearTwoSided
+    knownForms
+    applyLinearEquation;
+  meta = {
+    source = "stdlib math linear equation";
+    owner = ownerName;
+    base = "parametric-math-linear-equation-v0";
+    rev_note = "v0.12-MM (div-math): the math lane's first solver. Solves a*x + b = c (and the two-sided a*x + b = d*x + e by normalisation) exactly -- the solution is a rational, so 3*x = 1 gives x = 1/3 with no rounding. Mechanically distinguishes all three solution-set shapes (unique / infinitely-many / no-solution) rather than collapsing them. Every unique solution is verified by exact back-substitution. Kernel layering: linear-equation -> rational -> number-theory. NOT quadratic, NOT systems, NOT a symbolic parser, NOT yet a registered lens.";
+  };
+}

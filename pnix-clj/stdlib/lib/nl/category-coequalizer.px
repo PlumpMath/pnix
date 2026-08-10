@@ -1,0 +1,174 @@
+let
+  ownerName = "stdlib.nl.category-coequalizer";
+
+  cat = import nl/nl-flow-category-substrate.px;
+
+  # === Coequalizer (agent-NL-136) ==================================
+  #
+  # f, g : A → B 두 morphism. coequalizer = (Q, q : B → Q) such that
+  # q ∘ f = q ∘ g, and universal.
+  #
+  # NL flow 의미: 두 다른 step chain 이 *같은 결과 state* 에 도달하면
+  # 사용자에게는 *동치*. coequalizer 가 그 동치 클래스 식별.
+  #
+  # 예:
+  #   chain1: rename foo→bar ; rename bar→baz
+  #   chain2: rename foo→baz
+  # → 같은 final state. coequalizer 가 합쳐서 chain2 권장.
+
+  stepKind = "coequalizer";
+  framework_step = "categorical body — 동치 chain 식별 + 정규화";
+
+  # === Final-state comparison ====================================
+  #
+  # Two chains are coequalizable if their composition (last target)
+  # yields the same observable state.
+
+  chainFinalTarget = morphisms:
+    if morphisms == [] then null
+    else
+      let last = builtins.elemAt morphisms (builtins.length morphisms - 1);
+      in last.target;
+
+  chainInitialSource = morphisms:
+    if morphisms == [] then null
+    else (builtins.head morphisms).source;
+
+  observablyEqual = chain1: chain2:
+    let
+      t1 = chainFinalTarget chain1;
+      t2 = chainFinalTarget chain2;
+      s1 = chainInitialSource chain1;
+      s2 = chainInitialSource chain2;
+    in
+      s1 == s2 && t1 == t2;
+
+  # === Cost metric for choosing canonical representative =========
+  #
+  # Among coequalizable chains, prefer:
+  #   1. fewer morphisms
+  #   2. fewer total unknowns
+
+  chainCost = chain:
+    let
+      n = builtins.length chain;
+      totalUnknowns =
+        builtins.foldl' (acc: m: acc + builtins.length m.unknowns) 0
+          chain;
+    in {
+      morphism_count = n;
+      unknown_count = totalUnknowns;
+      score = n * 100 + totalUnknowns;  # primary: count, tiebreak: unknowns
+    };
+
+  cheaperChain = chainA: chainB:
+    let
+      cA = chainCost chainA;
+      cB = chainCost chainB;
+    in
+      if cA.score < cB.score then chainA else chainB;
+
+  # === Coequalizer construction ===================================
+  #
+  # Input: list of chains [c1, c2, ..., cn] all sharing source/target.
+  # Output: canonical representative + quotient projection.
+
+  buildCoequalizer = chains:
+    if chains == [] then null
+    else if builtins.length chains == 1 then {
+      outcome = "single-chain-trivial-coequalizer";
+      canonical = builtins.head chains;
+      quotient_size = 1;
+    }
+    else
+      let
+        first = builtins.head chains;
+        allEqual = builtins.all (c: observablyEqual first c)
+          (builtins.tail chains);
+      in
+        if !allEqual then {
+          outcome = "held-not-coequalizable";
+          reason = "chains have different source/target observable states";
+        }
+        else
+          let
+            canonical = builtins.foldl' cheaperChain first
+              (builtins.tail chains);
+          in {
+            outcome = "coequalizer-built";
+            canonical = canonical;
+            equivalence_class = chains;
+            quotient_size = builtins.length chains;
+            canonical_cost = chainCost canonical;
+            message_en =
+              builtins.toString (builtins.length chains)
+              + " observably-equal chains. Canonical: "
+              + builtins.toString (chainCost canonical).morphism_count
+              + " step(s).";
+            message_ko =
+              builtins.toString (builtins.length chains)
+              + " 개 동치 chain. 정규형: "
+              + builtins.toString (chainCost canonical).morphism_count
+              + " step.";
+          };
+
+  # === Quotient projection q : B → Q ==============================
+  #
+  # Sends any chain in the equivalence class to the canonical one.
+
+  quotientProject = coequalizerResult: chain:
+    if coequalizerResult.outcome != "coequalizer-built" then null
+    else if builtins.elem chain coequalizerResult.equivalence_class
+    then coequalizerResult.canonical
+    else null;
+
+  # === Plate entry =================================================
+
+  applyCoequalizerPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "chains" request then
+      buildCoequalizer request.chains
+    else if (builtins.hasAttr "observably_equal" request)
+         && (builtins.hasAttr "a" request.observably_equal)
+         && (builtins.hasAttr "b" request.observably_equal) then {
+      outcome = "observability-checked";
+      equal = observablyEqual request.observably_equal.a
+                              request.observably_equal.b;
+    }
+    else { outcome = "held-missing-input-field"; };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-category-coequalizer-axiom-122";
+    composes = "axiom-119-nl-flow-category";
+    inherit framework_step;
+    step_kind = stepKind;
+    bilingual = true;
+    universal_property =
+      "coequalizer of f,g : A → B is the universal q : B → Q such that q∘f = q∘g";
+    nl_meaning =
+      "두 chain 이 같은 final state 면 동치. canonical = 가장 적은 step / 미지수.";
+    primary_outcomes = [
+      "coequalizer-built"
+      "single-chain-trivial-coequalizer"
+      "observability-checked"
+    ];
+    held_outcomes = [
+      "held-not-coequalizable"
+      "held-non-attrs-request"
+      "held-missing-input-field"
+    ];
+  };
+
+in {
+  inherit ownerName
+    chainFinalTarget chainInitialSource observablyEqual
+    chainCost cheaperChain
+    buildCoequalizer quotientProject
+    applyCoequalizerPlate
+    stepKind framework_step inventorySummary;
+  meta = {
+    source = "stdlib NL category coequalizer (agent-NL-136)";
+    owner = ownerName;
+  };
+}

@@ -1,0 +1,333 @@
+let
+  ownerName = "stdlib.agent.formula-slot-registry-contract";
+
+  frpDsl = import frp.px;
+  mathLifter =
+    import math/nl-math-kernel-lifter.px;
+
+  # === Formula slot registry contract (Round 68) =====================
+  #
+  # 사용자 directive (Round 67 후):
+  # > 'Science 탭 에서 만들어진 수식이 [N] 번째 슬롯에 등록되어 있다고
+  #   치자. 그러면 @[N].x 로 X 미지수를 coding 탭에서 레퍼런스 할수있을
+  #   것이다. 수식전체는 그냥 @[N]. 이런식으로 @[N].y 로 미지수에 접근
+  #   하고, 그 수식전체는 서버쪽에 전달되어 pnixc-meta 가 분석한다.
+  #   변수라는 개념이 존재해야한다. 이는 freecat 쪽에 해당 언어로서 관리
+  #   되고 그것또한 pnixc-meta 에 전달되어 존재는 알고있어야한다.'
+  #
+  # 이 owner = formula slot 의 substrate 계약. Science 탭에서 등록된
+  # 수식이 *substrate 가 *알고 있는* shape* 으로 들어와야 한다:
+  # `slot_index`, `formula_ref` (= `@[N]`), `variable_table` (각 미지수
+  # 의 typed entry), 그리고 dual-target enumeration (Layer 2 freecat-
+  # native evaluator + Layer 3 external-app expression).
+  #
+  # # Architecture (3 layer)
+  #
+  #   Layer 1: pnixc-meta substrate
+  #     이 contract 가 layer 1 의 schema 정의.
+  #     formula AST + Round 51 functor-lift metadata (axiom_class,
+  #     typeclass_required, preserved_invariants, algorithm_class,
+  #     semantic_role) 를 받아 slot record 로 묶는다.
+  #
+  #   Layer 2: freecat-native parametric expression evaluator
+  #     freecat 안에서만 도는 작은 DSL (Maya parametric channel /
+  #     Houdini VEX 스타일). 이미 `stdlib/lib/frp.px::channelEq` 가
+  #     "Channel equation (Maya/Houdini style)" 로 존재. 각 freecat OS
+  #     플랫폼이 동일 evaluator 구현 (Kotlin / C# / Swift).
+  #
+  #   Layer 3: external app runtime API expression
+  #     Maya MEL, Houdini VEX, Blender Python, 3ds Max MAXScript +
+  #     Python, Rhino RhinoCommon C# + Python, Unreal Blueprint / C++ /
+  #     Python, etc. pnixc-meta 가 target app 의 자체 언어로 emit.
+  #
+  # # Round 68 scope (this owner = SCHEMA only)
+  #
+  # 이 round 는 *schema + target enumeration* 만 닫는다. Layer 2 /
+  # Layer 3 의 실제 code emit 은 별 round (Round 69+) 에서. 격자
+  # preservation rule: emit 도 frp.channelEq 와 expression-projection.px
+  # 의 multi-surface emit 위에 *연결* 만 박는다 — 새 primitive 안 만듦.
+  #
+  # # .px-first 원칙
+  #
+  # Rust = formula AST bytes ferry + UI render. Decision: slot 의
+  # variable shape, target enumeration, axiom carry → .px substrate.
+  #
+  # # Output verdict family
+  #
+  #   "formula-slot-registered"          — typed slot envelope
+  #   "held-empty-variable-table"        — 수식에 미지수 없음
+  #   "held-malformed-slot-index"        — slot_index 가 Nat 아님
+  #   "held-duplicate-variable-name"     — variable_table 에 중복
+  #   "held-no-parametric-targets"       — Layer 2/3 둘 다 비어있음
+  #   "held-axiom-carry-incomplete"      — Round 51 metadata 누락
+
+  stepKind = "formula-slot-registry";
+  framework_step =
+    "Science-tab formula → slot[N] + variable_table + dual-target enum";
+
+  # =================================================================
+  # === Layer 2 platforms (freecat-native evaluators) ===============
+  # =================================================================
+  #
+  # 각 freecat OS 플랫폼이 동일 evaluator 를 자기 언어로 구현. 모두
+  # 같은 input → 같은 결과 (deterministic).
+  #
+  # 매핑:
+  #   kotlin  → ~/kimchi/dev/meta-quest/freecat (Android + Quest 3)
+  #   csharp  → ~/kimchi/dev/cs/freecat (Windows WPF)
+  #   swift   → ~/kimchi/dev/swift/freecat (macOS / iOS / iPadOS / visionOS)
+  #
+  # 새 freecat 플랫폼 추가 = 이 list 에 한 row.
+
+  knownLayer2Platforms = [
+    "kotlin"
+    "csharp"
+    "swift"
+  ];
+
+  layer2PlatformRoles = {
+    kotlin = "freecat-native-evaluator/kotlin (quest3 + android)";
+    csharp = "freecat-native-evaluator/csharp (windows wpf)";
+    swift  = "freecat-native-evaluator/swift (macos + ios + ipados + visionos)";
+  };
+
+  # =================================================================
+  # === Layer 3 external apps (runtime API target enumeration) =====
+  # =================================================================
+  #
+  # 각 external app 의 자체 runtime API 언어 enumeration. pnixc-meta
+  # 가 같은 parametric expression 을 이 app 의 native 언어로 emit.
+  #
+  # 새 app 추가 = 이 list 에 한 row + runtime_api_language 매핑.
+
+  knownLayer3ExternalApps = [
+    "maya"
+    "houdini"
+    "3dsmax"
+    "rhino"
+    "cinema4d"
+    "unreal"
+  ];
+
+  externalAppRuntimeApiLanguages = {
+    maya     = [ "mel" "python" ];           # cmds / pymel
+    houdini  = [ "vex" "python" ];           # native expression / hou
+    "3dsmax" = [ "maxscript" "python" "csharp" ];
+    rhino    = [ "python" "csharp" ];        # rhinocommon
+    cinema4d = [ "python" ];                 # c4d
+    unreal   = [ "blueprint" "cpp" "python" ];
+  };
+
+  externalAppDualLanguagePreference = {
+    maya     = "python";    # cmds 가 mel 보다 maintain 좋음
+    houdini  = "vex";       # parametric expression 의 native
+    "3dsmax" = "python";    # MAXScript 보다 python 권장
+    rhino    = "python";    # rhinoscriptsyntax
+    cinema4d = "python";    # 단일
+    unreal   = "python";    # script 자동화 권장
+  };
+
+  # =================================================================
+  # === Variable-table schema ========================================
+  # =================================================================
+  #
+  # 각 변수 entry shape:
+  #   {
+  #     name = "x";              # @[N].x 의 .x 부분
+  #     role = "unknown" |       # 미지수 (solve for)
+  #            "parameter" |     # parametric expression input
+  #            "constant" |      # fixed numeric
+  #            "bound";          # 이미 다른 slot 에서 정의됨
+  #     domain = "Real" | "Nat" | "Int" | "Complex" | "Bool" | "...";
+  #     binder_scope = "all" |   # forall n : Nat. ...
+  #                    "exists" |
+  #                    "free";   # 위 둘 다 아닌 자유 변수
+  #     default_value = null | <expr>;   # parametric default
+  #   }
+  #
+  # 'free' + 'unknown' 조합 = solver 가 풀어야 할 미지수.
+  # 'parameter' = freecat parametric channel 의 input.
+
+  knownVariableRoles = [ "unknown" "parameter" "constant" "bound" ];
+  knownVariableDomains = [ "Real" "Nat" "Int" "Complex" "Bool" "Vector" "Matrix" ];
+  knownBinderScopes = [ "all" "exists" "free" ];
+
+  # =================================================================
+  # === Round 51 axiom-carry schema =================================
+  # =================================================================
+  #
+  # 등록된 슬롯은 *반드시* Round 51 functor-lift metadata 를 carry
+  # 한다. Terminal 탭에서 `@[N]` reference 시 coding agent 가 axiom-
+  # obligation 을 자동으로 끌어올 수 있도록.
+  #
+  # 빠지면 → "held-axiom-carry-incomplete"
+
+  requiredAxiomCarryKeys = [
+    "axiom_class"            # "monoid" | "linear-affine" | "...."
+    "typeclass_required"     # "Monoid (assoc + identity)" | ...
+    "preserved_invariants"   # [ "associativity" "identity-element" ]
+    "algorithm_class"        # "fold" | "linear-integrator" | ...
+    "semantic_role"          # "aggregation" | "state-evolution"
+  ];
+
+  # =================================================================
+  # === Helpers ======================================================
+  # =================================================================
+
+  hasKey = attrs: key: builtins.elem key (builtins.attrNames attrs);
+
+  allRequiredKeysPresent = attrs: keys:
+    builtins.all (k: hasKey attrs k) keys;
+
+  isInClosedList = list: value: builtins.elem value list;
+
+  uniqueNames = vars:
+    let names = builtins.map (v: v.name) vars;
+        unique = builtins.foldl' (acc: n:
+          if builtins.elem n acc then acc else acc ++ [ n ]
+        ) [] names;
+    in (builtins.length names) == (builtins.length unique);
+
+  # =================================================================
+  # === Main contract function =======================================
+  # =================================================================
+  #
+  # Input shape:
+  #   {
+  #     slot_index = 0;                    # Nat
+  #     formula_ast = { ... };             # parsed formula
+  #     variable_table = [ ... ];          # see schema above
+  #     axiom_carry = { ... };             # Round 51 metadata
+  #     enabled_layer2_platforms = [ ... ];  # subset of knownLayer2Platforms
+  #     enabled_layer3_external_apps = [ ... ]; # subset of knownLayer3ExternalApps
+  #   }
+
+  registerFormulaSlot = req:
+    let
+      hasSlotIndex = hasKey req "slot_index";
+      slotIndexOk =
+        hasSlotIndex && (builtins.isInt req.slot_index) && req.slot_index >= 0;
+
+      vars = if hasKey req "variable_table" then req.variable_table else [];
+      varsNonEmpty = (builtins.length vars) > 0;
+      varsUnique = uniqueNames vars;
+
+      axiomCarry =
+        if hasKey req "axiom_carry" then req.axiom_carry else {};
+      axiomComplete = allRequiredKeysPresent axiomCarry requiredAxiomCarryKeys;
+
+      layer2 =
+        if hasKey req "enabled_layer2_platforms"
+        then req.enabled_layer2_platforms
+        else knownLayer2Platforms;
+      layer3 =
+        if hasKey req "enabled_layer3_external_apps"
+        then req.enabled_layer3_external_apps
+        else knownLayer3ExternalApps;
+
+      anyParametricTarget =
+        (builtins.length layer2) > 0 || (builtins.length layer3) > 0;
+
+      formulaRef = "@[${builtins.toString req.slot_index}]";
+      variableRefs = builtins.map (v: {
+        name = v.name;
+        ref  = "${formulaRef}.${v.name}";
+        role = v.role;
+        domain = v.domain;
+        binder_scope = v.binder_scope;
+      }) vars;
+
+      verdict =
+        if !slotIndexOk then "held-malformed-slot-index"
+        else if !varsNonEmpty then "held-empty-variable-table"
+        else if !varsUnique then "held-duplicate-variable-name"
+        else if !axiomComplete then "held-axiom-carry-incomplete"
+        else if !anyParametricTarget then "held-no-parametric-targets"
+        else "formula-slot-registered";
+
+      isHeld = verdict != "formula-slot-registered";
+
+      layer2ResolvedRoles = builtins.foldl' (acc: p:
+        acc // { "${p}" = layer2PlatformRoles."${p}" or "unknown-platform"; }
+      ) {} layer2;
+
+      layer3ResolvedRoles = builtins.foldl' (acc: app:
+        let
+          langs = externalAppRuntimeApiLanguages."${app}" or [];
+          preferred = externalAppDualLanguagePreference."${app}" or null;
+        in
+          acc // {
+            "${app}" = {
+              runtime_api_languages = langs;
+              preferred_language = preferred;
+            };
+          }
+      ) {} layer3;
+
+    in {
+      kind = "formula-slot-registry-envelope";
+      owner = ownerName;
+      step_kind = stepKind;
+      framework_step = framework_step;
+      verdict = verdict;
+      is_held = isHeld;
+      slot_index = if slotIndexOk then req.slot_index else null;
+      formula_ref = if slotIndexOk then formulaRef else null;
+      variable_refs = if isHeld then [] else variableRefs;
+      variable_count = builtins.length variableRefs;
+      axiom_carry = if axiomComplete then axiomCarry else null;
+      parametric_targets = {
+        layer_2_platforms = layer2;
+        layer_2_resolved = layer2ResolvedRoles;
+        layer_3_external_apps = layer3;
+        layer_3_resolved = layer3ResolvedRoles;
+        layer_2_count = builtins.length layer2;
+        layer_3_count = builtins.length layer3;
+      };
+      held_diagnostics =
+        if !isHeld then null
+        else {
+          slot_index_ok = slotIndexOk;
+          variable_table_nonempty = varsNonEmpty;
+          variable_names_unique = varsUnique;
+          axiom_carry_complete = axiomComplete;
+          any_parametric_target = anyParametricTarget;
+        };
+      derived_from = [ "frp.channelEq" "math.nl-math-kernel-lifter"
+                       "agent.runtime-backbone-to-agent-stage (Round 51)" ];
+    };
+
+  # =================================================================
+  # === Inventory summary (for substrate self-introspection) ========
+  # =================================================================
+
+  inventorySummary = {
+    owner = ownerName;
+    step_kind = stepKind;
+    layer_2_platform_count = builtins.length knownLayer2Platforms;
+    layer_2_platforms = knownLayer2Platforms;
+    layer_3_external_app_count = builtins.length knownLayer3ExternalApps;
+    layer_3_external_apps = knownLayer3ExternalApps;
+    variable_role_count = builtins.length knownVariableRoles;
+    variable_roles = knownVariableRoles;
+    variable_domain_count = builtins.length knownVariableDomains;
+    variable_domains = knownVariableDomains;
+    binder_scope_count = builtins.length knownBinderScopes;
+    binder_scopes = knownBinderScopes;
+    required_axiom_carry_key_count = builtins.length requiredAxiomCarryKeys;
+    required_axiom_carry_keys = requiredAxiomCarryKeys;
+    external_app_total_runtime_api_language_count =
+      builtins.foldl' (acc: app:
+        acc + (builtins.length (externalAppRuntimeApiLanguages."${app}" or []))
+      ) 0 knownLayer3ExternalApps;
+  };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit knownLayer2Platforms knownLayer3ExternalApps;
+  inherit knownVariableRoles knownVariableDomains knownBinderScopes;
+  inherit requiredAxiomCarryKeys;
+  inherit layer2PlatformRoles;
+  inherit externalAppRuntimeApiLanguages externalAppDualLanguagePreference;
+  inherit registerFormulaSlot inventorySummary;
+}

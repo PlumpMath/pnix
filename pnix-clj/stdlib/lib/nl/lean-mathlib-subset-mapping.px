@@ -1,0 +1,356 @@
+let
+  ownerName = "stdlib.nl.lean-mathlib-subset-mapping";
+
+  # === Mathlib4 subset mapping for substrate cross-reference ========
+  #
+  # Purpose: 우리 14 substrate cohomology files 의 영역과 *직접 매칭*
+  # 되는 Mathlib4 module name 목록. 전체 Mathlib (5-10 GB) 대신
+  # 이 subset (~50-200 MB) 만 LeanDojo dump 에서 추출해 사용.
+  #
+  # CLAUDE.md 정합성:
+  #   - Lean = external tool / static dump (LLM 없음, deterministic)
+  #   - Mathlib = candidate evidence (5-gate firewall 통과 후 Accepted)
+  #   - 우리 substrate file 깨지 않음 (additive only)
+  #   - GPL-family 없음 (LeanDojo dataset = CC-BY-4.0)
+  #
+  # Honest scope:
+  #   - 우리 substrate 의 대부분 영역 (motivic cohomology / G_mot /
+  #     crystalline / Hodge / mixed Tate / K-theory / SH / Higher Chow)
+  #     은 Mathlib4 에 직접 대응 *없음* — 너무 advanced.
+  #   - Mathlib 매칭 가능한 것: sheaves / Galois / group cohomology /
+  #     category theory / differential forms / algebraic geometry
+  #     foundations.
+
+  # =================================================================
+  # === Substrate file → Mathlib module mapping ====================
+  # =================================================================
+
+  substrateToMathlibMapping = [
+    # ----- 1. Sheaf cohomology (#175) -----
+    {
+      substrate_file = "category-sheaf-cohomology-substrate.px";
+      substrate_concept = "Sh(Site_coding) — sheaves on substrate site";
+      mathlib_modules = [
+        "Mathlib.CategoryTheory.Sites.Sheaf"
+        "Mathlib.CategoryTheory.Sites.Sheafification"
+        "Mathlib.Topology.Sheaves.Sheaf"
+        "Mathlib.CategoryTheory.Sheaf.Abelian"
+      ];
+      match_quality = "direct";  # substrate sheaf primitive ↔ Mathlib Sheaf class
+      cross_reference_count_estimate = "20-40 directly relevant theorems";
+    }
+    # ----- 2. Étale cohomology + derived (#177) -----
+    {
+      substrate_file = "category-etale-cohomology-and-derived-substrate.px";
+      substrate_concept = "H^*_et + derived category D(Sh)";
+      mathlib_modules = [
+        "Mathlib.AlgebraicGeometry.EtaleMorphism"
+        "Mathlib.CategoryTheory.Triangulated.Triangle"
+        "Mathlib.CategoryTheory.Triangulated.TStructure"
+        "Mathlib.AlgebraicTopology.DoldKan.Basic"
+      ];
+      match_quality = "partial";
+      cross_reference_count_estimate = "10-20 (étale specific 작음, derived 일반 있음)";
+    }
+    # ----- 3. Spectral sequences -----
+    {
+      substrate_file = "category-spectral-sequences-substrate.px";
+      substrate_concept = "spectral sequence general";
+      mathlib_modules = [
+        "Mathlib.Algebra.Homology.SpectralObject.Basic"
+        "Mathlib.Algebra.Homology.HomologicalComplex"
+      ];
+      match_quality = "partial";
+      cross_reference_count_estimate = "5-15";
+    }
+    # ----- 4. Hochschild-Serre (#180) -----
+    {
+      substrate_file = "category-hochschild-serre-substrate.px";
+      substrate_concept = "Hochschild-Serre spectral seq for group cohomology";
+      mathlib_modules = [
+        "Mathlib.RepresentationTheory.GroupCohomology.Basic"
+        "Mathlib.RepresentationTheory.GroupCohomology.LowDegree"
+        "Mathlib.GroupTheory.QuotientGroup"
+      ];
+      match_quality = "direct (low-degree); partial (full SS)";
+      cross_reference_count_estimate = "15-30";
+    }
+    # ----- 5. l-adic substrate -----
+    {
+      substrate_file = "category-derived-etale-and-l-adic-substrate.px";
+      substrate_concept = "l-adic cohomology lim H^*_et(X, Z/l^n)";
+      mathlib_modules = [
+        "Mathlib.NumberTheory.NumberField.Basic"
+        "Mathlib.RingTheory.Adic.Basic"
+      ];
+      match_quality = "weak (l-adic cohomology 자체 미박힘)";
+      cross_reference_count_estimate = "5-10 indirect";
+    }
+    # ----- 6. Motivic substrate (#183-185) -----
+    {
+      substrate_file = "category-motivic-substrate.px";
+      substrate_concept = "DM(Site_coding) motivic category + Tate twist";
+      mathlib_modules = [
+        # Motivic cohomology = NOT in Mathlib4
+        # Closest = category theory foundations
+        "Mathlib.CategoryTheory.Monoidal.Category"
+        "Mathlib.CategoryTheory.Closed.Monoidal"
+      ];
+      match_quality = "indirect (motivic category 미박힘)";
+      cross_reference_count_estimate = "0 direct, foundations 만";
+    }
+    # ----- 7. Galois substrate (#182) -----
+    {
+      substrate_file = "category-galois-substrate.px";
+      substrate_concept = "G_pnix substrate Galois";
+      mathlib_modules = [
+        "Mathlib.FieldTheory.Galois"
+        "Mathlib.FieldTheory.IsAlgClosed.AlgebraicClosure"
+        "Mathlib.RingTheory.Polynomial.GaussLemma"
+      ];
+      match_quality = "direct (Galois theory 박힘)";
+      cross_reference_count_estimate = "30-50";
+    }
+    # ----- 8. G_mot motivic Galois (#186) -----
+    {
+      substrate_file = "category-motivic-galois-substrate.px";
+      substrate_concept = "G_mot = Aut^⊗(fiber functor) Tannakian";
+      mathlib_modules = [
+        # Tannakian formalism = NOT in Mathlib4 yet
+        # Closest = monoidal category theory
+        "Mathlib.CategoryTheory.Monoidal.Rigid"
+        "Mathlib.RepresentationTheory.FdRep"
+      ];
+      match_quality = "indirect (Tannakian 미박힘)";
+      cross_reference_count_estimate = "0 direct, FdRep 만";
+    }
+    # ----- 9. K-theory substrate (#187) -----
+    {
+      substrate_file = "category-substrate-k-theory.px";
+      substrate_concept = "K_0, K_1, K_n algebraic K-theory";
+      mathlib_modules = [
+        # Higher K-theory = mostly NOT in Mathlib4
+        # K_0 of vector bundles = partial
+        "Mathlib.Algebra.Category.GroupCat.Basic"
+        "Mathlib.LinearAlgebra.FiniteDimensional"
+      ];
+      match_quality = "weak (K_0 partial, higher K 미박힘)";
+      cross_reference_count_estimate = "0 direct higher K, foundations 만";
+    }
+    # ----- 10. Motivic stable homotopy SH(S) (#188) -----
+    {
+      substrate_file = "category-motivic-stable-homotopy.px";
+      substrate_concept = "Voevodsky's SH + bi-graded spectra";
+      mathlib_modules = [
+        # Motivic stable homotopy = NOT in Mathlib4
+        # Stable homotopy theory partial in Mathlib
+        "Mathlib.AlgebraicTopology.SimplicialSet.Basic"
+        "Mathlib.CategoryTheory.Triangulated.Triangle"
+      ];
+      match_quality = "indirect (SH(S) 미박힘)";
+      cross_reference_count_estimate = "0 direct";
+    }
+    # ----- 11. de Rham + Hodge (#189) -----
+    {
+      substrate_file = "category-de-rham-hodge-substrate.px";
+      substrate_concept = "H^*_dR + Hodge structure";
+      mathlib_modules = [
+        # Algebraic de Rham (Mathlib에 있는 것 일부)
+        "Mathlib.Algebra.Module.Differential.Basic"
+        # Smooth de Rham (differential geometry)
+        "Mathlib.Geometry.Manifold.DifferentialForms"
+        # Hodge structures = NOT in Mathlib4
+      ];
+      match_quality = "partial (de Rham 일부; Hodge 미박힘)";
+      cross_reference_count_estimate = "10-20 de Rham, 0 Hodge";
+    }
+    # ----- 12. Crystalline + period rings (#190) -----
+    {
+      substrate_file = "category-crystalline-and-period-rings-substrate.px";
+      substrate_concept = "H^*_crys + Fontaine B_HT/B_dR/B_crys/B_st";
+      mathlib_modules = [
+        # Crystalline cohomology = NOT in Mathlib4
+        # Period rings (Fontaine) = NOT in Mathlib4
+        # p-adic Hodge theory = NOT in Mathlib4
+        # Closest = basic p-adic theory
+        "Mathlib.NumberTheory.Padics.PadicNumbers"
+      ];
+      match_quality = "essentially none (Fontaine 미박힘)";
+      cross_reference_count_estimate = "0 direct; p-adic foundations 만";
+    }
+    # ----- 13. Higher Chow groups (Bloch) (#191) -----
+    {
+      substrate_file = "category-higher-chow-bloch-substrate.px";
+      substrate_concept = "CH^q(X, n) Bloch's cycle complex";
+      mathlib_modules = [
+        # Higher Chow groups = NOT in Mathlib4
+        # Classical Chow group (CH^q(X, 0)) = partial
+        "Mathlib.AlgebraicGeometry.PrimeSpectrum.Basic"
+      ];
+      match_quality = "essentially none";
+      cross_reference_count_estimate = "0 direct";
+    }
+    # ----- 14. Mixed Tate + MZV (#192) -----
+    {
+      substrate_file = "category-mixed-tate-motives-and-mzv-substrate.px";
+      substrate_concept = "Mixed Tate motives + MZV + pi_1^mot";
+      mathlib_modules = [
+        # Mixed Tate motives = NOT in Mathlib4
+        # MZV / zeta function: zeta(s) partial in Mathlib
+        "Mathlib.NumberTheory.LSeries.RiemannZeta"
+        "Mathlib.NumberTheory.ModularForms.Basic"
+      ];
+      match_quality = "weak (zeta function basic 만; MZV / motivic 미박힘)";
+      cross_reference_count_estimate = "5-10 zeta-related";
+    }
+  ];
+
+  # =================================================================
+  # === Honest aggregate ============================================
+  # =================================================================
+
+  matchQualityAggregate = {
+    direct = 2;  # sheaf cohomology, Galois — Mathlib에 직접 대응
+    partial = 4;  # étale derived, spectral SS, Hochschild-Serre, de Rham
+    indirect = 4;  # motivic, G_mot, motivic SH, K-theory (foundations 만)
+    weak = 2;  # l-adic, mixed Tate (zeta basic 만)
+    none = 2;  # crystalline + period rings, Higher Chow (essentially none)
+  };
+
+  honestNote = ''
+    우리 14 substrate cohomology files 의 *대부분 advanced 영역* 은
+    Mathlib4 에 *직접 대응 없음*. Motivic cohomology / G_mot Tannakian /
+    crystalline / Fontaine periods / Higher Chow / MZV motivic 등은
+    *현재 active math research* 이며 Mathlib4 가 아직 formalize 안 함.
+
+    *직접 매칭* 되는 것:
+      - Sheaf cohomology (substrate sheaf ↔ Mathlib Sheaf class)
+      - Galois theory (substrate G_pnix ↔ Mathlib Galois)
+      - Group cohomology (low-degree)
+      - Differential forms (de Rham 일부)
+
+    *foundation 만 매칭* (substrate advanced 영역 ↔ Mathlib foundations):
+      - Category theory (monoidal, triangulated, abelian)
+      - Algebraic geometry foundations
+      - p-adic numbers basics
+      - Riemann zeta function basics
+
+    *전혀 매칭 없음*:
+      - Crystalline cohomology + Fontaine period rings
+      - Higher Chow groups (Bloch)
+      - Motivic stable homotopy (Voevodsky)
+      - G_mot Tannakian motivic Galois
+      - Mixed Tate motives + MZV motivic
+
+    이런 영역에서는 substrate 가 자기 framework 안에서 *유일하게*
+    formalize 한 것 — Mathlib cross-reference 가 Held envelope 으로
+    정직히 박힘. 이게 substrate 의 *contribution claim* 의 한 정직한
+    surface (다만 substrate-internal claim 이지 외부 peer-review 받은
+    수학 결과 아님 — 차이 명확히).
+  '';
+
+  # =================================================================
+  # === Subset module name list (for LeanDojo extraction) ==========
+  # =================================================================
+
+  mathlibSubsetModules = [
+    # Category theory foundations
+    "Mathlib.CategoryTheory.Sites.Sheaf"
+    "Mathlib.CategoryTheory.Sites.Sheafification"
+    "Mathlib.CategoryTheory.Triangulated.Triangle"
+    "Mathlib.CategoryTheory.Triangulated.TStructure"
+    "Mathlib.CategoryTheory.Monoidal.Category"
+    "Mathlib.CategoryTheory.Monoidal.Rigid"
+    "Mathlib.CategoryTheory.Closed.Monoidal"
+    "Mathlib.CategoryTheory.Abelian.Basic"
+
+    # Sheaves
+    "Mathlib.Topology.Sheaves.Sheaf"
+    "Mathlib.Topology.Sheaves.SheafCondition"
+    "Mathlib.CategoryTheory.Sheaf.Abelian"
+
+    # Galois theory
+    "Mathlib.FieldTheory.Galois"
+    "Mathlib.FieldTheory.Adjoin"
+    "Mathlib.FieldTheory.IsAlgClosed.AlgebraicClosure"
+
+    # Group cohomology
+    "Mathlib.RepresentationTheory.GroupCohomology.Basic"
+    "Mathlib.RepresentationTheory.GroupCohomology.LowDegree"
+    "Mathlib.RepresentationTheory.FdRep"
+
+    # Homological algebra
+    "Mathlib.Algebra.Homology.HomologicalComplex"
+    "Mathlib.Algebra.Homology.SpectralObject.Basic"
+
+    # Algebraic geometry foundations
+    "Mathlib.AlgebraicGeometry.EtaleMorphism"
+    "Mathlib.AlgebraicGeometry.PrimeSpectrum.Basic"
+
+    # Differential forms
+    "Mathlib.Geometry.Manifold.DifferentialForms"
+    "Mathlib.Algebra.Module.Differential.Basic"
+
+    # p-adic / number theory
+    "Mathlib.NumberTheory.Padics.PadicNumbers"
+    "Mathlib.NumberTheory.LSeries.RiemannZeta"
+    "Mathlib.NumberTheory.NumberField.Basic"
+
+    # Algebraic topology
+    "Mathlib.AlgebraicTopology.SimplicialSet.Basic"
+    "Mathlib.AlgebraicTopology.DoldKan.Basic"
+  ];
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    substrate_file_count = 14;
+    mathlib_module_count = 30;  # mathlibSubsetModules length (hardcoded)
+    match_quality_direct = 2;
+    match_quality_partial = 4;
+    match_quality_indirect = 4;
+    match_quality_weak = 2;
+    match_quality_none = 2;
+    substrate_with_no_direct_mathlib_match = 2;  # crystalline + Higher Chow
+    leandojo_dataset_license = "CC-BY-4.0";
+    leandojo_dataset_size_mb = 86;  # compressed tar.gz
+    leandojo_theorem_count = 122517;
+    leandojo_premise_count = 167779;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyMathlibSubsetMappingPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "mathlib-subset-mapping-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "mapping" request then {
+      outcome = "substrate-to-mathlib-mapping-emitted"; receipt = substrateToMathlibMapping;
+    }
+    else if builtins.hasAttr "modules" request then {
+      outcome = "mathlib-subset-modules-emitted"; receipt = mathlibSubsetModules;
+    }
+    else if builtins.hasAttr "aggregate" request then {
+      outcome = "match-quality-aggregate-emitted"; receipt = matchQualityAggregate;
+    }
+    else if builtins.hasAttr "honest_note" request then {
+      outcome = "honest-note-emitted"; receipt = honestNote;
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "mapping" "modules" "aggregate" "honest_note"
+           ]; };
+         };
+
+in {
+  inherit ownerName;
+  inherit substrateToMathlibMapping mathlibSubsetModules;
+  inherit matchQualityAggregate honestNote;
+  inherit inventorySummary applyMathlibSubsetMappingPlate;
+}

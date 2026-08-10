@@ -1,0 +1,145 @@
+let
+  ownerName = "stdlib.nl.substrate-introspection-nl-lifter";
+
+  coverage =
+    import integration/substrate-coverage-introspection.px;
+
+  # === Substrate introspection NL lifter (Axiom #76) ===============
+  #
+  # 사용자 directive (2026-05-28): NL super-set bidirectional 의 한 차원 —
+  # substrate 가 *자기 자신* 을 NL 로 질의받을 수 있어야 한다.
+  #
+  # # NL utterance → Axiom #75 query 라우팅
+  #
+  # 한국어/영어 발화 → substrate-coverage-introspection.px 의 5 query kind
+  # 중 하나로 lift.
+  #
+  # 발화 예:
+  #   "총 axiom 몇 개?" → query_kind = "total-coverage"
+  #   "양방향 NL lifter 목록" → query_kind = "bilingual-lifters"
+  #   "한국어 보강된 lifter 목록" → query_kind = "korean-expanded"
+  #   "Held outcome 가족" → query_kind = "held-outcomes"
+  #   "receipt 종류" → query_kind = "receipt-kinds"
+  #
+  # # Held-honest 헌법
+  #
+  # 0 match → held-no-introspection-query-matched
+  # multi match → first-pass entry (가장 specific keyword wins)
+
+  knownIntrospectionQueryNLPatterns = [
+    {
+      query_kind = "total-coverage";
+      en_keywords = [ "total coverage" "total axiom" "how many axioms" "axiom count" "substrate stats" ];
+      ko_keywords = [ "총 axiom" "전체 axiom" "axiom 몇 개" "전체 커버리지" "substrate 통계" ];
+    }
+    {
+      query_kind = "bilingual-lifters";
+      en_keywords = [ "bilingual lifter" "NL lifter list" "all lifters" "lifter inventory" ];
+      ko_keywords = [ "양방향 lifter" "양방향 NL" "lifter 목록" "lifter 인벤토리" ];
+    }
+    {
+      query_kind = "korean-expanded";
+      en_keywords = [ "korean expanded" "korean coverage" "ko expansion" ];
+      ko_keywords = [ "한국어 보강" "한국어 keyword" "한국어 확장" "ko 보강" ];
+    }
+    {
+      query_kind = "held-outcomes";
+      en_keywords = [ "held outcome" "held family" "silent guess prevention" "held categories" ];
+      ko_keywords = [ "Held outcome" "Held 가족" "Held 카테고리" "silent guess 금지" ];
+    }
+    {
+      query_kind = "receipt-kinds";
+      en_keywords = [ "receipt kind" "successful outcome" "lifter result kind" ];
+      ko_keywords = [ "receipt 종류" "성공 outcome" "receipt 가족" ];
+    }
+  ];
+
+  patternCount = builtins.length knownIntrospectionQueryNLPatterns;
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  matchIntrospectionQuery = utterance:
+    builtins.filter (p:
+      (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords))
+      knownIntrospectionQueryNLPatterns;
+
+  liftToIntrospectionQuery = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let matches = matchIntrospectionQuery utterance;
+      in
+        if matches == [] then {
+          outcome = "held-no-introspection-query-matched";
+          known_queries = builtins.map (p: p.query_kind) knownIntrospectionQueryNLPatterns;
+        }
+        else
+          let chosen = builtins.head matches;
+          # Note: multi-match 는 first-pass entry (lifter list 순서). carry-all 은
+          # downstream router 가 처리. introspection 은 specific 한 query 가
+          # 일반적으로 하나만 fire 한다.
+          in {
+            outcome = "introspection-query-lifted";
+            utterance = utterance;
+            query_kind = chosen.query_kind;
+            query_result = coverage.applySubstrateCoverageIntrospectionPlate {
+              query_kind = chosen.query_kind;
+            };
+            multi_match_count = builtins.length matches;
+            axiom_origin = "axiom-76-substrate-introspection-nl-lifter (composes axiom-75)";
+          };
+
+  applySubstrateIntrospectionNlLifterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else liftToIntrospectionQuery request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-76 (substrate self-knowledge NL)";
+    pattern_count = patternCount;
+    composed_axiom = "axiom-75-substrate-coverage-introspection";
+    new_decision_count = 0;
+    do_not_rebuild = true;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-introspection-query-matched"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownIntrospectionQueryNLPatterns patternCount
+    containsAny matchIntrospectionQuery
+    liftToIntrospectionQuery applySubstrateIntrospectionNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL substrate introspection lifter (Axiom #76)";
+    owner = ownerName;
+    base = "substrate-introspection-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-28). NL super-set bidirectional 의 "
+      + "self-knowledge 차원. NL utterance → Axiom #75 query → query result. "
+      + "5 query kind × en+ko bilingual. DO NOT REBUILD — Axiom #75 의 "
+      + "기존 query primitive 재사용. 한국어 발화로 substrate self-inspection "
+      + "가능: '총 axiom 몇 개?' / '한국어 보강된 lifter' / 'Held outcome 가족'.";
+  };
+}

@@ -1,0 +1,347 @@
+# stdlib.lib.nl.nl-service-route-disposer
+#
+# Dispose ServiceRouteProposed evidence for the narrow service-loop slice.
+# This module is deliberately not a general dispatcher: it consumes a route
+# proposal and may close only narrow math lanes already owned by existing
+# math modules: arithmetic, symbolic canonical, derivative, and factor.
+# Everything else is held for its target owner.
+let
+  B = builtins;
+  extractor = import ../math/nl-symbolic-extractor.px;
+  numeric = import ../math/numeric-evaluator.px;
+  td = import ../lisp/term-dag.px;
+  ct = import ../lisp/pnix-lisp-ct.px;
+  factorOwner = import ../math/factor-executor-bridge.px;
+  derivativeOwner = import ../math/derivative-executor-bridge.px;
+  renameOwner = import ../coding/rename-symbol-candidate.px;
+
+  attrOr = attrs: key: fallback:
+    if (B.isAttrs attrs) && (B.hasAttr key attrs)
+    then B.getAttr key attrs else fallback;
+
+  slen = s: B.stringLength s;
+  sub = start: len: s: B.substring start len s;
+  hasInfix = needle: hay:
+    let n = slen needle; h = slen hay;
+        go = i:
+          if i + n > h then false
+          else if (sub i n hay) == needle then true
+          else go (i + 1);
+    in if n == 0 then false else go 0;
+  containsAny = utterance: cues:
+    B.any (cue: hasInfix cue utterance) cues;
+
+  factorCues = [ "인수분해" "factorize" "factorise" "factor x" "factor y" "factor it" "factor polynomial" "factor expression" ];
+  diffCues = [ "미분" "differentiate" "derivative of" "take derivative" ];
+
+  nonEmpty = s: (B.isString s) && s != "";
+
+  valueText = v:
+    if B.isString v then v else B.toString v;
+
+  proposalTarget = proposal:
+    let direct = attrOr proposal "target" null;
+        legacy = attrOr proposal "proposed_service_route" null;
+    in if direct != null then direct else legacy;
+
+  proposalIsDisposableMath = proposal:
+    (attrOr proposal "proposed" (attrOr proposal "service_route_proposed" false))
+    && (proposalTarget proposal == "math")
+    && ((attrOr proposal "decision" (attrOr proposal "service_route_decision" "")) == "propose-only")
+    && (attrOr proposal "dispose_required" (attrOr proposal "service_route_dispose_required" false));
+
+  proposalIsDisposableCode = proposal:
+    (attrOr proposal "proposed" (attrOr proposal "service_route_proposed" false))
+    && (proposalTarget proposal == "code")
+    && ((attrOr proposal "decision" (attrOr proposal "service_route_decision" "")) == "propose-only")
+    && (attrOr proposal "dispose_required" (attrOr proposal "service_route_dispose_required" false));
+
+  held = reason: extra: {
+    outcome = "held";
+    answer_ready = false;
+    durable_truth = false;
+    accepted_as_truth = false;
+    route_execute_allowed = false;
+    held_reason = reason;
+  } // extra;
+
+  arithmeticAnswerReady = utterance: expr: result: exact:
+    let v = valueText result.value;
+    in {
+      outcome = "answer-ready";
+      answer_ready = true;
+      target = "math";
+      operation_kind = "arithmetic";
+      disposed_by = "numeric-evaluator";
+      classification = {
+        via = "service-route-dispose-arithmetic-fast";
+        expression = expr;
+        exact = exact;
+      };
+      result = result // { value_text = v; input = utterance; };
+      response_kind = "answer";
+      response = "산술 결과: " + expr + " = " + v;
+      durable_truth = false;
+      accepted_as_truth = false;
+      route_execute_allowed = false;
+    };
+
+  symbolicAnswerReady = utterance: expr: term: rendered:
+    {
+      outcome = "answer-ready";
+      answer_ready = true;
+      target = "math";
+      operation_kind = "symbolic-math";
+      disposed_by = "term-dag";
+      classification = {
+        via = "service-route-dispose-symbolic-canonical";
+        expression = expr;
+      };
+      result = {
+        outcome = "canonicalized";
+        input = utterance;
+        expression = expr;
+        canonical = td.serialize term;
+        term_key = td.key term;
+        rendered_ko = rendered;
+        value_text = rendered;
+      };
+      response_kind = "answer";
+      response = "수식 구조: " + rendered;
+      durable_truth = false;
+      accepted_as_truth = false;
+      route_execute_allowed = false;
+    };
+
+  factorAnswerReady = utterance: expr: factored:
+    {
+      outcome = "answer-ready";
+      answer_ready = true;
+      target = "math";
+      operation_kind = "math-factor";
+      disposed_by = "factor-executor-bridge";
+      classification = {
+        via = "service-route-dispose-factor";
+        expression = expr;
+      };
+      result = factored // { input = utterance; value_text = factored.factorization; };
+      response_kind = "answer";
+      response = "인수분해 결과: " + factored.normalized_expression + " = " + factored.factorization;
+      durable_truth = false;
+      accepted_as_truth = false;
+      route_execute_allowed = false;
+    };
+
+  derivativeAnswerReady = utterance: expr: differentiated:
+    {
+      outcome = "answer-ready";
+      answer_ready = true;
+      target = "math";
+      operation_kind = "math-diff";
+      disposed_by = "derivative-executor-bridge";
+      classification = {
+        via = "service-route-dispose-derivative";
+        expression = expr;
+      };
+      result = differentiated // { input = utterance; value_text = differentiated.derivative_text; };
+      response_kind = "answer";
+      response = "미분 결과: " + differentiated.expression_text + " -> " + differentiated.derivative_text;
+      durable_truth = false;
+      accepted_as_truth = false;
+      route_execute_allowed = false;
+    };
+
+  codeCandidateAnswerReady = utterance: candidateResult:
+    let c = candidateResult.candidate;
+        transform = attrOr c "transform_kind" "code-transform";
+        target = attrOr c "target_symbol" "";
+        replacement = attrOr c "replacement_symbol" "";
+        value =
+          if target != "" && replacement != ""
+          then transform + ":" + target + "->" + replacement
+          else transform;
+    in {
+      outcome = "answer-ready";
+      answer_ready = true;
+      target = "code";
+      operation_kind = "code-transform-candidate";
+      disposed_by = "rename-symbol-candidate";
+      classification = {
+        via = "service-route-dispose-code-rename-candidate";
+        candidate_outcome = candidateResult.outcome;
+      };
+      result = {
+        outcome = candidateResult.outcome;
+        input = utterance;
+        candidate = c;
+        reason = candidateResult.reason;
+        value_text = value;
+      };
+      response_kind = "answer";
+      response =
+        if target != "" && replacement != ""
+        then "코드 변경 후보: " + target + " -> " + replacement + " 이름 변경"
+        else "코드 변경 후보를 만들었습니다.";
+      durable_truth = false;
+      accepted_as_truth = false;
+      route_execute_allowed = false;
+    };
+
+  codeClarifyAnswerReady = utterance: candidateResult:
+    let missing = attrOr candidateResult "missing_slots" [ ];
+        missingText =
+          if missing == [ ] then "필요한 코드 변경 정보를"
+          else builtins.concatStringsSep ", " missing;
+    in {
+      outcome = "answer-ready";
+      answer_ready = true;
+      target = "code";
+      operation_kind = "code-transform-candidate-held";
+      disposed_by = "rename-symbol-candidate";
+      classification = {
+        via = "service-route-dispose-code-rename-held";
+        candidate_outcome = candidateResult.outcome;
+      };
+      result = {
+        outcome = candidateResult.outcome;
+        input = utterance;
+        missing_slots = missing;
+        reason = candidateResult.reason;
+        value_text = missingText;
+      };
+      response_kind = "question";
+      response = "코드 변경 후보를 만들려면 " + missingText + " 알려 주세요.";
+      durable_truth = false;
+      accepted_as_truth = false;
+      route_execute_allowed = false;
+    };
+
+  opSym = op:
+    if op == "+" then "plus"
+    else if op == "-" then "sub"
+    else if op == "*" then "mul"
+    else if op == "/" then "div"
+    else null;
+
+  astToTerm = ast:
+    if !(B.isAttrs ast) || !(ast ? kind) then null
+    else if ast.kind == "lit" then
+      if ast.value == 0 then { sym = "zero"; }
+      else if ast.value == 1 then { sym = "one"; }
+      else { sym = B.toString ast.value; }
+    else if ast.kind == "var" then { sym = ast.name; }
+    else if ast.kind == "binop" then
+      let op = opSym ast.op;
+          l = astToTerm ast.left;
+          r = astToTerm ast.right;
+      in if op == null || l == null || r == null then null
+         else [ { sym = op; } l r ]
+    else null;
+
+  disposeSymbolicCanonical = utterance: expr:
+    let parsed = numeric.parseExpression expr;
+    in if !(parsed.ok or false) then
+         held "symbolic-parse-held" {
+           target = "math";
+           operation_kind = "symbolic-math";
+           expression = expr;
+           parse_error = parsed.error;
+         }
+       else let term = astToTerm parsed.node;
+            in if term == null then
+                 held "symbolic-term-lowering-held" {
+                   target = "math";
+                   operation_kind = "symbolic-math";
+                   expression = expr;
+                 }
+               else symbolicAnswerReady utterance expr term (ct.termToKo term);
+
+  disposeFactor = utterance: expr:
+    let factored = factorOwner.factorExpression utterance expr;
+    in if (B.isAttrs factored) && (factored.outcome == "factored")
+       then factorAnswerReady utterance expr factored
+       else held "factor-owner-held" {
+         target = "math";
+         operation_kind = "math-factor";
+         expression = expr;
+         factor_result = factored;
+       };
+
+  disposeDerivative = utterance: expr:
+    let differentiated = derivativeOwner.differentiateExpression {
+          utterance = utterance;
+          expression = expr;
+        };
+    in if (B.isAttrs differentiated) && (differentiated.outcome == "differentiated")
+       then derivativeAnswerReady utterance expr differentiated
+       else held "derivative-owner-held" {
+         target = "math";
+         operation_kind = "math-diff";
+         expression = expr;
+         derivative_result = differentiated;
+       };
+
+  disposeCodeRenameCandidate = utterance:
+    let candidateResult = renameOwner.proposeRenameSymbolCandidate utterance;
+    in if (B.isAttrs candidateResult) && (candidateResult.outcome == "candidate-proposed")
+       then codeCandidateAnswerReady utterance candidateResult
+       else if (B.isAttrs candidateResult)
+       then codeClarifyAnswerReady utterance candidateResult
+       else held "code-candidate-owner-held" {
+         target = "code";
+         operation_kind = "code-transform-candidate";
+       };
+in
+rec {
+  name = "stdlib.nl.nl-service-route-disposer";
+
+  disposeServiceRoute =
+    { utterance
+    , proposal ? { }
+    }:
+    if !(B.isString utterance) then
+      held "non-string-utterance" { target = proposalTarget proposal; }
+    else if proposalIsDisposableCode proposal then
+      disposeCodeRenameCandidate utterance
+    else if !(proposalIsDisposableMath proposal) then
+      held "no-disposable-route" { target = proposalTarget proposal; }
+    else
+      let extracted = extractor.extractExpression utterance;
+          expr = extracted.expression;
+      in if !(extracted.has_math_words or false) || !(nonEmpty expr) then
+           held "no-arithmetic-expression" {
+             target = "math";
+             operation_kind = "arithmetic";
+             extracted = extracted;
+           }
+         else
+           let evaluated = numeric.evaluateNumericExpression expr { };
+               rational =
+                 if evaluated.ok then null
+                 else numeric.evaluateRationalExpression expr { };
+           in if evaluated.ok then
+                arithmeticAnswerReady utterance expr {
+                  outcome = "evaluated";
+                  value = evaluated.value;
+                } "integer"
+              else if rational != null && rational.ok then
+                arithmeticAnswerReady utterance expr {
+                  outcome = "evaluated";
+                  value = if rational.is_integer then rational.value else rational.text;
+                  value_text = rational.text;
+                  exact_rational = rational.rational;
+                } "rational"
+              else if containsAny utterance factorCues then
+                disposeFactor utterance expr
+              else if containsAny utterance diffCues then
+                disposeDerivative utterance expr
+              else
+                disposeSymbolicCanonical utterance expr;
+
+  ownerName = "stdlib.nl.nl-service-route-disposer";
+  meta = {
+    owner = "stdlib.nl.nl-service-route-disposer";
+    role = "ServiceRouteProposed evidence disposer. Service-loop slices: math/arithmetic, narrow symbolic math canonical/diff/factor, and code rename candidate; no ontology assertion, no slow dispatch.";
+    note = "Consumes propose-only route evidence and calls existing owners (math: nl-symbolic-extractor, numeric-evaluator, term-dag/pnix-lisp-ct, derivative/factor bridges; code: rename-symbol-candidate). Analysis, unsupported symbolic, and non-disposable cases stay Held for their target owner.";
+  };
+}

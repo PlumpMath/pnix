@@ -1,0 +1,359 @@
+# stdlib.lib.ontology.semantic-chain-traversal
+#
+# Candidate semantic-chain traversal contract. It consumes a verified context
+# transition and relation-composition rows, then emits interpretation-candidate
+# chain rows. It does not run ontology evaluate/select, materialize context
+# graph views, promote facts, write memory/DB, or execute routes.
+let
+  ownerName = "stdlib.lib.ontology.semantic-chain-traversal";
+
+  contextTransitionOwner = import ./context-transition.px;
+  predicateMorphismOwner = import ./predicate-morphism.px;
+  relationComposition = import ../gate/reasoning/relation-composition.px;
+  contextualFactsQueryPolicy = import ../gate/contextual-facts-query-policy.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  listAttrOr = attrs: key:
+    let v = getAttrOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  contextTransitionFrom = req:
+    if hasAttr req "context_transition" && builtins.isAttrs req.context_transition then
+      req.context_transition
+    else if hasAttr req "context_transition_contract" && builtins.isAttrs req.context_transition_contract then
+      req.context_transition_contract
+    else if hasAttr req "plan" && builtins.isAttrs req.plan then
+      req.plan
+    else { };
+
+  sourceContextTransitionOk = plan:
+    builtins.isAttrs plan
+    && stringAttrOr plan "schema" "" == "puncheetah.ontology-context-transition.v0"
+    && stringAttrOr plan "outcome" "" == "ontology-context-transition-built"
+    && getBool plan "verified" false == true
+    && getBool plan "context_transition_contract_built" false == true
+    && getBool plan "source_predicate_morphism_verified" false == true
+    && getBool plan "candidate_only" false == true
+    && getBool plan "materialized_context_graph_write_allowed" true == false
+    && getBool plan "discourse_state_write_allowed" true == false
+    && getBool plan "semantic_chain_traversal_allowed" true == false
+    && getBool plan "ontology_query_allowed" true == false
+    && getBool plan "ontology_emit_allowed" true == false
+    && getBool plan "ontology_promote_allowed" true == false
+    && getBool plan "accepted_fact_promotion_allowed" true == false
+    && getBool plan "learning_promotion_allowed" true == false
+    && getBool plan "memory_write_allowed" true == false
+    && getBool plan "db_write_allowed" true == false
+    && getBool plan "policy_persistence_allowed" true == false;
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "semantic_chain_execution_requested" false
+    || getBool req "semantic_chain_traversal_execution_requested" false
+    || getBool req "relation_composition_execution_requested" false
+    || getBool req "ontology_evaluate_requested" false
+    || getBool req "ontology_select_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "materialized_context_graph_write_requested" false
+    || getBool req "context_graph_write_requested" false
+    || getBool req "discourse_state_write_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  relationRowOk = row:
+    builtins.isAttrs row
+    && stringAttrOr row "subj" "" != ""
+    && stringAttrOr row "pred1" "" != ""
+    && stringAttrOr row "mid" "" != ""
+    && stringAttrOr row "pred2" "" != ""
+    && stringAttrOr row "obj2" "" != "";
+
+  relationReceiptFor = row:
+    relationComposition.buildReceipt row;
+
+  rowCandidate = idx: row:
+    let receipt = relationReceiptFor row;
+    in {
+      seq = idx;
+      subj = stringAttrOr row "subj" "";
+      pred1 = stringAttrOr row "pred1" "";
+      mid = stringAttrOr row "mid" "";
+      pred2 = stringAttrOr row "pred2" "";
+      obj2 = stringAttrOr row "obj2" "";
+      relation_composition_receipt = receipt;
+      candidate_status = "Candidate";
+      interpretation_required = true;
+      ontology_evaluate_required_later = true;
+      ontology_select_required_later = true;
+      materialization_required_later = true;
+      accepted_fact_promotion_allowed = false;
+    };
+
+  indexedMap = f: xs:
+    let
+      len = builtins.length xs;
+      go = i:
+        if i >= len then [ ]
+        else [ (f i (builtins.elemAt xs i)) ] ++ go (i + 1);
+    in go 0;
+
+  countWhere = pred: xs:
+    builtins.length (builtins.filter pred xs);
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.ontology-semantic-chain-traversal.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    semantic_chain_traversal_contract_built = false;
+    source_context_transition_verified = false;
+    candidate_only = true;
+    relation_composition_execution_allowed = false;
+    semantic_chain_execution_allowed = false;
+    ontology_evaluate_allowed = false;
+    ontology_select_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    materialized_context_graph_write_allowed = false;
+    discourse_state_write_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    reason = reason;
+    negative_receipt = {
+      kind = "ontology-semantic-chain-traversal-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "semantic chain traversal contracts cannot execute traversal, evaluate/select interpretations, materialize views, promote facts, write memory/DB, or persist policy";
+    };
+    receipt = {
+      kind = "ontology-semantic-chain-traversal-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      relation_composition_execution_allowed = false;
+      semantic_chain_execution_allowed = false;
+      ontology_evaluate_allowed = false;
+      ontology_select_allowed = false;
+      materialized_context_graph_write_allowed = false;
+      accepted_fact_promotion_allowed = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName;
+
+  buildOntologySemanticChainTraversal = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-ontology-semantic-chain-traversal-non-attr-request" "Semantic chain traversal request must be an attrset." { }
+    else if effectRequested req then
+      mkHeld "held-ontology-semantic-chain-traversal-effect-blocked" "Semantic chain traversal is contract-only; it cannot execute traversal, evaluate/select, query/emit/promote ontology facts, materialize context graph/discourse state, write memory/DB, persist policy, route, or write code." { }
+    else
+      let
+        source = contextTransitionFrom req;
+        chainRows = listAttrOr req "relation_chain_rows";
+        malformedRows = builtins.filter (row: !(relationRowOk row)) chainRows;
+        candidates = indexedMap rowCandidate chainRows;
+        relationReceipts = builtins.map (row: row.relation_composition_receipt) candidates;
+        heldRelationReceipts =
+          builtins.filter (receipt: stringAttrOr receipt "verdict" "" == "held") relationReceipts;
+        composedReceipts =
+          builtins.filter (receipt: stringAttrOr receipt "verdict" "" == "composed") relationReceipts;
+        queryPlan =
+          contextualFactsQueryPolicy.applyContextualFactsQueryPolicy {
+            request_kind = "build-plan";
+            query_kind = "contextual-facts-by-subject-filtered";
+            subject = stringAttrOr source "from_context" "context-transition-source";
+            allowed_predicates = [ ];
+            include_candidate = true;
+          };
+      in
+        if source == { } then
+          mkHeld "held-ontology-semantic-chain-traversal-context-transition-required" "Semantic chain traversal requires a verified context transition contract." { }
+        else if !sourceContextTransitionOk source then
+          mkHeld "held-ontology-semantic-chain-traversal-context-transition-unverified" "Semantic chain traversal requires a verified effect-locked context transition contract." {
+            context_transition = source;
+          }
+        else if chainRows == [ ] then
+          mkHeld "held-ontology-semantic-chain-traversal-chain-rows-required" "Semantic chain traversal requires relation_chain_rows." {
+            context_transition = source;
+          }
+        else if malformedRows != [ ] then
+          mkHeld "held-ontology-semantic-chain-traversal-chain-row-malformed" "Every relation chain row must provide subj, pred1, mid, pred2, and obj2." {
+            malformed_rows = malformedRows;
+          }
+        else if heldRelationReceipts != [ ] then
+          mkHeld "held-ontology-semantic-chain-traversal-relation-composition-held" "Relation composition owner held at least one supplied chain row." {
+            relation_composition_receipts = heldRelationReceipts;
+          }
+        else if composedReceipts == [ ] then
+          mkHeld "held-ontology-semantic-chain-traversal-no-composed-candidate" "Semantic chain traversal requires at least one composed relation candidate; not-applicable rows alone do not form a traversal candidate." {
+            relation_composition_receipts = relationReceipts;
+          }
+        else {
+          schema = "puncheetah.ontology-semantic-chain-traversal.v0";
+          owner = ownerName;
+          outcome = "ontology-semantic-chain-traversal-built";
+          is_held = false;
+          verified = true;
+          semantic_chain_traversal_contract_built = true;
+          source_context_transition_verified = true;
+          candidate_only = true;
+          from_context = source.from_context;
+          to_context = source.to_context;
+          trigger_fact_key = source.utterance_fact_key;
+          relation_chain_row_count = builtins.length chainRows;
+          composed_candidate_count = builtins.length composedReceipts;
+          not_applicable_count =
+            countWhere (receipt: stringAttrOr receipt "verdict" "" == "not-applicable") relationReceipts;
+          semantic_chain_traversal = {
+            kind = "ontology-semantic-chain-traversal-v0";
+            status = "Candidate";
+            from_context = source.from_context;
+            to_context = source.to_context;
+            trigger_fact_key = source.utterance_fact_key;
+            context_transition_lifecycle_status = source.lifecycle_status;
+            relation_chain_candidates = candidates;
+            contextual_fact_query_plan = queryPlan;
+            interpretation_candidate_count = builtins.length composedReceipts;
+            ontology_evaluate_required_later = true;
+            ontology_select_required_later = true;
+            materialized_context_graph_required_later = true;
+            receipt_required = true;
+            candidate_only = true;
+            ontology_evaluate_allowed = false;
+            ontology_select_allowed = false;
+            materialized_context_graph_write_allowed = false;
+            accepted_fact_promotion_allowed = false;
+          };
+          source_owner_reuse = {
+            context_transition_owner = contextTransitionOwner.ownerName;
+            predicate_morphism_owner = predicateMorphismOwner.ownerName;
+            relation_composition_owner = relationComposition.ownerName;
+            contextual_facts_query_policy = contextualFactsQueryPolicy.ownerName;
+            ontology_evaluate_replaced = false;
+            ontology_select_replaced = false;
+            materialized_context_graph_replaced = false;
+            discourse_state_projection_replaced = false;
+            pnix_db_append_gate_replaced = false;
+          };
+          next_gate = "ontology-materialized-context-view";
+          relation_composition_execution_allowed = false;
+          semantic_chain_execution_allowed = false;
+          ontology_evaluate_allowed = false;
+          ontology_select_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          materialized_context_graph_write_allowed = false;
+          discourse_state_write_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "ontology-semantic-chain-traversal-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "ontology-semantic-chain-traversal-built";
+            from_context = source.from_context;
+            to_context = source.to_context;
+            trigger_fact_key = source.utterance_fact_key;
+            relation_chain_row_count = builtins.length chainRows;
+            composed_candidate_count = builtins.length composedReceipts;
+            next_gate = "ontology-materialized-context-view";
+            invariant = "semantic chain traversal may shape interpretation candidates, but cannot evaluate/select, materialize graph views, promote facts, or write memory/DB";
+            relation_composition_execution_allowed = false;
+            semantic_chain_execution_allowed = false;
+            ontology_evaluate_allowed = false;
+            ontology_select_allowed = false;
+            materialized_context_graph_write_allowed = false;
+            accepted_fact_promotion_allowed = false;
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "ontology-semantic-chain-traversal-v0";
+    role = "candidate semantic chain traversal contract over verified context transition and relation-composition rows";
+    source_gate = "ontology-context-transition + relation-composition";
+    next_gate = "ontology-materialized-context-view";
+    non_replacement_boundary = "does not replace relation-composition, ontology evaluate/select, contextual facts query execution, materialized context graph, discourse-state projection, ontology router, or pnix-db append gates";
+    effect_policy = "contract only; no traversal execution, no ontology evaluate/select/query/emit/promote, no materialized graph/discourse-state writes, no accepted fact promotion, no memory/DB write, no policy persistence, no route execution, and no code write";
+  };
+}

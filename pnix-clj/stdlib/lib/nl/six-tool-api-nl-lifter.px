@@ -1,0 +1,353 @@
+let
+  ownerName = "stdlib.nl.six-tool-api-nl-lifter";
+
+  # === 6-Tool API NL Lifter (Axiom #100) =============================
+  #
+  # 100% Coverage Campaign 의 6 substrate (#92~#99) 에 대한 NL access.
+  # NL utterance → substrate query envelope.
+  #
+  # # 발화 예 (en + ko)
+  #
+  # "HAnim head joint"             → hanim query, entity=head
+  # "HAnim 조인트 손목"            → hanim query, entity=l_wrist
+  # "FreeCAD Part.makeBox"         → freecad query, api=Part.makeBox
+  # "freecad 박스 만들기"          → freecad query
+  # "glTF mesh"                    → gltf query, type=mesh
+  # "rhino NurbsCurve"             → rhino query, type=NurbsCurve
+  # "전체 커버리지"                → coverage query, tool=all
+  #
+  # # Clean-room boundary
+  #
+  # This file is a small project-authored hint router. It does not vendor full
+  # API inventories, standard prose, generated schema maps, official fixtures,
+  # or conformance suites. 0/multi match are unsupported input states, not
+  # legal-provenance "held" states.
+
+  # ============= helper ==============================================
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  # ============= tool keyword patterns ===============================
+
+  knownToolKeywords = [
+    {
+      tool_id = "hanim";
+      en_keywords = [ "HAnim" "hanim" "humanoid" "skeleton joint" "H-Anim" ];
+      ko_keywords = [ "HAnim" "hanim" "휴머노이드" "조인트" "관절" ];
+      axiom = 94;
+      substrate_owner = "stdlib.nl.six-tool-api-nl-lifter.clean-room-hints";
+    }
+    {
+      tool_id = "freecad";
+      en_keywords = [ "FreeCAD" "freecad" "Part." "Draft." "Sketcher" "PartDesign" ];
+      ko_keywords = [ "프리캐드" "freecad" "FreeCAD" ];
+      axiom = 96;
+      substrate_owner = "stdlib.nl.six-tool-api-nl-lifter.clean-room-hints";
+    }
+    {
+      tool_id = "gltf";
+      en_keywords = [ "glTF" "gltf" "GLTF" ".glb" ".gltf" "KHR_" ];
+      ko_keywords = [ "glTF" "gltf" "지엘티에프" ];
+      axiom = 97;
+      substrate_owner = "stdlib.nl.six-tool-api-nl-lifter.clean-room-hints";
+    }
+    {
+      tool_id = "rhino";
+      en_keywords = [ "Rhino" "rhino" "RhinoCommon" "Grasshopper" "Rhinoceros" "rhinoscript" ];
+      ko_keywords = [ "라이노" "rhino" "Rhino" "그래스호퍼" ];
+      axiom = 99;
+      substrate_owner = "stdlib.nl.six-tool-api-nl-lifter.clean-room-hints";
+    }
+    {
+      tool_id = "coverage";
+      en_keywords = [ "coverage" "API coverage" "percent" "100%" ];
+      ko_keywords = [ "커버리지" "coverage" "퍼센트" "비율" ];
+      axiom = 92;
+      substrate_owner = "stdlib.integration.api-coverage-measurement-substrate";
+    }
+  ];
+
+  toolCount = builtins.length knownToolKeywords;
+
+  matchTools = utterance:
+    builtins.filter (t:
+      (containsAny utterance t.en_keywords) || (containsAny utterance t.ko_keywords))
+      knownToolKeywords;
+
+  # ============= entity extractors (per tool) ========================
+
+  # HAnim joint names (subset of 86 LOA-4 joints — most common 12)
+  knownHAnimEntityHints = [
+    { entity = "HumanoidRoot"; en = [ "root" "humanoid root" "HumanoidRoot" ]; ko = [ "루트" "골반" ]; }
+    { entity = "head"; en = [ "head" ]; ko = [ "머리" ]; }
+    { entity = "skullbase"; en = [ "skull" "neck top" "skullbase" ]; ko = [ "두개골" ]; }
+    { entity = "l_shoulder"; en = [ "left shoulder" "l_shoulder" ]; ko = [ "왼쪽 어깨" ]; }
+    { entity = "r_shoulder"; en = [ "right shoulder" "r_shoulder" ]; ko = [ "오른쪽 어깨" ]; }
+    { entity = "l_elbow"; en = [ "left elbow" "l_elbow" ]; ko = [ "왼쪽 팔꿈치" ]; }
+    { entity = "r_elbow"; en = [ "right elbow" "r_elbow" ]; ko = [ "오른쪽 팔꿈치" ]; }
+    { entity = "l_wrist"; en = [ "left wrist" "wrist" "l_wrist" ]; ko = [ "왼쪽 손목" "손목" ]; }
+    { entity = "l_knee"; en = [ "left knee" "knee" "l_knee" ]; ko = [ "왼쪽 무릎" "무릎" ]; }
+    { entity = "l_ankle"; en = [ "ankle" "l_ankle" ]; ko = [ "발목" ]; }
+    { entity = "sacrum"; en = [ "sacrum" "pelvis center" ]; ko = [ "천골" ]; }
+    { entity = "vc7"; en = [ "neck base" "vc7" ]; ko = [ "목뼈" ]; }
+  ];
+
+  findHAnimEntity = utterance:
+    let hits = builtins.filter (h:
+      (containsAny utterance h.en) || (containsAny utterance h.ko)) knownHAnimEntityHints;
+    in if hits == [] then null else (builtins.head hits).entity;
+
+  # FreeCAD API hints
+  knownFreeCADEntityHints = [
+    { api = "Part.makeBox"; en = [ "make box" "create box" "Part box" "Part.makeBox" ]; ko = [ "박스 만들기" "박스 생성" ]; }
+    { api = "Part.makeSphere"; en = [ "make sphere" "Part sphere" "Part.makeSphere" ]; ko = [ "구 만들기" ]; }
+    { api = "Part.makeCylinder"; en = [ "make cylinder" "Part cylinder" "Part.makeCylinder" ]; ko = [ "원기둥 만들기" ]; }
+    { api = "Part.BSplineCurve"; en = [ "nurbs curve" "BSpline" "BSplineCurve" "Part.BSplineCurve" ]; ko = [ "NURBS 곡선" "비스플라인" ]; }
+    { api = "Sketcher.createSketch"; en = [ "create sketch" "new sketch" "Sketcher.createSketch" ]; ko = [ "스케치 생성" "새 스케치" ]; }
+    { api = "Assembly.Revolute"; en = [ "revolute joint" "hinge" "Assembly.Revolute" ]; ko = [ "회전 조인트" "힌지" ]; }
+    { api = "shape.exportStep"; en = [ "export STEP" "export step" "shape.exportStep" ]; ko = [ "STEP 내보내기" ]; }
+  ];
+
+  findFreeCADEntity = utterance:
+    let hits = builtins.filter (h:
+      (containsAny utterance h.en) || (containsAny utterance h.ko)) knownFreeCADEntityHints;
+    in if hits == [] then null else (builtins.head hits).api;
+
+  # glTF type hints
+  knownGltfEntityHints = [
+    { type_name = "mesh"; en = [ "mesh" "geometry data" ]; ko = [ "메시" "지오메트리" ]; }
+    { type_name = "node"; en = [ "node" "scene node" ]; ko = [ "노드" ]; }
+    { type_name = "material"; en = [ "material" "PBR" ]; ko = [ "재질" "PBR" ]; }
+    { type_name = "animation"; en = [ "animation" "keyframe" ]; ko = [ "애니메이션" "키프레임" ]; }
+    { type_name = "skin"; en = [ "skin" "skinning" ]; ko = [ "스킨" "스키닝" ]; }
+    { type_name = "buffer"; en = [ "buffer" "binary data" ]; ko = [ "버퍼" "바이너리" ]; }
+    { type_name = "KHR_materials_pbrSpecularGlossiness"; en = [ "specular glossiness" ]; ko = [ "스페큘러 글로시" ]; }
+  ];
+
+  findGltfEntity = utterance:
+    let hits = builtins.filter (h:
+      (containsAny utterance h.en) || (containsAny utterance h.ko)) knownGltfEntityHints;
+    in if hits == [] then null else (builtins.head hits).type_name;
+
+  # Rhino type/namespace hints
+  knownRhinoEntityHints = [
+    { entity = "NurbsCurve"; en = [ "NurbsCurve" "nurbs curve" "NURBS curve" ]; ko = [ "NURBS 곡선" "넙스 커브" ]; }
+    { entity = "NurbsSurface"; en = [ "NurbsSurface" "nurbs surface" "NURBS surface" ]; ko = [ "NURBS 면" "넙스 서피스" ]; }
+    { entity = "Rhino.Geometry"; en = [ "Rhino.Geometry" "geometry namespace" ]; ko = [ "지오메트리 네임스페이스" ]; }
+    { entity = "rs.AddSphere"; en = [ "AddSphere" "rs.AddSphere" "rhinoscript sphere" ]; ko = [ "라이노스크립트 구체" ]; }
+    { entity = "Loft"; en = [ "Loft" "loft component" "Grasshopper loft" ]; ko = [ "로프트" ]; }
+    { entity = "Brep"; en = [ "Brep" "boundary representation" ]; ko = [ "비렙" "경계 표현" ]; }
+    { entity = "Mesh"; en = [ "Rhino mesh" "RhinoCommon mesh" ]; ko = [ "라이노 메시" ]; }
+  ];
+
+  findRhinoEntity = utterance:
+    let hits = builtins.filter (h:
+      (containsAny utterance h.en) || (containsAny utterance h.ko)) knownRhinoEntityHints;
+    in if hits == [] then null else (builtins.head hits).entity;
+
+  # ============= per-tool lift entries ===============================
+
+  liftToHAnimQuery = utterance:
+    if !(builtins.isString utterance) then { outcome = "unsupported-non-string-utterance"; }
+    else if (builtins.stringLength utterance) == 0 then { outcome = "unsupported-empty-utterance"; }
+    else
+      let entity = findHAnimEntity utterance;
+      in {
+        outcome = if entity == null then "unsupported-no-hanim-entity-matched" else "hanim-query-lifted";
+        utterance = utterance;
+        entity = entity;
+        substrate_query =
+          if entity == null then null
+          else { query_kind = "clean-room-hanim-joint-hint"; entity = entity; };
+        routed_substrate = "stdlib/lib/hanim.px clean-room surface";
+        substrate_action = "route small project-authored hint to HAnim shape surface";
+      };
+
+  liftToFreeCADQuery = utterance:
+    if !(builtins.isString utterance) then { outcome = "unsupported-non-string-utterance"; }
+    else if (builtins.stringLength utterance) == 0 then { outcome = "unsupported-empty-utterance"; }
+    else
+      let api = findFreeCADEntity utterance;
+      in {
+        outcome = if api == null then "unsupported-no-freecad-entity-matched" else "freecad-query-lifted";
+        utterance = utterance;
+        api = api;
+        substrate_query =
+          if api == null then null
+          else { query_kind = "clean-room-api-hint"; tool = "freecad"; api = api; };
+        routed_substrate = "clean-room small API hint envelope";
+        substrate_action = "route small project-authored hint without full API inventory";
+      };
+
+  liftToGltfQuery = utterance:
+    if !(builtins.isString utterance) then { outcome = "unsupported-non-string-utterance"; }
+    else if (builtins.stringLength utterance) == 0 then { outcome = "unsupported-empty-utterance"; }
+    else
+      let t = findGltfEntity utterance;
+      in {
+        outcome = if t == null then "unsupported-no-gltf-entity-matched" else "gltf-query-lifted";
+        utterance = utterance;
+        type_name = t;
+        substrate_query =
+          if t == null then null
+          else { query_kind = "clean-room-format-type-hint"; tool = "gltf"; type_name = t; };
+        routed_substrate = "clean-room small format hint envelope";
+        substrate_action = "route small project-authored hint without full spec inventory";
+      };
+
+  liftToRhinoQuery = utterance:
+    if !(builtins.isString utterance) then { outcome = "unsupported-non-string-utterance"; }
+    else if (builtins.stringLength utterance) == 0 then { outcome = "unsupported-empty-utterance"; }
+    else
+      let e = findRhinoEntity utterance;
+      in {
+        outcome = if e == null then "unsupported-no-rhino-entity-matched" else "rhino-query-lifted";
+        utterance = utterance;
+        entity = e;
+        substrate_query =
+          if e == null then null
+          else { query_kind = "clean-room-api-hint"; tool = "rhino"; entity = e; };
+        routed_substrate = "clean-room small API hint envelope";
+        substrate_action = "route small project-authored hint without full API inventory";
+      };
+
+  knownCoverageScopeHints = [
+    { scope = "all"; en = [ "전체" "all tools" "aggregate" ]; ko = [ "전체 커버리지" "전부" ]; }
+    { scope = "x3d"; en = [ "x3d coverage" ]; ko = [ "x3d 커버리지" ]; }
+    { scope = "hanim"; en = [ "hanim coverage" "humanoid coverage" ]; ko = [ "hanim 커버리지" "휴머노이드 커버리지" ]; }
+    { scope = "freecad"; en = [ "freecad coverage" ]; ko = [ "프리캐드 커버리지" ]; }
+    { scope = "gltf"; en = [ "gltf coverage" "glb coverage" ]; ko = [ "gltf 커버리지" ]; }
+    { scope = "rhino"; en = [ "rhino coverage" "rhinocommon coverage" ]; ko = [ "라이노 커버리지" ]; }
+  ];
+
+  liftToApiCoverageQuery = utterance:
+    if !(builtins.isString utterance) then { outcome = "unsupported-non-string-utterance"; }
+    else if (builtins.stringLength utterance) == 0 then { outcome = "unsupported-empty-utterance"; }
+    else if !(containsAny utterance [ "coverage" "커버리지" "퍼센트" "percent" "100%" ]) then {
+      outcome = "unsupported-no-coverage-keyword";
+    }
+    else
+      let
+        hits = builtins.filter (h:
+          (containsAny utterance h.en) || (containsAny utterance h.ko)) knownCoverageScopeHints;
+        chosen = if hits == [] then { scope = "all"; en = []; ko = []; } else builtins.head hits;
+      in {
+        outcome = "coverage-query-lifted";
+        utterance = utterance;
+        scope = chosen.scope;
+        substrate_query = { query_kind = "coverage-summary"; tool = chosen.scope; };
+        routed_substrate = "axiom-92 stdlib.integration.api-coverage-measurement-substrate";
+        substrate_action = "applyApiCoverageMeasurementPlate 호출";
+      };
+
+  # ============= master 6-tool lift entry ============================
+
+  liftToSixToolQuery = utterance:
+    if !(builtins.isString utterance) then { outcome = "unsupported-non-string-utterance"; }
+    else if (builtins.stringLength utterance) == 0 then { outcome = "unsupported-empty-utterance"; }
+    else
+      let matches = matchTools utterance;
+      in
+        if matches == [] then {
+          outcome = "unsupported-no-tool-keyword-matched";
+          known_tools = builtins.map (t: t.tool_id) knownToolKeywords;
+        }
+        else if (builtins.length matches) > 1 then {
+          outcome = "unsupported-multi-tool-keyword";
+          matched_tools = builtins.map (t: t.tool_id) matches;
+        }
+        else
+          let
+            chosen = builtins.head matches;
+            inner =
+              if chosen.tool_id == "hanim" then liftToHAnimQuery utterance
+              else if chosen.tool_id == "freecad" then liftToFreeCADQuery utterance
+              else if chosen.tool_id == "gltf" then liftToGltfQuery utterance
+              else if chosen.tool_id == "rhino" then liftToRhinoQuery utterance
+              else if chosen.tool_id == "coverage" then liftToApiCoverageQuery utterance
+              else { outcome = "unsupported-no-dispatcher-for-tool"; };
+          in inner // {
+            tool_id = chosen.tool_id;
+            tool_axiom = chosen.axiom;
+            substrate_owner = chosen.substrate_owner;
+          };
+
+  applySixToolApiNlLifterPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "unsupported-non-attrs-request"; }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "unsupported-missing-utterance-field";
+    }
+    else liftToSixToolQuery request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-100 (vetted API NL forward)";
+    tool_count = toolCount;
+    tools = builtins.map (t: t.tool_id) knownToolKeywords;
+    hanim_entity_hint_count = builtins.length knownHAnimEntityHints;
+    freecad_entity_hint_count = builtins.length knownFreeCADEntityHints;
+    gltf_entity_hint_count = builtins.length knownGltfEntityHints;
+    rhino_entity_hint_count = builtins.length knownRhinoEntityHints;
+    coverage_scope_hint_count = builtins.length knownCoverageScopeHints;
+    total_hints = (builtins.length knownHAnimEntityHints)
+                + (builtins.length knownFreeCADEntityHints)
+                + (builtins.length knownGltfEntityHints)
+                + (builtins.length knownRhinoEntityHints)
+                + (builtins.length knownCoverageScopeHints);
+    routed_substrates = [
+      "stdlib/lib/hanim.px clean-room surface"
+      "clean-room FreeCAD small API hint envelope"
+      "clean-room glTF small format hint envelope"
+      "clean-room Rhino small API hint envelope"
+      "axiom-92 api-coverage-measurement-substrate"
+    ];
+    new_decision_count = 0;
+    do_not_rebuild = true;
+    bilingual = true;
+    unsupported_outcomes = [
+      "unsupported-non-string-utterance"
+      "unsupported-empty-utterance"
+      "unsupported-non-attrs-request"
+      "unsupported-missing-utterance-field"
+      "unsupported-no-tool-keyword-matched"
+      "unsupported-multi-tool-keyword"
+      "unsupported-no-hanim-entity-matched"
+      "unsupported-no-freecad-entity-matched"
+      "unsupported-no-gltf-entity-matched"
+      "unsupported-no-rhino-entity-matched"
+      "unsupported-no-coverage-keyword"
+      "unsupported-no-dispatcher-for-tool"
+    ];
+  };
+
+in {
+  inherit
+    ownerName containsAny
+    knownToolKeywords toolCount matchTools
+    knownHAnimEntityHints findHAnimEntity
+    knownFreeCADEntityHints findFreeCADEntity
+    knownGltfEntityHints findGltfEntity
+    knownRhinoEntityHints findRhinoEntity
+    knownCoverageScopeHints
+    liftToHAnimQuery liftToFreeCADQuery
+    liftToGltfQuery liftToRhinoQuery liftToApiCoverageQuery
+    liftToSixToolQuery applySixToolApiNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL vetted API lifter (Axiom #100) — forward only";
+    owner = ownerName;
+    base = "six-tool-api-nl-lifter-v0";
+    rev_note = "100% Coverage Campaign 의 NL access. Vetted substrate (#92,#94,#96,#97,#99) "
+      + "각각 NL utterance → substrate query envelope 으로 lift. "
+      + "DO NOT REBUILD — 기존 substrate plate 의 query API 만 호출.";
+  };
+}

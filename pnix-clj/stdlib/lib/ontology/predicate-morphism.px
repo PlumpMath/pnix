@@ -1,0 +1,358 @@
+# stdlib.lib.ontology.predicate-morphism
+#
+# Typed predicate morphism contract for ContextualFact-style
+# subject-predicate-object facts. This owner does not replace the existing
+# predicate category policy, predicate record shape policy, NL sentence
+# morphism detector, or math morphism registry. It only lowers a predicate
+# into a candidate domain -> codomain morphism with explicit composition laws.
+let
+  ownerName = "stdlib.lib.ontology.predicate-morphism";
+
+  categoryPolicy = import ./substrate-predicate-category-policy.px;
+  recordShapePolicy = import ./substrate-predicate-record-shape-policy.px;
+  nlMorphismDetector = import ../nl/sentence-morphism-detector.px;
+  mathMorphism = import ../math/morphism.px;
+
+  hasAttr = attrs: key:
+    (builtins.isAttrs attrs) && (builtins.hasAttr key attrs);
+
+  getAttrOr = attrs: key: dflt:
+    if hasAttr attrs key then builtins.getAttr key attrs else dflt;
+
+  getBool = attrs: key: dflt:
+    let v = getAttrOr attrs key dflt;
+    in if builtins.isBool v then v else dflt;
+
+  stringAttrOr = attrs: key: dflt:
+    let v = getAttrOr attrs key null;
+    in if builtins.isString v && v != "" then v else dflt;
+
+  listAttrOr = attrs: key:
+    let v = getAttrOr attrs key [ ];
+    in if builtins.isList v then v else [ ];
+
+  validCategoryIds =
+    builtins.map (c: c.category_id) categoryPolicy.predicateCategories;
+
+  categoryById = categoryId:
+    categoryPolicy.applySubstratePredicateCategoryPolicy {
+      request_kind = "lookup-by-id";
+      category_id = categoryId;
+    };
+
+  categoryFor = predicateName: explicitCategory:
+    if explicitCategory != "" then
+      categoryById explicitCategory
+    else
+      categoryPolicy.applySubstratePredicateCategoryPolicy {
+        request_kind = "categorize-predicate";
+        predicate_name = predicateName;
+      };
+
+  categoryOk = category:
+    builtins.isAttrs category
+    && (
+      stringAttrOr category "verdict" "" == "category-resolved"
+      || stringAttrOr category "verdict" "" == "predicate-categorized"
+    )
+    && stringAttrOr category "category_id" "" != "";
+
+  effectRequested = req:
+    getBool req "file_write_requested" false
+    || getBool req "host_execution_requested" false
+    || getBool req "host_apply_requested" false
+    || getBool req "direct_apply_requested" false
+    || getBool req "apply_requested" false
+    || getBool req "raw_eval_requested" false
+    || getBool req "test_execution_requested" false
+    || getBool req "search_execution_requested" false
+    || getBool req "compiler_execution_requested" false
+    || getBool req "lsp_execution_requested" false
+    || getBool req "benchmark_execution_requested" false
+    || getBool req "morphism_execution_requested" false
+    || getBool req "predicate_chain_execution_requested" false
+    || getBool req "ontology_query_requested" false
+    || getBool req "ontology_emit_requested" false
+    || getBool req "ontology_promote_requested" false
+    || getBool req "accepted_fact_promotion_requested" false
+    || getBool req "learning_promotion_requested" false
+    || getBool req "memory_write_requested" false
+    || getBool req "db_write_requested" false
+    || getBool req "db_append_requested" false
+    || getBool req "policy_persistence_requested" false
+    || getBool req "route_policy_update_requested" false
+    || getBool req "source_ingest_requested" false
+    || getBool req "code_write_requested" false
+    || getBool req "route_execution_requested" false;
+
+  objectOntologyRequested = req:
+    getBool req "object_type_schema_requested" false
+    || getBool req "palantir_object_model_requested" false
+    || getBool req "fixed_object_ontology_requested" false
+    || getBool req "object_type_promotion_requested" false;
+
+  compositionRowOk = row:
+    builtins.isAttrs row
+    && stringAttrOr row "with_predicate" "" != ""
+    && stringAttrOr row "result_predicate" "" != "";
+
+  compositionRowsOk = rows:
+    rows != [ ] && builtins.all compositionRowOk rows;
+
+  compositionRow = sourcePredicate: domain: codomain: row: {
+    source_predicate = sourcePredicate;
+    with_predicate = stringAttrOr row "with_predicate" "";
+    result_predicate = stringAttrOr row "result_predicate" "";
+    source_domain = domain;
+    source_codomain = codomain;
+    intermediate_type = stringAttrOr row "intermediate_type" codomain;
+    result_domain = stringAttrOr row "result_domain" domain;
+    result_codomain = stringAttrOr row "result_codomain" codomain;
+    chain_rule = stringAttrOr row "chain_rule" "candidate-composition";
+    type_checked = true;
+    candidate_only = true;
+    accepted_fact_promotion_allowed = false;
+  };
+
+  mkPredicateRecord = predicateName: categoryId: domain: codomain: chainRule: {
+    name = predicateName;
+    category = categoryId;
+    type_signature = domain + " -> " + codomain;
+    chain_rule = chainRule;
+    declared_in_substrates = [
+      "stdlib/lib/ontology/predicate-morphism.px"
+    ];
+    occurrence_count = 1;
+    notes = [
+      "candidate typed predicate morphism contract"
+      "composition laws must be explicit before semantic chain traversal"
+    ];
+    last_updated_ms = 0;
+  };
+
+  recordShapeVerdict = record:
+    recordShapePolicy.applySubstratePredicateRecordShapePolicy {
+      request_kind = "validate-record";
+      record = record;
+    };
+
+  mkHeld = outcome: reason: extra: {
+    schema = "puncheetah.ontology-predicate-morphism.v0";
+    owner = ownerName;
+    outcome = outcome;
+    is_held = true;
+    verified = false;
+    predicate_morphism_contract_built = false;
+    candidate_only = true;
+    object_type_ontology_introduced = false;
+    composition_execution_allowed = false;
+    predicate_chain_execution_allowed = false;
+    ontology_query_allowed = false;
+    ontology_emit_allowed = false;
+    ontology_promote_allowed = false;
+    accepted_fact_promotion_allowed = false;
+    learning_promotion_allowed = false;
+    file_write_allowed = false;
+    host_execution_allowed = false;
+    host_apply_allowed = false;
+    direct_apply_allowed = false;
+    apply_allowed = false;
+    raw_eval_allowed = false;
+    test_execution_allowed = false;
+    search_execution_allowed = false;
+    compiler_execution_allowed = false;
+    lsp_execution_allowed = false;
+    benchmark_execution_allowed = false;
+    memory_write_allowed = false;
+    db_write_allowed = false;
+    policy_persistence_allowed = false;
+    source_ingest_allowed = false;
+    code_write_allowed = false;
+    route_execution_allowed = false;
+    route_policy_update_allowed = false;
+    reason = reason;
+    negative_receipt = {
+      kind = "ontology-predicate-morphism-negative-receipt";
+      route = ownerName;
+      outcome = outcome;
+      reason = reason;
+      repeat_guard = "predicate morphism contracts cannot introduce fixed object ontology, execute chains, query/emit/promote ontology facts, write memory/DB, persist policy, or accept facts";
+    };
+    receipt = {
+      kind = "ontology-predicate-morphism-receipt";
+      route = ownerName;
+      verified = false;
+      outcome = outcome;
+      object_type_ontology_introduced = false;
+      composition_execution_allowed = false;
+      accepted_fact_promotion_allowed = false;
+      memory_write_allowed = false;
+      db_write_allowed = false;
+      policy_persistence_allowed = false;
+    };
+  } // extra;
+in
+rec {
+  inherit ownerName validCategoryIds;
+
+  buildPredicateMorphism = req:
+    if !(builtins.isAttrs req) then
+      mkHeld "held-ontology-predicate-morphism-non-attr-request" "Predicate morphism request must be an attrset." { }
+    else if objectOntologyRequested req then
+      mkHeld "held-ontology-predicate-morphism-object-ontology-blocked" "Predicate morphism is runtime context/morphism/receipt oriented; fixed ObjectType ontology is blocked." { }
+    else if effectRequested req then
+      mkHeld "held-ontology-predicate-morphism-effect-blocked" "Predicate morphism is contract-only; it cannot execute chains, query/emit/promote ontology facts, write memory/DB, persist policy, route, or write code." { }
+    else
+      let
+        predicateName = stringAttrOr req "predicate_name" "";
+        domain = stringAttrOr req "domain" "";
+        codomain = stringAttrOr req "codomain" "";
+        chainRule = stringAttrOr req "chain_rule" "";
+        explicitCategory = stringAttrOr req "category_id" "";
+        category = categoryFor predicateName explicitCategory;
+        categoryId = stringAttrOr category "category_id" explicitCategory;
+        compositionLaws = listAttrOr req "composition_laws";
+        predicateRecord = mkPredicateRecord predicateName categoryId domain codomain chainRule;
+        recordVerdict = recordShapeVerdict predicateRecord;
+        identityContext = stringAttrOr req "identity_context" "same-context";
+      in
+        if predicateName == "" then
+          mkHeld "held-ontology-predicate-morphism-predicate-required" "Predicate morphism requires predicate_name." { }
+        else if domain == "" then
+          mkHeld "held-ontology-predicate-morphism-domain-required" "Predicate morphism requires a domain type." { predicate_name = predicateName; }
+        else if codomain == "" then
+          mkHeld "held-ontology-predicate-morphism-codomain-required" "Predicate morphism requires a codomain type." { predicate_name = predicateName; domain = domain; }
+        else if chainRule == "" then
+          mkHeld "held-ontology-predicate-morphism-chain-rule-required" "Predicate morphism requires an explicit chain_rule." { predicate_name = predicateName; domain = domain; codomain = codomain; }
+        else if !(categoryOk category) then
+          mkHeld "held-ontology-predicate-morphism-category-required" "Predicate morphism requires a known predicate category or a predicate categorized by the existing category policy." {
+            predicate_name = predicateName;
+            requested_category_id = explicitCategory;
+            category_verdict = category;
+            valid_category_ids = validCategoryIds;
+          }
+        else if !(compositionRowsOk compositionLaws) then
+          mkHeld "held-ontology-predicate-morphism-composition-law-required" "Predicate morphism requires at least one explicit composition_laws row with with_predicate and result_predicate." {
+            predicate_name = predicateName;
+            composition_laws = compositionLaws;
+          }
+        else if stringAttrOr recordVerdict "verdict" "" != "record-valid" then
+          mkHeld "held-ontology-predicate-morphism-record-shape-invalid" "Predicate morphism record must satisfy substrate-predicate-record-shape-policy." {
+            predicate_record = predicateRecord;
+            record_shape_verdict = recordVerdict;
+          }
+        else {
+          schema = "puncheetah.ontology-predicate-morphism.v0";
+          owner = ownerName;
+          outcome = "ontology-predicate-morphism-built";
+          is_held = false;
+          verified = true;
+          predicate_morphism_contract_built = true;
+          candidate_only = true;
+          object_type_ontology_introduced = false;
+          predicate_name = predicateName;
+          category_id = categoryId;
+          category_kebab_case = stringAttrOr category "kebab_case" "unclassified";
+          domain = domain;
+          codomain = codomain;
+          type_signature = domain + " -> " + codomain;
+          chain_rule = chainRule;
+          predicate_record = predicateRecord;
+          record_shape_verdict = recordVerdict;
+          category_verdict = category;
+          predicate_morphism = {
+            kind = "ontology-predicate-morphism-v0";
+            status = "Candidate";
+            name = predicateName;
+            category_id = categoryId;
+            domain = domain;
+            codomain = codomain;
+            type_signature = domain + " -> " + codomain;
+            chain_rule = chainRule;
+            identity = {
+              name = "identity::" + domain;
+              domain = domain;
+              codomain = domain;
+              identity_context = identityContext;
+              replay_law = "same input facts plus same owner policy produces the same candidate morphism chain";
+            };
+            composition_laws =
+              builtins.map (compositionRow predicateName domain codomain) compositionLaws;
+            held_if = [
+              "missing-predicate-name"
+              "missing-domain"
+              "missing-codomain"
+              "missing-chain-rule"
+              "unknown-predicate-category"
+              "missing-composition-law"
+              "object-type-ontology-requested"
+              "effect-or-promotion-requested"
+            ];
+            receipt_required = true;
+            candidate_only = true;
+          };
+          source_owner_reuse = {
+            predicate_category_policy = categoryPolicy.ownerName;
+            predicate_record_shape_policy = recordShapePolicy.ownerName;
+            nl_sentence_morphism_detector = nlMorphismDetector.ownerName;
+            math_morphism_registry = mathMorphism.ownerName;
+            nl_sentence_morphism_detector_replaced = false;
+            math_morphism_registry_replaced = false;
+            object_type_ontology_introduced = false;
+          };
+          next_gate = "ontology-context-transition";
+          composition_execution_allowed = false;
+          predicate_chain_execution_allowed = false;
+          ontology_query_allowed = false;
+          ontology_emit_allowed = false;
+          ontology_promote_allowed = false;
+          accepted_fact_promotion_allowed = false;
+          learning_promotion_allowed = false;
+          file_write_allowed = false;
+          host_execution_allowed = false;
+          host_apply_allowed = false;
+          direct_apply_allowed = false;
+          apply_allowed = false;
+          raw_eval_allowed = false;
+          test_execution_allowed = false;
+          search_execution_allowed = false;
+          compiler_execution_allowed = false;
+          lsp_execution_allowed = false;
+          benchmark_execution_allowed = false;
+          memory_write_allowed = false;
+          db_write_allowed = false;
+          policy_persistence_allowed = false;
+          source_ingest_allowed = false;
+          code_write_allowed = false;
+          route_execution_allowed = false;
+          route_policy_update_allowed = false;
+          receipt = {
+            kind = "ontology-predicate-morphism-receipt";
+            route = ownerName;
+            verified = true;
+            outcome = "ontology-predicate-morphism-built";
+            predicate_name = predicateName;
+            category_id = categoryId;
+            type_signature = domain + " -> " + codomain;
+            composition_law_count = builtins.length compositionLaws;
+            next_gate = "ontology-context-transition";
+            invariant = "predicate morphism may type predicate chains, but cannot introduce fixed object ontology, execute traversal, promote facts, or write memory/DB";
+            object_type_ontology_introduced = false;
+            composition_execution_allowed = false;
+            accepted_fact_promotion_allowed = false;
+            memory_write_allowed = false;
+            db_write_allowed = false;
+            policy_persistence_allowed = false;
+          };
+        };
+
+  meta = {
+    owner = ownerName;
+    base = "ontology-predicate-morphism-v0";
+    role = "candidate typed predicate morphism and composition law contract for ContextualFact predicate chains";
+    source_gate = "substrate-predicate-category-policy + substrate-predicate-record-shape-policy";
+    next_gate = "ontology-context-transition";
+    non_replacement_boundary = "does not replace predicate category policy, predicate record shape policy, NL sentence morphism detector, math morphism registry, ontology router, semantic traversal, materialized context graph, or pnix-db append gates";
+    effect_policy = "contract only; no object ontology install, chain execution, ontology query/emit/promote, accepted fact promotion, source ingest, memory/DB write, policy persistence, route execution, or code write";
+  };
+}

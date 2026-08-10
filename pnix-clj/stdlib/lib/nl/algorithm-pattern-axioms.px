@@ -1,0 +1,419 @@
+let
+  ownerName = "stdlib.nl.algorithm-pattern-axioms";
+
+  bt = import nl/branch-tree-substrate.px;
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === Algorithm Pattern Axiom Registry (agent-NL-119) =============
+  #
+  # 사용자 vision 의 *피 두 번째 방울* — 알고리즘 생성 axioms.
+  #
+  # control flow (#118) 가 "어떻게 흐를까" 의 axiom 이라면, 이건
+  # "어떤 알고리즘 패턴으로 풀까" 의 axiom. 둘이 결합:
+  #   - DP = loop (control flow) + memoization (pattern)
+  #   - BFS = queue + loop (control flow) + level-order (pattern)
+  #
+  # 5 family:
+  #   1. dynamic-programming (DP)
+  #   2. greedy
+  #   3. divide-conquer
+  #   4. graph-traversal (BFS / DFS)
+  #   5. two-pointer-and-sliding-window
+
+  stepKind = "algorithm-pattern-axiom-data";
+  framework_step =
+    "axiom content — 알고리즘 패턴 5 family 의 sub-tree topology";
+
+  # === 1. Dynamic Programming ===================================
+
+  dpAxiomTree = bt.composeBranchTree "dynamic programming axiom" [
+    {
+      name = "memoization-top-down";
+      cues = [ "memoize" "memoization" "top-down" "메모이제이션" "캐시" ];
+      sub_specs = [
+        { name = "recursive-with-cache"; cues = [ "recursive" "재귀" "cache" ]; terminal = true; }
+        { name = "hash-table-cache"; cues = [ "hash" "map" "dict" ]; terminal = true; }
+        { name = "array-cache"; cues = [ "array" "table" "배열" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "tabulation-bottom-up";
+      cues = [ "tabulation" "bottom-up" "iterative" "테이블" "상향" ];
+      sub_specs = [
+        { name = "1d-table"; cues = [ "1d" "linear" "선형" "fibonacci" ]; terminal = true; }
+        { name = "2d-table"; cues = [ "2d" "matrix" "grid" "edit distance" ]; terminal = true; }
+        { name = "rolling-array"; cues = [ "rolling" "space optimization" "공간 최적화" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "overlapping-subproblems-check";
+      cues = [ "overlapping" "subproblem" "겹치는" "부분 문제" ];
+      sub_specs = [
+        { name = "verify-overlap"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "optimal-substructure-check";
+      cues = [ "optimal substructure" "최적 부분구조" ];
+      sub_specs = [
+        { name = "verify-substructure"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 2. Greedy ================================================
+
+  greedyAxiomTree = bt.composeBranchTree "greedy axiom" [
+    {
+      name = "local-choice";
+      cues = [ "local optimum" "local choice" "지역 최적" "가까운 선택" ];
+      sub_specs = [
+        { name = "max-at-each-step"; cues = [ "maximum" "largest" "최대" ]; terminal = true; }
+        { name = "min-at-each-step"; cues = [ "minimum" "smallest" "최소" ]; terminal = true; }
+        { name = "earliest-deadline"; cues = [ "deadline" "earliest" "마감" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "exchange-argument";
+      cues = [ "exchange" "swap argument" "교환 논증" ];
+      sub_specs = [
+        { name = "prove-no-loss"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "matroid";
+      cues = [ "matroid" "independence" "독립" "매트로이드" ];
+      sub_specs = [
+        { name = "uniform-matroid"; cues = []; terminal = true; }
+        { name = "graphic-matroid"; cues = [ "spanning tree" "신장" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "interval-scheduling";
+      cues = [ "interval" "scheduling" "구간" "스케줄링" ];
+      sub_specs = [
+        { name = "earliest-finish"; cues = []; terminal = true; }
+        { name = "shortest-duration"; cues = []; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 3. Divide & Conquer ======================================
+
+  divideConquerAxiomTree = bt.composeBranchTree "divide and conquer axiom" [
+    {
+      name = "split-recurse-combine";
+      cues = [ "divide" "split" "conquer" "분할" "정복" ];
+      sub_specs = [
+        { name = "binary-split"; cues = [ "half" "midpoint" "절반" "중간" ]; terminal = true; }
+        { name = "k-way-split"; cues = [ "k-way" "n parts" "여러 분할" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "master-theorem-applicable";
+      cues = [ "master theorem" "마스터 정리" "T(n) =" ];
+      sub_specs = [
+        { name = "case-a-lt-bk"; cues = []; terminal = true; }
+        { name = "case-a-eq-bk"; cues = []; terminal = true; }
+        { name = "case-a-gt-bk"; cues = []; terminal = true; }
+      ];
+    }
+    {
+      name = "classic-examples";
+      cues = [ "merge sort" "quick sort" "binary search" "병합" "이진 탐색" ];
+      sub_specs = [
+        { name = "merge-sort"; cues = [ "merge" "병합" ]; terminal = true; }
+        { name = "quick-sort"; cues = [ "quick" "pivot" "피벗" ]; terminal = true; }
+        { name = "binary-search"; cues = [ "binary search" "이진" ]; terminal = true; }
+        { name = "fft"; cues = [ "fft" "fast fourier" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 4. Graph Traversal (BFS / DFS) ===========================
+
+  graphTraversalAxiomTree = bt.composeBranchTree "graph traversal axiom" [
+    {
+      name = "bfs";
+      cues = [ "bfs" "breadth" "level order" "너비 우선" "queue" "큐" ];
+      sub_specs = [
+        { name = "shortest-path-unweighted"; cues = [ "shortest" "최단" "unweighted" ]; terminal = true; }
+        { name = "level-by-level"; cues = [ "level" "층" ]; terminal = true; }
+        { name = "multi-source"; cues = [ "multi-source" "여러 시작" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "dfs";
+      cues = [ "dfs" "depth" "stack" "깊이 우선" "스택" "recursive traverse" ];
+      sub_specs = [
+        { name = "pre-order"; cues = [ "pre" "전위" ]; terminal = true; }
+        { name = "in-order"; cues = [ "in" "중위" ]; terminal = true; }
+        { name = "post-order"; cues = [ "post" "후위" ]; terminal = true; }
+        { name = "cycle-detection"; cues = [ "cycle" "순환" ]; terminal = true; }
+        { name = "topological-sort"; cues = [ "topo" "위상" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "weighted-shortest-path";
+      cues = [ "dijkstra" "weighted shortest" "가중치" ];
+      sub_specs = [
+        { name = "dijkstra"; cues = [ "non-negative" "비음수" ]; terminal = true; }
+        { name = "bellman-ford"; cues = [ "negative" "음수" ]; terminal = true; }
+        { name = "floyd-warshall"; cues = [ "all pairs" "모든 쌍" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "minimum-spanning-tree";
+      cues = [ "mst" "spanning tree" "최소 신장" ];
+      sub_specs = [
+        { name = "kruskal"; cues = [ "kruskal" "union-find" ]; terminal = true; }
+        { name = "prim"; cues = [ "prim" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === 5. Two-Pointer & Sliding Window ==========================
+
+  twoPointerSlidingWindowAxiomTree =
+    bt.composeBranchTree "two-pointer and sliding window axiom" [
+    {
+      name = "two-pointer";
+      cues = [ "two pointer" "two-pointer" "투 포인터" "left right" "양쪽" ];
+      sub_specs = [
+        { name = "opposite-ends-converging"; cues = [ "opposite" "convergent" "반대 끝" ]; terminal = true; }
+        { name = "fast-slow-pointers"; cues = [ "fast slow" "tortoise hare" "토끼 거북" ]; terminal = true; }
+        { name = "same-direction"; cues = [ "same direction" "같은 방향" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "sliding-window-fixed";
+      cues = [ "fixed window" "window of size k" "고정 윈도우" "k size" ];
+      sub_specs = [
+        { name = "sum-window"; cues = [ "sum" "합" ]; terminal = true; }
+        { name = "max-min-window"; cues = [ "max" "min" "최대 최소" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "sliding-window-variable";
+      cues = [ "variable window" "expand shrink" "가변 윈도우" "확장 축소" ];
+      sub_specs = [
+        { name = "longest-substring"; cues = [ "longest" "최장" ]; terminal = true; }
+        { name = "minimum-window"; cues = [ "minimum window" "최소 윈도우" ]; terminal = true; }
+      ];
+    }
+    {
+      name = "monotonic-deque";
+      cues = [ "monotonic" "deque" "단조" ];
+      sub_specs = [
+        { name = "max-in-window"; cues = []; terminal = true; }
+      ];
+    }
+    # === sub-tree 확장 (#155) ─────────────────────────────────
+    {
+      name = "branch-and-bound-backtracking";
+      cues = [ "branch and bound" "backtracking" "분기 한정" "백트래킹" ];
+      sub_specs = [
+        { name = "state-space-search"; cues = [ "state space" "상태 공간" ]; terminal = true; }
+        { name = "pruning"; cues = [ "prune" "가지치기" ]; terminal = true; }
+        { name = "lower-bound-estimation"; cues = [ "lower bound" "하한 추정" ]; terminal = true; }
+        { name = "constraint-propagation"; cues = [ "constraint propagation" "제약 전파" ]; terminal = true; }
+      ];
+    }
+  ];
+
+  # === Registry of all 5 axiom families ============================
+
+  knownAxioms = [
+    {
+      axiom_id = "axiom-alg-001";
+      name = "dynamic-programming";
+      domain = "algorithm-pattern";
+      activation_cues = [ "dp" "dynamic programming" "memoize" "memoization" "tabulation" "subproblem" "동적 계획법" "다이나믹" "메모이제이션" "부분 문제" "테이블링" ];
+      tree = dpAxiomTree;
+      sub_count = builtins.length dpAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-alg-002";
+      name = "greedy";
+      domain = "algorithm-pattern";
+      activation_cues = [ "greedy" "local optimum" "exchange" "탐욕" "그리디" "지역 최적" ];
+      tree = greedyAxiomTree;
+      sub_count = builtins.length greedyAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-alg-003";
+      name = "divide-and-conquer";
+      domain = "algorithm-pattern";
+      activation_cues = [ "divide" "conquer" "divide and conquer" "merge sort" "quick sort" "binary search" "분할 정복" "이진 탐색" ];
+      tree = divideConquerAxiomTree;
+      sub_count = builtins.length divideConquerAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-alg-004";
+      name = "graph-traversal";
+      domain = "algorithm-pattern";
+      activation_cues = [ "bfs" "dfs" "graph" "traverse" "shortest path" "dijkstra" "그래프" "탐색" "최단 경로" ];
+      tree = graphTraversalAxiomTree;
+      sub_count = builtins.length graphTraversalAxiomTree.branches;
+    }
+    {
+      axiom_id = "axiom-alg-005";
+      name = "two-pointer-sliding-window";
+      domain = "algorithm-pattern";
+      activation_cues = [ "two pointer" "sliding window" "window" "two-pointer" "branch and bound" "backtracking" "state space" "투 포인터" "슬라이딩 윈도우" "윈도우" "분기 한정" "백트래킹" ];
+      tree = twoPointerSlidingWindowAxiomTree;
+      sub_count = builtins.length twoPointerSlidingWindowAxiomTree.branches;
+    }
+  ];
+
+  # === Activation logic (same shape as #118) ======================
+
+  axiomsActivatedBy = utterance:
+    if !(builtins.isString utterance) then []
+    else
+      builtins.filter (ax:
+        decomposer.containsAny utterance ax.activation_cues
+      ) knownAxioms;
+
+  compositeTreeFromActivations = activations:
+    if activations == [] then null
+    else if builtins.length activations == 1 then
+      (builtins.head activations).tree
+    else
+      bt.mkTree {
+        node_label = "multiple algorithm-pattern axioms activated";
+        branches = builtins.map (ax: bt.mkBranch {
+          name = ax.name;
+          hypothesis = "apply " + ax.name + " pattern";
+          cues = ax.activation_cues;
+          sub_branches = ax.tree.branches;
+        }) activations;
+      };
+
+  # === Plate entry =================================================
+
+  applyAlgorithmPatternAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "list_axioms" request then {
+      outcome = "axioms-listed";
+      public = {
+        axiom_count = builtins.length knownAxioms;
+        axiom_names = builtins.map (ax: ax.name) knownAxioms;
+        total_branches = builtins.foldl' (acc: ax:
+          acc + ax.sub_count) 0 knownAxioms;
+      };
+      carry = { axioms = knownAxioms; };
+    }
+    else if builtins.hasAttr "activate_for" request then
+      let
+        activations = axiomsActivatedBy request.activate_for;
+        composite = compositeTreeFromActivations activations;
+      in {
+        outcome =
+          if activations == [] then "no-axiom-activated"
+          else if builtins.length activations == 1
+               then "single-axiom-activated"
+          else "multiple-axioms-activated";
+        public = {
+          utterance = request.activate_for;
+          activated_count = builtins.length activations;
+          activated_names =
+            builtins.map (ax: ax.name) activations;
+        };
+        carry = {
+          activations = activations;
+          composite_tree = composite;
+          axiom_origin =
+            "axiom-105-nl-algorithm-pattern "
+            + "(composes axiom-98-tree)";
+        };
+      }
+    else if builtins.hasAttr "describe" request then
+      let
+        hits = builtins.filter (ax: ax.name == request.describe)
+          knownAxioms;
+      in
+        if hits == [] then {
+          outcome = "held-unknown-axiom";
+          axiom_name = request.describe;
+        }
+        else
+          let ax = builtins.head hits; in
+          {
+            outcome = "axiom-described";
+            public = {
+              axiom_id = ax.axiom_id;
+              name = ax.name;
+              domain = ax.domain;
+              sub_branch_count = ax.sub_count;
+            };
+            carry = { axiom = ax; };
+          }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { list_axioms = true } or { activate_for = \"<NL>\" } "
+        + "or { describe = \"<axiom name>\" }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-algorithm-pattern-axiom-105";
+    composes = "axiom-98-tree (data on generic substrate)";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    family_count = 5;
+    families = [
+      "dynamic-programming (DP)"
+      "greedy (탐욕)"
+      "divide-and-conquer (분할 정복)"
+      "graph-traversal (BFS / DFS / shortest path)"
+      "two-pointer-sliding-window (투 포인터 / 윈도우)"
+    ];
+    total_axioms = builtins.length knownAxioms;
+    total_top_branches = builtins.foldl' (acc: ax:
+      acc + ax.sub_count) 0 knownAxioms;
+    primary_outcomes = [
+      "axioms-listed"
+      "single-axiom-activated"
+      "multiple-axioms-activated"
+      "axiom-described"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-unknown-axiom"
+      "no-axiom-activated"
+    ];
+    metaphor =
+      "혈관 위의 두 번째 axiom content. control flow (#118) 와 결합 "
+      + "— DP = loop+memoization, BFS = queue+loop+level. 사용자가 "
+      + "'DP 로 풀어' 발화 시 axiom 활성 + sub-tree walk.";
+  };
+
+in {
+  inherit
+    ownerName
+    dpAxiomTree greedyAxiomTree divideConquerAxiomTree
+    graphTraversalAxiomTree twoPointerSlidingWindowAxiomTree
+    knownAxioms
+    axiomsActivatedBy compositeTreeFromActivations
+    applyAlgorithmPatternAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL algorithm pattern axioms (agent-NL-119)";
+    owner = ownerName;
+    base = "nl-algorithm-pattern-axioms-v0";
+    rev_note = "agent-NL-119 (2026-05-29): 알고리즘 생성의 5 패턴 family "
+      + "(DP/greedy/divide-conquer/graph-traversal/two-pointer-sliding-"
+      + "window). #118 control flow 와 결합 가능 (DP=loop+memo). NL cue "
+      + "→ axiom 활성 → branch walk. DO NOT REBUILD — branch-tree-"
+      + "substrate generic constructor 위에 데이터로만.";
+  };
+}

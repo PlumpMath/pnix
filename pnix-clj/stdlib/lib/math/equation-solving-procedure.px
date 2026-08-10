@@ -1,0 +1,629 @@
+let
+  ownerName = "stdlib.math.equation-solving-procedure";
+
+  # === Equation solving as ordered turn sequence ====================
+  #
+  # 사용자 directive (2026-05-28):
+  # "대수로 ... 방정식을 구하는 조립/인수분해 식으로 분리될수있다.
+  # 이는 순서처럼 작동한다. meta-circular metaInterpreter (mirror
+  # primitive) 에서 처럼. 대수/방정식의 미지수의 값을 구할수있는지에
+  # 대해서도 도움이 되겠지? 작도의 순서처럼, 수학이나 코딩같은
+  # 알고리즘이 순서를 갖게되는, (즉, NL 에서 알고리즘이 되는 방법)
+  # 4 piece 랑 비슷한 중요한 내용이지?"
+  #
+  # 이 owner 는 *ordered* fact-temporality 카테고리의 첫 구체 예 —
+  # 방정식 풀이 의 step sequence 가 mirror primitive turn 과 동일 구조.
+  #
+  # # Mirror primitive turn ↔ equation step 대응
+  #
+  # ankh (substance, static)        ↔ 현 equation state (e.g. "x + 3 = 7")
+  # macro (mirror 가 곧 실행)       ↔ 적용 후보 algebraic rule
+  # mirror (execution context)      ↔ pnixc-meta evaluator
+  # turn (pre → post execution)    ↔ rule application (e.g. -3 양변)
+  #
+  # 같은 격자 단위로 작동. 4-piece 와 동급 의 architectural piece.
+  #
+  # # 학술 근거 (엄밀)
+  #
+  # - Linear equation solving: 고대 (Diophantus 250 AD ~)
+  # - Term rewriting: Knuth-Bendix 1970, Robinson 1965
+  # - Equational reasoning: birkhoff 1935 의 equational logic
+  # - 1차 방정식의 유일해 (linear, 1 unknown, R 상): 표준
+  #
+  # # v0 scope (honest)
+  #
+  # 박은 것 (엄밀):
+  #   - 1차 linear equation 1 unknown: ax + b = c (R 상)
+  #   - 단계별 turn sequence emit
+  #   - 각 turn 의 rule + state + receipt
+  #
+  # 박지 않은 것 (별 슬라이스):
+  #   - quadratic 인수분해 (ax² + bx + c)
+  #   - simultaneous equations
+  #   - symbolic algebra (계수가 표현식)
+  #   - 작도 (Euclidean construction)
+
+  ambientSpaceOwner = import ./ambient-space.px;
+
+  # NL equation lifter dependencies (recognition → existing solvers).
+  numericEvaluatorOwner = import ./numeric-evaluator.px;
+  quadraticSolverOwner  = import ./quadratic-equation.px;
+  linearSolverOwner     = import ./linear-equation.px;
+
+  # === Equation shape vocabulary ===================================
+
+  validEquationShapes = [
+    "linear-1-unknown"         # ax + b = c (a≠0)
+    # 다음 슬라이스 후보:
+    # "quadratic-1-unknown"      # ax² + bx + c = 0
+    # "linear-2-unknown-system"  # 2개 1차 방정식 + 2 unknown
+  ];
+
+  # === Algebraic rules (closed registry) ===========================
+  #
+  # Each rule:
+  #   id              — canonical name
+  #   action          — equation 변환 short description
+  #   precondition    — when this rule applies
+  #   preserves       — equation 의 어떤 invariant 가 보존 (equivalence)
+
+  knownAlgebraicRules = [
+    {
+      id = "subtract-from-both-sides";
+      action = "subtract constant c from both sides";
+      precondition = "equation has form `expr + c = rhs` with c constant";
+      preserves = [ "equation-equivalence" "solution-set" ];
+      step_description = "양변에서 같은 상수 빼기";
+    }
+    {
+      id = "add-to-both-sides";
+      action = "add constant c to both sides";
+      precondition = "equation has form `expr - c = rhs` with c constant";
+      preserves = [ "equation-equivalence" "solution-set" ];
+      step_description = "양변에 같은 상수 더하기";
+    }
+    {
+      id = "divide-both-sides";
+      action = "divide both sides by coefficient a (a≠0)";
+      precondition = "equation has form `a*x = rhs` with a≠0";
+      preserves = [ "equation-equivalence" "solution-set" ];
+      step_description = "양변을 같은 0이 아닌 수로 나누기";
+    }
+    {
+      id = "multiply-both-sides";
+      action = "multiply both sides by constant k (k≠0)";
+      precondition = "any equation";
+      preserves = [ "equation-equivalence" "solution-set" ];
+      step_description = "양변에 같은 0이 아닌 수 곱하기";
+    }
+  ];
+
+  findRule = ruleId:
+    let
+      matches = builtins.filter
+        (r: r.id == ruleId) knownAlgebraicRules;
+    in
+      if matches == [] then null
+      else builtins.head matches;
+
+  # === Equation state (ankh) =======================================
+  #
+  # equation 의 *현 상태* — turn 의 입력 + 출력.
+  # v0 shape: `{ coeff_x; const; rhs; }` 즉 a*x + b = c form.
+  # 즉 모든 1차 방정식은 이 normal form 으로 표현됨.
+
+  mkEquationState = coeff_x: const: rhs:
+    {
+      shape = "linear-1-unknown";
+      coeff_x = coeff_x;
+      const = const;
+      rhs = rhs;
+      # 현 상태의 normalized text representation:
+      text =
+        let
+          coeffStr =
+            if coeff_x == 1 then "x"
+            else (builtins.toString coeff_x) + "x";
+          constStr =
+            if const == 0 then ""
+            else if const > 0 then " + " + (builtins.toString const)
+            else " - " + (builtins.toString (-1 * const));
+        in
+          coeffStr + constStr + " = " + (builtins.toString rhs);
+    };
+
+  # === Turn: apply one rule =========================================
+  #
+  # Each turn: (ankh, rule) → new ankh + receipt.
+  # 사용자 강조: 이게 mirror primitive turn 과 동일 구조.
+
+  applyTurn = state: ruleId:
+    if state.shape != "linear-1-unknown" then {
+      outcome = "held-unsupported-equation-shape";
+      shape = state.shape;
+    }
+    else
+      let
+        rule = findRule ruleId;
+      in
+        if rule == null then {
+          outcome = "held-unknown-rule";
+          rule_id = ruleId;
+        }
+        else if ruleId == "subtract-from-both-sides" then
+          # `ax + b = c` → `ax = c - b`. const 가 0 이 됨.
+          let
+            newState = mkEquationState
+              state.coeff_x 0 (state.rhs - state.const);
+          in {
+            outcome = "turn-applied";
+            rule_id = ruleId;
+            rule_description = rule.step_description;
+            previous_state = state;
+            next_state = newState;
+            receipt = {
+              ankh_pre = state.text;
+              ankh_post = newState.text;
+              rule_applied = ruleId;
+              preserves_solution_set = true;
+            };
+          }
+        else if ruleId == "divide-both-sides" then
+          # `ax = c` → `x = c/a`. coeff_x 가 1 이 됨.
+          if state.coeff_x == 0 then {
+            outcome = "held-divide-by-zero";
+            reason = "cannot divide by zero coefficient";
+          }
+          else
+            let
+              # 정수 나눗셈 — substrate-honest: 정수 결과 아니면 Held.
+              quotient = state.rhs / state.coeff_x;
+              remainder = state.rhs - (quotient * state.coeff_x);
+            in
+              if state.const != 0 then {
+                outcome = "held-divide-requires-isolated-coeff";
+                reason =
+                  "divide-both-sides rule expects `a*x = rhs` form "
+                  + "(const = 0). Apply subtract-from-both-sides first.";
+              }
+              else if remainder != 0 then {
+                outcome = "held-non-integer-solution";
+                reason =
+                  "v0 substrate-honest: integer division only. "
+                  + "rhs=" + (builtins.toString state.rhs)
+                  + " not divisible by coeff_x="
+                  + (builtins.toString state.coeff_x);
+              }
+              else
+                let
+                  newState = mkEquationState 1 0 quotient;
+                in {
+                  outcome = "turn-applied";
+                  rule_id = ruleId;
+                  rule_description = rule.step_description;
+                  previous_state = state;
+                  next_state = newState;
+                  receipt = {
+                    ankh_pre = state.text;
+                    ankh_post = newState.text;
+                    rule_applied = ruleId;
+                    preserves_solution_set = true;
+                  };
+                }
+        else if ruleId == "add-to-both-sides" then
+          let
+            newState = mkEquationState
+              state.coeff_x 0 (state.rhs + (-1 * state.const));
+          in {
+            outcome = "turn-applied";
+            rule_id = ruleId;
+            previous_state = state;
+            next_state = newState;
+            receipt = {
+              ankh_pre = state.text;
+              ankh_post = newState.text;
+              rule_applied = ruleId;
+            };
+          }
+        else {
+          outcome = "held-rule-not-implemented";
+          rule_id = ruleId;
+        };
+
+  # === Solve: orchestrate turn sequence to terminal state ===========
+  #
+  # 사용자가 짚은 *작도의 순서처럼* — substrate 가 1차 방정식 자동
+  # 풀이. 각 step 이 turn → terminal state (x = ...) 도달까지 sequence
+  # carry.
+  #
+  # 1차 방정식 1 unknown 의 deterministic 풀이 algorithm:
+  # 1. const != 0 면 subtract-from-both-sides (const 제거)
+  # 2. coeff_x != 1 면 divide-both-sides (coeff_x = 1 만들기)
+  # 3. terminal: x = rhs
+
+  solveLinearEquation = state:
+    if state.shape != "linear-1-unknown" then {
+      outcome = "held-unsupported-shape";
+    }
+    else
+      let
+        # step 1
+        step1 =
+          if state.const != 0
+          then applyTurn state "subtract-from-both-sides"
+          else { outcome = "no-op"; next_state = state; receipt = null; };
+        afterStep1 = step1.next_state;
+
+        # check step1 outcome
+        step1OK =
+          step1.outcome == "turn-applied"
+          || step1.outcome == "no-op";
+
+        # step 2
+        step2 =
+          if !step1OK then null
+          else if afterStep1.coeff_x != 1
+          then applyTurn afterStep1 "divide-both-sides"
+          else {
+            outcome = "no-op";
+            next_state = afterStep1;
+            receipt = null;
+          };
+
+        step2OK =
+          step2 != null
+          && (step2.outcome == "turn-applied"
+              || step2.outcome == "no-op");
+
+        finalState =
+          if step2 == null then afterStep1
+          else step2.next_state;
+
+        receipts =
+          builtins.filter (r: r != null)
+            [(if step1.outcome == "turn-applied" then step1.receipt else null)
+             (if step2 != null && step2.outcome == "turn-applied"
+              then step2.receipt else null)];
+      in
+        if !step1OK then {
+          outcome = "held-step1-failed";
+          step1_outcome = step1.outcome;
+          step1_details = step1;
+        }
+        else if !step2OK then {
+          outcome = "held-step2-failed";
+          step2_outcome = step2.outcome;
+          step2_details = step2;
+        }
+        else {
+          outcome = "solved";
+          input_equation = state.text;
+          terminal_state = finalState;
+          solution_value = finalState.rhs;  # x = ?
+          step_count = builtins.length receipts;
+          turn_sequence = receipts;
+          # 사용자 강조: turn sequence 가 mirror primitive turn 의 등가.
+          mirror_primitive_correspondence = {
+            ankh_initial = state.text;
+            ankh_terminal = finalState.text;
+            turn_count = builtins.length receipts;
+          };
+        };
+
+  # === Mirror plate lens entry ======================================
+
+  applyEquationSolvingPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(request ? operation) then {
+      outcome = "held-operation-required";
+      known_operations = [ "apply-turn" "solve" ];
+    }
+    else if request.operation == "apply-turn" then
+      let
+        state = mkEquationState
+          request.coeff_x request.const request.rhs;
+      in
+        applyTurn state request.rule_id
+    else if request.operation == "solve" then
+      let
+        state = mkEquationState
+          request.coeff_x request.const request.rhs;
+      in
+        solveLinearEquation state
+    else {
+      outcome = "held-unknown-operation";
+      operation = request.operation;
+    };
+
+  # === NL equation lifter (recognition → existing solvers) ==========
+  #
+  # Closes the long-standing recognition gap: nl-universal-pipeline routed
+  # "방정식 / 해를 구해 / =" utterances to `beginSolveProcedure`, but it did
+  # not exist, so they never reached the solvers above. THIS is the bridge.
+  #
+  # GENERIC — does not pattern-match the equation's structure. It reuses the
+  # numeric-evaluator expression parser to read both sides, forms
+  # f(x) = LHS - RHS, and recovers the polynomial coefficients by finite
+  # differences (f at x = 0,1,2,3). Degree 1 → linear turn-sequence solver
+  # (+ exact rational via linear-equation); degree 2 → quadratic discriminant
+  # solver. Higher degree → honest Held. No "=" → held-not-an-equation so the
+  # caller can fall back to the arithmetic / conjecture-judge lanes.
+  slen = s: builtins.stringLength s;
+  sub = start: len: s: builtins.substring start len s;
+  contains = needle: hay:
+    let
+      nl = slen needle;
+      hl = slen hay;
+      go = i:
+        if nl == 0 then false
+        else if i + nl > hl then false
+        else if (sub i nl hay) == needle then true
+        else go (i + 1);
+    in go 0;
+  containsAny = hay: cues:
+    builtins.any (cue: contains cue hay) cues;
+
+  # `=` inside <=/>=/!= is not an equation separator. R44/R20 class bugs were
+  # caused by consuming only `x+3=7` and silently dropping `x>10` plus the
+  # operator's held-kind request, then projecting a confident answer.
+  hasStandaloneEquals = s:
+    let
+      n = slen s;
+      scan = i:
+        if i >= n then false
+        else if (sub i 1 s) != "=" then scan (i + 1)
+        else
+          let prev = if i > 0 then sub (i - 1) 1 s else "";
+          in !(builtins.elem prev [ "<" ">" "!" ]);
+    in scan 0;
+
+  constraintOperatorCues = [ ">=" "<=" ">" "<" "≥" "≤" ];
+  heldTaxonomyCues = [
+    "constraint-conflict"
+    "held_kind"
+    "held-kind"
+    "held taxonomy"
+    "held-taxonomy"
+    "분류"
+  ];
+
+  classifyEquationRequestPreflight = utterance: equationExpression:
+    let
+      hasEq = hasStandaloneEquals utterance;
+      hasConstraint = containsAny utterance constraintOperatorCues;
+      hasHeldTaxonomyCue = containsAny utterance heldTaxonomyCues;
+    in
+      if hasEq && (hasConstraint || hasHeldTaxonomyCue) then {
+        outcome = "held-constraint-conflict";
+        held_kind = "constraint-conflict";
+        reason = "조건절/held taxonomy 요청이 있는 방정식은 일부 식만 풀어 accepted하지 않습니다.";
+        input = utterance;
+        equation_expression = equationExpression;
+        constraint_present = hasConstraint;
+        held_taxonomy_requested = hasHeldTaxonomyCue;
+        accepted = false;
+      }
+      else null;
+
+  beginSolveProcedure = utterance:
+    let
+      preflight = classifyEquationRequestPreflight utterance utterance;
+      isEvalErr = v: (builtins.isAttrs v) && (v ? kind) && (v.kind == "error");
+      collectVars = ast:
+        if ast.kind == "var" then [ ast.name ]
+        else if ast.kind == "binop"
+        then (collectVars ast.left) ++ (collectVars ast.right)
+        else [ ];
+      dedup = xs: builtins.foldl'
+        (acc: x: if builtins.elem x acc then acc else acc ++ [ x ]) [ ] xs;
+      # Insert an explicit `*` for implicit multiplication ("2x" -> "2*x",
+      # "2(" -> "2*("). The numeric-evaluator grammar requires explicit `*`.
+      # Generic char walk — alpha = anything that is not a digit/operator/space.
+      digitSet = [ "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" ];
+      nonAlpha = digitSet ++ [ " " "+" "-" "*" "/" "%" "^" "(" ")" "." ];
+      normalizeImplicitMult = s:
+        let
+          n = builtins.stringLength s;
+          walk = i:
+            if i >= n then ""
+            else
+              let
+                cur = builtins.substring i 1 s;
+                nxt = if (i + 1) < n then builtins.substring (i + 1) 1 s else "";
+                curDigit = builtins.elem cur digitSet;
+                nxtAlpha = (nxt != "") && (!(builtins.elem nxt nonAlpha));
+                nxtOpen = nxt == "(";
+                star = if curDigit && (nxtAlpha || nxtOpen) then "*" else "";
+              in cur + star + (walk (i + 1));
+        in walk 0;
+      # normalize unicode superscripts so "x²-1=0" parses as a quadratic
+      # (the numeric-evaluator grammar uses ASCII "^").
+      usup = builtins.replaceStrings [ "²" "³" "⁴" ] [ "^2" "^3" "^4" ] utterance;
+      slen = builtins.stringLength usup;
+      contains = needle: hay:
+        let
+          nl = builtins.stringLength needle;
+          hl = builtins.stringLength hay;
+          go = i:
+            if nl == 0 then false
+            else if i + nl > hl then false
+            else if (builtins.substring i nl hay) == needle then true
+            else go (i + 1);
+        in go 0;
+      unsupportedEquationOperators = [
+        "√"       # radical equation needs a domain/squaring step owner first
+        "sqrt"    # ASCII spelling of the same unsupported operator
+        "|"       # absolute value equations are a separate piecewise owner
+      ];
+      firstUnsupportedOperator =
+        builtins.foldl'
+          (acc: op: if acc != null then acc else if contains op usup then op else null)
+          null
+          unsupportedEquationOperators;
+      idxScan = i:
+        if i >= slen then -1
+        else if (builtins.substring i 1 usup) == "=" then i
+        else idxScan (i + 1);
+      eqIdx = idxScan 0;
+      # extract the maximal ASCII math-expression span around "=" so NL-wrapped
+      # equations ("풀어 x+1=0", "방정식 2x-4=0 풀어줘.") drop the command words
+      # (the span walk stops at non-ASCII bytes = Korean/command text).
+      asciiLetters = [
+        "a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l" "m"
+        "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x" "y" "z"
+        "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M"
+        "N" "O" "P" "Q" "R" "S" "T" "U" "V" "W" "X" "Y" "Z"
+      ];
+      mathCharSet = digitSet ++ asciiLetters
+        ++ [ "+" "-" "*" "/" "%" "^" "(" ")" "." " " ];
+      isMathChar = c: builtins.elem c mathCharSet;
+      leftBound = i:
+        if i <= 0 then 0
+        else if isMathChar (builtins.substring (i - 1) 1 usup) then leftBound (i - 1)
+        else i;
+      rightBound = i:
+        if i >= slen then slen
+        else if isMathChar (builtins.substring i 1 usup) then rightBound (i + 1)
+        else i;
+    in
+      if preflight != null then preflight
+      else if firstUnsupportedOperator != null then {
+        outcome = "held-unsupported-equation-operator";
+        operator = firstUnsupportedOperator;
+        reason = "지원하지 않는 방정식 연산자를 무음 삭제하지 않고 보류합니다.";
+        input = utterance;
+      }
+      else if eqIdx < 0 then {
+        outcome = "held-not-an-equation";
+        reason = "등호(=)가 없어 방정식으로 인식할 수 없습니다.";
+        input = utterance;
+      }
+      else
+        let
+          ls = leftBound eqIdx;
+          re = rightBound (eqIdx + 1);
+          lhsStr = normalizeImplicitMult (builtins.substring ls (eqIdx - ls) usup);
+          rhsStr = normalizeImplicitMult
+            (builtins.substring (eqIdx + 1) (re - eqIdx - 1) usup);
+          lp = numericEvaluatorOwner.parseExpression lhsStr;
+          rp = numericEvaluatorOwner.parseExpression rhsStr;
+        in
+          if (!lp.ok) || (!rp.ok) then {
+            outcome = "held-unparseable-equation";
+            reason = "양변을 수식으로 해석하지 못했습니다.";
+            input = utterance;
+          }
+          else
+            let
+              vars = dedup ((collectVars lp.node) ++ (collectVars rp.node));
+              varCount = builtins.length vars;
+            in
+              if varCount > 1 then {
+                outcome = "held-multivariable";
+                reason = "미지수가 둘 이상인 방정식은 아직 지원하지 않습니다.";
+                variables = vars;
+                input = utterance;
+              }
+              else
+                let
+                  varName = if varCount == 1 then builtins.head vars else "x";
+                  fAt = n:
+                    let
+                      env = builtins.listToAttrs [ { name = varName; value = n; } ];
+                      lv = numericEvaluatorOwner.evalAst lp.node env;
+                      rv = numericEvaluatorOwner.evalAst rp.node env;
+                    in if (isEvalErr lv) || (isEvalErr rv) then null else lv - rv;
+                  f0 = fAt 0; f1 = fAt 1; f2 = fAt 2; f3 = fAt 3;
+                  allOk = (f0 != null) && (f1 != null)
+                    && (f2 != null) && (f3 != null);
+                in
+                  if !allOk then {
+                    outcome = "held-eval-error";
+                    reason = "방정식을 계산할 수 없습니다 (0으로 나눔/정의역 밖 등).";
+                    input = utterance;
+                  }
+                  else
+                    let
+                      # f(x) = a x^2 + b x + c, recovered by finite differences.
+                      cc = f0;
+                      aa = (f2 - (2 * f1) + f0) / 2;   # (f2-2f1+f0)=2a (정수계수면 짝수)
+                      bb = f1 - f0 - aa;
+                      predicted3 = (9 * aa) + (3 * bb) + cc;
+                    in
+                      if predicted3 != f3 then {
+                        outcome = "held-degree-too-high";
+                        reason = "현재 1차·2차 방정식만 풉니다 (3차 이상 미지원).";
+                        input = utterance;
+                      }
+                      else if aa == 0 then
+                        # degree <= 1 : exact rational via linear-equation,
+                        # integer step-sequence via the turn solver when available.
+                        let
+                          exact = linearSolverOwner.solveLinear bb cc 0;
+                          steps = solveLinearEquation (mkEquationState bb cc 0);
+                        in {
+                          outcome = "solved";
+                          solution_kind = "linear";
+                          variable = varName;
+                          input = utterance;
+                          degree = if bb == 0 then 0 else 1;
+                          a = aa; b = bb; c = cc;
+                          linear_exact = exact;       # unique / inf / no-solution
+                          linear_steps = steps;       # turn_sequence (정수해일 때)
+                        }
+                      else
+                        let quad = quadraticSolverOwner.solveQuadratic aa bb cc;
+                        in {
+                          outcome = "solved";
+                          solution_kind = "quadratic";
+                          variable = varName;
+                          input = utterance;
+                          degree = 2;
+                          a = aa; b = bb; c = cc;
+                          quadratic = quad;
+                        };
+
+  beginSolveProcedureWithContext = utterance: equationExpression:
+    let preflight = classifyEquationRequestPreflight utterance equationExpression;
+    in if preflight != null then preflight else beginSolveProcedure equationExpression;
+
+  # === Introspection ================================================
+
+  ruleCount = builtins.length knownAlgebraicRules;
+  ruleIds = builtins.map (r: r.id) knownAlgebraicRules;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    valid_equation_shapes = validEquationShapes;
+    algebraic_rule_count = ruleCount;
+    algebraic_rule_ids = ruleIds;
+    temporality_category = "ordered";  # 명시: mirror turn sequence
+    mirror_primitive_correspondence_axiom =
+      "Each equation rule application = one mirror primitive turn. "
+      + "ankh (state) → turn (rule apply) → ankh' (new state). "
+      + "Same architecture as pnixc-meta's evaluator turns.";
+  };
+
+in {
+  inherit
+    ownerName
+    validEquationShapes
+    knownAlgebraicRules
+    findRule
+    mkEquationState
+    applyTurn
+    solveLinearEquation
+    applyEquationSolvingPlate
+    beginSolveProcedure
+    beginSolveProcedureWithContext
+    classifyEquationRequestPreflight
+    inventorySummary;
+  meta = {
+    source = "stdlib math equation solving procedure (ordered)";
+    owner = ownerName;
+    base = "equation-solving-procedure-v0";
+    rev_note = "사용자 directive (2026-05-28): '방정식을 구하는 조립/인수분해 식으로 분리. 순서처럼 작동. mirror primitive turn 과 동일.' Ordered fact-temporality 카테고리의 첫 구체 예. 1차 linear equation 1 unknown (ax + b = c) — 4 algebraic rules (subtract/add/divide/multiply both sides) × turn sequence. solveLinearEquation: 자동 step sequence orchestration → terminal state + turn_sequence receipts. mirror primitive 의 ankh/turn/receipt axiom 과 1:1 대응. NL → algorithm 변환의 architectural mechanism.";
+  };
+}

@@ -1,0 +1,97 @@
+# stdlib.agent.conversation-format-korean-integer-contract — Korean integer format law.
+#
+# Phase 145++++++++++(s) (vpl-gate.md 10.7 헌법):
+#   "pnixc-meta = 유일한 .px / 지능 owner. 한국어 큰 숫자 단위
+#    (조/억/만) 변환 의미 = substrate."
+#
+# Rust `format_korean_integer` 의 4-tier threshold + 결합 규칙
+# (조 + 억, 억 + 만, 만 + 평수) 의미 evacuation.
+#
+# request shape (POST):
+#   { n = int;                  # signed integer
+#     unit_jo = "조" | string;   # caller-supplied unit labels
+#     unit_eok = "억" | string;
+#     unit_man = "만" | string; }
+#
+# response shape:
+#   { formatted = string;
+#     tier = "jo+eok" | "jo" | "eok+man" | "eok" | "man+rest" | "man" | "raw";
+#     candidate_only = true; }
+let
+  ownerName = "stdlib.agent.conversation-format-korean-integer-contract";
+
+  asAttrs = v: if builtins.isAttrs v then v else {};
+  nonBlank = v: if builtins.isString v && v != "" then v else null;
+  getOr = name: attrs: fb:
+    if builtins.isAttrs attrs && builtins.hasAttr name attrs
+    then builtins.getAttr name attrs else fb;
+  orElse = v: fb: if v == null then fb else v;
+
+  joThreshold = 1000000000000;   # 10^12
+  eokThreshold = 100000000;       # 10^8
+  manThreshold = 10000;           # 10^4
+
+in {
+  inherit ownerName;
+
+  dispatch = req:
+    let
+      body = asAttrs (req.body or {});
+      n = getOr "n" body 0;
+      unitJo = orElse (nonBlank (getOr "unit_jo" body "")) "조";
+      unitEok = orElse (nonBlank (getOr "unit_eok" body "")) "억";
+      unitMan = orElse (nonBlank (getOr "unit_man" body "")) "만";
+
+      abs = if n < 0 then 0 - n else n;
+      sign = if n < 0 then "-" else "";
+
+      # Tier 1: >= jo (10^12)
+      tierJo = abs >= joThreshold;
+      jo = abs / joThreshold;
+      restJo = abs - (jo * joThreshold);
+      jo_only = sign + builtins.toString jo + unitJo;
+      jo_eok = sign + builtins.toString jo + unitJo + " "
+               + builtins.toString (restJo / eokThreshold) + unitEok;
+
+      # Tier 2: >= eok (10^8)
+      tierEok = abs >= eokThreshold;
+      eok = abs / eokThreshold;
+      restEok = abs - (eok * eokThreshold);
+      eok_only = sign + builtins.toString eok + unitEok;
+      eok_man = sign + builtins.toString eok + unitEok + " "
+                + builtins.toString (restEok / manThreshold) + unitMan;
+
+      # Tier 3: >= man (10^4)
+      tierMan = abs >= manThreshold;
+      man = abs / manThreshold;
+      restMan = abs - (man * manThreshold);
+      man_only = sign + builtins.toString man + unitMan;
+      man_rest = sign + builtins.toString man + unitMan + " "
+                 + builtins.toString restMan;
+
+      result =
+        if tierJo && restJo == 0 then
+          { formatted = jo_only; tier = "jo"; }
+        else if tierJo && (restJo - ((restJo / eokThreshold) * eokThreshold)) == 0
+                       && (restJo / eokThreshold) > 0 then
+          { formatted = jo_eok; tier = "jo+eok"; }
+        else if tierEok && restEok == 0 then
+          { formatted = eok_only; tier = "eok"; }
+        else if tierEok && (restEok - ((restEok / manThreshold) * manThreshold)) == 0
+                       && (restEok / manThreshold) > 0 then
+          { formatted = eok_man; tier = "eok+man"; }
+        else if tierMan && restMan == 0 then
+          { formatted = man_only; tier = "man"; }
+        else if tierMan then
+          { formatted = man_rest; tier = "man+rest"; }
+        else
+          { formatted = builtins.toString n; tier = "raw"; };
+    in {
+      kind = "conversation-format-korean-integer-envelope";
+      owner = ownerName;
+      verdict = "formatted";
+      formatted = result.formatted;
+      tier = result.tier;
+      candidate_only = true;
+    };
+}

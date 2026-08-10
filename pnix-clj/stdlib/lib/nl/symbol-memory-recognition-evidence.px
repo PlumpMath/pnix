@@ -1,0 +1,54 @@
+# stdlib/lib/nl/symbol-memory-recognition-evidence.px
+#
+# P4 evidence-projector: symbol-memory read-back 결과를 UnderstandingReceipt에 붙일 *공개안전* memory_evidence로 투영.
+#   = dictionary-stdict-original-language-evidence 패턴(proposer_only·durable_truth=false)의 symbol-memory 판.
+#
+# ★recognition ≠ truth(redb는 판사 아님): proposer_only · durable_truth/accepted_as_truth/ontology_assert_allowed = false.
+# ★★leak 차단(과거 wire-leak 사고 방지): publicProjection은 *name·ref_kind·status·count만* 노출.
+#   recovered record 내용·store_key·memory_backed 내부주소는 *절대 public wire 비노출*(internal only).
+# ★갈라치기 0·새 key fn 0: proposeSymbols(canonical key)·symbol-memory-readback(recognize+recover) 재사용.
+let
+  B = builtins;
+  rb = import ./symbol-memory-readback.px;
+  propose = import ./symbol-memory-propose.px;
+
+  # mkMemoryEvidence {prop, memory_keys, memory_entries?}: proposition → proposeSymbols → recognize → evidence envelope.
+  #   prop 없으면 빈 evidence(held — 인식할 것 없음). memory 없으면 전부 missing(정직).
+  mkMemoryEvidence = args:
+    let prop = if args ? prop then args.prop else null;
+        memKeys = if args ? memory_keys then args.memory_keys else [ ];
+        memEntries = if args ? memory_entries then args.memory_entries else [ ];
+        symbols = if prop == null then [ ] else (propose.proposeSymbols prop).symbols;
+        recog = rb.recognizeSymbols { symbols = symbols; memory_keys = memKeys; memory_entries = memEntries; };
+        # public-safe subset: name·ref_kind·status만 (recovered/store_key/memory_backed 비노출)
+        symbols_status = B.map (r: { name = r.name; ref_kind = r.ref_kind; status = r.status; }) recog.results;
+        # 내부 full(서버 내부 owner만; public 비노출) — recovered 포함, route/dispose 참고용
+        internal_results = recog.results;
+    in {
+      evidence_kind = "symbol-memory.recognition";
+      evidence_role = "memory-backed-understanding-clue";
+      outcome = if recog.recognized_count > 0 then "evidence-ready" else "no-recognized-symbols";
+      recognized_count = recog.recognized_count;
+      missing_count = recog.missing_count;
+      total = recog.total;
+      symbols_status = symbols_status;        # ★public-safe
+      internal_results = internal_results;    # ★internal only(publicProjection서 제거)
+      # ★recognition ≠ truth
+      proposer_only = true;
+      durable_truth = false;
+      accepted_as_truth = false;
+      ontology_assert_allowed = false;
+      note = "memory recognition clue only — not truth/assertion; durable/law는 gate 이후";
+    };
+
+  # ★public projection: 외부 wire 안전 subset. internal_results·recovered·store_key 절대 비노출.
+  publicProjection = ev: {
+    evidence_kind = ev.evidence_kind;
+    recognized_count = ev.recognized_count;
+    missing_count = ev.missing_count;
+    total = ev.total;
+    symbols_status = ev.symbols_status;       # name·ref_kind·status only
+  };
+in {
+  inherit mkMemoryEvidence publicProjection;
+}

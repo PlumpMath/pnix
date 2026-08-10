@@ -1,0 +1,88 @@
+# stdlib.math.sound-meaning-resolution
+#
+# **왜 사람들은 알아듣나: 소리(symbol)는 의미를 못 정하지만, "결정된 단어(lexicon)+context"가 메운다.**
+#
+# 운영자(2026-06-14): "의미인 단어(symbol) 결정이 된 이후 그것으로 lowering. 결정된다는 걸 알기 때문에,
+#  소리로는 symbol 일부([t]←ㄷㅅㅈㅊㅌㅎ) 결정 안 되지만 [알아듣는다]." = 의미↔symbol 불일치의 *해소* 메커니즘.
+#
+# 모델 (컴파일러 lowering):
+#   의미(단어) ──결정──▶ lowering ──▶ 소리(표면; lossy)
+#   이해 = 소리 → "이 소리로 lowering 되는 *실제 결정된 단어*가 뭐냐" 역추적(lexicon) → context 로 고름.
+#   소리만으론 7 후보(held). lexicon(결정된 단어들)이 좁히고, context 가 마저 고른다 → understood.
+#
+# = hangul-phoneme-mirror 의 surface 불일치(held+후보)를 *결정된 의미(lexicon)+context* 로 collapse.
+# demoLexicon = 데모용 re-authored 상식 단어(낫/낮/낯/낱; corpus 아님). 비수정 data-only 조립: hangul-mirror + hangul-phoneme-mirror.
+let
+  hg = import ./hangul-mirror.px;
+  hp = import ./hangul-phoneme-mirror.px;
+
+  elemAt = builtins.elemAt;
+  map = builtins.map;
+  filter = builtins.filter;
+  concatLists = builtins.concatLists;
+  len = builtins.length;
+
+  # 같은 표면 소리를 내는 종성 후보 → 음절 code 후보 (소리만의 under-determination)
+  heardCandidates = cho: jung: surf:
+    let jongs = hp.surfaceCandidates surf;          # [t] → [ㄷㅅㅆㅈㅊㅌㅎ] index
+    in map (jong: hg.compose (hg.mkSound cho jung jong)) jongs;
+
+  # 데모 lexicon: 실제 한국어 단어(음절), code 는 compose 로 생성(정확). re-authored 상식, 데모용.
+  mkLex = cho: jung: jong: word: meaning:
+    { code = hg.compose (hg.mkSound cho jung jong); inherit word meaning; };
+  demoLexicon = [
+    (mkLex 2 0 19 "낫" "농기구")    # ㄴㅏㅅ
+    (mkLex 2 0 22 "낮" "시간")      # ㄴㅏㅈ
+    (mkLex 2 0 23 "낯" "얼굴")      # ㄴㅏㅊ
+    (mkLex 2 0 25 "낱" "하나")      # ㄴㅏㅌ
+  ];
+  inLexicon = code: filter (e: e.code == code) demoLexicon;
+
+  heardText = cho: jung: surf: (elemAt hp.choPh cho) + (elemAt hp.jungPh jung) + surf;
+
+  # ★ 소리 → lexicon(결정된 단어)로 좁힘 ★ (왜 알아듣나의 1단계)
+  resolve = cho: jung: surf:
+    let cands = heardCandidates cho jung surf;
+        real = concatLists (map inLexicon cands);
+        n = len real;
+    in {
+      heard = heardText cho jung surf;                    # "nat"
+      sound_candidate_count = len cands;                  # 7 (소리만으로는 못 정함)
+      lexicon_words = map (e: e.word) real;               # [낫 낮 낯 낱]
+      lexicon_candidate_count = n;
+      verdict = if n == 0 then "not-a-word"
+                else if n == 1 then "understood-by-lexicon"
+                else "held-need-context";                 # 결정된 단어로도 여럿 → context 필요
+    };
+
+  # ★ context(뜻 힌트)로 후보 중 하나 고름 ★ = 진짜 이해 (왜 알아듣나의 2단계)
+  resolveWithContext = cho: jung: surf: meaningHint:
+    let cands = heardCandidates cho jung surf;
+        real = concatLists (map inLexicon cands);
+        picked = filter (e: e.meaning == meaningHint) real;
+    in if (len picked) == 1
+       then { verdict = "understood"; word = (elemAt picked 0).word;
+              heard = heardText cho jung surf; via = "lexicon+context"; }
+       else { verdict = "held-context-insufficient";
+              heard = heardText cho jung surf; candidates = map (e: e.word) real; };
+
+  inventorySummary = _: {
+    owner = "stdlib.math.sound-meaning-resolution";
+    consumes = "hangul-mirror + hangul-phoneme-mirror (data-only; 비수정)";
+    role = "의미↔symbol 불일치의 해소: 소리 후보(held) → 결정된 단어(lexicon)로 좁힘 → context 로 고름 → understood. '왜 사람들은 알아듣나'의 코드 모델";
+    note = "운영자: 의미 결정 후 lowering, 소리는 lossy지만 lexicon+context 가 역추적. demoLexicon=데모 단어(corpus 아님). surface 불일치(hangul-phoneme)를 collapse.";
+  };
+
+in {
+  inherit
+    heardCandidates demoLexicon inLexicon
+    resolve resolveWithContext
+    inventorySummary;
+  ownerName = "stdlib.math.sound-meaning-resolution";
+  meta = {
+    source = "stdlib math sound-meaning-resolution (sound under-determines meaning; lexicon+context resolves)";
+    owner = "stdlib.math.sound-meaning-resolution";
+    base = "sound-meaning-resolution-v0";
+    rev_note = "idea.md (2026-06-14) 의미↔symbol 불일치 해소 = '왜 사람들은 알아듣나'. 모델(컴파일러 lowering): 의미(단어) 결정→lowering→소리(lossy). 이해=소리→이 소리로 lowering 되는 결정된 단어(lexicon) 역추적→context 고름. heardCandidates(표면 소리→종성 후보 음절 codes), demoLexicon(낫/낮/낯/낱 re-authored 데모), resolve(소리 7후보→lexicon로 좁힘→0 not-a-word/1 understood-by-lexicon/2+ held-need-context), resolveWithContext(뜻 힌트로 고름→understood). hangul-phoneme surface 불일치(held+후보)를 결정된 의미+context로 collapse. hangul-mirror/hangul-phoneme-mirror 비수정 조립.";
+  };
+}

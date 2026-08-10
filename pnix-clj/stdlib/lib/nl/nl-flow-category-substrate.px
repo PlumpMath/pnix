@@ -1,0 +1,455 @@
+let
+  ownerName = "stdlib.nl.nl-flow-category-substrate";
+
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+
+  # === NL Flow Category Substrate (agent-NL-133) ===================
+  #
+  # 사용자 vision (2026-05-29) 정정:
+  # > "여기서는 Category Theory 같은게 중요하겠네."
+  #
+  # 박힌 700+ axiom 은 *어휘* (morphism 이름). categorical structure
+  # 가 *substrate body*. equation 인수분해 ≡ morphism factorization,
+  # 재조립 ≡ composition, 미지수 ≡ universal property.
+  #
+  # # 8 categorical primitives:
+  #   1. Object        — code state / intent state
+  #   2. Morphism      — action (source → target)
+  #   3. Composition   — g ∘ f, associative
+  #   4. Identity      — noop morphism
+  #   5. Functor       — intent → code 매핑
+  #   6. Natural       — 동치 경로
+  #   7. Universal     — missing slot (pullback / pushout)
+  #   8. Adjoint       — 인수분해 ↔ 재조립
+
+  stepKind = "nl-flow-category";
+  framework_step =
+    "substrate body — Category Theory 위 NL flow algebra";
+
+  # =================================================================
+  # === A. Object (코드 state / intent state) =====================
+  # =================================================================
+  #
+  # Object = 정적 snapshot. NL flow 에서:
+  #   - codeObject = { files; defs; refs; tests; ... }
+  #   - intentObject = { goal; known_constraints; unknown_slots; ... }
+
+  mkCodeObject = { files ? [], defs ? [], refs ? [], tests ? [] }: {
+    object_kind = "code";
+    inherit files defs refs tests;
+  };
+
+  mkIntentObject = { goal, constraints ? {}, unknowns ? [] }: {
+    object_kind = "intent";
+    inherit goal constraints unknowns;
+  };
+
+  # =================================================================
+  # === B. Morphism (action / step) ===============================
+  # =================================================================
+  #
+  # f : A → B
+  #   source : Object
+  #   target : Object
+  #   action : string (NL 문장)
+  #   parameters : attrset (known) + unknowns : list (missing slots)
+
+  mkMorphism = { source, target, action, params ? {}, unknowns ? [] }: {
+    morphism_kind = "action";
+    inherit source target action params unknowns;
+  };
+
+  # =================================================================
+  # === C. Identity morphism (id_A : A → A) =======================
+  # =================================================================
+
+  identityMorphism = obj: {
+    morphism_kind = "identity";
+    source = obj;
+    target = obj;
+    action = "noop";
+    params = {};
+    unknowns = [];
+  };
+
+  # =================================================================
+  # === D. Composition (g ∘ f : A → C) ============================
+  # =================================================================
+  #
+  # Composition law: target(f) == source(g)
+  # Associativity: (h ∘ g) ∘ f == h ∘ (g ∘ f) — built-in to list structure.
+
+  composable = f: g:
+    f.target == g.source;
+
+  composeMorphisms = f: g:
+    if !(composable f g) then {
+      morphism_kind = "composition-error";
+      reason = "target of f != source of g (composition undefined)";
+    }
+    else {
+      morphism_kind = "composition";
+      source = f.source;
+      target = g.target;
+      action = f.action + " ; " + g.action;
+      components = [ f g ];
+      params = f.params // g.params;
+      unknowns = f.unknowns ++ g.unknowns;
+    };
+
+  # composeChain : [m1, m2, ..., mn] → m1 ∘ m2 ∘ ... ∘ mn
+  composeChain = morphisms:
+    if morphisms == [] then null
+    else if builtins.length morphisms == 1 then builtins.head morphisms
+    else
+      builtins.foldl' composeMorphisms (builtins.head morphisms)
+        (builtins.tail morphisms);
+
+  # =================================================================
+  # === E. Functor (intent → code) =================================
+  # =================================================================
+  #
+  # F : Intent → Code
+  #   F(intent_object) = code_object_skeleton
+  #   F(intent_morphism) = code_morphism_chain (decomposition!)
+  #
+  # 사용자 vision 의 핵심 — intent 발화 → algorithm step chain.
+  # 박힌 axiom 어휘를 *operator pool* 로 사용.
+
+  # NL verb → axiom-family-style morphism kinds.
+  # This is the substrate's deterministic decomposition rule.
+  intentVerbToMorphismKinds = verb:
+    if decomposer.containsAny verb [ "rename" "심볼 이름 바꾸" "식별자 바꾸" ] then
+      [ "locate-definition" "locate-references"
+        "replace-identifier-text" "verify-references-resolve"
+        "update-test-references" ]
+    else if decomposer.containsAny verb [ "extract" "추출" ] then
+      [ "select-region" "infer-parameters" "create-new-definition"
+        "replace-with-call" "verify-equivalent-behavior" ]
+    else if decomposer.containsAny verb [ "inline" "인라인" ] then
+      [ "locate-callers" "substitute-body" "remove-definition"
+        "verify-equivalent-behavior" ]
+    else if decomposer.containsAny verb [ "add test" "테스트" ] then
+      [ "identify-test-target" "design-input-output"
+        "write-assertion" "run-and-verify" ]
+    else if decomposer.containsAny verb [ "fix" "patch" "수정" ] then
+      [ "reproduce-bug" "locate-root-cause"
+        "design-patch" "verify-fix" "regression-test" ]
+    else if decomposer.containsAny verb [ "remove" "delete" "제거" ] then
+      [ "locate-target" "check-dependencies"
+        "remove-target" "verify-no-dangling-refs" ]
+    else [ "generic-action-step" ];
+
+  # functorApplyToIntent : intent_object → [morphisms]
+  # The decomposition functor — intent 한 줄을 morphism chain 으로 풀음.
+  functorApplyToIntent = intentObj: utterance:
+    let
+      kinds = intentVerbToMorphismKinds utterance;
+      mkStep = idx: kind: {
+        morphism_kind = "decomposed-step";
+        step_index = idx;
+        source = {
+          object_kind = "code-state";
+          phase = "pre-step-" + builtins.toString idx;
+        };
+        target = {
+          object_kind = "code-state";
+          phase = "post-step-" + builtins.toString idx;
+        };
+        action = kind;
+        params = {};
+        unknowns =
+          if kind == "locate-definition" then [ "scope" ]
+          else if kind == "locate-references" then [ "scope" ]
+          else if kind == "replace-identifier-text"
+               then [ "new-name" "case-handling" ]
+          else if kind == "update-test-references"
+               then [ "test-files-location" ]
+          else if kind == "design-patch" then [ "patch-strategy" ]
+          else [];
+      };
+      indexed = builtins.genList (i: i) (builtins.length kinds);
+      steps = builtins.map (i: mkStep i (builtins.elemAt kinds i))
+        indexed;
+    in {
+      decomposed_steps = steps;
+      step_count = builtins.length steps;
+    };
+
+  # =================================================================
+  # === F. Natural transformation (equivalent paths) ==============
+  # =================================================================
+  #
+  # Two morphism chains are *natural-isomorphic* if they have same
+  # source and same target — substrate views them as equivalent.
+
+  naturalIsomorphic = chain1: chain2:
+    let
+      head1 = builtins.head chain1;
+      head2 = builtins.head chain2;
+      last1 = builtins.elemAt chain1 (builtins.length chain1 - 1);
+      last2 = builtins.elemAt chain2 (builtins.length chain2 - 1);
+    in
+      chain1 != []
+      && chain2 != []
+      && head1.source == head2.source
+      && last1.target == last2.target;
+
+  # =================================================================
+  # === G. Universal property (missing slot = unique morphism) ====
+  # =================================================================
+  #
+  # In a pullback square, the *unique* morphism is the missing piece.
+  # In NL flow: missing slots aggregated across the chain = the
+  # universal piece the user must supply.
+
+  universalMissingPiece = morphisms:
+    let
+      allUnknowns =
+        builtins.foldl' (acc: m: acc ++ m.unknowns) [] morphisms;
+      dedup =
+        let
+          add = acc: u:
+            if builtins.elem u acc then acc else acc ++ [ u ];
+        in builtins.foldl' add [] allUnknowns;
+    in {
+      universal_kind = "missing-pieces";
+      unknown_count = builtins.length dedup;
+      unknown_slots = dedup;
+      message_en =
+        if dedup == [] then "No missing pieces — fully determined."
+        else "Substrate factored the intent; "
+             + builtins.toString (builtins.length dedup)
+             + " slot(s) require user input.";
+      message_ko =
+        if dedup == [] then "미지수 없음 — 완전 결정."
+        else "substrate 가 intent 분해 완료. "
+             + builtins.toString (builtins.length dedup)
+             + " 개 슬롯 사용자 입력 필요.";
+    };
+
+  # =================================================================
+  # === H. Algebraic laws (simplification) ========================
+  # =================================================================
+  #
+  # 1. Identity:  id ∘ f = f = f ∘ id
+  # 2. Idempotent: same morphism twice in a row → once
+  # 3. Cancel: f ; f-inverse → identity (only if inverse known)
+
+  # Drop identity morphisms in a chain.
+  simplifyIdentity = morphisms:
+    builtins.filter (m: m.morphism_kind != "identity") morphisms;
+
+  # Collapse adjacent duplicate actions (same kind back-to-back).
+  simplifyIdempotent = morphisms:
+    if builtins.length morphisms < 2 then morphisms
+    else
+      let
+        first = builtins.head morphisms;
+        rest = builtins.tail morphisms;
+        second = builtins.head rest;
+      in
+        if first.action == second.action then
+          simplifyIdempotent ([ first ] ++ builtins.tail rest)
+        else
+          [ first ] ++ simplifyIdempotent rest;
+
+  algebraSimplify = morphisms:
+    simplifyIdempotent (simplifyIdentity morphisms);
+
+  # =================================================================
+  # === I. Adjoint pair (factorize ↔ recompose) ===================
+  # =================================================================
+  #
+  # factorize : intent_morphism → [code_step_morphisms]
+  # recompose : [code_step_morphisms] → intent_morphism
+  #
+  # Adjunction:  factorize(F) ↔ recompose(steps)
+
+  factorizeIntent = utterance:
+    let
+      intent = mkIntentObject { goal = utterance; };
+      decomp = functorApplyToIntent intent utterance;
+      simplified = algebraSimplify decomp.decomposed_steps;
+      universal = universalMissingPiece simplified;
+    in {
+      outcome = "intent-factorized";
+      original_intent = utterance;
+      factored_morphisms = simplified;
+      morphism_count = builtins.length simplified;
+      universal_missing = universal;
+    };
+
+  recomposeMorphisms = morphisms:
+    composeChain morphisms;
+
+  # =================================================================
+  # === J. Language emit (시연 — Python / Rust / TS) ==============
+  # =================================================================
+  #
+  # Different languages = different *codomain categories* under the
+  # same functor F. We provide concrete emit rules per language.
+
+  emitStepForLanguage = language: stepKind: params:
+    if language == "python" then
+      if stepKind == "locate-definition" then
+        "# locate def of " + (params.target_name or "<TARGET>")
+        + " (e.g. grep -rn 'def " + (params.target_name or "<TARGET>")
+        + "' " + (params.scope or "./") + ")"
+      else if stepKind == "locate-references" then
+        "# locate refs (e.g. grep -rn '" + (params.target_name or "<TARGET>")
+        + "' " + (params.scope or "./") + ")"
+      else if stepKind == "replace-identifier-text" then
+        "# replace in each file:\n"
+        + "# sed -i 's/" + (params.target_name or "<OLD>")
+        + "/" + (params.new_name or "<NEW>") + "/g' <file>"
+      else if stepKind == "verify-references-resolve" then
+        "# verify: python -m py_compile <files>; pytest"
+      else if stepKind == "update-test-references" then
+        "# update test files with same sed pattern"
+      else if stepKind == "design-patch" then
+        "# write patch as unified diff"
+      else "# " + stepKind
+    else if language == "rust" then
+      if stepKind == "locate-definition" then
+        "// cargo rustc -- --emit=metadata; rust-analyzer goto def"
+      else if stepKind == "locate-references" then
+        "// rg '" + (params.target_name or "<TARGET>") + "' "
+        + (params.scope or "src/")
+      else if stepKind == "replace-identifier-text" then
+        "// cargo fmt; rustfmt --check (or manual sed + cargo check)"
+      else if stepKind == "verify-references-resolve" then
+        "// cargo check; cargo test"
+      else if stepKind == "update-test-references" then
+        "// rg --files-with-matches '" + (params.target_name or "<OLD>")
+        + "' tests/ | xargs sed -i 's/" + (params.target_name or "<OLD>")
+        + "/" + (params.new_name or "<NEW>") + "/g'"
+      else "// " + stepKind
+    else if language == "typescript" then
+      if stepKind == "locate-definition" then
+        "// tsc --noEmit; vscode goto def"
+      else if stepKind == "locate-references" then
+        "// rg '" + (params.target_name or "<TARGET>") + "' "
+        + (params.scope or "src/")
+      else if stepKind == "replace-identifier-text" then
+        "// vscode F2 rename, or ts-morph programmatic rename"
+      else if stepKind == "verify-references-resolve" then
+        "// tsc --noEmit; npm test"
+      else "// " + stepKind
+    else "(language not supported: " + language + ")";
+
+  emitFactoredIntent = factored: language:
+    builtins.map (m:
+      emitStepForLanguage language m.action m.params
+    ) factored.factored_morphisms;
+
+  # =================================================================
+  # === K. End-to-end demo ========================================
+  # =================================================================
+
+  demoUtterance = utterance: language:
+    let
+      factored = factorizeIntent utterance;
+      emitted = emitFactoredIntent factored language;
+    in {
+      outcome = "demo-complete";
+      public = {
+        utterance = utterance;
+        language = language;
+        morphism_count = factored.morphism_count;
+        morphism_actions = builtins.map (m: m.action)
+          factored.factored_morphisms;
+        unknown_slot_count =
+          factored.universal_missing.unknown_count;
+        unknown_slots = factored.universal_missing.unknown_slots;
+        message_ko = factored.universal_missing.message_ko;
+        emitted_code_per_step = emitted;
+      };
+      carry = {
+        factored = factored;
+        axiom_origin =
+          "axiom-119-nl-flow-category "
+          + "(category theory substrate — Object/Morphism/Composition/"
+          + "Functor/Natural/Universal/Adjoint)";
+      };
+    };
+
+  # === Plate entry =================================================
+
+  applyNlFlowCategoryPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "factorize" request then
+      factorizeIntent request.factorize
+    else if (builtins.hasAttr "demo_utterance" request)
+         && (builtins.hasAttr "language" request) then
+      demoUtterance request.demo_utterance request.language
+    else if builtins.hasAttr "compose_chain" request then {
+      outcome = "chain-composed";
+      result = composeChain request.compose_chain;
+    }
+    else {
+      outcome = "held-missing-input-field";
+      reason =
+        "Provide { factorize } | { demo_utterance, language } | "
+        + "{ compose_chain }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-flow-category-substrate-axiom-119";
+    composes = "박힌 axiom 어휘 (morphism kinds) + category theory primitives";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    categorical_primitives = [
+      "Object" "Morphism" "Composition" "Identity"
+      "Functor" "Natural" "Universal" "Adjoint"
+    ];
+    supported_languages = [ "python" "rust" "typescript" ];
+    primary_outcomes = [
+      "intent-factorized"
+      "demo-complete"
+      "chain-composed"
+    ];
+    held_outcomes = [
+      "held-non-attrs-request"
+      "held-missing-input-field"
+    ];
+    user_vision =
+      "equation 인수분해 + 재조립 ≡ Category Theory factorize + "
+      + "compose. 박힌 700 axiom 은 *어휘* — substrate 의 body 가 "
+      + "categorical structure.";
+  };
+
+in {
+  inherit
+    ownerName
+    mkCodeObject mkIntentObject mkMorphism identityMorphism
+    composable composeMorphisms composeChain
+    intentVerbToMorphismKinds functorApplyToIntent
+    naturalIsomorphic universalMissingPiece
+    simplifyIdentity simplifyIdempotent algebraSimplify
+    factorizeIntent recomposeMorphisms
+    emitStepForLanguage emitFactoredIntent
+    demoUtterance
+    applyNlFlowCategoryPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL flow category substrate (agent-NL-133)";
+    owner = ownerName;
+    base = "nl-flow-category-substrate-v0";
+    rev_note = "agent-NL-133 (2026-05-29): 사용자 정정 — 박힌 700+ axiom "
+      + "은 *어휘* 일 뿐, substrate body 가 Category Theory. v0 minimal "
+      + "8 categorical primitives (Object/Morphism/Composition/Identity/"
+      + "Functor/Natural/Universal/Adjoint) + algebraic laws (identity/"
+      + "idempotent simplify) + Python/Rust/TS 시연. equation 인수분해 "
+      + "≡ factorize, 재조립 ≡ compose, 미지수 ≡ universal property. "
+      + "박힌 axiom 어휘는 functorApplyToIntent 의 intentVerbToMorphism"
+      + "Kinds 안에서 *operator pool* 로 사용.";
+  };
+}

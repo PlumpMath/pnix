@@ -1,0 +1,190 @@
+let
+  ownerName = "stdlib.nl.agent-loop-nl-lifter";
+
+  # === Agent loop NL lifter (Axiom #41) ============================
+  #
+  # 사용자 directive (2026-05-28): NL super-set bidirectional.
+  # Axiom #13 (coding-agent-loop-primitives) 의 NL surface.
+  #
+  # NL utterance → 9-stage agent loop 의 stage routing.
+  #
+  # 사용자 자연어:
+  #   "src/main.rs 의 unused import 정리하고 cargo check 통과시켜"
+  #   → intent-extraction → patch-candidate routing
+  #
+  # # 9 stages × en/ko 키워드
+  #
+  # 1. repo-scan        — "전체 파일 보기" / "scan the repository"
+  # 2. intent-extraction — "의도 파악" / "what does X mean"
+  # 3. plan-formation   — "계획 짜기" / "plan the steps"
+  # 4. patch-candidate  — "패치 만들기" / "make a patch"
+  # 5. guarded-apply    — "적용" / "apply the change"
+  # 6. verify           — "테스트" / "run tests"
+  # 7. failure-parse    — "에러 분석" / "parse the error"
+  # 8. judge            — "판정" / "judge the outcome"
+  # 9. receipt          — "receipt 생성" / "create receipt"
+  #
+  # # Held-honest 헌법
+  #
+  # NL → stage 직접 mapping 은 first-pass routing 만. caller 가 receipt 의
+  # stage_id 로 downstream entry plate 호출. integration registry (Axiom
+  # #21) 의 stage_owner_mapping 과 align.
+
+  knownAgentStageNLPatterns = [
+    {
+      stage_id = "repo-scan";
+      stage_order = 1;
+      en_keywords = [ "scan the repo" "list files" "explore directory" "find all files" ];
+      ko_keywords = [ "전체 파일" "디렉토리 보기" "파일 목록" "탐색" ];
+      production_owner = "stdlib/lib/agent/repo-scan-plate.px";
+    }
+    {
+      stage_id = "intent-extraction";
+      stage_order = 2;
+      en_keywords = [ "what does this mean" "intent" "understand the goal" "interpret" ];
+      ko_keywords = [ "의도 파악" "목표 이해" "해석" "무슨 뜻" ];
+      production_owner = "stdlib/lib/coding/coding-intent-lifter.px";
+    }
+    {
+      stage_id = "plan-formation";
+      stage_order = 3;
+      en_keywords = [ "plan the steps" "make a plan" "task plan" "outline the approach" ];
+      ko_keywords = [ "계획 짜기" "단계 계획" "접근 방식" "어떻게 할지" ];
+      production_owner = "stdlib/lib/agent/loop-driver-plate.px";
+    }
+    {
+      stage_id = "patch-candidate";
+      stage_order = 4;
+      en_keywords = [ "make a patch" "patch candidate" "propose change" "rename symbol" "remove unused" "add import" "unused import" ];
+      ko_keywords = [ "패치 만들기" "변경 제안" "이름 바꾸기" "미사용 import 정리" "import 추가" "unused import 정리" ];
+      production_owner = "stdlib/lib/coding/coding-candidate-dispatcher.px";
+    }
+    {
+      stage_id = "guarded-apply";
+      stage_order = 5;
+      en_keywords = [ "apply the patch" "apply the change" "commit the patch" ];
+      ko_keywords = [ "패치 적용" "변경 적용" "커밋" ];
+      production_owner = "stdlib/lib/agent/patch-applier-plate.px";
+    }
+    {
+      stage_id = "verify";
+      stage_order = 6;
+      en_keywords = [ "run tests" "verify" "test the change" "cargo check" "cargo test" "npm test" "pytest" "go test" ];
+      ko_keywords = [ "테스트 돌리기" "검증" "테스트 통과" "확인" "테스트 돌려" "검증해" "테스트 돌리고" "테스트 실행" "확인해줘" ];
+      production_owner = "stdlib/lib/coding/verify-stage-plate.px";
+    }
+    {
+      stage_id = "failure-parse";
+      stage_order = 7;
+      en_keywords = [ "parse the error" "what went wrong" "diagnose failure" "test failure" "stack trace" "error log" ];
+      ko_keywords = [ "에러 분석" "실패 분석" "뭐가 잘못" "테스트 실패" "에러 해석" "스택 트레이스" "에러 메시지" "실패 원인" ];
+      production_owner = "stdlib/lib/agent/failure-parser-plate.px";
+    }
+    {
+      stage_id = "judge";
+      stage_order = 8;
+      en_keywords = [ "judge the outcome" "decide next step" "policy decision" "auto repair" "auto-repair" "fix automatically" ];
+      ko_keywords = [ "판정" "다음 단계 결정" "자동 수정" "정책 결정" "자동 고침" "자동으로 수정" "자동 복구" ];
+      production_owner = "stdlib/lib/agent/auto-repair-orchestrator-plate.px";
+    }
+    {
+      stage_id = "receipt";
+      stage_order = 9;
+      en_keywords = [ "create receipt" "rollback receipt" "audit log" ];
+      ko_keywords = [ "receipt 생성" "롤백" "감사 로그" "audit" ];
+      production_owner = "stdlib/lib/coding/rollback-receipt-plate.px";
+    }
+  ];
+
+  stagePatternCount = builtins.length knownAgentStageNLPatterns;
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  matchAgentStage = utterance:
+    builtins.filter (p:
+      (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords))
+      knownAgentStageNLPatterns;
+
+  liftToAgentStage = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let matches = matchAgentStage utterance;
+      in
+        if matches == [] then {
+          outcome = "held-no-agent-stage-matched";
+          known_stage_count = stagePatternCount;
+          known_stages = builtins.map (p: p.stage_id) knownAgentStageNLPatterns;
+        }
+        else
+          let
+            # 여러 stage matching → 가장 작은 stage_order 가 entry (loop 시작점).
+            sorted = builtins.sort (a: b: a.stage_order < b.stage_order) matches;
+            entry = builtins.head sorted;
+          in {
+            outcome = "agent-stage-lifted";
+            utterance = utterance;
+            entry_stage_id = entry.stage_id;
+            entry_stage_order = entry.stage_order;
+            entry_production_owner = entry.production_owner;
+            additional_stages = builtins.map (m: m.stage_id) (builtins.tail sorted);
+            substrate_action =
+              "production_owner plate 가 utterance 받아 stage envelope 시작. "
+              + "downstream stages (loop-driver-plate 가 자동 cascading).";
+            axiom_origin = "axiom-13-coding-agent-loop-primitives + axiom-21-closed-loop-integration";
+          };
+
+  applyAgentLoopNlLifterPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else liftToAgentStage request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-41";
+    stage_pattern_count = stagePatternCount;
+    routed_substrate = "stdlib/lib/agent/coding-agent-loop-primitives.px (Axiom #13)";
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-agent-stage-matched"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownAgentStageNLPatterns stagePatternCount
+    containsAny matchAgentStage
+    liftToAgentStage applyAgentLoopNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL agent loop lifter (Axiom #41)";
+    owner = ownerName;
+    base = "agent-loop-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-28). Axiom #13 agent-loop "
+      + "(9 stage) 의 NL surface. 9 stage × en/ko bilingual. 가장 작은 "
+      + "stage_order match = entry point. production_owner 로 routing. "
+      + "DO NOT REBUILD — 18 agent plate + 8 coding plate 재사용.";
+  };
+}

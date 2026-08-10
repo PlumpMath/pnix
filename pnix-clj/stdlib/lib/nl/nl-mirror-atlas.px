@@ -1,0 +1,114 @@
+# stdlib.nl.nl-mirror-atlas
+#
+# **read-only 인덱스: 3 NL lane + 2 mirror family + 공유 substrate. 전체 그림, 의미손상 0.**
+#
+# 운영자(2026-06-14): "안전하게 잘합쳐 ... 천천히 정밀 분석 ... 이전 사용의미 되살리며 ... 의미손상 0, 전체 그림 확보."
+#
+# 깊은 분석 결과 NL 표현이 *한 종류가 아니라 셋*이고 각자 다른 canonical·callers·도메인을 가진다. shape 을
+# 강제로 합치면 기존 callers(증명 narration·self-driving·문서 plan 등)가 깨진다. 그래서 이 owner =
+# *기존 owner 0 수정* read-only 인덱스(경로·메타데이터 데이터만; heavy import 0 = 0 coupling, 0 위험).
+#
+# meta-mirror-primitive화의 *안전한* 정의: shape 붕괴 아님. 각 lane = 자기 canonical 위 *형제 reflection instance*;
+# 통일은 (a) 법칙 레벨(reflection law) (b) 공유 substrate(조사 lens 단일-source, 이미 수렴) 두 곳뿐.
+# 그 다음에야 lane 별로 하나씩 careful adapter(테스트하며). 이 atlas 가 그 careful 작업의 지도.
+let
+  len = builtins.length;
+
+  # ── 3 NL 표현 lane (각자 다른 의미 — 붕괴 금지, preserve) ──
+  nlLanes = [
+    {
+      id = "coding-behavioratom";
+      canonical = "BehaviorAtom (print-line / exit-with-code / bind-variable / read-line / print-variable)";
+      direction = "NL→atom (forward composer); atom→code (emit-program-plate)";
+      forward_owner = "stdlib/lib/coding/korean-utterance-to-atom-composer.px";
+      reverse_owner = "stdlib/lib/coding/emit-program-plate.px (atom→source)";
+      callers = [ "stdlib/lib/agent/nl-realization-kor-mirror.px" "crates/pnixc-meta/tests/meta_circular_smoke.rs" ];
+      domain = "NL 명령 → 코드";
+      shared_josa = "stdlib/lib/coding/korean-case-marker-lens.px";
+      roundtrippable = "partial (코드 atom; closed coding vocab)";
+    }
+    {
+      id = "nlg-predication-property";
+      canonical = "predication{subject;verb;object} / property{entity;adjective} (닫힌 lexicon: router/proof/claim…)";
+      direction = "atom→문장 (realization; reverse only)";
+      forward_owner = "(없음 — 추상 atom 은 상위 reasoning 이 만듦)";
+      reverse_owner = "stdlib/lib/agent/nl-realization-kor-mirror.px (한국어) / stdlib/lib/agent/nl-realization-mirror.px (영어)";
+      callers = [
+        "stdlib/lib/agent/nlg-document-plan-mirror.px"
+        "stdlib/lib/agent/self-driving-narration-mirror.px"
+        "stdlib/lib/agent/reasoning-dispatch-mirror.px"
+        "crates/pnixc-meta/src/registry_prewarm.rs"
+      ];
+      domain = "추상 증명/계획 atom → 사람 narration";
+      shared_josa = "stdlib/lib/coding/korean-case-marker-lens.px (withJosa)";
+      roundtrippable = "no (express-only diverge; 닫힌 lexicon)";
+    }
+    {
+      id = "role-graph-proposition";
+      canonical = "proposition{roles=[{entity;role}]; action; tense; mood} (임의 한국어 surface)";
+      direction = "문장⟷proposition (converge=liftSentence, diverge=realizeSentence; round-trip)";
+      forward_owner = "stdlib/lib/nl/korean-taxonomy-lift.px (문장→proposition)";
+      reverse_owner = "stdlib/lib/nl/korean-nl-mirror.px (proposition→문장)";
+      callers = [ "stdlib/lib/math/mirror-instances.px" ];
+      domain = "일반 NL ⟷ 역할 graph";
+      shared_josa = "stdlib/lib/coding/korean-case-marker-lens.px (조사↔role 단일-source, 역으로 derive)";
+      roundtrippable = "yes (nl-meaning-surface-are-one; canonical proposition counit iso)";
+    }
+  ];
+
+  # ── 2 mirror family (서로 다른 종류 — 강제 통합 금지; 법칙 레벨에서만 형제) ──
+  mirrorFamilies = [
+    {
+      id = "plate-dispatch";
+      kind = "6-slot lens dispatch plate (facts / lens / owner_law / capability_route / parameters / receipts)";
+      registry = "stdlib/lib/integration/mirror-primitive-registry.px (15 primitives)";
+      canonical_owner = "pnix-mirror-runtime/primitives/parametric-mirror-plate.px";
+      claude_md = "Mirror-only computation axiom (2026-05-14)";
+    }
+    {
+      id = "reflection";
+      kind = "converge(수렴/perceive) / diverge(발산/emit) reflection, round-trip = id (counit iso)";
+      registry = "stdlib/lib/math/mirror-instances.px (15 instances, FIFTEEN-ONE-LAW)";
+      canonical_owner = "stdlib/lib/math/meta-mirror-primitive.px";
+      claude_md = "idea.md 거울 의미 삼각형 / symbolic-ct (2026-06-14)";
+    }
+  ];
+
+  sharedSubstrate = {
+    josa = "stdlib/lib/coding/korean-case-marker-lens.px";
+    case_role_bridge = "stdlib/lib/nl/korean-taxonomy-lift.px (caseToRole / roleToCase)";
+    note = "3 NL lane 전부 조사 lens 공유 = 의미 있는 단일-source(이미 수렴). 강제 shape 통합 불필요.";
+  };
+
+  # careful adapter 후보 (다음 단계; 이 atlas 가 지도, 아직 미구현)
+  adapterCandidates = [
+    { from = "role-graph-proposition"; to = "coding-behavioratom"; note = "proposition→BehaviorAtom (코딩 lane 구동); 테스트하며 야금야금"; status = "deferred"; }
+    { from = "role-graph-proposition"; to = "nlg-predication-property"; note = "proposition→predication (NLG narration 구동; 단 닫힌 lexicon 한계)"; status = "deferred"; }
+  ];
+
+  summary = _: {
+    nl_lane_count = len nlLanes;
+    mirror_family_count = len mirrorFamilies;
+    shared_josa_single_source = "stdlib/lib/coding/korean-case-marker-lens.px";
+    principle = "각 lane = 자기 canonical 위 형제 instance(붕괴 금지); 통일은 법칙 레벨(reflection law) + 공유 substrate(조사)만.";
+    modification_to_existing = 0;
+    verdict = "atlas-indexed-zero-modification";
+  };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.nl-mirror-atlas";
+    role = "read-only 인덱스: 3 NL lane(coding-BehaviorAtom / NLG-predication·property / role-graph-proposition) + 2 mirror family(plate-dispatch / reflection) + 공유 substrate(조사 lens). 전체 그림, 의미손상 0";
+    note = "운영자: 안전하게, 의미손상 0, 전체 그림 확보. heavy import 0(경로·메타데이터 데이터만). careful adapter 의 지도.";
+  };
+
+in {
+  inherit
+    nlLanes mirrorFamilies sharedSubstrate adapterCandidates summary inventorySummary;
+  ownerName = "stdlib.nl.nl-mirror-atlas";
+  meta = {
+    source = "stdlib nl nl-mirror-atlas (read-only index of 3 NL lanes + 2 mirror families + shared 조사 substrate)";
+    owner = "stdlib.nl.nl-mirror-atlas";
+    base = "nl-mirror-atlas-v0";
+    rev_note = "idea.md (2026-06-14) read-only NL 거울 atlas = 3 NL lane(coding-BehaviorAtom[NL→atom→code, callers nl-realization-kor/smoke] / NLG-predication·property[atom→문장, callers nlg-document-plan·self-driving-narration·reasoning-dispatch·registry_prewarm] / role-graph-proposition[문장⟷proposition round-trip, callers mirror-instances]) + 2 mirror family(plate-dispatch[mirror-primitive-registry 15]/reflection[mirror-instances 15 FIFTEEN-ONE-LAW]) + 공유 substrate(조사 lens 단일-source). 운영자: 안전하게 의미손상 0 전체 그림 확보. heavy import 0(경로·메타데이터만, 0 coupling 0 위험). meta-mirror-primitive화=shape 붕괴 아니라 각 lane 형제 instance+법칙 레벨 통일+공유 조사 substrate. careful adapter(proposition→BehaviorAtom/predication) 는 deferred 지도. 기존 owner 0 수정.";
+  };
+}

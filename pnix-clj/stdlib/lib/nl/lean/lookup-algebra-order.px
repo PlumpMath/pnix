@@ -1,0 +1,366 @@
+# AUTO-GENERATED — algebra-order
+# Entries: 51
+let
+  ownerName = "stdlib.nl.lean.lookup-algebra-order";
+  category = "algebra-order";
+  entries = [
+    {
+      full_name = "OrderedAddCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 34;
+      code_preview = "@[deprecated \"Use `[AddCommGroup α] [PartialOrder α] [IsOrderedAddMonoid α]` instead.\"   (since := \"2025-04-10\")] structure OrderedAddCommGroup (α : Type u) extends AddCommGroup α, PartialOrder α where      protected add_le_add_left : ∀ a b : α, a ≤ b → ∀ c : α, c + a ≤ c + b";
+    }
+    {
+      full_name = "OrderedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 43;
+      code_preview = "@[to_additive,   deprecated \"Use `[CommGroup α] [PartialOrder α] [IsOrderedMonoid α]` instead.\"   (since := \"2025-04-10\")] structure OrderedCommGroup (α : Type u) extends CommGroup α, PartialOrder α where      protected mul_le_mul_left : ∀ a b : α, a ≤ b → ∀ c : α, c * a ≤ c * b";
+    }
+    {
+      full_name = "IsOrderedMonoid.toIsOrderedCancelMonoid";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 65;
+      code_preview = "@[to_additive IsOrderedAddMonoid.toIsOrderedCancelAddMonoid] instance (priority := 100) IsOrderedMonoid.toIsOrderedCancelMonoid     [CommGroup α] [PartialOrder α] [IsOrderedMonoid α] : IsOrderedCancelMonoid α where   le_of_mul_le_mul_left a b c bc := by simpa using mul_le_mul_left' bc a⁻¹   le_of_mu";
+    }
+    {
+      full_name = "LinearOrderedAddCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 78;
+      code_preview = "@[deprecated \"Use `[AddCommGroup α] [LinearOrder α] [IsOrderedAddMonoid α]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedAddCommGroup (α : Type u) extends OrderedAddCommGroup α, LinearOrder α";
+    }
+    {
+      full_name = "LinearOrderedCommGroup";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 87;
+      code_preview = "@[to_additive,   deprecated \"Use `[CommGroup α] [LinearOrder α] [IsOrderedMonoid α]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedCommGroup (α : Type u) extends OrderedCommGroup α, LinearOrder α";
+    }
+    {
+      full_name = "LinearOrderedCommGroup.mul_lt_mul_left'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 102;
+      code_preview = "@[to_additive LinearOrderedAddCommGroup.add_lt_add_left] theorem LinearOrderedCommGroup.mul_lt_mul_left' (a b : α) (h : a < b) (c : α) : c * a < c * b";
+    }
+    {
+      full_name = "eq_one_of_inv_eq'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 106;
+      code_preview = "@[to_additive eq_zero_of_neg_eq] theorem eq_one_of_inv_eq' (h : a⁻¹ = a) : a = 1";
+    }
+    {
+      full_name = "exists_one_lt'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 117;
+      code_preview = "@[to_additive exists_zero_lt] theorem exists_one_lt' [Nontrivial α] : ∃ a : α, 1 < a";
+    }
+    {
+      full_name = "LinearOrderedCommGroup.to_noMaxOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 125;
+      code_preview = "@[to_additive] instance (priority := 100) LinearOrderedCommGroup.to_noMaxOrder [Nontrivial α] : NoMaxOrder α :=   ⟨by     obtain ⟨y, hy⟩ : ∃ a : α, 1 < a := exists_one_lt'     exact fun a => ⟨a * y, lt_mul_of_one_lt_right' a hy⟩⟩";
+    }
+    {
+      full_name = "LinearOrderedCommGroup.to_noMinOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 132;
+      code_preview = "@[to_additive] instance (priority := 100) LinearOrderedCommGroup.to_noMinOrder [Nontrivial α] : NoMinOrder α :=   ⟨by     obtain ⟨y, hy⟩ : ∃ a : α, 1 < a := exists_one_lt'     exact fun a => ⟨a / y, (div_lt_self_iff a).mpr hy⟩⟩";
+    }
+    {
+      full_name = "inv_le_self_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 138;
+      code_preview = "@[to_additive (attr := simp)] theorem inv_le_self_iff : a⁻¹ ≤ a ↔ 1 ≤ a";
+    }
+    {
+      full_name = "inv_lt_self_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 141;
+      code_preview = "@[to_additive (attr := simp)] theorem inv_lt_self_iff : a⁻¹ < a ↔ 1 < a";
+    }
+    {
+      full_name = "le_inv_self_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 144;
+      code_preview = "@[to_additive (attr := simp)] theorem le_inv_self_iff : a ≤ a⁻¹ ↔ a ≤ 1";
+    }
+    {
+      full_name = "lt_inv_self_iff";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 147;
+      code_preview = "@[to_additive (attr := simp)] theorem lt_inv_self_iff : a < a⁻¹ ↔ a < 1";
+    }
+    {
+      full_name = "inv_le_inv'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 158;
+      code_preview = "@[to_additive (attr := gcongr) neg_le_neg] theorem inv_le_inv' : a ≤ b → b⁻¹ ≤ a⁻¹";
+    }
+    {
+      full_name = "inv_lt_inv'";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 162;
+      code_preview = "@[to_additive (attr := gcongr) neg_lt_neg] theorem inv_lt_inv' : a < b → b⁻¹ < a⁻¹";
+    }
+    {
+      full_name = "inv_lt_one_of_one_lt";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 167;
+      code_preview = "@[to_additive] theorem inv_lt_one_of_one_lt : 1 < a → a⁻¹ < 1";
+    }
+    {
+      full_name = "inv_le_one_of_one_le";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 172;
+      code_preview = "@[to_additive] theorem inv_le_one_of_one_le : 1 ≤ a → a⁻¹ ≤ 1";
+    }
+    {
+      full_name = "one_le_inv_of_le_one";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Group/Defs.lean";
+      start_line = 176;
+      code_preview = "@[to_additive neg_nonneg_of_nonpos] theorem one_le_inv_of_le_one : a ≤ 1 → 1 ≤ a⁻¹";
+    }
+    {
+      full_name = "IsOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 114;
+      code_preview = "class IsOrderedRing (R : Type*) [Semiring R] [PartialOrder R] extends     IsOrderedAddMonoid R, ZeroLEOneClass R where      protected mul_le_mul_of_nonneg_left : ∀ a b c : R, a ≤ b → 0 ≤ c → c * a ≤ c * b      protected mul_le_mul_of_nonneg_right : ∀ a b c : R, a ≤ b → 0 ≤ c → a * c ≤ b * c";
+    }
+    {
+      full_name = "IsStrictOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 127;
+      code_preview = "class IsStrictOrderedRing (R : Type*) [Semiring R] [PartialOrder R] extends     IsOrderedCancelAddMonoid R, ZeroLEOneClass R, Nontrivial R where      protected mul_lt_mul_of_pos_left : ∀ a b c : R, a < b → 0 < c → c * a < c * b      protected mul_lt_mul_of_pos_right : ∀ a b c : R, a < b → 0 < c → a ";
+    }
+    {
+      full_name = "IsOrderedRing.of_mul_nonneg";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 141;
+      code_preview = "lemma IsOrderedRing.of_mul_nonneg [Ring R] [PartialOrder R] [IsOrderedAddMonoid R]     [ZeroLEOneClass R] (mul_nonneg : ∀ a b : R, 0 ≤ a → 0 ≤ b → 0 ≤ a * b) :     IsOrderedRing R where   mul_le_mul_of_nonneg_left a b c ab hc := by     simpa only [mul_sub, sub_nonneg] using mul_nonneg _ _ hc (sub_no";
+    }
+    {
+      full_name = "IsStrictOrderedRing.of_mul_pos";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 149;
+      code_preview = "lemma IsStrictOrderedRing.of_mul_pos [Ring R] [PartialOrder R] [IsOrderedAddMonoid R]     [ZeroLEOneClass R] [Nontrivial R] (mul_pos : ∀ a b : R, 0 < a → 0 < b → 0 < a * b) :     IsStrictOrderedRing R where   mul_lt_mul_of_pos_left a b c ab hc := by     simpa only [mul_sub, sub_pos] using mul_pos _ ";
+    }
+    {
+      full_name = "IsOrderedRing.toPosMulMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 161;
+      code_preview = "instance (priority := 200) IsOrderedRing.toPosMulMono : PosMulMono R where   elim x _ _ h := IsOrderedRing.mul_le_mul_of_nonneg_left _ _ _ h x.2";
+    }
+    {
+      full_name = "IsOrderedRing.toMulPosMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 165;
+      code_preview = "instance (priority := 200) IsOrderedRing.toMulPosMono : MulPosMono R where   elim x _ _ h := IsOrderedRing.mul_le_mul_of_nonneg_right _ _ _ h x.2";
+    }
+    {
+      full_name = "IsOrderedRing.toIsStrictOrderedRing";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 170;
+      code_preview = "lemma IsOrderedRing.toIsStrictOrderedRing (R : Type*)     [Ring R] [PartialOrder R] [IsOrderedRing R] [NoZeroDivisors R] [Nontrivial R] :     IsStrictOrderedRing R :=   .of_mul_pos fun _ _ ap bp ↦ (mul_nonneg ap.le bp.le).lt_of_ne' (mul_ne_zero ap.ne' bp.ne')";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toPosMulStrictMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 180;
+      code_preview = "instance (priority := 200) IsStrictOrderedRing.toPosMulStrictMono : PosMulStrictMono R where   elim x _ _ h := IsStrictOrderedRing.mul_lt_mul_of_pos_left _ _ _ h x.prop";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toMulPosStrictMono";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 184;
+      code_preview = "instance (priority := 200) IsStrictOrderedRing.toMulPosStrictMono : MulPosStrictMono R where   elim x _ _ h := IsStrictOrderedRing.mul_lt_mul_of_pos_right _ _ _ h x.prop";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toIsOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 188;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.toIsOrderedRing : IsOrderedRing R where   __ := ‹IsStrictOrderedRing R›   mul_le_mul_of_nonneg_left _ _ _ := mul_le_mul_of_nonneg_left   mul_le_mul_of_nonneg_right _ _ _ := mul_le_mul_of_nonneg_right";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toCharZero";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 194;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.toCharZero :     CharZero R where   cast_injective :=     (strictMono_nat_of_lt_succ fun n ↦ by rw [Nat.cast_succ]; apply lt_add_one).injective";
+    }
+    {
+      full_name = "IsStrictOrderedRing.toNoMaxOrder";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 200;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.toNoMaxOrder : NoMaxOrder R :=   ⟨fun a => ⟨a + 1, lt_add_of_pos_right _ one_pos⟩⟩";
+    }
+    {
+      full_name = "IsStrictOrderedRing.noZeroDivisors";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 210;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.noZeroDivisors : NoZeroDivisors R where   eq_zero_or_eq_zero_of_mul_eq_zero {a b} hab := by     contrapose! hab     obtain ha | ha := hab.1.lt_or_lt <;> obtain hb | hb := hab.2.lt_or_lt     exacts [(mul_pos_of_neg_of_neg ha hb).ne', (mul_neg_of_neg_of_p";
+    }
+    {
+      full_name = "IsStrictOrderedRing.isDomain";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 219;
+      code_preview = "instance (priority := 100) IsStrictOrderedRing.isDomain : IsDomain R where   mul_left_cancel_of_ne_zero {a b c} ha h := by     obtain ha | ha := ha.lt_or_lt     exacts [(strictAnti_mul_left ha).injective h, (strictMono_mul_left_of_pos ha).injective h]   mul_right_cancel_of_ne_zero {b a c} ha h := by";
+    }
+    {
+      full_name = "OrderedSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 233;
+      code_preview = "@[deprecated \"Use `[Semiring R] [PartialOrder R] [IsOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure OrderedSemiring (R : Type u) extends Semiring R, OrderedAddCommMonoid R where      protected zero_le_one : (0 : R) ≤ 1      protected mul_le_mul_of_nonneg_left : ∀ a b c : R, a ≤ b → 0 ";
+    }
+    {
+      full_name = "OrderedCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 248;
+      code_preview = "@[deprecated \"Use `[CommSemiring R] [PartialOrder R] [IsOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure OrderedCommSemiring (R : Type u) extends OrderedSemiring R, CommSemiring R where   mul_le_mul_of_nonneg_right a b c ha hc :=     (by simpa only [mul_comm] using mul_le_mul_of_nonneg";
+    }
+    {
+      full_name = "OrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 258;
+      code_preview = "@[deprecated \"Use `[Ring R] [PartialOrder R] [IsOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure OrderedRing (R : Type u) extends Ring R, OrderedAddCommGroup R where      protected zero_le_one : 0 ≤ (1 : R)      protected mul_nonneg : ∀ a b : R, 0 ≤ a → 0 ≤ b → 0 ≤ a * b";
+    }
+    {
+      full_name = "OrderedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 269;
+      code_preview = "@[deprecated \"Use `[CommRing R] [PartialOrder R] [IsOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure OrderedCommRing (R : Type u) extends OrderedRing R, CommRing R";
+    }
+    {
+      full_name = "StrictOrderedSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 276;
+      code_preview = "@[deprecated \"Use `[Semiring R] [PartialOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure StrictOrderedSemiring (R : Type u) extends Semiring R, OrderedCancelAddCommMonoid R,     Nontrivial R where      protected zero_le_one : (0 : R) ≤ 1      protected mul_lt_mul_of_p";
+    }
+    {
+      full_name = "StrictOrderedCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 290;
+      code_preview = "@[deprecated \"Use `[CommSemiring R] [PartialOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure StrictOrderedCommSemiring (R : Type u) extends StrictOrderedSemiring R, CommSemiring R";
+    }
+    {
+      full_name = "StrictOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 297;
+      code_preview = "@[deprecated \"Use `[Ring R] [PartialOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure StrictOrderedRing (R : Type u) extends Ring R, OrderedAddCommGroup R, Nontrivial R where      protected zero_le_one : 0 ≤ (1 : R)      protected mul_pos : ∀ a b : R, 0 < a → 0 < b → 0";
+    }
+    {
+      full_name = "StrictOrderedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 308;
+      code_preview = "@[deprecated \"Use `[CommRing R] [PartialOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure StrictOrderedCommRing (R : Type*) extends StrictOrderedRing R, CommRing R";
+    }
+    {
+      full_name = "LinearOrderedSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 318;
+      code_preview = "@[deprecated \"Use `[Semiring R] [LinearOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedSemiring (R : Type u) extends StrictOrderedSemiring R,   LinearOrderedAddCommMonoid R";
+    }
+    {
+      full_name = "LinearOrderedCommSemiring";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 326;
+      code_preview = "@[deprecated \"Use `[CommSemiring R] [LinearOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedCommSemiring (R : Type*) extends StrictOrderedCommSemiring R,   LinearOrderedSemiring R";
+    }
+    {
+      full_name = "LinearOrderedRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 334;
+      code_preview = "@[deprecated \"Use `[Ring R] [LinearOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedRing (R : Type u) extends StrictOrderedRing R, LinearOrder R";
+    }
+    {
+      full_name = "LinearOrderedCommRing";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 341;
+      code_preview = "@[deprecated \"Use `[CommRing R] [LinearOrder R] [IsStrictOrderedRing R]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedCommRing (R : Type u) extends LinearOrderedRing R, CommMonoid R";
+    }
+    {
+      full_name = "one_add_le_one_sub_mul_one_add";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 365;
+      code_preview = "lemma one_add_le_one_sub_mul_one_add (h : a + b + b * c ≤ c) : 1 + a ≤ (1 - b) * (1 + c) := by   rw [one_sub_mul, mul_one_add, le_sub_iff_add_le, add_assoc, ← add_assoc a]   gcongr";
+    }
+    {
+      full_name = "one_add_le_one_add_mul_one_sub";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 369;
+      code_preview = "lemma one_add_le_one_add_mul_one_sub (h : a + c + b * c ≤ b) : 1 + a ≤ (1 + b) * (1 - c) := by   rw [mul_one_sub, one_add_mul, le_sub_iff_add_le, add_assoc, ← add_assoc a]   gcongr";
+    }
+    {
+      full_name = "one_sub_le_one_sub_mul_one_add";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 373;
+      code_preview = "lemma one_sub_le_one_sub_mul_one_add (h : b + b * c ≤ a + c) : 1 - a ≤ (1 - b) * (1 + c) := by   rw [one_sub_mul, mul_one_add, sub_le_sub_iff, add_assoc, add_comm c]   gcongr";
+    }
+    {
+      full_name = "one_sub_le_one_add_mul_one_sub";
+      kind = "lemma";
+      file_path = "Mathlib/Algebra/Order/Ring/Defs.lean";
+      start_line = 377;
+      code_preview = "lemma one_sub_le_one_add_mul_one_sub (h : c + b * c ≤ a + b) : 1 - a ≤ (1 + b) * (1 - c) := by   rw [mul_one_sub, one_add_mul, sub_le_sub_iff, add_assoc, add_comm b]   gcongr";
+    }
+    {
+      full_name = "LinearOrderedSemifield";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Field/Defs.lean";
+      start_line = 27;
+      code_preview = "@[deprecated \"Use `[Semifield K] [LinearOrder K] [IsStrictOrderedRing K]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedSemifield (K : Type*) extends LinearOrderedCommSemiring K, Semifield K";
+    }
+    {
+      full_name = "LinearOrderedField";
+      kind = "commanddeclaration";
+      file_path = "Mathlib/Algebra/Order/Field/Defs.lean";
+      start_line = 33;
+      code_preview = "@[deprecated \"Use `[Field K] [LinearOrder K] [IsStrictOrderedRing K]` instead.\"   (since := \"2025-04-10\")] structure LinearOrderedField (K : Type*) extends LinearOrderedCommRing K, Field K";
+    }
+  ];
+  entryCount = builtins.length entries;
+in { inherit ownerName category entries entryCount; }

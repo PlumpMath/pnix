@@ -1,0 +1,147 @@
+# stdlib.lib.math.partition
+#
+# OWNER-LAW (v0.12-AAR, div-math, 2026-05-21): integer partitions.
+#
+# combinatorics.px counts arrangements and selections. This owner
+# counts a different combinatorial object: the integer partitions
+# of n -- the ways to write n as an unordered sum of positive
+# integers. p(4) = 5: 4, 3+1, 2+2, 2+1+1, 1+1+1+1.
+#
+# # The recurrence
+#
+# `partitionCount` uses the standard two-argument recurrence:
+# the partitions of m using parts no larger than k are those that
+# avoid k entirely plus those that use at least one k --
+#
+#   count m k = count m (k-1) + count (m-k) k
+#
+# with count 0 _ = 1. Every value is an exact integer.
+#
+# `distinctPartitionCount` is the same idea with each part used at
+# most once: count m k = count m (k-1) + count (m-k) (k-1).
+#
+# `partitionsOf` enumerates the partitions themselves (each a
+# descending list of parts) for small n.
+#
+# # Standalone
+#
+# Imports nothing. Same input -> same receipt.
+#
+# # What this owner is NOT (honest scope)
+#
+#   - NOT memoised -- the recurrence is recomputed, so the plate
+#     Held-guards count above n=40 and enumeration above n=16.
+#   - NOT the generating-function / pentagonal-number-theorem
+#     method.
+#   - NOT yet a registered mirror-plate lens.
+
+let
+  ownerName = "stdlib/lib/math/partition.px";
+
+  # p(n): the number of partitions of n. `count m k` = the number
+  # of partitions of m into parts each at most k.
+  partitionCount = n:
+    let
+      count = m: k:
+        if m == 0 then 1
+        else if k == 0 then 0
+        else if k > m then count m m
+        else (count m (k - 1)) + (count (m - k) k);
+    in if n < 0 then 0 else count n n;
+
+  # q(n): the number of partitions of n into DISTINCT parts. Same
+  # recurrence, but a used part k drops the cap to k-1.
+  distinctPartitionCount = n:
+    let
+      count = m: k:
+        if m == 0 then 1
+        else if k == 0 then 0
+        else if k > m then count m m
+        else (count m (k - 1)) + (count (m - k) (k - 1));
+    in if n < 0 then 0 else count n n;
+
+  # Enumerate the partitions of n, each as a non-increasing list
+  # of parts. `gen m k` lists the partitions of m with every part
+  # at most k.
+  partitionsOf = n:
+    let
+      gen = m: k:
+        if m == 0 then [ [] ]
+        else if k == 0 then []
+        else if k > m then gen m m
+        else
+          # partitions that do NOT use k ... ++ ... those that do
+          (gen m (k - 1))
+          ++ builtins.map (rest: [ k ] ++ rest) (gen (m - k) k);
+    in if n < 1 then [] else gen n n;
+
+  # --- plate-shaped entry ---------------------------------------
+
+  knownOperations = [ "count" "distinct-count" "list" ];
+
+  countLimit = 40;
+  listLimit = 16;
+
+  applyPartition = request:
+    let
+      op = request.operation;
+      n  = request.n;
+    in
+      if !(builtins.elem op knownOperations) then {
+        outcome = "held-unknown-operation";
+        operation = op;
+        known_operations = knownOperations;
+      }
+      else if n < 0 then {
+        outcome = "held-negative-number";
+        operation = op;
+        n = n;
+      }
+      else if (op == "count" || op == "distinct-count")
+              && n > countLimit then {
+        outcome = "held-argument-too-large";
+        operation = op;
+        n = n;
+        limit = countLimit;
+        reason = "the un-memoised recurrence is recomputed; n is capped";
+      }
+      else if op == "list" && n > listLimit then {
+        outcome = "held-argument-too-large";
+        operation = op;
+        n = n;
+        limit = listLimit;
+        reason = "the partition count grows fast; enumeration is capped";
+      }
+      else if op == "count" then {
+        outcome = "partition-computed";
+        operation = op; n = n;
+        value = partitionCount n;
+      }
+      else if op == "distinct-count" then {
+        outcome = "partition-computed";
+        operation = op; n = n;
+        value = distinctPartitionCount n;
+      }
+      else {
+        # op == "list"
+        outcome = "partition-computed";
+        operation = op; n = n;
+        partitions = partitionsOf n;
+        partition_count = builtins.length (partitionsOf n);
+      };
+
+in {
+  inherit
+    ownerName
+    partitionCount
+    distinctPartitionCount
+    partitionsOf
+    knownOperations
+    applyPartition;
+  meta = {
+    source = "stdlib math partition";
+    owner = ownerName;
+    base = "parametric-math-partition-v0";
+    rev_note = "v0.12-AAR (div-math): integer partition owner. partitionCount p(n) via the standard count m k = count m (k-1) + count (m-k) k recurrence; distinctPartitionCount for partitions into distinct parts; partitionsOf enumerates the partitions themselves. Exact integers. Standalone. NOT memoised (the recurrence is recomputed, so count is capped at n=40, enumeration at n=16), NOT the generating-function method, NOT yet a registered lens.";
+  };
+}

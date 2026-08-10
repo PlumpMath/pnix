@@ -1,0 +1,233 @@
+# stdlib.nl.canonical-sentence-form
+#
+# **K-CSF in .px (one-mirror 정본): 한글 문장 → 고정 역할순서 canonical form.**
+#
+# 운영자(2026-06-15, CLAUDE.md::인터프리터-우선 헌법): ingest 의미 매핑(정의→정규화
+# →CSF→meaning→relation)은 Rust(`nl_corpus/canonical_sentence_form.rs`)가 아니라
+# **거울(.px) 하나**에 있어야 한다. 이 owner 가 그 CSF 의 .px 정본이다.
+#
+# 무엇: 한국어는 자유 어순이지만 조사가 의미역을 고정한다 → 같은 의미의 서로 다른
+# 어순 문장을 *하나의* 고정-역할순서 canonical form 으로 재작성(의미보존 재작성 =
+# surface→canonical CT morphism). 두 어순이 같은 canonical_text 로 수렴한다.
+#
+# 재구현 0: 프레임 추출은 기존 `korean-taxonomy-lift.liftSentence`(조사→role,
+# 어미→mood) 를 그대로 재사용. 여기선 그 roles 를 *고정 순서로 정렬 + 직렬화* 만 한다.
+#
+# 경계(host): `csf_id` digest(sha) 는 순수 평가기가 hash 를 못 하므로 **host 몫**이다.
+# 이 owner 는 `csf_id_basis`(canonical_text)를 내놓고, Rust host 가 그것을 hash 한다.
+# (= Rust=바이트/hash host, 의미/구조=거울. 헌법 경계 그대로.)
+#
+# 남은 슬라이스(별도): MR6 다중절 분리(지만/는데/니까/아서/어서/면서), MR9 head
+# 종결어미 paradigm split, markers. 단일절 정본부터.
+let
+  lift = import nl/korean-taxonomy-lift.px;
+
+  concatStringsSep = builtins.concatStringsSep;
+  map = builtins.map;
+  sort = builtins.sort;
+  len = builtins.length;
+  elemAt = builtins.elemAt;
+  fieldOr = a: k: d: if a ? ${k} then a.${k} else d;
+
+  # 고정 역할 순서 (liftSentence 의 의미역 어휘 기준). 같은 의미구조 문장이 같은
+  # 직렬화로 수렴하도록 결정적 순서를 못박는다.
+  canonicalRoleOrder = [
+    "agent" "topic" "object" "recipient" "location"
+    "instrument" "source" "comitative" "genitive"
+    "comparison" "boundary" "start"
+  ];
+
+  roleRank = role:
+    let go = i:
+      if i >= (len canonicalRoleOrder) then 999
+      else if (elemAt canonicalRoleOrder i) == role then i
+      else go (i + 1);
+    in go 0;
+
+  # roles 를 canonical 순서로 안정 정렬 (어순 변형 → 같은 정렬 결과 = 수렴)
+  orderRoles = roles: sort (a: b: (roleRank a.role) < (roleRank b.role)) roles;
+
+  # ★ 문장 → canonical sentence form (단일절 v0) ★
+  canonicalize = sentence:
+    let lifted = lift.liftSentence sentence;
+    in
+      if lifted.outcome != "lifted" then {
+        outcome = lifted.outcome;            # held-empty 등 정직 전달
+        schema = "pnixc-meta.canonical-sentence-form.v0";
+        sentence = sentence;
+      }
+      else
+        let
+          ordered = orderRoles lifted.roles;
+          bindingStr = concatStringsSep "|" (map (a: a.role + "=" + a.entity) ordered);
+          canonicalText =
+            "csf|" + bindingStr
+            + "|head=" + lifted.action
+            + "|mood=" + lifted.mood
+            + "|tense=" + lifted.tense;
+          structureSig =
+            "sig|" + (concatStringsSep "," (map (a: a.role) ordered))
+            + "|mood=" + lifted.mood;
+        in {
+          outcome = "canonical";
+          schema = "pnixc-meta.canonical-sentence-form.v0";
+          sentence = sentence;
+          canonical_text = canonicalText;
+          role_bindings = map (a: { role = a.role; value = a.entity; }) ordered;
+          head_normalized = lifted.action;
+          sentence_mood = lifted.mood;
+          structure_signature = structureSig;
+          # digest(csf_id) = host 몫: host 가 이 basis 를 hash → csf/<sha16>.
+          csf_id_basis = canonicalText;
+        };
+
+  # ── MR6: 다중절 (connective ending 으로 절 분리·합성) ──
+  #   다중자 연결어미만(고/면 같은 단일자는 noun final 과 모호 → 보수적 제외).
+  #   단일절 문장은 canonicalize 와 byte-동일 유지(기존 csf graph 주소 안정).
+  endsWith = lift.endsWith;
+  stripSuffix = lift.stripSuffix;
+  splitSp = lift.splitSp;
+  head = builtins.head;
+  tail = builtins.tail;
+
+  firstMatch = list: pred:
+    let go = i:
+      if i >= (len list) then null
+      else if pred (elemAt list i) then (elemAt list i)
+      else go (i + 1);
+    in go 0;
+
+  connectiveEndings = [ "면서" "니까" "는데" "지만" "아서" "어서" ];
+
+  # 문장 → [ { clause_words; connective } ]  (connective=null = 마지막 절)
+  splitClauses = sentence:
+    let
+      go = acc: cur: ws:
+        if ws == [ ] then
+          (if cur == [ ] then acc else acc ++ [ { clause_words = cur; connective = null; } ])
+        else
+          let w = head ws; rest = tail ws;
+              conn = firstMatch connectiveEndings (c: endsWith c w);
+          in
+            if conn != null
+            then go (acc ++ [ { clause_words = cur ++ [ (stripSuffix conn w) ]; connective = conn; } ]) [ ] rest
+            else go acc (cur ++ [ w ]) rest;
+    in go [ ] [ ] (splitSp sentence);
+
+  # 다중절 canonical (단일절은 canonicalize 로 위임 = byte-동일)
+  canonicalizeMulti = sentence:
+    let clauses = splitClauses sentence;
+    in
+      if (len clauses) <= 1 then canonicalize sentence
+      else
+        let
+          perClause = map (cl:
+            let c = canonicalize (builtins.concatStringsSep " " cl.clause_words);
+            in {
+              connective = cl.connective;
+              csf_outcome = c.outcome;
+              canonical_text = if c.outcome == "canonical" then c.canonical_text else null;
+            }) clauses;
+          composed = builtins.concatStringsSep " >> " (map (pc:
+            (if pc.canonical_text == null then "?" else pc.canonical_text)
+            + (if pc.connective == null then "" else "[" + pc.connective + "]")) perClause);
+        in {
+          outcome = "canonical-multi";
+          schema = "pnixc-meta.canonical-sentence-form.v0";
+          sentence = sentence;
+          clause_count = len clauses;
+          clauses = perClause;
+          canonical_text = composed;
+        };
+
+  # ── MR9: head 종결어미 paradigm split (먹었다→먹/었다; cross-ending 매칭 evidence) ──
+  #   lift.verbEndings 재사용(재구현0). canonical_text 엔 미포함(byte-안정) = 별 evidence.
+  #   ★bound 정직: verbEndings 표(었다/았다/였다/겠다/는다/어라/아라/자/까/다)에 든
+  #     어미만 정확(먹었다→먹, 바꾸다→바꾸). 표에 없는 긴 종결어미(ㄴ다/ㅂ니다/습니다)는
+  #     짧은 "다"만 떼어 stem 이 근사(간다→간, 바꿉니다→바꿉니) — 교차매칭 *놓침*
+  #     (false-negative)이지 거짓-stem 단정 아님. 완전 paradigm = korean-morphology
+  #     strip-suffixes 확장 별 슬라이스.
+  verbEndings = lift.verbEndings;
+  headParadigm = word:
+    let m = firstMatch verbEndings (ve: endsWith ve.e word);
+    in
+      if m == null then { stem = word; ending = ""; ending_class = ""; }
+      else { stem = stripSuffix m.e word; ending = m.e; ending_class = m.mood; };
+
+  # 어순 무변 증명용: 두 문장이 같은 canonical_text 로 수렴하는가.
+  convergesSame = s1: s2:
+    (canonicalize s1).canonical_text == (canonicalize s2).canonical_text;
+
+  # ★ 통합 진입점(one-mirror 정본): 단일/다중절/held → *균일* contract ★
+  #   Rust host(canonicalize_sentence)가 via_px 로 이것만 호출 → csf_id=host sha16(csf_id_basis).
+  #   held(비-lift 명사구 정의 등)는 정직 노출 + csf_id_basis 에 sentence 포함(distinct held
+  #   정의가 빈 canonical_text 로 충돌하지 않도록). canonical_text 는 .px 가 *정의*한다
+  #   (lift taxonomy; nl_core 와 byte-match 안 함 — .px 가 진리원천).
+  canonicalizeForm = sentence:
+    let
+      schema = "pnixc-meta.canonical-sentence-form.v0";
+      clauses = splitClauses sentence;
+    in
+      if (len clauses) > 1
+      then
+        let m = canonicalizeMulti sentence;
+        in {
+          inherit schema;
+          outcome = m.outcome;                  # "canonical-multi"
+          canonical_text = m.canonical_text;
+          csf_id_basis = m.canonical_text;
+          role_bindings = [ ];                  # 다중절 집계 역할은 별 슬라이스
+          head_normalized = "";
+          sentence_mood = "multi";
+          structure_signature = m.canonical_text;
+          clause_count = m.clause_count;
+        }
+      else
+        let c = canonicalize sentence;
+        in
+          if c.outcome == "canonical"
+          then {
+            inherit schema;
+            outcome = "canonical";
+            canonical_text = c.canonical_text;
+            csf_id_basis = c.canonical_text;
+            role_bindings = c.role_bindings;
+            head_normalized = c.head_normalized;
+            sentence_mood = c.sentence_mood;
+            structure_signature = c.structure_signature;
+            clause_count = 1;
+          }
+          else {                                # held-empty 등 비-lift(명사구 정의)
+            inherit schema;
+            outcome = fieldOr c "outcome" "held";
+            canonical_text = "";
+            csf_id_basis = "held|" + sentence;  # distinct held → distinct csf_id(충돌 방지)
+            role_bindings = [ ];
+            head_normalized = "";
+            sentence_mood = "unknown";
+            structure_signature = "";
+            clause_count = 0;
+          };
+
+  inventorySummary = _: {
+    owner = "stdlib.nl.canonical-sentence-form";
+    consumes = "korean-taxonomy-lift.liftSentence (조사→role, 어미→mood; 재구현 0)";
+    role = "한글 문장 → 고정 역할순서 canonical form (의미보존 재작성, 어순 무변). ingest 의미 매핑의 .px 정본.";
+    boundary = "csf_id digest(sha) = host; 이 owner 는 csf_id_basis(canonical_text) 만 내놓는다.";
+    note = "단일절 v0. MR6 다중절/MR9 head paradigm/markers 는 별 슬라이스. Rust nl_corpus/canonical_sentence_form.rs 는 Phase 2/3 삭제 대상.";
+  };
+
+in {
+  inherit
+    canonicalRoleOrder roleRank orderRoles
+    canonicalize convergesSame inventorySummary
+    connectiveEndings splitClauses canonicalizeMulti
+    canonicalizeForm headParadigm;
+  ownerName = "stdlib.nl.canonical-sentence-form";
+  meta = {
+    source = "stdlib nl canonical-sentence-form (.px CSF: 한글 문장 → 고정 역할순서 canonical form; one-mirror 정본)";
+    owner = "stdlib.nl.canonical-sentence-form";
+    base = "canonical-sentence-form-v0";
+    rev_note = "2026-06-15 CLAUDE.md::인터프리터-우선 헌법 Phase 1: ingest 의미 매핑(CSF)의 .px 정본화. korean-taxonomy-lift.liftSentence 재사용(재구현 0) → roles 를 canonicalRoleOrder 로 정렬·직렬화 → canonical_text + structure_signature. 어순 무변(convergesSame): '철수가 사과를 먹었다' ≡ '사과를 철수가 먹었다' → 같은 csf. digest(csf_id)=host 몫(순수 평가기 hash 불가)=csf_id_basis 만 노출. Rust nl_corpus/canonical_sentence_form.rs(503줄)=Phase 2/3 삭제 대상. 단일절 v0; MR6 다중절/MR9 head paradigm 별 슬라이스.";
+  };
+}

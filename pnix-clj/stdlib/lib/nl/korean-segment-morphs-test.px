@@ -1,0 +1,43 @@
+# stdlib/lib/nl/korean-segment-morphs-test.px — segmentMorphs(splitHead) 회귀 하니스 (Slice 4)
+#
+# korean-taxonomy-lift.splitHead(자모 수준 용언 head 분해)가 Rust nl_core/head.rs
+# (split_head_morphology)와 동치인지 self-check. 한글을 거대 수학법칙으로 고정 = 종성 산술
+# (hangul-mirror)로 ㅂ니다/ㄴ다 융합어미 분해. 새 거울 0개(taxonomy-lift apply).
+#
+# 케이스 출처 = head.rs 의 docstring/test 정본: 3-phase longest-first, min-stem 가드, 명사 미분해.
+let
+  tl = import ./korean-taxonomy-lift.px;
+  B = builtins;
+  sh = tl.splitHead;
+  case = tok: exp:
+    let r = sh tok;
+    in { tok = tok;
+         stem = (if r == null then null else r.stem);
+         ending = (if r == null then null else r.ending);
+         ok = (if exp == null then (r == null)
+               else (r != null) && (r.stem == exp.stem) && (r.ending == exp.ending)); };
+  cases = [
+    (case "먹습니다"   { stem = "먹"; ending = "습니다"; })   # ① 다자 suffix
+    (case "읽어요"     { stem = "읽"; ending = "어요"; })     # ① polite
+    (case "먹었다"     { stem = "먹"; ending = "었다"; })     # ① past
+    (case "먹는다"     { stem = "먹"; ending = "는다"; })     # ① 는다 가 ㄴ다 자모분해를 이김
+    (case "갑니다"     { stem = "가"; ending = "ㅂ니다"; })   # ② 융합 종성 ㅂ(17)
+    (case "합니다"     { stem = "하"; ending = "ㅂ니다"; })   # ② ㅂ
+    (case "들어갑니다" { stem = "들어가"; ending = "ㅂ니다"; }) # ② 긴 어간 + ㅂ
+    (case "간다"       { stem = "가"; ending = "ㄴ다"; })     # ② 융합 종성 ㄴ(4)
+    (case "들어간다"   { stem = "들어가"; ending = "ㄴ다"; }) # ② 긴 어간 + ㄴ
+    # head.rs 정본 cross-ending: 바꾸다/바꿉니다/바꾼다 = 한 술어 어간 "바꾸"
+    (case "바꾸다"     { stem = "바꾸"; ending = "다"; })     # ③ 단자(어간 2자 OK)
+    (case "바꿉니다"   { stem = "바꾸"; ending = "ㅂ니다"; }) # ② 융합 ㅂ (바꿉=바꾸+ㅂ)
+    (case "바꾼다"     { stem = "바꾸"; ending = "ㄴ다"; })   # ② 융합 ㄴ (바꾼=바꾸+ㄴ)
+    (case "바꿨어요"   { stem = "바꿨"; ending = "어요"; })   # ① polite
+    (case "만들었다"   { stem = "만들"; ending = "었다"; })   # ① past
+    (case "바다"       null)                                  # ③ 명사 미분해(단자 다 + 어간<2)
+    (case "가다"       null)                                  # ③ 1자 어간 미분해(정본 documented miss)
+  ];
+in {
+  results = B.map (c: { tok = c.tok; stem = c.stem; ending = c.ending; ok = c.ok; }) cases;
+  pass_count = B.length (B.filter (c: c.ok) cases);
+  total = B.length cases;
+  all_ok = B.all (c: c.ok) cases;
+}

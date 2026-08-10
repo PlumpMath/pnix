@@ -1,0 +1,7 @@
+# adapter	status	schema	held_policy	conflict_policy	note
+local-rust	DONE	bootstrap-cli-v1	none	fail-closed	local bootstrap CLI plus rustc toolchain adapter is verified by local proof checks
+rustc-native	DONE	rustc-process-v1	soft-env-observed	fail-closed	native tier shells out to rustc with deterministic flags and content-hash cache and is replayed by tv-check
+github-actions	DISABLED	workflow-yml-v1	disabled-receipt	fail-closed	GitHub Actions workflow is stored under workflows.disabled and must not run verification
+external-github	HELD	github-api-v1	explicit-enable-required	fail-closed	external GitHub adapter closure is not claimed by rs-meta local proof checks
+external-calendar	HELD	calendar-api-v1	explicit-enable-required	fail-closed	calendar or scheduling adapters are outside rs-meta and remain held
+cross-implementation	HELD	export-json-v1	explicit-enable-required	fail-closed	stage14 comparison exports require separate implementation receipts

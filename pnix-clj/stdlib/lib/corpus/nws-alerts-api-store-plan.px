@@ -1,0 +1,43 @@
+# stdlib/lib/corpus/nws-alerts-api-store-plan.px — NWS API OpenAPI / alert type metadata snapshot.
+# redb `corpus_source_records`에 pnix attrset source(JSON 아님)로 append한다.
+# live alerts/CAP/forecast/zone geometry/emergency guidance는 포함하지 않는다. graph/mirror 연결도 하지 않는다.
+let
+  B = builtins;
+  genPath = ./nws-alerts-api.generated.px;
+  seed = if B.pathExists genPath then import genPath else {
+    schema = "weather.nws_alerts_api.v1";
+    source = { name = "National Weather Service API OpenAPI / alert type metadata"; license = "US-GOV-PD"; scope = "empty seed fallback"; };
+    summary = { path_count = 0; schema_count = 0; alert_type_count = 0; };
+    paths = [ ]; schemas = [ ]; alert_types = [ ];
+  };
+  ser = import ../nl/pnix-value-literal.px;
+  valueSrc = ser.toPnixSource seed;
+  contentHash = B.hashString "sha256" valueSrc;
+  key = seed.schema + "/" + contentHash;
+in {
+  mkPlan = args: {
+    plan = {
+      plan_id = "nws-alerts-api-load-v0";
+      source_lens = "stdlib/lib/corpus/nws-alerts-api-store-plan.px";
+      source_verdict = "materialize-corpus-source";
+      operations = [ { op_kind = "append"; table = "corpus_source_records"; key = key; value_bytes = valueSrc; } ];
+      receipt_owner = "weather.nws_alerts_api.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    schema = seed.schema;
+    content_hash = contentHash;
+    value_bytes_len = B.stringLength valueSrc;
+  };
+  mkQuery = args: {
+    plan = {
+      plan_id = "nws-alerts-api-query-v0";
+      source_lens = "stdlib/lib/corpus/nws-alerts-api-store-plan.px";
+      source_verdict = "query-corpus-source";
+      operations = [ { op_kind = "scan-prefix"; table = "corpus_source_records"; key = ""; key_prefix = seed.schema + "/"; } ];
+      receipt_owner = "weather.nws_alerts_api.v0";
+      plan_built_at_ms = args.built_at_ms or 0;
+    };
+    expected_key = key;
+    expected_hash = contentHash;
+  };
+}

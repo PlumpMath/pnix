@@ -1,0 +1,177 @@
+{:schema :pnix.clr-meta.compiler-selfhost-contract.v1
+ :id :pnix.clr-meta.compiler-kernel-c0-c1.v1
+ :family :pnix.clr-meta.compiler-kernel.v1
+ :phase :c0-c1-canonical-source
+ :source {:path "compiler_kernel.clj"
+          :namespace pnix.clr-meta.compiler-kernel.v1
+          :entry compile-source
+          :identity-def kernel-identity
+          :identity-literal "pnix.clr-meta.compiler-kernel.v1"
+          :profile-id :pnix.clr-meta.compiler-kernel-source.v1}
+ :language-invariant
+ {:source-language-id :pnix.clr-meta.compiler-kernel-source.v1
+  :compiled-language-id :pnix.clr-meta.compiler-kernel-source.v1
+  :source-language-equals-compiled-language true
+  :same-source "compiler_kernel.clj"
+  :same-source-recompilable :future-executable-gate}
+ :compiler-abi
+ {:kind :in-process-source-pesink
+  :entry compile-source
+  :arguments [:source-text :pe-sink]
+  :result :artifact-descriptor
+  :output :managed-compiler-pe
+  :structured-error :compiler-rejection
+  :atomicity :commit-only-on-pesink-finish
+  :partial-output :forbidden}
+ :support-abi
+ {:id :pnix.clr-meta.compiler-support.v1
+  :boundary :c0-low-level
+  :data-contract
+  {:environment :persistent-opaque-map
+   :binding [:kind :target :arity]
+   :missing-binding nil
+   :pe-sink :transactional-opaque-handle}
+  :calls
+  [{:symbol pnix.clr-meta.compiler-support.reader.v1/read-all
+    :arity 2 :partition :reader :effect :read :returns :source-forms}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/kind-is?
+    :arity 2 :partition :data :effect :pure :returns :boolean}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/count
+    :arity 1 :partition :data :effect :pure :returns :system-int64}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/nth
+    :arity 2 :partition :data :effect :pure :returns :source-value}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/symbol-name
+    :arity 1 :partition :data :effect :pure :returns :string}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/string-equal?
+    :arity 2 :partition :data :effect :pure :returns :boolean}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/env-new
+    :arity 0 :partition :data :effect :pure :returns :environment}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/env-bind
+    :arity 5 :partition :data :effect :pure :returns :environment}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/env-lookup
+    :arity 2 :partition :data :effect :pure :returns :binding-or-nil}
+   {:symbol pnix.clr-meta.compiler-support.data.v1/reject
+    :arity 3 :partition :data :effect :reject :returns :never}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/begin
+    :arity 5 :partition :pesink :effect :sink-begin :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/define-constant
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/define-method
+    :arity 3 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/begin-initializer
+    :arity 1 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/end-initializer
+    :arity 1 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/begin-method
+    :arity 3 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/end-method
+    :arity 1 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/allocate-local
+    :arity 1 :partition :pesink :effect :sink-write :returns :local-handle}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/new-label
+    :arity 1 :partition :pesink :effect :sink-write :returns :label-handle}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/mark-label
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-literal
+    :arity 3 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-load-arg
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-load-local
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-load-field
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-store-local
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-store-field
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-call
+    :arity 3 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-opcode
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-branch-false
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-branch
+    :arity 2 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-pop
+    :arity 1 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/emit-ret
+    :arity 1 :partition :pesink :effect :sink-write :returns :nil}
+   {:symbol pnix.clr-meta.compiler-support.pesink.v1/finish
+    :arity 1 :partition :pesink :effect :sink-finish :returns :artifact-descriptor}]}
+ :intrinsics
+ [{:symbol + :arity 2 :opcode "add.ovf" :semantics :checked-system-int64-add}
+  {:symbol - :arity 2 :opcode "sub.ovf" :semantics :checked-system-int64-subtract}
+  {:symbol = :arity 2 :opcode "ceq" :semantics :closed-value-equality}
+  {:symbol < :arity 2 :opcode "clt" :semantics :system-int64-less-than}]
+ :lowering-coverage
+ [{:construct :ns :owner lower-program}
+  {:construct :def-constant :owner initialize-constants}
+  {:construct :def-fn :owner lower-definition}
+  {:construct :fn* :owner lower-definition}
+  {:construct :if :owner lower-node}
+  {:construct :let* :owner lower-node}
+  {:construct :do :owner lower-node}
+  {:construct :literal :owner lower-node}
+  {:construct :lexical-symbol :owner lower-node}
+  {:construct :global-symbol :owner lower-node}
+  {:construct :call :owner lower-node}
+  {:construct :intrinsic :owner select-intrinsic-opcode}]
+ :forbidden
+ {:forms [defn defn- declare fn let loop loop* recur letfn letfn*
+          when when-not if-let when-let cond condp case and or
+          quote var throw try catch finally new . set! monitor-enter
+          monitor-exit import require use in-ns]
+  :symbols [clojure.core/eval
+            clojure.core/load
+            clojure.core/load-file
+            clojure.core/load-reader
+            clojure.core/load-string
+            clojure.core/read-string
+            clojure.core/resolve
+            clojure.core/requiring-resolve
+            clojure.core/apply
+            clojure.core/map
+            clojure.core/mapv
+            clojure.core/reduce
+            clojure.core/filter
+            clojure.core/partial
+            clojure.core/comp
+            clojure.core/future
+            clojure.lang.Compiler/compile
+            clojure.lang.Compiler/eval
+            System.Diagnostics.Process/Start]
+  :symbol-prefixes ["clojure.lang.Compiler/"
+                    "System.Reflection."
+                    "System.Reflection.Emit."
+                    "System.Diagnostics.Process/"
+                    "Microsoft.CSharp."]
+  :payloads [:embedded-pe-bytes
+             :embedded-dll-bytes
+             :base64-artifact
+             :opaque-resource-copy
+             :precompiled-method-body]}
+ :mutation-sites
+ [{:id :identity-literal
+   :def kernel-identity
+   :selector :string-literal
+   :expected "pnix.clr-meta.compiler-kernel.v1"}
+  {:id :add-lowering-rule
+   :def select-intrinsic-opcode
+   :selector :operator-branch
+   :input-symbol "+"
+   :expected-opcode "add.ovf"}
+  {:id :subtract-lowering-rule
+   :def select-intrinsic-opcode
+   :selector :operator-branch
+   :input-symbol "-"
+   :expected-opcode "sub.ovf"}]
+ :claim-boundary
+ {:c1_source_admission :static-source-and-lowering-closure-only
+  :executable_stage false
+  :same_source_recompile_executed false
+  :promotion :held}
+ :claims {:stage1_artifact false
+          :stage2 false
+          :self_reproduction false
+          :fixed_point false
+          :raw_reproducibility false}}

@@ -1,0 +1,121 @@
+# stdlib/lib/meta/abstraction-status-store-plan.px
+#
+# P5-b writer/store: P3 abstraction-gate-bridge 결과(gate_status)를 read-back 가능한 *abstraction-status memory*로
+#   저장하는 store-plan. = symbol-memory-store-plan.px의 abstraction 판(append-only, content-hash key, pnix rec{}).
+#   닫히는 루프: 먹/잡수시/드시 → ingest abstraction candidate → gate bridge(held-pending-utility) →
+#   *이 store* → 다음 "잡수시" 입력 → read-back이 "ingest로 볼 수 있으나 held-pending-utility" evidence.
+#   = 시스템이 *아는 것* 뿐 아니라 *아직 검증 못 한 것*을 기억.
+#
+# ★verified minting 0: status = gate_result.gate_status 그대로 *거울*(승격/재분류 0). P3는 {held,
+#   held-pending-utility, submit-to-promoteCandidate}만 냄 → verified는 어떤 경로로도 안 생김(§38 영구 Held).
+# ★byte-identical 링크(새 key fn 0): about_concept = source_symbols → proposeSymbols *재사용*으로 concept key(s:n:ingest)
+#   박제 → read-back의 recognized_concepts(다음 발화 proposeSymbols)와 *정확히 같은 키스페이스*. (먹/잡수시 → 둘 다 s:n:ingest)
+# ★비파괴/누설0: append-only · content-hash key · pnix rec{}(JSON 금지). raw gate receipt/owner lock/source body
+#   *비저장*. proposer_only=true·durable/accepted/ontology=false. (P5-a projector가 allow-list로 5필드만 읽고 3필드만 공개.)
+# ★갈라치기 0: 새 gate/Arena/mirror 0. serializer=substrate-store-value-literal(재파싱 가능) 재사용, concept key=symbol-memory-propose 재사용.
+let
+  B = builtins;
+  # ★재파싱 가능한 serializer(substrate-store-value-literal): 마지막 바인딩에도 trailing-`;`(함정 #5) → ferry가
+  #   stored value를 *pnix module로 되읽을 수 있음*. pnix-value-literal은 last-binding `;` 누락(재파싱 불가)이라 안 씀.
+  ser = import ../corpus/substrate-store-value-literal.px;
+  propose = import ../nl/symbol-memory-propose.px;   # byte-identical concept key (재사용)
+  schema = "meta.abstraction-status.v0";
+  table = "corpus_abstraction_status";
+
+  # source_symbol(surface 술어, 예 "먹") → concept canonical key(s:n:ingest). proposeSymbols 재사용 = read-back과 동일.
+  #   ★read-back recognized_concepts와 *대칭*(concept-only): symbol.concept==null(entity surface, 예 "철수")이면 null.
+  #   비대칭이면 entity-sourced about_concept(s:n:철수)는 read-back(concept!=null 필터)에 *영영 무매칭* = silent 누락.
+  #   그래서 writer도 진짜 concept(conceptOf 비-null)만 about_concept에 넣어 양측 키스페이스를 일치시킨다.
+  conceptKeyOf = s:
+    let syms = (propose.proposeSymbols { action = s; roles = [ ]; }).symbols;
+        h = if syms == [ ] then null else B.head syms;
+    in if h == null then null
+       else if h.concept == null then null   # entity surface = concept 아님 → about 제외(대칭)
+       else h.canonical_key;
+
+  # source_symbols → unique about_concept key list (null=빈 surface 제외).
+  aboutConceptsOf = srcs:
+    let keys = B.filter (k: k != null) (B.map conceptKeyOf srcs);
+    in B.foldl' (acc: k: if B.elem k acc then acc else acc ++ [ k ]) [ ] keys;
+
+  # ★mkEntry {candidate, gate_result}: P3 submitToGate 결과 → P5-a projector가 읽는 abstraction-status entry.
+  #   candidate = genesisCandidate 출력(abstraction.key, source_symbols, owner_candidate, relation).
+  #   gate_result = submitToGate 출력(gate_status). status = gate_status 거울(승격 0).
+  mkEntry = args:
+    let cand = args.candidate or { };
+        gate = args.gate_result or { };
+        absKey = if (cand ? abstraction) && (cand.abstraction ? key) then cand.abstraction.key else "";
+        srcs = cand.source_symbols or [ ];
+        gateStatus = gate.gate_status or "held";
+    in {
+      inherit schema;
+      entry_kind = "abstraction-status";
+      abstraction_key = absKey;
+      about_concept = aboutConceptsOf srcs;        # s:n:ingest — read-back recognized_concepts와 byte-identical
+      status = gateStatus;                          # ★P5-a가 읽는 status = gate_status 거울(verified minting 0)
+      gate_status = gateStatus;                     # provenance(P5-a allow-list가 무시 — 누설 0)
+      owner = cand.owner_candidate or "";           # P5-a internal_entries만 읽음(공개 비노출)
+      relation = cand.relation or "common-structure";
+      source_symbols_public = srcs;                 # 표면 술어명(secret 아님; projector 비노출)
+      created_by = "abstraction-gate-bridge";
+      proposer_only = true;
+      durable_truth = false;
+      accepted_as_truth = false;
+      ontology_assert_allowed = false;
+    };
+
+  # entry → content-hash key append op (abstraction_key=term-dag content key 기준 dedup idempotent).
+  entryInfo = e:
+    let contentHash = B.hashString "sha256" (e.abstraction_key + "|" + e.status);
+        valueSrc = ser.toPnixStorageValue e;
+        key = schema + "/status/" + contentHash;
+    in {
+      op = { op_kind = "append"; table = table; key = key; value_bytes = valueSrc; };
+      meta = { key = key; content_hash = contentHash; abstraction_key = e.abstraction_key; status = e.status; };
+    };
+
+  dedupByKey = infos:
+    B.foldl' (acc: x: if B.any (y: y.meta.key == x.meta.key) acc then acc else acc ++ [ x ]) [ ] infos;
+in {
+  inherit mkEntry conceptKeyOf aboutConceptsOf;
+  # storeKeyOfEntry: entry → durable store key (소비측이 byte-identical로 참조 가능, 새 key fn 0).
+  storeKeyOfEntry = e: (entryInfo e).meta.key;
+
+  # mkPlan {pairs | entries}: pairs=[{candidate,gate_result}] (P3 결과 직접), entries=이미-만든 entry list.
+  #   → append-only op-plan(corpus_abstraction_status). 새 lane/플래그 0(기존 generic executor 재사용).
+  mkPlan = args:
+    let pairs = if args ? pairs then args.pairs else [ ];
+        fromPairs = B.map (p: mkEntry p) pairs;
+        entries = (if args ? entries then args.entries else [ ]) ++ fromPairs;
+        infos = dedupByKey (B.map entryInfo entries);
+        ops = B.map (x: x.op) infos;
+        manifestRecord = {
+          inherit schema;
+          source = "abstraction-status memory (P3 gate result read-back)";
+          entry_count = B.length infos;
+          entries = B.map (x: x.meta) infos;
+          proposer_only = true;
+          durable_truth = false;
+          ontology_assert_allowed = false;
+        };
+        manifestSrc = ser.toPnixStorageValue manifestRecord;
+        manifestKey = schema + "/manifest/" + (B.hashString "sha256" manifestSrc);
+        manifestOp = { op_kind = "append"; table = table; key = manifestKey; value_bytes = manifestSrc; };
+    in {
+      plan = {
+        plan_id = "abstraction-status-load-v0";
+        source_lens = "stdlib/lib/meta/abstraction-status-store-plan.px";
+        source_verdict = "materialize-abstraction-status";
+        operations = [ manifestOp ] ++ ops;
+        receipt_owner = schema;
+        plan_built_at_ms = args.built_at_ms or 0;
+      };
+      inherit schema;
+      entry_count = B.length infos;
+      operation_count = 1 + (B.length ops);
+      proposer_only = true;
+      durable_truth = false;
+      ontology_assert_allowed = false;
+      append_only = true;
+    };
+}

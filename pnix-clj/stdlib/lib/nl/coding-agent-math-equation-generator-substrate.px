@@ -1,0 +1,557 @@
+let
+  ownerName = "stdlib.nl.coding-agent-math-equation-generator-substrate";
+
+  # Convergence note (2026-06-03): this owner only needs Lean owner identity
+  # for inventory/defer metadata.  Do not top-level import the heavy Lean
+  # lookup stack here; route real latest-engine work through the converged
+  # entry on demand.
+  defer_lean_unified = "stdlib/lib/nl/lean/unified-query-entry.px";
+  defer_converged_engine = "stdlib/lib/nl/converged-engine-entry.px";
+  defer_lean_axiom_dep = "stdlib/lib/nl/lean/substrate-axiom-dependency-chain.px";
+
+  # === Coding agent math equation generator (agent-NL-205) ===========
+  #
+  # 사용자 vision 정확 박힘 (2026-05-29):
+  # > "응용수학 개념들이 알고리즘<->수학 substrate 간에 문장생성이 목표가
+  #    아님. 실제 coding 에이전트 행동(작업)시에 필요한 수학식 생성과
+  #    작동시키는 원동력들을 구현."
+  #
+  # 이전 applied-math-cs-intelligence-substrate.px 는 *명칭 매핑 + 한글
+  # 응답* (문장 생성). 이 owner = **실제 수학식 자동 생성 + driver power**.
+  #
+  # 각 generator:
+  #   input: coding receipt (structured: op / algorithm / inputs)
+  #   output: {
+  #     equation_string: 실제 수학식 (식 그대로)
+  #     symbolic_form: 변수 + relation
+  #     derivation_steps: 식 유도 단계
+  #     driver_power: 식이 *작동* 시키는 결정/원동력
+  #     decision_constraint: 식이 강제하는 coding decision
+  #   }
+  #
+  # 12 generator (각각 실제 수학식 생성, 명칭 매칭 아님):
+  #   1. complexity-equation-generator (recurrence + master theorem → O(...))
+  #   2. loop-invariant-generator (loop receipt → Hoare triple + invariant)
+  #   3. probabilistic-bound-generator (random op → Chernoff/Hoeffding)
+  #   4. graph-property-generator (graph algo → BFS depth / MST cost)
+  #   5. numerical-error-generator (float op → error propagation)
+  #   6. info-bound-generator (encoding → Shannon + Huffman bound)
+  #   7. optimization-constraint-generator (opt → LP / KKT / Bellman)
+  #   8. combinatorics-count-generator (enum → I-E / gen function)
+  #   9. linear-algebra-decomp-generator (matrix → rank / eigenvalue)
+  #   10. decision-utility-generator (choice → E[utility] / argmax)
+  #   11. learning-bound-generator (train → PAC / VC bound)
+  #   12. type-refinement-generator (function → pre/postcondition)
+
+  stepKind = "coding-agent-math-equation-generator";
+  framework_step =
+    "coding receipt → 실제 수학식 자동 생성 + 작동 원동력";
+
+  # =================================================================
+  # === Generator 1: Complexity Equation Generator ===================
+  # =================================================================
+  #
+  # coding receipt → recurrence T(n) → Master theorem case → O(...).
+
+  generateComplexityEquation = receipt:
+    let
+      algo = receipt.algorithm or "unknown";
+      n = receipt.input_size or "n";
+    in
+      if algo == "merge-sort" || algo == "merge sort" || algo == "mergesort"
+      then {
+        outcome = "complexity-equation-emitted";
+        algorithm = algo;
+        recurrence = "T(" + n + ") = 2*T(" + n + "/2) + Θ(" + n + ")";
+        master_theorem_case = "Case 2: f(n) = Θ(n^{log_2 2}) = Θ(n)";
+        closed_form = "T(" + n + ") = Θ(" + n + " log " + n + ")";
+        symbolic_form = {
+          a = 2;  # subproblems
+          b = 2;  # division factor
+          f_n = "n";  # merge cost
+          c = 1;  # log_b a
+        };
+        derivation_steps = [
+          "split: T(n) = 2 * T(n/2)"
+          "merge: + Θ(n)"
+          "Master Thm: a=2, b=2, c=log_2 2 = 1, f(n)=Θ(n^1) → Case 2"
+          "→ T(n) = Θ(n log n)"
+        ];
+        driver_power =
+          "merge sort 선택의 *수학적 원동력*: O(n log n) 가 O(n²) bubble sort 보다 안정적";
+        decision_constraint =
+          "input_size > 50 → merge sort 선택; in-place 강제 시 quick sort 고려";
+      }
+      else if algo == "binary-search" || algo == "binary search"
+      then {
+        outcome = "complexity-equation-emitted";
+        algorithm = algo;
+        recurrence = "T(" + n + ") = T(" + n + "/2) + Θ(1)";
+        master_theorem_case = "Case 2: f(n) = Θ(1) = Θ(n^{log_2 1}) = Θ(n^0)";
+        closed_form = "T(" + n + ") = Θ(log " + n + ")";
+        symbolic_form = { a = 1; b = 2; f_n = "1"; c = 0; };
+        derivation_steps = [
+          "T(n) = T(n/2) + Θ(1) (한쪽 절반 + comparison)"
+          "Master Thm: a=1, b=2, c=0, f(n)=Θ(1)=Θ(n^0) → Case 2"
+          "→ T(n) = Θ(log n)"
+        ];
+        driver_power = "정렬된 array 에서 lookup 의 *exponential speedup*";
+        decision_constraint = "sorted input → binary search; unsorted → O(n) linear";
+      }
+      else if algo == "quick-sort" || algo == "quicksort"
+      then {
+        outcome = "complexity-equation-emitted";
+        algorithm = algo;
+        recurrence = "avg: T(" + n + ") = 2*T(" + n + "/2) + Θ(" + n + "); worst: T(" + n + ") = T(" + n + "-1) + Θ(" + n + ")";
+        master_theorem_case = "avg: Case 2 (Θ(n log n)); worst: linear recurrence (Θ(n²))";
+        closed_form = "avg = Θ(" + n + " log " + n + "); worst = Θ(" + n + "²)";
+        symbolic_form = { a_avg = 2; b_avg = 2; f_n = "n"; };
+        derivation_steps = [
+          "avg pivot: balanced split → T(n) = 2T(n/2) + Θ(n)"
+          "worst pivot (sorted): unbalanced → T(n) = T(n-1) + Θ(n) = Θ(n²)"
+          "randomized pivot → avg case with high prob"
+        ];
+        driver_power = "in-place + cache-friendly, but adversarial input 시 quadratic";
+        decision_constraint = "random pivot 강제, 또는 input size 큰 경우 introsort hybrid";
+      }
+      else if algo == "fibonacci-naive"
+      then {
+        outcome = "complexity-equation-emitted";
+        algorithm = algo;
+        recurrence = "T(" + n + ") = T(" + n + "-1) + T(" + n + "-2) + Θ(1)";
+        master_theorem_case = "non-master (subproblems not equal-sized)";
+        closed_form = "T(" + n + ") = Θ(φ^" + n + "), φ = (1+√5)/2";
+        symbolic_form = { golden_ratio = "phi"; growth = "exponential"; };
+        derivation_steps = [
+          "T(n) = T(n-1) + T(n-2) + Θ(1) — same shape as Fibonacci 자체"
+          "characteristic equation: x² = x + 1 → x = φ"
+          "→ T(n) = Θ(φ^n) = exponential"
+        ];
+        driver_power = "exponential blowup → memoization (DP) 강제";
+        decision_constraint = "n > 30 → 반드시 memoize 또는 closed-form (Binet)";
+      }
+      else {
+        outcome = "held-no-complexity-pattern-match";
+        algorithm = algo;
+        held_reason = "등록된 algorithm pattern 에 매칭 없음";
+        registered_algorithms = [ "merge-sort" "binary-search" "quick-sort" "fibonacci-naive" ];
+      };
+
+  # =================================================================
+  # === Generator 2: Loop Invariant Generator ========================
+  # =================================================================
+  #
+  # loop receipt → Hoare triple {P} S {Q} + loop invariant I.
+
+  generateLoopInvariant = receipt:
+    let
+      loop_kind = receipt.loop_kind or "unknown";
+      loop_var = receipt.loop_var or "i";
+      bound = receipt.bound or "n";
+    in
+      if loop_kind == "sum-array" || loop_kind == "sum array"
+      then {
+        outcome = "loop-invariant-emitted";
+        loop_kind = loop_kind;
+        precondition = "P: array a[0..n] given, sum_var = 0, " + loop_var + " = 0";
+        loop_invariant =
+          "I: sum_var = Σ_{k=0}^{" + loop_var + "-1} a[k] ∧ 0 ≤ " + loop_var + " ≤ " + bound;
+        loop_body = "sum_var := sum_var + a[" + loop_var + "]; " + loop_var + " := " + loop_var + " + 1";
+        postcondition = "Q: sum_var = Σ_{k=0}^{" + bound + "-1} a[k]";
+        hoare_triple = "{P} while " + loop_var + " < " + bound + " do { body } {Q}";
+        termination_measure = "(" + bound + " - " + loop_var + ") strictly decreasing, well-founded on ℕ";
+        derivation_steps = [
+          "init: " + loop_var + " = 0 → I trivially (empty sum)"
+          "preservation: I ∧ B ⊢ wp(body, I)"
+          "exit: I ∧ ¬B → " + loop_var + " = " + bound + " → Q"
+          "termination: variant decreases each iter"
+        ];
+        driver_power =
+          "Hoare triple 이 *partial correctness + termination = total correctness* 의 원동력";
+        decision_constraint =
+          "loop invariant 명시 시 → 자동 검증; 미명시 시 → infer 또는 reject";
+      }
+      else if loop_kind == "search" || loop_kind == "linear-search"
+      then {
+        outcome = "loop-invariant-emitted";
+        loop_kind = loop_kind;
+        precondition = "P: array a[0..n], target t, found = false, " + loop_var + " = 0";
+        loop_invariant =
+          "I: (¬found → ∀k ∈ [0, " + loop_var + "). a[k] ≠ t) ∧ 0 ≤ " + loop_var + " ≤ " + bound;
+        loop_body = "if a[" + loop_var + "] = t then found := true else " + loop_var + " := " + loop_var + " + 1";
+        postcondition = "Q: found ↔ ∃k ∈ [0, " + bound + "). a[k] = t";
+        hoare_triple = "{P} while " + loop_var + " < " + bound + " ∧ ¬found do { body } {Q}";
+        termination_measure = "(" + bound + " - " + loop_var + ") + (if found then 0 else 1)";
+        derivation_steps = [
+          "init: " + loop_var + " = 0 → I trivially"
+          "preservation: 검사 후 found 또는 i++"
+          "exit: i = n ∨ found → Q"
+        ];
+        driver_power = "early termination 시 wasted iteration 0; worst case Θ(n)";
+        decision_constraint = "sorted 면 binary search 로 교체 (log n); unsorted 면 그대로";
+      }
+      else {
+        outcome = "held-no-loop-invariant-pattern";
+        loop_kind = loop_kind;
+        registered_kinds = [ "sum-array" "linear-search" ];
+      };
+
+  # =================================================================
+  # === Generator 3: Probabilistic Bound Generator ===================
+  # =================================================================
+  #
+  # random sampling receipt → Hoeffding / Chernoff bound.
+
+  generateProbabilityBound = receipt:
+    let
+      sample_kind = receipt.sample_kind or "unknown";
+      n = receipt.sample_size or "n";
+      epsilon = receipt.tolerance or "ε";
+    in
+      if sample_kind == "iid-bounded" || sample_kind == "bernoulli"
+      then {
+        outcome = "probability-bound-emitted";
+        sample_kind = sample_kind;
+        bound_name = "Hoeffding's inequality";
+        bound_equation =
+          "P(|X̄ - E[X̄]| ≥ " + epsilon + ") ≤ 2 * exp(-2 * " + n + " * " + epsilon + "²)";
+        symbolic_form = {
+          random_var = "X̄ = (1/n) Σ X_i";
+          mean = "μ = E[X̄]";
+          bound_type = "two-sided exponential concentration";
+        };
+        sample_size_required = n + " ≥ ln(2/δ) / (2*" + epsilon + "²)";
+        derivation_steps = [
+          "X_i ∈ [a, b] independent"
+          "Hoeffding: P(|X̄ - μ| ≥ ε) ≤ 2 exp(-2nε²/(b-a)²)"
+          "for bounded [0,1]: P ≤ 2 exp(-2nε²)"
+          "set 2 exp(-2nε²) ≤ δ → n ≥ ln(2/δ)/(2ε²)"
+        ];
+        driver_power =
+          "Hoeffding 이 *유한 sample size 결정* 의 원동력 — (ε, δ)-PAC guarantee";
+        decision_constraint =
+          "n = O(1/ε² · log(1/δ)) sample 로 충분; 더 작은 n 은 *수학적으로 불충분*";
+      }
+      else if sample_kind == "sum-of-bernoulli" || sample_kind == "binomial"
+      then {
+        outcome = "probability-bound-emitted";
+        sample_kind = sample_kind;
+        bound_name = "Chernoff bound";
+        bound_equation =
+          "P(X ≥ (1+δ)μ) ≤ exp(-δ²μ / (2+δ))";
+        symbolic_form = {
+          random_var = "X = Σ X_i (Bernoulli)";
+          mean = "μ = Σ p_i";
+        };
+        derivation_steps = [
+          "moment generating function: E[e^{tX}] = Π E[e^{tX_i}]"
+          "Markov 적용 후 t = log(1+δ) 최적화"
+          "→ multiplicative Chernoff: P(X ≥ (1+δ)μ) ≤ exp(-δ²μ/3) for δ ≤ 1"
+        ];
+        driver_power =
+          "Chernoff 가 *exponentially decreasing tail* — multiplicative deviation 의 원동력";
+        decision_constraint =
+          "high confidence (δ ≥ Θ(√(log n / μ))) 시 selection 자동 통과";
+      }
+      else {
+        outcome = "held-no-probability-pattern";
+        sample_kind = sample_kind;
+        registered_kinds = [ "iid-bounded" "bernoulli" "sum-of-bernoulli" "binomial" ];
+      };
+
+  # =================================================================
+  # === Generator 4: Graph Property Generator ========================
+  # =================================================================
+
+  generateGraphProperty = receipt:
+    let
+      algo = receipt.graph_algo or "unknown";
+      V = receipt.vertex_count or "V";
+      E = receipt.edge_count or "E";
+    in
+      if algo == "BFS" || algo == "bfs" || algo == "breadth-first-search"
+      then {
+        outcome = "graph-property-emitted";
+        algorithm = algo;
+        complexity_equation = "T(" + V + ", " + E + ") = Θ(" + V + " + " + E + ")";
+        space_equation = "S = Θ(" + V + ") (queue + visited)";
+        invariant =
+          "I: dist[u] = shortest unweighted distance from source to u, ∀u visited";
+        correctness_proof =
+          "induction on dist: dist[u] = k → ∃ path of length k; queue invariant: FIFO ensures shortest discovered first";
+        properties = [
+          "shortest path on *unweighted* graph"
+          "level-order traversal of tree"
+          "connectivity check: O(V+E)"
+        ];
+        derivation_steps = [
+          "each vertex visited once: V visits"
+          "each edge relaxed once: E relaxations"
+          "→ Θ(V + E) total"
+        ];
+        driver_power =
+          "BFS 가 *unweighted shortest path* 의 *수학적 optimality* — queue FIFO 가 invariant 강제";
+        decision_constraint =
+          "unweighted → BFS; weighted nonnegative → Dijkstra; negative → Bellman-Ford";
+      }
+      else if algo == "Dijkstra" || algo == "dijkstra"
+      then {
+        outcome = "graph-property-emitted";
+        algorithm = algo;
+        complexity_equation = "T(" + V + ", " + E + ") = Θ((" + V + " + " + E + ") * log " + V + ")";
+        space_equation = "S = Θ(" + V + ") (priority queue + dist array)";
+        invariant =
+          "I: after relaxation of edge (u,v), dist[v] ≤ dist[u] + w(u,v)";
+        correctness_proof =
+          "non-negative weights + greedy choice (min dist) → relaxation correctness";
+        derivation_steps = [
+          "with binary heap: extract-min O(log V), V extracts → Θ(V log V)"
+          "relaxation: E edges, each priority decrease O(log V) → Θ(E log V)"
+          "→ Θ((V + E) log V)"
+        ];
+        driver_power =
+          "Dijkstra 의 *greedy invariant* — 항상 *최소 거리* vertex 가 *확정* 됨";
+        decision_constraint =
+          "Fibonacci heap 사용 시 → Θ(V log V + E); 일반 heap 으로 충분 if E ≤ V²/log V";
+      }
+      else {
+        outcome = "held-no-graph-pattern";
+        algorithm = algo;
+        registered_algos = [ "BFS" "Dijkstra" ];
+      };
+
+  # =================================================================
+  # === Generator 5: Numerical Error Generator =======================
+  # =================================================================
+
+  generateNumericalError = receipt:
+    let
+      op_kind = receipt.op_kind or "unknown";
+    in
+      if op_kind == "iterative-refinement" || op_kind == "Newton"
+      then {
+        outcome = "numerical-error-emitted";
+        op_kind = op_kind;
+        iteration_equation = "x_{n+1} = x_n - f(x_n)/f'(x_n)";
+        error_recurrence = "|x_{n+1} - x*| ≤ M * |x_n - x*|², where M = |f''(x*)|/(2|f'(x*)|)";
+        convergence_rate = "quadratic (for simple roots)";
+        symbolic_form = {
+          rate = "quadratic";
+          condition = "f'(x*) ≠ 0 (simple root)";
+        };
+        derivation_steps = [
+          "Taylor: f(x_n) = f(x*) + f'(x*)(x_n - x*) + (1/2)f''(ξ)(x_n - x*)²"
+          "rearrange Newton step: x_{n+1} - x* = (1/(2f'(x*))) f''(ξ) (x_n - x*)²"
+          "→ quadratic convergence"
+        ];
+        driver_power =
+          "Newton method 의 *quadratic convergence* — doubling correct digits per iter";
+        decision_constraint =
+          "good initial guess (in basin) → Newton; far → bisection (linear but global)";
+      }
+      else if op_kind == "summation" || op_kind == "Kahan"
+      then {
+        outcome = "numerical-error-emitted";
+        op_kind = op_kind;
+        error_bound = "naive sum error: O(n * ε_machine * |max term|); Kahan: O(ε_machine * |max term|)";
+        symbolic_form = {
+          naive = "n × ε";
+          kahan = "ε (effectively independent of n)";
+        };
+        derivation_steps = [
+          "naive: each add introduces relative ε, propagates linearly in n"
+          "Kahan compensated summation: tracks lost low bits → O(ε) total"
+        ];
+        driver_power =
+          "Kahan summation 의 *catastrophic cancellation 방지* 가 numerical stability 의 원동력";
+        decision_constraint =
+          "n > 10^6 or ill-conditioned terms → Kahan 강제; 작은 n → naive OK";
+      }
+      else {
+        outcome = "held-no-numerical-pattern";
+        op_kind = op_kind;
+        registered_kinds = [ "iterative-refinement" "Newton" "summation" "Kahan" ];
+      };
+
+  # =================================================================
+  # === Generator 6-12: 추가 generators (placeholder shape) ==========
+  # =================================================================
+  #
+  # 나머지 7 generator 는 *placeholder shape* 만 박힘. 실제 식 generator
+  # 는 future slice 에서 박는다 (각 generator 가 별 owner 로 분리 가능).
+
+  placeholderGenerators = [
+    { name = "info-bound-generator"; status = "shape-pinned-future-instance"; concept = "Shannon entropy + Huffman optimality"; }
+    { name = "optimization-constraint-generator"; status = "shape-pinned-future-instance"; concept = "LP / KKT conditions / Bellman equation"; }
+    { name = "combinatorics-count-generator"; status = "shape-pinned-future-instance"; concept = "inclusion-exclusion + generating functions"; }
+    { name = "linear-algebra-decomp-generator"; status = "shape-pinned-future-instance"; concept = "SVD / eigenvalue / rank-nullity"; }
+    { name = "decision-utility-generator"; status = "shape-pinned-future-instance"; concept = "E[utility] + argmax + regret"; }
+    { name = "learning-bound-generator"; status = "shape-pinned-future-instance"; concept = "PAC / VC dimension / generalization bound"; }
+    { name = "type-refinement-generator"; status = "shape-pinned-future-instance"; concept = "refinement type + pre/postcondition"; }
+  ];
+
+  # =================================================================
+  # === Demonstration cases ==========================================
+  # =================================================================
+
+  demoCases = [
+    {
+      label = "complexity-mergesort";
+      receipt = { algorithm = "merge-sort"; input_size = "n"; };
+      generator = "complexity";
+    }
+    {
+      label = "complexity-binsearch";
+      receipt = { algorithm = "binary-search"; input_size = "n"; };
+      generator = "complexity";
+    }
+    {
+      label = "complexity-quicksort";
+      receipt = { algorithm = "quick-sort"; input_size = "n"; };
+      generator = "complexity";
+    }
+    {
+      label = "complexity-fib-naive";
+      receipt = { algorithm = "fibonacci-naive"; input_size = "n"; };
+      generator = "complexity";
+    }
+    {
+      label = "loop-sum-array";
+      receipt = { loop_kind = "sum-array"; loop_var = "i"; bound = "n"; };
+      generator = "loop-invariant";
+    }
+    {
+      label = "loop-linear-search";
+      receipt = { loop_kind = "linear-search"; loop_var = "i"; bound = "n"; };
+      generator = "loop-invariant";
+    }
+    {
+      label = "prob-hoeffding";
+      receipt = { sample_kind = "iid-bounded"; sample_size = "n"; tolerance = "ε"; };
+      generator = "probability";
+    }
+    {
+      label = "prob-chernoff";
+      receipt = { sample_kind = "binomial"; sample_size = "n"; tolerance = "δ"; };
+      generator = "probability";
+    }
+    {
+      label = "graph-bfs";
+      receipt = { graph_algo = "BFS"; vertex_count = "V"; edge_count = "E"; };
+      generator = "graph";
+    }
+    {
+      label = "graph-dijkstra";
+      receipt = { graph_algo = "Dijkstra"; vertex_count = "V"; edge_count = "E"; };
+      generator = "graph";
+    }
+    {
+      label = "numeric-newton";
+      receipt = { op_kind = "Newton"; };
+      generator = "numerical";
+    }
+    {
+      label = "numeric-kahan";
+      receipt = { op_kind = "Kahan"; };
+      generator = "numerical";
+    }
+  ];
+
+  runDemoCase = c:
+    let result =
+      if c.generator == "complexity" then generateComplexityEquation c.receipt
+      else if c.generator == "loop-invariant" then generateLoopInvariant c.receipt
+      else if c.generator == "probability" then generateProbabilityBound c.receipt
+      else if c.generator == "graph" then generateGraphProperty c.receipt
+      else if c.generator == "numerical" then generateNumericalError c.receipt
+      else { outcome = "held-unknown-generator"; };
+    in {
+      inherit (c) label generator;
+      actual_outcome = result.outcome;
+      success =
+        result.outcome == "complexity-equation-emitted"
+        || result.outcome == "loop-invariant-emitted"
+        || result.outcome == "probability-bound-emitted"
+        || result.outcome == "graph-property-emitted"
+        || result.outcome == "numerical-error-emitted";
+    };
+
+  allDemoResults = builtins.map runDemoCase demoCases;
+  demoSuccessCount =
+    builtins.length (builtins.filter (r: r.success) allDemoResults);
+
+  # =================================================================
+  # === Inventory =====================================================
+  # =================================================================
+
+  inventorySummary = _arg: {
+    owner = ownerName;
+    has_generateComplexityEquation = true;
+    has_generateLoopInvariant = true;
+    has_generateProbabilityBound = true;
+    has_generateGraphProperty = true;
+    has_generateNumericalError = true;
+    implemented_generator_count = 5;
+    placeholder_generator_count = 7;
+    total_generator_target = 12;
+    demo_case_count = builtins.length demoCases;
+    demo_success_count = demoSuccessCount;
+    is_actual_equation_generator = true;  # NOT 명칭 매핑
+    is_driver_power_emitter = true;
+    lean_unified_owner_inherited = "stdlib.nl.lean.unified-query-entry";
+    lean_axiom_dep_owner_inherited = "stdlib.nl.lean.substrate-axiom-dependency-chain";
+    converged_engine_owner_inherited = "stdlib.nl.converged-engine-entry";
+    defer_lean_unified_path = defer_lean_unified;
+    defer_converged_engine_path = defer_converged_engine;
+    defer_lean_axiom_dep_path = defer_lean_axiom_dep;
+    heavy_lean_import_policy = "path-manifest-only; use converged-engine-entry for runtime routing";
+    deterministic = true;
+  };
+
+  # =================================================================
+  # === Plate entry ===================================================
+  # =================================================================
+
+  applyCodingAgentMathEquationPlate = request:
+    if !(builtins.isAttrs request) then { outcome = "held-non-attrs-request"; }
+    else if builtins.hasAttr "inventory" request then {
+      outcome = "coding-agent-math-equation-generator-inventory"; receipt = inventorySummary {};
+    }
+    else if builtins.hasAttr "complexity" request then
+      generateComplexityEquation request.complexity
+    else if builtins.hasAttr "loop_invariant" request then
+      generateLoopInvariant request.loop_invariant
+    else if builtins.hasAttr "probability" request then
+      generateProbabilityBound request.probability
+    else if builtins.hasAttr "graph" request then
+      generateGraphProperty request.graph
+    else if builtins.hasAttr "numerical" request then
+      generateNumericalError request.numerical
+    else if builtins.hasAttr "placeholders" request then {
+      outcome = "placeholder-generators-emitted"; receipt = placeholderGenerators;
+    }
+    else if builtins.hasAttr "demo_cases" request then {
+      outcome = "demo-cases-emitted"; receipt = demoCases;
+    }
+    else if builtins.hasAttr "run_all_demos" request then {
+      outcome = "demo-results-emitted";
+      receipt = {
+        total = builtins.length demoCases;
+        success = demoSuccessCount;
+        results = allDemoResults;
+      };
+    }
+    else { outcome = "held-unknown-request-shape";
+           receipt = { allowed_keys = [
+             "inventory" "complexity" "loop_invariant" "probability" "graph"
+             "numerical" "placeholders" "demo_cases" "run_all_demos"
+           ]; };
+         };
+
+in {
+  inherit ownerName stepKind framework_step;
+  inherit generateComplexityEquation generateLoopInvariant generateProbabilityBound;
+  inherit generateGraphProperty generateNumericalError;
+  inherit placeholderGenerators demoCases runDemoCase allDemoResults demoSuccessCount;
+  inherit inventorySummary applyCodingAgentMathEquationPlate;
+}

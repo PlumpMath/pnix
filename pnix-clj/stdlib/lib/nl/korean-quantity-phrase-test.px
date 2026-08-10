@@ -1,0 +1,32 @@
+# stdlib/lib/nl/korean-quantity-phrase-test.px
+#
+# 수량구(numeral phrase) lock: {entity;count;classifier;role} ⟷ "사과 세 개를".
+#   생성 realizeQuantityPhrase(거울) ↔ 파싱 parseQuantityPhrase(lift). scaffolding(numberWords/classifierEntities) 위 구조 추출.
+#   분류사+조사 받침-aware(개+object→개를·명+agent→명이·권+object→권을). 수사 관형형(한/두/세/네)+standalone(하나/둘/셋/넷).
+let
+  knm = import ./korean-nl-mirror.px;
+  lift = import ./korean-taxonomy-lift.px;
+  B = builtins;
+  rq = knm.realizeQuantityPhrase;
+  pq = lift.parseQuantityPhrase;
+  splitSp = s: B.filter (w: B.isString w && w != "") (B.split " " s);
+  rt = qp: let s = rq qp; back = pq (splitSp s); in { s = s; ok = back == qp; };
+  q1 = { entity = "사과"; count = 3; classifier = "개"; role = "object"; };
+  q2 = { entity = "학생"; count = 2; classifier = "명"; role = "agent"; };
+  q3 = { entity = "책"; count = 1; classifier = "권"; role = "object"; };
+in {
+  rt1 = (rt q1).s; rt2 = (rt q2).s; rt3 = (rt q3).s;
+  all_ok =
+    # ★수량구 생성 표면 (받침-aware 조사)
+       ((rt q1).s == "사과 세 개를") && ((rt q2).s == "학생 두 명이") && ((rt q3).s == "책 한 권을")
+    # ★round-trip: 생성 → 파싱 → 원 구조 복원
+    && (rt q1).ok && (rt q2).ok && (rt q3).ok
+    # ★수사→정수 (관형형·standalone 둘 다), 비-수사=null
+    && (lift.numberWordToInt "세" == 3) && (lift.numberWordToInt "둘" == 2) && (lift.numberWordToInt "열" == 10)
+    && (lift.numberWordToInt "한" == 1) && (lift.numberWordToInt "넷" == 4)
+    && (lift.numberWordToInt "사과" == null)
+    # ★비-수량구 fail-closed: 분류사 아님(사람 ∉ classifierEntities)·수사 아님 → null (오발 차단)
+    && (lift.parseQuantityPhrase [ "사과" "세" "사람을" ] == null)
+    && (lift.parseQuantityPhrase [ "사과" "큰" "개를" ] == null)      # 큰=비수사 → null
+    ;
+}

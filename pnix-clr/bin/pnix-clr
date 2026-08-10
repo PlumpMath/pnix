@@ -1,0 +1,235 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+# Capture caller cwd before any cd into the AOT artifact tree (relative FILE.px
+# and optional ROOT args must resolve from the invocation directory).
+caller_pwd="$PWD"
+dll="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
+artifact="${PNIX_CLR_RUNTIME_ARTIFACT:-$root/pnix-clr/target/runtime-artifact}"
+plan="$root/pnix-clr/runtime-artifact.edn"
+source_root="$root/pnix-clr/src"
+
+absolute_from_caller() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *) printf '%s/%s\n' "$caller_pwd" "$1" ;;
+  esac
+}
+
+# Rewrite relative path operands against caller_pwd. -e/--eval bodies stay as-is.
+resolve_cli_args() {
+  local -a out=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -e|--eval)
+        out+=("$1")
+        shift
+        if [[ $# -eq 0 ]]; then
+          break
+        fi
+        out+=("$1")
+        shift
+        ;;
+      --production-outcome)
+        out+=("$1")
+        shift
+        if [[ $# -eq 0 ]]; then
+          break
+        fi
+        out+=("$(absolute_from_caller "$1")")
+        shift
+        ;;
+      --*)
+        out+=("$1")
+        shift
+        ;;
+      *)
+        out+=("$(absolute_from_caller "$1")")
+        shift
+        ;;
+    esac
+  done
+  # shellcheck disable=SC2206
+  RESOLVED_ARGS=("${out[@]}")
+}
+
+artifact_error() {
+  echo "pnix-clr artifact: $1" >&2
+  exit 2
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+safe_relative() {
+  [[ -n "$1" && "$1" != /* && "$1" != *".."* ]]
+}
+
+command -v dotnet >/dev/null 2>&1 || artifact_error "dotnet-unavailable"
+command -v jq >/dev/null 2>&1 || artifact_error "jq-unavailable"
+[[ -f "$dll" ]] || artifact_error "bootstrap-runtime-missing"
+[[ -d "$artifact" ]] || artifact_error "runtime-directory-missing"
+[[ ! -L "$artifact" ]] || artifact_error "runtime-directory-symlink"
+artifact="$(cd "$artifact" && pwd -P)"
+manifest="$artifact/manifest.json"
+runtime_dir="$(cd "$(dirname "$dll")" && pwd -P)"
+[[ -f "$manifest" ]] || artifact_error "manifest-missing"
+[[ ! -L "$manifest" ]] || artifact_error "manifest-not-regular"
+[[ -f "$plan" ]] || artifact_error "plan-missing"
+[[ ! -L "$plan" ]] || artifact_error "plan-not-regular"
+
+if ! jq -e '
+  (keys == ["backend",
+            "compiler_self_reproduction",
+            "compiler_stage15_n",
+            "entry",
+            "evaluator_generations",
+            "il_fixed_point",
+            "output_closure_sha256",
+            "outputs",
+            "plan_sha256",
+            "producer",
+            "schema",
+            "source_closure_sha256",
+            "sources",
+            "target"]) and
+  .schema == "pnix.clr-meta.runtime-artifact.v1" and
+  .producer == "clr-meta" and
+  .backend == "host-clojureclr-aot" and
+  .target == "net10.0" and
+  .entry == "pnix-clr.main" and
+  .evaluator_generations == 3 and
+  .compiler_stage15_n == false and
+  .compiler_self_reproduction == false and
+  .il_fixed_point == false and
+  (.plan_sha256 | test("^[0-9a-f]{64}$")) and
+  (.source_closure_sha256 | test("^[0-9a-f]{64}$")) and
+  (.output_closure_sha256 | test("^[0-9a-f]{64}$")) and
+  (.sources | type == "array" and length == 8) and
+  (.outputs | type == "array" and length == 8) and
+  all(.sources[]; (keys == ["path", "sha256"]) and
+                  (.path | type == "string") and
+                  (.sha256 | test("^[0-9a-f]{64}$"))) and
+  all(.outputs[]; (keys == ["path", "sha256"]) and
+                  (.path | type == "string") and
+                  (.sha256 | test("^[0-9a-f]{64}$")))
+' "$manifest" >/dev/null; then
+  artifact_error "manifest-contract-mismatch"
+fi
+
+expected_plan_hash="$(jq -r '.plan_sha256' "$manifest")"
+[[ "$(sha256_file "$plan")" == "$expected_plan_hash" ]] || \
+  artifact_error "plan-stale"
+
+source_closure_hash="$({
+  jq -r '.sources[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$source_closure_hash" == "$(jq -r '.source_closure_sha256' "$manifest")" ]] || \
+  artifact_error "source-closure-mismatch"
+
+output_closure_hash="$({
+  jq -r '.outputs[] | "\(.sha256)  \(.path)"' "$manifest"
+} | sha256_stdin)"
+[[ "$output_closure_hash" == "$(jq -r '.output_closure_sha256' "$manifest")" ]] || \
+  artifact_error "output-closure-mismatch"
+
+verification_dir="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clr-artifact.XXXXXX")"
+trap 'rm -rf "$verification_dir"' EXIT
+jq -r '.sources[].path' "$manifest" | LC_ALL=C sort \
+  >"$verification_dir/expected-sources"
+(
+  cd "$source_root"
+  find . \( -type f -o -type l \) -name '*.clj' -print \
+    | sed 's#^\./##' | LC_ALL=C sort
+) >"$verification_dir/actual-sources"
+cmp "$verification_dir/expected-sources" "$verification_dir/actual-sources" \
+  >/dev/null 2>&1 || artifact_error "source-set-mismatch"
+
+while IFS=$'\t' read -r relative expected_hash; do
+  safe_relative "$relative" || artifact_error "source-path-invalid"
+  source="$source_root/$relative"
+  [[ -f "$source" ]] || artifact_error "source-missing"
+  [[ ! -L "$source" ]] || artifact_error "source-not-regular"
+  [[ "$(sha256_file "$source")" == "$expected_hash" ]] || \
+    artifact_error "source-stale"
+done < <(jq -r '.sources[] | [.path, .sha256] | @tsv' "$manifest")
+
+jq -r '.outputs[].path' "$manifest" | LC_ALL=C sort \
+  >"$verification_dir/expected-outputs"
+(
+  cd "$artifact"
+  find . \( -type f -o -type l \) -name '*.dll' -print \
+    | sed 's#^\./##' | LC_ALL=C sort
+) >"$verification_dir/actual-outputs"
+cmp "$verification_dir/expected-outputs" "$verification_dir/actual-outputs" \
+  >/dev/null 2>&1 || artifact_error "output-set-mismatch"
+
+{
+  printf '%s\n' manifest.json
+  cat "$verification_dir/expected-outputs"
+} | LC_ALL=C sort >"$verification_dir/expected-artifact-files"
+(
+  cd "$artifact"
+  find . -mindepth 1 -print | sed 's#^\./##' | LC_ALL=C sort
+) >"$verification_dir/actual-artifact-files"
+cmp "$verification_dir/expected-artifact-files" \
+    "$verification_dir/actual-artifact-files" >/dev/null 2>&1 || \
+  artifact_error "artifact-file-set-mismatch"
+
+while IFS=$'\t' read -r relative expected_hash; do
+  safe_relative "$relative" || artifact_error "output-path-invalid"
+  output="$artifact/$relative"
+  [[ -f "$output" ]] || artifact_error "output-missing"
+  [[ ! -L "$output" ]] || artifact_error "output-not-regular"
+  [[ "$(sha256_file "$output")" == "$expected_hash" ]] || \
+    artifact_error "output-stale"
+done < <(jq -r '.outputs[] | [.path, .sha256] | @tsv' "$manifest")
+
+# ClojureCLR probes its application directory, application `bin`, and cwd
+# before CLOJURE_LOAD_PATH.  The pinned runtime roots are trusted substrate,
+# but they must not contain a product namespace that could shadow the artifact.
+while IFS= read -r relative; do
+  stem="${relative%.clj}"
+  assembly_stem="${stem//\//.}"
+  for lookup_root in "$runtime_dir" "$runtime_dir/bin"; do
+    for extension in clj cljc cljr; do
+      source_shadow="$lookup_root/$stem.$extension"
+      assembly_shadow="$lookup_root/$assembly_stem.$extension.dll"
+      if [[ -e "$source_shadow" || -L "$source_shadow" || \
+            -e "$assembly_shadow" || -L "$assembly_shadow" ]]; then
+        artifact_error "bootstrap-product-shadow"
+      fi
+    done
+  done
+done <"$verification_dir/expected-sources"
+
+entry="$(jq -r '.entry' "$manifest")"
+rm -rf "$verification_dir"
+trap - EXIT
+
+# Replace, rather than append to, the inherited path. Product execution may
+# load only the clr-meta-produced AOT artifact; source fallback is forbidden.
+export CLOJURE_LOAD_PATH="$artifact"
+unset CLOJURE_COMPILE_PATH || true
+export PNIX_CLR_ROOT="${PNIX_CLR_ROOT:-$root}"
+
+resolve_cli_args "$@"
+
+# Neutralize ClojureCLR's cwd-before-load-path lookup.  The exact artifact tree
+# was verified above and contains no source files or subdirectories.
+cd "$artifact"
+exec dotnet "$dll" -m "$entry" "${RESOLVED_ARGS[@]}"

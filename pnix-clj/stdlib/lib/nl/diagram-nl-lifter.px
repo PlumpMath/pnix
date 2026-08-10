@@ -1,0 +1,156 @@
+let
+  ownerName = "stdlib.nl.diagram-nl-lifter";
+
+  diagramSubstrate =
+    import diagram/diagram-ir-substrate.px;
+
+  # === Diagram NL lifter (Axiom #40) ================================
+  #
+  # 사용자 directive (2026-05-28): NL super-set bidirectional.
+  # Axiom #10 (diagram-ir-substrate, 13 atom × 5 view) 의 NL surface.
+  #
+  # NL utterance → diagram view classification.
+  # "draw a flowchart" → control-flow-view
+  # "데이터 흐름도" → data-flow-view
+  # "상태 머신" → state-machine-view
+  # "증명 트리" → proof-view
+  # "기하 도형" → geometry-view
+  #
+  # # Held-honest 헌법
+  #
+  # NL → 명시적 atom 구조 추출은 NL parser 수준의 깊이가 필요.
+  # 이 owner 는 *view classification + atom kind suggestion* 만 carry.
+  # 실제 graph 생성은 caller (UI / agent) 가 사용자 supplied atom 또는
+  # 추가 lift 로 한다.
+  #
+  # # DO NOT REBUILD
+  #
+  # 13 atom + 5 view 는 *기존 박힘* (Axiom #10). 이 owner 는 NL routing.
+
+  knownDiagramViewNLPatterns = [
+    {
+      view_id = "control-flow-view";
+      en_keywords = [ "flowchart" "control flow" "control-flow" "branch" "loop" "if-then" "decision tree" ];
+      ko_keywords = [ "흐름도" "제어 흐름" "분기" "반복" "if-then" "조건문" "결정 트리" "플로우차트" "제어흐름" ];
+      suggested_atoms = [ "node" "edge" "branch" "loop" ];
+    }
+    {
+      view_id = "data-flow-view";
+      en_keywords = [ "data flow" "data-flow" "data dependency" "pipeline" "dataflow" "ETL pipeline" ];
+      ko_keywords = [ "데이터 흐름" "데이터 의존" "파이프라인" "데이터흐름" "데이터 파이프라인" "ETL" ];
+      suggested_atoms = [ "node" "port" "flow" "data-dependency" ];
+    }
+    {
+      view_id = "state-machine-view";
+      en_keywords = [ "state machine" "state-machine" "FSM" "automaton" "transition" "petri" "state diagram" ];
+      ko_keywords = [ "상태 머신" "상태기계" "오토마타" "전이" "유한상태" "상태 다이어그램" "FSM 그려" ];
+      suggested_atoms = [ "state" "transition" ];
+    }
+    {
+      view_id = "proof-view";
+      en_keywords = [ "proof tree" "proof step" "natural deduction" "sequent" "proof diagram" ];
+      ko_keywords = [ "증명 트리" "증명 단계" "자연연역" "시퀀트" "증명 다이어그램" "증명도" ];
+      suggested_atoms = [ "proof-step" "constraint" ];
+    }
+    {
+      view_id = "geometry-view";
+      en_keywords = [ "geometry diagram" "geometric figure" "triangle" "circle" "polygon" "geo figure" ];
+      ko_keywords = [ "기하 도형" "기하학 그림" "삼각형" "원" "다각형" "기하 다이어그램" "도형 그려" ];
+      suggested_atoms = [ "geometry-relation" "node" "constraint" ];
+    }
+  ];
+
+  viewPatternCount = builtins.length knownDiagramViewNLPatterns;
+
+  containsAny = haystack: hints:
+    builtins.any (h:
+      let
+        hlen = builtins.stringLength h;
+        ulen = builtins.stringLength haystack;
+        walk = pos:
+          if pos + hlen > ulen then false
+          else if (builtins.substring pos hlen haystack) == h then true
+          else walk (pos + 1);
+      in walk 0) hints;
+
+  matchDiagramView = utterance:
+    builtins.filter (p:
+      (containsAny utterance p.en_keywords) || (containsAny utterance p.ko_keywords))
+      knownDiagramViewNLPatterns;
+
+  liftToDiagramView = utterance:
+    if !(builtins.isString utterance) then {
+      outcome = "held-non-string-utterance";
+    }
+    else if (builtins.stringLength utterance) == 0 then {
+      outcome = "held-empty-utterance";
+    }
+    else
+      let matches = matchDiagramView utterance;
+      in
+        if matches == [] then {
+          outcome = "held-no-diagram-view-matched";
+          known_view_count = viewPatternCount;
+          known_views = builtins.map (p: p.view_id) knownDiagramViewNLPatterns;
+        }
+        else if (builtins.length matches) > 1 then {
+          outcome = "held-multi-view-candidates";
+          candidate_count = builtins.length matches;
+          candidates = builtins.map (m: m.view_id) matches;
+        }
+        else
+          let m = builtins.head matches;
+          in {
+            outcome = "diagram-view-lifted";
+            utterance = utterance;
+            view_id = m.view_id;
+            suggested_atom_kinds = m.suggested_atoms;
+            substrate_action =
+              "diagram-ir-substrate 의 view " + m.view_id + " 의 "
+              + "atom 구성을 caller 가 build. validateDiagramGraph 로 "
+              + "최종 graph integrity check.";
+            axiom_origin = "axiom-10-diagram-ir-substrate";
+          };
+
+  applyDiagramNlLifterPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if !(builtins.hasAttr "utterance" request) then {
+      outcome = "held-missing-utterance-field";
+    }
+    else liftToDiagramView request.utterance;
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-bidirectional-axiom-40";
+    view_pattern_count = viewPatternCount;
+    routed_substrate = "stdlib/lib/diagram/diagram-ir-substrate.px (Axiom #10)";
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-utterance"
+      "held-empty-utterance"
+      "held-non-attrs-request"
+      "held-missing-utterance-field"
+      "held-no-diagram-view-matched"
+      "held-multi-view-candidates"
+    ];
+  };
+
+in {
+  inherit
+    ownerName knownDiagramViewNLPatterns viewPatternCount
+    containsAny matchDiagramView
+    liftToDiagramView applyDiagramNlLifterPlate
+    inventorySummary;
+  meta = {
+    source = "stdlib NL diagram lifter (Axiom #40)";
+    owner = ownerName;
+    base = "diagram-nl-lifter-v0";
+    rev_note = "사용자 directive (2026-05-28). Axiom #10 diagram-ir "
+      + "(13 atom × 5 view) 의 NL surface. 5 view × en/ko bilingual "
+      + "keyword routing. suggested_atom_kinds 가 receipt 에 carry. "
+      + "DO NOT REBUILD — diagram-ir-substrate 기존 owner 재사용.";
+  };
+}

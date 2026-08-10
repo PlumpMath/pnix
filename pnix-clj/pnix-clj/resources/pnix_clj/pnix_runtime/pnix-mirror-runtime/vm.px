@@ -1,0 +1,328 @@
+# pnix-mirror-runtime — unified VM composition
+#
+# OWNER-LAW (2026-05-13): single composition that imports the
+# P1-P12 mirror runtime contracts. P1-P4 are executable value-
+# level VM verbs here (`spawn` / `project`). P5-P12 are persistent/
+# NL/process-hosting/visibility/write-batching/gc
+# contracts consumed by the doghouse-core runtime adapter.
+#
+# Every operation here automatically:
+#   - assigns mirror identity (P1)
+#   - emits ontology-extension event when contributions present (P2)
+#   - builds boundary projection on cross-boundary access (P3)
+#   - chains a typed receipt for every primitive event (P4)
+#   - declares session continuity, NL input, NL output, process
+#     sandbox, contribution-visibility, write-batching, gc, and
+#     .px-first semantic work contracts consumed by the runtime
+#     adapter (P5-P12)
+#
+# This is the surface other ankh consume to interact with mirrors.
+# Internal substrate state still lives in pnix-eval's evaluation
+# context; the VM operations are pure functions that produce typed
+# event records.
+
+let
+  p1 = import ./primitives/p1-mirror-identity-registry.px;
+  p2 = import ./primitives/p2-ontology-extension-event.px;
+  p3 = import ./primitives/p3-boundary-projection.px;
+  p4 = import ./primitives/p4-typed-receipt-stream.px;
+  p5 = import ./primitives/p5-mirror-session-contract.px;
+  p6 = import ./primitives/p6-nl-to-spawn-request.px;
+  p7 = import ./primitives/p7-nl-projection.px;
+  p8 = import ./primitives/p8-process-sandbox-contract.px;
+  p9 = import ./primitives/p9-contribution-visibility.px;
+  p10 = import ./primitives/p10-algorithm-synthesis-mirror-bridge.px;
+  p11 = import ./primitives/p11-write-batching-contract.px;
+  p12 = import ./primitives/p12-mirror-gc-contract.px;
+
+  # Unified spawn — produces (identity, extension, receipt-chain).
+  # Caller provides: source ankh info, contributions, timing.
+  # Returns: a single VmSpawnRecord with all 4 primitives' events.
+  spawn = req:
+    let
+      # P9: owner_user_id is forwarded only when visibility=private.
+      # Public spawn (default) leaves it absent, preserving legacy
+      # fingerprint bit-for-bit.
+      visibility =
+        if req ? visibility then req.visibility else p9.defaultVisibility;
+      reqOwnerUserId =
+        if req ? owner_user_id then req.owner_user_id else null;
+      hasOwner =
+        reqOwnerUserId != null
+        && builtins.isString reqOwnerUserId
+        && builtins.stringLength reqOwnerUserId > 0;
+      ownerUserId =
+        if visibility == "private" && hasOwner then reqOwnerUserId else null;
+
+      # P9 visibility-validation: every violation Holds the spawn
+      # *before* P1 builds an identity. Silent dedup-of-private or
+      # silent privacy-of-public would both be substrate corruption.
+      visibilityHeldKind =
+        if !(builtins.elem visibility p9.validVisibilityKinds)
+        then "unknown-visibility-kind"
+        else if visibility == "public" && hasOwner
+        then "public-cannot-have-owner-user-id"
+        else if visibility == "private" && !hasOwner
+        then "missing-owner-for-private"
+        else if visibility == "scoped-future"
+        then "scoped-future-not-yet-implemented"
+        else null;
+    in
+      if visibilityHeldKind != null then {
+        identity = null;
+        identity_verdict = "mirror-spawn-visibility-held";
+        visibility_verdict = "visibility-held";
+        visibility = visibility;
+        visibility_held_kind = visibilityHeldKind;
+        extension = null;
+        extension_verdict = "skipped";
+        receipts = [];
+      } else
+    let
+
+      # Mirror-init-seed forward (2026-05-14): if the caller booted
+      # this spawn with an overlay-seed snapshot of substrate state,
+      # forward its digest into P1 so the resulting mirror_id
+      # captures *which* learned substrate the mirror starts from.
+      overlaySeedDigest =
+        if req ? overlay_seed_digest then req.overlay_seed_digest else null;
+
+      identityResult = p1.spawnMirror {
+        source_ankh_path = req.source_ankh_path;
+        source_ankh_digest = req.source_ankh_digest;
+        spawn_index = req.spawn_index;
+        spawn_at_ms = req.spawn_at_ms;
+        parent_mirror_id =
+          if req ? parent_mirror_id then req.parent_mirror_id else null;
+        owner_user_id = ownerUserId;
+        overlay_seed_digest = overlaySeedDigest;
+      };
+      identity = identityResult.identity;
+
+      extensionResult =
+        if identity == null then null
+        else p2.emitExtension {
+          mirror_id = identity.id;
+          parent_ontology_id =
+            if req ? parent_ontology_id then req.parent_ontology_id else null;
+          base_meaning_count =
+            if req ? base_meaning_count then req.base_meaning_count else 0;
+          contributions =
+            if req ? contributions then req.contributions else [];
+        };
+
+      # Build receipt chain for this spawn.
+      spawnReceiptReq = {
+        receipt_kind = "mirror-spawn";
+        emitted_at_ms = req.spawn_at_ms;
+        related_mirror_id = if identity == null then null else identity.id;
+        related_ankh_id = req.source_ankh_path;
+        parent_receipt_id =
+          if req ? parent_receipt_id then req.parent_receipt_id else null;
+        evidence = {
+          source_ankh_path = req.source_ankh_path;
+          source_ankh_digest = req.source_ankh_digest;
+          spawn_index = req.spawn_index;
+          parent_mirror_id =
+            if identity != null then identity.parent_mirror_id else null;
+          visibility = visibility;
+          owner_user_id = ownerUserId;
+          overlay_seed_digest = overlaySeedDigest;
+        };
+      };
+      spawnReceipt = p4.buildReceipt spawnReceiptReq;
+
+      extensionReceipt =
+        if extensionResult == null
+           || extensionResult.verdict != "ontology-extension-ready"
+        then null
+        else (p4.buildReceipt {
+          receipt_kind = "ontology-extend";
+          emitted_at_ms = req.spawn_at_ms;
+          related_mirror_id = identity.id;
+          related_ontology_id = extensionResult.event.resulting_ontology_id;
+          parent_receipt_id =
+            if spawnReceipt.verdict == "receipt-build-ready"
+            then spawnReceipt.receipt.id else null;
+          evidence = {
+            parent_ontology_id = extensionResult.event.parent_ontology_id;
+            delta = extensionResult.event.delta;
+            contributions_count =
+              builtins.length extensionResult.event.contributions;
+          };
+        });
+    in {
+      identity = identity;
+      identity_verdict = identityResult.verdict;
+      visibility = visibility;
+      visibility_verdict = "visibility-ready";
+      visibility_held_kind = null;
+      extension =
+        if extensionResult != null then extensionResult.event else null;
+      extension_verdict =
+        if extensionResult != null then extensionResult.verdict else "skipped";
+      receipts =
+        if extensionReceipt != null
+        then [ spawnReceipt.receipt extensionReceipt.receipt ]
+        else if spawnReceipt.verdict == "receipt-build-ready"
+        then [ spawnReceipt.receipt ]
+        else [];
+    };
+
+  # Unified projection — builds a boundary-projection plus its receipt.
+  project = req:
+    let
+      projectionResult = p3.buildProjection req;
+      receiptResult =
+        if projectionResult.verdict != "boundary-projection-ready"
+        then null
+        else p4.buildReceipt {
+          receipt_kind = "boundary-project";
+          emitted_at_ms = req.projection_at_ms;
+          related_mirror_id = req.source_mirror_id;
+          related_ankh_id = req.ankh_id;
+          parent_receipt_id =
+            if req ? parent_receipt_id then req.parent_receipt_id else null;
+          evidence = {
+            projection_kind = req.projection_kind;
+            projection_id = projectionResult.projection.id;
+          };
+        };
+    in {
+      projection =
+        if projectionResult.verdict == "boundary-projection-ready"
+        then projectionResult.projection else null;
+      projection_verdict = projectionResult.verdict;
+      receipt =
+        if receiptResult != null && receiptResult.verdict == "receipt-build-ready"
+        then receiptResult.receipt else null;
+    };
+
+  # Inspector — read-only view of VM state for cockpit/test/viz.
+  describe = {
+    primitives = {
+      P1 = { role = p1.meta.role; owner = p1.ownerName; };
+      P2 = { role = p2.meta.role; owner = p2.ownerName; };
+      P3 = { role = p3.meta.role; owner = p3.ownerName; };
+      P4 = { role = p4.meta.role; owner = p4.ownerName; };
+      P5 = { role = p5.meta.role; owner = p5.ownerName; };
+      P6 = { role = p6.meta.role; owner = p6.ownerName; };
+      P7 = { role = p7.meta.role; owner = p7.ownerName; };
+      P8 = { role = p8.meta.role; owner = p8.ownerName; };
+      P9 = { role = p9.meta.role; owner = p9.ownerName; };
+      P10 = { role = p10.meta.role; owner = p10.ownerName; };
+      P11 = { role = p11.meta.role; owner = p11.ownerName; };
+      P12 = { role = p12.meta.role; owner = p12.ownerName; };
+    };
+    verbs = [
+      "spawn"               # .px value-level verb
+      "project"             # .px value-level verb
+      "describe"            # .px value-level verb
+      "session"             # doghouse-core runtime adapter
+      "transduce-and-spawn" # doghouse-core + P6 adapter
+      "inspect"             # doghouse-core read-only adapter
+      "narrate"             # doghouse-core + P7 adapter
+      "narrate-sequence"    # doghouse-core + P10.b adapter (fold-step chain → story)
+      "plan-demo-generation" # doghouse-core + P10.c adapter (NL → .px-owned sequence)
+      "sandbox-status"      # doghouse-core + P8 adapter
+      "mirror-gc"           # doghouse-core + P12 adapter
+      "execute-sequence"    # doghouse-core + P10.a adapter (sequence → fold-step receipts)
+    ];
+    receipt_kinds = p4.validReceiptKinds;
+    projection_kinds = p3.validProjectionKinds;
+    boundary_contract = p3.insideOutsideContract;
+    audit_invariants = p4.auditInvariants;
+    session_tables = p5.persistentTables;
+    session_invariants = p5.sessionInvariants;
+    nl_input = {
+      valid_intents = p6.validIntents;
+      valid_verdicts = p6.validVerdicts;
+      valid_held_kinds = p6.validHeldKinds;
+      cue_count = builtins.length p6.verbCues;
+      slot_rules = p6.slotExtractionRules;
+    };
+    nl_output = {
+      valid_locales = p7.validLocales;
+      default_locale = p7.defaultLocale;
+      template_count = builtins.length p7.sentenceTemplates;
+    };
+    sandbox_contract = {
+      report_version = p8.reportVersion;
+      common_required_features = p8.commonRequiredFeatures;
+      common_report_fields = p8.commonReportFields;
+      platform_backends = p8.platformBackends;
+      invariants = p8.invariants;
+    };
+    visibility_contract = {
+      valid_visibility_kinds = p9.validVisibilityKinds;
+      default_visibility = p9.defaultVisibility;
+      visibility_fields_by_kind = p9.visibilityFieldsByKind;
+      valid_held_kinds = p9.validHeldKinds;
+      fingerprint_contribution = p9.fingerprintContribution;
+      invariants = p9.invariants;
+    };
+    write_batching_contract = {
+      version = p11.version;
+      valid_batch_scopes = p11.validBatchScopes;
+      active_batch_scope = p11.activeBatchScope;
+      single_spawn_max_receipts = p11.singleSpawnMaxReceipts;
+      single_spawn_rollback_on_any_failure = p11.singleSpawnRollbackOnAnyFailure;
+      valid_held_kinds = p11.validHeldKinds;
+      invariants = p11.invariants;
+      future_p11b_sketch = p11.futureP11bSketch;
+    };
+    mirror_gc_contract = {
+      version = p12.version;
+      active_policy = p12.activePolicy;
+      valid_gc_actions = p12.validGcActions;
+      valid_gc_held_kinds = p12.validGcHeldKinds;
+      required_candidate_fields = p12.requiredCandidateFields;
+      post_gc_projection_kind = p12.postGcProjectionKind;
+      gc_receipt_kind = p12.gcReceiptKind;
+      visibility_policy = p12.visibilityPolicy;
+      invariants = p12.invariants;
+    };
+    algorithm_synthesis_mirror_bridge_contract = {
+      version = p10.version;
+      valid_step_kinds = p10.validStepKinds;
+      receipt_kind_by_step = p10.receiptKindByStep;
+      fold_step_fingerprint_fields = p10.foldStepFingerprintFields;
+      held_step_fingerprint_fields = p10.heldStepFingerprintFields;
+      fingerprint_separator = p10.fingerprintSeparator;
+      fold_step_evidence_fields = p10.foldStepEvidenceFields;
+      held_evidence_fields = p10.heldEvidenceFields;
+      valid_held_kinds = p10.validHeldKinds;
+      invariants = p10.invariants;
+      narration_contract = p10.narrationContract;
+      # P10.b sequence-narration surface
+      narration_styles = p10.narrationStyles;
+      narration_fallback = p10.narrationFallback;
+      narration_default_locale = p10.narrationDefaultLocale;
+      narration_valid_locales = p10.narrationValidLocales;
+      narration_placeholders = p10.narrationPlaceholders;
+      narration_invariants = p10.narrationInvariants;
+    };
+  };
+in {
+  inherit spawn project describe;
+  inherit p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12;  # expose primitives for advanced consumers
+  meta = {
+    source = "pnix-mirror-runtime/vm.px";
+    role = "unified mirror-VM composition — P1-P4 executable verbs plus P5-P12 runtime contracts for session memory, deterministic NL surfaces, cross-platform process sandboxing, contribution visibility (multi-user shared intelligence), single-spawn write batching (redb single-writer throughput), mirror gc (lazy-stub + thunk-gc)";
+    consumes = [
+      "primitives/p1-mirror-identity-registry.px"
+      "primitives/p2-ontology-extension-event.px"
+      "primitives/p3-boundary-projection.px"
+      "primitives/p4-typed-receipt-stream.px"
+      "primitives/p5-mirror-session-contract.px"
+      "primitives/p6-nl-to-spawn-request.px"
+      "primitives/p7-nl-projection.px"
+      "primitives/p8-process-sandbox-contract.px"
+      "primitives/p9-contribution-visibility.px"
+      "primitives/p11-write-batching-contract.px"
+      "primitives/p12-mirror-gc-contract.px"
+      "primitives/p10-algorithm-synthesis-mirror-bridge.px"
+    ];
+    composition_pattern = "value-level .px substrate plus doghouse-core process adapter. pnixc-meta evaluates this .px; doghouse-mirror-vm runs the persistent/session/NL adapter in a child process.";
+  };
+}

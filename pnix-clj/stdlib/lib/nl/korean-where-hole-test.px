@@ -1,0 +1,30 @@
+# stdlib/lib/nl/korean-where-hole-test.px — 운영자 통찰 lock: where=? hole 표현.
+#
+# "<- 방금 이런건 where 가 빠진거잖아. 그냥 sentence 의 where=? 항목은 이렇게 둬서 해결하면 되는거 아닌가?
+#   이어지는 다른 sentence 들로 인해 조각들이 완성되는 형태잖아." (운영자)
+# → 처소 valency 동사(있/계시/없=at·가/오=goal)인데 location role 부재 = where 가 빠짐 → 문장을 held 하지 않고
+#   명시적 where-hole(slot=location, subtype=valency, status=absent)로 둔다. candidate≠truth, slot-level fail-closed.
+#   후속 문장(담화)이 조각을 완성(liftDiscourse whereRecovered). 비-처소 동사(먹/자)는 location 불요 → no-hole.
+# ★불변식: where_hole 은 분석층 metadata — propToTerm 미독 → term_key·convergeGate math-keep 불변.
+let knm = import ./korean-nl-mirror.px; B = builtins;
+  whSub = s: let p = knm.liftToProposition s; in if p.where_hole == null then "none" else p.where_hole.subtype;
+  whStatus = s: let p = knm.liftToProposition s; in if p.where_hole == null then "none" else p.where_hole.status;
+in {
+  go_noloc  = whSub "철수가 갔다";          # goal (어디로? hole)
+  iss_noloc = whSub "철수가 있다";          # at   (어디에? hole)
+  eop_noloc = whSub "철수가 없다";          # at
+  go_loc    = whSub "철수가 학교에 갔다";   # none (채워짐)
+  iss_loc   = whSub "철수가 학교에 있다";   # none
+  eat       = whSub "철수가 사과를 먹었다"; # none (먹=처소 불요)
+  sleep     = whSub "철수가 잔다";          # none
+  go_status = whStatus "철수가 갔다";       # absent
+  all_ok =
+       (whSub "철수가 갔다" == "goal") && (whStatus "철수가 갔다" == "absent")
+    && (whSub "철수가 있다" == "at")  && (whSub "철수가 없다" == "at")
+    && (whSub "철수가 학교에 갔다" == "none") && (whSub "철수가 학교에 있다" == "none")
+    && (whSub "철수가 사과를 먹었다" == "none") && (whSub "철수가 잔다" == "none")
+    # ★term_key 불변: where-hole 있어도 math-keep (propToTerm 미독)
+    && ((knm.convergeGate "철수가 갔다").verdict == "math-keep")
+    && ((knm.convergeGate "철수가 있다").verdict == "math-keep")
+    && ((knm.convergeGate "철수가 학교에 갔다").verdict == "math-keep");
+}

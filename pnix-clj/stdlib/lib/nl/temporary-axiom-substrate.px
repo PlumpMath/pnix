@@ -1,0 +1,463 @@
+let
+  ownerName = "stdlib.nl.temporary-axiom-substrate";
+
+  decomposer =
+    import nl/sentence-decomposition-substrate.px;
+  numericEvaluator =
+    import math/numeric-evaluator.px;
+
+  # === Temporary Axiom Substrate (agent-NL-107, redesigned 2026-05-29)
+  #
+  # 사용자 directive 정정:
+  # > "LLM 이 하는것처럼 이미 스스로 검증이 참이라고 가정할때 yes/no 가
+  # >  나오게 하는게 나을듯, 즉 참인경우가 pnix 내부에서 검증되었다고
+  # >  판단된경우만? (중요한건 여러갈래길)
+  # >  왜냐면 yes 가 (갈수있는길이어야되어야 하기 때문에, 새로 (일시적
+  # >  axiom 생성 이 필요하거나, 여러갈래길 일때) 존재해서, 실패하면
+  # >  held 가 되기 때문이다."
+  #
+  # mental model:
+  #   - yes/no 는 *substrate verdict* 이지 user attest 가 아니다
+  #   - substrate 가 candidate 를 multiple verification branch 로 시도
+  #   - "yes 의 길" = substrate-verified path 가 존재 (axiom 박힘)
+  #   - "no 의 길" = contradiction path 가 존재 (rejection 박힘)
+  #   - 어느 갈래도 결정 못 함 = held + 여러 갈래 상태 명시
+  #
+  # # branch enumeration (v0)
+  #
+  #   Branch 1: registry-consistency
+  #     - duplicate → already-recorded
+  #     - contradicts existing → no 길 (substrate-rejected)
+  #     - no conflict → yes 길 candidate
+  #
+  #   Branch 2: math-substrate-hint    (placeholder; future = real verify)
+  #     - v0 returns "needs-math-substrate-runtime" when math hint present
+  #     - heuristic: candidate contains "=", "+", "^", math morphemes
+  #
+  #   Branch 3: code-substrate-hint    (placeholder; future = real verify)
+  #     - v0 returns "needs-code-substrate-runtime" when patch hint present
+  #     - heuristic: candidate contains "rename", "remove", patch verbs
+  #
+  # # branch outcome aggregation
+  #
+  #   - any branch "verified"   → yes 길 chosen → axiom-added
+  #   - any branch "contradicts" → no 길 chosen → axiom-rejected
+  #   - all branches "needs-*"   → held with branches enumerated
+  #   - duplicate path           → already-recorded (no second copy)
+
+  stepKind = "substrate-verified-axiomatize";
+  framework_step = "interactive — substrate multi-branch verify → 일시 axiom 또는 held";
+
+  containsAny = decomposer.containsAny;
+
+  # === Math / code hint heuristics =================================
+
+  mathTokens = [
+    " = " "+ " " - " " * " "^2" "^3" "^n"
+    "는 다음과" "이다." "와 같다" "수학적" "방정식" "함수"
+  ];
+  codeTokens = [
+    "rename " "remove " "replace " "add " "delete " "move "
+    "extract " "inline " "rewrite " "이름 바꾸" "제거" "삭제"
+  ];
+
+  hasMathHint = s:
+    builtins.isString s && containsAny s mathTokens;
+  hasCodeHint = s:
+    builtins.isString s && containsAny s codeTokens;
+
+  # === Branch evaluators ===========================================
+  #
+  # Each branch returns one of:
+  #   { branch_name; verdict ∈ {"verified", "contradicts", "needs-witness",
+  #                              "duplicate", "not-applicable"};
+  #     reason; ... }
+
+  evalRegistryConsistencyBranch = registry: statement:
+    let
+      duplicates = builtins.filter (r: r.statement == statement) registry;
+      contradictions =
+        builtins.filter (r:
+          # v0 contradiction heuristic: statement equals "NOT " + this
+          # OR the registry row's statement equals "NOT " + statement
+          (r.statement == ("NOT " + statement))
+          || (statement == ("NOT " + r.statement))
+        ) registry;
+    in
+      if duplicates != [] then {
+        branch_name = "registry-consistency";
+        verdict = "duplicate";
+        reason = "same statement already in registry";
+        existing_id = (builtins.head duplicates).id;
+      }
+      else if contradictions != [] then {
+        branch_name = "registry-consistency";
+        verdict = "contradicts";
+        reason = "explicit NOT-form found in registry";
+        contradicting_id = (builtins.head contradictions).id;
+      }
+      else {
+        branch_name = "registry-consistency";
+        verdict = "verified";
+        reason = "no conflict found in session registry";
+      };
+
+  evalMathSubstrateBranch = statement:
+    if !(hasMathHint statement) then {
+      branch_name = "math-substrate";
+      verdict = "not-applicable";
+      reason = "no math hint in statement";
+    }
+    else
+      # agent-NL-108 (2026-05-29): real wiring to numeric-evaluator.
+      # If statement parses as a universal equation, run bounded
+      # domain check against `defaultFiniteDomain` {0..5}.
+      # Outcomes:
+      #   - small-domain-verified → verdict="verified" (yes 길 — bounded)
+      #   - counterexample-found  → verdict="contradicts" (no 길 — real)
+      #   - held-statement-shape  → verdict="needs-witness" (kernel matched only)
+      #   - held-eval-error       → verdict="needs-witness"
+      let
+        mathCheck = numericEvaluator.checkUniversalOverFiniteDomain
+          statement numericEvaluator.defaultFiniteDomain;
+      in
+        if mathCheck.outcome == "small-domain-verified" then {
+          branch_name = "math-substrate";
+          verdict = "verified";
+          sub_verdict = "small-domain-verified";
+          reason = "Universal equation verified on bounded domain {0..5}. "
+            + "NOT a proof for all naturals — bounded check only.";
+          domain_size = mathCheck.domain_size;
+          substrate_used = "numeric-evaluator.checkUniversalOverFiniteDomain";
+        }
+        else if mathCheck.outcome == "counterexample-found" then {
+          branch_name = "math-substrate";
+          verdict = "contradicts";
+          sub_verdict = "counterexample-found";
+          reason = "Substrate found a counterexample on bounded domain {0..5}.";
+          witness = mathCheck.witness or mathCheck.bindings or {};
+          domain_size = mathCheck.domain_size;
+          substrate_used = "numeric-evaluator.checkUniversalOverFiniteDomain";
+        }
+        else {
+          # held-statement-shape, held-eval-error, or anything else
+          branch_name = "math-substrate";
+          verdict = "needs-witness";
+          reason = "Math hint detected; numeric-evaluator could not "
+            + "evaluate (shape mismatch or eval error). "
+            + "Real verify deferred to other math substrate.";
+          defer_to = "stdlib/lib/math/problem-kernel-substrate.px";
+          eval_outcome = mathCheck.outcome;
+        };
+
+  evalCodeSubstrateBranch = statement:
+    if !(hasCodeHint statement) then {
+      branch_name = "code-substrate";
+      verdict = "not-applicable";
+      reason = "no code hint in statement";
+    }
+    else {
+      # v0: placeholder. real verify defers to patch-IR substrate
+      # (agent-NL-89 patch-ir-nl-lifter).
+      branch_name = "code-substrate";
+      verdict = "needs-witness";
+      reason = "code hint detected; real verify deferred to patch-IR substrate";
+      defer_to = "stdlib/lib/nl/patch-ir-nl-lifter.px";
+    };
+
+  enumerateBranches = registry: statement: [
+    (evalRegistryConsistencyBranch registry statement)
+    (evalMathSubstrateBranch statement)
+    (evalCodeSubstrateBranch statement)
+  ];
+
+  # === Aggregation: pick the winning branch (deterministic) ========
+  #
+  # Priority order:
+  #   1. duplicate           → already-recorded
+  #   2. contradicts         → no 길 (substrate-rejected)
+  #   3. verified            → yes 길 (substrate-verified)
+  #   4. all needs-witness   → held with branches enumerated
+  #   5. all not-applicable  → held + no-applicable-branch
+
+  aggregateVerdict = branches:
+    let
+      duplicates = builtins.filter (b: b.verdict == "duplicate") branches;
+      contradictions = builtins.filter (b: b.verdict == "contradicts") branches;
+      verifieds = builtins.filter (b: b.verdict == "verified") branches;
+      witnessing = builtins.filter (b: b.verdict == "needs-witness") branches;
+      applicable_count = builtins.length (
+        builtins.filter (b: b.verdict != "not-applicable") branches
+      );
+    in
+      if duplicates != [] then {
+        decision = "already-recorded";
+        winning_branch = builtins.head duplicates;
+        all_branches = branches;
+      }
+      else if contradictions != [] then {
+        decision = "substrate-rejected";
+        winning_branch = builtins.head contradictions;
+        all_branches = branches;
+      }
+      else if verifieds != [] then {
+        decision = "substrate-verified";
+        winning_branch = builtins.head verifieds;
+        all_branches = branches;
+      }
+      else if witnessing != [] then {
+        decision = "held-needs-witness";
+        held_branches = witnessing;
+        all_branches = branches;
+      }
+      else if applicable_count == 0 then {
+        decision = "held-no-applicable-branch";
+        all_branches = branches;
+      }
+      else {
+        decision = "held-undetermined";
+        all_branches = branches;
+      };
+
+  # === Registry primitives =========================================
+
+  emptyRegistry = [];
+
+  nextAxiomId = registry:
+    let
+      n = builtins.length registry;
+      pad = i:
+        if i < 10 then "00" + builtins.toString i
+        else if i < 100 then "0" + builtins.toString i
+        else builtins.toString i;
+    in "tmp-" + pad (n + 1);
+
+  appendAxiomRow = registry: row: registry ++ [ row ];
+
+  findAxiom = registry: id:
+    let hits = builtins.filter (r: r.id == id) registry; in
+    if hits == [] then null else builtins.head hits;
+
+  discardAxiom = registry: id:
+    builtins.filter (r: r.id != id) registry;
+
+  markVerdict = registry: id: newVerdict:
+    builtins.map (r:
+      if r.id == id then r // { verified = newVerdict; } else r
+    ) registry;
+
+  # === Main entry: evaluate candidate + maybe axiomatize ===========
+
+  evaluateCandidate =
+    { candidate_statement, registry ? emptyRegistry, provenance ? {} }:
+    if !(builtins.isString candidate_statement) then {
+      outcome = "held-non-string-candidate";
+    }
+    else if candidate_statement == "" then {
+      outcome = "held-empty-candidate";
+    }
+    else
+      let
+        branches = enumerateBranches registry candidate_statement;
+        verdict = aggregateVerdict branches;
+        decision = verdict.decision;
+      in
+        if decision == "already-recorded" then {
+          outcome = "already-axiom";
+          axiom_id = verdict.winning_branch.existing_id;
+          public = {
+            statement = candidate_statement;
+            message_en = "Already recorded as a temporary axiom in this session.";
+            message_ko = "이미 이 세션의 일시 axiom 으로 기록됨.";
+          };
+          carry = {
+            updated_registry = registry;
+            decision = decision;
+            all_branches = verdict.all_branches;
+            axiom_origin =
+              "axiom-96-nl-temporary-axiom (composes axiom-95-nl-clarification)";
+          };
+        }
+        else if decision == "substrate-rejected" then {
+          outcome = "axiom-rejected";
+          public = {
+            statement = candidate_statement;
+            verdict = "substrate-rejected";
+            message_en = "Substrate found a contradiction — no axiom recorded.";
+            message_ko = "substrate 가 모순을 발견 — axiom 기록 안 됨.";
+            reason_en = verdict.winning_branch.reason;
+          };
+          carry = {
+            updated_registry = registry;
+            decision = decision;
+            winning_branch = verdict.winning_branch;
+            all_branches = verdict.all_branches;
+            axiom_origin =
+              "axiom-96-nl-temporary-axiom (composes axiom-95-nl-clarification)";
+          };
+        }
+        else if decision == "substrate-verified" then
+          let
+            newId = nextAxiomId registry;
+            row = {
+              id = newId;
+              statement = candidate_statement;
+              received_at_turn = builtins.length registry + 1;
+              provenance = provenance;
+              verified = "verified-by-" + verdict.winning_branch.branch_name;
+              winning_branch = verdict.winning_branch.branch_name;
+              scope = "session";
+            };
+            newRegistry = appendAxiomRow registry row;
+          in {
+            outcome = "axiom-added";
+            axiom_id = newId;
+            public = {
+              statement = candidate_statement;
+              verdict = "substrate-verified";
+              winning_branch = verdict.winning_branch.branch_name;
+              message_en = "Substrate verified — temporary axiom recorded for this session.";
+              message_ko = "substrate 검증 통과 — 이 세션에 일시 axiom 으로 기록됨.";
+              registry_size = builtins.length newRegistry;
+            };
+            carry = {
+              updated_registry = newRegistry;
+              axiom_row = row;
+              decision = decision;
+              winning_branch = verdict.winning_branch;
+              all_branches = verdict.all_branches;
+              axiom_origin =
+                "axiom-96-nl-temporary-axiom (composes axiom-95-nl-clarification)";
+            };
+          }
+        else if decision == "held-needs-witness" then {
+          outcome = "held-multi-branch-undetermined";
+          public = {
+            statement = candidate_statement;
+            verdict = "held";
+            message_en = "Substrate could not pick a yes/no path — multiple branches need witnesses.";
+            message_ko = "substrate 가 yes/no 갈래길 결정 못 함 — 여러 branch 가 witness 필요.";
+            branch_count = builtins.length verdict.held_branches;
+          };
+          carry = {
+            updated_registry = registry;
+            decision = decision;
+            held_branches = verdict.held_branches;
+            all_branches = verdict.all_branches;
+            axiom_origin =
+              "axiom-96-nl-temporary-axiom (composes axiom-95-nl-clarification)";
+          };
+        }
+        else {
+          outcome = "held-undetermined";
+          public = {
+            statement = candidate_statement;
+            verdict = "held";
+            message_en = "Substrate found no applicable verification branch.";
+            message_ko = "substrate 가 적용 가능한 검증 branch 를 못 찾음.";
+          };
+          carry = {
+            updated_registry = registry;
+            decision = decision;
+            all_branches = verdict.all_branches;
+            axiom_origin =
+              "axiom-96-nl-temporary-axiom (composes axiom-95-nl-clarification)";
+          };
+        };
+
+  # === Independent verify (existing axiom) =========================
+
+  verifyExistingAxiom = registry: id:
+    let ax = findAxiom registry id; in
+    if ax == null then { outcome = "held-axiom-not-found"; }
+    else {
+      outcome = "verification-pass";
+      axiom_id = id;
+      statement = ax.statement;
+      verified = ax.verified;
+      note_en = "Axiom retained its prior verification verdict.";
+      note_ko = "axiom 의 이전 검증 결과 유지.";
+    };
+
+  # === Plate entry =================================================
+
+  applyTempAxiomPlate = request:
+    if !(builtins.isAttrs request) then {
+      outcome = "held-non-attrs-request";
+    }
+    else if builtins.hasAttr "candidate_statement" request then
+      evaluateCandidate {
+        candidate_statement = request.candidate_statement;
+        registry =
+          if builtins.hasAttr "registry" request
+          then request.registry else emptyRegistry;
+        provenance =
+          if builtins.hasAttr "provenance" request
+          then request.provenance else {};
+      }
+    else if (builtins.hasAttr "verify_axiom_id" request)
+         && (builtins.hasAttr "registry" request) then
+      verifyExistingAxiom request.registry request.verify_axiom_id
+    else {
+      outcome = "held-missing-input-field";
+      reason = "Provide { candidate_statement, registry? } or { verify_axiom_id, registry }.";
+    };
+
+  inventorySummary = _: {
+    owner = ownerName;
+    axiom_class = "nl-temporary-axiom-axiom-96";
+    branch_count = 3;
+    branch_names = [ "registry-consistency" "math-substrate" "code-substrate" ];
+    decision_kinds = [
+      "substrate-verified"
+      "substrate-rejected"
+      "already-recorded"
+      "held-needs-witness"
+      "held-no-applicable-branch"
+      "held-undetermined"
+    ];
+    composes = "axiom-95-nl-clarification + axiom-94-nl-chain";
+    inherit framework_step;
+    step_kind = stepKind;
+    new_decision_count = 0;
+    bilingual = true;
+    held_outcomes = [
+      "held-non-string-candidate"
+      "held-empty-candidate"
+      "held-axiom-not-found"
+      "held-non-attrs-request"
+      "held-missing-input-field"
+      "held-multi-branch-undetermined"
+      "held-undetermined"
+    ];
+    yes_path_meaning = "substrate-verified branch exists (axiom-added)";
+    no_path_meaning = "substrate-contradiction branch exists (axiom-rejected)";
+    held_path_meaning = "no determined branch; multiple branches need witness";
+  };
+
+in {
+  inherit
+    ownerName
+    mathTokens codeTokens hasMathHint hasCodeHint
+    evalRegistryConsistencyBranch evalMathSubstrateBranch
+    evalCodeSubstrateBranch enumerateBranches aggregateVerdict
+    emptyRegistry nextAxiomId appendAxiomRow findAxiom
+    discardAxiom markVerdict
+    evaluateCandidate verifyExistingAxiom
+    applyTempAxiomPlate
+    stepKind framework_step
+    inventorySummary;
+  meta = {
+    source = "stdlib NL temporary axiom substrate (agent-NL-107)";
+    owner = ownerName;
+    base = "nl-temporary-axiom-substrate-v0-math-wired";
+    rev_note = "agent-NL-108 (2026-05-29): math-substrate branch 가 "
+      + "numeric-evaluator.checkUniversalOverFiniteDomain 과 real 결합. "
+      + "universal-equation shape 면 bounded {0..5} 검증 → counterexample-"
+      + "found → contradicts (no 길), small-domain-verified → verified "
+      + "(yes 길). non-shape math hint 는 needs-witness (kernel-matched). "
+      + "registry-consistency 와 함께 *두 real verify path*. code branch "
+      + "는 여전히 hint-only (별 슬라이스). DO NOT REBUILD — decomposer "
+      + "containsAny + numeric-evaluator 재사용.";
+  };
+}
