@@ -300,8 +300,8 @@ builtins.trace "여기까지 실행됨" 42
 >> 42
 
 
-## 안되는것/사용방법?: builtins.toXML
->>  px: attrset has no attribute toXML
+builtins.toXML {a=1;}
+>> '<?xml version=\'1.0\' encoding=\'utf-8\'?>\n<expr>\n  <attrs>\n    <attr name="a">\n      <int>1</int>\n    </attr>\n  </attrs>\n</expr>\n'
 
 builtins.toString [ "foo" "bar" ]
 >> "foo bar"
@@ -330,8 +330,8 @@ builtins.pathExists ./hello.txt
 builtins.fetchurl "https://bootstrap.pypa.io/get-pip.py"
 >> '/private/var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/pnix-nix-store/7857aef9f8c57b58885cd8fe5ad4fb78-get-pip.py'
 
-# builtins.fetchTarball { url = "https://www.svp-team.com/files/svp4-mac.4.5.210-4.dmg"; sha256 = "04phzhyw0haiz77j494s1rz0as5yg70gb33i864riylfj776h27v"; }
->> error: PnixError: builtins.fetchurl: failed to download `https://www.svp-team.com/files/svp4-mac.4.5.210-4.dmg`: HTTP Error 404: Not Found
+builtins.fetchTarball { url = "https://www.svp-team.com/files/svp4-latest.php?mac"; sha256 = "04phzhyw0haiz77j494s1rz0as5yg70gb33i864riylfj776h27v"; }
+>> '/private/var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/pnix-nix-store/d8bcf39b8267074da5e5993ddf8046cb-tarball-unpacked'
 
 builtins.fetchGit { url = "https://github.com/NixOS/nixpkgs.git"; rev = "abcdef1234567890"; }
 >> {'lastModified': 0, 'outPath': '/private/var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/pnix-nix-store/23c625374b5d229691c6612d8440ae26-nixpkgs', 'rev': 'b78ee463a44bd56f935ec34724f54611e0b569a2', 'revCount': 0, 'shortRev': 'b78ee46', 'submodules': False}

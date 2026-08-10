@@ -109,9 +109,8 @@ builtins.trace "여기까지 실행됨" 42
 >> trace: 여기까지 실행됨
 >> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":42}
 
-## 안되는것/사용방법?: builtins.toXML
->> {"error":{"class":"attribute-missing","evidence":{"name":"toXML"},"phase":"eval"},"outcome_kind":"failed","schema":"pnix.machine.host-outcome.v1"}
-
+builtins.toXML {a=1;}
+>> "<?xml version='1.0' encoding='utf-8'?>\n<expr><attrs><attr name=\"a\"><int>1</int></attr></attrs></expr>\n"
 
 builtins.toString [ "foo" "bar" ]
 >> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":"foo bar"}
@@ -140,8 +139,8 @@ builtins.pathExists "/path/to/hello.txt"
 builtins.fetchurl "https://bootstrap.pypa.io/get-pip.py"
 >> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":"/var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/pnix-fetch-1786258190619-0.bz0my7lf4hv.out"}
 
-# builtins.fetchTarball { url = "https://www.svp-team.com/files/svp4-mac.4.5.210-4.dmg"; sha256 = "04phzhyw0haiz77j494s1rz0as5yg70gb33i864riylfj776h27v"; }
->> {"error":{"class":"io-error","evidence":{"message":"Error: Command failed: node -e const fs=require('fs');fetch(process.argv[1]).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer()}).then(b=>{fs.writeFileSync(process.argv[2],Buffer.from(b));}).catch(e=>{console.error(e);process.exit(1);}) https://www.svp-team.com/files/svp4-mac.4.5.210-4.dmg /var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/pnix-fetch-1786258216898-0.ms83eqe88a.out\nError: HTTP 404\n    at [eval]:1:71\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n","operation":"fetchurl","url":"https://www.svp-team.com/files/svp4-mac.4.5.210-4.dmg"},"phase":"eval"},"outcome_kind":"failed","schema":"pnix.machine.host-outcome.v1"}
+builtins.fetchTarball { url = "https://www.svp-team.com/files/svp4-latest.php?mac"; sha256 = "04phzhyw0haiz77j494s1rz0as5yg70gb33i864riylfj776h27v"; }
+>> "/var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/pnix-fetch-1786371799185-0.gpz7glkazot.out"
 
 builtins.fetchGit { url = "https://github.com/NixOS/nixpkgs.git"; rev = "abcdef1234567890"; }
 >> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":{"narHash":"","outPath":"/var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/pnix-fetch-1786258245010-0.yr0e605y8vl.out","rev":"abcdef1234567890","revCount":0,"shortRev":"abcdef1","submodules":false}}

@@ -160,8 +160,8 @@ builtins.pathExists "${builtins.getEnv "HOME"}/hello.txt"
 builtins.fetchurl "https://bootstrap.pypa.io/get-pip.py"
 >> "/tmp/pnix-nix-store/d3ae4644cf5ce68b5c97485ba6fbca31-get-pip.py"
 
-# builtins.fetchTarball { url = "https://www.svp-team.com/files/svp4-latest.php?mac"; sha256 = "04phzhyw0haiz77j494s1rz0as5yg70gb33i864riylfj776h27v"; }
->> error: {:schema :pnix.machine.eval-error-model.v1, :phase :eval, :class :type-error, :evidence {:url "{:kind :thunk, :label [:attr \"url\"], :state #object[clojure.lang.Atom 0x418911d3 {:status :ready, :val {:phase :pending}}], :compute #object[pnix_clj.evaluator$eval_attrs$fn__914 0x4f4ef792 \"pnix_clj.evaluator$eval_attrs$fn__914@4f4ef792\"]}"}}
+builtins.fetchTarball { url = "https://www.svp-team.com/files/svp4-latest.php?mac"; sha256 = "04phzhyw0haiz77j494s1rz0as5yg70gb33i864riylfj776h27v"; }
+>> "/tmp/pnix-nix-store/10b6d0baaf062b024ab29e68898e27a2-tarball"
 
 # builtins.fetchGit { url = "https://github.com/NixOS/nixpkgs.git"; rev = "abcdef1234567890"; }
 >> error: {:schema :pnix.machine.eval-error-model.v1, :phase :eval, :class :type-error, :evidence {:builtin :fetchGit, :url "{:kind :thunk, :label [:attr \"url\"], :state #object[clojure.lang.Atom 0x538f381a {:status :ready, :val {:phase :pending}}], :compute #object[pnix_clj.evaluator$eval_attrs$fn__914 0x5d48cc1b \"pnix_clj.evaluator$eval_attrs$fn__914@5d48cc1b\"]}", :rev "{:kind :thunk, :label [:attr \"rev\"], :state #object[clojure.lang.Atom 0x5977536a {:status :ready, :val {:phase :pending}}], :compute #object[pnix_clj.evaluator$eval_attrs$fn__914 0x1c75c620 \"pnix_clj.evaluator$eval_attrs$fn__914@1c75c620\"]}", :policy :network-or-git-unavailable}}
