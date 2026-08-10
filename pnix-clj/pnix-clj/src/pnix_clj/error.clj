@@ -21,7 +21,7 @@
 (def ^:private machine-error-classes
   #{:syntax-error :invalid-machine-state :unsupported-expression
     :assertion-failed :string-interpolation-coercion-failed
-    :throw-builtin-called
+    :throw-builtin-called :abort-builtin-called
     :unknown-variable :not-callable :non-boolean-condition
     :missing-heap-cell :invalid-heap-cell :thunk-blackhole
     :invalid-resume :invalid-guest-value :invalid-primitive-ref
@@ -79,10 +79,19 @@
       (= phase :builtin) :type-error
       :else :unsupported-expression)))
 
+(def ^:private guest-message-classes
+  "Classes whose `:message` is GUEST data — the string the evaluated program
+  itself passed to `builtins.throw` / `builtins.abort`. Unlike host throwable
+  text, it is produced by the source and is therefore deterministic, so it
+  stays in the evidence (Nix prints it: `builtins.throw \"x\"` => `error: x`)."
+  #{:throw-builtin-called :abort-builtin-called})
+
 (defn- stable-evidence
-  [details]
+  [details class]
   (apply dissoc (or details {})
-         [:message :class :data :throwable :stack :stack-trace]))
+         (cond-> [:class :data :throwable :stack :stack-trace]
+           (not (contains? guest-message-classes class))
+           (conj :message))))
 
 (defn failed
   "Build a deterministic Failed outcome. Host throwable identity and text are
@@ -91,10 +100,11 @@
   ([phase reason]
    (failed phase reason nil))
   ([phase reason details]
-   (let [evidence (stable-evidence details)
+   (let [class (machine-class phase reason details)
+         evidence (stable-evidence details class)
          error {:schema machine-error-schema
                 :phase (machine-phase phase reason)
-                :class (machine-class phase reason details)
+                :class class
                 :evidence evidence}]
      (merge {:status :failed
              :reason reason

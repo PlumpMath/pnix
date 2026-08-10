@@ -7,8 +7,10 @@ Python 언어 생태계(**Hy**, Python)와 **pnix**(순수·지연·Nix 계열 �
   action. 개발자 CLI는 **`pnix-hy-project`**.
 - **`hy-meta/`** — HOST 증명 레인: Hy/Python 자기컴파일·평가·재현(stage1→7 부트스트랩, 커널,
   import hook, artifact/pyc/marshal, clean replay, introspection).
-- **`hy-1.3.0/`** + `hy`/`stage1`/`stage2`/`tests` 심볼릭링크 — 부트스트랩과 투영 "proof Python"이
-  실행되는 벤더된 Hy (`HY_ROOT` = 이 저장소 루트).
+- **`stage1/`** (Python), **`stage2/`** (Hy) — hy-meta 소유의 seed/self-hosting 컴파일러
+  (first-party 코드, Hy 자체와 별개). Hy 인터프리터 자체는 벤더링하지 않고 flake input
+  (`github:hylang/hy` 태그 고정)에서 받아오며, `proofPython`이 설치된 패키지로 제공한다
+  (`HY_ROOT` = 이 저장소 루트).
 - **`SCOPE_LOCK.md`** — 권위 있는 경계 선언(무엇을 바꾸기 전에 먼저 읽을 것).
 
 > 이 프로젝트는 **현재 선언된 meta-circular-projection scope 안에서 닫혀 있음**
@@ -21,16 +23,16 @@ Python 언어 생태계(**Hy**, Python)와 **pnix**(순수·지연·Nix 계열 �
 
 `import pnix_hy`는 **일반 Python(≥3.11)에서 의존성 0, 저장소 트리 없이 동작**한다 — CORE 티어
 (pnix eval / `safe_eval` / purity / `gate_check` / `check_action` / IR / witness / `explain_pnix` /
-cache / diagnose)는 어디서나 실행된다. 투영·증명 티어는 추가로 Hy 1.3.0과 `hy-meta` 트리가
+cache / diagnose)는 어디서나 실행된다. 투영·증명 티어는 추가로 Hy 1.3.1과 `hy-meta` 트리가
 필요하며, 트리 밖 설치본은 `PNIX_HY_HOME`으로 그 트리를 찾는다. 투영 기능은 Hy/트리가 없으면
 **호출 시점에 우아하게 물러난다**(예외/`available:False`) — CORE는 영향받지 않는다.
 
 ```sh
 pip install .                    # CORE: import pnix_hy; safe_eval / gate / action / ir / witness / explain
-pip install '.[projection]'      # + Hy 1.3.0  -> Hy<->pnix 투영 / mirror-over-Hy
+pip install '.[projection]'      # + Hy 1.3.1  -> Hy<->pnix 투영 / mirror-over-Hy
 pip install '.[full]'            # + proof ladder; 추가로: export PNIX_HY_HOME=/path/to/pnix-hy 체크아웃
 
-pnix-hy-project --deployment     # 설치 위치 + 어떤 티어(core/projection/full)가 되는지 표시
+pnix-hy --deployment     # 설치 위치 + 어떤 티어(core/projection/full)가 되는지 표시
 ```
 
 ```python
@@ -42,7 +44,7 @@ ph.deployment_info()["tiers"]                       # {core:True, projection:?, 
 
 - **CORE 티어** = 어떤 pip 설치에서도, Hy 없이, 트리 없이 동작.
 - **projection / full 티어** = `PNIX_HY_HOME`을 체크아웃(`hy-meta/` + `hy` 포함)으로 지정하고
-  `projection`/`full` extra(Hy 1.3.0)를 설치, 또는 아래 Nix 방식 사용.
+  `projection`/`full` extra(Hy 1.3.1)를 설치, 또는 아래 Nix 방식 사용.
 - 저장소 안/editable 설치는 그대로다: `PNIX_HY_HOME` 미설정 시 `HY_ROOT`는 예전처럼 저장소 sibling.
 
 ## Nix로 설치/실행 (저장소 루트의 flake)
@@ -51,7 +53,7 @@ ph.deployment_info()["tiers"]                       # {core:True, projection:?, 
 nix build                       # .#pnix-hy 빌드 -> ./result/bin/pnix-hy-project
 ./result/bin/pnix-hy-project --safe-eval '1 + 2 * 3'
 
-nix run .#pnix-hy-project -- --safe-eval '1 + 2 * 3'   # 위와 동일, ./result 없이
+nix run .#pnix-hy -- --safe-eval '1 + 2 * 3'   # 위와 동일, ./result 없이
 nix run .#check                 # 56개 toolkit self-check   (저장소 루트에서 실행)
 nix run .#gate                  # sacred 레인 + toolkit       (저장소 루트에서 실행)
 nix run .#hy-meta -- <args>     # hy-meta 호스트 proof 레인 (bootstrap.py, 저장소 루트에서)
@@ -59,25 +61,25 @@ nix run .#hy-meta -- <args>     # hy-meta 호스트 proof 레인 (bootstrap.py, 
 nix develop                     # 개발셸: python + hy + pnix-hy-project 전부 PATH에
 
 # context 유지 REPL (warm 프로세스; 저장소 루트에서):
-nix run .#repl-pnix-hy-pnix     # pnix REPL (바인딩 지속: `a = 1` 후 `a + 1` -> 2)
-nix run .#repl-pnix-hy-hy       # Hy 1.3.0 REPL
-nix run .#repl-pnix-hy-python   # python REPL (`ph` = 툴킷)
-nix run .#repl-hy-meta-hy       # hy-meta 호스트 레인용 Hy REPL
-nix run .#repl-hy-meta-python   # python REPL (sys.path에 ./hy-meta + 저장소 루트)
+nix run .#pnix-hy-pnix          # pnix REPL (바인딩 지속: `a = 1` 후 `a + 1` -> 2)
+nix run .#pnix-hy-hy            # Hy 1.3.1 REPL
+nix run .#pnix-hy-python        # python REPL (`ph` = 툴킷)
+nix run .#hy-meta-hy            # hy-meta 호스트 레인용 Hy REPL
+nix run .#hy-meta-python        # python REPL (sys.path에 ./hy-meta + 저장소 루트)
 ```
 
-패키지: `.#pnix-hy`(CLI), `.#hy`(공식 `github:hylang/hy` 태그 `1.3.0`, `flake.lock`에 고정),
-`.#proofPython`(python 3.11 + Hy 1.3.0).
+패키지: `.#pnix-hy`(CLI), `.#hy`(공식 `github:hylang/hy` 태그 `1.3.1`, `flake.lock`에 고정),
+`.#proofPython`(python 3.11 + Hy 1.3.1).
 
 **두 종류의 명령 — 이게 중요하다:**
 
 | | 어디서 되나 | 필요 |
 |---|---|---|
 | 순수 기능 (`--safe-eval`, `--purity`, `--diagnose`, `--specialize`, `--ir`, `--gate-check`, `--mirror`, `--tower`, `--pnix`, `--stage-ladder`, `--receipt`, `--reify`, `--action-check`, …) | **어디서나** (설치본 `./result/bin/...`) | 없음 — 순수 stdlib |
-| 투영 기능 (`--hy*`, `--quasiquote`, `--defmacro`, `--reader-macro`, `--macro-steps`, `--synth-pnix`, `--hy-roundtrip`, `--hy-closure`, `--trace`, `--interop` w/ Hy, `--correspondence`) 및 **`--check` / `--gate`** | **저장소 루트** | Hy 1.3.0 (`PNIX_HY_PYTHON`) + `HY_ROOT`의 저장소 트리 |
+| 투영 기능 (`--hy*`, `--quasiquote`, `--defmacro`, `--reader-macro`, `--macro-steps`, `--synth-pnix`, `--hy-roundtrip`, `--hy-closure`, `--trace`, `--interop` w/ Hy, `--correspondence`) 및 **`--check` / `--gate`** | **저장소 루트** | Hy 1.3.1 (`PNIX_HY_PYTHON`) + `HY_ROOT`의 저장소 트리 |
 
 `.#check` / `.#gate` / `.#hy-meta`와 devShell의 `pnix-hy-project`는 `PNIX_HY_PYTHON`을 flake의
-Hy 1.3.0으로 자동 설정하고 `HY_ROOT`의 **소스 트리**에서 실행하므로 저장소 루트에서 돌린다.
+Hy 1.3.1으로 자동 설정하고 `HY_ROOT`의 **소스 트리**에서 실행하므로 저장소 루트에서 돌린다.
 맨 `.#pnix-hy` / `./result` CLI는 **설치본**(순수 기능 전용; `HY_ROOT`가 Nix store라 Hy 트리 없음).
 
 > `evaluation warning: Nixpkgs 26.05 … x86_64-darwin`, `'system' … stdenv.hostPlatform` 줄은
@@ -104,7 +106,7 @@ pnix-hy-project --specialize 'let a=1; in a + x' --json # Futamura: dynamic vars
 pnix-hy-project --mirror 'rec { x=1; y=x+41; }.y'       # singleton mirror facet
 pnix-hy-project --stage-ladder '1 + 2'                  # pnix 런타임 stage ladder
 pnix-hy-project --reify '(+ 1 2)'                       # source/form/ast/ir/value/witness 통일 물화
-pnix-hy-project --deployment                            # 이 설치에서 어떤 티어가 되는지
+pnix-hy --deployment                            # 이 설치에서 어떤 티어가 되는지
 ```
 
 ### Action checkpoint (semantic/action VM 레이어)
@@ -158,11 +160,11 @@ pnix-hy-project --gate      # + sacred 레인 (runtime self-test, rust corpus, 4
 
 | 모드 | `nix run` 앱 | CLI (devShell/소스) | 무엇인가 |
 |---|---|---|---|
-| pnix-hy · **pnix** | `.#repl-pnix-hy-pnix` | `pnix-hy-project --repl pnix` | pnix REPL(신규) — 누적 pnix env |
-| pnix-hy · hy | `.#repl-pnix-hy-hy` | `pnix-hy-project --repl hy` | Hy 1.3.0 REPL |
-| pnix-hy · python | `.#repl-pnix-hy-python` | `pnix-hy-project --repl python` | CPython REPL, `ph` = 툴킷 |
-| hy-meta · hy | `.#repl-hy-meta-hy` | — | 호스트 레인용 Hy REPL |
-| hy-meta · python | `.#repl-hy-meta-python` | — | CPython REPL, `sys.path`에 `./hy-meta` + 저장소 루트 |
+| pnix-hy · **pnix** | `.#pnix-hy-pnix` | `pnix-hy-project --repl pnix` | pnix REPL(신규) — 누적 pnix env |
+| pnix-hy · hy | `.#pnix-hy-hy` | `pnix-hy-project --repl hy` | Hy 1.3.1 REPL |
+| pnix-hy · python | `.#pnix-hy-python` | `pnix-hy-project --repl python` | CPython REPL, `ph` = 툴킷 |
+| hy-meta · hy | `.#hy-meta-hy` | — | 호스트 레인용 Hy REPL |
+| hy-meta · python | `.#hy-meta-python` | — | CPython REPL, `sys.path`에 `./hy-meta` + 저장소 루트 |
 
 `nix run .#repl-*` 앱은 **저장소 루트에서**(PNIX_HY_PYTHON을 flake Hy로 설정, 소스 트리 사용).
 `nix develop` 안에서는 `pnix-hy-project --repl <mode>`가 PATH에 있다.
@@ -173,7 +175,7 @@ pnix-hy-project --gate      # + sacred 레인 (runtime self-test, rust corpus, 4
 바인딩은 미강제 값 저장).
 
 ```text
-$ nix run .#repl-pnix-hy-pnix
+$ nix run .#pnix-hy-pnix
 pnix REPL -- pure/lazy, context-retaining. :help for commands, :quit (or Ctrl-D) to exit.
 pnix> a = 20                 # 바인딩(지속); `:let a = 20` 도 가능
 a bound
@@ -222,7 +224,7 @@ ph.deployment_info()                               # 이 설치에서 되는 티
 
 ```sh
 python hy-meta/bootstrap.py <args>     # 저장소 루트에서 (./hy, ./stage1 필요)
-nix run .#hy-meta -- <args>            # 위와 동일, flake의 Hy 1.3.0으로
+nix run .#hy-meta -- <args>            # 위와 동일, flake의 Hy 1.3.1으로
 ```
 
 hy-meta는 Hy/Python 자기컴파일·평가·재현 proof 레인이고, pnix-hy는 그 위에 얹힌다.
@@ -234,21 +236,21 @@ pip 패키지가 아니라 저장소 트리(`HY_ROOT`)에서 실행된다.
 
 ```sh
 python3.11 -m venv /tmp/pnix-hy-py311-venv
-/tmp/pnix-hy-py311-venv/bin/pip install 'hy==1.3.0'
+/tmp/pnix-hy-py311-venv/bin/pip install 'hy==1.3.1'
 export PNIX_HY_PYTHON=/tmp/pnix-hy-py311-venv/bin/python   # 투영 "proof Python"
-cd pnix-hy && PYTHONPATH=. python bin/pnix-hy-project --check
+cd pnix-hy && PYTHONPATH=. python bin/pnix-hy --check
 ```
 
-코어 eval/샌드박스는 무의존; 투영 기능 + `--check`/`--gate`만 Hy 1.3.0 필요(자동 탐색 또는
+코어 eval/샌드박스는 무의존; 투영 기능 + `--check`/`--gate`만 Hy 1.3.1 필요(자동 탐색 또는
 `PNIX_HY_PYTHON`).
 
 **트리 밖 / pip 설치본**이 투영·증명 티어에 도달하려면 체크아웃을 가리키게 한다:
 
 ```sh
 pip install 'pnix-hy[full]'
-export PNIX_HY_PYTHON=/path/to/python-with-hy-1.3.0     # proof Python
+export PNIX_HY_PYTHON=/path/to/python-with-hy-1.3.1     # proof Python
 export PNIX_HY_HOME=/path/to/pnix-hy                     # hy-meta/ + hy 가 있는 체크아웃
-pnix-hy-project --deployment                             # projection/full = True 확인
+pnix-hy --deployment                             # projection/full = True 확인
 ```
 
 `PNIX_HY_HOME` 미설정 시 동작은 정확히 in-repo 기본값(`HY_ROOT` = 저장소 sibling).

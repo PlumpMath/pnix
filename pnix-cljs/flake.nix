@@ -279,22 +279,59 @@ buildPhase = ''
           };
         });
 
-      apps = forAllSystems (system: {
-        pnix-cljs = {
-          type = "app";
-          program = "${self.packages.${system}.pnix-cljs}/bin/pnix-cljs";
-        };
-        cljs-meta = {
-          type = "app";
-          program = "${self.packages.${system}.cljs-meta}/bin/cljs-meta";
-        };
-        pnix-cljs-cljs = {
-          type = "app";
-          program = "${self.packages.${system}.pnix-cljs-cljs}/bin/pnix-cljs-cljs";
-        };
-		deps-lock = { type = "app"; program = "${clj-nix.packages."${system}".deps-lock}/bin/deps-lock"; };
-        default = self.apps.${system}.pnix-cljs;
-      });
+      # App names follow the scheme shared by every pnix host:
+      #   pnix-<host>          the runtime CLI
+      #   pnix-<host>-<lang>   an interactive REPL in <lang>
+      #   <host>-meta          the host-language mechanism CLI
+      #   gate                 this host's full gate
+      apps = forAllSystems (system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ clj-nix.overlays.default ];
+          };
+          pnixCljsRepl = pkgs.writeShellApplication {
+            name = "pnix-cljs-pnix";
+            text = ''
+              exec ${self.packages.${system}.pnix-cljs}/bin/pnix-cljs --repl "$@"
+            '';
+          };
+          # The gate reads the source tree (identity + artifact digests), so it
+          # runs from the working directory rather than from the store.
+          gateApp = pkgs.writeShellApplication {
+            name = "pnix-cljs-gate";
+            runtimeInputs = [ pkgs.nodejs pkgs.ripgrep ];
+            text = ''
+              if [ ! -x "$PWD/bin/pnix-cljs-gate" ]; then
+                echo "pnix-cljs gate: run from the pnix-cljs source root" >&2
+                exit 2
+              fi
+              # `bin/pnix-cljs-gate` reads compiled artifacts under dist/; build
+              # them unless the caller already ran `--rebuild` or a manual build.
+              if [ ! -f "$PWD/pnix-cljs/dist/pnix-cljs.js" ]; then
+                exec "$PWD/bin/pnix-cljs-gate" --rebuild "$@"
+              fi
+              exec "$PWD/bin/pnix-cljs-gate" "$@"
+            '';
+          };
+        in {
+          pnix-cljs = {
+            type = "app";
+            program = "${self.packages.${system}.pnix-cljs}/bin/pnix-cljs";
+          };
+          pnix-cljs-pnix = { type = "app"; program = pkgs.lib.getExe pnixCljsRepl; };
+          cljs-meta = {
+            type = "app";
+            program = "${self.packages.${system}.cljs-meta}/bin/cljs-meta";
+          };
+          pnix-cljs-cljs = {
+            type = "app";
+            program = "${self.packages.${system}.pnix-cljs-cljs}/bin/pnix-cljs-cljs";
+          };
+          gate = { type = "app"; program = pkgs.lib.getExe gateApp; };
+          deps-lock = { type = "app"; program = "${clj-nix.packages."${system}".deps-lock}/bin/deps-lock"; };
+          default = self.apps.${system}.pnix-cljs;
+        });
 
       devShells = forAllSystems (system:
         let pkgs = import nixpkgs { inherit system; };

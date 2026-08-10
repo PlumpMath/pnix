@@ -64,6 +64,16 @@
               exec "$source_root/${script}" "$@"
             '';
           };
+          pnixClrRepl = sourceRunner {
+            name = "pnix-clr-pnix";
+            script = "bin/pnix-clr";
+            prepare = ''
+              if [ ! -f "$source_root/pnix-clr/target/runtime-artifact/manifest.json" ]; then
+                "$source_root/bin/build-pnix-clr-artifact" >/dev/null
+              fi
+              set -- --repl "$@"
+            '';
+          };
           pnixClr = sourceRunner {
             name = "pnix-clr";
             script = "bin/pnix-clr";
@@ -85,6 +95,7 @@
         in {
           default = pnixClr;
           pnix-clr = pnixClr;
+          pnix-clr-pnix = pnixClrRepl;
           clr-meta = clrMeta;
           inherit gate;
         });
@@ -99,6 +110,11 @@
           type = "app";
           program = "${self.packages.${system}.pnix-clr}/bin/pnix-clr";
           meta.description = "Run the experimental PNIX ClojureCLR host";
+        };
+        pnix-clr-pnix = {
+          type = "app";
+          program = "${self.packages.${system}.pnix-clr-pnix}/bin/pnix-clr-pnix";
+          meta.description = "Interactive PNIX REPL on the ClojureCLR host";
         };
         clr-meta = {
           type = "app";

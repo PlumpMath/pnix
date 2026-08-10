@@ -131,8 +131,8 @@ builtins.substring 0 3 "abcdef"
 builtins.readFile "/path/to/hello.txt"
 >> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":"helo\n"}
 
-builtins.readDir "/path/to/pnix"
->> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":{".github":"directory",".gitignore":"regular","LICENSE":"regular","README.md":"regular","pnix-clj":"directory","pnix-cljs":"directory","pnix-clr":"directory","pnix-hy":"directory","pnix-rs":"directory"}}
+builtins.readDir "/path/to/pnix-cljs"
+>> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":{"CLAUDE.md":"regular","README.md":"regular","bin":"directory","cljs-meta":"directory","deps-lock.json":"regular","flake.nix":"regular","package.json":"regular","pnix-cljs":"directory","scripts":"directory"}}
 
 builtins.pathExists "/path/to/hello.txt"
 >> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":true}

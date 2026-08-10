@@ -72,7 +72,7 @@ Env used this session:
 /usr/local/bin/python3.11 -m venv /tmp/pnix-hy-py311-venv
 /tmp/pnix-hy-py311-venv/bin/python -m pip install 'funcparserlib ~= 1.0'
 export HY_META_PYTHON=/tmp/pnix-hy-py311-venv/bin/python
-# wrapper sets PYTHONPATH=hy-1.3.0
+# HY_META_PYTHON has hy installed (pip/nix); no vendored PYTHONPATH needed
 ```
 
 ## Last run (this machine, 2026-08-07)

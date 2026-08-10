@@ -198,9 +198,10 @@
           # ── THREE INDEPENDENT RUNNERS (like pnix-hy: pnix / hy / hy-meta) ──
           # pnix-clj is an independent runner for TWO lanes (pnix + its Clojure
           # host), and clj-meta is an independent meta-circular Clojure runner.
-          #   pnix-clj-pnix : the pnix language          (≈ repl-pnix-hy-pnix)
-          #   pnix-clj-clj  : pnix-clj's Clojure host     (≈ repl-pnix-hy-hy)
-          #   clj-meta      : clj-meta meta-circular clj  (≈ repl-hy-meta-hy)
+          # Shared app-name scheme across every pnix host:
+          #   pnix-clj-pnix : the pnix language          (≈ pnix-hy-pnix)
+          #   pnix-clj-clj  : pnix-clj's Clojure host     (≈ pnix-hy-hy)
+          #   clj-meta      : clj-meta meta-circular clj  (≈ hy-meta-hy)
           pnixPnix = cljRunner { name = "pnix-clj-pnix"; argv = "-M:repl-pnix";
                                  help = "pnix language runner: <file.px> | -e EXPR | ./default.px | interactive | --server [port]"; };
           # Historical source-tree-only host mode (retired):
@@ -231,6 +232,8 @@
         {
           # default runner = the pnix language lane
           default = { type = "app"; program = pkgs.lib.getExe pnixPnix; };
+          # the runtime CLI (thin `clojure` wrapper inside ./pnix-clj)
+          pnix-clj = { type = "app"; program = "${self.packages.${system}.pnix-clj}/bin/pnix-clj"; };
           # the three independent runners
           pnix-clj-pnix = { type = "app"; program = pkgs.lib.getExe pnixPnix; };
           pnix-clj-clj = { type = "app"; program = "${pnixClj}/bin/pnix-clj-clj"; };

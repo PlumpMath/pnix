@@ -134,11 +134,11 @@
       # RUST compiler/evaluator:
       #   nix run .#rs-meta -- run -c '<rust>'          # interpret (trusted floor)
       #   nix run .#rs-meta -- native-run -c '<rust>'   # compile via rustc (native tier)
-      #   nix run .#repl-pnix-rs-rust                   # interactive Rust REPL (drives rs-meta interp)
+      #   nix run .#pnix-rs-rust                        # interactive Rust REPL (drives rs-meta interp)
       # PNIX (px) compiler/evaluator:
-      #   nix run .#pnix-rs-pnix -- -f default.px       # evaluate a .px file (compiler mode)
-      #   nix run .#pnix-rs-pnix -- -c '<px>'           # evaluate inline px
-      #   nix run .#repl-pnix-rs-pnix                   # interactive px REPL (interpreter mode)
+      #   nix run .#pnix-rs-px-eval -- -f default.px    # evaluate a .px file (compiler mode)
+      #   nix run .#pnix-rs-px-eval -- -c '<px>'        # evaluate inline px
+      #   nix run .#pnix-rs-pnix                        # interactive px REPL (interpreter mode)
       # FRONT-END / CHECKS:
       #   nix run .#pnix-rs -- <cmd>                    # full pnix-rs CLI (mirror/ir/gate/engine/...)
       #   nix run .#rs-meta-check                       # rs-meta self-check   (from rs-meta/)
@@ -178,11 +178,30 @@
             name = "substrate-check"; bin = "${p.pnix-rs}/bin/pnix-rs";
             needFile = "src/px.rs"; hint = "pnix-rs"; argv = "substrate-check";
           };
+          # This host's full gate, under the name every pnix host uses: the
+          # rs-meta floor first, then the pnix-rs product, then the two-way
+          # substrate proof between them.
+          # Each check validates the source tree it belongs to, so the gate runs
+          # every one from its own directory rather than from a single cwd.
+          gateApp = pkgs.writeShellApplication {
+            name = "pnix-rs-gate";
+            text = ''
+              root="$PWD"
+              if [ ! -e "$root/rs-meta/src/interp.rs" ] || [ ! -e "$root/pnix-rs/src/px.rs" ]; then
+                echo "pnix-rs gate: run from the pnix-rs repo root (needs ./rs-meta and ./pnix-rs)." >&2
+                exit 2
+              fi
+              (cd "$root/rs-meta" && ${pkgs.lib.getExe rsMetaCheck})
+              (cd "$root/pnix-rs" && ${pkgs.lib.getExe pnixRsCheck})
+              (cd "$root/pnix-rs" && ${pkgs.lib.getExe substrateCheck})
+              echo "pnix-rs gate: PASS"
+            '';
+          };
           # px compiler/evaluator (file or inline) and the two REPLs. All go
           # through the wrapped pnix-rs binary, so RS_META_BOOTSTRAP is wired.
-          pnixPnix = sub { name = "pnix-rs-pnix"; bin = "${p.pnix-rs}/bin/pnix-rs"; argv = "px-eval"; };
-          replPnix = sub { name = "repl-pnix-rs-pnix"; bin = "${p.pnix-rs}/bin/pnix-rs"; argv = "px-repl"; };
-          replRust = sub { name = "repl-pnix-rs-rust"; bin = "${p.pnix-rs}/bin/pnix-rs"; argv = "rust-repl"; };
+          pnixPxEval = sub { name = "pnix-rs-px-eval"; bin = "${p.pnix-rs}/bin/pnix-rs"; argv = "px-eval"; };
+          replPnix = sub { name = "pnix-rs-pnix"; bin = "${p.pnix-rs}/bin/pnix-rs"; argv = "px-repl"; };
+          replRust = sub { name = "pnix-rs-rust"; bin = "${p.pnix-rs}/bin/pnix-rs"; argv = "rust-repl"; };
         in
         {
           # front-end + Rust engine
@@ -190,10 +209,11 @@
           pnix-rs = { type = "app"; program = pkgs.lib.getExe p.pnix-rs; };
           rs-meta = { type = "app"; program = "${p.rs-meta}/bin/bootstrap"; };
           # px compiler + the two REPLs (interpreter mode)
-          pnix-rs-pnix = { type = "app"; program = pkgs.lib.getExe pnixPnix; };
-          repl-pnix-rs-pnix = { type = "app"; program = pkgs.lib.getExe replPnix; };
-          repl-pnix-rs-rust = { type = "app"; program = pkgs.lib.getExe replRust; };
+          pnix-rs-pnix = { type = "app"; program = pkgs.lib.getExe replPnix; };
+          pnix-rs-rust = { type = "app"; program = pkgs.lib.getExe replRust; };
+          pnix-rs-px-eval = { type = "app"; program = pkgs.lib.getExe pnixPxEval; };
           # checks
+          gate = { type = "app"; program = pkgs.lib.getExe gateApp; };
           rs-meta-check = { type = "app"; program = pkgs.lib.getExe rsMetaCheck; };
           pnix-rs-check = { type = "app"; program = pkgs.lib.getExe pnixRsCheck; };
           substrate-check = { type = "app"; program = pkgs.lib.getExe substrateCheck; };

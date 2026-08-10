@@ -2,9 +2,9 @@
   description = "pnix-hy + hy-meta: a Hy(Python) <-> pnix meta-circular projection toolkit (pure resource-bounded pnix eval + Hy<->pnix projection facilities).";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  # Hy 1.3.0 from the official upstream repo (tag `1.3.0`), locked by flake.lock.
+  # Hy 1.3.1 from the official upstream repo (tag `1.3.1`), locked by flake.lock.
   inputs.hy-src = {
-    url = "github:hylang/hy/1.3.0";
+    url = "github:hylang/hy/1.3.1";
     flake = false;
   };
 
@@ -19,12 +19,12 @@
         let
           python = pkgs.python311;
 
-          # Hy 1.3.0 from the OFFICIAL upstream repo (github:hylang/hy tag 1.3.0, pinned in
+          # Hy 1.3.1 from the OFFICIAL upstream repo (github:hylang/hy tag 1.3.1, pinned in
           # flake.lock) -- the exact version the 4-lane mirror + rust corpus are proven against,
           # rather than a possibly-different nixpkgs Hy.
           hy = python.pkgs.buildPythonPackage {
             pname = "hy";
-            version = "1.3.0";
+            version = "1.3.1";
             src = hy-src;
             format = "setuptools";
             propagatedBuildInputs = [ python.pkgs.funcparserlib ];
@@ -32,7 +32,7 @@
             doCheck = false; # upstream test suite is heavy + network-ish; not needed to install
             pythonImportsCheck = [ "hy" ];
             meta = {
-              description = "Hy 1.3.0 (Lisp dialect embedded in Python), vendored for pnix-hy";
+              description = "Hy 1.3.1 (Lisp dialect embedded in Python), fetched from upstream for pnix-hy";
               license = pkgs.lib.licenses.mit;
             };
           };
@@ -55,7 +55,7 @@
             };
           };
 
-          # A Python that carries Hy 1.3.0 -- used as the projection "proof Python"
+          # A Python that carries Hy 1.3.1 -- used as the projection "proof Python"
           # (PNIX_HY_PYTHON) and to run the source tree's --check / --gate.
           proofPython = python.withPackages (ps: [ hy ]);
         in
@@ -67,7 +67,7 @@
       # ---- apps ----------------------------------------------------------
       # `nix run .#pnix-hy-project -- ...`  : the installed CLI (pure facilities work anywhere).
       # `nix run .#check` / `.#gate`        : the FULL projection self-checks -- MUST be run from
-      #                                       the repo root (needs ./hy, ./hy-meta, ./pnix-hy at
+      #                                       the repo root (needs ./hy-meta and ./pnix-hy at
       #                                       HY_ROOT); they use the source shim + set PNIX_HY_PYTHON.
       # `nix run .#hy-meta -- <args>`       : the hy-meta host proof lane (bootstrap.py) from the repo.
       apps = forAll (pkgs:
@@ -80,55 +80,57 @@
             text = ''
               py="${p.proofPython}/bin/python"
               export PNIX_HY_PYTHON="$py"
-              if [ ! -e "$PWD/pnix-hy/bin/pnix-hy-project" ] || [ ! -e "$PWD/hy" ] || [ ! -e "$PWD/hy-meta" ]; then
-                echo "pnix-hy: run this from the repo root (needs ./pnix-hy, ./hy, ./hy-meta at HY_ROOT)." >&2
+              # Hy itself comes from the pinned flake input (proofPython), so only
+              # this repo's own trees are required at HY_ROOT.
+              if [ ! -e "$PWD/pnix-hy/bin/pnix-hy" ] || [ ! -e "$PWD/hy-meta" ]; then
+                echo "pnix-hy: run this from the repo root (needs ./pnix-hy and ./hy-meta at HY_ROOT)." >&2
                 exit 2
               fi
               exec "$py" ${argv} "$@"
             '';
           };
-          checkApp = srcRunner { name = "pnix-hy-check"; argv = ''"$PWD/pnix-hy/bin/pnix-hy-project" --check''; };
-          gateApp = srcRunner { name = "pnix-hy-gate"; argv = ''"$PWD/pnix-hy/bin/pnix-hy-project" --gate''; };
+          checkApp = srcRunner { name = "pnix-hy-check"; argv = ''"$PWD/pnix-hy/bin/pnix-hy" --check''; };
+          gateApp = srcRunner { name = "pnix-hy-gate"; argv = ''"$PWD/pnix-hy/bin/pnix-hy" --gate''; };
           hyMetaApp = srcRunner { name = "hy-meta"; argv = ''"$PWD/hy-meta/bootstrap.py"''; };
           # the 5 context-retaining REPL modes (proposal 0008), all warm + from the repo root
-          replPnix = srcRunner { name = "repl-pnix-hy-pnix"; argv = ''"$PWD/pnix-hy/bin/pnix-hy-project" --repl pnix''; };
-          replHy = srcRunner { name = "repl-pnix-hy-hy"; argv = ''"$PWD/pnix-hy/bin/pnix-hy-project" --repl hy''; };
-          replPy = srcRunner { name = "repl-pnix-hy-python"; argv = ''"$PWD/pnix-hy/bin/pnix-hy-project" --repl python''; };
-          replMetaHy = srcRunner { name = "repl-hy-meta-hy"; argv = ''-m hy''; };
-          replMetaPy = srcRunner { name = "repl-hy-meta-python"; argv = ''-i -c "import sys; sys.path[:0]=['hy-meta','.']; print('hy-meta python REPL: sys.path has ./hy-meta and repo root -> import bootstrap / import hy')"''; };
+          replPnix = srcRunner { name = "pnix-hy-pnix"; argv = ''"$PWD/pnix-hy/bin/pnix-hy" --repl pnix''; };
+          replHy = srcRunner { name = "pnix-hy-hy"; argv = ''"$PWD/pnix-hy/bin/pnix-hy" --repl hy''; };
+          replPy = srcRunner { name = "pnix-hy-python"; argv = ''"$PWD/pnix-hy/bin/pnix-hy" --repl python''; };
+          replMetaHy = srcRunner { name = "hy-meta-hy"; argv = ''-m hy''; };
+          replMetaPy = srcRunner { name = "hy-meta-python"; argv = ''-i -c "import sys; sys.path[:0]=['hy-meta','.']; print('hy-meta python REPL: sys.path has ./hy-meta and repo root -> import bootstrap / import hy')"''; };
         in
         {
           default = { type = "app"; program = pkgs.lib.getExe p.pnix-hy; };
-          pnix-hy-project = { type = "app"; program = pkgs.lib.getExe p.pnix-hy; };
+          pnix-hy = { type = "app"; program = pkgs.lib.getExe p.pnix-hy; };
           check = { type = "app"; program = pkgs.lib.getExe checkApp; };
           gate = { type = "app"; program = pkgs.lib.getExe gateApp; };
           hy-meta = { type = "app"; program = pkgs.lib.getExe hyMetaApp; };
-          repl-pnix-hy-pnix = { type = "app"; program = pkgs.lib.getExe replPnix; };
-          repl-pnix-hy-hy = { type = "app"; program = pkgs.lib.getExe replHy; };
-          repl-pnix-hy-python = { type = "app"; program = pkgs.lib.getExe replPy; };
-          repl-hy-meta-hy = { type = "app"; program = pkgs.lib.getExe replMetaHy; };
-          repl-hy-meta-python = { type = "app"; program = pkgs.lib.getExe replMetaPy; };
+          pnix-hy-pnix = { type = "app"; program = pkgs.lib.getExe replPnix; };
+          pnix-hy-hy = { type = "app"; program = pkgs.lib.getExe replHy; };
+          pnix-hy-python = { type = "app"; program = pkgs.lib.getExe replPy; };
+          hy-meta-hy = { type = "app"; program = pkgs.lib.getExe replMetaHy; };
+          hy-meta-python = { type = "app"; program = pkgs.lib.getExe replMetaPy; };
         });
 
       # ---- devShell ------------------------------------------------------
       # `nix develop` then, from the repo root:
-      #   python pnix-hy/bin/pnix-hy-project --check   (54 toolkit self-checks)
-      #   python pnix-hy/bin/pnix-hy-project --gate    (sacred lanes + toolkit)
+      #   python pnix-hy/bin/pnix-hy --check   (54 toolkit self-checks)
+      #   python pnix-hy/bin/pnix-hy --gate    (sacred lanes + toolkit)
       devShells = forAll (pkgs:
         let
           p = self.packages.${pkgs.stdenv.hostPlatform.system};
           # `pnix-hy-project` on PATH, running the SOURCE tree (so projection sees HY_ROOT) with
-          # the flake's Hy 1.3.0 as the proof Python.
+          # the flake's Hy 1.3.1 as the proof Python.
           pnixHyProjectSrc = pkgs.writeShellApplication {
             name = "pnix-hy-project";
             runtimeInputs = [ p.proofPython ];
             text = ''
               export PNIX_HY_PYTHON="${p.proofPython}/bin/python"
-              if [ ! -e "$PWD/pnix-hy/bin/pnix-hy-project" ]; then
-                echo "pnix-hy-project: run from the repo root (needs ./pnix-hy, ./hy, ./hy-meta)." >&2
+              if [ ! -e "$PWD/pnix-hy/bin/pnix-hy" ]; then
+                echo "pnix-hy-project: run from the repo root (needs ./pnix-hy and ./hy-meta)." >&2
                 exit 2
               fi
-              exec "${p.proofPython}/bin/python" "$PWD/pnix-hy/bin/pnix-hy-project" "$@"
+              exec "${p.proofPython}/bin/python" "$PWD/pnix-hy/bin/pnix-hy" "$@"
             '';
           };
         in
@@ -137,7 +139,7 @@
             packages = [ p.proofPython pnixHyProjectSrc pkgs.git ];
             shellHook = ''
               export PNIX_HY_PYTHON="${p.proofPython}/bin/python"
-              echo "pnix-hy devShell -- Hy 1.3.0 at PNIX_HY_PYTHON; python/hy/pnix-hy-project on PATH"
+              echo "pnix-hy devShell -- Hy 1.3.1 at PNIX_HY_PYTHON; python/hy/pnix-hy-project on PATH"
               echo "  from the repo root:"
               echo "    pnix-hy-project --check              # 54 toolkit self-checks"
               echo "    pnix-hy-project --gate               # sacred lanes + toolkit"

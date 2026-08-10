@@ -29,27 +29,33 @@ parity between them.
 Every host is a Nix flake. Nothing is built from this top level; you enter the
 host you care about.
 
+The five hosts expose the same entry points under the same names, so what you
+learn on one carries to the others. With `<host>` one of `clj`, `cljs`, `clr`,
+`hy`, `rs`:
+
+| App | What it is |
+|---|---|
+| `.#pnix-<host>` | the pnix runtime CLI |
+| `.#pnix-<host>-pnix` | interactive pnix REPL |
+| `.#pnix-<host>-<lang>` | REPL in the host's own language, where it has one |
+| `.#<host>-meta` | that host language's mechanism CLI (`clj-meta`, `rs-meta`, …) |
+| `.#gate` | that host's full gate |
+| `.#default` | same as `.#pnix-<host>` |
+
+So the pnix REPL is `.#pnix-clj-pnix` on the JVM and `.#pnix-rs-pnix` on Rust,
+and the gate is `.#gate` everywhere:
+
+```bash
+cd pnix-rs && nix run .#pnix-rs-pnix
+```
+
 ```bash
 cd pnix-clj && nix run .#gate
 ```
 
-```bash
-cd pnix-rs && nix run .#pnix-rs-check
-```
-
-```bash
-cd pnix-hy && nix develop . --command bash -c 'cd pnix-hy && "$PNIX_HY_PYTHON" -m pnix_hy.cli --gate'
-```
-
-```bash
-cd pnix-clr && nix run .#gate
-```
-
-```bash
-cd pnix-cljs && nix flake check
-```
-
-Run `nix flake show` inside a host to see everything it exposes.
+Individual hosts add their own extras — `nix run .#pnix-rs-px-eval`,
+`.#substrate-check`, `.#tower`, `.#deps-lock`. Run `nix flake show` inside a
+host to see everything it exposes.
 
 ## Upstream substrates
 

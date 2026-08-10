@@ -2649,16 +2649,36 @@
       (err/failed-throwable :builtin :fetch-failed e
                           {:url (str url)}))))
 
+(defn- forced-attr
+  "Read one attrset member in weak-head normal form. Attrset members are
+  thunks, so an unforced read would hand a thunk to code that expects a value
+  — and a thunk stringified into error evidence carries JVM object identity,
+  which is not deterministic. Returns nil when the attr is absent or fails to
+  force; the caller reports the missing/typed argument in its own vocabulary."
+  [attrs k]
+  (when-let [v (get attrs k)]
+    (let [result (force-value v)]
+      (when (= :ok (:status result))
+        (:value result)))))
+
 (defn- fetch-url-arg
   "Normalize fetchurl/fetchTarball arg (string URL or attrs with url)."
   [arg]
   (cond
     (string-like? arg) {:url (string-content arg) :name nil}
     (attrset-value? arg)
-    (let [url (or (get arg "url") (get arg "urls"))]
-      {:url (if (vector? url) (first url) url)
-       :name (get arg "name")
-       :sha256 (get arg "sha256")
+    ;; `urls` is a list, whose elements are thunks in their own right, so the
+    ;; chosen element is forced again before it is read as a string.
+    (let [forced-string (fn [v]
+                          (let [result (force-value v)
+                                v (when (= :ok (:status result)) (:value result))]
+                            (when (string-like? v) (string-content v))))
+          url (or (forced-attr arg "url")
+                  (when-let [urls (forced-attr arg "urls")]
+                    (when (vector? urls) (first urls))))]
+      {:url (forced-string url)
+       :name (forced-string (get arg "name"))
+       :sha256 (forced-string (get arg "sha256"))
        :attrs arg})
     :else nil))
 
@@ -2903,10 +2923,17 @@
         (if (nil? attrs)
           (err/failed :builtin :fetch-git-bad-arg
                     {:builtin name :arg arg})
-          (let [url (str (get attrs "url"))
-                rev (str (or (get attrs "rev") (get attrs "ref") "HEAD"))
-                key (str url "\0" rev)
-                store-path (store-path-for "git-src" key)]
+          (let [url (forced-attr attrs "url")
+                url (when (string-like? url) (string-content url))
+                rev (or (let [r (or (forced-attr attrs "rev")
+                                    (forced-attr attrs "ref"))]
+                          (when (string-like? r) (string-content r)))
+                        "HEAD")]
+            (if (nil? url)
+              (err/failed :builtin :fetch-git-bad-arg
+                          {:builtin name :attr "url"})
+              (let [key (str url "\0" rev)
+                    store-path (store-path-for "git-src" key)]
             (ensure-pnix-store!)
             (let [f (java.io.File. store-path)]
               (if (.exists f)
@@ -2946,7 +2973,7 @@
                                    :policy :network-or-git-unavailable}))))
                   (catch Exception e
                     (err/failed-throwable :builtin :fetch-git-failed e
-                                        {:builtin name :url url :rev rev})))))))))
+                                        {:builtin name :url url :rev rev})))))))))))
 
     :implies
     {:status :ok :value (boolean (or (not (first args)) (second args)))}

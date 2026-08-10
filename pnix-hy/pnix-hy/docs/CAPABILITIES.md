@@ -6,7 +6,7 @@
 핵심 basic 예: [[safe_eval]] · [[explain_pnix]].
 명시적 proof/service API: `pnix_hy.proof.check_action` · `pnix_hy.deploy.deployment_info` (basic top-level export 아님).
 
-counts: symbols=47 · reports=74 · proposals=31
+counts: symbols=47 · reports=73 · proposals=31
 
 ## Public API (`pnix_hy.__all__`)
 
@@ -122,7 +122,6 @@ counts: symbols=47 · reports=74 · proposals=31
 | `pnix_form_projection` | `pnix_hy.pnix_mirror` | `pnix_form_projection_report` |
 | `pnix_import_hook` | `pnix_hy.cli` | `_pnix_import_hook_report` |
 | `pnix_meta_circular_projection` | `pnix_hy.pnix_mirror` | `pnix_meta_circular_projection_report` |
-| `pnix_meta_conformance` | `pnix_hy.cli` | `_pnix_meta_conformance_report` |
 | `pnix_projection_closure` | `pnix_hy.pnix_mirror` | `pnix_projection_closure_report` |
 | `pnix_stage_ladder` | `pnix_hy.cli` | `_stage_ladder_report` |
 | `pnix_to_hy_form` | `pnix_hy.pnix_mirror` | `pnix_to_hy_form_report` |

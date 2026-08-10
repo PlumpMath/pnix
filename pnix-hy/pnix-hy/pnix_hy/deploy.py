@@ -36,6 +36,8 @@ def deployment_info() -> dict[str, Any]:
     """Report the resolved paths + which tiers (core / projection / full_gate) are available."""
     hy_root = hm.HY_ROOT
     hy_meta_ok = (hy_root / "hy-meta" / "host_introspect.py").exists()
+    # Hy is an upstream dependency pinned by the flake, not a vendored tree:
+    # availability means the proof Python can import it.
     vendored_hy_ok = (hy_root / "hy").exists() or (hy_root / "hy-1.3.0").exists()
     proof_python: str | None = None
     proof_ok = False

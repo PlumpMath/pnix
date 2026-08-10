@@ -83,7 +83,7 @@ printf '(+ 20 22)\n' | /tmp/pnix-hy-py311-venv/bin/python hy-meta/bootstrap.py r
 의도적으로 중단한다.
 
 같은 proof 레인이 `.github/workflows/hy-meta-proof.yml`에 Python 3.11 / 3.14 매트릭스로 연결되어
-있고, `hy-1.3.0`를 설치해 syntax/whitespace 검사와 `hy-meta/smoke_test.py`를 실행한다.
+있고, `hy==1.3.1`을 설치해 syntax/whitespace 검사와 `hy-meta/smoke_test.py`를 실행한다.
 
 ## Status / primary gate
 

@@ -3,6 +3,28 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
+# The fixed-point proof compiles the ClojureScript compiler's own sources
+# (cljs/js.cljs and friends) with itself, so it needs those sources on disk.
+# They ship inside the pinned org.clojure/clojurescript jar (see
+# cljs-meta/deps.edn, pnix-cljs/deps.edn); unpack them into the source layout
+# the proof expects. This tree is never committed (see .gitignore) — it is
+# rebuilt here exactly as the Nix package build does.
+ensure_clojurescript_source() {
+  local marker="$root/clojurescript-r1.12.145/src/main/cljs/cljs/js.cljs"
+  [[ -f "$marker" ]] && return 0
+  local jar
+  jar="$(find "$HOME/.m2/repository/org/clojure/clojurescript/1.12.145" \
+              -name 'clojurescript-*.jar' -not -name '*-sources.jar' 2>/dev/null | head -1)"
+  if [[ -z "$jar" ]]; then
+    echo "build-cljs: clojurescript-1.12.145.jar not found in ~/.m2; run 'clojure -P' in cljs-meta/ first" >&2
+    exit 1
+  fi
+  mkdir -p "$root/clojurescript-r1.12.145/src/main/cljs"
+  (cd "$root/clojurescript-r1.12.145/src/main/cljs" && unzip -qo "$jar" -x 'META-INF/*')
+  ln -sfn cljs "$root/clojurescript-r1.12.145/src/main/clojure"
+}
+ensure_clojurescript_source
+
 build_project() {
   local project="$1"
   shift
