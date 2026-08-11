@@ -11,6 +11,7 @@
 //! own source) are tracked by `stage-status`.
 
 use crate::emit::emit_program;
+use crate::independent_mini_backend::compile_and_run;
 use crate::interp::Interp;
 use crate::lexer::lex;
 use crate::native::{default_workdir, native_artifact_receipt, native_cache_probe, native_run};
@@ -2837,8 +2838,7 @@ pub fn independent_mini_backend_check() -> Report {
     for (name, src, expected) in independent_mini_backend_fixtures() {
         let result = (|| -> Result<(String, String), String> {
             let native = native_run(src, &workdir)?;
-            let mini = crate::independent_mini_backend::compile_and_run(src)
-                .map_err(|e| e.to_string())?;
+            let mini = compile_and_run(src)?;
             Ok((native, mini))
         })();
         match result {
@@ -8104,11 +8104,13 @@ fn source_files() -> Vec<&'static str> {
         "src/cap.rs",
         "src/diag.rs",
         "src/hash.rs",
+        "src/independent_mini_backend.rs",
         "src/interp.rs",
         "src/sig.rs",
         "src/emit.rs",
         "src/witness.rs",
         "src/native.rs",
+        "src/io.rs",
         "src/check.rs",
         "src/main.rs",
     ]

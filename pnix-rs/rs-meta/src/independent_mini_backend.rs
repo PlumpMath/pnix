@@ -16,17 +16,16 @@
 //! fixture set, not the Rust language `interp.rs` targets.
 
 use std::collections::HashMap;
-use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
-enum Tok {
+enum MiniTok {
     Ident(String),
     Int(i64),
     Str(String),
     Punct(&'static str),
 }
 
-fn tokenize(src: &str) -> Result<Vec<Tok>, String> {
+fn tokenize(src: &str) -> Result<Vec<MiniTok>, String> {
     let bytes: Vec<char> = src.chars().collect();
     let mut i = 0usize;
     let mut out = Vec::new();
@@ -46,7 +45,7 @@ fn tokenize(src: &str) -> Result<Vec<Tok>, String> {
             if j >= bytes.len() {
                 return Err("tiny lexer: unterminated string".to_string());
             }
-            out.push(Tok::Str(s));
+            out.push(MiniTok::Str(s));
             i = j + 1;
             continue;
         }
@@ -56,7 +55,9 @@ fn tokenize(src: &str) -> Result<Vec<Tok>, String> {
                 j += 1;
             }
             let text: String = bytes[i..j].iter().collect();
-            out.push(Tok::Int(text.parse().map_err(|_| "tiny lexer: bad int")?));
+            out.push(MiniTok::Int(
+                text.parse::<i64>().map_err(|_| "tiny lexer: bad int")?,
+            ));
             i = j;
             continue;
         }
@@ -65,7 +66,7 @@ fn tokenize(src: &str) -> Result<Vec<Tok>, String> {
             while j < bytes.len() && (bytes[j].is_alphanumeric() || bytes[j] == '_') {
                 j += 1;
             }
-            out.push(Tok::Ident(bytes[i..j].iter().collect()));
+            out.push(MiniTok::Ident(bytes[i..j].iter().collect()));
             i = j;
             continue;
         }
@@ -79,7 +80,7 @@ fn tokenize(src: &str) -> Result<Vec<Tok>, String> {
                 "==" => Some("=="),
                 _ => None,
             } {
-                out.push(Tok::Punct(p));
+                out.push(MiniTok::Punct(p));
                 i += 2;
                 continue;
             }
@@ -100,14 +101,14 @@ fn tokenize(src: &str) -> Result<Vec<Tok>, String> {
             '!' => "!",
             _ => return Err(format!("tiny lexer: unexpected char {:?}", c)),
         };
-        out.push(Tok::Punct(one));
+        out.push(MiniTok::Punct(one));
         i += 1;
     }
     Ok(out)
 }
 
 #[derive(Debug, Clone)]
-enum BinOp {
+enum MiniBinOp {
     Add,
     Sub,
     Mul,
@@ -119,31 +120,31 @@ enum BinOp {
 }
 
 #[derive(Debug, Clone)]
-enum Expr {
+enum MiniExpr {
     Int(i64),
     Var(String),
-    Bin(BinOp, Box<Expr>, Box<Expr>),
-    If(Box<Expr>, Box<Expr>, Box<Expr>),
-    Call(String, Vec<Expr>),
+    Bin(MiniBinOp, Box<MiniExpr>, Box<MiniExpr>),
+    If(Box<MiniExpr>, Box<MiniExpr>, Box<MiniExpr>),
+    Call(String, Vec<MiniExpr>),
 }
 
 #[derive(Debug, Clone)]
 struct FnDef {
     name: String,
     params: Vec<String>,
-    body: Expr,
+    body: MiniExpr,
 }
 
-struct Parser {
-    toks: Vec<Tok>,
+struct MiniParser {
+    toks: Vec<MiniTok>,
     pos: usize,
 }
 
-impl Parser {
-    fn peek(&self) -> Option<&Tok> {
+impl MiniParser {
+    fn peek(&self) -> Option<&MiniTok> {
         self.toks.get(self.pos)
     }
-    fn next(&mut self) -> Result<Tok, String> {
+    fn next(&mut self) -> Result<MiniTok, String> {
         let t = self
             .toks
             .get(self.pos)
@@ -154,21 +155,21 @@ impl Parser {
     }
     fn expect_punct(&mut self, p: &str) -> Result<(), String> {
         match self.next()? {
-            Tok::Punct(q) if q == p => Ok(()),
+            MiniTok::Punct(q) if q == p => Ok(()),
             other => Err(format!("tiny parser: expected {:?}, got {:?}", p, other)),
         }
     }
     fn expect_ident(&mut self) -> Result<String, String> {
         match self.next()? {
-            Tok::Ident(s) => Ok(s),
+            MiniTok::Ident(s) => Ok(s),
             other => Err(format!("tiny parser: expected identifier, got {:?}", other)),
         }
     }
     fn is_punct(&self, p: &str) -> bool {
-        matches!(self.peek(), Some(Tok::Punct(q)) if *q == p)
+        matches!(self.peek(), Some(MiniTok::Punct(q)) if *q == p)
     }
     fn is_ident(&self, kw: &str) -> bool {
-        matches!(self.peek(), Some(Tok::Ident(s)) if s == kw)
+        matches!(self.peek(), Some(MiniTok::Ident(s)) if s == kw)
     }
 
     // Skip an optional `: i64` type annotation.
@@ -204,59 +205,59 @@ impl Parser {
         Ok(FnDef { name, params, body })
     }
 
-    fn parse_expr(&mut self) -> Result<Expr, String> {
+    fn parse_expr(&mut self) -> Result<MiniExpr, String> {
         self.parse_cmp()
     }
 
-    fn parse_cmp(&mut self) -> Result<Expr, String> {
+    fn parse_cmp(&mut self) -> Result<MiniExpr, String> {
         let lhs = self.parse_add()?;
         let op = match self.peek() {
-            Some(Tok::Punct("<")) => Some(BinOp::Lt),
-            Some(Tok::Punct(">")) => Some(BinOp::Gt),
-            Some(Tok::Punct("<=")) => Some(BinOp::Le),
-            Some(Tok::Punct(">=")) => Some(BinOp::Ge),
-            Some(Tok::Punct("==")) => Some(BinOp::Eq),
+            Some(MiniTok::Punct("<")) => Some(MiniBinOp::Lt),
+            Some(MiniTok::Punct(">")) => Some(MiniBinOp::Gt),
+            Some(MiniTok::Punct("<=")) => Some(MiniBinOp::Le),
+            Some(MiniTok::Punct(">=")) => Some(MiniBinOp::Ge),
+            Some(MiniTok::Punct("==")) => Some(MiniBinOp::Eq),
             _ => None,
         };
         if let Some(op) = op {
             self.next()?;
             let rhs = self.parse_add()?;
-            Ok(Expr::Bin(op, Box::new(lhs), Box::new(rhs)))
+            Ok(MiniExpr::Bin(op, Box::new(lhs), Box::new(rhs)))
         } else {
             Ok(lhs)
         }
     }
 
-    fn parse_add(&mut self) -> Result<Expr, String> {
+    fn parse_add(&mut self) -> Result<MiniExpr, String> {
         let mut lhs = self.parse_mul()?;
         loop {
             let op = match self.peek() {
-                Some(Tok::Punct("+")) => Some(BinOp::Add),
-                Some(Tok::Punct("-")) => Some(BinOp::Sub),
+                Some(MiniTok::Punct("+")) => Some(MiniBinOp::Add),
+                Some(MiniTok::Punct("-")) => Some(MiniBinOp::Sub),
                 _ => None,
             };
             match op {
                 Some(op) => {
                     self.next()?;
                     let rhs = self.parse_mul()?;
-                    lhs = Expr::Bin(op, Box::new(lhs), Box::new(rhs));
+                    lhs = MiniExpr::Bin(op, Box::new(lhs), Box::new(rhs));
                 }
                 None => return Ok(lhs),
             }
         }
     }
 
-    fn parse_mul(&mut self) -> Result<Expr, String> {
+    fn parse_mul(&mut self) -> Result<MiniExpr, String> {
         let mut lhs = self.parse_atom()?;
         while self.is_punct("*") {
             self.next()?;
             let rhs = self.parse_atom()?;
-            lhs = Expr::Bin(BinOp::Mul, Box::new(lhs), Box::new(rhs));
+            lhs = MiniExpr::Bin(MiniBinOp::Mul, Box::new(lhs), Box::new(rhs));
         }
         Ok(lhs)
     }
 
-    fn parse_atom(&mut self) -> Result<Expr, String> {
+    fn parse_atom(&mut self) -> Result<MiniExpr, String> {
         if self.is_punct("(") {
             self.next()?;
             let e = self.parse_expr()?;
@@ -266,7 +267,7 @@ impl Parser {
         if self.is_punct("-") {
             self.next()?;
             let e = self.parse_atom()?;
-            return Ok(Expr::Bin(BinOp::Sub, Box::new(Expr::Int(0)), Box::new(e)));
+            return Ok(MiniExpr::Bin(MiniBinOp::Sub, Box::new(MiniExpr::Int(0)), Box::new(e)));
         }
         if self.is_ident("if") {
             self.next()?;
@@ -278,11 +279,11 @@ impl Parser {
             self.expect_punct("{")?;
             let else_e = self.parse_expr()?;
             self.expect_punct("}")?;
-            return Ok(Expr::If(Box::new(cond), Box::new(then_e), Box::new(else_e)));
+            return Ok(MiniExpr::If(Box::new(cond), Box::new(then_e), Box::new(else_e)));
         }
         match self.next()? {
-            Tok::Int(n) => Ok(Expr::Int(n)),
-            Tok::Ident(name) => {
+            MiniTok::Int(n) => Ok(MiniExpr::Int(n)),
+            MiniTok::Ident(name) => {
                 if self.is_punct("(") {
                     self.next()?;
                     let mut args = Vec::new();
@@ -293,9 +294,9 @@ impl Parser {
                         }
                     }
                     self.expect_punct(")")?;
-                    Ok(Expr::Call(name, args))
+                    Ok(MiniExpr::Call(name, args))
                 } else {
-                    Ok(Expr::Var(name))
+                    Ok(MiniExpr::Var(name))
                 }
             }
             other => Err(format!("tiny parser: unexpected token {:?}", other)),
@@ -306,16 +307,16 @@ impl Parser {
 /// Parse `fn ...` definitions followed by
 /// `fn main() { println!("{}", EXPR); }` and return (helper fns, main's
 /// printed expression).
-fn parse_program(src: &str) -> Result<(Vec<FnDef>, Expr), String> {
+fn parse_mini_program(src: &str) -> Result<(Vec<FnDef>, MiniExpr), String> {
     let toks = tokenize(src)?;
-    let mut p = Parser { toks, pos: 0 };
+    let mut p = MiniParser { toks, pos: 0 };
     let mut fns = Vec::new();
     let mut main_expr = None;
     while p.peek().is_some() {
         if !p.is_ident("fn") {
             return Err("tiny parser: expected 'fn' at top level".to_string());
         }
-        if matches!(&p.toks.get(p.pos + 1), Some(Tok::Ident(n)) if n == "main") {
+        if matches!(&p.toks.get(p.pos + 1), Some(MiniTok::Ident(n)) if n == "main") {
             p.next()?; // fn
             p.next()?; // main
             p.expect_punct("(")?;
@@ -325,7 +326,7 @@ fn parse_program(src: &str) -> Result<(Vec<FnDef>, Expr), String> {
             p.expect_punct("!")?;
             p.expect_punct("(")?;
             match p.next()? {
-                Tok::Str(s) if s == "{}" => {}
+                MiniTok::Str(s) if s == "{}" => {}
                 other => return Err(format!("tiny parser: expected \"{{}}\" format string, got {:?}", other)),
             }
             p.expect_punct(",")?;
@@ -343,44 +344,44 @@ fn parse_program(src: &str) -> Result<(Vec<FnDef>, Expr), String> {
 }
 
 fn eval_expr(
-    e: &Expr,
+    e: &MiniExpr,
     env: &HashMap<String, i64>,
-    fns: &HashMap<String, &FnDef>,
+    fns: &HashMap<String, FnDef>,
 ) -> Result<i64, String> {
     match e {
-        Expr::Int(n) => Ok(*n),
-        Expr::Var(name) => env
+        MiniExpr::Int(n) => Ok(*n),
+        MiniExpr::Var(name) => env
             .get(name)
             .copied()
             .ok_or_else(|| format!("tiny interp: unknown local {}", name)),
-        Expr::Bin(op, l, r) => {
+        MiniExpr::Bin(op, l, r) => {
             let lv = eval_expr(l, env, fns)?;
             let rv = eval_expr(r, env, fns)?;
             Ok(match op {
-                BinOp::Add => lv
+                MiniBinOp::Add => lv
                     .checked_add(rv)
                     .ok_or("tiny interp: overflow in +")?,
-                BinOp::Sub => lv
+                MiniBinOp::Sub => lv
                     .checked_sub(rv)
                     .ok_or("tiny interp: overflow in -")?,
-                BinOp::Mul => lv
+                MiniBinOp::Mul => lv
                     .checked_mul(rv)
                     .ok_or("tiny interp: overflow in *")?,
-                BinOp::Lt => (lv < rv) as i64,
-                BinOp::Gt => (lv > rv) as i64,
-                BinOp::Le => (lv <= rv) as i64,
-                BinOp::Ge => (lv >= rv) as i64,
-                BinOp::Eq => (lv == rv) as i64,
+                MiniBinOp::Lt => (lv < rv) as i64,
+                MiniBinOp::Gt => (lv > rv) as i64,
+                MiniBinOp::Le => (lv <= rv) as i64,
+                MiniBinOp::Ge => (lv >= rv) as i64,
+                MiniBinOp::Eq => (lv == rv) as i64,
             })
         }
-        Expr::If(cond, then_e, else_e) => {
+        MiniExpr::If(cond, then_e, else_e) => {
             if eval_expr(cond, env, fns)? != 0 {
                 eval_expr(then_e, env, fns)
             } else {
                 eval_expr(else_e, env, fns)
             }
         }
-        Expr::Call(name, args) => {
+        MiniExpr::Call(name, args) => {
             let f = fns
                 .get(name.as_str())
                 .ok_or_else(|| format!("tiny interp: unknown fn {}", name))?;
@@ -396,23 +397,17 @@ fn eval_expr(
     }
 }
 
-#[derive(Debug)]
-pub struct MiniBackendError(pub String);
-
-impl fmt::Display for MiniBackendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 /// Parse and evaluate a small `fn`/`if`/arithmetic Rust program whose `main`
 /// is exactly `println!("{}", EXPR);`, and return the printed value as a
 /// string (matching how `native::native_run` returns captured stdout, so the
 /// two can be compared directly).
-pub fn compile_and_run(src: &str) -> Result<String, MiniBackendError> {
-    let (fn_defs, main_expr) = parse_program(src).map_err(MiniBackendError)?;
-    let fn_map: HashMap<String, &FnDef> = fn_defs.iter().map(|f| (f.name.clone(), f)).collect();
+pub fn compile_and_run(src: &str) -> Result<String, String> {
+    let (fn_defs, main_expr) = parse_mini_program(src)?;
+    let mut fn_map: HashMap<String, FnDef> = HashMap::new();
+    for f in fn_defs.into_iter() {
+        fn_map.insert(f.name.clone(), f);
+    }
     let env = HashMap::new();
-    let value = eval_expr(&main_expr, &env, &fn_map).map_err(MiniBackendError)?;
+    let value = eval_expr(&main_expr, &env, &fn_map)?;
     Ok(format!("{}\n", value))
 }

@@ -2487,6 +2487,29 @@ impl Parser {
                 }
                 break;
             }
+            if matches!(self.peek(), Some(Tok::Ident(s)) if s == "ref") {
+                self.pos += 1;
+                let mutable = if self.at(&Tok::KwMut) {
+                    self.pos += 1;
+                    true
+                } else {
+                    false
+                };
+                let fname = self.ident()?;
+                fields.push((
+                    fname.clone(),
+                    Pattern::BindRef {
+                        name: fname,
+                        mutable,
+                    },
+                ));
+                if self.at(&Tok::Comma) {
+                    self.pos += 1;
+                } else {
+                    break;
+                }
+                continue;
+            }
             let fname = self.ident()?;
             let pat = if self.at(&Tok::Colon) {
                 self.pos += 1;
@@ -2691,7 +2714,35 @@ impl Parser {
             }
             let inner: String = chars[i + 1..j].iter().collect();
             let (selector, spec) = split_format_selector(&inner);
-            if selector.is_empty() {
+            if selector.is_empty() && spec.contains(".*") {
+                // `{:.*}` (dynamic precision): consumes the NEXT positional
+                // arg as the precision, then the one after that as the value
+                // being formatted -- two args, precision first (matches real
+                // Rust's format! argument order for this specifier).
+                let precision_idx = auto_i;
+                let precision_expr = positional.get(precision_idx).cloned().ok_or_else(|| {
+                    format!(
+                        "parse: {} missing positional format arg {} (dynamic precision)",
+                        macro_name, precision_idx
+                    )
+                })?;
+                used_pos[precision_idx] = true;
+                auto_i += 1;
+                let value_idx = auto_i;
+                let value_expr = positional.get(value_idx).cloned().ok_or_else(|| {
+                    format!(
+                        "parse: {} missing positional format arg {}",
+                        macro_name, value_idx
+                    )
+                })?;
+                used_pos[value_idx] = true;
+                auto_i += 1;
+                out.push('{');
+                out.push_str(&spec);
+                out.push('}');
+                args.push(precision_expr);
+                args.push(value_expr);
+            } else if selector.is_empty() {
                 let expr = positional.get(auto_i).cloned().ok_or_else(|| {
                     format!(
                         "parse: {} missing positional format arg {}",

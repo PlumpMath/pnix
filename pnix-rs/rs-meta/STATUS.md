@@ -52,6 +52,77 @@ whole_binary_self_interpretation_default_gate = false
   (full-chain is budget-gated, not default primary)
 ```
 
+**Correction (verified this session, 2026-08-11):** the "source-ast/bundle" row
+above claimed DONE in `proofs/stage-manifest.tsv` is stale for
+`source-bundle-check` specifically. `stage9-aggregate-replay-check` (and the
+full `check` aggregate) fail on a completely unmodified checkout — confirmed
+via a `git worktree` at the pre-session commit, not a regression from any
+recent change. Root-caused two layered pre-existing bugs, one fixed:
+
+```text
+FIXED: parser.rs's format!-arg-usage validator didn't understand `{:.*}`
+  (dynamic precision from an extra positional arg) -- it counted `{:.*}` as
+  consuming one positional arg (the value) when real Rust's format! macro
+  consumes two (precision, then value). Caused src/interp.rs's own
+  `format!("{:.*}", precision, f)` (line ~2463, real, valid, rustc-accepted
+  Rust) to fail rs-meta's OWN self-parse with "positional arg 1 is never
+  used". Fixed.
+
+FIXED: parser.rs's struct-pattern-field parser didn't recognize the `ref`
+  shorthand (`Struct { ref x, .. }`) -- it read `ref` itself as if it were
+  the field name. src/io.rs:97 uses exactly this
+  (`Err(MetaIoError { ref error_class, .. }) if ...`), a real, valid Rust
+  pattern. Fixed by special-casing `ref [mut] ident` in
+  `parse_pattern_fields`, reusing the existing `Pattern::BindRef` AST node
+  (already used for top-level `ref` patterns). io.rs now parses cleanly:
+  source-ast-check is 16/16 (io.rs added to `source_files()` in check.rs;
+  was 14/14 without it, would have been 15/15-with-a-failure without the
+  ref fix).
+
+ADDED (additive, no risk to existing passes): fs::symlink_metadata,
+  fs::metadata, fs::read_dir type signatures, and Metadata/FileType method
+  modeling (`.file_type()`, `.is_symlink()`/`.is_dir()`/`.is_file()`) in
+  typeck.rs -- io.rs's `classify()` needs these to type-check.
+
+FIXED: `Path::new(s)` was typed as returning owned `PathBuf` in typeck.rs;
+  real Rust's `Path::new` returns borrowed `&Path`. io.rs's
+  `classify(Path::new(path))` (classify takes `&Path`) surfaced this as a
+  type mismatch. Changed the rule to return
+  `Type::Ref { mutable: false, inner: Named("Path") }`. Verified safe: this
+  is method-call-transparent (`method_target_name` already derefs `Ref` to
+  find the target type, so `.exists()`/`.display()`/`.join()` etc. still
+  resolve correctly), and re-confirmed self-check 407/407, tv-check 407/407,
+  typeck-check 272/272 -- no regressions.
+
+STILL OPEN (next layer found, not fixed): getting past Path::new reveals
+  io.rs's `read_utf8`/`read_dir` call `e.kind() == std::io::ErrorKind::X`
+  on the error from `fs::read`/`fs::read_dir` -- but those are modeled
+  (matching the three pre-existing `fs::` functions) as returning
+  `Result<_, String>`, a plain String error with no `.kind()` method or
+  `ErrorKind` enum. Unlike Path::new, `fs::read`'s `String`-typed error is
+  PRE-EXISTING (not added this session) and likely load-bearing elsewhere
+  (e.g. anything that formats or `?`-propagates it as a String), so it
+  should NOT be blanket-changed the way Path::new was -- the safer shape is
+  probably an additive `.kind()` special-case (e.g. in `type_string_method`)
+  returning a new small `IoErrorKind`-like type comparable via `==` against
+  `std::io::ErrorKind::NotFound`/`NotADirectory` path expressions, without
+  touching what `fs::read`'s error type actually is. Not attempted this
+  session -- this makes four fixed layers (`.* `, `ref` patterns, Metadata/
+  FileType, Path::new) and a fifth found; there is no guarantee this is the
+  last one io.rs will reveal, since it was never in the self-hosting bundle
+  before this session.
+
+Net effect: `source-bundle-check`, `stage9-proof-matrix-check`,
+  `stage9-aggregate-replay-check`, and the full `check` aggregate remain red
+  -- but now for this one, precisely-diagnosed, next reason, not
+  the "env_clear() strips something macOS needs" hypothesis this
+  investigation started from (that hypothesis is ruled out: every failure
+  found was a 100% deterministic Rust-subset-parser/typeck feature gap, not
+  environment- or platform-dependent). Verified no regressions: self-check
+  407/407, tv-check 407/407, typeck-check 272/272,
+  independent-mini-backend-check 9/9, source-ast-check 16/16.
+```
+
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)
 
 **`mrustc` turned out not to be usable here.** It's packaged in nixpkgs, but

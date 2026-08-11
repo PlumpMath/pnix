@@ -974,7 +974,10 @@ impl TypeCk {
                     }
                     let got = self.type_expr(&args[0])?;
                     expect_str_like(&got, "Path::new")?;
-                    return Ok(Type::Named("PathBuf".to_string()));
+                    return Ok(Type::Ref {
+                        mutable: false,
+                        inner: Box::new(Type::Named("Path".to_string())),
+                    });
                 }
                 if type_name == "char" && item == "from_u32" {
                     if args.len() != 1 {
@@ -1083,6 +1086,44 @@ impl TypeCk {
                                     Type::Generic {
                                         name: "Vec".to_string(),
                                         args: vec![Type::U8],
+                                    },
+                                    Type::Named("String".to_string()),
+                                ],
+                            });
+                        }
+                        "symlink_metadata" | "metadata" => {
+                            if args.len() != 1 {
+                                return Err(format!(
+                                    "typeck: {}::{} expects 1 arg, got {}",
+                                    type_name,
+                                    item,
+                                    args.len()
+                                ));
+                            }
+                            self.type_expr(&args[0])?;
+                            return Ok(Type::Generic {
+                                name: "Result".to_string(),
+                                args: vec![
+                                    Type::Named("Metadata".to_string()),
+                                    Type::Named("String".to_string()),
+                                ],
+                            });
+                        }
+                        "read_dir" => {
+                            if args.len() != 1 {
+                                return Err(format!(
+                                    "typeck: {}::read_dir expects 1 arg, got {}",
+                                    type_name,
+                                    args.len()
+                                ));
+                            }
+                            self.type_expr(&args[0])?;
+                            return Ok(Type::Generic {
+                                name: "Result".to_string(),
+                                args: vec![
+                                    Type::Generic {
+                                        name: "ReadDir".to_string(),
+                                        args: Vec::new(),
                                     },
                                     Type::Named("String".to_string()),
                                 ],
@@ -1306,6 +1347,12 @@ impl TypeCk {
                 }
                 if target == "ExitStatus" {
                     return self.type_exit_status_method(name, args);
+                }
+                if target == "Metadata" {
+                    return self.type_metadata_method(name, args);
+                }
+                if target == "FileType" {
+                    return self.type_file_type_method(name, args);
                 }
                 if is_int_target(&target) {
                     return self.type_int_method(&target, name, &rt, args);
@@ -3563,6 +3610,37 @@ impl TypeCk {
                 Ok(Type::Bool)
             }
             other => Err(format!("typeck: unsupported {} method {}", target, other)),
+        }
+    }
+
+    fn type_metadata_method(&mut self, name: &str, args: &[Expr]) -> Result<Type, String> {
+        match name {
+            "file_type" => {
+                if !args.is_empty() {
+                    return Err(format!(
+                        "typeck: Metadata::file_type expects 0 args, got {}",
+                        args.len()
+                    ));
+                }
+                Ok(Type::Named("FileType".to_string()))
+            }
+            other => Err(format!("typeck: unsupported Metadata method {}", other)),
+        }
+    }
+
+    fn type_file_type_method(&mut self, name: &str, args: &[Expr]) -> Result<Type, String> {
+        match name {
+            "is_symlink" | "is_dir" | "is_file" => {
+                if !args.is_empty() {
+                    return Err(format!(
+                        "typeck: FileType::{} expects 0 args, got {}",
+                        name,
+                        args.len()
+                    ));
+                }
+                Ok(Type::Bool)
+            }
+            other => Err(format!("typeck: unsupported FileType method {}", other)),
         }
     }
 
