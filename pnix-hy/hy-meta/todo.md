@@ -17,6 +17,88 @@
 >   (`witness.py`) via interop — NO new host machinery. Host objects never enter pnix terms
 >   (opaque ref via interop). See `pnix-hy/docs/proposals/0009-pnix-semantic-action-vm.md`.
 
+## Current Remaining Work (verified 2026-08-11)
+
+Verified by reading this entire file plus `STATUS.md`, and spot-checking the
+cited symbols in `bootstrap.py`/`smoke_test.py`/`independent_mini_backend.py`.
+The overwhelming majority of this document is CLOSED work (stage7 compiler
+chain, stage8–stageN proof ladder, the parity-ledger 100%-direct bar, the
+Deep-Research Audit frontier items, and — as of earlier this session —
+`independent-mini-backend-check` and the `tests/` native-corpus fetch). What
+follows is what is actually still open, by axis. Do not re-flag anything not
+listed here; see the detailed sections below for the full history.
+
+1. **Reader/front-end ownership — NOT a gap, a recorded non-goal.**
+   Deliberately ceded to upstream `hy.reader`/mangling (`front-end-boundary-check`,
+   `reader-boundary-check` in `bootstrap.py`). Reaffirmed by the 2026-06-29
+   Deep-Research Audit after adversarial review. Public classification is
+   honestly downgraded to "self-hosting back-end." Only reopen behind an
+   explicit proposal, not as a `[ ]` item.
+
+2. **Full upstream `hy.compiler`/`result_macros.py` parity — open, but bounded
+   and mostly closed within its own bar.** The parity-ledger corpus (owned
+   compiler corpus + all `tests/native_tests/*.hy`) is 100% direct, zero
+   fallback (verified: `parity-ledger-check` -> 45/45 files, 1487/1487 forms
+   per `STATUS.md`). The literal remaining gap is only what that finite corpus
+   does not exercise — not a measured/sized backlog, more a standing
+   "grow the ledger corpus if a real gap surfaces" posture. Sizing: small,
+   opportunistic, no known concrete failing case today.
+
+3. **Python 3.12/3.13 support — explicitly out of scope by decision, not a
+   gap to close.** Proof targets stay pinned to 3.11 + Homebrew 3.14. Revisit
+   only on explicit user request (`todo.md` "Active Goals: 3.11 + Latest 3.14").
+
+4. **REPL/`hyc`/`hy2py`/zipimport product surface — implemented as scoped
+   product commands, not full upstream-parity tooling.** `hyc`, `hy2py`,
+   `-c`/stdin/shebang, and a scoped line REPL all exist and are smoke-tested
+   (`smoke_test.py`: `hyc-check`, `repl-check`, `cli-io-check`,
+   `startup-output-check`, plus the `hy2py`/`kernel-py`/`stage7-kernel-py`
+   command rows). zipimport is deliberately marked unsupported, not silently
+   missing (`bootstrap.py` `zipimport_status: "unsupported-filesystem-roots-only"`,
+   sandbox denial fixtures). `STATUS.md`'s
+   `full_REPL/hyc/hy2py/zipimport_product_surface = false` claim is honest
+   shorthand for "scoped, not upstream-drop-in" — there is no missing
+   implementation here, only a naming/framing gap if a reader expects "full"
+   to mean upstream-identical.
+
+5. **Third-independent-path DDC leg — genuine, scoped open item (the biggest
+   real one left).** `diverse-double-compile-check` is closed (kernel.hy built
+   two ways — via upstream `hy.compiler` seed vs the direct kernel — byte
+   identical at 4 levels). Its known limit: one of the two paths still routes
+   through trusted upstream `hy.compiler`, so it can't catch a backdoor
+   already in upstream itself. Added this session:
+   `independent_mini_backend.py` + `independent-mini-backend-check`, a
+   from-scratch Hy-subset-to-`ast` compiler sharing zero code with
+   `hy.reader`/`hy.compiler`/`stage1`/`stage2/kernel.hy` (verified: 8/8
+   fixtures accepted on 3.11 + 3.14). Still open, per `STATUS.md`'s own
+   "next concrete step": (a) grow the mini-backend fixture set toward
+   clj-meta's `frontend_selfhost.clj` ~50-fixture scope (data literals,
+   `while`/`setv` mutation, `require`/macros), and (b) add `kernel_direct` as
+   a third per-fixture comparison point so it becomes a true 3-way check
+   instead of upstream-vs-mini 2-way. Sizing: medium — mostly fixture
+   authoring plus one plumbing change to add the third comparison leg.
+
+6. **Stage8–StageN proof ladder — closed except 3 cross-repo-blocked Stage14
+   items.** Verified: every stage8–stageN checklist item in this file is
+   `[x]` except three `[~]` items under Stage14, all gated on a live Clojure
+   host exposing a stage14-compatible export:
+   - "Run the same fixtures on Clojure and Hy/Python hosts."
+   - "Compare answer-plan hashes against Clojure host exports."
+   - "Add actual `pnix-clj`/`clj-meta` invocation wiring."
+   Confirmed still genuinely open (not stale): `bootstrap.py`'s
+   `stage14_host_capability_matrix()` still lists `pnix-clj` and `clj-meta` as
+   `status: "held"` / `reason: "*-not-wired"`, and no `pnix-clj`/`clj-meta`
+   invocation code exists in `bootstrap.py` beyond that static matrix entry.
+   This is cross-repo integration work, not something closeable from hy-meta
+   alone. Sizing: small-to-medium once a Clojure-side export command exists;
+   currently blocked, not actionable today.
+
+Everything else in "Gap Analysis," the "Deep-Research Audit," and Stage8
+through StageN below is closed and verified against code in this pass — see
+those sections for citations and detail. `pnix_language_semantics_ownership`
+(the sixth `STATUS.md` open claim) is out of scope for hy-meta entirely — it
+belongs to `pnix-hy`'s runtime lane, not this host-meta layer.
+
 Date: 2026-06-27
 
 Latest pushed baseline before shutdown:

@@ -7,6 +7,124 @@
 
 ---
 
+## Current Remaining Work (verified 2026-08-11)
+
+Audit pass over this entire file + `STATUS.md` + source (`compiler.clj`,
+`diverse_double_compile.clj`, `frontend_selfhost.clj`, `language_surface.clj`,
+`kernel.clj`) to separate genuinely-open work from stale/superseded TODO
+placeholders. **Headline: almost everything "fixable" is closed.** Of 3223
+lines and hundreds of `- [x]` entries, only 3 raw `- [ ]` checkboxes exist in
+the whole file (§18.1-18.3, "perf/bug/production-API agent triage") — and
+those are stale: the "★★ codex 구현 인계" note near the top of this file
+(same 2026-06-29 date) already reports that exact triage done and closed
+("현재 todo 큐 남은 구현 항목 없음"). Treat §18.1-18.3's empty checkboxes as
+dead placeholders, not open work. No `SCOPE_LOCK.md` exists inside
+`clj-meta/` itself (the sibling `pnix-clj/SCOPE_LOCK.md` governs the pnix
+*runtime* layer, not this host-proof lane, and doesn't add constraints beyond
+what's already reflected below).
+
+What's actually left, by axis (map into the detailed sections below for
+receipts/digests — this is a pointer, not a duplicate):
+
+### 1. Trusting-Trust / Diverse-Double-Compiling depth — MEDIUM, in progress
+STATUS.md `trusting-trust/Wheeler-independent-DDC = false` is the honest
+top-line claim, but the substance is much closer than "false" implies:
+- U5 (`kernel.clj` interpreter) cross-checks 112/112 conformance corpus,
+  U6 (`frontend_selfhost.clj`) is a genuinely independent tiny reader +
+  analyzer + ASM emitter (0 calls into `tools.analyzer.jvm`/host reader),
+  U8 fuzzes 10,000 random-program comparisons — all closed, all live gates.
+- `independent-mini-backend-subset` (the real 3-way host≡compiler≡U6-backend
+  DDC row) was widened this session from 14→**43/51** of U6's fixtures
+  (verified by direct grep count against source, matches STATUS.md exactly).
+- **Remaining, size small**: wire U6's other ~8 fixtures into the DDC row
+  (isolated `>`/`>=`/`<=`, isolated `inc`/`dec`/`pos?` — currently only
+  covered in combined form). Mechanical, same pattern as this session's work.
+- **Remaining, size large**: grow U6's *own* fixture set past 51 toward the
+  full 112-case conformance corpus U5 already reaches — this is what upgrades
+  the claim from "51-fixture subset" to "full-corpus independent 2nd
+  compiler." Each new fixture needs its own tiny-frontend support (new
+  syntax/op coverage in `frontend_selfhost.clj`), so this is proportional to
+  how much of Clojure's surface remains unimplemented there — plausibly
+  several more sessions at the pace of the 14→43 slice.
+- **Remaining, size large/open-ended (may be permanently held)**: bit-identical
+  (not just behavior-identical) compiler-binary DDC needs a *fully
+  independent* second compiler targeting the same bytecode format by
+  genuine design, not coincidence. Explicitly held; see U10's CakeML/
+  CompCert/Octagon research trail for why this is a different order of
+  project, not a slice-able TODO.
+
+### 2. Full-language-correctness / formal proof (R7f) — LARGE, likely permanently held
+`full-language-correctness = false` per STATUS.md. Current evidence: 112/112
+conformance + 20+ negative cases + 10,000-case fuzz corpus (0 divergences) +
+translation-validation VCs for the checked-long lowering. This is strong
+*evidence*, explicitly not a *proof*. Closing this for real means a
+machine-checked semantic-preservation proof (Coq/ACL2/HOL, CompCert-style) —
+a standalone research project, not a coding task. The doc's own framing
+(§16.6, §17) treats this as intentionally, permanently held rather than a
+todo-list item; sizing it as "large" undersells it — it's arguably out of
+scope for incremental work at all.
+
+### 3. Production frontend / full runtime self-host (R5f/R6f) — LARGE
+- R5f: `frontend_selfhost.clj` covers 51 fixtures (fn/if/do/let/loop-recur/
+  17 macros/destructuring/data literals) but is still a subset; the
+  production path (`compiler.clj`'s main line) still depends on
+  `tools.analyzer.jvm` + host reader for anything outside that subset. Full
+  closure = self-hosting Clojure's entire reader+macroexpander+analyzer,
+  which is a large, multi-session undertaking (same order of magnitude as a
+  small Clojure-in-Clojure frontend from scratch).
+- R6f: `runtime_selfhost.clj` has 8 host-core-free leaf helpers
+  (inc/second/assoc/get/reduce/conj/map/count fragments); full closure means
+  reimplementing `clojure.core` + persistent data structures without host
+  delegation — large, and arguably in tension with the "host JVM performance,
+  0 feature loss" design goal stated in §0, so likely stays intentionally
+  held rather than pursued to completion.
+
+### 4. JVM-free self-hosting — NOT SIZED (permanent architectural boundary, not a gap)
+`JVM-free self-hosting = false` is correctly false, but §7 "Boundary"
+explicitly declares JVM/Java runtime/Maven/JDK as **permanent substrate** —
+this was never intended to close, the same way hy-meta doesn't aim to drop
+CPython. Recommend STATUS.md keep stating this as `false` for honesty, but
+it should not appear on anyone's "remaining work" punch list as if it were
+actionable; there is no planned path to it in this codebase's design.
+
+### 5. Product-integration readiness (pnix-clj launcher, M7) — SMALL-MEDIUM, deferred by decision, not by blocker
+M7 is explicitly `PARKED`: clj-meta's receipts are marked
+`:not-consumed-by "pnix-clj launcher"` by policy, pending "a complete
+meta-circular stage15/N Clojure compiler" per the doc's own (very high) bar —
+but the practical peer-floor gate (`selfhost`, `stage7`, `primary`) has been
+**READY/PASS** since at least 2026-08-07 per STATUS.md. This reads like a
+deliberate non-technical gate (governance decision to keep clj-meta
+pnix-agnostic, consumed via the documented API surface in
+`pnix.clj-meta.compiler`/`form-proof`/`host-reflection`) rather than missing
+implementation. If/when the decision is made to lift PARKED, the API surface
+is already documented as stable (see the "pnix-clj interop boundary" note
+near the top of this file) — likely a small integration task on the pnix-clj
+side, not new work here.
+
+### 6. Minor loose ends — SMALL
+- Stage14 cross-host law closure is `OK` but with **missing external
+  transcripts** (hy-meta/pnix-hy/pnix-clj fixture files) held as optional
+  evidence, not blocking — STATUS.md lists this explicitly. Small to close if
+  another host's transcript becomes available; not actionable from clj-meta
+  alone.
+- No `Stage16`/"beyond stageN" concept exists as a distinct axis: `StageN` in
+  §10a is already a generic *recursive* closure mechanism ("repeat the same
+  closure law whenever a new host/runtime/proof surface appears"), and it's
+  marked `[x]` done as a mechanism. There is currently no new surface pending
+  that would trigger a "stage16" — this is not a gap, just a framework that
+  activates on demand.
+
+### Bottom line
+Nothing found that contradicts the "a lot is already implemented" framing.
+The only concrete, scoped, small-to-medium next slice is **item 1's two
+sub-steps** (finish wiring U6's remaining ~8 fixtures into the DDC row, then
+grow U6 itself toward the 112-case corpus). Everything else in items 2-4 is
+correctly framed in the existing docs as intentionally-held research
+frontier or permanent architectural boundary, not backlog; item 5 is a
+governance decision, not missing code.
+
+---
+
 ## try in expression position — VerifyError fix (2026-07-03)
 
 `compile-form` 이 표현 위치의 `try`(호출 인자 등 피연산자 스택 위에 값이 있는

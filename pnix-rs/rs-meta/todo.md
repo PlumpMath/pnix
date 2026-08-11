@@ -36,6 +36,130 @@
    rustc native tier, 추후 self-host)는 동일 Rust 프로그램에 동일 출력. native tier가
    못 다루는 형태는 명시 거부(silently wrong 금지).
 
+## Current Remaining Work (verified 2026-08-11)
+
+이 섹션은 2026-08-11 세션(commits `272ccef`, `24d3326`, `ae170e0`)이 끝난 시점의
+정확한 "실제로 남은 일" 요약이다. 아래 §2 이후의 상세 로드맵/진행 로그는 그대로
+보존하되(historical), 최신 상태를 빠르게 파악하려면 이 섹션부터 읽는다. 전체 서사는
+`STATUS.md`(특히 "Correction (verified this session, 2026-08-11)"과 "Trusting-Trust
+defense roadmap" 절)를 참고. 아래 항목들은 이 세션에서 라이브로 재검증됨
+(`cargo build`, `self-check` 407/407, `tv-check` 407/407, `typeck-check` 272/272,
+`independent-mini-backend-check` 9/9, `source-ast-check` 16/16, `source-bundle-check`
+1/1, `stage2-chain-check` reproduces the FAIL below — all re-run live during this
+audit, not just read from docs).
+
+### 1. `interp.rs` runtime dispatch bug — Vec/chars (HIGHEST PRIORITY — actively blocks the aggregate gate)
+
+- **State:** `stage2-chain-check` fails with `interp: unsupported Vec method chars`.
+  This cascades: `stage9-proof-matrix-check`, `stage9-aggregate-replay-check`, and
+  the full `check` aggregate all fail transitively because they call
+  `stage2-chain-check` internally. Confirmed newly-reachable (not a regression —
+  `git stash` to an earlier commit shows this check never ran this far before;
+  it always failed at bundling/typechecking first, which the 9-layer fix in this
+  session's other work cleared).
+- **Why it's hard:** `stage2-chain-check`'s harness calls `interp_run` *from inside
+  interpreted code* — the whole bundle (including `interp.rs`'s own lexer/parser/
+  interpreter logic) runs through rs-meta's own interpreter, meta-circularly. This
+  is a genuine interpreter (runtime value dispatch) bug, not a typeck/parser static
+  gap like the 9 bugs fixed this session in `source-bundle-check`.
+- **Narrowed to (not yet fixed):** `format_placeholder_kinds`'s `fmt: &str`
+  parameter in `typeck.rs`, reached via
+  `Expr::Println{fmt,args} -> check_format_args(fmt,...) -> format_placeholder_kinds(fmt,...)`.
+  Confirmed via `runtime_type_name()` that the actual runtime value at that point is
+  a genuine `Val::Vec`, not a dispatch-logic misfire. Ruled out a simple enum-field-
+  order swap (`ast.rs`'s `Expr::Println { fmt: String, args: Vec<Expr> }` field
+  order matches the match-arm pattern order, so it isn't that).
+- **What "done" looks like:** `stage2-chain-check` passes, which should cascade to
+  `stage9-proof-matrix-check`, `stage9-aggregate-replay-check`, and the full `check`
+  aggregate all going green (no other known blocker behind this one, but that's
+  unverified until it's actually fixed — there could be more layers).
+- **Size:** unknown / open-ended. Needs interactive or print-debugging of
+  `interp.rs`'s struct/enum field-binding and function-call argument-passing logic
+  to find where a `&str` becomes a `Vec` at runtime — a qualitatively different
+  investigation from the 9 static bugs fixed this session (those were found by
+  reading error messages against parser/typeck source; this one requires tracing
+  actual runtime value representations through the tree-walking evaluator).
+- **Note:** a background task chip may already exist tracking this exact bug from
+  this session's investigation — check before spawning a duplicate. Do not lose
+  this precise diagnosis (the `format_placeholder_kinds`/`fmt: &str` narrowing) in
+  any future restatement of this item.
+- **Side effect worth knowing:** `proofs/stage-manifest.tsv` still marks the
+  `source-bundle` and `stage9-aggregate-replay`/`stage9` rows `DONE` — that's
+  accurate for `source-bundle-check` itself (now passing) but the `stage9-*` rows
+  are currently **not** reproducible via a live `check` run because of this bug.
+  The manifest should be revisited once this bug is fixed (or annotated sooner) —
+  out of scope for this audit pass, flagged here so it isn't lost.
+
+### 2. Widen `independent-mini-backend-check` fixtures (in-house DDC track)
+
+- **State:** DONE-so-far: 9/9 fixtures (`mini-const-arithmetic`,
+  `mini-one-arg`, `mini-branch-two-arg`, `mini-mul`, `mini-sub`,
+  `mini-unary-negate-branch`, `mini-equality-branch`, `mini-ge-branch`,
+  `mini-recursive-factorial`) in `src/independent_mini_backend.rs`, cross-validated
+  live against real `rustc` this session.
+- **What "done" looks like:** widen toward (not necessarily matching 1:1) the
+  407-case main corpus — add loops, more arg arities, string/bool handling to the
+  from-scratch tokenizer/parser/interpreter, keeping it a genuinely independent
+  implementation (zero shared code with `lexer.rs`/`parser.rs`/`ast.rs`/
+  `typeck.rs`/`interp.rs`).
+- **Size:** small-to-medium, incremental, purely additive, no known blockers —
+  each new fixture is its own self-contained slice.
+
+### 3. mrustc-based Trusting-Trust DDC (Wheeler bar) — deferred, Linux-only
+
+- **State:** deliberately not pursued this session. `mrustc` is nixpkgs-packaged
+  but marked `platforms = [ "x86_64-linux" ]` only; this dev machine is
+  `x86_64-darwin`. Forcing a cross-build via `NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM`
+  was judged actively counterproductive for a *trust* witness (a shakily
+  cross-built mrustc could silently miscompile, giving false DDC confidence).
+- **What "done" looks like:** on a Linux box, build real `mrustc`, compile
+  rs-meta's own source through it, and compare against `rustc`'s output —  a
+  genuine compiler-vs-compiler (not compiler-vs-interpreter) comparison, clearing
+  the full Wheeler DDC bar that item 2 above does not by itself clear.
+- **Size:** large, but environment-gated, not effort-gated — the phased plan is
+  already written up in `STATUS.md`; this is "pick it up on Linux," not "design it
+  from scratch."
+
+### 4. stage8–stage15/N seed + replay closures
+
+- **State: ALL DONE.** Verified by reading every checkbox in §5.3 (Milestone C —
+  stage8) and §5.4 (Milestone D — stage9-15 + stageN) below: every single line is
+  `[x]`. Across the entire 1500+-line file there is exactly **one** unchecked
+  `- [ ]` line, and it is unrelated to stage8-15/N (see item 6 below).
+- **What this means:** no open work on this axis. These are local seed/replay
+  closures — DONE here explicitly means "local proof closure," not "full rustc
+  replacement" or "Trusting-Trust defense" (see item 5). That scope boundary is
+  intentional and already correctly labeled throughout; nothing to re-flag.
+
+### 5. Full rustc replacement / borrow checker / full trait solver / user `macro_rules!` — HELD (recorded non-goal, not pending work)
+
+- **State:** explicitly HELD, and — per `docs/self-hosting.md`'s audit
+  (2026-07-04, gated by `selfhost-audit-check`) — **confirmed not a blocker**:
+  rs-meta's evaluator core (`lexer.rs`/`ast.rs`/`parser.rs`/`typeck.rs`/
+  `interp.rs`/`sig.rs`/`hash.rs`) uses **zero** instances of `macro_rules!`,
+  proc/derive macros, `async`/`await`, `unsafe`, `trait` definitions, associated
+  types, `dyn Trait`, or const generics. Lifting any of these would not move the
+  self-host bar. Borrow checker is held as a no-op/witness under the mrustc
+  stance ("trust the input is valid; a miscompile is our bug"), sound here because
+  rs-meta's own source is already borrow-validated by real `rustc`.
+- **Do not re-flag this as pending work.** It is a recorded, audited scope
+  decision, not a gap.
+- **If ever revisited (not currently planned):** `macro_rules!` is called out in
+  `docs/self-hosting.md` as "the tractable one" if a lift is ever wanted for
+  downstream (`pnix-rs`) reasons. A full trait solver is explicitly called "a
+  research frontier," not required to self-host.
+
+### 6. Minor open item: A4 generic-inference tail (§5.1, line ~380)
+
+- **State:** the one remaining unchecked `- [ ]` in the whole file: preserve
+  nested unsuffixed integer provenance so
+  `Rc::ptr_eq(&Rc::new(vec![1]), &Rc::new(vec![1u64]))` can infer `u64` like
+  `rustc` does, while explicit `Rc<i64>` vs `Rc<u64>` still gets rejected.
+- **Size:** small, narrow, pre-existing, unrelated to the interp.rs bug (item 1)
+  or the DDC work (items 2-3). Lowest priority of everything on this list.
+
+---
+
 ## 2. Stage 사다리 (rustc bootstrap 모델 → stage15~N)
 
 rustc의 stage0/1/2 부트스트랩을 stage15~N까지 확장한다.
