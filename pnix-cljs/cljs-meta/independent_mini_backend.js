@@ -13,10 +13,17 @@
  *
  * It is a frontier witness, not a replacement for the production frontend:
  * it covers a bounded fixture set (arithmetic, comparisons, `if`, `let`,
- * booleans/keywords), not ClojureScript.
+ * `do`, named `fn` literals/recursion, strings, vector literals,
+ * booleans/keywords), not ClojureScript. The host side of this DDC pair
+ * (`cljs.js` via `core/evaluate`) runs `eval-str` with `:context :expr`,
+ * which only accepts a single top-level expression, so this backend does
+ * not implement `defn` or other multi-form/top-level-definition source —
+ * recursion is expressed the same way both backends can agree on it: a
+ * self-referencing named `fn` literal invoked in place, e.g.
+ * `((fn fact [n] (if (<= n 1) 1 (* n (fact (- n 1))))) 6)`.
  */
 
-const TOKEN_RE = /\s*(\(|\)|\[|\]|:[^\s()\[\]]+|-?\d+|[^\s()\[\]]+)/y;
+const TOKEN_RE = /\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|:[^\s()\[\]]+|-?\d+|[^\s()\[\]]+)/y;
 
 function tokenize(source) {
   const tokens = [];
@@ -65,6 +72,9 @@ function parseOne(tokens, i) {
   if (tok === "true") return [{ kind: "bool", value: true }, i + 1];
   if (tok === "false") return [{ kind: "bool", value: false }, i + 1];
   if (tok === "nil") return [{ kind: "nil" }, i + 1];
+  if (tok.startsWith('"') && tok.endsWith('"')) {
+    return [{ kind: "str", value: JSON.parse(tok) }, i + 1];
+  }
   if (tok.startsWith(":") && tok.length > 1) {
     return [{ kind: "keyword", name: tok.slice(1) }, i + 1];
   }
@@ -90,6 +100,34 @@ function freshName(prefix) {
   return `${prefix}_${jsIdCounter}`;
 }
 
+function emitFn(args, env) {
+  let rest = args;
+  let jsFnName = "";
+  let fnEnv = env;
+  if (rest.length > 0 && rest[0].kind === "sym") {
+    const nameForm = rest[0];
+    jsFnName = freshName(nameForm.name);
+    fnEnv = new Map(env);
+    fnEnv.set(nameForm.name, jsFnName);
+    rest = rest.slice(1);
+  }
+  const [paramsForm, ...body] = rest;
+  if (!paramsForm || paramsForm.kind !== "vector" || body.length === 0) {
+    throw new SyntaxError("tiny analyzer: malformed fn");
+  }
+  const paramsEnv = new Map(fnEnv);
+  const jsParams = [];
+  for (const p of paramsForm.items) {
+    if (p.kind !== "sym") throw new SyntaxError("tiny analyzer: fn param must be a symbol");
+    const jsParam = freshName(p.name);
+    jsParams.push(jsParam);
+    paramsEnv.set(p.name, jsParam);
+  }
+  const bodyCode = body.map((f) => emitExpr(f, paramsEnv));
+  const returnCode = bodyCode[bodyCode.length - 1];
+  return `(function ${jsFnName}(${jsParams.join(", ")}) { return (${returnCode}); })`;
+}
+
 function emitExpr(form, env) {
   switch (form.kind) {
     case "num":
@@ -100,6 +138,10 @@ function emitExpr(form, env) {
       return "null";
     case "keyword":
       return JSON.stringify(form.name);
+    case "str":
+      return JSON.stringify(form.value);
+    case "vector":
+      return `[${form.items.map((f) => emitExpr(f, env)).join(", ")}]`;
     case "sym": {
       if (!env.has(form.name)) {
         throw new SyntaxError(`tiny analyzer: unknown local ${form.name}`);
@@ -108,8 +150,19 @@ function emitExpr(form, env) {
     }
     case "list": {
       const [head, ...args] = form.items;
+      if (head.kind === "sym" && head.name === "fn") {
+        return emitFn(args, env);
+      }
       if (head.kind !== "sym") {
-        throw new SyntaxError("tiny analyzer: call head must be a symbol");
+        return `(${emitExpr(head, env)})(${args.map((f) => emitExpr(f, env)).join(", ")})`;
+      }
+      if (head.name === "do") {
+        if (args.length === 0) throw new SyntaxError("tiny analyzer: do arity");
+        const bodyCode = args.map((f) => emitExpr(f, env));
+        return `(function(){ ${bodyCode
+          .slice(0, -1)
+          .map((c) => `${c};`)
+          .join(" ")} return (${bodyCode[bodyCode.length - 1]}); })()`;
       }
       if (head.name === "if") {
         if (args.length !== 3) throw new SyntaxError("tiny analyzer: if arity");
@@ -146,6 +199,10 @@ function emitExpr(form, env) {
       if (Object.prototype.hasOwnProperty.call(CMPOPS, head.name)) {
         if (args.length !== 2) throw new SyntaxError("tiny analyzer: compare op arity");
         return `(${emitExpr(args[0], env)} ${CMPOPS[head.name]} ${emitExpr(args[1], env)})`;
+      }
+      if (env.has(head.name)) {
+        const argsCode = args.map((f) => emitExpr(f, env));
+        return `${env.get(head.name)}(${argsCode.join(", ")})`;
       }
       throw new SyntaxError(`tiny analyzer: unsupported call head ${head.name}`);
     }

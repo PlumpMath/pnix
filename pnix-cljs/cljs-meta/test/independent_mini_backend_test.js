@@ -18,16 +18,26 @@ const FIXTURES = [
   ["(* 6 7)", 42],
   ["(if false 0 42)", 42],
   ["(let [x 41] (+ x 1))", 42],
+  ['"hello"', "hello"],
+  ["(do 1 2 3)", 3],
+  ["(let [a 1 b 2] [a b])", [1, 2]],
+  ["((fn [x] (* x x)) 6)", 36],
+  ["((fn fact [n] (if (<= n 1) 1 (* n (fact (- n 1))))) 6)", 720],
+  ["((fn fib [n] (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))) 10)", 55],
 ];
 
 (async () => {
   for (const [source, expected] of FIXTURES) {
     const hostResult = await cljsMeta.evaluate(source);
     assert.equal(hostResult.outcome_kind, "done", `host failed on: ${source}`);
-    assert.equal(hostResult.value, expected, `host mismatch on: ${source}`);
+    // deepEqual (not equal/strictEqual): some fixtures return vectors, which
+    // cljs.js and the mini backend each produce as freshly-allocated JS
+    // arrays, so reference equality would spuriously fail structurally-equal
+    // results.
+    assert.deepEqual(hostResult.value, expected, `host mismatch on: ${source}`);
 
     const miniResult = mini.compileAndEval(source);
-    assert.equal(miniResult, expected, `mini backend mismatch on: ${source}`);
+    assert.deepEqual(miniResult, expected, `mini backend mismatch on: ${source}`);
   }
 
   console.log(`independent mini backend DDC: PASS (${FIXTURES.length} fixtures)`);

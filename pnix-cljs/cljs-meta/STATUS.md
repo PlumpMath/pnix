@@ -70,26 +70,38 @@ substrate, the same honest role the JVM classfile format plays for clj-meta's
 `frontend_selfhost.clj` and Python's `ast`/`compile()` play for hy-meta's
 `independent_mini_backend.py`.
 
-Covers 8 fixtures (`let`, `if`, `+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`, booleans,
-keyword literals). Cross-validated against the real self-hosted compiler
+Covers 14 fixtures (`let`, `if`, `do`, `+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`,
+booleans, keyword literals, string literals, vector literals as return
+values, and named `fn` literals including self-recursion — factorial and
+fibonacci). Cross-validated against the real self-hosted compiler
 (`dist/cljs-meta-module.js`'s `evaluate()`, the actual cljs.js-backed
-production path) — both agree on all 8. Wired into
+production path) — both agree on all 14. Wired into
 `test/independent_mini_backend_test.js`, run from both
 `cljs-meta/bin/cljs-meta-gate` and the top-level `bin/pnix-cljs-gate`.
-Verified live this session: `independent mini backend DDC: PASS (8
-fixtures)`, full `pnix-cljs aggregate gate: PASS`, no regressions in
-self-test, runtime matrix, fixed-point runtime, or identity gates.
+Verified live this session (2026-08-11 widening pass): `independent mini
+backend DDC: PASS (14 fixtures)`, full `pnix-cljs aggregate gate: PASS`, no
+regressions in self-test, runtime matrix, fixed-point runtime, or identity
+gates.
+
+Note on scope: `core/evaluate` runs `cljs.js`'s `eval-str` with `:context
+:expr`, which only accepts a single top-level expression — multiple
+top-level forms (e.g. `(defn ...) (foo)`) fail on the real host itself, not
+just the mini backend. So `defn`/recursion is expressed the DDC-comparable
+way instead: a self-referencing named `fn` literal invoked in place, e.g.
+`((fn fact [n] (if (<= n 1) 1 (* n (fact (- n 1))))) 6)`. The test file's
+fixture comparison was also switched from `assert.equal`/`strictEqual` to
+`assert.deepEqual`, since vector-returning fixtures produce structurally-equal
+but reference-distinct JS arrays on the two independently-emitting backends.
 
 **What this closes and what it still doesn't:** this is now a genuine 2-way
 behavioral comparison (self-hosted cljs.js-backed compiler ≡ independent
 from-scratch mini backend) on a small fixture set, not merely documented as a
-plan. It is still only 8 fixtures, not the conformance surface, and — same
+plan. It is still only 14 fixtures, not the conformance surface, and — same
 honest bar as clj-meta and hy-meta already settled on — behavior equivalence,
 not bit-identical JS text, since two independently-authored emitters
 targeting the same language by coincidence would not be expected to produce
-identical source text. **Next concrete step:** widen the fixture set (`do`,
-data literals — vectors/maps/keywords-as-values rather than just as return
-values, string handling) toward parity with clj-meta's ~50-fixture
+identical source text. **Next concrete step:** widen further (maps, more seq
+ops, destructuring) toward parity with clj-meta's ~50-fixture
 `frontend_selfhost.clj` scope.
 
 Node.js, the Google Closure runtime, and `cljs.core` itself remain shared

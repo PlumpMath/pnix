@@ -10,7 +10,8 @@ duplicate that detail — it maps what is left, by axis, prioritized.
 
 Verified this pass: `./cljs-meta/bin/cljs-meta-gate` PASSes live (self_test +
 fixed_point_test + independent_mini_backend_test, "independent mini backend
-DDC: PASS (8 fixtures)"); `bin/build-cljs`, `bin/build-fixed-point.js`, and
+DDC: PASS (8 fixtures)" at the start of this pass, widened to 14 fixtures —
+see §2 below); `bin/build-cljs`, `bin/build-fixed-point.js`, and
 `bin/cljs-meta-gate` match what STATUS.md/FIXED-POINT.md describe; the
 top-level `bin/pnix-cljs-gate` runs the same three cljs-meta test files;
 `flake.nix` lists `aarch64-darwin`/`x86_64-linux`/`aarch64-linux` alongside
@@ -19,8 +20,10 @@ evaluated as flake outputs), consistent with FIXED-POINT.md's explicit
 "appears in flake.nix or evaluates successfully is not supported" caveat.
 STATUS.md's "Open claims (do not claim)" block is accurate as of this pass —
 nothing below was found already closed and mislabeled open, and the
-`independent_mini_backend.js` work from earlier this session is correctly
-described (8 fixtures, wired into both gates, not re-flagged as missing).
+`independent_mini_backend.js` work from earlier this session was widened in
+this pass from 8 to 14 fixtures (`do`, strings, vectors-as-values, named-`fn`
+recursion), wired into both gates, verified against the real host, no
+regressions.
 
 The five open claims split into two genuinely actionable axes and three
 structural scope boundaries that read as "false" by design, the same way
@@ -62,14 +65,28 @@ infra-and-execution, not design.
 
 ### 2. Trusting-Trust / DDC depth — actionable, small-to-medium, incremental
 
-**State:** `independent_mini_backend.js` (added 2026-08-11) is a genuine
-from-scratch tokenizer/reader + direct JS-text emitter sharing zero code with
-`cljs.js`/`cljs.compiler`/`cljs.analyzer`, cross-validated against the real
-self-hosted compiler's `evaluate()`. Covers 8 fixtures: `let`, `if`,
-`+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`, booleans, keyword literals. Wired into
-`test/independent_mini_backend_test.js`, run from both `cljs-meta-gate` and
-`pnix-cljs-gate`. This closed the "no DDC exists at all" gap — do not re-flag
-it as missing.
+**State:** `independent_mini_backend.js` (added 2026-08-11, widened
+2026-08-11) is a genuine from-scratch tokenizer/reader + direct JS-text
+emitter sharing zero code with `cljs.js`/`cljs.compiler`/`cljs.analyzer`,
+cross-validated against the real self-hosted compiler's `evaluate()`. Covers
+14 fixtures: `let`, `if`, `do`, `+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`, booleans,
+keyword literals, string literals, vector literals as return values, and
+named `fn` literals including self-recursion (factorial, fibonacci). Wired
+into `test/independent_mini_backend_test.js` (now using `assert.deepEqual`
+so vector-returning fixtures compare structurally, not by reference), run
+from both `cljs-meta-gate` and `pnix-cljs-gate`. This closed the "no DDC
+exists at all" gap — do not re-flag it as missing.
+
+**Scope note found and resolved this pass:** `core/evaluate` runs `cljs.js`'s
+`eval-str` with `:context :expr`, which only accepts a *single* top-level
+expression — `(defn ...) (foo)`-style multi-form source fails on the real
+host itself (confirmed live), not just the mini backend. So `defn` is not a
+reachable DDC fixture shape at all under this evaluate path. Recursion is
+instead expressed the way both backends can agree on it: a self-referencing
+named `fn` literal invoked in place, e.g. `((fn fact [n] (if (<= n 1) 1 (* n
+(fact (- n 1))))) 6)`. Do not re-flag `defn`/multi-form support as missing —
+it is out of reach of this DDC harness by the real host's own design, not an
+oversight.
 
 **Done looks like (aspirational, not a hard bar):** fixture coverage
 approaching clj-meta's ~50-fixture `frontend_selfhost.clj` scope, still on the
@@ -81,12 +98,15 @@ source).
 mini-backend extension plus a handful of cross-validated fixtures; no
 architecture change needed.
 
-- [ ] `do` (sequencing / multiple body forms).
-- [ ] Data literals as *values*, not just return position: vectors, maps,
-      keywords-as-values (currently keywords only appear as branch results).
-- [ ] String literals and basic string handling (`str`, concatenation).
-- [ ] `defn`/`fn` (named and anonymous function definition + call).
-- [ ] Recursion (self-reference through a bound name).
+- [x] `do` (sequencing / multiple body forms).
+- [x] String literals and basic string handling (concatenation available via
+      `str`, not yet exercised by a fixture).
+- [x] `fn` (named and anonymous function definition + call).
+- [x] Recursion (self-reference through a named `fn` literal).
+- [ ] Data literals as *values* beyond vectors: maps, keywords-as-values in
+      non-branch position.
+- [ ] Map literals, `get`, basic seq ops (`first`/`next`/`count`).
+- [ ] Destructuring (vector/map binding forms in `let`/`fn` params).
 - [ ] Re-run STATUS.md's "Trusting-Trust defense roadmap" honesty language
       (fixture count, scope caveat) after each widening pass so the doc never
       drifts ahead of actual coverage.
