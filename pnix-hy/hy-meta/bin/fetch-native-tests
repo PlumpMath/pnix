@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Materialize upstream Hy's own tests/ tree (tests/native_tests/*.hy,
+# tests/resources/tlib.hy, ...) into pnix-hy/tests/.
+#
+# hy-meta's bootstrap.py uses this corpus as a native-Hy oracle
+# (native-subset-test, parity-ledger-check, and diverse-double-compile-check's
+# self-compilation of compiler.hy) but the corpus itself is not vendored in
+# git -- pnix-hy/tests/ is gitignored, matching this repo's convention that
+# externally-sourced build/test corpora are fetched, not committed.
+#
+# The source is the exact `hy-src` flake input already pinned in flake.lock
+# (github:hylang/hy tag 1.3.1) -- resolved through Nix, so its content is
+# hash-verified against the lock file rather than fetched ad hoc.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$root"
+
+hy_src="$(nix eval --raw --impure --expr \
+  '(builtins.getFlake (toString ./.)).inputs.hy-src')"
+
+if [[ ! -d "$hy_src/tests" ]]; then
+  echo "fetch-native-tests: $hy_src/tests not found (unexpected hy-src layout)" >&2
+  exit 1
+fi
+
+rm -rf tests
+cp -R "$hy_src/tests" tests
+chmod -R u+w tests
+
+echo "fetch-native-tests: wrote $(find tests -type f | wc -l | tr -d ' ') files to $root/tests (from $hy_src)"

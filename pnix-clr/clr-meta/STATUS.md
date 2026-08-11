@@ -82,46 +82,51 @@ cross_host_canonical_equivalence / clr_host_promotion = false
 
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)
 
-**Nothing closed yet on this axis, and no shortcut exists.** Unlike Rust
-(`mrustc`), there is no independently-authored third-party ClojureCLR compiler
-in the wild to lean on — a second, independent backend would have to be built
-in-house, same constraint clj-meta already worked through for the JVM host.
+Unlike Rust (`mrustc`), there is no independently-authored third-party
+ClojureCLR compiler in the wild to lean on — a second, independent backend
+has to be built in-house, the same constraint the reference JVM host
+(the `frontend_selfhost.clj`/`diverse_double_compile.clj` pair) already
+worked through for its own DDC witness, and the same pattern followed here.
 
-Concrete plan, adapted from clj-meta's already-closed U5/U6 pattern (same host
-language family, directly reusable lessons):
+**Independent mini backend added this session (2026-08-11):**
+`independent_mini_backend.clj` is a new, from-scratch Int64
+tokenizer/reader + analyzer + `System.Reflection.Emit.DynamicMethod` IL
+emitter, sharing zero code with the Compiler Stage1-7 family
+(`compiler_stage1.clj`, `compiler_selfhost_*.clj`), which uses
+`System.Reflection.Emit.PersistedAssemblyBuilder` to produce full PE
+executables. `DynamicMethod` JITs a method in memory and hands back an
+invokable handle directly — it never touches the assembly/PE-writing path
+the Stage1-7 family shares. The pinned ClojureCLR runtime and the CLR itself
+remain trusted host substrate, the same honest role the JVM classfile format
+plays for the reference host's tiny frontend witness.
 
-```text
-Step 1 — independent interpreter cross-check (clj-meta's U5 analogue)
-    The existing gen0-2 nested evaluator lane already interprets rather than
-    compiles. Extend it (or add a sibling tree-walking evaluator) to cover the
-    same corpus the Compiler Stage1/2 PE-emitting lane targets, and compare
-    behavior: PE-emitted output vs interpreted output on identical inputs.
-    This catches a backdoor unique to either lane, though — same honest scope
-    clj-meta records for its own kernel — an interpreter is not a second
-    *compiler*, so this alone would not be the full Wheeler bar.
+Covers 8 fixtures (`+`/`-`/`*` checked-overflow arithmetic, `<`/`>`/`<=`/`>=`/
+`=` comparisons, `if`, 0/1/2-arg functions). Cross-validated against real
+host ClojureCLR `eval` — both agree on all 8. Wired into
+`independent-mini-backend-test` (`clr-meta/test/pnix/clr_meta/`), which now
+runs as part of the aggregate `bootstrap-test` entry point invoked by
+`scripts/clr-meta-gate`. Verified live this session: 19 tests / 187
+assertions, 0 failures, `:ready true`; full `pnix-clr-gate` re-run green with
+no regressions.
 
-Step 2 — independent minimal 2nd PE emitter (clj-meta's U6 analogue)
-    Author a small, algorithmically independent second backend that emits CLR
-    PE bytes directly for a bounded fixture set (mirrors clj-meta's tiny
-    reader+analyzer+ASM-emitter that covers 17 fixtures with zero calls into
-    the shared recognizer/emit path). Must not reuse the C2/C3 compiler
-    kernel's lowering-owner or PE-sink code — a shared emit path defeats the
-    purpose.
-    Cross-validate: the Compiler Stage1/2 chain's output vs this independent
-    emitter's output must agree (behaviorally, and ideally byte-for-byte for
-    the specific fixture PE format) on the shared fixture set.
+**What this closes and what it still doesn't:** a genuine 2-way behavioral
+comparison (real host `eval` ≡ from-scratch `DynamicMethod`-based mini
+backend) now exists and passes, not just a documented plan. It is still only
+8 fixtures, scoped to the same checked-Int64 arithmetic/comparison/`if`
+surface the Compiler Stage1 profile itself targets — not the full
+conformance corpus, and (same honest bar settled on for every host this
+session) behavior equivalence, not byte-identical IL, since a
+`DynamicMethod`-JITted method and a `PersistedAssemblyBuilder`-written PE are
+different CLR artifact kinds by construction.
 
-Step 3 — widen the fixture set toward the real conformance corpus
-    Same honest scoping as clj-meta U5/U6: grow coverage incrementally, record
-    exactly how much of the corpus each side of the DDC actually spans, and
-    keep "full Wheeler DDC" held until the independent backend's coverage
-    matches the primary compiler's.
-```
-
-This is a genuinely large, from-scratch build (the "high difficulty, must be
-built in-house" case clj-meta's own `todo.md` R4 flags for any host without an
-existing independent compiler) — expect it to be its own multi-session track,
-sequenced after Stage8+ same-lineage work stabilizes, not before it.
+**Next concrete step:** widen the fixture set (nested `if`, more arg
+arities, the checked-overflow negative cases the Stage1 gate itself already
+exercises) toward the same corpus the Compiler Stage1 profile covers, so the
+comparison stops being "a bounded subset" and starts being "the whole
+profile, independently cross-validated." Building an independent
+interpreter (as opposed to a second compiler) to cross-check the gen0-2
+evaluator lane remains a separate, not-yet-started track — an interpreter
+alone would not clear the full Wheeler bar even if added.
 
 ## Primary gate
 

@@ -119,16 +119,26 @@ described. **Next concrete step:** grow the fixture set (data literals,
 `kernel_direct` behavior as a third comparison point per-fixture (not just
 upstream vs mini) to make it a true 3-way rather than 2-way check.
 
-**Unrelated pre-existing gap found while verifying this (not fixed here):**
-`diverse-double-compile-check` and other native-corpus-dependent checks
-currently fail in a fresh checkout/venv with
-`hy.errors.HyRequireError: No module named 'tests'` — confirmed on unmodified
-`bootstrap.py` too (not a regression from this session's changes). The
-referenced `tests/` corpus (native Hy test suite, e.g.
-`tests.resources.tlib`) is absent from this checkout entirely. This blocks
-`diverse-double-compile-check`, `parity-ledger-check`, and
-`native-subset-test` in a from-scratch environment and should be tracked
-separately.
+**Fixed this session: missing native-corpus dependency.** A fresh
+checkout/venv used to fail `diverse-double-compile-check` and other
+native-corpus-dependent checks with
+`hy.errors.HyRequireError: No module named 'tests'` (confirmed on unmodified
+`bootstrap.py` too — not a regression, a genuine gap). Root cause: `tests/`
+(upstream Hy's own `tests/native_tests/*.hy` + `tests/resources/tlib.hy`,
+used as a native-Hy oracle) was never materialized in this checkout — only
+referenced by path. Fixed via `hy-meta/bin/fetch-native-tests`, which
+resolves the already-pinned `hy-src` flake input (`github:hylang/hy` tag
+`1.3.1`, hash-verified by `flake.lock`) through Nix and copies its `tests/`
+subtree into `pnix-hy/tests/` (gitignored, ~528K, 95 files — not committed).
+`nix develop`'s shellHook now does this automatically. A second, smaller gap
+surfaced once `tests/` existed: `tests/resources/__init__.py` imports
+`pytest` at module load time (upstream Hy's own test-resource file, not
+something hy-meta invokes), so `pytest` was added to `flake.nix`'s
+`proofPython` and is needed in manual venvs too. Verified live this session:
+`diverse-double-compile-check` -> `ddc_status: reproduced` (was previously
+unable to run at all), `native-subset-check` -> `ok`,
+`parity-ledger-check` -> 100% direct (45/45 files, 1487/1487 forms, 0
+fallbacks), `hy-meta-gate full` -> PASS.
 
 ## Primary gate
 
@@ -143,9 +153,13 @@ Env used this session:
 
 ```sh
 /usr/local/bin/python3.11 -m venv /tmp/pnix-hy-py311-venv
-/tmp/pnix-hy-py311-venv/bin/python -m pip install 'funcparserlib ~= 1.0'
+/tmp/pnix-hy-py311-venv/bin/python -m pip install 'funcparserlib ~= 1.0' 'hy == 1.3.1'
 export HY_META_PYTHON=/tmp/pnix-hy-py311-venv/bin/python
-# HY_META_PYTHON has hy installed (pip/nix); no vendored PYTHONPATH needed
+
+# Only needed for diverse-double-compile-check / parity-ledger-check /
+# native-subset-test (the native-Hy-corpus checks):
+./hy-meta/bin/fetch-native-tests                          # materializes tests/
+/tmp/pnix-hy-py311-venv/bin/python -m pip install pytest   # tests/resources/__init__.py needs it
 ```
 
 ## Last run (this machine, 2026-08-07)

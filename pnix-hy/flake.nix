@@ -57,7 +57,10 @@
 
           # A Python that carries Hy 1.3.1 -- used as the projection "proof Python"
           # (PNIX_HY_PYTHON) and to run the source tree's --check / --gate.
-          proofPython = python.withPackages (ps: [ hy ]);
+          # pytest is required transitively: tests/resources/__init__.py (part of
+          # the native Hy corpus pulled in below) imports it at module load time,
+          # even though hy-meta never invokes pytest itself.
+          proofPython = python.withPackages (ps: [ hy ps.pytest ]);
         in
         {
           default = pnix-hy;
@@ -139,6 +142,15 @@
             packages = [ p.proofPython pnixHyProjectSrc pkgs.git ];
             shellHook = ''
               export PNIX_HY_PYTHON="${p.proofPython}/bin/python"
+              # hy-meta's native-Hy-corpus checks (diverse-double-compile-check,
+              # parity-ledger-check, native-subset-test) need tests/ materialized
+              # from the pinned hy-src input; it is gitignored, not committed.
+              # Idempotent and cheap (528K), so just refresh it every shell entry.
+              if [ -e "$PWD/hy-meta/bootstrap.py" ]; then
+                rm -rf "$PWD/tests"
+                cp -R "${hy-src}/tests" "$PWD/tests"
+                chmod -R u+w "$PWD/tests"
+              fi
               echo "pnix-hy devShell -- Hy 1.3.1 at PNIX_HY_PYTHON; python/hy/pnix-hy-project on PATH"
               echo "  from the repo root:"
               echo "    pnix-hy-project --check              # 54 toolkit self-checks"

@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is run-tests testing]]
             [pnix.clr-meta.bootstrap :as bootstrap]
             [pnix.clr-meta.compiler-stage1-test]
+            [pnix.clr-meta.independent-mini-backend-test]
             [pnix.clr-meta.main-test]
             [pnix.clr-meta.runtime-artifact-test]))
 
@@ -60,6 +61,7 @@
   [& _]
   (let [summary (run-tests 'pnix.clr-meta.bootstrap-test
                            'pnix.clr-meta.compiler-stage1-test
+                           'pnix.clr-meta.independent-mini-backend-test
                            'pnix.clr-meta.main-test
                            'pnix.clr-meta.runtime-artifact-test)
         bootstrap-receipt (bootstrap/run-gate)
