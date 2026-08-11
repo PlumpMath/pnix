@@ -17,7 +17,14 @@
    ["(fn [x y] (+ x y))" [20 22] 42]
    ["(fn [x] (if (> x 0) x (- 0 x)))" [-42] 42]
    ["(fn [x] (if (= x 42) 1 0))" [42] 1]
-   ["(fn [x] (if (>= x 41) 42 0))" [41] 42]])
+   ["(fn [x] (if (>= x 41) 42 0))" [41] 42]
+   ["(fn [x] (if (> x 0) (if (> x 100) 2 1) 0))" [50] 1]
+   ["(fn [x] (if (> x 0) (if (> x 100) 2 1) 0))" [200] 2]
+   ["(fn [x] (if (> x 0) (if (> x 100) 2 1) 0))" [-5] 0]
+   ["(fn [a b c] (+ (+ a b) c))" [10 20 12] 42]
+   ["(fn [a b c] (if (< a b) (+ b c) (- b c)))" [1 20 22] 42]
+   ["(fn [a b c d] (+ (+ a b) (+ c d)))" [10 10 10 12] 42]
+   ["(fn [a b c d] (if (> a b) (+ c d) (- d c)))" [5 1 20 22] 42]])
 
 (deftest independent-mini-backend-agrees-with-host-eval
   (testing "real host ClojureCLR eval and the independent mini backend agree"
@@ -27,3 +34,21 @@
             mini-result (long (mini/compile-and-invoke source args))]
         (is (= expected host-result) (str "host mismatch: " source))
         (is (= expected mini-result) (str "mini backend mismatch: " source))))))
+
+(def ^:private overflow-fixtures
+  "checked-i64-expression profile's :overflow :system-overflow-exception --
+  both the real host and the independent mini backend use checked (not
+  wrapping) Int64 arithmetic, so both must reject these the same way."
+  [["(fn [x] (+ x 1))" [Int64/MaxValue]]
+   ["(fn [x] (- x 1))" [Int64/MinValue]]
+   ["(fn [x] (* x 2))" [Int64/MaxValue]]
+   ["(fn [x y] (+ x y))" [Int64/MaxValue Int64/MaxValue]]])
+
+(deftest independent-mini-backend-agrees-on-checked-overflow
+  (testing "real host ClojureCLR eval and the independent mini backend both reject Int64 overflow"
+    (doseq [[source args] overflow-fixtures]
+      (let [host-fn (eval (read-string source))
+            host-threw? (try (apply host-fn args) false (catch Exception _ true))
+            mini-threw? (try (mini/compile-and-invoke source args) false (catch Exception _ true))]
+        (is host-threw? (str "host did not reject overflow: " source))
+        (is mini-threw? (str "mini backend did not reject overflow: " source))))))

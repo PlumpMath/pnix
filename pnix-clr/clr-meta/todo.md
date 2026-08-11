@@ -37,17 +37,21 @@ trusting doc prose:
 
 ### Priority-ordered remaining items
 
-1. **Widen the independent mini-backend fixture set** (cheap, near-term).
-   State: 8 fixtures (checked `+`/`-`/`*`, comparisons, `if`, 0–2 arg fns),
-   not the full Compiler Stage1 `checked-i64-expression` profile — missing
-   nested `if`, more arities, the checked-overflow negative cases the Stage1
-   gate itself already exercises. Done = fixture set matches that profile's
-   corpus, so the DDC comparison stops being "a bounded subset" and becomes
-   "the whole profile, independently cross-validated." **Size: small** —
-   explicitly named as the next concrete step in `STATUS.md`'s own DDC
-   section; same file/pattern, just more cases.
+1. **Widen the independent mini-backend fixture set — DONE (2026-08-11, later pass).**
+   State was: 8 fixtures (checked `+`/`-`/`*`, comparisons, `if`, 0–2 arg
+   fns), not the full Compiler Stage1 `checked-i64-expression` profile —
+   missing nested `if`, more arities, the checked-overflow negative cases the
+   Stage1 gate itself already exercises. Now: 15 value-returning fixtures
+   (added nested `if`, 3-arg, 4-arg functions) plus 4 checked-overflow
+   negative fixtures (`Int64.MaxValue`/`Int64.MinValue` boundary cases for
+   `+`/`-`/`*`, asserting both real-host `eval` and the mini backend reject
+   them — the mini backend's `Add_Ovf`/`Sub_Ovf`/`Mul_Ovf` IL opcodes were
+   always checked, just untested until now). Verified:
+   `independent-mini-backend-test` namespace 38/38 assertions, full
+   `bin/clr-meta-gate --no-build` 209/209 assertions, `:ready true`, no
+   regressions. Do not re-flag as open.
 
-2. **Stage8 — reproducible assembly artifact closure.** State: not started
+2. **Stage8 — reproducible assembly artifact closure — NEXT PRIORITY.** State: not started
    (no design doc, no gate/builder scripts, `stage8: false` stamped
    everywhere). Done = an explicit policy for PE metadata, MVIDs, debug
    info, paths, and timestamps, plus a gate proving two independent builds

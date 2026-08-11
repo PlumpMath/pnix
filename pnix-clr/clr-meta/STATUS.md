@@ -100,33 +100,41 @@ the Stage1-7 family shares. The pinned ClojureCLR runtime and the CLR itself
 remain trusted host substrate, the same honest role the JVM classfile format
 plays for the reference host's tiny frontend witness.
 
-Covers 8 fixtures (`+`/`-`/`*` checked-overflow arithmetic, `<`/`>`/`<=`/`>=`/
-`=` comparisons, `if`, 0/1/2-arg functions). Cross-validated against real
-host ClojureCLR `eval` — both agree on all 8. Wired into
+Covers 15 value-returning fixtures (`+`/`-`/`*` checked arithmetic,
+`<`/`>`/`<=`/`>=`/`=` comparisons, `if` including nested `if`, 0/1/2/3/4-arg
+functions) plus 4 checked-overflow negative fixtures (both the real host and
+the mini backend must reject `Int64.MaxValue + 1`, `Int64.MinValue - 1`,
+`Int64.MaxValue * 2`, and `Int64.MaxValue + Int64.MaxValue`). Cross-validated
+against real host ClojureCLR `eval` — both agree on all 19. Wired into
 `independent-mini-backend-test` (`clr-meta/test/pnix/clr_meta/`), which now
 runs as part of the aggregate `bootstrap-test` entry point invoked by
-`scripts/clr-meta-gate`. Verified live this session: 19 tests / 187
-assertions, 0 failures, `:ready true`; full `pnix-clr-gate` re-run green with
-no regressions.
+`scripts/clr-meta-gate`. Verified live this session (2026-08-11, later
+widening pass): the namespace's own test run shows `{:test 2, :pass 38,
+:fail 0, :error 0}`; full `bin/clr-meta-gate --no-build` re-run shows
+`{:test 20, :pass 209, :fail 0, :error 0}, :ready true` with no regressions.
 
 **What this closes and what it still doesn't:** a genuine 2-way behavioral
 comparison (real host `eval` ≡ from-scratch `DynamicMethod`-based mini
-backend) now exists and passes, not just a documented plan. It is still only
-8 fixtures, scoped to the same checked-Int64 arithmetic/comparison/`if`
-surface the Compiler Stage1 profile itself targets — not the full
-conformance corpus, and (same honest bar settled on for every host this
-session) behavior equivalence, not byte-identical IL, since a
-`DynamicMethod`-JITted method and a `PersistedAssemblyBuilder`-written PE are
-different CLR artifact kinds by construction.
+backend) now exists and passes on both the success surface and the
+checked-overflow negative surface, not just a documented plan. Nested `if`
+and more function arities close the "not the full Stage1 profile shape" gap
+noted here previously; the checked-overflow fixtures close the "negative
+cases not exercised" gap — the mini backend's `Add_Ovf`/`Sub_Ovf`/`Mul_Ovf`
+IL opcodes were always checked (matching the Compiler Stage1 profile's
+`:overflow :system-overflow-exception`), they just weren't tested until now.
+It is still a bounded fixture set, not the full conformance corpus, and (same
+honest bar settled on for every host this session) behavior equivalence, not
+byte-identical IL, since a `DynamicMethod`-JITted method and a
+`PersistedAssemblyBuilder`-written PE are different CLR artifact kinds by
+construction.
 
-**Next concrete step:** widen the fixture set (nested `if`, more arg
-arities, the checked-overflow negative cases the Stage1 gate itself already
-exercises) toward the same corpus the Compiler Stage1 profile covers, so the
-comparison stops being "a bounded subset" and starts being "the whole
-profile, independently cross-validated." Building an independent
-interpreter (as opposed to a second compiler) to cross-check the gen0-2
-evaluator lane remains a separate, not-yet-started track — an interpreter
-alone would not clear the full Wheeler bar even if added.
+**Next concrete step:** Stage8 (reproducible assembly artifacts for the
+`PersistedAssemblyBuilder`-based Compiler Stage1-7 family) is the next
+concrete work item, not further mini-backend widening — see `todo.md`.
+Building an independent interpreter (as opposed to a second compiler) to
+cross-check the gen0-2 evaluator lane remains a separate, not-yet-started
+track — an interpreter alone would not clear the full Wheeler bar even if
+added.
 
 ## Primary gate
 
