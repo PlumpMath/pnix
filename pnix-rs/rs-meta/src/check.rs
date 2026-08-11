@@ -2770,6 +2770,94 @@ pub fn tv_check() -> Report {
     r
 }
 
+/// Small, bounded `fn`/`if`/arithmetic/comparison/call fixtures for the
+/// Trusting-Trust (Diverse Double-Compiling) witness below. Each is a
+/// complete, valid Rust program whose `main` is exactly
+/// `println!("{}", EXPR);`.
+fn independent_mini_backend_fixtures() -> Vec<(&'static str, &'static str, &'static str)> {
+    vec![
+        (
+            "mini-const-arithmetic",
+            "fn main() { println!(\"{}\", 40 + 2); }",
+            "42",
+        ),
+        (
+            "mini-one-arg",
+            "fn f(x: i64) -> i64 { x + 1 } fn main() { println!(\"{}\", f(41)); }",
+            "42",
+        ),
+        (
+            "mini-branch-two-arg",
+            "fn f(x: i64, y: i64) -> i64 { if x < y { (x + 1) * y } else { x - y } } fn main() { println!(\"{}\", f(5, 7)); }",
+            "42",
+        ),
+        (
+            "mini-mul",
+            "fn main() { println!(\"{}\", 6 * 7); }",
+            "42",
+        ),
+        (
+            "mini-sub",
+            "fn main() { println!(\"{}\", 50 - 8); }",
+            "42",
+        ),
+        (
+            "mini-unary-negate-branch",
+            "fn f(x: i64) -> i64 { if x > 0 { x } else { 0 - x } } fn main() { println!(\"{}\", f(-42)); }",
+            "42",
+        ),
+        (
+            "mini-equality-branch",
+            "fn f(x: i64) -> i64 { if x == 42 { 1 } else { 0 } } fn main() { println!(\"{}\", f(42)); }",
+            "1",
+        ),
+        (
+            "mini-ge-branch",
+            "fn f(x: i64) -> i64 { if x >= 41 { 42 } else { 0 } } fn main() { println!(\"{}\", f(41)); }",
+            "42",
+        ),
+        (
+            "mini-recursive-factorial",
+            "fn f(n: i64) -> i64 { if n <= 1 { 1 } else { n * f(n - 1) } } fn main() { println!(\"{}\", f(5)); }",
+            "120",
+        ),
+    ]
+}
+
+/// Trusting-Trust (Diverse Double-Compiling) witness: cross-check real
+/// `rustc` against `independent_mini_backend`, a from-scratch
+/// tokenizer/parser/interpreter sharing no code with `lexer.rs`/`parser.rs`/
+/// `ast.rs`/`typeck.rs`/`interp.rs` (the evaluator core `tv-check` above
+/// already proves `== rustc`). See rs-meta's STATUS.md "Trusting-Trust
+/// defense roadmap" for the honest scope: a bounded fixture subset, behavior
+/// equivalence (stdout text), not the full corpus `tv-check` covers.
+pub fn independent_mini_backend_check() -> Report {
+    let mut r = Report::new("independent-mini-backend-check (rustc == from-scratch mini interpreter)");
+    let workdir = default_workdir();
+    for (name, src, expected) in independent_mini_backend_fixtures() {
+        let result = (|| -> Result<(String, String), String> {
+            let native = native_run(src, &workdir)?;
+            let mini = crate::independent_mini_backend::compile_and_run(src)
+                .map_err(|e| e.to_string())?;
+            Ok((native, mini))
+        })();
+        match result {
+            Ok((n, m)) if n.trim() == expected && m.trim() == expected => {
+                r.ok(format!("{}: rustc == mini backend == {}", name, expected))
+            }
+            Ok((n, m)) => r.fail(format!(
+                "{}: rustc {:?} mini {:?} expected {:?}",
+                name,
+                n.trim(),
+                m.trim(),
+                expected
+            )),
+            Err(e) => r.fail(format!("{}: {}", name, e)),
+        }
+    }
+    r
+}
+
 /// Acceptance translation validation: every negative program is rejected by BOTH
 /// the interpreter (typeck) and rustc.
 pub fn typeck_check() -> Report {

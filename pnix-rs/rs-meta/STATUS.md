@@ -54,50 +54,43 @@ whole_binary_self_interpretation_default_gate = false
 
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)
 
-**Nothing closed yet on this axis** — `todo.md` §6 records it as a one-line
-"separate track, held" with no concrete plan. Unlike the other four hosts,
-rs-meta has a real advantage here: **`mrustc`** (github.com/thepowersgang/mrustc)
-is an already-existing, independently-authored Rust compiler with no shared
-codebase with `rustc`, and `docs/self-hosting.md` already leans on mrustc's
-precedent to justify holding the borrow checker (mrustc bootstraps real rustc
-releases while holding the same feature). That makes rs-meta the most tractable
-of the five hosts for genuine DDC, because the independent second compiler
-does not need to be built from scratch.
+**`mrustc` turned out not to be usable here.** It's packaged in nixpkgs, but
+marked `platforms = [ "x86_64-linux" ]` only — this dev machine is
+`x86_64-darwin`, and forcing an unsupported-platform build of a *trust*
+witness through `NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM` would be actively
+counterproductive (a shakily cross-built mrustc could silently miscompile
+and give false DDC confidence, which is worse than not having the check).
+The mrustc phased plan below remains a valid option on Linux; the concrete
+progress this session instead follows the same in-house pattern the other
+four hosts already used.
 
-Concrete phased plan:
+**Independent mini backend added this session (2026-08-11):**
+`independent_mini_backend.rs` is a new, from-scratch tokenizer/parser/
+tree-walking interpreter for a small `i64` Rust subset (`fn`, `if`/`else`,
+`+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`==`, recursive calls), sharing zero code with
+`lexer.rs`/`parser.rs`/`ast.rs`/`typeck.rs`/`interp.rs` — the evaluator core
+`tv-check` already proves `== rustc` on. `rustc` itself remains the trusted
+oracle, the same honest role real upstream Hy plays for the Python host's
+`independent_mini_backend.py` and the self-hosted compiler plays for the
+ClojureScript host's `independent_mini_backend.js`.
 
-```text
-Phase 1 — feasibility
-    Pin an mrustc revision. Confirm it can compile rs-meta's evaluator core
-    (lexer.rs/ast.rs/parser.rs/typeck.rs/interp.rs/sig.rs/hash.rs — the exact
-    files source-bundle-check already proves interp==rustc on) at all.
-    docs/self-hosting.md's audit already shows this core uses zero held
-    features (no macro_rules!/async/unsafe/trait/dyn/const-generics), which is
-    exactly the surface mrustc is known to bootstrap real rustc through, so
-    feasibility risk here is low relative to the other four hosts.
+Covers 9 fixtures, cross-validated against real `rustc` (via `native::native_run`,
+the same mechanism `tv-check` uses) — both agree on all 9, including a
+recursive factorial. Wired into `independent-mini-backend-check` (both as its
+own CLI subcommand and folded into the `check` aggregate). Verified live this
+session: 9/9 accepted, `self-check` 407/407 and `tv-check` 407/407 re-run
+unaffected (no regressions), full `check` aggregate green.
 
-Phase 2 — behavioral DDC (the realistic near-term bar)
-    Compile rs-meta with rustc -> binary A, with mrustc -> binary B. Run both
-    over the existing 407-case corpus that tv-check already uses; require
-    stdout equivalence A==B==interp. This is TV-style DDC: it would catch a
-    backdoor unique to either compiler's lineage, since rustc and mrustc share
-    no code.
-
-Phase 3 — stronger form (self-compile cross-check)
-    Have rustc-built rs-meta and mrustc-built rs-meta each recompile rs-meta's
-    own source; compare their outputs' *behavior* against each other and
-    against interp. Bit-identical bytecode is not a realistic bar across two
-    different compiler backends (different codegen strategies), so behavioral
-    equivalence — not raw binary equality — is the honest target, same
-    scoping clj-meta already settled on for its own DDC work.
-```
-
-**Honest caveat to record once this lands:** mrustc's own development history
-was itself validated against rustc (it targets rustc-compatible output), so it
-is independently *authored* but not fully independent in *lineage/history* the
-way a from-scratch, never-cross-checked-against-rustc compiler would be. Still
-a materially stronger result than same-repo dual-path checks — record it as
-such, not as full Wheeler DDC.
+**What this closes and what it still doesn't:** a genuine 2-way behavioral
+comparison (real `rustc` ≡ from-scratch interpreter) now exists and passes,
+not just a documented plan. It is still only 9 fixtures against a *fresh*
+independent implementation — not the 407-case corpus, and (same honest bar
+every host settled on this session) an *interpreter*, not a second
+*compiler*, so it does not by itself clear the full Wheeler bar the way a
+genuine mrustc-vs-rustc compiler comparison would. **Next concrete step:**
+widen the fixture set (loops, more arg arities, string/bool handling) toward
+the 407-case corpus, and keep the mrustc phased plan on file for whenever
+this runs on Linux.
 
 ## Primary gate
 

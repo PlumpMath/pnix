@@ -11,6 +11,7 @@ mod check;
 mod diag;
 mod emit;
 mod hash;
+mod independent_mini_backend;
 mod interp;
 mod io;
 mod lexer;
@@ -31,6 +32,7 @@ fn main() -> ExitCode {
     match cmd {
         "self-check" => run_report(check::self_check()),
         "tv-check" => run_report(check::tv_check()),
+        "independent-mini-backend-check" => run_report(check::independent_mini_backend_check()),
         "typeck-check" => run_report(check::typeck_check()),
         "roundtrip-check" => run_report(check::roundtrip_check()),
         "emit-tv-check" => run_report(check::emit_tv_check()),
@@ -111,6 +113,7 @@ fn main() -> ExitCode {
             let reports = [
                 check::self_check(),
                 check::tv_check(),
+                check::independent_mini_backend_check(),
                 check::typeck_check(),
                 check::roundtrip_check(),
                 check::emit_tv_check(),
@@ -605,6 +608,7 @@ USAGE:\n\
 PROOF COMMANDS:\n\
   self-check          interpreter runs the corpus; output matches expected\n\
   tv-check            interpreter stdout == rustc stdout (translation validation)\n\
+  independent-mini-backend-check  rustc == from-scratch mini interpreter (DDC)\n\
   typeck-check        interpreter rejects a program iff rustc rejects it\n\
   roundtrip-check     parse -> emit -> reparse AST identity + interp(emit) parity\n\
   emit-tv-check       rustc(emit(parse(src))) == expected (emitted-source parity)\n\
