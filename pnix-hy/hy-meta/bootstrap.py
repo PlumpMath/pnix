@@ -1647,16 +1647,35 @@ def independent_mini_backend_fixtures() -> list[dict[str, Any]]:
 
 
 def run_independent_mini_backend_check() -> dict[str, Any]:
-    """Trusting-Trust (DDC) witness: cross-check upstream Hy against a tiny,
-    from-scratch reader+AST-builder (`independent_mini_backend.py`) that
-    shares no code with `hy.reader`, `hy.compiler`, `stage1/compiler.py`, or
-    `stage2/kernel.hy`. Unlike `run_diverse_double_compile_check` (which
-    compares whole-file kernel.hy/compiler.hy bytecode artifacts between the
-    upstream-seeded and direct-kernel lineages), this compares small-fixture
-    *behavior* between real upstream Hy and the independent mini backend —
-    the same honest "subset, behavior not bit-identical" bar clj-meta's
-    analogous `independent-mini-backend-subset` DDC row already uses.
+    """Trusting-Trust (DDC) witness: cross-check upstream Hy AND the
+    direct-kernel lineage against a tiny, from-scratch reader+AST-builder
+    (`independent_mini_backend.py`) that shares no code with `hy.reader`,
+    `hy.compiler`, `stage1/compiler.py`, or `stage2/kernel.hy`.
+
+    This is a genuine 3-way per-fixture comparison, not just upstream-vs-mini:
+
+    1. `host_result` — upstream Hy 1.3.0 (`stage1.compiler.eval_source`,
+       real `hy.reader`/`hy.compiler`), the same upstream leg
+       `run_diverse_double_compile_check` calls `kernel_upstream`.
+    2. `kernel_direct_result` — kernel.hy compiled and run through the
+       direct-kernel bridge (`stage2.load_hy_file(KERNEL_PATH, ...)`), the
+       same leg that check calls `kernel_direct`.
+    3. `mini_backend_result` — the independent mini backend.
+
+    `run_diverse_double_compile_check` already compares (1) and (2) against
+    each other at the whole-file kernel.hy/compiler.hy bytecode-artifact
+    level; what this check adds is a third, code-independent leg at
+    small-fixture *behavior* granularity — the same honest "subset, behavior
+    not bit-identical" bar clj-meta's analogous
+    `independent-mini-backend-subset` DDC row already uses. A backdoor
+    present in both upstream Hy and the direct kernel (e.g. inherited by (2)
+    from (1) at some prior bootstrap stage) would still be caught here
+    because (3) shares no code, tooling, or bootstrap lineage with either.
     """
+    stage2 = bootstrap_stage2()
+    kernel_direct = stage2.load_hy_file(
+        KERNEL_PATH, "hy_meta_ddc.mini_backend_kernel_direct"
+    )
     rows = []
     for fixture in independent_mini_backend_fixtures():
         source = fixture["source"]
@@ -1670,6 +1689,16 @@ def run_independent_mini_backend_check() -> dict[str, Any]:
             host_ok = False
             host_error = f"{type(exc).__name__}: {exc}"
         try:
+            direct_result = kernel_direct.eval_source(
+                source, None, "<independent-mini-backend:direct>"
+            )
+            direct_ok = True
+            direct_error = None
+        except Exception as exc:  # noqa: BLE001 - captured for the receipt
+            direct_result = None
+            direct_ok = False
+            direct_error = f"{type(exc).__name__}: {exc}"
+        try:
             mini_result = independent_mini_backend.compile_and_eval(source)
             mini_ok = True
             mini_error = None
@@ -1679,8 +1708,10 @@ def run_independent_mini_backend_check() -> dict[str, Any]:
             mini_error = f"{type(exc).__name__}: {exc}"
         ok = (
             host_ok
+            and direct_ok
             and mini_ok
             and host_result == expected
+            and direct_result == expected
             and mini_result == expected
         )
         rows.append(
@@ -1691,6 +1722,9 @@ def run_independent_mini_backend_check() -> dict[str, Any]:
                 "host_result": host_result,
                 "host_ok": host_ok,
                 "host_error": host_error,
+                "kernel_direct_result": direct_result,
+                "kernel_direct_ok": direct_ok,
+                "kernel_direct_error": direct_error,
                 "mini_backend_result": mini_result,
                 "mini_backend_ok": mini_ok,
                 "mini_backend_error": mini_error,
@@ -1700,6 +1734,11 @@ def run_independent_mini_backend_check() -> dict[str, Any]:
     all_ok = bool(rows) and all(row["ok"] for row in rows)
     return {
         "backend": "independent_mini_backend.compile_and_eval",
+        "comparison_legs": [
+            "upstream-hy-stage1",
+            "direct-kernel-stage2",
+            "independent-mini-backend",
+        ],
         "independence": {
             "uses_hy_reader": False,
             "uses_hy_compiler": False,

@@ -102,22 +102,41 @@ frontend gets its own `independent-mini-backend-subset` row instead of being
 merged into its whole-file DDC comparison.
 
 Covers 8 fixtures (arithmetic, comparisons, `if`, `defn`, recursion via
-factorial, boolean/`None`-equality branching) with real upstream Hy
-(`stage1.compiler.eval_source`) as the host reference. Verified live this
-session on both supported interpreters: `independent-mini-backend-check` ->
-8/8 accepted on Python 3.11.15 and 3.14, with `stage7-check` re-run
-unaffected on both (no regression from the new imports).
+factorial, boolean/`None`-equality branching), each checked against real
+upstream Hy (`stage1.compiler.eval_source`) as the host reference. Verified
+live this session on both supported interpreters:
+`independent-mini-backend-check` -> 8/8 accepted on Python 3.11.15 and 3.14,
+with `stage7-check` re-run unaffected on both (no regression from the new
+imports).
 
-**What this closes and what it still doesn't:** this is now a genuine 3-way
-comparison (real upstream Hy ≡ independent from-scratch mini backend) on a
-small fixture set — stronger than "documented but held," but still only 8
-fixtures, not the conformance corpus, and it does not (yet) cross-check
-against `kernel_direct` as a formal third leg the way the roadmap originally
-described. **Next concrete step:** grow the fixture set (data literals,
+**Widened to a true 3-way per-fixture comparison (2026-08-11, later in this
+session):** each of the 8 fixtures is now checked against *three*
+independently-lineaged evaluators, not two — `host_result` (upstream Hy
+1.3.0, `stage1.compiler.eval_source`, the same leg
+`diverse-double-compile-check` calls `kernel_upstream`), `kernel_direct_result`
+(kernel.hy compiled and run through the direct-kernel bridge,
+`stage2.load_hy_file(KERNEL_PATH, ...)`, the same leg that check calls
+`kernel_direct`), and `mini_backend_result` (the independent mini backend).
+`diverse-double-compile-check` already compares upstream vs. direct-kernel at
+the whole-file kernel.hy/compiler.hy bytecode-artifact level; this adds a
+third, code-independent leg at small-fixture *behavior* granularity, closing
+the "does not yet cross-check `kernel_direct` as a formal third leg" gap this
+doc previously flagged. Verified live: `independent-mini-backend-check` ->
+8/8 accepted with all three legs agreeing, `diverse-double-compile-check`
+still `ddc_status: reproduced`, and the full `hy-meta-gate full` ladder
+(self-check, chain-check, stage7-check, self-host-check,
+bootstrap-fixedpoint-check) still green — no regression from adding the
+`kernel_direct` leg.
+
+**What this closes and what it still doesn't:** a backdoor present in *both*
+upstream Hy and the direct kernel (e.g. inherited by the direct-kernel build
+at some prior bootstrap stage) would still be caught, since the mini backend
+shares no code, tooling, or bootstrap lineage with either. It is still only 8
+fixtures, not the conformance corpus, and — same honest bar as clj-meta and
+cljs-meta already settled on — behavior equivalence, not bit-identical
+artifacts. **Next concrete step:** grow the fixture set (data literals,
 `while`/`setv` mutation, `require`/macros) toward parity with
-`frontend_selfhost.clj`'s ~50-fixture scope on the clj-meta side, and add
-`kernel_direct` behavior as a third comparison point per-fixture (not just
-upstream vs mini) to make it a true 3-way rather than 2-way check.
+`frontend_selfhost.clj`'s ~50-fixture scope on the clj-meta side.
 
 **Fixed this session: missing native-corpus dependency.** A fresh
 checkout/venv used to fail `diverse-double-compile-check` and other

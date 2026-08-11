@@ -61,22 +61,33 @@ listed here; see the detailed sections below for the full history.
    implementation here, only a naming/framing gap if a reader expects "full"
    to mean upstream-identical.
 
-5. **Third-independent-path DDC leg — genuine, scoped open item (the biggest
-   real one left).** `diverse-double-compile-check` is closed (kernel.hy built
-   two ways — via upstream `hy.compiler` seed vs the direct kernel — byte
-   identical at 4 levels). Its known limit: one of the two paths still routes
-   through trusted upstream `hy.compiler`, so it can't catch a backdoor
-   already in upstream itself. Added this session:
-   `independent_mini_backend.py` + `independent-mini-backend-check`, a
+5. **Third-independent-path DDC leg — (b) done this pass, (a) still open.**
+   `diverse-double-compile-check` is closed (kernel.hy built two ways — via
+   upstream `hy.compiler` seed vs the direct kernel — byte identical at 4
+   levels). Its known limit: one of the two paths still routes through
+   trusted upstream `hy.compiler`, so it can't catch a backdoor already in
+   upstream itself. `independent_mini_backend.py` +
+   `independent-mini-backend-check` (added earlier this session) is a
    from-scratch Hy-subset-to-`ast` compiler sharing zero code with
-   `hy.reader`/`hy.compiler`/`stage1`/`stage2/kernel.hy` (verified: 8/8
-   fixtures accepted on 3.11 + 3.14). Still open, per `STATUS.md`'s own
-   "next concrete step": (a) grow the mini-backend fixture set toward
-   clj-meta's `frontend_selfhost.clj` ~50-fixture scope (data literals,
-   `while`/`setv` mutation, `require`/macros), and (b) add `kernel_direct` as
-   a third per-fixture comparison point so it becomes a true 3-way check
-   instead of upstream-vs-mini 2-way. Sizing: medium — mostly fixture
-   authoring plus one plumbing change to add the third comparison leg.
+   `hy.reader`/`hy.compiler`/`stage1`/`stage2/kernel.hy`.
+
+   **(b) done this pass (2026-08-11):** `run_independent_mini_backend_check`
+   in `bootstrap.py` now loads `kernel_direct` via
+   `stage2.load_hy_file(KERNEL_PATH, ...)` (the same direct-kernel bridge
+   `diverse-double-compile-check` uses) and evaluates every fixture through
+   it as a third leg alongside `host_result` (upstream) and
+   `mini_backend_result` (independent). All three must agree with `expected`
+   for a fixture to pass. Verified: 8/8 fixtures accepted with all three legs
+   agreeing (`kernel_direct_result` rows added), `diverse-double-compile-check`
+   still `reproduced`, full `hy-meta-gate full` ladder still green — no
+   regression. Do not re-flag "upstream-vs-mini 2-way only" as open; it is
+   now a genuine 3-way per-fixture check.
+
+   **(a) still open:** grow the mini-backend fixture set toward clj-meta's
+   `frontend_selfhost.clj` ~50-fixture scope (data literals, `while`/`setv`
+   mutation, `require`/macros). Sizing: small increments, additive — no
+   architecture change needed, the 3-way plumbing already exists and each new
+   fixture automatically gets checked on all three legs.
 
 6. **Stage8–StageN proof ladder — closed except 3 cross-repo-blocked Stage14
    items.** Verified: every stage8–stageN checklist item in this file is
