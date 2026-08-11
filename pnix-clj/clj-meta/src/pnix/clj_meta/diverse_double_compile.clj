@@ -393,6 +393,18 @@
    {:id :mini-backend-op-neg?
     :source "(fn [x] (if (neg? x) 0 42))"
     :args [5]
+    :expected 42}
+   {:id :mini-backend-branch-two-arg
+    :source "(fn [x y] (if (< x y) (* (+ x 1) y) (- x y)))"
+    :args [5 7]
+    :expected 42}
+   {:id :mini-backend-let-sequential
+    :source "(fn [x] (let [a (+ x 1) b (* a 2)] b))"
+    :args [20]
+    :expected 42}
+   {:id :mini-backend-macro-when-not
+    :source "(fn [x] (when-not (< x 0) (+ x 1)))"
+    :args [41]
     :expected 42}])
 
 (defn- mini-backend-case-row
