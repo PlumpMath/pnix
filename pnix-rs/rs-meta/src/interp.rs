@@ -2453,6 +2453,35 @@ impl Interp {
                 out.push_str(&s);
                 arg_i += 1;
                 i += 4;
+            } else if c == '{'
+                && chars.get(i + 1) == Some(&':')
+                && chars.get(i + 2) == Some(&'.')
+                && chars.get(i + 3) == Some(&'*')
+                && chars.get(i + 4) == Some(&'}')
+            {
+                // `{:.*}` (dynamic precision): consumes two args in source
+                // order -- the precision (an integer) then the value being
+                // formatted -- matching normalize_format_args'/
+                // format_placeholder_kinds' parse/typeck-time arg counting.
+                let p = args
+                    .get(arg_i)
+                    .ok_or_else(|| "println!: not enough arguments".to_string())?;
+                let precision = p.as_i64("{:.*} precision").map_err(|e| e.to_string())? as usize;
+                let v = args
+                    .get(arg_i + 1)
+                    .ok_or_else(|| "println!: not enough arguments".to_string())?;
+                match deref_value(v.clone()) {
+                    Val::F64(f) => out.push_str(&format!("{:.*}", precision, f)),
+                    Val::I64(n) => out.push_str(&format!("{}", n)),
+                    other => {
+                        return Err(format!(
+                            "println!: fixed precision expects a number, got {}",
+                            other.kind()
+                        ))
+                    }
+                }
+                arg_i += 2;
+                i += 5;
             } else if let Some((precision, next_i)) =
                 interp_fixed_precision_placeholder(&chars, i)
             {
@@ -3542,6 +3571,29 @@ fn coerce_string_to_char_vec(v: Val) -> Val {
             s.borrow().chars().map(Val::Char).collect(),
         ))),
         Val::Str(s) => Val::Vec(Rc::new(RefCell::new(s.chars().map(Val::Char).collect()))),
+        other => other,
+    }
+}
+
+fn coerce_char_vec_to_string(v: Val) -> Val {
+    // Mirror of coerce_string_to_char_vec: untyped `.collect()` on a char
+    // iterator guesses String vs Vec<char> from the runtime items (an empty
+    // iterator collects to Vec by default, see Iter::collect in this file),
+    // so a `let x: String = chars_iter.collect();` with zero or non-char
+    // items lands here still tagged Val::Vec. Convert it back when the
+    // items really are (or trivially could be) chars.
+    match v {
+        Val::Vec(items) => {
+            let snapshot: Vec<Val> = items.borrow().clone();
+            let mut s = String::new();
+            for item in snapshot.into_iter() {
+                match deref_value(item) {
+                    Val::Char(ch) => s.push(ch),
+                    _ => return Val::Vec(items),
+                }
+            }
+            Val::String(Rc::new(RefCell::new(s)))
+        }
         other => other,
     }
 }
@@ -6345,6 +6397,9 @@ fn coerce_let_value(v: Val, ty: &Option<Type>) -> Val {
             if name == "Vec" && args.len() == 1 && args[0] == Type::Char =>
         {
             coerce_string_to_char_vec(Val::Str(s))
+        }
+        (Some(Type::Named(name)), Val::Vec(items)) if name == "String" => {
+            coerce_char_vec_to_string(Val::Vec(items))
         }
         (_, v) => v,
     }

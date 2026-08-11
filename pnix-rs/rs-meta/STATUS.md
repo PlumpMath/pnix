@@ -165,23 +165,56 @@ FIXED (separate bundling-level bug, same function): `io.rs`'s
   regressions: self-check 407/407, tv-check 407/407, typeck-check 272/272,
   independent-mini-backend-check 9/9, source-ast-check 16/16.
 
-STILL OPEN (10th layer, found, not fixed -- genuinely different category):
-  `stage9-proof-matrix-check`/`stage9-aggregate-replay-check`/the full
-  `check` aggregate still fail, now at `stage2-chain-check`
-  ("stage2 evaluator' corpus replay"), with `interp: unsupported Vec method
-  chars`. This check is meta-circular in a way nothing above it is: its
-  harness calls `interp_run` *from inside interpreted code*, i.e. it runs
-  the whole bundle (including `interp.rs`'s own lexer/parser/interpreter
-  logic) *through rs-meta's own interpreter* rather than through real rustc
-  or through typeck alone. Confirmed via `git stash` to an earlier commit
-  that this check has never once run this far before (it always failed
-  bundling/typechecking first) -- so this is newly-reachable, not a
-  regression. Somewhere in that self-interpreted call graph, a value that
-  should be string-like gets treated as a Vec at runtime when `.chars()` is
-  called on it; this is a genuine interpreter (interp.rs runtime dispatch)
-  bug, not a typeck/parser gap like everything fixed above -- a different
-  class of investigation (need to trace actual runtime value
-  representations through the interpreter, not just what typeck accepts).
+FIXED (10th layer, `interp.rs` runtime dispatch bug -- genuinely different
+  category from the 9 above, and now closed): `stage2-chain-check`
+  ("stage2 evaluator' corpus replay") failed with `interp: unsupported Vec
+  method chars`. This check is meta-circular in a way nothing above it is:
+  its harness calls `interp_run` *from inside interpreted code*, i.e. it
+  runs the whole bundle (including `interp.rs`'s own lexer/parser/
+  interpreter logic) *through rs-meta's own interpreter* rather than through
+  real rustc or through typeck alone.
+
+  Root cause: `interp.rs`'s untyped `.collect()` (no turbofish) has no
+  static type information, so it *guesses* String vs `Vec<char>` from the
+  runtime items it collected -- and, by explicit design (see the comment at
+  its definition), an *empty* char iterator guesses `Vec` rather than
+  `String`. `coerce_let_value` already patched the opposite mismatch
+  (`let x: Vec<char> = ...` landing as a String) via
+  `coerce_string_to_char_vec`, but had no symmetric case for a `let
+  x: String = ...` landing as an empty/non-char `Vec`. That gap is
+  extremely common to hit: `parser.rs`'s `normalize_format_args` does
+  `let inner: String = chars[i + 1..j].iter().collect();` to extract the
+  text *between* a format placeholder's braces -- which is the empty string
+  for every bare `{}` placeholder, i.e. almost every `println!`/`format!`
+  call in the whole self-interpreted program. Confirmed by isolated repro
+  (`bootstrap run -c`) before touching any real file. Fixed additively and
+  symmetrically: added `coerce_char_vec_to_string` (mirrors
+  `coerce_string_to_char_vec`) and a matching `(Type::Named("String"),
+  Val::Vec)` arm in `coerce_let_value`.
+
+  This unblocked `stage2-chain-check` far enough to expose a second,
+  previously-unreachable gap in the same area: `interp.rs`'s own
+  `format_println` (the RUNTIME renderer used when the interpreter executes
+  a real `println!`/`format!` call) had no case for `{:.*}` (dynamic
+  precision) -- only `normalize_format_args` (parser.rs, parse-time arg
+  counting) and `format_placeholder_kinds` (typeck.rs, type checking) had
+  been taught about it earlier this session; the runtime renderer was
+  never updated to match, and this was masked until the Vec/chars fix let
+  execution reach far enough to hit it. This mattered because `interp.rs`'s
+  *own source* calls `format!("{:.*}", precision, f)` in its
+  fixed-precision formatting branch, and self-interpreting `interp.rs` runs
+  that exact line as interpreted code, which needs its own `format_println`
+  to render it. Fixed additively: added a `{:.*}` branch to `format_println`
+  that consumes two args (precision, then value) exactly like the
+  parse/typeck-time fix already does.
+
+  Verified: `stage2-chain-check` now PASSES, and so does
+  `stage9-aggregate-replay-check` -- the check this whole investigation was
+  originally trying to get past (`aggregate-proof-matrix -> success`).
+  No regressions: self-check 407/407, tv-check 407/407, typeck-check
+  272/272, independent-mini-backend-check 9/9, source-ast-check 16/16,
+  source-bundle-check PASS, ast-diff-check 4/4, rust-ir-check 4/4,
+  emit-tv-check 407/407.
 ```
 
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)

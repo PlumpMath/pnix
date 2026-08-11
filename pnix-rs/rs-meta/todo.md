@@ -38,57 +38,59 @@
 
 ## Current Remaining Work (verified 2026-08-11)
 
-이 섹션은 2026-08-11 세션(commits `272ccef`, `24d3326`, `ae170e0`)이 끝난 시점의
-정확한 "실제로 남은 일" 요약이다. 아래 §2 이후의 상세 로드맵/진행 로그는 그대로
-보존하되(historical), 최신 상태를 빠르게 파악하려면 이 섹션부터 읽는다. 전체 서사는
-`STATUS.md`(특히 "Correction (verified this session, 2026-08-11)"과 "Trusting-Trust
-defense roadmap" 절)를 참고. 아래 항목들은 이 세션에서 라이브로 재검증됨
-(`cargo build`, `self-check` 407/407, `tv-check` 407/407, `typeck-check` 272/272,
-`independent-mini-backend-check` 9/9, `source-ast-check` 16/16, `source-bundle-check`
-1/1, `stage2-chain-check` reproduces the FAIL below — all re-run live during this
-audit, not just read from docs).
+이 섹션은 2026-08-11 세션(commits `272ccef`, `24d3326`, `ae170e0`, 그리고 이후
+같은 날 진행된 `interp.rs` Vec/chars 수정 커밋)이 끝난 시점의 정확한 "실제로 남은
+일" 요약이다. 아래 §2 이후의 상세 로드맵/진행 로그는 그대로 보존하되(historical),
+최신 상태를 빠르게 파악하려면 이 섹션부터 읽는다. 전체 서사는 `STATUS.md`(특히
+"Correction (verified this session, 2026-08-11)"과 "Trusting-Trust defense
+roadmap" 절)를 참고. 아래 항목들은 이 세션에서 라이브로 재검증됨 (`cargo build`,
+`self-check` 407/407, `tv-check` 407/407, `typeck-check` 272/272,
+`independent-mini-backend-check` 9/9, `source-ast-check` 16/16,
+`source-bundle-check` PASS, `stage2-chain-check` PASS,
+`stage9-aggregate-replay-check` PASS — all re-run live during this audit, not just
+read from docs). Item 1 below (previously the highest-priority open item) is now
+DONE — see its entry for the fix.
 
-### 1. `interp.rs` runtime dispatch bug — Vec/chars (HIGHEST PRIORITY — actively blocks the aggregate gate)
+### 1. `interp.rs` runtime dispatch bug — Vec/chars — FIXED (2026-08-11, later pass)
 
-- **State:** `stage2-chain-check` fails with `interp: unsupported Vec method chars`.
-  This cascades: `stage9-proof-matrix-check`, `stage9-aggregate-replay-check`, and
-  the full `check` aggregate all fail transitively because they call
-  `stage2-chain-check` internally. Confirmed newly-reachable (not a regression —
-  `git stash` to an earlier commit shows this check never ran this far before;
-  it always failed at bundling/typechecking first, which the 9-layer fix in this
-  session's other work cleared).
-- **Why it's hard:** `stage2-chain-check`'s harness calls `interp_run` *from inside
-  interpreted code* — the whole bundle (including `interp.rs`'s own lexer/parser/
-  interpreter logic) runs through rs-meta's own interpreter, meta-circularly. This
-  is a genuine interpreter (runtime value dispatch) bug, not a typeck/parser static
-  gap like the 9 bugs fixed this session in `source-bundle-check`.
-- **Narrowed to (not yet fixed):** `format_placeholder_kinds`'s `fmt: &str`
-  parameter in `typeck.rs`, reached via
-  `Expr::Println{fmt,args} -> check_format_args(fmt,...) -> format_placeholder_kinds(fmt,...)`.
-  Confirmed via `runtime_type_name()` that the actual runtime value at that point is
-  a genuine `Val::Vec`, not a dispatch-logic misfire. Ruled out a simple enum-field-
-  order swap (`ast.rs`'s `Expr::Println { fmt: String, args: Vec<Expr> }` field
-  order matches the match-arm pattern order, so it isn't that).
-- **What "done" looks like:** `stage2-chain-check` passes, which should cascade to
-  `stage9-proof-matrix-check`, `stage9-aggregate-replay-check`, and the full `check`
-  aggregate all going green (no other known blocker behind this one, but that's
-  unverified until it's actually fixed — there could be more layers).
-- **Size:** unknown / open-ended. Needs interactive or print-debugging of
-  `interp.rs`'s struct/enum field-binding and function-call argument-passing logic
-  to find where a `&str` becomes a `Vec` at runtime — a qualitatively different
-  investigation from the 9 static bugs fixed this session (those were found by
-  reading error messages against parser/typeck source; this one requires tracing
-  actual runtime value representations through the tree-walking evaluator).
-- **Note:** a background task chip may already exist tracking this exact bug from
-  this session's investigation — check before spawning a duplicate. Do not lose
-  this precise diagnosis (the `format_placeholder_kinds`/`fmt: &str` narrowing) in
-  any future restatement of this item.
-- **Side effect worth knowing:** `proofs/stage-manifest.tsv` still marks the
-  `source-bundle` and `stage9-aggregate-replay`/`stage9` rows `DONE` — that's
-  accurate for `source-bundle-check` itself (now passing) but the `stage9-*` rows
-  are currently **not** reproducible via a live `check` run because of this bug.
-  The manifest should be revisited once this bug is fixed (or annotated sooner) —
-  out of scope for this audit pass, flagged here so it isn't lost.
+- **State: DONE.** `stage2-chain-check` now passes, and so does
+  `stage9-aggregate-replay-check` (the check this whole investigation was
+  originally trying to get past — `aggregate-proof-matrix -> success`). Do not
+  re-flag this as open.
+- **Root cause:** `interp.rs`'s untyped `.collect()` (no turbofish, no static
+  types available at runtime) guesses String vs `Vec<char>` from the collected
+  items, and by explicit design an *empty* char iterator guesses `Vec`. A
+  symmetric coercion already existed for the opposite mismatch
+  (`coerce_string_to_char_vec`, used by `coerce_let_value` when a `let
+  x: Vec<char> = ...` landed as a String) but not for this direction. This
+  bit `parser.rs`'s `normalize_format_args`, whose `let inner: String =
+  chars[i + 1..j].iter().collect();` extracts the (often-empty, e.g. every
+  bare `{}`) text between a format placeholder's braces — landing as an empty
+  `Val::Vec` instead of `Val::String`, so a later `.chars()` call on it failed
+  with "interp: unsupported Vec method chars".
+- **Fix:** added `coerce_char_vec_to_string` (mirrors
+  `coerce_string_to_char_vec`) plus a matching `(Type::Named("String"),
+  Val::Vec)` arm in `coerce_let_value`, in `src/interp.rs`.
+- **Second gap found once unblocked:** `interp.rs`'s own `format_println`
+  (the *runtime* renderer for interpreted `println!`/`format!` calls) had no
+  case for `{:.*}` (dynamic precision) — only the parse-time arg-counting
+  (`normalize_format_args`) and typeck (`format_placeholder_kinds`) sides had
+  been taught about it earlier this session. This mattered because
+  `interp.rs`'s *own source* calls `format!("{:.*}", precision, f)` in its
+  fixed-precision branch, and self-interpreting `interp.rs` runs that exact
+  line as interpreted code. Fixed by adding a `{:.*}` branch to
+  `format_println` that consumes two args (precision, then value), matching
+  the parse/typeck-time behavior.
+- **Verified:** self-check 407/407, tv-check 407/407, typeck-check 272/272,
+  independent-mini-backend-check 9/9, source-ast-check 16/16,
+  source-bundle-check PASS, stage2-chain-check PASS, stage9-aggregate-replay-check
+  PASS, ast-diff-check 4/4, rust-ir-check 4/4, emit-tv-check 407/407 — no
+  regressions.
+- **Side effect worth knowing:** `proofs/stage-manifest.tsv`'s `source-bundle`
+  and `stage9-aggregate-replay`/`stage9` `DONE` rows are now genuinely
+  reproducible via a live `check` run again (they were accurate for
+  `source-bundle-check` alone but not for the `stage9-*` rows while this bug
+  was open); no manifest edit needed now that reality matches the label.
 
 ### 2. Widen `independent-mini-backend-check` fixtures (in-house DDC track)
 
