@@ -1,15 +1,22 @@
 # pnix
 
-**pnix** is a Nix-like expression language, implemented independently on five
-host languages. Each implementation is a self-contained repository: it builds,
-runs, and gates on its own, with no shared runtime, no shared corpus, and no
-dependency on any sibling directory here.
+**pnix** is a Nix-like expression language, implemented independently on five host languages. 
+Each implementation is a self-contained repository: 
+it builds, runs, and gates on its own, with no shared runtime, no shared corpus, and no dependency on any sibling directory here.
+
+**pnix**는 Nix와 유사한 표현 언어로 5개의 호스트 언어에서 독립적으로 구현됩니다.
+각 구현은 자체 포함된 저장소입니다:
+공유 런타임, 공유 코퍼스, 형제 디렉터리에 대한 종속성 없이 자체적으로 빌드, 실행 및 게이트됩니다.
 
 ## The five hosts
 
-Every host is a pair. The `*-meta` half owns that host language's self-host
-proof and native acceleration and is pnix-agnostic; the `pnix-*` half owns the
-pnix runtime — parse, evaluate, and the bridge to host values.
+Every host is a pair. 
+The `*-meta` half owns that host language's self-host proof and native acceleration and is pnix-agnostic; 
+the `pnix-*` half owns the pnix runtime — parse, evaluate, and the bridge to host values.
+
+모든 호스트는 쌍입니다.
+`*-meta` 절반은 해당 호스트 언어의 자체 호스트 증명 및 기본 가속을 소유하며 pnix에 구애받지 않습니다;
+`pnix-*` 절반은 pnix 런타임(분석, 평가 및 호스트 값에 대한 브리지)을 소유합니다.
 
 | Directory | Host language | Pair |
 |---|---|---|
@@ -19,19 +26,28 @@ pnix runtime — parse, evaluate, and the bridge to host values.
 | [`pnix-hy/`](pnix-hy) | Hy / Python | `hy-meta` + `pnix-hy` |
 | [`pnix-rs/`](pnix-rs) | Rust | `rs-meta` + `pnix-rs` |
 
-Maturity differs per host. `pnix-clj` is the most complete; `pnix-clr` and
-`pnix-cljs` are explicitly experimental. Each host's own `README.md` and
-`CLAUDE.md` state what it does and does not claim — read those before assuming
-parity between them.
+Maturity differs per host.
+`pnix-clj` is the most complete; `pnix-clr` and `pnix-cljs` are explicitly experimental. 
+Each host's own `README.md` and `CLAUDE.md` state what it does and does not claim — read those before assuming parity between them.
+
+성숙도는 호스트마다 다릅니다.  `pnix-clj`가 가장 완벽합니다.
+`pnix-clr` 및 `pnix-cljs`는 명시적으로 실험적입니다.  
+각 호스트의 `README.md` 및 `CLAUDE.md`는 주장하는 것과 주장하지 않는 것을 명시합니다. 
+둘 사이의 패리티를 가정하기 전에 이를 읽어보세요.
+
 
 ## Running a host
 
-Every host is a Nix flake. Nothing is built from this top level; you enter the
-host you care about.
+Every host is a Nix flake. Nothing is built from this top level; you enter the host you care about.
 
-The five hosts expose the same entry points under the same names, so what you
-learn on one carries to the others. With `<host>` one of `clj`, `cljs`, `clr`,
-`hy`, `rs`:
+모든 호스트는 Nix 플레이크입니다. 이 최상위 수준에서는 아무것도 구축되지 않습니다. 관심 있는 호스트를 입력합니다.
+
+The five hosts expose the same entry points under the same names, 
+so what you learn on one carries to the others. With `<host>` one of `clj`, `cljs`, `clr`, `hy`, `rs`:
+
+5개의 호스트는 동일한 이름으로 동일한 진입점을 노출합니다,
+그래서 한 곳에서 배운 내용이 다른 곳으로도 전달됩니다. `<host>`를 `clj`, `cljs`, `clr`, `hy`, `rs` 중 하나 사용:
+
 
 | App | What it is |
 |---|---|
@@ -42,8 +58,9 @@ learn on one carries to the others. With `<host>` one of `clj`, `cljs`, `clr`,
 | `.#gate` | that host's full gate |
 | `.#default` | same as `.#pnix-<host>` |
 
-So the pnix REPL is `.#pnix-clj-pnix` on the JVM and `.#pnix-rs-pnix` on Rust,
-and the gate is `.#gate` everywhere:
+So the pnix REPL is `.#pnix-clj-pnix` on the JVM and `.#pnix-rs-pnix` on Rust, and the gate is `.#gate` everywhere:
+
+따라서 pnix REPL은 JVM에서는 `.#pnix-clj-pnix`이고 Rust에서는 `.#pnix-rs-pnix`이며, 게이트는 모든 곳에서 `.#gate`입니다:
 
 ```bash
 cd pnix-rs && nix run .#pnix-rs-pnix
@@ -53,30 +70,33 @@ cd pnix-rs && nix run .#pnix-rs-pnix
 cd pnix-clj && nix run .#gate
 ```
 
-Individual hosts add their own extras — `nix run .#pnix-rs-px-eval`,
-`.#substrate-check`, `.#tower`, `.#deps-lock`. Run `nix flake show` inside a
-host to see everything it exposes.
+Individual hosts add their own extras — `nix run .#pnix-rs-px-eval`, `.#substrate-check`, `.#tower`, `.#deps-lock`. 
+Run `nix flake show` inside a host to see everything it exposes.
+
+개별 호스트는 `nix run .#pnix-rs-px-eval`, `.#substrate-check`, `.#tower`, `.#deps-lock`과 같은 자체 추가 기능을 추가합니다.  
+호스트 내에서 `nix flake show`를 실행하여 노출되는 모든 것을 확인하세요.
 
 ## Upstream substrates
 
-Host language compilers are consumed as pinned upstream release packages, never
-vendored into this tree:
+Host language compilers are consumed as pinned upstream release packages, never vendored into this tree:
 
-- ClojureScript — `org.clojure/clojurescript` from Maven, pinned in
-  `pnix-cljs/deps-lock.json`
-- ClojureCLR — the `Clojure` NuGet package, pinned in
-  `pnix-clr/clr-bootstrap/`
+호스트 언어 컴파일러는 고정된 업스트림 릴리스 패키지로 사용되며 이 트리에 공급되지 않습니다:
+
+- ClojureScript — `org.clojure/clojurescript` from Maven, pinned in `pnix-cljs/deps-lock.json`
+- ClojureCLR — the `Clojure` NuGet package, pinned in `pnix-clr/clr-bootstrap/`
 - Hy — the upstream `hylang/hy` tag, pinned in `pnix-hy/flake.lock`
 
-Build outputs (`work/`, `dist/`, `target/`) are regenerated by each host's gate
-and are not tracked.
+Build outputs (`work/`, `dist/`, `target/`) are regenerated by each host's gate and are not tracked.
 
 ## Status
 
-This is research code under active development. Interfaces move, and the hosts
-do not guarantee identical behaviour on the same input.
+This is research code under active development. 
+Interfaces move, and the hosts do not guarantee identical behaviour on the same input.
+
+활발히 개발 중인 연구 코드입니다.
+인터페이스는 이동하며 호스트는 동일한 입력에서 동일한 동작을 보장하지 않습니다.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Upstream host-language compilers are fetched from
-their own registries at build time and keep their own licenses.
+MIT — see [LICENSE](LICENSE). 
+Upstream host-language compilers are fetched from their own registries at build time and keep their own licenses.
