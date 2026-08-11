@@ -42,13 +42,15 @@ local gate proves nominal CLR outcomes, the common 11-case projection, and
 focused dead-import/hasAttr precedence behavior. The fourth case adds checked
 add/subtract/multiply/divide and unary negation only for Int64 values originating
 in the admitted PNIX source path, including structured overflow failures and
-lazy avoidance of dead overflow expressions. It does not claim float or BigInt
-semantics, general numeric promotion, primitive-manifest enforcement,
-structural equality, the mature JVM surface, production request/suspension, a
-compiler Stage1--15/N chain, compiler self-reproduction, an IL fixed point,
-raw AOT reproducibility, broad ClojureCLR compatibility/replacement, a
-standalone source-free distribution, PNIX common-compiler integration, or
-membership in any cross-host gate. Grow and gate
+lazy avoidance of dead overflow expressions. Float literals, structural
+equality (lists/attrsets), and an extended builtin surface (math, bitwise,
+list/attrset helpers — maturity pass 2026-08-11) work, but the checked-I64
+guarantees above cover only integers; general numeric promotion, BigInt
+semantics, primitive-manifest enforcement, the mature JVM surface, production
+request/suspension, a compiler Stage1--15/N chain, compiler self-reproduction,
+an IL fixed point, raw AOT reproducibility, broad ClojureCLR compatibility/
+replacement, a standalone source-free distribution, PNIX common-compiler
+integration, and membership in any cross-host gate remain unclaimed. Grow and gate
 `clr-meta` first, then admit `pnix-clr` slices. The current aggregate gate
 enforces that order and the artifact dependency; direct compiler acceleration
 and replacement remain future work. See `clr-meta/STAGE15_N_ROADMAP.md` for the

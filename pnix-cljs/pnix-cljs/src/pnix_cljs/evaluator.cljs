@@ -1,5 +1,6 @@
 (ns pnix-cljs.evaluator
   (:require [pnix-cljs.parser :as parser]
+            [clojure.string :as str]
             goog.crypt.Md5
             goog.crypt.Sha1
             goog.crypt.Sha256
@@ -1452,13 +1453,11 @@
   (->AttrsetValue
    (into {}
          (keep (fn [[name attribute-cell]]
-                 (let [value (force-cell attribute-cell)]
-                   (if (instance? AttrsetValue value)
-                     (let [nested (filter-attrs-recursive function-value value)]
-                       (when (seq (:fields nested))
-                         [name (value-cell nested)]))
-                     (when (require-boolean
-                            (apply-value2 function-value name attribute-cell))
+                 (when (require-boolean
+                        (apply-value2 function-value name attribute-cell))
+                   (let [value (force-cell attribute-cell)]
+                     (if (instance? AttrsetValue value)
+                       [name (value-cell (filter-attrs-recursive function-value value))]
                        [name attribute-cell]))))
                (:fields attrs)))))
 
@@ -2324,6 +2323,356 @@
       :getName (get-name-value argument)
       :getVersion (get-version-value argument)
 
+      ;; ---- Extended builtins (maturity pass 2026-08-11) ----
+      :pow
+      (if (< (count arguments) 2)
+        (->BuiltinValue :pow arguments)
+        (let [a (nth arguments 0) b (nth arguments 1)
+              result (js/Math.pow (as-double a) (as-double b))]
+          (if (and (integer-value? a) (integer-value? b))
+            (checked-integer (js/BigInt (.toFixed result 0)))
+            result)))
+
+      :sqrt (js/Math.sqrt (as-double argument))
+      :exp (js/Math.exp (as-double argument))
+      :ln (js/Math.log (as-double argument))
+      :sin (js/Math.sin (as-double argument))
+      :cos (js/Math.cos (as-double argument))
+      :atan2
+      (if (< (count arguments) 2)
+        (->BuiltinValue :atan2 arguments)
+        (js/Math.atan2 (as-double (nth arguments 0)) (as-double (nth arguments 1))))
+
+      :bitAnd
+      (if (< (count arguments) 2)
+        (->BuiltinValue :bitAnd arguments)
+        (checked-integer (js* "(~{} & ~{})" (require-integer (nth arguments 0))
+                             (require-integer (nth arguments 1)))))
+      :bitOr
+      (if (< (count arguments) 2)
+        (->BuiltinValue :bitOr arguments)
+        (checked-integer (js* "(~{} | ~{})" (require-integer (nth arguments 0))
+                             (require-integer (nth arguments 1)))))
+      :bitXor
+      (if (< (count arguments) 2)
+        (->BuiltinValue :bitXor arguments)
+        (checked-integer (js* "(~{} ^ ~{})" (require-integer (nth arguments 0))
+                             (require-integer (nth arguments 1)))))
+
+      :and
+      (if (< (count arguments) 2)
+        (->BuiltinValue :and arguments)
+        (boolean (and (require-boolean (nth arguments 0))
+                      (require-boolean (nth arguments 1)))))
+      :or
+      (if (< (count arguments) 2)
+        (->BuiltinValue :or arguments)
+        (boolean (or (require-boolean (nth arguments 0))
+                     (require-boolean (nth arguments 1)))))
+      :not (not (require-boolean argument))
+      :eq
+      (if (< (count arguments) 2)
+        (->BuiltinValue :eq arguments)
+        (equal-values (nth arguments 0) (nth arguments 1)))
+      :lt
+      (if (< (count arguments) 2)
+        (->BuiltinValue :lt arguments)
+        (ordered-less (nth arguments 0) (nth arguments 1)))
+      :le
+      (if (< (count arguments) 2)
+        (->BuiltinValue :le arguments)
+        (not (ordered-less (nth arguments 1) (nth arguments 0))))
+      :gt
+      (if (< (count arguments) 2)
+        (->BuiltinValue :gt arguments)
+        (ordered-less (nth arguments 1) (nth arguments 0)))
+      :ge
+      (if (< (count arguments) 2)
+        (->BuiltinValue :ge arguments)
+        (not (ordered-less (nth arguments 0) (nth arguments 1))))
+      :neg
+      (if (integer-value? argument)
+        (checked-integer (integer-negate (require-integer argument)))
+        (- (as-double argument)))
+
+      :get
+      (if (< (count arguments) 2)
+        (->BuiltinValue :get arguments)
+        (let [attrs (nth arguments 0) attr (require-string-arg (nth arguments 1) "get")]
+          (when-not (instance? AttrsetValue attrs)
+            (evaluation-failure! "type-error" {"operation" "get"}))
+          (when-not (contains? (:fields attrs) attr)
+            (evaluation-failure! "attribute-missing" {"name" attr}))
+          (force-cell (get (:fields attrs) attr))))
+      :set
+      (if (< (count arguments) 3)
+        (->BuiltinValue :set arguments)
+        (let [attrs (nth arguments 0) attr (require-string-arg (nth arguments 1) "set")]
+          (when-not (instance? AttrsetValue attrs)
+            (evaluation-failure! "type-error" {"operation" "set"}))
+          (->AttrsetValue (assoc (:fields attrs) attr (nth arguments 2)))))
+      :keys
+      (if-not (instance? AttrsetValue argument)
+        (evaluation-failure! "type-error" {"operation" "keys"})
+        (vec (sorted-field-names (:fields argument))))
+      :values
+      (if-not (instance? AttrsetValue argument)
+        (evaluation-failure! "type-error" {"operation" "values"})
+        (mapv (fn [n] (force-cell (get (:fields argument) n)))
+              (sorted-field-names (:fields argument))))
+      :merge
+      (if (< (count arguments) 2)
+        (->BuiltinValue :merge arguments)
+        (let [left (nth arguments 0) right (nth arguments 1)]
+          (when-not (and (instance? AttrsetValue left) (instance? AttrsetValue right))
+            (evaluation-failure! "type-error" {"operation" "merge"}))
+          (->AttrsetValue (merge (:fields left) (:fields right)))))
+
+      :genAttrs
+      (if (< (count arguments) 2)
+        (->BuiltinValue :genAttrs arguments)
+        (let [names (nth arguments 0) f (nth arguments 1)]
+          (when-not (vector? names)
+            (evaluation-failure! "type-error" {"operation" "genAttrs"}))
+          (->AttrsetValue
+           (into {}
+                 (map (fn [n]
+                        (let [n (require-string-arg (force-cell n) "genAttrs")]
+                          [n (value-cell (apply-value f (value-cell n)))])))
+                 names))))
+
+      :nameValuePair
+      (if (< (count arguments) 2)
+        (->BuiltinValue :nameValuePair arguments)
+        (->AttrsetValue {"name" (value-cell (nth arguments 0)) "value" (nth arguments 1)}))
+
+      :foldlAttrs
+      (if (< (count arguments) 3)
+        (->BuiltinValue :foldlAttrs arguments)
+        (let [f (nth arguments 0) acc (nth arguments 1) attrs (nth arguments 2)]
+          (when-not (instance? AttrsetValue attrs)
+            (evaluation-failure! "type-error" {"operation" "foldlAttrs"}))
+          (loop [remaining (sorted-field-names (:fields attrs)) acc acc]
+            (if (empty? remaining)
+              acc
+              (recur (rest remaining)
+                     (apply-value3 f acc (first remaining)
+                                   (get (:fields attrs) (first remaining))))))))
+
+      :unsafeGetAttrPos nil
+
+      :seq
+      (if (< (count arguments) 2)
+        (->BuiltinValue :seq arguments)
+        (do (force-cell (nth arguments 0)) (nth arguments 1)))
+      :deepSeq
+      (letfn [(deep! [v]
+                (let [v (force-cell v)]
+                  (cond
+                    (vector? v) (run! deep! v)
+                    (instance? AttrsetValue v) (run! deep! (vals (:fields v))))
+                  v))]
+        (if (< (count arguments) 2)
+          (->BuiltinValue :deepSeq arguments)
+          (do (deep! (nth arguments 0)) (nth arguments 1))))
+
+      :drop
+      (if (< (count arguments) 2)
+        (->BuiltinValue :drop arguments)
+        (let [n (require-integer (nth arguments 0)) xs (nth arguments 1)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "drop"}))
+          (vec (drop (js/Number n) xs))))
+      :take
+      (if (< (count arguments) 2)
+        (->BuiltinValue :take arguments)
+        (let [n (require-integer (nth arguments 0)) xs (nth arguments 1)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "take"}))
+          (vec (take (js/Number n) xs))))
+      :cons
+      (if (< (count arguments) 2)
+        (->BuiltinValue :cons arguments)
+        (let [xs (nth arguments 1)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "cons"}))
+          (vec (cons (value-cell (nth arguments 0)) xs))))
+      :append
+      (if (< (count arguments) 2)
+        (->BuiltinValue :append arguments)
+        (let [left (nth arguments 0) right (nth arguments 1)]
+          (when-not (and (vector? left) (vector? right))
+            (evaluation-failure! "type-error" {"operation" "append"}))
+          (vec (concat left right))))
+      :zip
+      ;; [a b] pairs (distinct from zipLists, which returns {fst=a; snd=b;}).
+      (if (< (count arguments) 2)
+        (->BuiltinValue :zip arguments)
+        (let [left (nth arguments 0) right (nth arguments 1)
+              as-cell (fn [v] (if (instance? Cell v) v (value-cell v)))]
+          (when-not (and (vector? left) (vector? right))
+            (evaluation-failure! "type-error" {"operation" "zip"}))
+          (mapv (fn [a b] [(as-cell a) (as-cell b)]) left right)))
+      :reverseList
+      (if-not (vector? argument)
+        (evaluation-failure! "type-error" {"operation" "reverseList"})
+        (vec (reverse argument)))
+      :replicate
+      (if (< (count arguments) 2)
+        (->BuiltinValue :replicate arguments)
+        (let [n (require-integer (nth arguments 0))]
+          (vec (repeat (js/Number n) (nth arguments 1)))))
+      :findFirst
+      (if (< (count arguments) 3)
+        (->BuiltinValue :findFirst arguments)
+        (let [pred (nth arguments 0) default (nth arguments 1) xs (nth arguments 2)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "findFirst"}))
+          (loop [remaining xs]
+            (if (empty? remaining)
+              default
+              (if (require-boolean (apply-value pred (first remaining)))
+                (force-cell (first remaining))
+                (recur (rest remaining)))))))
+      :find
+      (if (< (count arguments) 2)
+        (->BuiltinValue :find arguments)
+        (let [needle (nth arguments 0) xs (nth arguments 1)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "find"}))
+          (loop [remaining xs]
+            (if (empty? remaining)
+              nil
+              (if (equal-values-in-container needle (first remaining))
+                (force-cell (first remaining))
+                (recur (rest remaining)))))))
+      :imap0
+      (if (< (count arguments) 2)
+        (->BuiltinValue :imap0 arguments)
+        (let [f (nth arguments 0) xs (nth arguments 1)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "imap0"}))
+          (mapv (fn [i x] (value-cell (apply-value2 f (js/BigInt i) x))) (range) xs)))
+      :imap1
+      (if (< (count arguments) 2)
+        (->BuiltinValue :imap1 arguments)
+        (let [f (nth arguments 0) xs (nth arguments 1)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "imap1"}))
+          (mapv (fn [i x] (value-cell (apply-value2 f (js/BigInt i) x)))
+                (iterate inc 1) xs)))
+      :stringToCharacters
+      (let [s (require-string-arg argument "stringToCharacters")]
+        (mapv str (string-text s)))
+      :groupBy
+      (if (< (count arguments) 2)
+        (->BuiltinValue :groupBy arguments)
+        (let [f (nth arguments 0) xs (nth arguments 1)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "groupBy"}))
+          (->AttrsetValue
+           (into {}
+                 (map (fn [[k vs]] [k (vec vs)]))
+                 (group-by (fn [x] (require-string-arg (apply-value f x) "groupBy")) xs)))))
+      :functionArgs
+      (if (and (instance? ClosureValue argument) (map? (:parameter argument)))
+        (->AttrsetValue
+         (into {}
+               (map (fn [field] [(:name field) (boolean (contains? field :default))]))
+               (:fields (:parameter argument))))
+        (->AttrsetValue {}))
+
+      :compareVersions
+      (if (< (count arguments) 2)
+        (->BuiltinValue :compareVersions arguments)
+        (let [a (string-text (require-string-arg (nth arguments 0) "compareVersions"))
+              b (string-text (require-string-arg (nth arguments 1) "compareVersions"))
+              parts (fn [s] (str/split s #"[.\-]"))
+              cmp1 (fn [x y]
+                     (if (and (re-matches #"\d+" x) (re-matches #"\d+" y))
+                       (compare (js/parseInt x) (js/parseInt y))
+                       (compare x y)))]
+          (js/BigInt
+           (loop [xs (parts a) ys (parts b)]
+             (cond
+               (and (empty? xs) (empty? ys)) 0
+               (empty? xs) -1
+               (empty? ys) 1
+               :else (let [c (cmp1 (first xs) (first ys))]
+                       (if (zero? c) (recur (rest xs) (rest ys)) c)))))))
+      :splitVersion
+      (vec (str/split
+            (string-text (require-string-arg argument "splitVersion")) #"[.\-]"))
+      :dirOf
+      (let [s (string-text (require-string-arg argument "dirOf"))
+            i (str/last-index-of s "/")]
+        (cond (nil? i) "." (zero? i) "/" :else (subs s 0 i)))
+      :baseNameOf
+      (last (str/split (string-text (require-string-arg argument "baseNameOf")) #"/"))
+      :toInt
+      (let [s (str/trim (string-text (require-string-arg argument "toInt")))]
+        (if (re-matches #"-?\d+" s)
+          (js/BigInt s)
+          (evaluation-failure! "type-error" {"operation" "toInt"})))
+      :hasInfix
+      (if (< (count arguments) 2)
+        (->BuiltinValue :hasInfix arguments)
+        (str/includes?
+         (string-text (require-string-arg (nth arguments 1) "hasInfix"))
+         (string-text (require-string-arg (nth arguments 0) "hasInfix"))))
+      :concatMapStrings
+      (if (< (count arguments) 2)
+        (->BuiltinValue :concatMapStrings arguments)
+        (let [f (nth arguments 0) xs (nth arguments 1)]
+          (when-not (vector? xs)
+            (evaluation-failure! "type-error" {"operation" "concatMapStrings"}))
+          (decode-byte-string
+           (concatenate-byte-arrays
+            (mapv (fn [x] (string-bytes (nix-to-string (apply-value f x)))) xs)))))
+      :concatStrings
+      (if-not (vector? argument)
+        (evaluation-failure! "type-error" {"operation" "concatStrings"})
+        (decode-byte-string
+         (concatenate-byte-arrays
+          (mapv (fn [x] (string-bytes (nix-to-string (force-cell x)))) argument))))
+
+      :placeholder
+      ;; Deterministic context-free placeholder for an output name, replaced
+      ;; at build time in real Nix. Pseudo hash, not byte-compatible with Nix.
+      (let [output (string-text (require-string-arg argument "placeholder"))
+            hex (hash-bytes "sha256" (.encode utf8-encoder (str "pnix-output:" output)))]
+        (str "/" (subs hex 0 32)))
+      :storePath
+      (evaluation-failure! "type-error" {"operation" "storePath" "reason" "pure-evaluator-no-store"})
+      :pnixMounts
+      (evaluation-failure! "type-error" {"operation" "pnixMounts" "nix-builtin?" false})
+      :addErrorContext
+      (if (< (count arguments) 2)
+        (->BuiltinValue :addErrorContext arguments)
+        (nth arguments 1))
+
+      :genericClosure
+      (let [attrs argument]
+        (when-not (instance? AttrsetValue attrs)
+          (evaluation-failure! "type-error" {"operation" "genericClosure"}))
+        (let [operator (force-cell (get (:fields attrs) "operator"))
+              start-set (force-cell (get (:fields attrs) "startSet"))]
+          (when-not (vector? start-set)
+            (evaluation-failure! "type-error" {"operation" "genericClosure"}))
+          (loop [worklist (vec start-set) seen #{} result []]
+            (if (empty? worklist)
+              result
+              (let [item (force-cell (first worklist))
+                    key (force-cell (get (:fields item) "key"))]
+                (if (contains? seen key)
+                  (recur (vec (rest worklist)) seen result)
+                  (let [next-items (force-cell (apply-value operator (value-cell item)))]
+                    (when-not (vector? next-items)
+                      (evaluation-failure! "type-error" {"operation" "genericClosure"}))
+                    (recur (into (vec (rest worklist)) next-items)
+                           (conj seen key)
+                           (conj result item)))))))))
+
       (evaluation-failure! "unknown-builtin"
                            {"operation" (name (:operation builtin))}))))
 
@@ -2458,7 +2807,66 @@
                 "zipLists" (->BuiltinValue :zipLists [])
                 "zipListsWith" (->BuiltinValue :zipListsWith [])
                 "filterAttrsRecursive" (->BuiltinValue :filterAttrsRecursive [])
-                "getAttrFromPathOr" (->BuiltinValue :getAttrFromPathOr [])})]
+                "getAttrFromPathOr" (->BuiltinValue :getAttrFromPathOr [])
+
+                ;; ---- Extended builtins (maturity pass 2026-08-11) ----
+                "pow" (->BuiltinValue :pow [])
+                "sqrt" (->BuiltinValue :sqrt [])
+                "exp" (->BuiltinValue :exp [])
+                "ln" (->BuiltinValue :ln [])
+                "sin" (->BuiltinValue :sin [])
+                "cos" (->BuiltinValue :cos [])
+                "atan2" (->BuiltinValue :atan2 [])
+                "bitAnd" (->BuiltinValue :bitAnd [])
+                "bitOr" (->BuiltinValue :bitOr [])
+                "bitXor" (->BuiltinValue :bitXor [])
+                "and" (->BuiltinValue :and [])
+                "or" (->BuiltinValue :or [])
+                "not" (->BuiltinValue :not [])
+                "eq" (->BuiltinValue :eq [])
+                "lt" (->BuiltinValue :lt [])
+                "le" (->BuiltinValue :le [])
+                "gt" (->BuiltinValue :gt [])
+                "ge" (->BuiltinValue :ge [])
+                "neg" (->BuiltinValue :neg [])
+                "get" (->BuiltinValue :get [])
+                "set" (->BuiltinValue :set [])
+                "keys" (->BuiltinValue :keys [])
+                "values" (->BuiltinValue :values [])
+                "merge" (->BuiltinValue :merge [])
+                "genAttrs" (->BuiltinValue :genAttrs [])
+                "nameValuePair" (->BuiltinValue :nameValuePair [])
+                "foldlAttrs" (->BuiltinValue :foldlAttrs [])
+                "unsafeGetAttrPos" (->BuiltinValue :unsafeGetAttrPos [])
+                "seq" (->BuiltinValue :seq [])
+                "deepSeq" (->BuiltinValue :deepSeq [])
+                "drop" (->BuiltinValue :drop [])
+                "take" (->BuiltinValue :take [])
+                "cons" (->BuiltinValue :cons [])
+                "append" (->BuiltinValue :append [])
+                "zip" (->BuiltinValue :zip [])
+                "reverseList" (->BuiltinValue :reverseList [])
+                "replicate" (->BuiltinValue :replicate [])
+                "findFirst" (->BuiltinValue :findFirst [])
+                "find" (->BuiltinValue :find [])
+                "imap0" (->BuiltinValue :imap0 [])
+                "imap1" (->BuiltinValue :imap1 [])
+                "stringToCharacters" (->BuiltinValue :stringToCharacters [])
+                "groupBy" (->BuiltinValue :groupBy [])
+                "functionArgs" (->BuiltinValue :functionArgs [])
+                "compareVersions" (->BuiltinValue :compareVersions [])
+                "splitVersion" (->BuiltinValue :splitVersion [])
+                "dirOf" (->BuiltinValue :dirOf [])
+                "baseNameOf" (->BuiltinValue :baseNameOf [])
+                "toInt" (->BuiltinValue :toInt [])
+                "hasInfix" (->BuiltinValue :hasInfix [])
+                "concatMapStrings" (->BuiltinValue :concatMapStrings [])
+                "concatStrings" (->BuiltinValue :concatStrings [])
+                "placeholder" (->BuiltinValue :placeholder [])
+                "storePath" (->BuiltinValue :storePath [])
+                "pnixMounts" (->BuiltinValue :pnixMounts [])
+                "addErrorContext" (->BuiltinValue :addErrorContext [])
+                "genericClosure" (->BuiltinValue :genericClosure [])})]
     (reset! (:state self-cell) {:tag :evaluated :value value})
     value))
 

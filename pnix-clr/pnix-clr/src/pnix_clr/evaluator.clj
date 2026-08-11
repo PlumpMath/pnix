@@ -1778,6 +1778,392 @@
           (str/replace "-" "")
           str/lower-case))
 
+    ;; ---- Extended builtins (maturity pass 2026-08-11) ----
+    :pow
+    (let [a (force-value (first args)) b (force-value (second args))]
+      (if (and (integer? a) (integer? b))
+        (i64 (long (Math/Pow (double a) (double b))))
+        (nix-double (Math/Pow (float-double a) (float-double b)))))
+
+    :sqrt
+    (nix-double (Math/Sqrt (float-double (force-value (first args)))))
+
+    :exp
+    (nix-double (Math/Exp (float-double (force-value (first args)))))
+
+    :ln
+    (nix-double (Math/Log (float-double (force-value (first args)))))
+
+    :sin
+    (nix-double (Math/Sin (float-double (force-value (first args)))))
+
+    :cos
+    (nix-double (Math/Cos (float-double (force-value (first args)))))
+
+    :atan2
+    (nix-double (Math/Atan2 (float-double (force-value (first args)))
+                            (float-double (force-value (second args)))))
+
+    :bitAnd
+    (i64 (bit-and (integer-value (first args) "bitAnd")
+                  (integer-value (second args) "bitAnd")))
+
+    :bitOr
+    (i64 (bit-or (integer-value (first args) "bitOr")
+                 (integer-value (second args) "bitOr")))
+
+    :bitXor
+    (i64 (bit-xor (integer-value (first args) "bitXor")
+                  (integer-value (second args) "bitXor")))
+
+    :and
+    (boolean (and (boolean-value (first args) "and")
+                  (boolean-value (second args) "and")))
+
+    :or
+    (boolean (or (boolean-value (first args) "or")
+                 (boolean-value (second args) "or")))
+
+    :not
+    (not (boolean-value (first args) "not"))
+
+    :eq
+    (deep-equal? (first args) (second args))
+
+    :lt
+    (let [a (force-value (first args)) b (force-value (second args))]
+      (cond
+        (and (integer? a) (integer? b)) (< (long a) (long b))
+        (and (or (integer? a) (float-value? a))
+             (or (integer? b) (float-value? b)))
+        (< (float-double a) (float-double b))
+        :else (outcome/fail! :eval :type-error
+                             {:operation "lt" :expected "number"})))
+
+    :le
+    (not (exec-builtin {:name :lt :args [(second args) (first args)]}))
+
+    :gt
+    (exec-builtin {:name :lt :args [(second args) (first args)]})
+
+    :ge
+    (not (exec-builtin {:name :lt :args [(first args) (second args)]}))
+
+    :neg
+    (let [v (force-value (first args))]
+      (if (integer? v)
+        (checked-negate v)
+        (nix-double (- (float-double v)))))
+
+    :get
+    (let [attrs (require-attrset (first args) "get")
+          attr (string-value (second args) "get")]
+      (when-not (contains? (:entries attrs) attr)
+        (outcome/fail! :eval :attribute-missing {:attribute attr}))
+      (force-value (get (:entries attrs) attr)))
+
+    :set
+    (let [attrs (require-attrset (first args) "set")
+          attr (string-value (second args) "set")]
+      (attrset-value (assoc (:entries attrs) attr (nth args 2))))
+
+    :keys
+    (sorted-attr-keys (require-attrset (first args) "keys"))
+
+    :values
+    (let [attrs (require-attrset (first args) "values")]
+      (mapv #(get (:entries attrs) %) (sorted-attr-keys attrs)))
+
+    :merge
+    (let [left (require-attrset (first args) "merge")
+          right (require-attrset (second args) "merge")]
+      (attrset-value (merge (:entries left) (:entries right))))
+
+    :genAttrs
+    (let [names (force-list-items (list-value (first args) "genAttrs"))
+          f (force-value (second args))]
+      (when-not (every? string? names)
+        (outcome/fail! :eval :type-error
+                       {:operation "genAttrs" :expected "string-list"}))
+      (attrset-value
+       (into {} (map (fn [n] [n (thunk #(apply-callable f n))])) names)))
+
+    :nameValuePair
+    (attrset-value {"name" (force-value (first args)) "value" (second args)})
+
+    :mapAttrsToList
+    (let [f (force-value (first args))
+          attrs (require-attrset (second args) "mapAttrsToList")]
+      (mapv (fn [k]
+              (thunk #(apply-callable2 f k (get (:entries attrs) k))))
+            (sorted-attr-keys attrs)))
+
+    :mapAttrsRecursive
+    (letfn [(walk [f attrs path]
+              (attrset-value
+               (into {}
+                     (map (fn [[k v]]
+                            (let [v* (force-value v)
+                                  path* (conj path k)]
+                              [k (if (attrset? v*)
+                                   (walk f v* path*)
+                                   (thunk #(apply-callable2 f (mapv identity path*) v)))])))
+                     (:entries attrs))))]
+      (walk (force-value (first args)) (require-attrset (second args) "mapAttrsRecursive") []))
+
+    :filterAttrsRecursive
+    (letfn [(walk [pred attrs]
+              (attrset-value
+               (into {}
+                     (keep (fn [[k v]]
+                             (when (boolean-value (apply-callable2 pred k v) "filterAttrsRecursive")
+                               (let [v* (force-value v)]
+                                 [k (if (attrset? v*) (walk pred v*) v)]))))
+                     (:entries attrs))))]
+      (walk (force-value (first args)) (require-attrset (second args) "filterAttrsRecursive")))
+
+    :foldlAttrs
+    (let [f (force-value (first args))
+          acc (second args)
+          attrs (require-attrset (nth args 2) "foldlAttrs")]
+      (loop [remaining (sorted-attr-keys attrs) acc acc]
+        (if (empty? remaining)
+          (force-value acc)
+          (recur (rest remaining)
+                 (apply-callable (apply-callable (apply-callable f acc) (first remaining))
+                                 (get (:entries attrs) (first remaining)))))))
+
+    :getAttrFromPathOr
+    (attr-by-path (list-value (second args) "getAttrFromPathOr")
+                  (nth args 2)
+                  (require-attrset (first args) "getAttrFromPathOr"))
+
+    :getName
+    (let [x (force-value (first args))]
+      (cond
+        (string? x) (first (str/split x #"-\d" 2))
+        (attrset? x)
+        (let [pname (get (:entries x) "pname")]
+          (if pname
+            (force-value pname)
+            (let [n (force-value (get (:entries x) "name"))]
+              (first (str/split (str n) #"-\d" 2)))))
+        :else (outcome/fail! :eval :type-error {:operation "getName"})))
+
+    :getVersion
+    (let [x (force-value (first args))
+          drv-name (fn [s] (let [m (re-matches #"(.+?)-(\d.*)" s)] (if m (nth m 2) "")))]
+      (cond
+        (string? x) (drv-name x)
+        (attrset? x)
+        (let [ver (get (:entries x) "version")]
+          (if ver
+            (force-value ver)
+            (drv-name (str (force-value (get (:entries x) "name"))))))
+        :else (outcome/fail! :eval :type-error {:operation "getVersion"})))
+
+    :updateManyAttrs
+    (let [updates (force-list-items (list-value (first args) "updateManyAttrs"))
+          base (require-attrset (second args) "updateManyAttrs")]
+      (attrset-value
+       (reduce (fn [acc item]
+                 (merge acc (:entries (require-attrset item "updateManyAttrs"))))
+               (:entries base)
+               updates)))
+
+    :unsafeGetAttrPos
+    nil
+
+    :seq
+    (do (force-value (first args)) (second args))
+
+    :deepSeq
+    (letfn [(deep! [v]
+              (let [v (force-value v)]
+                (cond
+                  (vector? v) (run! deep! v)
+                  (attrset? v) (run! deep! (vals (:entries v))))
+                v))]
+      (deep! (first args))
+      (second args))
+
+    :drop
+    (let [n (integer-value (first args) "drop")
+          xs (list-value (second args) "drop")]
+      (vec (drop n xs)))
+
+    :take
+    (let [n (integer-value (first args) "take")
+          xs (list-value (second args) "take")]
+      (vec (take n xs)))
+
+    :cons
+    (vec (cons (first args) (list-value (second args) "cons")))
+
+    :append
+    (vec (concat (list-value (first args) "append") (list-value (second args) "append")))
+
+    :zip
+    (mapv vector (list-value (first args) "zip") (list-value (second args) "zip"))
+
+    :zipAttrs
+    (let [rows (mapv #(require-attrset % "zipAttrs")
+                     (force-list-items (list-value (first args) "zipAttrs")))
+          names (sort (set (mapcat #(keys (:entries %)) rows)))]
+      (attrset-value
+       (into {}
+             (map (fn [n]
+                    [n (vec (keep (fn [row]
+                                    (when (contains? (:entries row) n)
+                                      (get (:entries row) n)))
+                                  rows))]))
+             names)))
+
+    :reverseList
+    (vec (reverse (list-value (first args) "reverseList")))
+
+    :replicate
+    (let [n (integer-value (first args) "replicate")]
+      (vec (repeat n (second args))))
+
+    :findFirst
+    (let [pred (force-value (first args))
+          default (second args)
+          xs (list-value (nth args 2) "findFirst")]
+      (loop [remaining xs]
+        (if (empty? remaining)
+          (force-value default)
+          (if (boolean-value (apply-callable pred (first remaining)) "findFirst")
+            (force-value (first remaining))
+            (recur (rest remaining))))))
+
+    :find
+    (let [needle (first args)
+          xs (list-value (second args) "find")]
+      (loop [remaining xs]
+        (if (empty? remaining)
+          nil
+          (if (deep-equal? needle (first remaining))
+            (force-value (first remaining))
+            (recur (rest remaining))))))
+
+    :imap0
+    (let [f (force-value (first args))
+          xs (list-value (second args) "imap0")]
+      (mapv (fn [i x] (thunk #(apply-callable2 f (i64 i) x))) (range) xs))
+
+    :imap1
+    (let [f (force-value (first args))
+          xs (list-value (second args) "imap1")]
+      (mapv (fn [i x] (thunk #(apply-callable2 f (i64 i) x))) (iterate inc 1) xs))
+
+    :stringToCharacters
+    (mapv str (string-value (first args) "stringToCharacters"))
+
+    :groupBy
+    (let [f (force-value (first args))
+          xs (list-value (second args) "groupBy")]
+      (attrset-value
+       (group-by (fn [x] (string-value (apply-callable f x) "groupBy")) xs)))
+
+    :functionArgs
+    (let [f (force-value (first args))]
+      (if (and (closure? f) (:param-pattern f))
+        (attrset-value
+         (into {}
+               (map (fn [p] [(:name p) (boolean (contains? p :default))]))
+               (:params (:param-pattern f))))
+        (attrset-value {})))
+
+    :compareVersions
+    (let [a (string-value (first args) "compareVersions")
+          b (string-value (second args) "compareVersions")
+          parts (fn [s] (str/split s #"[.\-]"))
+          cmp1 (fn [x y]
+                 (let [xn (re-matches #"\d+" x) yn (re-matches #"\d+" y)]
+                   (cond
+                     (and xn yn) (compare (Int64/Parse x) (Int64/Parse y))
+                     :else (compare x y))))]
+      (i64 (loop [xs (parts a) ys (parts b)]
+             (cond
+               (and (empty? xs) (empty? ys)) 0
+               (empty? xs) -1
+               (empty? ys) 1
+               :else (let [c (cmp1 (first xs) (first ys))]
+                       (if (zero? c) (recur (rest xs) (rest ys)) c))))))
+
+    :splitVersion
+    (vec (str/split (string-value (first args) "splitVersion") #"[.\-]"))
+
+    :dirOf
+    (let [s (string-value (first args) "dirOf")
+          i (str/last-index-of s "/")]
+      (cond
+        (nil? i) "."
+        (zero? i) "/"
+        :else (subs s 0 i)))
+
+    :baseNameOf
+    (last (str/split (string-value (first args) "baseNameOf") #"/"))
+
+    :toInt
+    (try
+      (i64 (Int64/Parse (str/trim (string-value (first args) "toInt"))))
+      (catch System.Exception _
+        (outcome/fail! :eval :type-error {:operation "toInt" :reason "not-an-integer"})))
+
+    :hasInfix
+    (str/includes? (string-value (second args) "hasInfix")
+                   (string-value (first args) "hasInfix"))
+
+    :concatMapStrings
+    (let [f (force-value (first args))
+          xs (list-value (second args) "concatMapStrings")]
+      (apply str (map (fn [x] (nix-to-string (apply-callable f x))) xs)))
+
+    :concatStrings
+    (apply str (map nix-to-string (list-value (first args) "concatStrings")))
+
+    :placeholder
+    ;; Deterministic context-free placeholder for an output name, replaced at
+    ;; build time in real Nix. Pseudo hash, not byte-compatible with Nix.
+    (let [output (string-value (first args) "placeholder")
+          bytes (as-utf8-bytes (str "pnix-output:" output) "placeholder")
+          digest (.ComputeHash (System.Security.Cryptography.SHA256/Create) bytes)
+          hex (-> (System.BitConverter/ToString digest)
+                  (str/replace "-" "")
+                  str/lower-case)]
+      (str "/" (subs hex 0 32)))
+
+    :storePath
+    (outcome/fail! :eval :type-error
+                   {:operation "storePath" :reason "pure-evaluator-no-store"})
+
+    :pnixMounts
+    (outcome/fail! :eval :type-error
+                   {:operation "pnixMounts" :reason "extension-not-wired"
+                    :nix-builtin? false})
+
+    :addErrorContext
+    (second args)
+
+    :genericClosure
+    (let [arg (require-attrset (first args) "genericClosure")
+          operator (force-value (get (:entries arg) "operator"))
+          start-set (force-list-items (list-value (get (:entries arg) "startSet") "genericClosure"))]
+      (loop [worklist (vec start-set) seen #{} result []]
+        (if (empty? worklist)
+          result
+          (let [item (require-attrset (first worklist) "genericClosure")
+                key (force-value (get (:entries item) "key"))]
+            (if (contains? seen key)
+              (recur (rest worklist) seen result)
+              (let [next-items (force-list-items
+                                 (list-value (apply-callable operator item) "genericClosure"))]
+                (recur (into (vec (rest worklist)) next-items)
+                       (conj seen key)
+                       (conj result item))))))))
+
     (outcome/fail! :eval :unsupported-expression
                    {:builtin (name name)})))
 
@@ -1911,7 +2297,74 @@
    "null" nil
    "nixVersion" "2.34.7"
    "langVersion" (i64 6)
-   "storeDir" "/nix/store"})
+   "storeDir" "/nix/store"
+
+   ;; ---- Extended builtins (maturity pass 2026-08-11) ----
+   "pow" (bi :pow 2)
+   "sqrt" (bi :sqrt 1)
+   "exp" (bi :exp 1)
+   "ln" (bi :ln 1)
+   "sin" (bi :sin 1)
+   "cos" (bi :cos 1)
+   "atan2" (bi :atan2 2)
+   "bitAnd" (bi :bitAnd 2)
+   "bitOr" (bi :bitOr 2)
+   "bitXor" (bi :bitXor 2)
+   "and" (bi :and 2)
+   "or" (bi :or 2)
+   "not" (bi :not 1)
+   "eq" (bi :eq 2)
+   "lt" (bi :lt 2)
+   "le" (bi :le 2)
+   "gt" (bi :gt 2)
+   "ge" (bi :ge 2)
+   "neg" (bi :neg 1)
+   "get" (bi :get 2)
+   "set" (bi :set 3)
+   "keys" (bi :keys 1)
+   "values" (bi :values 1)
+   "merge" (bi :merge 2)
+   "genAttrs" (bi :genAttrs 2)
+   "nameValuePair" (bi :nameValuePair 2)
+   "mapAttrsToList" (bi :mapAttrsToList 2)
+   "mapAttrsRecursive" (bi :mapAttrsRecursive 2)
+   "filterAttrsRecursive" (bi :filterAttrsRecursive 2)
+   "foldlAttrs" (bi :foldlAttrs 3)
+   "getAttrFromPathOr" (bi :getAttrFromPathOr 3)
+   "getName" (bi :getName 1)
+   "getVersion" (bi :getVersion 1)
+   "updateManyAttrs" (bi :updateManyAttrs 2)
+   "unsafeGetAttrPos" (bi :unsafeGetAttrPos 2)
+   "seq" (bi :seq 2)
+   "deepSeq" (bi :deepSeq 2)
+   "drop" (bi :drop 2)
+   "take" (bi :take 2)
+   "cons" (bi :cons 2)
+   "append" (bi :append 2)
+   "zip" (bi :zip 2)
+   "zipAttrs" (bi :zipAttrs 1)
+   "reverseList" (bi :reverseList 1)
+   "replicate" (bi :replicate 2)
+   "findFirst" (bi :findFirst 3)
+   "find" (bi :find 2)
+   "imap0" (bi :imap0 2)
+   "imap1" (bi :imap1 2)
+   "stringToCharacters" (bi :stringToCharacters 1)
+   "groupBy" (bi :groupBy 2)
+   "functionArgs" (bi :functionArgs 1)
+   "compareVersions" (bi :compareVersions 2)
+   "splitVersion" (bi :splitVersion 1)
+   "dirOf" (bi :dirOf 1)
+   "baseNameOf" (bi :baseNameOf 1)
+   "toInt" (bi :toInt 1)
+   "hasInfix" (bi :hasInfix 2)
+   "concatMapStrings" (bi :concatMapStrings 2)
+   "concatStrings" (bi :concatStrings 1)
+   "placeholder" (bi :placeholder 1)
+   "storePath" (bi :storePath 1)
+   "pnixMounts" (bi :pnixMounts 0)
+   "addErrorContext" (bi :addErrorContext 2)
+   "genericClosure" (bi :genericClosure 1)})
 
 (defn- make-builtins
   []

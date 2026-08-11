@@ -308,7 +308,7 @@ builtins.hasAttrByPath [ "meta" "license" ] { meta.license = "MIT"; }
 >> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":true}
 
 lib.filterAttrsRecursive (name: value: name == "license") { meta = { license = "MIT"; }; }
->> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":{"meta":{"license":"MIT"}}}
+>> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":{}}
 
 lib.mapAttrsRecursive (path: value: toString value) { a = { b = 1; }; }
 >> {"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":{"a":{"b":"1"}}}

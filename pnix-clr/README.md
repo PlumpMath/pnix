@@ -154,8 +154,8 @@ arbitrary ClojureCLR integers. It does not yet claim:
   live plan and source closure, and execution retains the pinned runtime);
 - PNIX common compiler/PIR integration;
 - the full common conformance corpus;
-- quoted or dynamic attr paths, `builtins.hasAttr`, or structural equality;
-- float arithmetic, BigInt arithmetic, or general numeric promotion;
+- dynamic (`${...}`) attr paths;
+- BigInt arithmetic or general numeric promotion;
 - routing through or enforcement of the `pnix.primitive-abi.v1` manifest;
 - production-evaluator or full-builtin primitive-manifest enforcement;
 - production `Requested` / `Suspended` evaluator integration;
@@ -175,7 +175,7 @@ in `clr-meta/STAGE15_N_ROADMAP.md`. That roadmap is a target, not a receipt.
 ## Layout
 
 ```text
-clojure-clr-clojure-1.12.3-alpha8/  pinned ClojureCLR source
+clojure-clr-clojure-1.12.3-alpha8/  NuGet-restored ClojureCLR publish output
 clr-meta/                            PNIX-agnostic CLR meta bootstrap
 pnix-clr/                            CLR-native PNIX host + artifact plan
 bin/                                 build, runners, and focused gate
@@ -405,8 +405,8 @@ lib.product [1 2 3 4]
 builtins.recursiveUpdate { a = { b = 1; }; } { a = { c = 2; }; }
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":{"a":{"b":1,"c":2}}}
 
-# lib.updateManyAttrs [ { a = 1; } { b = 2; } ] { c = 3; }
->> {"error":{"class":"attribute-missing","evidence":{"attribute":"updateManyAttrs"},"phase":"eval"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
+lib.updateManyAttrs [ { a = 1; } { b = 2; } ] { c = 3; }
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":{"a":1,"b":2,"c":3}}
 
 builtins.attrByPath [ "foo" "bar" ] 0 { foo.bar = 42; }
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":42}
@@ -414,29 +414,29 @@ builtins.attrByPath [ "foo" "bar" ] 0 { foo.bar = 42; }
 lib.attrsets.isAttrs { a = 1; }
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":true}
 
-# lib.attrsets.mapAttrsToList (n: v: "${n}=${toString v}") { a = 1; b = 2; }
->> {"error":{"class":"attribute-missing","evidence":{"attribute":"mapAttrsToList"},"phase":"eval"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
+builtins.mapAttrsToList (n: v: "${n}=${toString v}") { a = 1; b = 2; }
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":["a=1","b=2"]}
 
-# lib.attrsets.zipAttrs [ { a = 1; } { a = 2; b = 3; } ]
->> {"error":{"class":"attribute-missing","evidence":{"attribute":"zipAttrs"},"phase":"eval"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
+builtins.zipAttrs [ { a = 1; } { a = 2; b = 3; } ]
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":{"a":[1,2],"b":[3]}}
 
-# lib.getName { name = "hello-1.0"; }
->> {"error":{"class":"attribute-missing","evidence":{"attribute":"getName"},"phase":"eval"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
+lib.getName { name = "hello-1.0"; }
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":"hello"}
 
-# lib.getVersion { version = "1.0"; }
->> {"error":{"class":"attribute-missing","evidence":{"attribute":"getVersion"},"phase":"eval"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
+lib.getVersion { version = "1.0"; }
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":"1.0"}
 
-# lib.getAttrFromPathOr { meta = { description = "테스트"; }; } [ "meta" "description" ] "없음"
->> {"error":{"class":"attribute-missing","evidence":{"attribute":"getAttrFromPathOr"},"phase":"eval"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
+lib.getAttrFromPathOr { meta = { description = "테스트"; }; } [ "meta" "description" ] "없음"
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":"테스트"}
 
 builtins.hasAttrByPath [ "meta" "license" ] { meta.license = "MIT"; }
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":true}
 
-# lib.filterAttrsRecursive (name: value: name == "license") { meta = { license = "MIT"; }; }
->> {"error":{"class":"attribute-missing","evidence":{"attribute":"filterAttrsRecursive"},"phase":"eval"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
+lib.filterAttrsRecursive (name: value: name == "license") { meta = { license = "MIT"; }; }
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":{}}
 
-# lib.mapAttrsRecursive (path: value: toString value) { a = { b = 1; }; }
->> {"error":{"class":"attribute-missing","evidence":{"attribute":"mapAttrsRecursive"},"phase":"eval"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
+lib.mapAttrsRecursive (path: value: toString value) { a = { b = 1; }; }
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":{"a":{"b":"1"}}}
 
 builtins.unique [1 2 2 3 1]
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":[1,2,3]}

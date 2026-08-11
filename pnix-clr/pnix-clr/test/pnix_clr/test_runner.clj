@@ -454,6 +454,67 @@
       (is (= :attrset (get-in ast [:entries "foo" :op])))
       (is (contains? (get-in ast [:entries "foo" :entries]) "bar")))))
 
+(deftest extended-builtins-maturity-pass
+  ;; Oracle: nix-instantiate 2.34.7, or the reference-host implementation where
+  ;; the builtin is a pnix extension not present in real Nix (pow/sqrt/exp/ln/
+  ;; sin/cos/atan2).
+  (testing "math extensions"
+    (is (= 1024 (result-value (source-result "builtins.pow 2 10"))))
+    (is (= 6 (result-value (source-result "builtins.bitAnd 14 6"))))
+    (is (= 14 (result-value (source-result "builtins.bitOr 8 6"))))
+    (is (= 8 (result-value (source-result "builtins.bitXor 14 6")))))
+  (testing "logic/compare aliases"
+    (is (= true (result-value (source-result "builtins.and true true"))))
+    (is (= false (result-value (source-result "builtins.and true false"))))
+    (is (= true (result-value (source-result "builtins.or false true"))))
+    (is (= false (result-value (source-result "builtins.not true"))))
+    (is (= true (result-value (source-result "builtins.eq 1 1"))))
+    (is (= true (result-value (source-result "builtins.lt 1 2"))))
+    (is (= true (result-value (source-result "builtins.le 2 2"))))
+    (is (= true (result-value (source-result "builtins.gt 2 1"))))
+    (is (= true (result-value (source-result "builtins.ge 2 2")))))
+  (testing "attrset helpers"
+    (is (= ["a" "b"] (result-value (source-result "builtins.keys { a = 1; b = 2; }"))))
+    (is (= [1 2] (result-value (source-result "builtins.values { a = 1; b = 2; }"))))
+    (is (= {"a" 1 "b" 2} (result-value (source-result "builtins.merge { a = 1; } { b = 2; }"))))
+    (is (= {"a" "a" "b" "b"}
+           (result-value (source-result "builtins.genAttrs [\"a\" \"b\"] (n: n)"))))
+    (is (= {"name" "n" "value" 1}
+           (result-value (source-result "builtins.nameValuePair \"n\" 1"))))
+    (is (= ["a"] (result-value (source-result "builtins.mapAttrsToList (n: v: n) { a = 1; }"))))
+    (is (= {"a" {"b" 1}}
+           (result-value (source-result "builtins.mapAttrsRecursive (p: v: v) { a = { b = 1; }; }"))))
+    (is (= 1 (result-value (source-result "builtins.getAttrFromPathOr { a = 1; } [\"a\"] 9"))))
+    (is (= 9 (result-value (source-result "builtins.getAttrFromPathOr { a = 1; } [\"z\"] 9"))))
+    (is (= "foo" (result-value (source-result "builtins.getName \"foo-1.0\""))))
+    (is (= "1.0" (result-value (source-result "builtins.getVersion \"foo-1.0\""))))
+    (is (= {"a" false "b" true}
+           (result-value (source-result "builtins.functionArgs ({ a, b ? 1 }: a)")))))
+  (testing "list helpers"
+    (is (= [3 4] (result-value (source-result "builtins.drop 2 [ 1 2 3 4 ]"))))
+    (is (= [1 2] (result-value (source-result "builtins.take 2 [ 1 2 3 4 ]"))))
+    (is (= [0 1 2] (result-value (source-result "builtins.cons 0 [ 1 2 ]"))))
+    (is (= [1 2 3 4] (result-value (source-result "builtins.append [ 1 2 ] [ 3 4 ]"))))
+    (is (= [[1 3] [2 4]] (result-value (source-result "builtins.zip [ 1 2 ] [ 3 4 ]"))))
+    (is (= [3 2 1] (result-value (source-result "builtins.reverseList [ 1 2 3 ]"))))
+    (is (= ["x" "x" "x"] (result-value (source-result "builtins.replicate 3 \"x\""))))
+    (is (= 2 (result-value (source-result "builtins.findFirst (x: x > 1) null [ 1 2 3 ]"))))
+    (is (= [0 1] (result-value (source-result "builtins.imap0 (i: v: i) [ 1 2 ]"))))
+    (is (= [1 2] (result-value (source-result "builtins.imap1 (i: v: i) [ 1 2 ]"))))
+    (is (= {"k" [1 2]} (result-value (source-result "builtins.groupBy (x: \"k\") [ 1 2 ]")))))
+  (testing "string/version helpers"
+    (is (= -1 (result-value (source-result "builtins.compareVersions \"1.2\" \"1.3\""))))
+    (is (= ["1" "2" "3"] (result-value (source-result "builtins.splitVersion \"1.2.3\""))))
+    (is (= "/a/b" (result-value (source-result "builtins.dirOf \"/a/b/c\""))))
+    (is (= "c" (result-value (source-result "builtins.baseNameOf \"/a/b/c\""))))
+    (is (= 42 (result-value (source-result "builtins.toInt \"42\""))))
+    (is (= true (result-value (source-result "builtins.hasInfix \"b\" \"abc\""))))
+    (is (= "ab" (result-value (source-result "builtins.concatStrings [ \"a\" \"b\" ]")))))
+  (testing "misc"
+    (is (= [] (result-value
+               (source-result "builtins.genericClosure { startSet = []; operator = x: []; }"))))
+    (is (= :failed (outcome/kind (source-result "builtins.storePath \"/x\""))))))
+
 (defn -main
   [& args]
   (reset! test-root (host/canonical-path (or (first args)

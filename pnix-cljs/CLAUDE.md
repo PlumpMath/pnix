@@ -24,4 +24,7 @@ pnix-cljs
   cannot gate ordinary `pnix-cljs` evaluation.
 - Do not copy JVM, Java reflection, ASM, or Clojure-only implementation code
   into the active ClojureScript source closure.
-- This seed does not claim full parity with the three established hosts.
+- This seed does not claim full parity with the three established hosts,
+  though the builtin surface was substantially widened in the 2026-08-11
+  maturity pass (math, bitwise, list/attrset helpers ported from the
+  reference host's `evaluator.clj`).
