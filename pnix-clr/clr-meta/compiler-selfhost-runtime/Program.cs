@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Runtime.Loader;
@@ -30,6 +32,7 @@ public static class Program
                 "describe" => Describe(args),
                 "prepare" => Prepare(args),
                 "contains-text" => ContainsText(args),
+                "describe-determinism" => DescribeDeterminism(args),
                 "publish-directory" => PublishDirectory(args),
                 _ => throw DataAbi.Reject("host", "unknown-command", args[0]),
             };
@@ -145,6 +148,37 @@ public static class Program
         bool found = ContainsSequence(bytes, Encoding.UTF8.GetBytes(args[2])) ||
             ContainsSequence(bytes, Encoding.Unicode.GetBytes(args[2]));
         Console.Out.WriteLine(found ? "true" : "false");
+        return 0;
+    }
+
+    private static int DescribeDeterminism(string[] args)
+    {
+        RequireArity(args, 2, "describe-determinism <artifact.dll>");
+        string full = RequireRegularFile(args[1], "artifact-missing", "artifact-reparse-point");
+        int timeDateStamp;
+        Guid mvid;
+        using (var stream = File.OpenRead(full))
+        using (var peReader = new PEReader(stream))
+        {
+            byte[] header = new byte[4];
+            stream.Position = peReader.PEHeaders.CoffHeaderStartOffset + 4;
+            int read = stream.Read(header, 0, 4);
+            if (read != 4)
+            {
+                throw DataAbi.Reject("host", "coff-header-truncated", read);
+            }
+
+            timeDateStamp = BitConverter.ToInt32(header, 0);
+            MetadataReader metadataReader = peReader.GetMetadataReader();
+            ModuleDefinition module = metadataReader.GetModuleDefinition();
+            mvid = metadataReader.GetGuid(module.Mvid);
+        }
+
+        Console.Out.WriteLine("{" +
+            "\"mvid\":" + JsonString(mvid.ToString()) + "," +
+            "\"schema\":\"pnix.clr-meta.compiler-selfhost-determinism.v1\"," +
+            "\"time_date_stamp\":" + timeDateStamp.ToString(CultureInfo.InvariantCulture) +
+            "}");
         return 0;
     }
 

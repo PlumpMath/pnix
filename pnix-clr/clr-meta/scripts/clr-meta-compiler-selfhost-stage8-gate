@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# Gate: Stage8 reproducible assembly artifact closure.
+# Builds Stage7 TWICE, independently, from the same frozen Stage6 parent, and
+# requires the two CompilerStage7.dll outputs to be byte-identical under the
+# canonicalization policy in compiler-selfhost/stage8-contract.edn. See
+# STAGE8_DESIGN.md. Does not claim Stage9, self-reproduction, or promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+family_root="$clr_meta_root/compiler-selfhost"
+canonical_source="$family_root/compiler_kernel.clj"
+stage7_contract="$family_root/stage7-contract.edn"
+stage8_contract="$family_root/stage8-contract.edn"
+public_cli="$root/bin/clr-meta"
+dotnet_bin="$(command -v dotnet || true)"
+receipt_out="${CLR_META_STAGE8_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage8-gate.receipt.json}"
+canonical_time_date_stamp=0
+canonical_mvid="00000000-0000-0000-0000-000000000000"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage8 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+for command in jq dotnet cmp; do
+  command -v "$command" >/dev/null 2>&1 || fail "$command-missing"
+done
+for input in "$public_cli" "$canonical_source" "$stage7_contract" "$stage8_contract"; do
+  [[ -f "$input" && ! -L "$input" ]] || fail required-input-missing
+done
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+grep -Fq ':schema :pnix.clr-meta.compiler-selfhost-stage8-contract.v1' \
+  "$stage8_contract" || fail stage8-contract-schema
+grep -Fq ':checkpoint :stage8-reproducible-assembly-artifact' \
+  "$stage8_contract" || fail stage8-contract-checkpoint
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage8.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/home" "$tmp/process-tmp" "$tmp/dotnet-home" "$tmp/poison"
+
+clean_environment=(
+  env -i
+  "PATH=/usr/bin:/bin"
+  "HOME=$tmp/home"
+  "TMPDIR=$tmp/process-tmp"
+  "DOTNET_CLI_HOME=$tmp/dotnet-home"
+  "DOTNET_CLI_TELEMETRY_OPTOUT=1"
+  "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1"
+  "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=1"
+  "DOTNET_NOLOGO=1"
+  "CLOJURE_LOAD_PATH=$tmp/poison"
+  "CLOJURE_COMPILE_PATH=$tmp/poison"
+  "CLR_META_SOURCE_ROOT=$tmp/poison"
+)
+if [[ -n "${DOTNET_ROOT:-}" ]]; then
+  clean_environment+=("DOTNET_ROOT=$DOTNET_ROOT")
+fi
+clean_environment+=(
+  "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin"):$PATH"
+)
+
+support_call() {
+  local cwd="$1"
+  local support="$2"
+  shift 2
+  (
+    cd "$cwd"
+    "${clean_environment[@]}" "$dotnet_bin" "$support" "$@"
+  )
+}
+
+# --- Build Stage1 -> ... -> Stage6 once (shared parent for both Stage7 builds) ---
+stage1="$tmp/stage1"
+"$public_cli" --build-compiler-selfhost-stage1 "$stage1" \
+  >"$tmp/stage1-builder.stdout" 2>"$tmp/stage1-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage1-builder.stderr" >&2
+  fail public-stage1-builder
+}
+stage2="$tmp/stage2"
+"$public_cli" --build-compiler-selfhost-stage2 "$stage1" "$stage2" \
+  >"$tmp/stage2-builder.stdout" 2>"$tmp/stage2-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage2-builder.stderr" >&2
+  fail public-stage2-builder
+}
+stage3="$tmp/stage3"
+"$public_cli" --build-compiler-selfhost-stage3 "$stage2" "$stage3" \
+  >"$tmp/stage3-builder.stdout" 2>"$tmp/stage3-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage3-builder.stderr" >&2
+  fail public-stage3-builder
+}
+stage4="$tmp/stage4"
+"$public_cli" --build-compiler-selfhost-stage4 "$stage3" "$stage4" \
+  >"$tmp/stage4-builder.stdout" 2>"$tmp/stage4-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage4-builder.stderr" >&2
+  fail public-stage4-builder
+}
+stage5="$tmp/stage5"
+"$public_cli" --build-compiler-selfhost-stage5 "$stage4" "$stage5" \
+  >"$tmp/stage5-builder.stdout" 2>"$tmp/stage5-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage5-builder.stderr" >&2
+  fail public-stage5-builder
+}
+stage6="$tmp/stage6"
+"$public_cli" --build-compiler-selfhost-stage6 "$stage5" "$stage6" \
+  >"$tmp/stage6-builder.stdout" 2>"$tmp/stage6-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage6-builder.stderr" >&2
+  fail public-stage6-builder
+}
+
+# --- Build Stage7 TWICE, independently, from the same frozen Stage6 ---
+stage7_run1="$tmp/stage7-run1"
+"$public_cli" --build-compiler-selfhost-stage7 "$stage6" "$stage7_run1" \
+  >"$tmp/stage7-run1-builder.stdout" 2>"$tmp/stage7-run1-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage7-run1-builder.stderr" >&2
+  fail public-stage7-builder-run1
+}
+sleep 2 # widen the wall-clock gap so a live TimeDateStamp would visibly differ if uncanonicalized
+stage7_run2="$tmp/stage7-run2"
+"$public_cli" --build-compiler-selfhost-stage7 "$stage6" "$stage7_run2" \
+  >"$tmp/stage7-run2-builder.stdout" 2>"$tmp/stage7-run2-builder.stderr" || {
+  sed -n '1,200p' "$tmp/stage7-run2-builder.stderr" >&2
+  fail public-stage7-builder-run2
+}
+
+run1_compiler="$stage7_run1/compiler/CompilerStage7.dll"
+run2_compiler="$stage7_run2/compiler/CompilerStage7.dll"
+run1_support="$stage7_run1/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+run2_support="$stage7_run2/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+[[ -f "$run1_compiler" && ! -L "$run1_compiler" ]] || fail run1-compiler-missing
+[[ -f "$run2_compiler" && ! -L "$run2_compiler" ]] || fail run2-compiler-missing
+
+# --- Core claim: the two independently-built compilers are byte-identical ---
+run1_sha256="$(sha256_file "$run1_compiler")"
+run2_sha256="$(sha256_file "$run2_compiler")"
+[[ "$run1_sha256" == "$run2_sha256" ]] || fail stage7-artifacts-not-byte-identical
+cmp "$run1_compiler" "$run2_compiler" >/dev/null || fail stage7-artifacts-cmp-mismatch
+
+# --- Independent re-derivation: read the canonicalized fields back from each
+#     artifact via a separate reader path (describe-determinism), not just
+#     the sha256 match, and not just trusting that Finish() ran. ---
+support_call "$tmp" "$run1_support" describe-determinism "$run1_compiler" \
+  >"$tmp/run1-determinism.json" 2>"$tmp/run1-determinism.stderr" || {
+  sed -n '1,80p' "$tmp/run1-determinism.stderr" >&2
+  fail run1-describe-determinism
+}
+[[ ! -s "$tmp/run1-determinism.stderr" ]] || fail run1-describe-determinism-stderr
+support_call "$tmp" "$run2_support" describe-determinism "$run2_compiler" \
+  >"$tmp/run2-determinism.json" 2>"$tmp/run2-determinism.stderr" || {
+  sed -n '1,80p' "$tmp/run2-determinism.stderr" >&2
+  fail run2-describe-determinism
+}
+[[ ! -s "$tmp/run2-determinism.stderr" ]] || fail run2-describe-determinism-stderr
+
+jq -e --argjson ts "$canonical_time_date_stamp" --arg mvid "$canonical_mvid" '
+  .schema == "pnix.clr-meta.compiler-selfhost-determinism.v1" and
+  .time_date_stamp == $ts and .mvid == $mvid
+' "$tmp/run1-determinism.json" >/dev/null || fail run1-determinism-not-canonical
+jq -e --argjson ts "$canonical_time_date_stamp" --arg mvid "$canonical_mvid" '
+  .schema == "pnix.clr-meta.compiler-selfhost-determinism.v1" and
+  .time_date_stamp == $ts and .mvid == $mvid
+' "$tmp/run2-determinism.json" >/dev/null || fail run2-determinism-not-canonical
+
+# --- Canonicalization did not corrupt the artifact: it still behaves as a
+#     Stage7 compiler (structural description + a live compile+execute). ---
+support_call "$tmp" "$run1_support" describe "$run1_compiler" \
+  >"$tmp/run1-description.json" 2>"$tmp/run1-description.stderr" || {
+  sed -n '1,80p' "$tmp/run1-description.stderr" >&2
+  fail run1-describe
+}
+[[ ! -s "$tmp/run1-description.stderr" ]] || fail run1-describe-stderr
+[[ "$(support_call "$tmp" "$run1_support" prepare "$run1_compiler")" == 27 ]] || \
+  fail run1-prepare
+
+add_target="$tmp/stage8-add.dll"
+support_call "$tmp" "$run1_support" compile "$run1_compiler" \
+  "$family_root/unseen_add.clj" "$add_target" \
+  >"$tmp/stage8-add-descriptor.json" 2>"$tmp/stage8-add.stderr" || {
+  sed -n '1,80p' "$tmp/stage8-add.stderr" >&2
+  fail stage8-add-compile
+}
+[[ ! -s "$tmp/stage8-add.stderr" ]] || fail stage8-add-compile-stderr
+add_result="$(support_call "$tmp" "$run1_support" invoke-i64 "$add_target" 20 22)"
+[[ "$add_result" == 42 ]] || fail stage8-add-semantic
+
+# --- Receipt ---
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n \
+  --arg canonical_mvid "$canonical_mvid" \
+  --argjson canonical_time_date_stamp "$canonical_time_date_stamp" \
+  --arg canonical_source_sha256 "$(sha256_file "$canonical_source")" \
+  --arg contract_sha256 "$(sha256_file "$stage8_contract")" \
+  --arg parent_stage7_contract_sha256 "$(sha256_file "$stage7_contract")" \
+  --arg run1_sha256 "$run1_sha256" \
+  --arg run2_sha256 "$run2_sha256" \
+  --argjson run1_determinism "$(jq -c '.' "$tmp/run1-determinism.json")" \
+  --argjson run2_determinism "$(jq -c '.' "$tmp/run2-determinism.json")" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage8-gate-receipt.v1",
+    checkpoint:"stage8-reproducible-assembly-artifact",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    contract:{
+      path:"compiler-selfhost/stage8-contract.edn",
+      sha256:$contract_sha256
+    },
+    parent:{
+      stage:7,
+      contract_path:"compiler-selfhost/stage7-contract.edn",
+      contract_sha256:$parent_stage7_contract_sha256
+    },
+    canonical_source_sha256:$canonical_source_sha256,
+    reproducibility:{
+      independent_builds:2,
+      run1_compiler_sha256:$run1_sha256,
+      run2_compiler_sha256:$run2_sha256,
+      byte_identical:true,
+      run1_determinism:$run1_determinism,
+      run2_determinism:$run2_determinism,
+      canonical_time_date_stamp:$canonical_time_date_stamp,
+      canonical_mvid:$canonical_mvid
+    },
+    functional_sanity:{
+      structural_description_read:true,
+      prepared_methods:27,
+      add_target_compiled_and_executed:true,
+      add_result:42
+    },
+    claims:{
+      compiler_stage7:true,
+      stage8:true,
+      raw_artifact_reproducibility:true,
+      raw_artifact_reproducibility_scope:"compiler_stage7_persisted_assembly_builder_output",
+      stage9:false,
+      self_reproduction:false,
+      fixed_point:false,
+      stage15_n:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.stage8 == true and
+  .claims.raw_artifact_reproducibility == true and
+  .claims["promotion/allowed?"] == false and
+  .reproducibility.byte_identical == true' \
+  "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost Stage8 gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  stage7_run1_sha256=$run1_sha256"
+echo "  stage7_run2_sha256=$run2_sha256"

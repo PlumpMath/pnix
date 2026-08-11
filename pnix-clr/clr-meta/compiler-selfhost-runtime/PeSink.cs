@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 
 namespace Pnix.ClrMeta.CompilerSupport;
@@ -573,6 +575,7 @@ public sealed class PeSink
             }
 
             assembly!.Save(temporary);
+            CanonicalizeForReproducibility(temporary);
             File.Move(temporary, outputPath);
         }
         finally
@@ -754,6 +757,78 @@ public sealed class PeSink
     {
         using FileStream stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    // Stage8: PersistedAssemblyBuilder.Save() has no public hook to control the
+    // PE COFF header TimeDateStamp or the module's MVID -- both vary between
+    // two saves of byte-identical IL, confirmed empirically (two builds from
+    // the same frozen source differed at exactly these two locations and
+    // nowhere else). Neither field is read by anything this pipeline invokes
+    // (compile/invoke/describe/prepare never inspect them), so zeroing both
+    // after Save() is a safe, purely-cosmetic patch that makes the artifact
+    // byte-reproducible across independent builds. The MVID patch locates its
+    // exact bytes via the real GUID that MetadataReader reports (not a
+    // fixed offset, since heap layout shifts with content) and requires that
+    // 16-byte sequence to occur exactly once in the file before overwriting it
+    // -- a 128-bit random value colliding elsewhere in a ~20KB IL image is not
+    // a real risk, but failing closed on anything else is cheap insurance.
+    private static void CanonicalizeForReproducibility(string path)
+    {
+        byte[] bytes = File.ReadAllBytes(path);
+        int timeDateStampOffset;
+        byte[] mvidBytes;
+        using (var stream = new MemoryStream(bytes, writable: false))
+        using (var peReader = new PEReader(stream))
+        {
+            timeDateStampOffset = peReader.PEHeaders.CoffHeaderStartOffset + 4;
+            MetadataReader metadataReader = peReader.GetMetadataReader();
+            ModuleDefinition module = metadataReader.GetModuleDefinition();
+            mvidBytes = metadataReader.GetGuid(module.Mvid).ToByteArray();
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            bytes[timeDateStampOffset + i] = 0;
+        }
+
+        int mvidOffset = FindSingleOccurrence(bytes, mvidBytes);
+        for (int i = 0; i < mvidBytes.Length; i++)
+        {
+            bytes[mvidOffset + i] = 0;
+        }
+
+        File.WriteAllBytes(path, bytes);
+    }
+
+    private static int FindSingleOccurrence(byte[] haystack, byte[] needle)
+    {
+        int found = -1;
+        int count = 0;
+        for (int i = 0; i + needle.Length <= haystack.Length; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < needle.Length; j++)
+            {
+                if (haystack[i + j] != needle[j])
+                {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (match)
+            {
+                count++;
+                found = i;
+            }
+        }
+
+        if (count != 1)
+        {
+            throw DataAbi.Reject("pesink", "mvid-occurrence-count", count);
+        }
+
+        return found;
     }
 }
 

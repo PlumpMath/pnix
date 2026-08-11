@@ -5,7 +5,9 @@ selfhost-family C0 contract and C1 recursive source-admission checkpoint are
 closed; executable selfhost Compiler Stage1 is closed at C2; same-source
 executable Compiler Stage2 and its source-hidden fresh-target replay are closed
 at C3; the same-source Stage3--7 recompile ladder is live-gated CLOSED (2026-08-07)
-with `promotion/allowed?=false`; Stage8--15/N and replacement remain OPEN.
+with `promotion/allowed?=false`; Stage8 (reproducible assembly artifacts) is
+live-gated CLOSED (2026-08-12), also `promotion/allowed?=false`; Stage9--15/N
+and replacement remain OPEN.
 Truth owners: the monorepo constitution, CLR source, artifact manifests, and
 future stage receipts. This page is a roadmap, not closure evidence.
 
@@ -187,12 +189,17 @@ compiler fixed point.
    host-seeded Compiler Stage1 artifact, and semantic mutation propagation are
    closed at C2; C3 now also closes Stage1-to-Stage2 exact same-source
    compilation and source-hidden fresh-target replay.
-4. **Compiler Stage3–5 closed** (2026-08-07): successive same-source
-   recompiles Stage2→3→4→5; structural descriptions equal parent; source-hidden
-   fresh-target replay PASS (`STAGE{3,4,5}_DESIGN.md`,
-   `scripts/clr-meta-compiler-selfhost-stage{3,4,5}-gate`).
-   Next: Stage6–7 convergence and a separately named self-reproduction gate.
-5. Close Stage8--15/N without making proof receipts control ordinary language
+4. **Compiler Stage3–7 closed** (2026-08-07): successive same-source
+   recompiles Stage2→3→4→5→6→7; structural descriptions equal parent;
+   source-hidden fresh-target replay PASS (`STAGE{3,4,5,6,7}_DESIGN.md`,
+   `scripts/clr-meta-compiler-selfhost-stage{3,4,5,6,7}-gate`).
+   **Stage8 closed** (2026-08-12): reproducible assembly artifacts — two
+   independent Stage7 builds from the same frozen Stage6 are byte-identical
+   under an explicit, empirically-derived PE-field canonicalization policy
+   (`STAGE8_DESIGN.md`, `scripts/clr-meta-compiler-selfhost-stage8-gate`).
+   Next: Stage9 (clean-process compiler/runtime replay) and a separately
+   named self-reproduction gate.
+5. Close Stage9--15/N without making proof receipts control ordinary language
    execution.
 6. Admit exact `-e`, file, REPL, compile/AOT, namespace/load, and tooling
    compatibility profiles individually.
@@ -219,10 +226,13 @@ selfhost_family_stage2_fresh_target_replay = true
 compiler_stage3 = true
 compiler_stage4 = true
 compiler_stage5 = true
-compiler_stage6_through_15_n = false
+compiler_stage6 = true
+compiler_stage7 = true
+compiler_stage8 = true
+compiler_stage9_through_15_n = false
 compiler_self_reproduction = false
 clr_il_fixed_point = false
-raw_aot_rebuild_determinism = false
+raw_aot_rebuild_determinism = true (compiler_stage7_persisted_assembly_builder_output only; see STAGE8_DESIGN.md)
 broad_clojureclr_compatibility = false
 clojureclr_replacement = false
 standalone_source_free_distribution = false

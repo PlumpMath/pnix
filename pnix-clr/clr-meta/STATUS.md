@@ -1,6 +1,6 @@
 # clr-meta status (peer host-meta floor)
 
-Last verified: 2026-08-07.
+Last verified: 2026-08-12.
 
 ## Peer-floor statement
 
@@ -68,17 +68,49 @@ pnix-clr common-slice: live five-host floor (URI, JSON, dynamic attrs, exact int
   promotion/allowed? = false
 ```
 
+## Closed this wave (2026-08-12) — Compiler Stage8 reproducible assembly artifacts
+
+```text
+./scripts/clr-meta-compiler-selfhost-stage8-gate   PASS
+  Two independent Stage7 builds from the same frozen Stage6 parent are now
+  byte-identical (sha256-equal, cmp-equal), not just structurally equal.
+  Found and canonicalized the only two non-deterministic PE fields this
+  codegen path (PeSink.cs, PersistedAssemblyBuilder-based) actually produces:
+    PE COFF TimeDateStamp -> 0
+    Module Mvid -> 00000000-0000-0000-0000-000000000000
+  Found empirically (cmp -l byte diffing of two real builds), not assumed --
+  confirmed no PDB/debug-info variance exists in this codegen path either.
+  New describe-determinism verb re-derives both fields independently of the
+  writer, so the gate does not just trust that the canonicalizer ran.
+  Bonus (unplanned, observed live): Stage3, Stage4, Stage5, Stage6, and
+  Stage7's own compiler DLLs are now ALL sha256-identical to each other too
+  (not merely structurally equal), since canonicalization removes the only
+  two things that varied between what were otherwise identical recompiles of
+  the same frozen kernel.
+  claims.stage8 = true; raw_artifact_reproducibility = true (scoped to
+    compiler_stage7_persisted_assembly_builder_output); promotion/allowed? = false
+receipt: work/compiler-selfhost-stage8-gate.receipt.json
+contract: compiler-selfhost/stage8-contract.edn
+design: STAGE8_DESIGN.md
+gate chain: scripts/clr-meta-gate → …stage7 → stage8
+```
+
 ## Open claims (do not claim)
 
 ```text
-compiler_stage8_through_15_n = false
+compiler_stage9_through_15_n = false
 compiler_self_reproduction = false
 clr_il_fixed_point = false
-raw_aot_rebuild_determinism = false
 broad_clojureclr_compatibility / replacement = false
 pnix_common_compiler_integration = false
 cross_host_canonical_equivalence / clr_host_promotion = false
 ```
+
+`raw_aot_rebuild_determinism` moved out of this block (2026-08-12): Stage8
+closes it for the Compiler Stage1-7 `PersistedAssemblyBuilder` artifact family
+specifically. It is not a general claim about every artifact this repo could
+ever produce — a future codegen path that writes debug info would need its
+own determinism check, per `stage8-contract.edn`'s explicit non-claims.
 
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)
 

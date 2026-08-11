@@ -1,0 +1,91 @@
+{:schema :pnix.clr-meta.compiler-selfhost-stage8-contract.v1
+ :id :pnix.clr-meta.compiler-kernel-stage8.v1
+ :family :pnix.clr-meta.compiler-kernel.v1
+ :checkpoint :stage8-reproducible-assembly-artifact
+ :extends
+ {:contract "contract.edn"
+  :profile "profile.edn"
+  :plan "plan.edn"
+  :canonical-source "compiler_kernel.clj"
+  :stage7-contract "stage7-contract.edn"
+  :stage7-checkpoint :stage7-executable-compiler-stage7}
+
+ ;; Unlike Stage1-7, Stage8 does not produce a new compiler generation. It is
+ ;; a property proof: build Stage7 (via the existing, unmodified
+ ;; clr-meta-build-compiler-selfhost-stage7 builder) TWICE, independently,
+ ;; from the same frozen Stage6 parent, and require the two CompilerStage7.dll
+ ;; outputs to be byte-identical under an explicit, narrow determinism policy.
+
+ :non-determinism-sources
+ ;; Found empirically (not assumed): two Save() calls of byte-identical IL via
+ ;; System.Reflection.Emit.PersistedAssemblyBuilder, a few seconds apart,
+ ;; produced outputs differing at exactly 17 bytes across exactly two regions
+ ;; -- nowhere else. Confirmed via cmp -l byte-offset diffing plus PEReader/
+ ;; MetadataReader identification of both regions before any fix was written.
+ [{:field :pe-coff-time-date-stamp
+   :location "PE COFF file header TimeDateStamp (4 bytes, PEHeaders.CoffHeaderStartOffset + 4)"
+   :cause "PersistedAssemblyBuilder stamps the real build wall-clock time; no public API to override it"
+   :observed-in-baseline-diff "1 byte differed (low byte of the 4-byte field; builds were seconds apart)"}
+  {:field :module-mvid
+   :location "Module table Mvid column, a 16-byte GUID in the #GUID metadata heap"
+   :cause "PersistedAssemblyBuilder assigns a fresh random GUID per Save() call; no public API to override it"
+   :observed-in-baseline-diff "16 consecutive bytes differed (a distinct random GUID each build)"}]
+
+ :not-a-source-of-nondeterminism
+ ;; Explicitly checked, not assumed absent: this codegen path (PeSink.cs) never
+ ;; calls a PDB-writing overload of Save() and embeds no debug directory, so
+ ;; there is no PDB/debug-info or embedded-source-path variance to canonicalize
+ ;; for this specific artifact family. A future codegen path that does emit
+ ;; debug info would need its own, separate policy entry here -- do not assume
+ ;; this contract's silence on debug info generalizes to a codegen path that
+ ;; wasn't checked.
+ [:debug-info :embedded-source-paths]
+
+ :policy
+ ;; PeSink.Finish() calls a new CanonicalizeForReproducibility step, after
+ ;; PersistedAssemblyBuilder.Save() and before the artifact is moved to its
+ ;; final path, for every artifact this pipeline produces (Stage1-7 alike --
+ ;; not gated behind a flag, since neither field is semantically observable by
+ ;; anything compile/invoke/describe/prepare/publish-directory do).
+ {:pe-coff-time-date-stamp {:canonical-value 0}
+  :module-mvid {:canonical-value "00000000-0000-0000-0000-000000000000"}
+  :method
+  "Locate PEHeaders.CoffHeaderStartOffset + 4 for the timestamp (a fixed PE
+   structural offset, not a hardcoded byte position); read the real MVID via
+   MetadataReader.GetModuleDefinition().Mvid, then find that exact 16-byte
+   sequence in the file (required to occur exactly once, or the canonicalizer
+   rejects) rather than assuming a fixed heap offset, since heap layout shifts
+   with the compiled program's own content."
+  :implementation "compiler-selfhost-runtime/PeSink.cs CanonicalizeForReproducibility"
+  :independent-verification "compiler-selfhost-runtime/Program.cs describe-determinism verb (reads the two canonicalized fields directly from a finished artifact, independent of the writer)"}
+
+ :parent-stage7
+ {:artifact-schema "pnix.clr-meta.compiler-selfhost-stage7-artifact.v1"
+  :checkpoint :stage7-executable-compiler-stage7
+  :stage 7
+  :required-claims
+  {:compiler-stage7 true
+   :same-source-recompile true
+   :stage8 :gate-owned}}
+
+ :claims
+ {:compiler-stage7 true
+  :stage8 true
+  :raw-artifact-reproducibility true
+  :raw-artifact-reproducibility-scope :compiler-stage7-persisted-assembly-builder-output
+  :stage9 false
+  :self-reproduction false
+  :fixed-point false
+  :stage15-n false
+  :promotion-allowed false
+  :clojureclr-replacement false}
+
+ :non-claims
+ [:stage9-clean-process-replay
+  :compiler-self-reproduction
+  :il-fixed-point
+  :full-clojure-surface
+  :pnix-semantics
+  :cross-host-canonical-equivalence
+  :trusting-trust-defense
+  :determinism-for-codegen-paths-that-emit-debug-info]}

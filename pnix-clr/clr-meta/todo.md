@@ -51,30 +51,43 @@ trusting doc prose:
    `bin/clr-meta-gate --no-build` 209/209 assertions, `:ready true`, no
    regressions. Do not re-flag as open.
 
-2. **Stage8 — reproducible assembly artifact closure — NEXT PRIORITY.** State: not started
-   (no design doc, no gate/builder scripts, `stage8: false` stamped
-   everywhere). Done = an explicit policy for PE metadata, MVIDs, debug
-   info, paths, and timestamps, plus a gate proving two independent builds
-   from the same frozen source produce artifacts equal under that policy —
-   same shape as the five already-shipped `clr-meta-build/gate-compiler-
-   selfhost-stage{3..7}` pairs. **Size: medium** — the gate/builder
-   scaffolding pattern is proven and copyable, but the PE/MVID/timestamp
-   determinism policy for `System.Reflection.Emit.PersistedAssemblyBuilder`
-   output is genuinely new work, not a port.
+2. **Stage8 — reproducible assembly artifact closure — DONE (2026-08-12).**
+   Was: not started (no design doc, no gate/builder scripts, `stage8: false`
+   stamped everywhere). Now: found the *actual* non-determinism by measurement
+   (two builds of the same frozen source, byte-diffed) rather than assuming
+   the roadmap's generic list — exactly two fields varied: PE COFF
+   `TimeDateStamp` and the module `Mvid`; no PDB/debug-info variance exists in
+   this codegen path (checked, not assumed). `PeSink.Finish()` now
+   canonicalizes both (`compiler-selfhost-runtime/PeSink.cs`
+   `CanonicalizeForReproducibility`); a new `describe-determinism` verb
+   independently re-reads both fields from a finished artifact. New gate
+   `scripts/clr-meta-compiler-selfhost-stage8-gate` builds Stage7 twice from
+   the same frozen Stage6 and requires byte-identical output — PASS on first
+   run. Policy recorded in `compiler-selfhost/stage8-contract.edn`; design in
+   `STAGE8_DESIGN.md`; wired into `scripts/clr-meta-gate`. Verified: full
+   `bin/clr-meta-gate --no-build` still green (209/209 assertions, all
+   Stage1–8 gates PASS) — no regressions. Unplanned bonus observed live:
+   Stage3–7's own compiler DLLs are now all sha256-identical to each other
+   too, not just structurally equal, since canonicalization removed the only
+   two things that varied between otherwise-identical recompiles of the same
+   frozen kernel. Do not re-flag Stage8 as open or as "not started."
 
-3. **Stage9 — clean-process compiler/runtime replay.** State: not started;
-   depends on Stage8's artifact existing. Done = the Stage8 artifact runs in
-   an actual fresh `dotnet` process (not in-process eval) and reproduces the
-   same canonical result. **Size: small–medium** once Stage8 lands — rs-meta
-   and hy-meta both have a working stage9 pattern (clean subprocess +
-   manifest binding) to follow.
+3. **Stage9 — clean-process compiler/runtime replay — NEXT PRIORITY.** State:
+   not started; Stage8's artifact now exists (the gate's own `stage7_run1`
+   bundle, proven byte-reproducible). Done = that artifact runs in an actual
+   fresh `dotnet` process (not in-process eval) and reproduces the same
+   canonical result. **Size: small–medium** — rs-meta and hy-meta both have a
+   working stage9 pattern (clean subprocess + manifest binding) to follow.
 
 4. **Compiler self-reproduction / B==C fixed point.** State: false. Stage3–7
    prove same-source recompile plus structural-description equality to the
    immediate parent, but not that a stage reproduces itself byte-identically
    (the "kernelB compiles kernelC, B==C" pattern hy-meta and rs-meta both
-   closed). **Size: medium** — likely folds naturally out of the Stage8
-   determinism-policy work rather than needing a fully separate track.
+   closed). **Size: medium.** Partially de-risked by Stage8: the byte-level
+   reproducibility machinery (canonicalization, sha256/cmp comparison) that a
+   fixed-point proof would need already exists and is proven working — what's
+   still missing is compiling the compiler's *own* source through itself
+   (not just recompiling the frozen kernel through successive generations).
 
 5. **Stage10 (sandbox/session isolation) and Stage11–15/N (multi-domain
    adapters, self-improvement quarantine, long-horizon replay, cross-host
