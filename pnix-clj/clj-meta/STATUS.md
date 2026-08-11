@@ -78,6 +78,66 @@ Stage11–N are **local product/organism closure seeds** with honest held
 boundaries (missing cross-host transcripts, checked-fallback lowering), not
 Clojure language-runtime replacement.
 
+## Trusting-Trust defense roadmap (Diverse Double-Compiling)
+
+**Current state is stronger than "false" alone suggests.** The "diverse double
+compile OK" / "reproducible DDC lane OK" rows above are real, passing gates —
+not aspirational. Three concrete pieces are already closed (see `todo.md`
+U5/U6/U8/U10 for full detail and 2026-06-29 receipts):
+
+```text
+U5  independent-kernel-evaluator-supported-corpus
+    kernel.clj (tree-walking value-semantics evaluator) cross-checked against
+    compiler.clj on the full 112-case conformance corpus: host≡compiler≡kernel,
+    0 unsupported. Honest scope: shares host clojure.core, not a second
+    bytecode compiler, no independent deftype/defrecord typegen.
+U6  frontend-selfhost
+    a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
+    no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
+    51 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    quote/13 macros/vector-destructuring) with ZERO calls into
+    tools.analyzer.jvm or the host reader.
+U8  fuzz-conformance
+    10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
+    0 divergences found.
+```
+
+**`independent-mini-backend-subset` DDC row (verified this session, 2026-08-11):**
+this row in `diverse_double_compile.clj` already runs the real 3-way comparison
+(host `eval` ≡ `compiler.clj` backend ≡ U6's independent mini backend) — it was
+not merely documented, it is a live, passing gate. It was wired to only 14 of
+U6's 51 fixtures, covering arithmetic/let/loop/threading-macros/cond/if-let/
+comparisons/quot-rem/unary-ops/seq-ops/get/nested-destructure. Grown to **43
+fixtures** this session by adding the previously-unwired categories that
+already existed and passed standalone in `frontend_selfhost.clj`: `do`,
+let-shadowing, boolean/nil/equality branching, all four data literals (vector/
+string+keyword/map/set), all three quote forms, the remaining 13 macros
+(`when`/`and`/`or`/`not`/`nil?`/`when-let`/`if-not`/`as->`/`cond->`/`cond->>`/
+`some->`/`some->-nil`/`some->>`), plain and rest-position destructuring, and
+`zero?`/`neg?`. Re-ran `-M:ddc`: `independent-mini-backend-subset -> accepted`
+(43/43 agree), full `diverse-double-compile: OK`, no regressions in the other
+15 rows. Receipt digest: `4688b206f7cd9c22beb0f3bbc4ae5a69d61fcdb01d806726ef24125f3827838c`.
+
+**What's still genuinely open:** full Wheeler DDC needs the independent
+backend's coverage to match the *production* corpus, not a 43-fixture subset,
+and (harder) bit-identical rather than behavior-identical output — two
+different compiler backends targeting the same bytecode format by coincidence
+is not the honest bar; behavior equivalence is. U5's kernel is also still an
+interpreter, not a second compiler, so it doesn't independently count toward
+this claim either.
+
+**Next concrete step:** widen `mini-backend-ddc-fixtures` further using
+`frontend_selfhost.clj`'s remaining ~8 fixtures not yet wired in (the ones that
+overlap categories already covered, e.g. plain `>`/`>=`/`<=` in isolation,
+`inc`/`dec`/`pos?` in isolation) for completeness, then grow U6's own fixture
+set itself past 51 toward the full 112-case conformance corpus U5 already
+reaches — at that point the claim upgrades from "43-fixture subset" to "full
+conformance-corpus independent 2nd compiler cross-validation," the actual
+Wheeler bar for this corpus. Full compiler-binary DDC (bit-identical bytecode,
+not just behavior) remains a further, harder bar on top of that and stays
+explicitly held; see `todo.md` U10 for the CakeML/CompCert/Octagon research
+trail this was checked against.
+
 ## Primary gate
 
 ```sh

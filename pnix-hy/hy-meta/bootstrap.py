@@ -47,9 +47,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from stage1.compiler import Stage1Compiler, load_hy_file  # noqa: E402
+from stage1.compiler import Stage1Compiler, eval_source, load_hy_file  # noqa: E402
 import hy  # noqa: E402
 import hy.errors  # noqa: E402
+import independent_mini_backend  # noqa: E402
 
 
 HY_META_ROUTE_POLICY_VERSION = "stage9-product-route-policy-v1"
@@ -1609,6 +1610,113 @@ def run_diverse_double_compile_check() -> dict[str, Any]:
         "upstream_factorial": upstream_factorial,
         "direct_factorial": direct_factorial,
         "ddc_status": status,
+    }
+
+
+def independent_mini_backend_fixtures() -> list[dict[str, Any]]:
+    return [
+        {"id": "mini-const-arithmetic", "source": "(defn f [] (+ 40 2)) (f)", "expected": 42},
+        {"id": "mini-one-arg", "source": "(defn f [x] (+ x 1)) (f 41)", "expected": 42},
+        {
+            "id": "mini-branch-two-arg",
+            "source": "(defn f [x y] (if (< x y) (* (+ x 1) y) (- x y))) (f 5 7)",
+            "expected": 42,
+        },
+        {
+            "id": "mini-recursive-factorial",
+            "source": "(defn f [x] (if (<= x 1) 1 (* x (f (- x 1))))) (f 5)",
+            "expected": 120,
+        },
+        {
+            "id": "mini-equality-boolean",
+            "source": "(defn f [x] (if (= x 42) True False)) (f 42)",
+            "expected": True,
+        },
+        {
+            "id": "mini-none-equality",
+            "source": "(defn f [x] (if (= x None) 42 0)) (f None)",
+            "expected": 42,
+        },
+        {
+            "id": "mini-unary-negate-branch",
+            "source": "(defn f [x] (if (> x 0) x (- 0 x))) (f -42)",
+            "expected": 42,
+        },
+        {"id": "mini-bare-arithmetic", "source": "(+ 1 2)", "expected": 3},
+    ]
+
+
+def run_independent_mini_backend_check() -> dict[str, Any]:
+    """Trusting-Trust (DDC) witness: cross-check upstream Hy against a tiny,
+    from-scratch reader+AST-builder (`independent_mini_backend.py`) that
+    shares no code with `hy.reader`, `hy.compiler`, `stage1/compiler.py`, or
+    `stage2/kernel.hy`. Unlike `run_diverse_double_compile_check` (which
+    compares whole-file kernel.hy/compiler.hy bytecode artifacts between the
+    upstream-seeded and direct-kernel lineages), this compares small-fixture
+    *behavior* between real upstream Hy and the independent mini backend —
+    the same honest "subset, behavior not bit-identical" bar clj-meta's
+    analogous `independent-mini-backend-subset` DDC row already uses.
+    """
+    rows = []
+    for fixture in independent_mini_backend_fixtures():
+        source = fixture["source"]
+        expected = fixture["expected"]
+        try:
+            host_result = eval_source(source, filename="<independent-mini-backend:host>")
+            host_ok = True
+            host_error = None
+        except Exception as exc:  # noqa: BLE001 - captured for the receipt
+            host_result = None
+            host_ok = False
+            host_error = f"{type(exc).__name__}: {exc}"
+        try:
+            mini_result = independent_mini_backend.compile_and_eval(source)
+            mini_ok = True
+            mini_error = None
+        except Exception as exc:  # noqa: BLE001 - captured for the receipt
+            mini_result = None
+            mini_ok = False
+            mini_error = f"{type(exc).__name__}: {exc}"
+        ok = (
+            host_ok
+            and mini_ok
+            and host_result == expected
+            and mini_result == expected
+        )
+        rows.append(
+            {
+                "id": fixture["id"],
+                "source": source,
+                "expected": expected,
+                "host_result": host_result,
+                "host_ok": host_ok,
+                "host_error": host_error,
+                "mini_backend_result": mini_result,
+                "mini_backend_ok": mini_ok,
+                "mini_backend_error": mini_error,
+                "ok": ok,
+            }
+        )
+    all_ok = bool(rows) and all(row["ok"] for row in rows)
+    return {
+        "backend": "independent_mini_backend.compile_and_eval",
+        "independence": {
+            "uses_hy_reader": False,
+            "uses_hy_compiler": False,
+            "uses_stage1_compiler_internals": False,
+            "uses_stage2_kernel": False,
+            "shared_runtime": ["python-ast-module", "python-compile-builtin"],
+        },
+        "not_claimed": [
+            "full-wheeler-ddc",
+            "bit-identical-bytecode-ddc",
+            "production-frontend-replacement",
+            "full-hy-language-coverage",
+        ],
+        "fixture_count": len(rows),
+        "rows": rows,
+        "all_fixtures_accepted": all_ok,
+        "mini_backend_status": "accepted" if all_ok else "rejected",
     }
 
 
@@ -7907,6 +8015,15 @@ def cmd_diverse_double_compile_check(_args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_independent_mini_backend_check(_args: argparse.Namespace) -> int:
+    result = run_independent_mini_backend_check()
+    for row in result["rows"]:
+        print(f"  [{'OK' if row['ok'] else 'FAIL'}] {row['id']} -> {row['host_result']!r}")
+    print(f"fixture_count: {result['fixture_count']}")
+    print(f"mini_backend_status: {result['mini_backend_status']}")
+    return 0 if result["all_fixtures_accepted"] else 1
+
+
 def cmd_no_fallback_check(_args: argparse.Namespace) -> int:
     result = run_no_fallback_check()
     ok = (
@@ -8718,6 +8835,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="DDC: upstream-built and direct-built kernels emit identical artifacts",
     )
     diverse_double_compile_check.set_defaults(func=cmd_diverse_double_compile_check)
+
+    independent_mini_backend_check = sub.add_parser(
+        "independent-mini-backend-check",
+        help="DDC: real upstream Hy and a from-scratch mini backend agree on a fixture subset",
+    )
+    independent_mini_backend_check.set_defaults(func=cmd_independent_mini_backend_check)
 
     no_fallback_check = sub.add_parser(
         "no-fallback-check",

@@ -57,6 +57,79 @@ pnix_language_semantics_ownership = false
 
 Stage15/N checks are **local product/organism seeds**, not Hy/CPython replacement.
 
+## Trusting-Trust defense roadmap (Diverse Double-Compiling)
+
+**hy-meta is the furthest along of the five hosts on this axis.** The
+`trusting-trust_defense = false` line above is about the *full* bar, not zero
+progress — a real DDC-style gate is already closed. From `todo.md`'s
+2026-06-29 Deep-Research Audit:
+
+```text
+diverse-double-compile-check (CLOSED, wired into smoke)
+    builds kernel.hy two independent ways:
+      kernel_upstream = via upstream hy.compiler (stage1 seed)
+      kernel_direct   = via the direct kernel (stage2 bridge, confirmed by a
+                         nonzero direct-kernel hit count, i.e. it actually ran
+                         through the new path, not a silent passthrough)
+    both then compile kernel.hy and compiler.hy. Outputs agree at all four
+    levels: normalized AST, canonical code, raw marshal, timestamped pyc.
+    A backdoor present in the direct build path but absent from upstream would
+    have produced a divergence here; none was found (green on 3.11 + 3.14).
+```
+
+**Why this is not yet "full" Trusting-Trust defense:** one of the two build
+paths (`kernel_upstream`) still routes through the real, trusted upstream
+`hy.compiler` as its seed — it is not an independently-authored third
+implementation. This check catches a backdoor introduced uniquely in the
+*direct-kernel* path; it would NOT catch one already present in upstream
+`hy.compiler` itself, since that same upstream compiler is one of the two
+things being compared. Wheeler's bar requires the second compiler to have no
+shared authorship/lineage with the first.
+
+**Independent mini backend added this session (2026-08-11):**
+`independent_mini_backend.py` is a new, from-scratch Hy-subset-to-Python-AST
+compiler — its own hand-written tokenizer/reader plus direct `ast` node
+construction, sharing zero code with `hy.reader`, `hy.compiler`,
+`stage1/compiler.py`, or `stage2/kernel.hy`. Python's `ast` module and
+`compile()` builtin remain trusted host substrate (the same honest role the
+JVM classfile format plays for clj-meta's analogous `frontend_selfhost.clj`).
+Wired in as a *separate* check (`independent-mini-backend-check`, in
+`smoke_test.py` right after `diverse-double-compile-check`) rather than a
+literal third leg of it: the existing DDC check compares whole-file
+`kernel.hy`/`compiler.hy` bytecode-artifact hashes, which a bounded tiny
+backend cannot meaningfully participate in — same reason clj-meta's tiny
+frontend gets its own `independent-mini-backend-subset` row instead of being
+merged into its whole-file DDC comparison.
+
+Covers 8 fixtures (arithmetic, comparisons, `if`, `defn`, recursion via
+factorial, boolean/`None`-equality branching) with real upstream Hy
+(`stage1.compiler.eval_source`) as the host reference. Verified live this
+session on both supported interpreters: `independent-mini-backend-check` ->
+8/8 accepted on Python 3.11.15 and 3.14, with `stage7-check` re-run
+unaffected on both (no regression from the new imports).
+
+**What this closes and what it still doesn't:** this is now a genuine 3-way
+comparison (real upstream Hy ≡ independent from-scratch mini backend) on a
+small fixture set — stronger than "documented but held," but still only 8
+fixtures, not the conformance corpus, and it does not (yet) cross-check
+against `kernel_direct` as a formal third leg the way the roadmap originally
+described. **Next concrete step:** grow the fixture set (data literals,
+`while`/`setv` mutation, `require`/macros) toward parity with
+`frontend_selfhost.clj`'s ~50-fixture scope on the clj-meta side, and add
+`kernel_direct` behavior as a third comparison point per-fixture (not just
+upstream vs mini) to make it a true 3-way rather than 2-way check.
+
+**Unrelated pre-existing gap found while verifying this (not fixed here):**
+`diverse-double-compile-check` and other native-corpus-dependent checks
+currently fail in a fresh checkout/venv with
+`hy.errors.HyRequireError: No module named 'tests'` — confirmed on unmodified
+`bootstrap.py` too (not a regression from this session's changes). The
+referenced `tests/` corpus (native Hy test suite, e.g.
+`tests.resources.tlib`) is absent from this checkout entirely. This blocks
+`diverse-double-compile-check`, `parity-ledger-check`, and
+`native-subset-test` in a from-scratch environment and should be tracked
+separately.
+
 ## Primary gate
 
 ```sh

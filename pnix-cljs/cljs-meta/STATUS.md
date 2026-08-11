@@ -50,6 +50,47 @@ independent_of_Node_Closure_cljs.core = false
 full_ClojureScript_product_replacement = false
 ```
 
+## Trusting-Trust defense roadmap (Diverse Double-Compiling)
+
+**Nothing closed yet on this axis.** The existing fixed-point proof
+(stage2 == stage3, byte-identical after >=15 self-recompiles) is *reproducibility*
+evidence, not Trusting-Trust defense — a backdoor baked into stage0/stage1 would
+reproduce itself identically forever and this check would still pass. No
+independently-authored third-party ClojureScript compiler exists to lean on
+either: alternatives like shadow-cljs still compile through the same official
+`cljs.core`/analyzer lineage this fixed point already depends on, so they would
+not catch a defect in that shared lineage.
+
+Concrete plan, following clj-meta's already-closed U6 pattern (same host
+language family, JS emit instead of JVM bytecode):
+
+```text
+Step 1 — independent minimal 2nd backend
+    Author a small, algorithmically independent ClojureScript-subset-to-JS
+    emitter: its own tiny reader/analyzer/emit path, zero shared code with the
+    self-hosted analyzer/compiler/cljs.js payload this fixed point produces.
+    Bound the target surface the same way clj-meta's frontend_selfhost.clj
+    does (fn/if/do/let/loop-recur/arithmetic/compare/literals/quote is a
+    reasonable first slice) rather than attempting full ClojureScript.
+
+Step 2 — cross-validate against the fixed-point compiler
+    Compile the same bounded fixture set through both: the primary
+    self-hosted (stage2/stage3) compiler, and the new independent emitter.
+    Require behavioral agreement (same evaluated result) on every fixture; a
+    divergence would indicate a defect unique to one lineage.
+
+Step 3 — widen coverage, keep the honest boundary explicit
+    Same scoping discipline clj-meta already settled on: record exactly how
+    much of the conformance surface the independent backend covers, keep
+    claiming only that scoped subset as "independently cross-validated," and
+    leave "full Wheeler DDC across the whole language" held until coverage
+    actually matches.
+```
+
+Node.js, the Google Closure runtime, and `cljs.core` itself would remain shared
+trust-root substrate even after this closes — DDC at the compiler level does
+not touch that lower layer, and no claim should be made that it does.
+
 ## Primary gate
 
 ```sh

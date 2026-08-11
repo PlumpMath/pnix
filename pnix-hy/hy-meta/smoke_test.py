@@ -17,6 +17,7 @@ if __name__ == "__main__":
         ["self-host-check"],
         ["bootstrap-fixedpoint-check"],
         ["diverse-double-compile-check"],
+        ["independent-mini-backend-check"],
         ["no-fallback-check"],
         ["parity-ledger-check"],
         ["stage8-check"],

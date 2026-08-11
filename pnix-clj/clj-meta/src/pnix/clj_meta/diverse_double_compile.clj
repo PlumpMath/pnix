@@ -277,6 +277,122 @@
    {:id :mini-backend-destructure
     :source "(fn [v] (let [[a [b c]] v] (+ a (+ b c))))"
     :args [[10 [20 12]]]
+    :expected 42}
+   {:id :mini-backend-do-body
+    :source "(fn [] (do (+ 1 2) (* 6 7)))"
+    :args []
+    :expected 42}
+   {:id :mini-backend-let-shadowing
+    :source "(fn [x] (let [x (+ x 1)] (if (< x 10) (* x 6) (- x 1))))"
+    :args [6]
+    :expected 42}
+   {:id :mini-backend-boolean-const-if
+    :source "(fn [] (if true 42 0))"
+    :args []
+    :expected 42}
+   {:id :mini-backend-nil-falsey
+    :source "(fn [] (if nil 0 42))"
+    :args []
+    :expected 42}
+   {:id :mini-backend-equality-branch
+    :source "(fn [x] (if (= x 7) 42 0))"
+    :args [7]
+    :expected 42}
+   {:id :mini-backend-vector-literal
+    :source "(fn [x] [x (+ x 1) true nil])"
+    :args [40]
+    :expected [40 41 true nil]}
+   {:id :mini-backend-string-keyword-vector
+    :source "(fn [] [\"ok\" :answer])"
+    :args []
+    :expected ["ok" :answer]}
+   {:id :mini-backend-map-literal
+    :source "(fn [x] {:answer x :label \"ok\" :flag true})"
+    :args [42]
+    :expected {:answer 42 :label "ok" :flag true}}
+   {:id :mini-backend-set-literal
+    :source "(fn [x] #{x 7 42})"
+    :args [41]
+    :expected #{41 7 42}}
+   {:id :mini-backend-quoted-symbol
+    :source "(fn [] (quote answer))"
+    :args []
+    :expected 'answer}
+   {:id :mini-backend-quoted-list
+    :source "(fn [] (quote (+ 1 2)))"
+    :args []
+    :expected '(+ 1 2)}
+   {:id :mini-backend-quoted-nested-data
+    :source "(fn [] (quote {:op answer :xs [1 2] :call (+ 1 2)}))"
+    :args []
+    :expected '{:op answer :xs [1 2] :call (+ 1 2)}}
+   {:id :mini-backend-macro-when
+    :source "(fn [x] (when (< x 50) (+ x 1)))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-and
+    :source "(fn [x] (and true (< x 50) (+ x 1)))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-or
+    :source "(fn [x] (or nil false (+ x 1)))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-not
+    :source "(fn [x] (if (not (< x 0)) (+ x 1) 0))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-nil?
+    :source "(fn [x] (if (nil? x) 0 (+ x 1)))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-when-let
+    :source "(fn [x] (when-let [y (+ x 1)] y))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-if-not
+    :source "(fn [x] (if-not (< x 0) (+ x 1) 0))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-as->
+    :source "(fn [x] (as-> x v (+ v 1) (* v 2)))"
+    :args [20]
+    :expected 42}
+   {:id :mini-backend-macro-cond->
+    :source "(fn [x] (cond-> x (< x 50) (+ 1) (> x 100) (* 2)))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-cond->>
+    :source "(fn [x] (cond->> x (< x 50) (+ 1)))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-macro-some->
+    :source "(fn [x] (some-> x (+ 1) (* 2)))"
+    :args [20]
+    :expected 42}
+   {:id :mini-backend-macro-some->-nil
+    :source "(fn [x] (some-> x (+ 1)))"
+    :args [nil]
+    :expected nil}
+   {:id :mini-backend-macro-some->>
+    :source "(fn [x] (some->> x (+ 1)))"
+    :args [41]
+    :expected 42}
+   {:id :mini-backend-destructure-plain
+    :source "(fn [v] (let [[a b] v] (+ a b)))"
+    :args [[20 22]]
+    :expected 42}
+   {:id :mini-backend-destructure-rest-positions
+    :source "(fn [v] (let [[a b c] v] (if (nil? c) (+ a b) (+ a (+ b c)))))"
+    :args [[20 22]]
+    :expected 42}
+   {:id :mini-backend-op-zero?
+    :source "(fn [x] (if (zero? x) 42 0))"
+    :args [0]
+    :expected 42}
+   {:id :mini-backend-op-neg?
+    :source "(fn [x] (if (neg? x) 0 42))"
+    :args [5]
     :expected 42}])
 
 (defn- mini-backend-case-row

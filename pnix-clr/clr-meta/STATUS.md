@@ -80,6 +80,49 @@ pnix_common_compiler_integration = false
 cross_host_canonical_equivalence / clr_host_promotion = false
 ```
 
+## Trusting-Trust defense roadmap (Diverse Double-Compiling)
+
+**Nothing closed yet on this axis, and no shortcut exists.** Unlike Rust
+(`mrustc`), there is no independently-authored third-party ClojureCLR compiler
+in the wild to lean on — a second, independent backend would have to be built
+in-house, same constraint clj-meta already worked through for the JVM host.
+
+Concrete plan, adapted from clj-meta's already-closed U5/U6 pattern (same host
+language family, directly reusable lessons):
+
+```text
+Step 1 — independent interpreter cross-check (clj-meta's U5 analogue)
+    The existing gen0-2 nested evaluator lane already interprets rather than
+    compiles. Extend it (or add a sibling tree-walking evaluator) to cover the
+    same corpus the Compiler Stage1/2 PE-emitting lane targets, and compare
+    behavior: PE-emitted output vs interpreted output on identical inputs.
+    This catches a backdoor unique to either lane, though — same honest scope
+    clj-meta records for its own kernel — an interpreter is not a second
+    *compiler*, so this alone would not be the full Wheeler bar.
+
+Step 2 — independent minimal 2nd PE emitter (clj-meta's U6 analogue)
+    Author a small, algorithmically independent second backend that emits CLR
+    PE bytes directly for a bounded fixture set (mirrors clj-meta's tiny
+    reader+analyzer+ASM-emitter that covers 17 fixtures with zero calls into
+    the shared recognizer/emit path). Must not reuse the C2/C3 compiler
+    kernel's lowering-owner or PE-sink code — a shared emit path defeats the
+    purpose.
+    Cross-validate: the Compiler Stage1/2 chain's output vs this independent
+    emitter's output must agree (behaviorally, and ideally byte-for-byte for
+    the specific fixture PE format) on the shared fixture set.
+
+Step 3 — widen the fixture set toward the real conformance corpus
+    Same honest scoping as clj-meta U5/U6: grow coverage incrementally, record
+    exactly how much of the corpus each side of the DDC actually spans, and
+    keep "full Wheeler DDC" held until the independent backend's coverage
+    matches the primary compiler's.
+```
+
+This is a genuinely large, from-scratch build (the "high difficulty, must be
+built in-house" case clj-meta's own `todo.md` R4 flags for any host without an
+existing independent compiler) — expect it to be its own multi-session track,
+sequenced after Stage8+ same-lineage work stabilizes, not before it.
+
 ## Primary gate
 
 ```sh
