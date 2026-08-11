@@ -49,7 +49,10 @@ roadmap" 절)를 참고. 아래 항목들은 이 세션에서 라이브로 재�
 `source-bundle-check` PASS, `stage2-chain-check` PASS,
 `stage9-aggregate-replay-check` PASS — all re-run live during this audit, not just
 read from docs). Item 1 below (previously the highest-priority open item) is now
-DONE — see its entry for the fix.
+DONE — see its entry for the fix. A full `bin/rs-meta-gate check` run after that
+fix found exactly one unrelated pre-existing failure (`trait-boundary-check`,
+item 7 below, confirmed via `git worktree` to predate item 1's fix) — everything
+else in the full aggregate is green.
 
 ### 1. `interp.rs` runtime dispatch bug — Vec/chars — FIXED (2026-08-11, later pass)
 
@@ -160,7 +163,32 @@ DONE — see its entry for the fix.
 - **Size:** small, narrow, pre-existing, unrelated to the interp.rs bug (item 1)
   or the DDC work (items 2-3). Lowest priority of everything on this list.
 
----
+### 7. `trait-boundary-check` regression: `held-assoc-type` now parses (found 2026-08-11, later pass)
+
+- **State:** found while re-verifying the full `bin/rs-meta-gate check` aggregate
+  after fixing item 1. `trait-boundary-check` (3 cases) now fails 1/3:
+  `FAIL held assoc: held-assoc-type parses=true` — an associated-type binding
+  is supposed to be classified `held-assoc-type` and **not** parse (that's the
+  documented supported/held boundary; see `todo.md`'s 2026-07-03 boundary
+  reports entry), but it now parses successfully.
+- **Confirmed pre-existing, not a regression from item 1's fix:** isolated via
+  `git worktree add <tmp> <commit before the interp.rs fix>`, rebuilt, and ran
+  `trait-boundary-check` there directly — same failure reproduces on the
+  pre-fix commit. The interp.rs runtime-coercion fix (item 1) only touches
+  `coerce_let_value`/collect-result typing at interpretation time; it has no
+  path into parsing trait/associated-type syntax, so this is unrelated and
+  was already broken before this session's `interp.rs` work — just not
+  re-verified via a live `check` run in a while (the whole `check` aggregate
+  was blocked earlier in the pipeline by item 1 until this pass).
+- **What "done" looks like:** find why an associated-type binding now parses
+  (check `parser.rs`'s trait-impl parsing path against
+  `check.rs`'s `held-assoc-type` fixture source) and either fix the parser to
+  reject it again (if held-ness is meant to be enforced at parse time) or
+  update the classification if accepting it was an intentional, undocumented
+  widening — read the actual fixture/expectation in `check.rs` first before
+  assuming which direction is correct.
+- **Size:** small-to-medium, narrow, isolated to one check. Not currently
+  blocking anything else in the `check` aggregate (everything else passes).
 
 ## 2. Stage 사다리 (rustc bootstrap 모델 → stage15~N)
 
