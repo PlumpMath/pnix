@@ -52,43 +52,48 @@ full_ClojureScript_product_replacement = false
 
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)
 
-**Nothing closed yet on this axis.** The existing fixed-point proof
-(stage2 == stage3, byte-identical after >=15 self-recompiles) is *reproducibility*
-evidence, not Trusting-Trust defense — a backdoor baked into stage0/stage1 would
-reproduce itself identically forever and this check would still pass. No
-independently-authored third-party ClojureScript compiler exists to lean on
-either: alternatives like shadow-cljs still compile through the same official
-`cljs.core`/analyzer lineage this fixed point already depends on, so they would
-not catch a defect in that shared lineage.
+The fixed-point proof (stage2 == stage3, byte-identical after >=15
+self-recompiles) is *reproducibility* evidence, not Trusting-Trust defense — a
+backdoor baked into stage0/stage1 would reproduce itself identically forever
+and that check would still pass. No independently-authored third-party
+ClojureScript compiler exists to lean on either: alternatives like shadow-cljs
+still compile through the same official `cljs.core`/analyzer lineage the
+fixed point depends on, so they would not catch a defect in that shared
+lineage.
 
-Concrete plan, following clj-meta's already-closed U6 pattern (same host
-language family, JS emit instead of JVM bytecode):
+**Independent mini backend added this session (2026-08-11):**
+`independent_mini_backend.js` is a new, from-scratch ClojureScript-subset-to-JS
+emitter — its own tokenizer/reader plus direct JS source-text emission via
+`new Function(...)`, sharing zero code with `cljs.js`/`cljs.compiler`/
+`cljs.analyzer`. `new Function` and the JS engine itself remain trusted host
+substrate, the same honest role the JVM classfile format plays for clj-meta's
+`frontend_selfhost.clj` and Python's `ast`/`compile()` play for hy-meta's
+`independent_mini_backend.py`.
 
-```text
-Step 1 — independent minimal 2nd backend
-    Author a small, algorithmically independent ClojureScript-subset-to-JS
-    emitter: its own tiny reader/analyzer/emit path, zero shared code with the
-    self-hosted analyzer/compiler/cljs.js payload this fixed point produces.
-    Bound the target surface the same way clj-meta's frontend_selfhost.clj
-    does (fn/if/do/let/loop-recur/arithmetic/compare/literals/quote is a
-    reasonable first slice) rather than attempting full ClojureScript.
+Covers 8 fixtures (`let`, `if`, `+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`, booleans,
+keyword literals). Cross-validated against the real self-hosted compiler
+(`dist/cljs-meta-module.js`'s `evaluate()`, the actual cljs.js-backed
+production path) — both agree on all 8. Wired into
+`test/independent_mini_backend_test.js`, run from both
+`cljs-meta/bin/cljs-meta-gate` and the top-level `bin/pnix-cljs-gate`.
+Verified live this session: `independent mini backend DDC: PASS (8
+fixtures)`, full `pnix-cljs aggregate gate: PASS`, no regressions in
+self-test, runtime matrix, fixed-point runtime, or identity gates.
 
-Step 2 — cross-validate against the fixed-point compiler
-    Compile the same bounded fixture set through both: the primary
-    self-hosted (stage2/stage3) compiler, and the new independent emitter.
-    Require behavioral agreement (same evaluated result) on every fixture; a
-    divergence would indicate a defect unique to one lineage.
+**What this closes and what it still doesn't:** this is now a genuine 2-way
+behavioral comparison (self-hosted cljs.js-backed compiler ≡ independent
+from-scratch mini backend) on a small fixture set, not merely documented as a
+plan. It is still only 8 fixtures, not the conformance surface, and — same
+honest bar as clj-meta and hy-meta already settled on — behavior equivalence,
+not bit-identical JS text, since two independently-authored emitters
+targeting the same language by coincidence would not be expected to produce
+identical source text. **Next concrete step:** widen the fixture set (`do`,
+data literals — vectors/maps/keywords-as-values rather than just as return
+values, string handling) toward parity with clj-meta's ~50-fixture
+`frontend_selfhost.clj` scope.
 
-Step 3 — widen coverage, keep the honest boundary explicit
-    Same scoping discipline clj-meta already settled on: record exactly how
-    much of the conformance surface the independent backend covers, keep
-    claiming only that scoped subset as "independently cross-validated," and
-    leave "full Wheeler DDC across the whole language" held until coverage
-    actually matches.
-```
-
-Node.js, the Google Closure runtime, and `cljs.core` itself would remain shared
-trust-root substrate even after this closes — DDC at the compiler level does
+Node.js, the Google Closure runtime, and `cljs.core` itself remain shared
+trust-root substrate even with this closed — DDC at the compiler level does
 not touch that lower layer, and no claim should be made that it does.
 
 ## Primary gate
