@@ -549,8 +549,10 @@ impl TypeCk {
                     name.as_str(),
                     "std::io::ErrorKind::NotFound"
                         | "io::ErrorKind::NotFound"
+                        | "std::ErrorKind::NotFound"
                         | "std::io::ErrorKind::NotADirectory"
                         | "io::ErrorKind::NotADirectory"
+                        | "std::ErrorKind::NotADirectory"
                 ) {
                     return Ok(Type::Named("IoErrorKind".to_string()));
                 }
@@ -1385,6 +1387,15 @@ impl TypeCk {
                 if target == "FileType" {
                     return self.type_file_type_method(name, args);
                 }
+                if target == "DirEntry" {
+                    return self.type_dir_entry_method(name, args);
+                }
+                if target == "OsString" {
+                    return self.type_os_string_method(name, args);
+                }
+                if target == "Cow" {
+                    return self.type_cow_method(name, args);
+                }
                 if is_int_target(&target) {
                     return self.type_int_method(&target, name, &rt, args);
                 }
@@ -1629,6 +1640,18 @@ impl TypeCk {
                 // Associated const `Target::N`?
                 if let Some(ty) = self.globals.get(&format!("{}::{}", enum_name, variant)) {
                     return Ok(ty.clone());
+                }
+                // Module-qualified top-level const, e.g. `cap::CAP_FS_READ` for
+                // a plain `pub const CAP_FS_READ: &str = ...;` declared (with no
+                // module qualifier at all, since this bundle flattens every
+                // source file's `mod`-less top level into one program) in some
+                // other bundled file. `enum_name` here isn't a real enum in that
+                // case -- only try this when it truly isn't one, so genuine
+                // enum-variant resolution below is untouched.
+                if !self.enums.contains_key(enum_name) {
+                    if let Some(ty) = self.globals.get(variant) {
+                        return Ok(ty.clone());
+                    }
                 }
                 let fields = self.enum_variant_fields(enum_name, variant)?;
                 if fields.is_empty() {
@@ -1948,6 +1971,15 @@ impl TypeCk {
                     }
                     Type::Generic { name, args } if name == "Iter" && args.len() == 1 => {
                         args[0].clone()
+                    }
+                    Type::Generic { name, args } if name == "ReadDir" && args.is_empty() => {
+                        Type::Generic {
+                            name: "Result".to_string(),
+                            args: vec![
+                                Type::Named("DirEntry".to_string()),
+                                Type::Named("String".to_string()),
+                            ],
+                        }
                     }
                     other => return Err(format!("typeck: for over {:?}", other)),
                 };
@@ -3687,6 +3719,63 @@ impl TypeCk {
                 Ok(Type::Bool)
             }
             other => Err(format!("typeck: unsupported FileType method {}", other)),
+        }
+    }
+
+    // DirEntry/OsString/Cow are modeled only as narrowly as
+    // `DirEntry::file_name().to_string_lossy().into_owned()` and
+    // `DirEntry::path()` need -- not general std::ffi/std::borrow coverage.
+    fn type_dir_entry_method(&mut self, name: &str, args: &[Expr]) -> Result<Type, String> {
+        match name {
+            "file_name" => {
+                if !args.is_empty() {
+                    return Err(format!(
+                        "typeck: DirEntry::file_name expects 0 args, got {}",
+                        args.len()
+                    ));
+                }
+                Ok(Type::Named("OsString".to_string()))
+            }
+            "path" => {
+                if !args.is_empty() {
+                    return Err(format!(
+                        "typeck: DirEntry::path expects 0 args, got {}",
+                        args.len()
+                    ));
+                }
+                Ok(Type::Named("PathBuf".to_string()))
+            }
+            other => Err(format!("typeck: unsupported DirEntry method {}", other)),
+        }
+    }
+
+    fn type_os_string_method(&mut self, name: &str, args: &[Expr]) -> Result<Type, String> {
+        match name {
+            "to_string_lossy" => {
+                if !args.is_empty() {
+                    return Err(format!(
+                        "typeck: OsString::to_string_lossy expects 0 args, got {}",
+                        args.len()
+                    ));
+                }
+                Ok(Type::Named("Cow".to_string()))
+            }
+            other => Err(format!("typeck: unsupported OsString method {}", other)),
+        }
+    }
+
+    fn type_cow_method(&mut self, name: &str, args: &[Expr]) -> Result<Type, String> {
+        match name {
+            "into_owned" => {
+                if !args.is_empty() {
+                    return Err(format!(
+                        "typeck: Cow::into_owned expects 0 args, got {}",
+                        args.len()
+                    ));
+                }
+                Ok(Type::Named("String".to_string()))
+            }
+            other => Err(format!("typeck: unsupported Cow method {}", other)),
         }
     }
 
@@ -5714,6 +5803,19 @@ fn format_placeholder_kinds(fmt: &str, ctx: &str) -> Result<Vec<FormatArgKind>, 
                 // {:x}/{:X}/{:b}/{:o} all require an integer, like LowerHex.
                 kinds.push(FormatArgKind::LowerHex);
                 i += 4;
+            }
+            '{' if chars.get(i + 1) == Some(&':')
+                && chars.get(i + 2) == Some(&'.')
+                && chars.get(i + 3) == Some(&'*')
+                && chars.get(i + 4) == Some(&'}') =>
+            {
+                // `{:.*}` (dynamic precision) consumes two args in source
+                // order: the precision (an integer) then the value being
+                // formatted. FixedPrecision's existing type check (F64 or
+                // integer) already accepts both correctly.
+                kinds.push(FormatArgKind::FixedPrecision(0));
+                kinds.push(FormatArgKind::FixedPrecision(0));
+                i += 5;
             }
             '{' if typeck_fixed_precision_placeholder(&chars, i).is_some() => {
                 let (precision, next_i) =

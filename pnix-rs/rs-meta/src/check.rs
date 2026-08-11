@@ -8140,6 +8140,51 @@ fn source_bundle_with_harness(harness: &str) -> Result<String, String> {
     Ok(out)
 }
 
+/// Extract the bare imported name(s) from a `use std::a::b::Name;` or
+/// `use std::a::b::{Name1, Name2};` line (best-effort text parsing, not a
+/// real path resolver -- only needs to handle this bundle's own import
+/// lines, and check.rs is itself part of the self-hosting bundle, so this
+/// stays deliberately imperative/simple rather than relying on iterator
+/// combinators rs-meta's own typeck may not model).
+fn use_line_imported_names(line: &str) -> Vec<String> {
+    let trimmed_line = line.trim();
+    let chars: Vec<char> = trimmed_line.chars().collect();
+    let mut last_colons: i64 = -1;
+    let mut i = 0;
+    while i + 1 < chars.len() {
+        if chars[i] == ':' && chars[i + 1] == ':' {
+            last_colons = i as i64;
+        }
+        i += 1;
+    }
+    if last_colons < 0 {
+        return Vec::new();
+    }
+    let start = (last_colons + 2) as usize;
+    let mut tail = String::new();
+    let mut j = start;
+    while j < chars.len() {
+        if chars[j] != ';' {
+            tail.push(chars[j]);
+        }
+        j += 1;
+    }
+    let tail = tail.trim();
+    let mut names = Vec::new();
+    if let Some(inner) = tail.strip_prefix("{") {
+        let inner = inner.strip_suffix("}").unwrap_or(inner);
+        for part in inner.split(",") {
+            let part = part.trim();
+            if !part.is_empty() {
+                names.push(part.to_string());
+            }
+        }
+    } else if !tail.is_empty() {
+        names.push(tail.to_string());
+    }
+    names
+}
+
 fn normalize_bundle_line(line: &str, seen_uses: &mut Vec<String>) -> Option<String> {
     if line.starts_with("//!")
         || line.starts_with("use crate::")
@@ -8149,11 +8194,20 @@ fn normalize_bundle_line(line: &str, seen_uses: &mut Vec<String>) -> Option<Stri
         return None;
     }
     if line.starts_with("use std::") {
-        let use_line = line.to_string();
-        if seen_uses.iter().any(|seen| seen == &use_line) {
+        // Dedup by imported NAME, not exact line text: two bundled files can
+        // import the same std item through differently-shaped `use` lines
+        // (`use std::path::Path;` vs `use std::path::{Path, PathBuf};`),
+        // which would otherwise both survive as textually-distinct lines and
+        // rustc would reject the item as defined multiple times.
+        let names = use_line_imported_names(line);
+        if !names.is_empty() && names.iter().all(|n| seen_uses.contains(n)) {
             return None;
         }
-        seen_uses.push(use_line);
+        for n in names {
+            if !seen_uses.contains(&n) {
+                seen_uses.push(n);
+            }
+        }
     }
     if line == "fn main() -> ExitCode {" {
         return Some("fn bootstrap_main() -> ExitCode {".to_string());
@@ -8172,6 +8226,13 @@ fn normalize_bundle_line(line: &str, seen_uses: &mut Vec<String>) -> Option<Stri
     out = replace_all(out.as_str(), "native::", "");
     out = replace_all(out.as_str(), "hash::", "");
     out = replace_all(out.as_str(), "witness::", "");
+    // "io::" self-references (e.g. main.rs's `io::io_check()`) need
+    // stripping like every other bundled module above, but a blind
+    // substring strip also eats the "io" out of real std paths like
+    // `std::io::ErrorKind` -- protect that one first.
+    out = replace_all(out.as_str(), "std::io::", "PNIX_STD_IO_PLACEHOLDER");
+    out = replace_all(out.as_str(), "io::", "");
+    out = replace_all(out.as_str(), "PNIX_STD_IO_PLACEHOLDER", "std::io::");
     Some(out)
 }
 

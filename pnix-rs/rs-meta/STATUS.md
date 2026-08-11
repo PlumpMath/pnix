@@ -113,30 +113,75 @@ FIXED: `String::from_utf8(bytes)` (io.rs's `read_utf8`) wasn't registered at
   `.map_err(|_| ...)`, so the exact error type doesn't matter here, but
   `String` matches this codebase's existing fs-error convention).
 
-STILL OPEN, NOT ATTEMPTED (recommend treating as a separate, dedicated
-  piece of work rather than another inline fix): `read_dir`'s
-  `for item in entries { ... }` fails with "for over Generic{ReadDir}" --
-  ForEach's iterator-type match only knows Vec/&Vec/&slice/Iter<T>, not
-  ReadDir. Getting past that needs a `DirEntry` item type, and getting past
-  THAT needs `entry.file_name()` (-> OsString) `.to_string_lossy()`
-  (-> Cow<str>) `.into_owned()` (-> String) -- i.e. modeling a real chunk of
-  std::ffi's OsString/Cow machinery from scratch, not one more small
-  registration. This is qualitatively bigger than every fix above it (which
-  were each "teach typeck about one function/method/enum"); it's "build an
-  OsString/Cow type family". Stopping the inline-fix chain here.
+FIXED: `read_dir`'s `for item in entries { ... }` -- ForEach's iterator-type
+  match only knew Vec/&Vec/&slice/Iter<T>, not `ReadDir`. Added it (item type
+  `Result<DirEntry, String>`, matching this codebase's fs-error convention),
+  plus narrowly-scoped `DirEntry` (`.file_name()` -> `OsString`, `.path()` ->
+  `PathBuf`), `OsString` (`.to_string_lossy()` -> `Cow`), and `Cow`
+  (`.into_owned()` -> `String`) method dispatchers -- exactly the
+  `file_name().to_string_lossy().into_owned()` chain io.rs uses and nothing
+  more (no general std::ffi/std::borrow coverage), matching this codebase's
+  existing narrow-modeling style.
 
-Session total: 6 layers found across io.rs (a file that had never been in
-  the self-hosting bundle before this session), 5 fixed (2 real parser bugs,
-  1 real typeck bug, 3 additive registrations), 1 (OsString/Cow) explicitly
-  deferred as its own track. `source-bundle-check`, `stage9-proof-matrix-check`,
-  `stage9-aggregate-replay-check`, and the full `check` aggregate remain red
-  for this one remaining, precisely-scoped reason -- not the
-  "env_clear() strips something macOS needs" hypothesis this investigation
-  started from (ruled out: every failure found was a 100% deterministic
-  Rust-subset-parser/typeck feature gap, not environment- or
-  platform-dependent). Verified no regressions at every step: self-check
-  407/407, tv-check 407/407, typeck-check 272/272,
+FIXED: `io::FILE_READ_CAPABILITY`/`io::io_check()` in main.rs (and, it turns
+  out, `cap::CAP_FS_READ` too -- confirmed by isolating cap.rs alone in a
+  throwaway bundle, both fail identically) hit "unknown enum {module}".
+  Root cause, found by reading the parser: any bare 2-segment path with no
+  call (`module::CONST`) parses as `Expr::EnumCtor`, and typeck only
+  resolved that via an enum-variant table or a `self.globals` lookup keyed
+  by the literal string `"module::CONST"` -- but top-level `const`
+  declarations are parsed with their bare name only (`parse_global` never
+  learns a module prefix; this bundle flattens every file's un-`mod`-qualified
+  top level into one program), so that qualified key never existed for ANY
+  module-qualified constant, not just io's. Fixed generally: when
+  `enum_name` isn't a real registered enum, fall back to a bare-name
+  `self.globals` lookup before erroring -- fixes every `module::CONST`
+  reference symmetrically, not just io's.
+
+FIXED (bundling-level bug, in check.rs's `normalize_bundle_line`, not
+  typeck.rs): every other bundled file already had its own self-reference
+  prefix stripped (`lexer::`, `parser::`, ... `witness::`) but `io::` was
+  simply missing from that list -- so real rustc (which source-bundle-check
+  also compiles the bundle through) saw literal unresolvable `io::` paths
+  and, confusingly, suggested "did you mean `i8`" (textually close builtin
+  type), which looked like a bundling corruption bug before the real cause
+  was found. Added `io::` stripping, but naively stripping it as a blind
+  substring also ate the "io" out of real `std::io::` paths -- protected
+  those first via a placeholder round-trip.
+
+FIXED (separate bundling-level bug, same function): `io.rs`'s
+  `use std::path::Path;` and `native.rs`'s `use std::path::{Path, PathBuf};`
+  are textually different lines importing an overlapping name, so the
+  bundler's exact-text-match dedup kept both, and rustc rejected `Path` as
+  redefined. Replaced the dedup with one based on the actual imported
+  name(s) (parsing both `use ...::Name;` and `use ...::{A, B};` forms) so a
+  name already brought in by an earlier line's broader form is recognized
+  and the redundant later line is dropped.
+
+**`source-bundle-check` now PASSES** -- the check this whole investigation
+  was originally trying to get past. Session total across both rounds: 9
+  layers found in io.rs/main.rs/the bundler (io.rs had never been in the
+  self-hosting bundle before this session), all 9 fixed. Verified no
+  regressions: self-check 407/407, tv-check 407/407, typeck-check 272/272,
   independent-mini-backend-check 9/9, source-ast-check 16/16.
+
+STILL OPEN (10th layer, found, not fixed -- genuinely different category):
+  `stage9-proof-matrix-check`/`stage9-aggregate-replay-check`/the full
+  `check` aggregate still fail, now at `stage2-chain-check`
+  ("stage2 evaluator' corpus replay"), with `interp: unsupported Vec method
+  chars`. This check is meta-circular in a way nothing above it is: its
+  harness calls `interp_run` *from inside interpreted code*, i.e. it runs
+  the whole bundle (including `interp.rs`'s own lexer/parser/interpreter
+  logic) *through rs-meta's own interpreter* rather than through real rustc
+  or through typeck alone. Confirmed via `git stash` to an earlier commit
+  that this check has never once run this far before (it always failed
+  bundling/typechecking first) -- so this is newly-reachable, not a
+  regression. Somewhere in that self-interpreted call graph, a value that
+  should be string-like gets treated as a Vec at runtime when `.chars()` is
+  called on it; this is a genuine interpreter (interp.rs runtime dispatch)
+  bug, not a typeck/parser gap like everything fixed above -- a different
+  class of investigation (need to trace actual runtime value
+  representations through the interpreter, not just what typeck accepts).
 ```
 
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)
