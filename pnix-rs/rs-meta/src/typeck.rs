@@ -539,6 +539,21 @@ impl TypeCk {
                         args: Vec::new(),
                     });
                 }
+                // A bare multi-segment path with no call, e.g.
+                // `std::io::ErrorKind::NotFound`, parses as a single flat
+                // Expr::Var("std::io::ErrorKind::NotFound") rather than a
+                // structured path -- so std::io::ErrorKind's variants are
+                // recognized here by their full literal spelling, matching
+                // the `.kind()` method's IoErrorKind return type above.
+                if matches!(
+                    name.as_str(),
+                    "std::io::ErrorKind::NotFound"
+                        | "io::ErrorKind::NotFound"
+                        | "std::io::ErrorKind::NotADirectory"
+                        | "io::ErrorKind::NotADirectory"
+                ) {
+                    return Ok(Type::Named("IoErrorKind".to_string()));
+                }
                 if let Some(local) = self.lookup(name) {
                     return Ok(local);
                 }
@@ -891,6 +906,22 @@ impl TypeCk {
                             }
                             self.type_expr(&args[0])?;
                             return Ok(Type::Named("String".to_string()));
+                        }
+                        "from_utf8" => {
+                            if args.len() != 1 {
+                                return Err(format!(
+                                    "typeck: String::from_utf8 expects 1 arg, got {}",
+                                    args.len()
+                                ));
+                            }
+                            self.type_expr(&args[0])?;
+                            return Ok(Type::Generic {
+                                name: "Result".to_string(),
+                                args: vec![
+                                    Type::Named("String".to_string()),
+                                    Type::Named("String".to_string()),
+                                ],
+                            });
                         }
                         _ => {}
                     }
@@ -3456,6 +3487,21 @@ impl TypeCk {
                     name: "Iter".to_string(),
                     args: vec![Type::Tuple(vec![Type::Usize, Type::Char])],
                 })
+            }
+            "kind" => {
+                // Real Rust: std::io::Error::kind() -> std::io::ErrorKind. This
+                // repo's fs::* errors are modeled as plain String (a pre-existing
+                // simplification, load-bearing elsewhere), so this is an additive
+                // special case letting a String-typed error respond to `.kind()`
+                // rather than changing what type fs::read/fs::read_dir return.
+                if !args.is_empty() {
+                    return Err(format!(
+                        "typeck: {}::kind expects 0 args, got {}",
+                        target,
+                        args.len()
+                    ));
+                }
+                Ok(Type::Named("IoErrorKind".to_string()))
             }
             other => Err(format!("typeck: unsupported {} method {}", target, other)),
         }

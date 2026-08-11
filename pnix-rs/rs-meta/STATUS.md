@@ -94,31 +94,47 @@ FIXED: `Path::new(s)` was typed as returning owned `PathBuf` in typeck.rs;
   resolve correctly), and re-confirmed self-check 407/407, tv-check 407/407,
   typeck-check 272/272 -- no regressions.
 
-STILL OPEN (next layer found, not fixed): getting past Path::new reveals
-  io.rs's `read_utf8`/`read_dir` call `e.kind() == std::io::ErrorKind::X`
-  on the error from `fs::read`/`fs::read_dir` -- but those are modeled
-  (matching the three pre-existing `fs::` functions) as returning
-  `Result<_, String>`, a plain String error with no `.kind()` method or
-  `ErrorKind` enum. Unlike Path::new, `fs::read`'s `String`-typed error is
-  PRE-EXISTING (not added this session) and likely load-bearing elsewhere
-  (e.g. anything that formats or `?`-propagates it as a String), so it
-  should NOT be blanket-changed the way Path::new was -- the safer shape is
-  probably an additive `.kind()` special-case (e.g. in `type_string_method`)
-  returning a new small `IoErrorKind`-like type comparable via `==` against
-  `std::io::ErrorKind::NotFound`/`NotADirectory` path expressions, without
-  touching what `fs::read`'s error type actually is. Not attempted this
-  session -- this makes four fixed layers (`.* `, `ref` patterns, Metadata/
-  FileType, Path::new) and a fifth found; there is no guarantee this is the
-  last one io.rs will reveal, since it was never in the self-hosting bundle
-  before this session.
+FIXED: `e.kind() == std::io::ErrorKind::X` (io.rs's `read_utf8`/`read_dir`
+  error handling) didn't type-check: `fs::read`/`fs::read_dir`'s errors are
+  modeled as plain `String` (a PRE-EXISTING simplification, left untouched
+  since other passing code likely relies on it), which has no `.kind()`
+  method, and separately `std::io::ErrorKind::NotFound`/`NotADirectory`
+  parse as a single flat `Expr::Var("std::io::ErrorKind::NotFound")` (a bare
+  multi-segment path with no call doesn't build a structured path node) so
+  it hit "unbound variable". Fixed additively: `.kind()` is now a special
+  case on `type_string_method` returning a new `IoErrorKind` type, and the
+  two exact literal variable-name strings are recognized in `type_expr`'s
+  `Expr::Var` handling and typed as `IoErrorKind` too, so the `==` compares
+  matching types without changing what `fs::read`'s error actually is.
 
-Net effect: `source-bundle-check`, `stage9-proof-matrix-check`,
+FIXED: `String::from_utf8(bytes)` (io.rs's `read_utf8`) wasn't registered at
+  all (only `String::new`/`String::from`/`String::from_utf8_lossy` were).
+  Added `Result<String, String>` (io.rs immediately discards the error via
+  `.map_err(|_| ...)`, so the exact error type doesn't matter here, but
+  `String` matches this codebase's existing fs-error convention).
+
+STILL OPEN, NOT ATTEMPTED (recommend treating as a separate, dedicated
+  piece of work rather than another inline fix): `read_dir`'s
+  `for item in entries { ... }` fails with "for over Generic{ReadDir}" --
+  ForEach's iterator-type match only knows Vec/&Vec/&slice/Iter<T>, not
+  ReadDir. Getting past that needs a `DirEntry` item type, and getting past
+  THAT needs `entry.file_name()` (-> OsString) `.to_string_lossy()`
+  (-> Cow<str>) `.into_owned()` (-> String) -- i.e. modeling a real chunk of
+  std::ffi's OsString/Cow machinery from scratch, not one more small
+  registration. This is qualitatively bigger than every fix above it (which
+  were each "teach typeck about one function/method/enum"); it's "build an
+  OsString/Cow type family". Stopping the inline-fix chain here.
+
+Session total: 6 layers found across io.rs (a file that had never been in
+  the self-hosting bundle before this session), 5 fixed (2 real parser bugs,
+  1 real typeck bug, 3 additive registrations), 1 (OsString/Cow) explicitly
+  deferred as its own track. `source-bundle-check`, `stage9-proof-matrix-check`,
   `stage9-aggregate-replay-check`, and the full `check` aggregate remain red
-  -- but now for this one, precisely-diagnosed, next reason, not
-  the "env_clear() strips something macOS needs" hypothesis this
-  investigation started from (that hypothesis is ruled out: every failure
-  found was a 100% deterministic Rust-subset-parser/typeck feature gap, not
-  environment- or platform-dependent). Verified no regressions: self-check
+  for this one remaining, precisely-scoped reason -- not the
+  "env_clear() strips something macOS needs" hypothesis this investigation
+  started from (ruled out: every failure found was a 100% deterministic
+  Rust-subset-parser/typeck feature gap, not environment- or
+  platform-dependent). Verified no regressions at every step: self-check
   407/407, tv-check 407/407, typeck-check 272/272,
   independent-mini-backend-check 9/9, source-ast-check 16/16.
 ```
