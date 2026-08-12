@@ -66,14 +66,16 @@ infra-and-execution, not design.
 ### 2. Trusting-Trust / DDC depth — actionable, small-to-medium, incremental
 
 **State:** `independent_mini_backend.js` (added 2026-08-11, widened
-2026-08-11) is a genuine from-scratch tokenizer/reader + direct JS-text
-emitter sharing zero code with `cljs.js`/`cljs.compiler`/`cljs.analyzer`,
-cross-validated against the real self-hosted compiler's `evaluate()`. Covers
-14 fixtures: `let`, `if`, `do`, `+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`, booleans,
-keyword literals, string literals, vector literals as return values, and
-named `fn` literals including self-recursion (factorial, fibonacci). Wired
-into `test/independent_mini_backend_test.js` (now using `assert.deepEqual`
-so vector-returning fixtures compare structurally, not by reference), run
+2026-08-11 and again 2026-08-12) is a genuine from-scratch tokenizer/reader +
+direct JS-text emitter sharing zero code with
+`cljs.js`/`cljs.compiler`/`cljs.analyzer`, cross-validated against the real
+self-hosted compiler's `evaluate()`. Covers 21 fixtures: `let` (including
+vector destructuring), `if`, `do`, `+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`,
+booleans, keyword literals, string literals, vector and map literals as
+return values, the seq ops `get`/`nth`/`count`/`conj`/`nil?`, and named `fn`
+literals including self-recursion (factorial, fibonacci). Wired into
+`test/independent_mini_backend_test.js` (using `assert.deepEqual` so
+vector/map-returning fixtures compare structurally, not by reference), run
 from both `cljs-meta-gate` and `pnix-cljs-gate`. This closed the "no DDC
 exists at all" gap — do not re-flag it as missing.
 
@@ -103,10 +105,18 @@ architecture change needed.
       `str`, not yet exercised by a fixture).
 - [x] `fn` (named and anonymous function definition + call).
 - [x] Recursion (self-reference through a named `fn` literal).
-- [ ] Data literals as *values* beyond vectors: maps, keywords-as-values in
-      non-branch position.
-- [ ] Map literals, `get`, basic seq ops (`first`/`next`/`count`).
-- [ ] Destructuring (vector/map binding forms in `let`/`fn` params).
+- [x] Map literals as return values (keyword/string keys only).
+- [x] `get`, `nth`, `count`, `conj`, `nil?` seq ops.
+- [x] Vector destructuring in `let` bindings (out-of-bounds positions bind to
+      `nil`/JS `null`, not `undefined`, matching this backend's own `nil`
+      mapping — verified against `(nil? c)` on a too-short source vector).
+- [ ] Nested destructuring (`[[a b] c]`), map destructuring in `let`/`fn`
+      params — explicitly not yet supported (`emitFn`'s params and this
+      `let` binding loop both throw on a non-symbol, non-flat-vector name).
+- [ ] Keywords-as-values in non-branch position (currently only appear as
+      branch results/map keys/vector elements — not yet a documented gap,
+      just unexercised by a fixture).
+- [ ] Set literals, `assoc`/`update`, more macros (`when`, `cond`, `->`).
 - [ ] Re-run STATUS.md's "Trusting-Trust defense roadmap" honesty language
       (fixture count, scope caveat) after each widening pass so the doc never
       drifts ahead of actual coverage.

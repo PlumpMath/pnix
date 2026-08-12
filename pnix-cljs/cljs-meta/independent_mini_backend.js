@@ -12,9 +12,11 @@
  * `independent_mini_backend.py`.
  *
  * It is a frontier witness, not a replacement for the production frontend:
- * it covers a bounded fixture set (arithmetic, comparisons, `if`, `let`,
- * `do`, named `fn` literals/recursion, strings, vector literals,
- * booleans/keywords), not ClojureScript. The host side of this DDC pair
+ * it covers a bounded fixture set (arithmetic, comparisons, `if`, `let`
+ * (including vector destructuring), `do`, named `fn` literals/recursion,
+ * strings, vector/map literals, booleans/keywords, and the seq ops
+ * `get`/`nth`/`count`/`conj`/`nil?`), not ClojureScript. The host side of
+ * this DDC pair
  * (`cljs.js` via `core/evaluate`) runs `eval-str` with `:context :expr`,
  * which only accepts a single top-level expression, so this backend does
  * not implement `defn` or other multi-form/top-level-definition source —
@@ -23,7 +25,7 @@
  * `((fn fact [n] (if (<= n 1) 1 (* n (fact (- n 1))))) 6)`.
  */
 
-const TOKEN_RE = /\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|:[^\s()\[\]]+|-?\d+|[^\s()\[\]]+)/y;
+const TOKEN_RE = /\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|\{|\}|:[^\s()\[\]{}]+|-?\d+|[^\s()\[\]{}]+)/y;
 
 function tokenize(source) {
   const tokens = [];
@@ -66,7 +68,21 @@ function parseOne(tokens, i) {
     }
     return [{ kind: "vector", items }, i + 1];
   }
-  if (tok === ")" || tok === "]") {
+  if (tok === "{") {
+    const items = [];
+    i += 1;
+    while (tokens[i] !== "}") {
+      if (i >= tokens.length) throw new SyntaxError("tiny reader: missing }");
+      const [item, next] = parseOne(tokens, i);
+      items.push(item);
+      i = next;
+    }
+    if (items.length % 2 !== 0) {
+      throw new SyntaxError("tiny reader: malformed map literal");
+    }
+    return [{ kind: "map", items }, i + 1];
+  }
+  if (tok === ")" || tok === "]" || tok === "}") {
     throw new SyntaxError(`tiny reader: unexpected closing delimiter ${tok}`);
   }
   if (tok === "true") return [{ kind: "bool", value: true }, i + 1];
@@ -142,6 +158,24 @@ function emitExpr(form, env) {
       return JSON.stringify(form.value);
     case "vector":
       return `[${form.items.map((f) => emitExpr(f, env)).join(", ")}]`;
+    case "map": {
+      // Keys are keyword/string literals only (the DDC fixtures this
+      // backend targets), emitted as a plain JS object -- matching what
+      // cljs.js's own clj->js conversion produces for a returned map
+      // (keyword keys become string keys), so results compare equal via
+      // assert.deepEqual against the real host.
+      const pairs = [];
+      for (let i = 0; i < form.items.length; i += 2) {
+        const keyForm = form.items[i];
+        if (keyForm.kind !== "keyword" && keyForm.kind !== "str") {
+          throw new SyntaxError("tiny analyzer: map literal key must be a keyword or string");
+        }
+        const key = keyForm.kind === "keyword" ? keyForm.name : keyForm.value;
+        const valueCode = emitExpr(form.items[i + 1], env);
+        pairs.push(`${JSON.stringify(key)}: ${valueCode}`);
+      }
+      return `{${pairs.join(", ")}}`;
+    }
     case "sym": {
       if (!env.has(form.name)) {
         throw new SyntaxError(`tiny analyzer: unknown local ${form.name}`);
@@ -180,13 +214,33 @@ function emitExpr(form, env) {
         for (let i = 0; i < bindingsForm.items.length; i += 2) {
           const nameForm = bindingsForm.items[i];
           const initForm = bindingsForm.items[i + 1];
-          if (nameForm.kind !== "sym") {
+          const initCode = emitExpr(initForm, innerEnv);
+          if (nameForm.kind === "sym") {
+            const jsName = freshName(nameForm.name);
+            decls.push(`let ${jsName} = ${initCode};`);
+            innerEnv.set(nameForm.name, jsName);
+          } else if (nameForm.kind === "vector") {
+            // Vector destructuring `[a b c]`: extra names beyond the
+            // source's length bind to nil (JS `null`, matching this
+            // backend's own `nil` -> `null` mapping), not JS `undefined`,
+            // so `(nil? c)` on a missing position works the same way it
+            // does on the real host.
+            const jsTemp = freshName("destructure");
+            decls.push(`let ${jsTemp} = ${initCode};`);
+            for (let k = 0; k < nameForm.items.length; k += 1) {
+              const subName = nameForm.items[k];
+              if (subName.kind !== "sym") {
+                throw new SyntaxError("tiny analyzer: nested destructuring not supported");
+              }
+              const jsSubName = freshName(subName.name);
+              decls.push(
+                `let ${jsSubName} = (${jsTemp}[${k}] === undefined ? null : ${jsTemp}[${k}]);`
+              );
+              innerEnv.set(subName.name, jsSubName);
+            }
+          } else {
             throw new SyntaxError("tiny analyzer: let binding name");
           }
-          const jsName = freshName(nameForm.name);
-          const initCode = emitExpr(initForm, innerEnv);
-          decls.push(`let ${jsName} = ${initCode};`);
-          innerEnv.set(nameForm.name, jsName);
         }
         const bodyCode = body.map((f) => emitExpr(f, innerEnv));
         const returnCode = bodyCode[bodyCode.length - 1];
@@ -199,6 +253,26 @@ function emitExpr(form, env) {
       if (Object.prototype.hasOwnProperty.call(CMPOPS, head.name)) {
         if (args.length !== 2) throw new SyntaxError("tiny analyzer: compare op arity");
         return `(${emitExpr(args[0], env)} ${CMPOPS[head.name]} ${emitExpr(args[1], env)})`;
+      }
+      if (head.name === "get") {
+        if (args.length !== 2) throw new SyntaxError("tiny analyzer: get arity");
+        return `(${emitExpr(args[0], env)})[${emitExpr(args[1], env)}]`;
+      }
+      if (head.name === "nth") {
+        if (args.length !== 2) throw new SyntaxError("tiny analyzer: nth arity");
+        return `(${emitExpr(args[0], env)})[${emitExpr(args[1], env)}]`;
+      }
+      if (head.name === "count") {
+        if (args.length !== 1) throw new SyntaxError("tiny analyzer: count arity");
+        return `(${emitExpr(args[0], env)}).length`;
+      }
+      if (head.name === "conj") {
+        if (args.length !== 2) throw new SyntaxError("tiny analyzer: conj arity");
+        return `[...(${emitExpr(args[0], env)}), ${emitExpr(args[1], env)}]`;
+      }
+      if (head.name === "nil?") {
+        if (args.length !== 1) throw new SyntaxError("tiny analyzer: nil? arity");
+        return `(${emitExpr(args[0], env)} === null)`;
       }
       if (env.has(head.name)) {
         const argsCode = args.map((f) => emitExpr(f, env));
