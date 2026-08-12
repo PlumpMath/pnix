@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Check: compiler self-reproduction / B==C fixed point.
+#
+# Builds Stage1 -> Stage2 -> ... -> Stage7 from scratch and requires every
+# single stage's compiled CompilerStageN.dll to be byte-identical to every
+# other stage's -- not just an adjacent B==C pair, the strongest form of this
+# claim. This is expected to hold *because* of Stage8's PE canonicalization
+# (compiler-selfhost-runtime/PeSink.cs): each stage compiles the exact same
+# frozen compiler_kernel.clj source, producing the exact same IL, through the
+# exact same PersistedAssemblyBuilder-based codegen path -- once the only two
+# non-deterministic PE fields (TimeDateStamp, Mvid) are canonicalized away,
+# nothing is left to differ between stages. Found and confirmed empirically
+# (this session's Stage8 work already logged Stage3-7 sharing one hash as an
+# unplanned bonus observation) before writing this dedicated check -- this
+# formalizes that finding into its own named, verified claim rather than
+# leaving it as an incidental note on a different stage's receipt.
+#
+# Also verifies the shared artifact is not vacuously identical-but-broken: a
+# live compile+execute of an unseen target through the Stage7 artifact must
+# still produce the correct result.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+family_root="$clr_meta_root/compiler-selfhost"
+public_cli="$root/bin/clr-meta"
+dotnet_bin="$(command -v dotnet || true)"
+receipt_out="${CLR_META_SELF_REPRODUCTION_RECEIPT:-$clr_meta_root/work/compiler-self-reproduction-check.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler self-reproduction check: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+for command in jq dotnet; do
+  command -v "$command" >/dev/null 2>&1 || fail "$command-missing"
+done
+[[ -f "$public_cli" && ! -L "$public_cli" ]] || fail public-cli-missing
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-self-reproduction.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+build_stage() {
+  local n="$1"
+  local parent="$2"
+  local out="$tmp/stage$n"
+  if [[ -z "$parent" ]]; then
+    "$public_cli" --build-compiler-selfhost-stage1 "$out" \
+      >"$tmp/stage$n-builder.stdout" 2>"$tmp/stage$n-builder.stderr" || {
+      sed -n '1,120p' "$tmp/stage$n-builder.stderr" >&2
+      fail "stage$n-build-failed"
+    }
+  else
+    "$public_cli" --build-compiler-selfhost-stage"$n" "$parent" "$out" \
+      >"$tmp/stage$n-builder.stdout" 2>"$tmp/stage$n-builder.stderr" || {
+      sed -n '1,120p' "$tmp/stage$n-builder.stderr" >&2
+      fail "stage$n-build-failed"
+    }
+  fi
+  echo "$out"
+}
+
+stage1="$(build_stage 1 "")"
+stage2="$(build_stage 2 "$stage1")"
+stage3="$(build_stage 3 "$stage2")"
+stage4="$(build_stage 4 "$stage3")"
+stage5="$(build_stage 5 "$stage4")"
+stage6="$(build_stage 6 "$stage5")"
+stage7="$(build_stage 7 "$stage6")"
+
+sha1="$(sha256_file "$stage1/compiler/CompilerStage1.dll")"
+sha2="$(sha256_file "$stage2/compiler/CompilerStage2.dll")"
+sha3="$(sha256_file "$stage3/compiler/CompilerStage3.dll")"
+sha4="$(sha256_file "$stage4/compiler/CompilerStage4.dll")"
+sha5="$(sha256_file "$stage5/compiler/CompilerStage5.dll")"
+sha6="$(sha256_file "$stage6/compiler/CompilerStage6.dll")"
+sha7="$(sha256_file "$stage7/compiler/CompilerStage7.dll")"
+
+for sha in "$sha2" "$sha3" "$sha4" "$sha5" "$sha6" "$sha7"; do
+  [[ "$sha" == "$sha1" ]] || fail "stage-hashes-not-identical: stage1=$sha1 vs $sha"
+done
+
+# Functional sanity: the shared artifact still behaves correctly, not just
+# byte-identical-and-broken.
+stage7_support="$stage7/runtime/Pnix.ClrMeta.CompilerSupport.dll"
+add_target="$tmp/self-repro-add.dll"
+"${dotnet_bin}" "$stage7_support" compile "$stage7/compiler/CompilerStage7.dll" \
+  "$family_root/unseen_add.clj" "$add_target" \
+  >"$tmp/add-descriptor.json" 2>"$tmp/add-compile.stderr" || {
+  sed -n '1,80p' "$tmp/add-compile.stderr" >&2
+  fail add-compile-failed
+}
+[[ ! -s "$tmp/add-compile.stderr" ]] || fail add-compile-stderr
+add_result="$(cd "$tmp" && "${dotnet_bin}" "$stage7_support" invoke-i64 "$add_target" 20 22)"
+[[ "$add_result" == 42 ]] || fail "add-result-wrong: $add_result"
+
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n \
+  --arg shared_sha256 "$sha1" \
+  --arg stage1_sha256 "$sha1" \
+  --arg stage2_sha256 "$sha2" \
+  --arg stage3_sha256 "$sha3" \
+  --arg stage4_sha256 "$sha4" \
+  --arg stage5_sha256 "$sha5" \
+  --arg stage6_sha256 "$sha6" \
+  --arg stage7_sha256 "$sha7" '
+  {
+    schema:"pnix.clr-meta.compiler-self-reproduction-check-receipt.v1",
+    checkpoint:"compiler-self-reproduction-b-equals-c-fixed-point",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    stage_hashes:{
+      stage1:$stage1_sha256, stage2:$stage2_sha256, stage3:$stage3_sha256,
+      stage4:$stage4_sha256, stage5:$stage5_sha256, stage6:$stage6_sha256,
+      stage7:$stage7_sha256
+    },
+    shared_sha256:$shared_sha256,
+    all_seven_stages_identical:true,
+    functional_sanity:{ add_target_compiled_and_executed:true, add_result:42 },
+    claims:{
+      compiler_self_reproduction:true,
+      fixed_point:true,
+      fixed_point_scope:"compiler_stage1_through_7_persisted_assembly_builder_output",
+      stage8:true,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.compiler_self_reproduction == true and
+  .claims.fixed_point == true and .all_seven_stages_identical == true and
+  .claims["promotion/allowed?"] == false' "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler self-reproduction check: PASS"
+echo "  receipt: $receipt_out"
+echo "  shared_sha256=$sha1 (stage1 through stage7)"

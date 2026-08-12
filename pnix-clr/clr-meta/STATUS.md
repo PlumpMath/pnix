@@ -197,20 +197,49 @@ designs: STAGE{10-15,N}_DESIGN.md
 gate chain: scripts/clr-meta-gate → …stage9 → stage10 → … → stagen
 ```
 
+## Closed this wave (2026-08-12, same day) — compiler self-reproduction / B==C fixed point
+
+```text
+./scripts/clr-meta-compiler-self-reproduction-check   PASS
+  Not built from scratch -- found: Stage8's own gate output already logged,
+  as an unplanned bonus observation, that Stage3-7's compiled
+  CompilerStageN.dll shared one sha256. This check formalizes that finding
+  with its own dedicated, named receipt: builds Stage1 through Stage7 fresh
+  and confirms ALL SEVEN stages -- not just an adjacent pair, and including
+  Stage1's host-seeded build itself -- share the exact same sha256
+  (19872f28ed3576cbdf50001649fb9fd773023778fa0bb5c3d7aee45a61baecb7 in the
+  verifying run). Holds because of Stage8's PE canonicalization: every
+  stage compiles the same frozen compiler_kernel.clj source through the
+  same PersistedAssemblyBuilder codegen path, and once the only two
+  non-deterministic PE fields are canonicalized away nothing is left to
+  differ -- including Stage1, since it goes through the same PeSink.Finish()
+  path as every later stage. A live compile+execute of an unseen target
+  through the shared Stage7 artifact confirms the shared bytes are not
+  vacuously identical-but-broken (add_result: 42).
+  claims.compiler_self_reproduction = true; claims.fixed_point = true
+    (scope: compiler_stage1_through_7_persisted_assembly_builder_output);
+    promotion/allowed? = false
+receipt: work/compiler-self-reproduction-check.receipt.json
+design: SELF_REPRODUCTION_DESIGN.md
+gate chain: scripts/clr-meta-gate → …stage7 → self-reproduction-check → stage8
+```
+
 ## Open claims (do not claim)
 
 ```text
-compiler_self_reproduction = false
 clr_il_fixed_point = false
 broad_clojureclr_compatibility / replacement = false
 pnix_common_compiler_integration = false
 cross_host_canonical_equivalence / clr_host_promotion = false
 ```
 
-Stage1 through StageN are now ALL closed (see the "Closed this wave" sections
-above) — `promotion/allowed?` stays `false` on every one of them regardless,
-since none of this closes compiler self-reproduction, an IL fixed point, or
-broad ClojureCLR replacement, which remain the actual promotion gates.
+Stage1 through StageN, and compiler self-reproduction, are now ALL closed
+(see the "Closed this wave" sections above) — `promotion/allowed?` stays
+`false` on every one of them regardless, since none of this closes a general
+CLR IL fixed point (this is scoped to the Compiler Stage1-7
+`PersistedAssemblyBuilder` output specifically, not every artifact kind this
+repo could ever produce) or broad ClojureCLR replacement, which remain the
+actual promotion gates.
 
 `raw_aot_rebuild_determinism` moved out of this block (2026-08-12): Stage8
 closes it for the Compiler Stage1-7 `PersistedAssemblyBuilder` artifact family

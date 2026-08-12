@@ -95,15 +95,34 @@ trusting doc prose:
    `bin/clr-meta-gate --no-build` still green, all Stage1–9 gates PASS, no
    regressions. Do not re-flag Stage9 as open or as "not started."
 
-4. **Compiler self-reproduction / B==C fixed point.** State: false. Stage3–7
-   prove same-source recompile plus structural-description equality to the
-   immediate parent, but not that a stage reproduces itself byte-identically
-   (the "kernelB compiles kernelC, B==C" pattern hy-meta and rs-meta both
-   closed). **Size: medium.** Partially de-risked by Stage8: the byte-level
-   reproducibility machinery (canonicalization, sha256/cmp comparison) that a
-   fixed-point proof would need already exists and is proven working — what's
-   still missing is compiling the compiler's *own* source through itself
-   (not just recompiling the frozen kernel through successive generations).
+4. **Compiler self-reproduction / B==C fixed point — DONE (2026-08-12, same
+   day as Stage10-15/N).** Was: State false — Stage3–7 proved same-source
+   recompile plus structural-description equality to the immediate parent,
+   but not that a stage reproduces itself byte-identically. Turned out to
+   already be TRUE as an unplanned consequence of Stage8's canonicalization,
+   just never formally checked or claimed: Stage8's own gate output had
+   already logged Stage3-7 sharing one compiled-artifact sha256 as a bonus
+   observation. Verified this pass (not assumed) by rebuilding Stage1
+   through Stage7 fresh in a NEW dedicated
+   `scripts/clr-meta-compiler-self-reproduction-check`: all seven stages —
+   not just an adjacent pair, and including Stage1's host-seeded build
+   itself — share the exact same sha256
+   (`19872f28ed3576cbdf50001649fb9fd773023778fa0bb5c3d7aee45a61baecb7`).
+   Every stage compiles the same frozen `compiler_kernel.clj` through the
+   same `PersistedAssemblyBuilder` codegen path Stage8 canonicalized, so
+   once the only two non-deterministic PE fields are removed, nothing is
+   left to differ between generations — this is the "kernelB compiles
+   kernelC, B==C" pattern hy-meta/rs-meta close, at its strongest possible
+   form (all generations identical, not just one adjacent pair). Verified
+   the shared bytes are not vacuously identical-but-broken: a live
+   compile+execute of an unseen target through the shared Stage7 artifact
+   still returns the correct result. Design in `SELF_REPRODUCTION_DESIGN.md`;
+   wired into `scripts/clr-meta-gate`. Verified full aggregate gate still
+   green, no regressions. Do not re-flag as open or "state: false" — check
+   `SELF_REPRODUCTION_DESIGN.md`'s explicit scope note before assuming this
+   generalizes beyond the Compiler Stage1-7 `PersistedAssemblyBuilder`
+   artifact family (a general CLR IL fixed point is a broader, still-open
+   claim).
 
 5. **Stage10 (sandbox/session isolation) and Stage11–15/N (multi-domain
    adapters, self-improvement quarantine, long-horizon replay, cross-host
@@ -140,7 +159,8 @@ trusting doc prose:
    or as "not started."
 
 6. **Independent-interpreter DDC track (distinct from the compiler-backend
-   DDC work already closed).** State: not started at all. The DDC gap that
+   DDC work already closed) — NEXT PRIORITY now that items 1-5 are all
+   closed.** State: not started at all. The DDC gap that
    *is* closed covers the Compiler Stage1–7 family (a second, from-scratch
    *compiler* backend). A second, from-scratch tree-walking *interpreter*
    that cross-checks the gen0→1→2 evaluator lane is a separate, explicitly

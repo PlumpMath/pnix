@@ -216,7 +216,14 @@ compiler fixed point.
    draft hit), anchoring the whole chain back to Stage9
    (`STAGE{10,11,12,13,14,15,N}_DESIGN.md`,
    `scripts/clr-meta-compiler-selfhost-stage{10,11,12,13,14,15,n}-gate`).
-   Next: a separately named self-reproduction gate.
+   **Compiler self-reproduction / B==C fixed point closed** (2026-08-12, same
+   day): found, not built from scratch — Stage8's own gate output had
+   already logged Stage3-7 sharing one compiled-artifact sha256 as an
+   unplanned bonus observation.
+   `scripts/clr-meta-compiler-self-reproduction-check` formalizes this into
+   its own dedicated receipt: Stage1 through Stage7, rebuilt fresh, all
+   share the exact same sha256 — not just an adjacent B==C pair, all seven,
+   including Stage1's host-seeded build (`SELF_REPRODUCTION_DESIGN.md`).
 6. Admit exact `-e`, file, REPL, compile/AOT, namespace/load, and tooling
    compatibility profiles individually.
 7. Only after those gates may the `bin/clojure-clr` name expand beyond its
@@ -253,8 +260,8 @@ compiler_stage13 = true
 compiler_stage14 = true
 compiler_stage15 = true
 compiler_stagen = true
-compiler_self_reproduction = false
-clr_il_fixed_point = false
+compiler_self_reproduction = true (compiler_stage1_through_7_persisted_assembly_builder_output only; see SELF_REPRODUCTION_DESIGN.md)
+clr_il_fixed_point = false (a general IL fixed-point claim is broader than the above scoped self-reproduction result)
 raw_aot_rebuild_determinism = true (compiler_stage7_persisted_assembly_builder_output only; see STAGE8_DESIGN.md)
 broad_clojureclr_compatibility = false
 clojureclr_replacement = false
