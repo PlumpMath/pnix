@@ -295,13 +295,27 @@ byte-identical IL, since a `DynamicMethod`-JITted method and a
 `PersistedAssemblyBuilder`-written PE are different CLR artifact kinds by
 construction.
 
-**Next concrete step:** Stage8 (reproducible assembly artifacts for the
-`PersistedAssemblyBuilder`-based Compiler Stage1-7 family) is the next
-concrete work item, not further mini-backend widening — see `todo.md`.
-Building an independent interpreter (as opposed to a second compiler) to
-cross-check the gen0-2 evaluator lane remains a separate, not-yet-started
-track — an interpreter alone would not clear the full Wheeler bar even if
-added.
+**Independent-interpreter DDC track closed, same day (2026-08-12):** this
+was flagged above as "a separate, not-yet-started track" — building an
+independent *interpreter* (as opposed to the second *compiler* the mini
+backend already is) to cross-check the gen0-2 evaluator lane.
+`src/pnix/clr_meta/independent_mini_interpreter.clj` is a from-scratch
+tokenizer/reader + tree-walking interpreter for the small, environment-driven
+Lisp subset `bootstrap.clj`'s own 9-case `conformance-cases` corpus proves
+(`quote`/`if`/`let`/`fn` including named recursion and `&` variadic rest),
+sharing zero code with `pnix.clr-meta.main`'s reader or
+`pnix.clr-meta.bootstrap/evaluate`. Cross-validated against the real,
+textual `bin/clr-meta -e` evaluator-generation-2 tool-eval path (not
+pre-parsed data, confirming an independently-authored *reader* too) via
+`scripts/clr-meta-independent-mini-interpreter-gate`. Verified live: 9/9
+fixtures accepted on the first run, full aggregate gate still green.
+See `INDEPENDENT_MINI_INTERPRETER_DESIGN.md`. An interpreter alone still
+does not clear the full Wheeler bar by itself (same honest bar as the
+mini-backend's own scope note) — it is a necessary, not sufficient, piece.
+
+**Next concrete step:** widen either DDC witness's fixture set further, or
+pick up item 6/7 from `todo.md` (broad ClojureCLR compatibility/replacement,
+explicitly deferred by the roadmap's own ordering).
 
 ## Primary gate
 

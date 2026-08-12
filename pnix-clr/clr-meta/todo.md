@@ -159,17 +159,25 @@ trusting doc prose:
    or as "not started."
 
 6. **Independent-interpreter DDC track (distinct from the compiler-backend
-   DDC work already closed) — NEXT PRIORITY now that items 1-5 are all
-   closed.** State: not started at all. The DDC gap that
-   *is* closed covers the Compiler Stage1–7 family (a second, from-scratch
-   *compiler* backend). A second, from-scratch tree-walking *interpreter*
-   that cross-checks the gen0→1→2 evaluator lane is a separate, explicitly
-   flagged-as-not-started track per `STATUS.md`'s own text — "an interpreter
-   alone would not clear the full Wheeler bar even if added," i.e. it's
-   necessary but not sufficient on its own. **Size: medium** — similar
-   scope to the mini-backend work just finished (~1 session); the target
-   corpus (the focused evaluator corpus already proven across gen0–2) is
-   already defined.
+   DDC work already closed) — DONE (2026-08-12, same day as items 1-5).**
+   Was: not started at all. Built
+   `src/pnix/clr_meta/independent_mini_interpreter.clj`: a from-scratch
+   tokenizer/reader + tree-walking interpreter for the small,
+   environment-driven Lisp subset `bootstrap.clj`'s own 9-case
+   `conformance-cases` corpus proves (`quote`/`if`/`let`/`fn` including named
+   recursion and `&` variadic rest), sharing zero code with
+   `pnix.clr-meta.main`'s reader or `pnix.clr-meta.bootstrap/evaluate`.
+   Cross-validated against the *real, textual* `bin/clr-meta -e`
+   evaluator-generation-2 tool-eval path (not pre-parsed data — confirmed
+   live that ordinary arithmetic/comparison/vector symbols already resolve
+   there with no injected environment, unlike `conformance-cases`'s own
+   test harness which injects placeholder names per case) via new
+   `scripts/clr-meta-independent-mini-interpreter-gate`. Verified: 9/9
+   fixtures accepted on the first run, full aggregate gate still green, no
+   regressions. Design in `INDEPENDENT_MINI_INTERPRETER_DESIGN.md`. Do not
+   re-flag as "not started" — an interpreter alone still does not clear the
+   full Wheeler bar by itself (same honest bar as the mini-backend's own
+   scope note), but this track itself is now built and gated.
 
 7. **Broad ClojureCLR compatibility/replacement, `pnix_common_compiler_
    integration`, `cross_host_canonical_equivalence`, `clr_host_promotion`.**

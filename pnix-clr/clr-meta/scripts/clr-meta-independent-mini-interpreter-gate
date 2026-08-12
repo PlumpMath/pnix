@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Gate: independent-interpreter DDC track, distinct from the Compiler
+# Stage1-7 *compiler*-backend DDC work (independent_mini_backend.clj, a
+# DynamicMethod IL emitter). Cross-checks the real, textual
+# `bin/clr-meta -e` evaluator-generation-2 tool-eval path against
+# independent_mini_interpreter.clj, a from-scratch reader + tree-walking
+# interpreter sharing zero code with pnix.clr-meta.main's reader or
+# pnix.clr-meta.bootstrap/evaluate. Fixture set matches bootstrap.clj's own
+# 9-case conformance corpus (quote/if/let/fn/named-recursion/variadic-rest).
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+public_cli="$root/bin/clr-meta"
+dll="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
+dotnet_bin="$(command -v dotnet || true)"
+receipt_out="${CLR_META_MINI_INTERPRETER_RECEIPT:-$clr_meta_root/work/independent-mini-interpreter-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta independent mini interpreter gate: $1" >&2
+  exit 1
+}
+
+command -v jq >/dev/null 2>&1 || fail jq-missing
+[[ -f "$public_cli" && ! -L "$public_cli" ]] || fail public-cli-missing
+[[ -f "$dll" ]] || fail "clojure-main-dll-missing (run ./bin/build-clr first)"
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-mini-interp.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/home"
+
+# id<TAB>source<TAB>expected(edn)
+fixtures="literal	42	42
+quote	(quote (alpha beta gamma))	(alpha beta gamma)
+if-true	(if true :yes :no)	:yes
+if-false	(if false :yes :no)	:no
+sequential-let	(let [x 20 y (+ x 2)] (* y 2))	44
+closure	(((fn [x] (fn [y] (+ x y))) 20) 22)	42
+named-recursion	((fn factorial [n] (if (< n 2) 1 (* n (factorial (- n 1))))) 5)	120
+variadic-rest	((fn [head & tail] (vector head tail)) 1 2 3)	[1 (2 3)]
+let-bound-recursion	(let [f (fn fib [n] (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] (f 10))	55"
+
+pass_count=0
+rows="[]"
+while IFS=$'\t' read -r id source expected; do
+  [[ -z "$id" ]] && continue
+
+  host_out=$(env -i "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin")" "HOME=$tmp/home" \
+    "$public_cli" -e "$source" 2>"$tmp/$id.host.stderr") || {
+    sed -n '1,40p' "$tmp/$id.host.stderr" >&2
+    fail "$id-host-eval-failed"
+  }
+  [[ ! -s "$tmp/$id.host.stderr" ]] || fail "$id-host-stderr-not-quiet"
+  host_value=$(echo "$host_out" | sed -E 's/.*:value (.*)\}$/\1/')
+
+  export MINI_SOURCE="$source"
+  mini_out=$(env -i "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin")" "HOME=$tmp/home" \
+    "MINI_SOURCE=$source" "CLOJURE_LOAD_PATH=$clr_meta_root/src" \
+    "$dotnet_bin" "$dll" -e '
+      (require (quote [pnix.clr-meta.independent-mini-interpreter :as mi]))
+      (prn (mi/compile-and-eval (System.Environment/GetEnvironmentVariable "MINI_SOURCE")))
+    ' 2>"$tmp/$id.mini.stderr") || {
+    sed -n '1,40p' "$tmp/$id.mini.stderr" >&2
+    fail "$id-mini-eval-failed"
+  }
+  [[ ! -s "$tmp/$id.mini.stderr" ]] || fail "$id-mini-stderr-not-quiet"
+  mini_value="$(echo "$mini_out" | tr -d '\r\n')"
+
+  [[ "$host_value" == "$expected" ]] || fail "$id-host-mismatch: got [$host_value] want [$expected]"
+  [[ "$mini_value" == "$expected" ]] || fail "$id-mini-mismatch: got [$mini_value] want [$expected]"
+
+  pass_count=$((pass_count + 1))
+  rows="$(jq -c --arg id "$id" --arg source "$source" --arg expected "$expected" \
+    '. + [{id:$id, source:$source, expected:$expected, host_ok:true, mini_ok:true}]' <<<"$rows")"
+  echo "  [OK] $id -> $expected"
+done <<<"$fixtures"
+
+[[ "$pass_count" -ge 9 ]] || fail "too-few-fixtures:$pass_count"
+
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n --argjson rows "$rows" --argjson count "$pass_count" '
+  {
+    schema:"pnix.clr-meta.independent-mini-interpreter-gate-receipt.v1",
+    checkpoint:"independent-interpreter-ddc",
+    backend:"pnix.clr-meta.independent-mini-interpreter/compile-and-eval",
+    independence:{
+      uses_bootstrap_evaluate:false,
+      uses_main_reader:false,
+      uses_independent_mini_backend:false,
+      shared_runtime:["clojureclr-host-functions (+ - * < <= > >= = vector)"]
+    },
+    not_claimed:[
+      "full-wheeler-ddc",
+      "full-pnix-language-coverage",
+      "production-evaluator-replacement"
+    ],
+    fixture_count:$count,
+    rows:$rows,
+    all_fixtures_accepted:true,
+    claims:{
+      independent_interpreter_ddc:true,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .all_fixtures_accepted == true and
+  .claims["promotion/allowed?"] == false' "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta independent mini interpreter gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  fixture_count=$pass_count"
