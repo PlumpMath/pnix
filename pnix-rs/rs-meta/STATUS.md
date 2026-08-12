@@ -217,6 +217,56 @@ FIXED (10th layer, `interp.rs` runtime dispatch bug -- genuinely different
   emit-tv-check 407/407.
 ```
 
+**Three more small/medium items closed, same wave (2026-08-12/13):**
+
+```text
+FIXED: A4 generic-inference tail -- Rc::ptr_eq(&Rc::new(vec![1]),
+  &Rc::new(vec![1u64])) now infers u64 for both sides like rustc, while
+  explicit Rc<i64> vs Rc<u64> still gets rejected. Root cause: vec!'s own
+  typeck eagerly collapses an unsuffixed literal to i64 before Rc::ptr_eq
+  ever compares its two arguments, so the flexibility needed to unify is
+  already gone by then. A blanket fix (stop collapsing in vec!'s typeck
+  entirely) was tried and reverted -- it broke a real positive fixture
+  (`vec![3, 1, 2]; v.sort_by(|a, b| b.cmp(a))`) that legitimately needs the
+  literal to default to i64 in isolation. Fixed narrowly instead: a
+  fallback inside Rc::ptr_eq's own check that only runs on the failure
+  path, re-deriving each side's vec! element type without the eager
+  default for exactly the `&Rc::new(vec![...])` shape. Self-hosting
+  gotcha hit while building this: `.collect::<Result<Vec<_>, _>>()` isn't
+  modeled by interp.rs's own Iter::collect turbofish handling -- rewritten
+  as two plain sequential calls.
+
+FIXED: independent-mini-backend-check widened 9->13 fixtures (nested if,
+  double-recursive fibonacci, 3-arg, 4-arg) using capabilities the backend
+  already had -- no new backend features needed for this pass.
+
+FIXED: trait-boundary-check's held-assoc-type classification was false --
+  associated types genuinely parse, typecheck, AND execute correctly now
+  for a supported (struct) impl target, confirmed by actually running the
+  code, not just checking it parses. The original fixture
+  (`impl Two for i64`) had conflated two separate boundaries: associated
+  types (now supported) and implementing any trait for a primitive type
+  (still separately unsupported -- confirmed the same error occurs for a
+  trait with NO associated type against the same i64 target). Also
+  confirmed the "support" is shallow: Self::Out in the trait signature is
+  never checked against the impl's own `type Out = ...` binding, so a
+  mismatched impl is silently accepted -- documented as an explicit,
+  honest gap via a new classification (`assoc-type-accepted-unenforced`)
+  rather than either overclaiming full support or leaving the false
+  held-assoc-type label in place. A second caller
+  (`rust_surface_check`, consumed by pnix-rs's peer-engine `verdict`
+  field) had its own separate hardcoded assertion of the old label --
+  missed on the first pass, caught by re-running the full
+  `bin/rs-meta-gate check` aggregate before considering this closed.
+
+Verified (all three together): self-check 408/408, tv-check 408/408,
+  typeck-check 273/273, independent-mini-backend-check 13/13,
+  source-ast-check 16/16, source-bundle-check PASS, macro-boundary-check
+  3/3, borrow-boundary-check 3/3, trait-boundary-check 4/4,
+  rust-surface-check 4/4, full `bin/rs-meta-gate check` aggregate PASS --
+  no regressions.
+```
+
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)
 
 **`mrustc` turned out not to be usable here.** It's packaged in nixpkgs, but

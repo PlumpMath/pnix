@@ -1733,6 +1733,11 @@ pub fn corpus() -> Vec<(&'static str, &'static str, &'static str)> {
             "enum Opt<T> { None, Some(T) } fn main() { let o = Opt::Some(42); let n = match o { Opt::Some(v) => v, Opt::None => 0 }; println!(\"{}\", n); }",
             "42",
         ),
+        (
+            "rc-ptr-eq-unsuffixed-literal-provenance",
+            "use std::rc::Rc; fn main() { println!(\"{}\", Rc::ptr_eq(&Rc::new(vec![1]), &Rc::new(vec![1u64]))); }",
+            "false",
+        ),
     ]
 }
 
@@ -2682,6 +2687,10 @@ pub fn negative_corpus() -> Vec<(&'static str, &'static str)> {
             "generic-enum-pattern-mismatch",
             "enum Opt<T> { None, Some(T) } fn main() { let o = Opt::Some(1); let _n = match o { Opt::Some(true) => 1, _ => 0 }; }",
         ),
+        (
+            "rc-ptr-eq-explicit-conflicting-types",
+            "use std::rc::Rc; fn main() { let a: Rc<Vec<i64>> = Rc::new(vec![1]); let b: Rc<Vec<u64>> = Rc::new(vec![1]); let _n = Rc::ptr_eq(&a, &b); }",
+        ),
     ]
 }
 
@@ -2821,6 +2830,26 @@ fn independent_mini_backend_fixtures() -> Vec<(&'static str, &'static str, &'sta
             "mini-recursive-factorial",
             "fn f(n: i64) -> i64 { if n <= 1 { 1 } else { n * f(n - 1) } } fn main() { println!(\"{}\", f(5)); }",
             "120",
+        ),
+        (
+            "mini-nested-if",
+            "fn main() { println!(\"{}\", if 1 < 2 { if 3 < 4 { 100 } else { 200 } } else { 300 }); }",
+            "100",
+        ),
+        (
+            "mini-recursive-fibonacci",
+            "fn fib(n: i64) -> i64 { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } } fn main() { println!(\"{}\", fib(10)); }",
+            "55",
+        ),
+        (
+            "mini-three-arg",
+            "fn f(a: i64, b: i64, c: i64) -> i64 { a + b + c } fn main() { println!(\"{}\", f(10, 20, 12)); }",
+            "42",
+        ),
+        (
+            "mini-four-arg",
+            "fn f(a: i64, b: i64, c: i64, d: i64) -> i64 { a * b + c * d } fn main() { println!(\"{}\", f(2, 3, 4, 9)); }",
+            "42",
         ),
     ]
 }
@@ -3441,10 +3470,22 @@ pub fn rs_meta_parses(src: &str) -> bool {
 
 /// Trait BOUNDARY report (pnix-rs peer-engine 4순위): NOT a trait solver. rs-meta
 /// supports inherent/trait impls + narrow dispatch (Display/Debug/Iterator);
-/// associated types, where-clauses, blanket/overlapping impls, dyn Trait,
-/// coherence/orphan are HELD. This classifies a program's trait surface and
-/// cross-checks it against the ACTUAL parse boundary (a held surface must not
-/// parse — the classification has teeth).
+/// where-clauses, blanket/overlapping impls, dyn Trait, coherence/orphan are
+/// HELD (verified: each still fails to parse or fails typeck the same way it
+/// always did). Associated types are a documented exception, found live
+/// (2026-08-12) to no longer be held: `type Out;` / `type Out = T;` /
+/// `Self::Out` now parse, typeck, and execute correctly for a supported impl
+/// target (struct/enum) -- some earlier, unrelated session's general
+/// `type X = Y;` item support incidentally enabled this. But it is *syntax
+/// acceptance*, not real associated-type modeling: `Self::Out` in the
+/// trait's own method signature is never checked against the impl's `type
+/// Out = ...` binding, so an impl can declare `type Out = i64` while its
+/// method actually returns `bool`, and rs-meta accepts it silently (real
+/// rustc would reject the mismatch). Classified as
+/// `assoc-type-accepted-unenforced`, not `trait-dispatch-supported`, so
+/// this distinction isn't lost. This classifies a program's trait surface
+/// and cross-checks it against the ACTUAL parse/typeck boundary (a held
+/// surface must still fail somewhere — the classification has teeth).
 pub struct SurfaceReport {
     pub classification: String,
     pub parses: bool,
@@ -3458,7 +3499,7 @@ pub fn trait_boundary_report(src: &str) -> SurfaceReport {
     } else if src.contains("dyn ") {
         String::from("held-dyn-trait")
     } else if impl_has_assoc_type(src) {
-        String::from("held-assoc-type")
+        String::from("assoc-type-accepted-unenforced")
     } else if src.contains("impl<") && src.contains("> ") && src.contains(" for ") {
         String::from("held-blanket-impl")
     } else if src.contains("trait ") || src.contains(" for ") {
@@ -3470,7 +3511,8 @@ pub fn trait_boundary_report(src: &str) -> SurfaceReport {
 }
 
 /// Detect an associated type binding inside an impl (`type X = ...;`), the
-/// held surface. Coarse but sound: only impls with `type ` bindings match.
+/// `assoc-type-accepted-unenforced` surface. Coarse but sound: only impls
+/// with `type ` bindings match.
 fn impl_has_assoc_type(src: &str) -> bool {
     src.contains("impl ") && src.contains("type ") && src.contains(" = ")
 }
@@ -4472,10 +4514,17 @@ pub fn rust_surface_check() -> Report {
     } else {
         r.fail(format!("held macro: macro={} parses={}", m2, p2));
     }
-    // held trait surface (impl with an associated-type binding).
+    // associated-type binding: found live (2026-08-12) to actually parse and
+    // typecheck for a supported impl target, not held at the parse boundary
+    // the way it used to be -- see trait_boundary_report's doc comment and
+    // trait-boundary-check for the full story. This program's specific
+    // target (`impl Two for i64`, a primitive) still fails, but at typeck
+    // (unsupported primitive impl target), not at the associated-type
+    // syntax itself, so the classification is `assoc-type-accepted-
+    // unenforced`, matching trait_boundary_report's current behavior.
     let (t3, _m3, _p3) = rust_surface_report("trait Two { type Out; fn two(&self) -> Self::Out; } impl Two for i64 { type Out = i64; fn two(&self) -> i64 { self * 2 } } fn main() {}");
-    if t3 == "held-assoc-type" {
-        r.ok("impl associated-type binding -> trait=held-assoc-type".to_string());
+    if t3 == "assoc-type-accepted-unenforced" {
+        r.ok("impl associated-type binding -> trait=assoc-type-accepted-unenforced".to_string());
     } else {
         r.fail(format!("held trait: trait={}", t3));
     }
@@ -4498,12 +4547,39 @@ pub fn trait_boundary_check() -> Report {
     } else {
         r.fail(format!("supported trait: {} parses={}", s1.classification, s1.parses));
     }
-    // held: associated type does NOT parse (boundary confirmed).
-    let s2 = trait_boundary_report("trait Two { type Out; fn two(&self) -> Self::Out; } impl Two for i64 { type Out = i64; fn two(&self) -> i64 { self * 2 } } fn main() {}");
-    if s2.classification == "held-assoc-type" && !s2.parses {
-        r.ok("associated type -> held-assoc-type, 파스 X (경계 확인)".to_string());
+    // assoc-type-accepted-unenforced: found live (2026-08-12) to actually
+    // parse, typecheck, and execute correctly for a supported impl target
+    // (struct, not the primitive-impl-target boundary `impl Two for i64`
+    // would separately hit) -- this is genuine syntax acceptance, verified
+    // by actually running it, not just checking it parses.
+    let s2_src = "trait Two { type Out; fn two(&self) -> Self::Out; } struct D { n: i64 } impl Two for D { type Out = i64; fn two(&self) -> i64 { self.n * 2 } } fn main() { let d = D { n: 21 }; println!(\"{}\", d.two()); }";
+    let s2 = trait_boundary_report(s2_src);
+    let s2_runs = match interp_run(s2_src) {
+        Ok(out) => out.trim() == "42",
+        Err(_) => false,
+    };
+    if s2.classification == "assoc-type-accepted-unenforced" && s2.parses && s2_runs {
+        r.ok("associated type -> assoc-type-accepted-unenforced, 파스 O + 실행 O (syntax accepted, not really modeled)".to_string());
     } else {
-        r.fail(format!("held assoc: {} parses={}", s2.classification, s2.parses));
+        r.fail(format!(
+            "assoc type: {} parses={} runs={}",
+            s2.classification, s2.parses, s2_runs
+        ));
+    }
+    // Same boundary, the "unenforced" half: Self::Out in the trait's method
+    // signature is never checked against the impl's own `type Out = ...`
+    // binding, so a mismatched impl (declares Out=i64, method returns bool)
+    // is silently accepted rather than rejected the way real rustc would.
+    let s2b_src = "trait Two { type Out; fn two(&self) -> Self::Out; } struct D { n: i64 } impl Two for D { type Out = i64; fn two(&self) -> bool { true } } fn main() { let d = D { n: 21 }; println!(\"{}\", d.two()); }";
+    match interp_run(s2b_src) {
+        Ok(out) if out.trim() == "true" => r.ok(
+            "associated type -> Self::Out not enforced against impl's type binding (honest gap, not silently claimed fixed)".to_string(),
+        ),
+        Ok(out) => r.fail(format!("assoc type unenforced-mismatch: unexpected output {:?}", out)),
+        Err(e) => r.fail(format!(
+            "assoc type unenforced-mismatch: expected silent acceptance (documented gap), got rejection: {}",
+            e
+        )),
     }
     // held: dyn Trait classified held.
     let s3 = trait_boundary_report("trait T { fn v(&self) -> i64; } fn go(x: &dyn T) -> i64 { x.v() } fn main() {}");

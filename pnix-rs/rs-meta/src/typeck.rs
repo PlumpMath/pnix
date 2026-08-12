@@ -1253,10 +1253,32 @@ impl TypeCk {
                             inners.push(inner);
                         }
                         if !same_generic_type(&inners[0], &inners[1]) {
-                            return Err(format!(
-                                "typeck: Rc::ptr_eq inner types differ: {:?} vs {:?}",
-                                inners[0], inners[1]
-                            ));
+                            // Fallback for the case both sides collapsed away the
+                            // provenance that would have let them unify: e.g.
+                            // Rc::new(vec![1]) vs Rc::new(vec![1u64]) each
+                            // independently type-check their own vec! literal to
+                            // a concrete Vec<i64>/Vec<u64> (defaulting unsuffixed
+                            // literals in isolation), so by the time we get here
+                            // the fact that the first side's `1` was flexible is
+                            // already lost. Re-derive each side's inner type
+                            // without that eager default, for exactly this
+                            // `&Rc::new(vec![...])` shape, and retry -- this does
+                            // not change anything for the (already-passing)
+                            // general case, only recovers literal-vs-suffixed
+                            // pairs that real rustc accepts but which fail the
+                            // collapsed comparison above.
+                            let uncollapsed_a = self.rc_ptr_eq_uncollapsed_vec_type(&args[0])?;
+                            let uncollapsed_b = self.rc_ptr_eq_uncollapsed_vec_type(&args[1])?;
+                            let recovered = match (&uncollapsed_a, &uncollapsed_b) {
+                                (Some(a), Some(b)) => same_generic_type(a, b),
+                                _ => false,
+                            };
+                            if !recovered {
+                                return Err(format!(
+                                    "typeck: Rc::ptr_eq inner types differ: {:?} vs {:?}",
+                                    inners[0], inners[1]
+                                ));
+                            }
                         }
                         return Ok(Type::Bool);
                     }
@@ -2083,6 +2105,57 @@ impl TypeCk {
                 other
             )),
         }
+    }
+
+    /// Narrow recovery helper for `Rc::ptr_eq`'s literal-provenance fallback
+    /// (see its call site): if `arg` is exactly `&Rc::new(vec![...])`, return
+    /// that vec!'s unified element type *without* defaulting an unsuffixed
+    /// literal to `i64` the way the normal `Expr::VecLit` typeck path does.
+    /// Anything else (not this exact shape) returns `Ok(None)`, deferring to
+    /// the caller's existing collapsed-type comparison.
+    fn rc_ptr_eq_uncollapsed_vec_type(&mut self, arg: &Expr) -> Result<Option<Type>, String> {
+        let Expr::Ref { expr, .. } = arg else {
+            return Ok(None);
+        };
+        let Expr::PathCall {
+            type_name,
+            item,
+            args,
+        } = expr.as_ref()
+        else {
+            return Ok(None);
+        };
+        if type_name != "Rc" || item != "new" || args.len() != 1 {
+            return Ok(None);
+        }
+        let Expr::VecLit(items) = &args[0] else {
+            return Ok(None);
+        };
+        if items.is_empty() {
+            return Ok(None);
+        }
+        let mut first = self.type_expr(&items[0])?;
+        for it in &items[1..] {
+            let got = self.type_expr(it)?;
+            if got == first {
+                continue;
+            }
+            if first == Type::IntLit && is_integer(&got) {
+                first = got;
+                continue;
+            }
+            if got == Type::IntLit && is_integer(&first) {
+                continue;
+            }
+            return Err(format!(
+                "typeck: vec! element {:?} differs from {:?}",
+                got, first
+            ));
+        }
+        Ok(Some(Type::Generic {
+            name: "Vec".to_string(),
+            args: vec![first],
+        }))
     }
 
     fn enum_variant_fields(&self, enum_name: &str, variant: &str) -> Result<Vec<Type>, String> {

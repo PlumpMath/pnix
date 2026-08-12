@@ -54,6 +54,10 @@ fix found exactly one unrelated pre-existing failure (`trait-boundary-check`,
 item 7 below, confirmed via `git worktree` to predate item 1's fix) — everything
 else in the full aggregate is green.
 
+**2026-08-12/13 update:** items 2, 6, and 7 are now ALL done too — see each
+item's own entry. Only item 3 (mrustc, environment-gated) and item 5 (HELD
+non-goal) remain open, and neither is actionable from this machine.
+
 ### 1. `interp.rs` runtime dispatch bug — Vec/chars — FIXED (2026-08-11, later pass)
 
 - **State: DONE.** `stage2-chain-check` now passes, and so does
@@ -95,18 +99,23 @@ else in the full aggregate is green.
   `source-bundle-check` alone but not for the `stage9-*` rows while this bug
   was open); no manifest edit needed now that reality matches the label.
 
-### 2. Widen `independent-mini-backend-check` fixtures (in-house DDC track)
+### 2. Widen `independent-mini-backend-check` fixtures (in-house DDC track) — DONE (2026-08-12/13, later pass)
 
-- **State:** DONE-so-far: 9/9 fixtures (`mini-const-arithmetic`,
+- **State: DONE-so-far, widened further.** Now 13/13 fixtures in
+  `src/independent_mini_backend.rs`: the original 9 (`mini-const-arithmetic`,
   `mini-one-arg`, `mini-branch-two-arg`, `mini-mul`, `mini-sub`,
   `mini-unary-negate-branch`, `mini-equality-branch`, `mini-ge-branch`,
-  `mini-recursive-factorial`) in `src/independent_mini_backend.rs`, cross-validated
-  live against real `rustc` this session.
-- **What "done" looks like:** widen toward (not necessarily matching 1:1) the
-  407-case main corpus — add loops, more arg arities, string/bool handling to the
-  from-scratch tokenizer/parser/interpreter, keeping it a genuinely independent
-  implementation (zero shared code with `lexer.rs`/`parser.rs`/`ast.rs`/
-  `typeck.rs`/`interp.rs`).
+  `mini-recursive-factorial`) plus 4 new ones added this pass using
+  capabilities the backend already had (no new backend features needed):
+  `mini-nested-if`, `mini-recursive-fibonacci` (double recursive call),
+  `mini-three-arg`, `mini-four-arg`. All cross-validated live against real
+  `rustc`.
+- **What "done" looks like (still aspirational, not a hard bar):** widen
+  toward (not necessarily matching 1:1) the 407-case main corpus — this
+  pass didn't add new backend LANGUAGE FEATURES (no `!=`, no strings), just
+  more fixtures on top of existing arithmetic/comparison/`if`/recursion/
+  multi-arg support. A future pass adding new syntax (e.g. `!=`) would need
+  backend changes too.
 - **Size:** small-to-medium, incremental, purely additive, no known blockers —
   each new fixture is its own self-contained slice.
 
@@ -154,41 +163,83 @@ else in the full aggregate is green.
   downstream (`pnix-rs`) reasons. A full trait solver is explicitly called "a
   research frontier," not required to self-host.
 
-### 6. Minor open item: A4 generic-inference tail (§5.1, line ~380)
+### 6. Minor open item: A4 generic-inference tail (§5.1, line ~380) — DONE (2026-08-12/13, later pass)
 
-- **State:** the one remaining unchecked `- [ ]` in the whole file: preserve
-  nested unsuffixed integer provenance so
-  `Rc::ptr_eq(&Rc::new(vec![1]), &Rc::new(vec![1u64]))` can infer `u64` like
-  `rustc` does, while explicit `Rc<i64>` vs `Rc<u64>` still gets rejected.
-- **Size:** small, narrow, pre-existing, unrelated to the interp.rs bug (item 1)
-  or the DDC work (items 2-3). Lowest priority of everything on this list.
+- **State: DONE.** Preserved nested unsuffixed integer provenance so
+  `Rc::ptr_eq(&Rc::new(vec![1]), &Rc::new(vec![1u64]))` now infers `u64`
+  like `rustc` does, while explicit `Rc<i64>` vs `Rc<u64>` (both concrete,
+  conflicting) still gets rejected.
+- **Root cause:** `vec![...]`'s own typeck (`Expr::VecLit` in `typeck.rs`)
+  eagerly collapses an unsuffixed integer literal element to `i64`
+  (`collapse_lit`) before returning the `Vec<T>` type — so by the time
+  `Rc::ptr_eq` compares its two `&Rc<Vec<T>>` arguments' inner types, the
+  first side's `1` has already lost its flexibility and become a concrete
+  `Vec<I64>`, which no longer unifies with the second side's `Vec<U64>`.
+  A blanket fix (removing the eager collapse everywhere) was tried first and
+  reverted: it broke a genuinely different case
+  (`vec![3, 1, 2]; v.sort_by(|a, b| b.cmp(a))`, a positive self-check
+  fixture) where the literal really does need to default to `i64` in
+  isolation, since nothing else constrains it — this needs real
+  bidirectional inference to do generally, which is out of scope for a
+  "very small" item.
+- **Fix (narrowly scoped to `Rc::ptr_eq` specifically):** added
+  `rc_ptr_eq_uncollapsed_vec_type`, a fallback that only runs when the
+  normal (collapsed) comparison fails: if an argument is exactly
+  `&Rc::new(vec![...])`, re-derive that `vec!`'s element type *without* the
+  eager default, then retry the comparison. Purely additive on the failure
+  path — does not change behavior for anything that already passed.
+- **Fixtures added:** `rc-ptr-eq-unsuffixed-literal-provenance` (positive,
+  self-check/tv-check) and `rc-ptr-eq-explicit-conflicting-types` (negative,
+  typeck-check).
+- **Self-hosting gotcha hit while building this (same pattern as earlier
+  this session):** the first draft used `.collect::<Result<Vec<_>, _>>()` to
+  gather both sides' results — real rustc accepts this, but rs-meta's own
+  `interp.rs` `Iter::collect` turbofish only supports `String`/`Vec<T>`
+  targets, not `Result<Vec<T>, E>`, so `source-bundle-check` failed once
+  this became part of the self-hosted bundle. Rewritten as two plain
+  sequential calls instead of a `.collect()`.
+- **Verified:** self-check 408/408, tv-check 408/408, typeck-check 273/273,
+  source-ast-check 16/16, source-bundle-check PASS — no regressions.
 
-### 7. `trait-boundary-check` regression: `held-assoc-type` now parses (found 2026-08-11, later pass)
+### 7. `trait-boundary-check` regression: `held-assoc-type` now parses — DONE (2026-08-12/13, later pass)
 
-- **State:** found while re-verifying the full `bin/rs-meta-gate check` aggregate
-  after fixing item 1. `trait-boundary-check` (3 cases) now fails 1/3:
-  `FAIL held assoc: held-assoc-type parses=true` — an associated-type binding
-  is supposed to be classified `held-assoc-type` and **not** parse (that's the
-  documented supported/held boundary; see `todo.md`'s 2026-07-03 boundary
-  reports entry), but it now parses successfully.
-- **Confirmed pre-existing, not a regression from item 1's fix:** isolated via
-  `git worktree add <tmp> <commit before the interp.rs fix>`, rebuilt, and ran
-  `trait-boundary-check` there directly — same failure reproduces on the
-  pre-fix commit. The interp.rs runtime-coercion fix (item 1) only touches
-  `coerce_let_value`/collect-result typing at interpretation time; it has no
-  path into parsing trait/associated-type syntax, so this is unrelated and
-  was already broken before this session's `interp.rs` work — just not
-  re-verified via a live `check` run in a while (the whole `check` aggregate
-  was blocked earlier in the pipeline by item 1 until this pass).
-- **What "done" looks like:** find why an associated-type binding now parses
-  (check `parser.rs`'s trait-impl parsing path against
-  `check.rs`'s `held-assoc-type` fixture source) and either fix the parser to
-  reject it again (if held-ness is meant to be enforced at parse time) or
-  update the classification if accepting it was an intentional, undocumented
-  widening — read the actual fixture/expectation in `check.rs` first before
-  assuming which direction is correct.
-- **Size:** small-to-medium, narrow, isolated to one check. Not currently
-  blocking anything else in the `check` aggregate (everything else passes).
+- **State: DONE.** Confirmed live (not assumed) that associated types
+  genuinely now parse, typecheck, *and execute correctly* — not just parse
+  and fail later. `impl Two for D { type Out = i64; fn two(&self) -> i64 {
+  self.n * 2 } }` (struct target) runs and returns the right value. The
+  original fixture (`impl Two for i64`) combined TWO separate boundaries:
+  associated types (now genuinely supported) and implementing any trait for
+  a primitive type (still separately unsupported, confirmed by testing a
+  trait with NO associated type against the same `i64` target — same "impl
+  target I64 is not supported yet" error either way).
+- **Also confirmed the "support" is shallow, not real associated-type
+  modeling:** `Self::Out` in the trait's own method signature is never
+  checked against the impl's `type Out = ...` binding. An impl declaring
+  `type Out = i64` with a method that actually returns `bool` is silently
+  accepted (real rustc would reject the mismatch). This is intentionally
+  preserved as a documented, honest gap, not silently claimed as full
+  support.
+- **Fix:** renamed the classification from `held-assoc-type` (false — it
+  does parse now) to `assoc-type-accepted-unenforced` in
+  `trait_boundary_report`, with a doc comment explaining exactly why and
+  what's still not modeled. Updated `trait_boundary_check`'s test case to
+  use a supported (struct) impl target and assert real execution, plus
+  added a second case asserting the mismatch-is-silently-accepted gap
+  explicitly (so it stays documented, not just true-by-accident).
+- **Second caller found and fixed:** `rust_surface_check` (the
+  `rust_surface_report` consumer used by `pnix-rs`'s peer-engine `verdict`
+  field) had its OWN separate hardcoded `"held-assoc-type"` string
+  assertion, missed on the first pass and caught by re-running the full
+  `bin/rs-meta-gate check` aggregate before considering this closed. Fixed
+  to match the renamed classification.
+- **Self-hosting gotcha hit while building this:** an early draft used
+  `Option::as_deref()` in the new test code, which `interp.rs` doesn't
+  model either (`unsupported Option method as_deref`) — rewritten as a
+  plain `match`.
+- **Verified:** `trait-boundary-check` 4/4, `rust-surface-check` 4/4, plus
+  the full regression bar (self-check/tv-check/typeck-check/mini-backend/
+  source-ast/source-bundle/macro-boundary/borrow-boundary) all green, no
+  regressions.
 
 ## 2. Stage 사다리 (rustc bootstrap 모델 → stage15~N)
 
