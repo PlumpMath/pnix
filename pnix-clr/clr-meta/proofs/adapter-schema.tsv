@@ -1,0 +1,6 @@
+# adapter	status	schema	held_policy	conflict_policy	note
+local-clojureclr	DONE	bin-clr-meta-cli-v1	none	fail-closed	the bin/clr-meta CLI plus the pinned ClojureCLR NuGet package (1.12.3-alpha8) and dotnet toolchain is replayed by the stage9 clean-process gate
+compiler-selfhost-native	DONE	persisted-assembly-builder-v1	none	fail-closed	the PersistedAssemblyBuilder-based compiler-selfhost artifact family (Stage1-9) is replayed by the stage8 reproducible-artifact gate
+github-actions	HELD	workflow-yml-v1	external-not-fetched	fail-closed	the monorepo-level hosts.yml workflow exercises this host remotely on every PR, but its outcome is external and not fetched or trusted by any local proof check
+external-nuget-feed	HELD	nuget-restore-v1	explicit-enable-required	fail-closed	fetching packages beyond the pinned/cached ClojureCLR package is outside the local proof boundary
+cross-implementation	HELD	export-json-v1	explicit-enable-required	fail-closed	comparison against another ClojureCLR-hosted PNIX implementation is deferred to stage14 receipts

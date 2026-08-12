@@ -120,17 +120,97 @@ design: STAGE9_DESIGN.md
 gate chain: scripts/clr-meta-gate → …stage8 → stage9
 ```
 
+## Closed this wave (2026-08-12, same day) — Compiler Stage10–15/N + StageN
+
+```text
+./scripts/clr-meta-compiler-selfhost-stage10-gate   PASS
+./scripts/clr-meta-compiler-selfhost-stage11-gate   PASS
+./scripts/clr-meta-compiler-selfhost-stage12-gate   PASS
+./scripts/clr-meta-compiler-selfhost-stage13-gate   PASS
+./scripts/clr-meta-compiler-selfhost-stage14-gate   PASS
+./scripts/clr-meta-compiler-selfhost-stage15-gate   PASS
+./scripts/clr-meta-compiler-selfhost-stagen-gate    PASS
+./scripts/clr-meta-manifest-check                   PASS
+
+  Every other host (hy-meta, rs-meta) had already closed this whole range;
+  clr-meta had none of it -- no adapter matrix, no quarantine storage, no
+  cross-host law, nothing. Built following the SAME pattern those hosts
+  already established (a policy TSV per stage under proofs/, declaring an
+  explicit DONE/GROW/HELD/DISABLED stance for every relevant boundary, plus a
+  live replay of whatever's DONE), adapted to clr-meta's own real surfaces
+  rather than a blind copy of rs-meta's wording:
+    Stage10: proofs/session-sandbox.tsv -- load-context shadow rejection
+      (bin/clr-meta already rejects a planted pnix.clr-meta namespace
+      shadow before running anything; now proven live, twice, plus a
+      shadow-removed sanity check) + a 2-command session replay through
+      bin/clr-meta under env -i.
+    Stage11: proofs/adapter-schema.tsv -- local-clojureclr (replays Stage9
+      once) + compiler-selfhost-native (via Stage8's own latest checked
+      receipt, not a re-run -- see below) + github-actions/external-nuget-
+      feed/cross-implementation held.
+    Stage12: proofs/quarantine-policy.tsv -- local-verification (Stage11) +
+      candidate-intake (manifest-check) + remote-ci/manual-promotion/self-
+      modification/external-evidence held.
+    Stage13: proofs/horizon-policy.tsv -- stage-manifest + session-replay
+      (Stage12) + stale-evidence/external-memory/organism-state/ambient-
+      network held (all degrade-to-held by policy default).
+    Stage14: proofs/cross-impl-schema.tsv -- clr-meta-local +
+      independent-mini-backend (both via a fresh bootstrap-test run) +
+      compiler-selfhost-native (Stage8 receipt) + remote-ci/alternate-
+      clojureclr/mrustc-style-second-compiler held. Note:
+      independent-mini-backend is the one row here already closed to a
+      genuine Trusting-Trust bar (a real second, independently-authored
+      implementation cross-validated against host eval) -- the other DONE
+      rows are local self-consistency checks, not independent-implementation
+      comparisons; the design doc calls this distinction out explicitly.
+    Stage15: proofs/evidence-federation.tsv -- local-proof (Stage14) +
+      stage-manifest (manifest-check) + remote-ci/external-web/external-
+      tool/human-note held.
+    StageN: proofs/extension-policy.tsv -- manifest-index + timeout-cost
+      (Stage15) + stageN-seed (self-validated) + breaking-change/external-
+      law/future-stage held.
+
+  Cost-shape correction made while building this (recorded so it isn't
+  silently re-broken later): the first draft had every stage re-run its
+  predecessor's *entire* gate TWICE (mirroring Stage8-10's own "replay
+  twice" pattern). That's wrong past Stage10 -- each predecessor already
+  proves its own replay property internally, so doubling again at every
+  hop compounds to quadratic cost by StageN (measured: an early stage12
+  draft alone took ~90s; the fixed version's whole stage11-15/N+StageN
+  chain together takes well under that). Fixed: every stage from Stage11
+  onward calls its referenced predecessor exactly ONCE, and the two
+  genuinely expensive artifacts (compiler-selfhost-native, referenced by
+  both Stage11 and Stage14) are verified via Stage8's own latest checked
+  receipt rather than by re-running Stage8's multi-minute chain-rebuild gate
+  again from inside a later stage.
+
+  Also fixed live: proofs/stage-manifest.tsv's own validator
+  (scripts/clr-meta-manifest-check) initially used `declare -A`
+  (bash 4+ associative arrays), which fails outright under macOS's system
+  /bin/bash (3.2) -- rewritten to plain string matching, matching every
+  other script in this codebase's existing bash-3.2-safe convention.
+
+  claims.stage10 through claims.stagen = true;
+    promotion/allowed? = false on every one of them
+receipts: work/compiler-selfhost-stage{10-15,n}-gate.receipt.json
+designs: STAGE{10-15,N}_DESIGN.md
+gate chain: scripts/clr-meta-gate → …stage9 → stage10 → … → stagen
+```
+
 ## Open claims (do not claim)
 
 ```text
-compiler_stage9 = true
-compiler_stage10_through_15_n = false
 compiler_self_reproduction = false
 clr_il_fixed_point = false
 broad_clojureclr_compatibility / replacement = false
 pnix_common_compiler_integration = false
 cross_host_canonical_equivalence / clr_host_promotion = false
 ```
+
+Stage1 through StageN are now ALL closed (see the "Closed this wave" sections
+above) — `promotion/allowed?` stays `false` on every one of them regardless,
+since none of this closes compiler self-reproduction, an IL fixed point, or
+broad ClojureCLR replacement, which remain the actual promotion gates.
 
 `raw_aot_rebuild_determinism` moved out of this block (2026-08-12): Stage8
 closes it for the Compiler Stage1-7 `PersistedAssemblyBuilder` artifact family

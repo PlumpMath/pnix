@@ -1,0 +1,7 @@
+# implementation	status	export_schema	comparison_policy	conflict_policy	note
+clr-meta-local	DONE	canonical-edn-v1	local-bootstrap-check	fail-closed	clr-meta's own evaluator gen0-2 and compiler-selfhost artifact receipts are the current checked implementation pair
+compiler-selfhost-native	DONE	pe-artifact-receipt-v1	local-dotnet-output	fail-closed	the PersistedAssemblyBuilder-based native tier records reproducible artifact receipts (stage8) for local comparison
+independent-mini-backend	DONE	ddc-fixture-v1	local-eval-agreement	fail-closed	the from-scratch DynamicMethod-based mini backend (19 fixtures) is an independently-authored second implementation, cross-validated against real host ClojureCLR eval -- this is the one row on this table already closed to a genuine Trusting-Trust bar, not just a local-vs-local comparison
+remote-ci	HELD	workflow-yml-v1	no-remote-comparison	fail-closed	the monorepo-level hosts.yml workflow is external and cannot act as a comparison oracle for local checks
+alternate-clojureclr	HELD	canonical-edn-v1	explicit-version-receipt-required	fail-closed	a different pinned ClojureCLR version requires an explicit local export receipt before comparison
+mrustc-style-second-compiler	HELD	artifact-receipt-v1	explicit-independent-compiler-required	fail-closed	a second, fully independent CLR-targeting compiler (the Wheeler DDC bar, beyond the mini-backend) is a separate held track

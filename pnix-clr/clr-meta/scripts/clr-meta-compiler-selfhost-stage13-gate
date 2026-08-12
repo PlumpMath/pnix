@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Gate: Stage13 long-horizon stale artifact, cache, and source-drift closure
+# (the roadmap's own one-line Stage13 definition). Validates
+# proofs/horizon-policy.tsv's shape, then live-replays the two DONE signals
+# (stage-manifest via manifest-check, session-replay via Stage12), each run
+# twice. See STAGE13_DESIGN.md. Does not claim Stage14-15/N,
+# self-reproduction, or promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+policy_tsv="$clr_meta_root/proofs/horizon-policy.tsv"
+receipt_out="${CLR_META_STAGE13_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage13-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage13 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+command -v jq >/dev/null 2>&1 || fail jq-missing
+[[ -f "$policy_tsv" && ! -L "$policy_tsv" ]] || fail policy-tsv-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage13.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+rows=0
+has_manifest=false
+has_session=false
+has_stale_held=false
+has_memory_held=false
+has_organism_held=false
+has_network_held=false
+has_degrade=true
+while IFS=$'\t' read -r signal status freshness_policy boundary_policy degradation_policy note; do
+  [[ -z "$signal" || "$signal" == \#* ]] && continue
+  [[ -n "$signal" && -n "$status" && -n "$freshness_policy" && -n "$boundary_policy" \
+     && -n "$degradation_policy" && -n "$note" ]] || fail "policy-empty-field:$signal"
+  case "$status" in
+    DONE | GROW | HELD | DISABLED) ;;
+    *) fail "policy-unknown-status:$signal:$status" ;;
+  esac
+  if [[ "$status" == "HELD" && "$degradation_policy" != "degrade-to-held" ]]; then
+    has_degrade=false
+  fi
+  case "$signal:$status" in
+    stage-manifest:DONE) has_manifest=true ;;
+    session-replay:DONE) has_session=true ;;
+    stale-evidence:HELD) has_stale_held=true ;;
+    external-memory:HELD) has_memory_held=true ;;
+    organism-state:HELD) has_organism_held=true ;;
+    ambient-network:HELD) has_network_held=true ;;
+  esac
+  rows=$((rows + 1))
+done <"$policy_tsv"
+[[ "$rows" -ge 6 ]] || fail "policy-too-few-rows:$rows"
+$has_manifest || fail policy-missing-manifest
+$has_session || fail policy-missing-session
+$has_stale_held || fail policy-missing-stale-held
+$has_memory_held || fail policy-missing-memory-held
+$has_organism_held || fail policy-missing-organism-held
+$has_network_held || fail policy-missing-network-held
+$has_degrade || fail policy-missing-degrade-to-held
+
+# Called ONCE each -- see stage11/12-gate for why this ladder does not
+# double at every hop (each predecessor already proved its own replay
+# property; re-running it twice per stage would compound to quadratic cost
+# by the time the chain reaches StageN).
+replay_gate() {
+  local label="$1"
+  local script="$2"
+  [[ -f "$script" && ! -L "$script" ]] || fail "$label-script-missing"
+  "$script" >"$tmp/$label.stdout" 2>"$tmp/$label.stderr" || {
+    sed -n '1,80p' "$tmp/$label.stderr" >&2
+    fail "$label-failed"
+  }
+  grep -Fq "PASS" "$tmp/$label.stdout" || fail "$label-no-pass-marker"
+}
+replay_gate stage-manifest "$clr_meta_root/scripts/clr-meta-manifest-check"
+replay_gate session-replay "$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage12-gate"
+
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n \
+  --argjson rows "$rows" \
+  --arg policy_sha256 "$(sha256_file "$policy_tsv")" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage13-gate-receipt.v1",
+    checkpoint:"stage13-horizon-closure",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    policy:{path:"proofs/horizon-policy.tsv", sha256:$policy_sha256, row_count:$rows},
+    replay:{
+      "stage-manifest":{gate:"manifest-check", method:"live-rerun-once"},
+      "session-replay":{gate:"stage12", method:"live-rerun-once"}
+    },
+    claims:{
+      stage13:true,
+      horizon_policy_declared:true,
+      stage14_through_15_n:false,
+      self_reproduction:false,
+      fixed_point:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.stage13 == true and
+  .claims["promotion/allowed?"] == false' "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost Stage13 gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  policy_rows=$rows"

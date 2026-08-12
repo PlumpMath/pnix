@@ -1,0 +1,7 @@
+# source	status	evidence_schema	approval_policy	conflict_policy	note
+local-proof	DONE	receipt-v1	local-check-required	fail-closed	local bootstrap-test and the compiler-selfhost stage receipts are the only current promotion evidence
+stage-manifest	DONE	manifest-tsv-v1	machine-readable-required	fail-closed	stage claims are federated through the checked stage manifest index
+remote-ci	HELD	workflow-yml-v1	no-remote-approval	fail-closed	the monorepo-level hosts.yml workflow is external evidence and cannot promote claims
+external-web	HELD	evidence-json-v1	offline-approval-required	fail-closed	web or network evidence requires explicit offline capture before use
+external-tool	HELD	tool-receipt-v1	offline-approval-required	fail-closed	external tools can contribute only via checked receipts and remain held
+human-note	HELD	review-note-v1	explicit-review-required	fail-closed	human notes document intent but cannot replace machine-checked receipts

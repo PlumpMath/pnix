@@ -1,0 +1,7 @@
+# signal	status	freshness_policy	boundary_policy	degradation_policy	note
+stage-manifest	DONE	canonical-index	local-proof-boundary	fail-closed	stage status is read from the machine-readable manifest, not ambient memory
+session-replay	DONE	replay-receipt	no-boundary-leak	fail-closed	long-running sessions must replay through deterministic local receipts (stage9/stage10/stage12)
+stale-evidence	HELD	explicit-refresh-required	no-boundary-leak	degrade-to-held	stale or unrefreshed evidence cannot keep a DONE claim
+external-memory	HELD	explicit-import-required	no-boundary-leak	degrade-to-held	external memory may annotate TODO or HELD but cannot promote local proof status
+organism-state	HELD	manifest-versioned	no-boundary-leak	degrade-to-held	long-horizon state requires versioned manifests and explicit receipts
+ambient-network	HELD	offline-first	no-boundary-leak	degrade-to-held	network observations are not proof artifacts unless captured in a checked receipt

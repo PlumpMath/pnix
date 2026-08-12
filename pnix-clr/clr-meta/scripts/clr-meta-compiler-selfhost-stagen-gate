@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Gate: StageN every newly bound runtime, adapter, proof, or product surface
+# replays the complete applicable closure ledger (the roadmap's own one-line
+# StageN definition). Validates proofs/extension-policy.tsv's shape, then
+# live-replays the DONE rows: manifest-index via manifest-check, timeout-cost
+# via Stage15 (anchoring the whole chain back to Stage9), and stageN-seed by
+# validating this gate's own policy is itself well-formed. See
+# STAGEN_DESIGN.md. Does not claim self-reproduction or promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+policy_tsv="$clr_meta_root/proofs/extension-policy.tsv"
+manifest_tsv="$clr_meta_root/proofs/stage-manifest.tsv"
+receipt_out="${CLR_META_STAGEN_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stagen-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler selfhost StageN gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+command -v jq >/dev/null 2>&1 || fail jq-missing
+[[ -f "$policy_tsv" && ! -L "$policy_tsv" ]] || fail policy-tsv-missing
+[[ -f "$manifest_tsv" && ! -L "$manifest_tsv" ]] || fail manifest-tsv-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stagen.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+rows=0
+has_manifest_index=false
+has_timeout_cost=false
+has_stagen_seed=false
+has_breaking_held=false
+has_law_held=false
+has_future_held=false
+has_fail_closed=true
+while IFS=$'\t' read -r extension status version_policy migration_policy conflict_policy note; do
+  [[ -z "$extension" || "$extension" == \#* ]] && continue
+  [[ -n "$extension" && -n "$status" && -n "$version_policy" && -n "$migration_policy" \
+     && -n "$conflict_policy" && -n "$note" ]] || fail "policy-empty-field:$extension"
+  case "$status" in
+    DONE | GROW | HELD | DISABLED) ;;
+    *) fail "policy-unknown-status:$extension:$status" ;;
+  esac
+  [[ "$conflict_policy" == "fail-closed" ]] || has_fail_closed=false
+  case "$extension:$status" in
+    manifest-index:DONE) has_manifest_index=true ;;
+    timeout-cost:DONE) has_timeout_cost=true ;;
+    stageN-seed:DONE) has_stagen_seed=true ;;
+    breaking-change:HELD) has_breaking_held=true ;;
+    external-law:HELD) has_law_held=true ;;
+    future-stage:HELD) has_future_held=true ;;
+  esac
+  rows=$((rows + 1))
+done <"$policy_tsv"
+[[ "$rows" -ge 6 ]] || fail "policy-too-few-rows:$rows"
+$has_manifest_index || fail policy-missing-manifest-index
+$has_timeout_cost || fail policy-missing-timeout-cost
+$has_stagen_seed || fail policy-missing-stagen-seed
+$has_breaking_held || fail policy-missing-breaking-held
+$has_law_held || fail policy-missing-law-held
+$has_future_held || fail policy-missing-future-held
+$has_fail_closed || fail policy-missing-fail-closed
+
+# manifest-index: every manifest row must carry a numeric max_seconds and a
+# non-empty cost_note (the "timeout-cost" budget-record-required policy this
+# same table declares) -- checked directly here, not just via manifest-check.
+while IFS=$'\t' read -r stage status check command max_seconds cost_note; do
+  [[ -z "$stage" || "$stage" == \#* ]] && continue
+  [[ "$max_seconds" =~ ^[0-9]+$ ]] || fail "manifest-row-non-numeric-max-seconds:$stage"
+  [[ -n "$cost_note" ]] || fail "manifest-row-missing-cost-note:$stage"
+done <"$manifest_tsv"
+
+replay_gate() {
+  local label="$1"
+  local script="$2"
+  [[ -f "$script" && ! -L "$script" ]] || fail "$label-script-missing"
+  "$script" >"$tmp/$label.stdout" 2>"$tmp/$label.stderr" || {
+    sed -n '1,80p' "$tmp/$label.stderr" >&2
+    fail "$label-failed"
+  }
+  grep -Fq "PASS" "$tmp/$label.stdout" || fail "$label-no-pass-marker"
+}
+replay_gate manifest-index "$clr_meta_root/scripts/clr-meta-manifest-check"
+replay_gate timeout-cost "$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage15-gate"
+
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n \
+  --argjson rows "$rows" \
+  --arg policy_sha256 "$(sha256_file "$policy_tsv")" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stagen-gate-receipt.v1",
+    checkpoint:"stagen-versioned-extension-closure",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    policy:{path:"proofs/extension-policy.tsv", sha256:$policy_sha256, row_count:$rows},
+    replay:{
+      "manifest-index":{gate:"manifest-check", method:"live-rerun-once"},
+      "timeout-cost":{gate:"stage15", method:"live-rerun-once"},
+      "stageN-seed":{method:"self-policy-validation"}
+    },
+    claims:{
+      stagen:true,
+      extension_policy_declared:true,
+      stage_chain_anchored_to_stage9:true,
+      self_reproduction:false,
+      fixed_point:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.stagen == true and
+  .claims["promotion/allowed?"] == false' "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost StageN gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  policy_rows=$rows"

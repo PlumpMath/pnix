@@ -7,7 +7,10 @@ executable Compiler Stage2 and its source-hidden fresh-target replay are closed
 at C3; the same-source Stage3--7 recompile ladder is live-gated CLOSED (2026-08-07)
 with `promotion/allowed?=false`; Stage8 (reproducible assembly artifacts) and
 Stage9 (clean-process compiler/runtime replay) are both live-gated CLOSED
-(2026-08-12), also `promotion/allowed?=false`; Stage10--15/N and replacement
+(2026-08-12); Stage10--15/N (session/sandbox, adapter, quarantine, horizon,
+cross-implementation, evidence-federation, and versioned-extension closure)
+are ALSO live-gated CLOSED (2026-08-12, same day), all also
+`promotion/allowed?=false`; only broad ClojureCLR compatibility/replacement
 remain OPEN.
 Truth owners: the monorepo constitution, CLR source, artifact manifests, and
 future stage receipts. This page is a roadmap, not closure evidence.
@@ -203,10 +206,17 @@ compiler fixed point.
    replays its entrypoint matrix byte-identically across two fully clean
    (`env -i`) process invocations (`STAGE9_DESIGN.md`,
    `scripts/clr-meta-compiler-selfhost-stage9-gate`).
-   Next: Stage10 (sandbox/session isolation) and a separately named
-   self-reproduction gate.
-5. Close Stage10--15/N without making proof receipts control ordinary
-   language execution.
+   **Stage10–15/N closed** (2026-08-12, same day): each stage is a policy
+   table under `proofs/` (`session-sandbox.tsv`, `adapter-schema.tsv`,
+   `quarantine-policy.tsv`, `horizon-policy.tsv`, `cross-impl-schema.tsv`,
+   `evidence-federation.tsv`, `extension-policy.tsv`) declaring an explicit
+   DONE/GROW/HELD/DISABLED stance for every relevant boundary, plus a live
+   replay of whatever's DONE — each stage calling its immediate predecessor
+   exactly once (not "twice," to avoid the quadratic cost blowup an early
+   draft hit), anchoring the whole chain back to Stage9
+   (`STAGE{10,11,12,13,14,15,N}_DESIGN.md`,
+   `scripts/clr-meta-compiler-selfhost-stage{10,11,12,13,14,15,n}-gate`).
+   Next: a separately named self-reproduction gate.
 6. Admit exact `-e`, file, REPL, compile/AOT, namespace/load, and tooling
    compatibility profiles individually.
 7. Only after those gates may the `bin/clojure-clr` name expand beyond its
@@ -236,7 +246,13 @@ compiler_stage6 = true
 compiler_stage7 = true
 compiler_stage8 = true
 compiler_stage9 = true
-compiler_stage10_through_15_n = false
+compiler_stage10 = true
+compiler_stage11 = true
+compiler_stage12 = true
+compiler_stage13 = true
+compiler_stage14 = true
+compiler_stage15 = true
+compiler_stagen = true
 compiler_self_reproduction = false
 clr_il_fixed_point = false
 raw_aot_rebuild_determinism = true (compiler_stage7_persisted_assembly_builder_output only; see STAGE8_DESIGN.md)

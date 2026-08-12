@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# Gate: Stage10 isolated load-context, classpath, session, and sandbox replay.
+# Validates proofs/session-sandbox.tsv's policy shape, then live-replays the
+# two DONE properties that are actually checkable locally: (1) bin/clr-meta
+# rejects a planted pnix.clr-meta namespace shadow in the pinned runtime root
+# before running anything, and (2) a multi-command session through
+# bin/clr-meta replays byte-identically across two independent clean (env -i)
+# process runs. See STAGE10_DESIGN.md. Does not claim Stage11-15/N,
+# self-reproduction, or promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+public_cli="$root/bin/clr-meta"
+policy_tsv="$clr_meta_root/proofs/session-sandbox.tsv"
+dotnet_bin="$(command -v dotnet || true)"
+runtime_root="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish"
+receipt_out="${CLR_META_STAGE10_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage10-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage10 gate: $1" >&2
+  exit 1
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+for command in jq dotnet; do
+  command -v "$command" >/dev/null 2>&1 || fail "$command-missing"
+done
+[[ -f "$public_cli" && ! -L "$public_cli" ]] || fail public-cli-missing
+[[ -f "$policy_tsv" && ! -L "$policy_tsv" ]] || fail policy-tsv-missing
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+[[ -d "$runtime_root" ]] || fail runtime-root-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage10.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/home"
+
+# --- Policy shape: proofs/session-sandbox.tsv ---
+rows=0
+has_load_context=false
+has_classpath=false
+has_session=false
+has_sandbox_env=false
+has_remote_held=false
+has_network_held=false
+has_fail_closed=true
+while IFS=$'\t' read -r boundary status replay_policy sandbox_policy conflict_policy note; do
+  [[ -z "$boundary" || "$boundary" == \#* ]] && continue
+  [[ -n "$boundary" && -n "$status" && -n "$replay_policy" && -n "$sandbox_policy" \
+     && -n "$conflict_policy" && -n "$note" ]] || fail "policy-empty-field:$boundary"
+  case "$status" in
+    DONE | GROW | HELD | DISABLED) ;;
+    *) fail "policy-unknown-status:$boundary:$status" ;;
+  esac
+  [[ "$conflict_policy" == "fail-closed" ]] || has_fail_closed=false
+  case "$boundary:$status" in
+    load-context-shadow-rejection:DONE) has_load_context=true ;;
+    classpath-scoped:DONE) has_classpath=true ;;
+    session-replay:DONE) has_session=true ;;
+    sandbox-env:DONE) has_sandbox_env=true ;;
+    remote-ci:HELD) has_remote_held=true ;;
+    network:HELD) has_network_held=true ;;
+  esac
+  rows=$((rows + 1))
+done <"$policy_tsv"
+[[ "$rows" -ge 6 ]] || fail "policy-too-few-rows:$rows"
+$has_load_context || fail policy-missing-load-context
+$has_classpath || fail policy-missing-classpath
+$has_session || fail policy-missing-session
+$has_sandbox_env || fail policy-missing-sandbox-env
+$has_remote_held || fail policy-missing-remote-held
+$has_network_held || fail policy-missing-network-held
+$has_fail_closed || fail policy-missing-fail-closed
+
+# --- Live replay 1: load-context shadow rejection (fail-closed, twice) ---
+shadow_dll="$runtime_root/pnix.clr_meta.stage10_probe.cljr.dll"
+[[ ! -e "$shadow_dll" ]] || fail shadow-probe-path-already-exists
+cleanup_shadow() { rm -f "$shadow_dll"; }
+trap 'cleanup_shadow; rm -rf "$tmp"' EXIT
+: >"$shadow_dll"
+
+set +e
+env -i "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin")" "HOME=$tmp/home" \
+  "$public_cli" -e "(+ 1 1)" >"$tmp/shadow.run1.stdout" 2>"$tmp/shadow.run1.stderr"
+shadow_rc1=$?
+env -i "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin")" "HOME=$tmp/home" \
+  "$public_cli" -e "(+ 1 1)" >"$tmp/shadow.run2.stdout" 2>"$tmp/shadow.run2.stderr"
+shadow_rc2=$?
+set -e
+cleanup_shadow
+trap 'rm -rf "$tmp"' EXIT
+
+[[ "$shadow_rc1" == 2 && "$shadow_rc2" == 2 ]] || fail shadow-rejection-exit-code
+[[ ! -s "$tmp/shadow.run1.stdout" && ! -s "$tmp/shadow.run2.stdout" ]] || fail shadow-rejection-stdout-not-empty
+grep -Fq 'pinned runtime contains a pnix.clr-meta shadow' "$tmp/shadow.run1.stderr" || fail shadow-rejection-message-run1
+grep -Fq 'pinned runtime contains a pnix.clr-meta shadow' "$tmp/shadow.run2.stderr" || fail shadow-rejection-message-run2
+cmp "$tmp/shadow.run1.stderr" "$tmp/shadow.run2.stderr" >/dev/null || fail shadow-rejection-not-replayed
+shadow_sha256="$(sha256_stdin <"$tmp/shadow.run1.stderr")"
+
+# Sanity: with the shadow removed, the same command succeeds again (proves
+# the rejection above was actually caused by the planted file, not some
+# unrelated breakage).
+env -i "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin")" "HOME=$tmp/home" \
+  "$public_cli" -e "(+ 1 1)" >"$tmp/shadow-cleared.stdout" 2>"$tmp/shadow-cleared.stderr"
+[[ ! -s "$tmp/shadow-cleared.stderr" ]] || fail shadow-cleared-stderr-not-quiet
+grep -Fq ':value 2' "$tmp/shadow-cleared.stdout" || fail shadow-cleared-wrong-value
+
+# --- Live replay 2: multi-command session (env -i, twice) ---
+session_transcript() {
+  local out="$1"
+  {
+    env -i "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin")" "HOME=$tmp/home" \
+      "$public_cli" --gate
+    env -i "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin")" "HOME=$tmp/home" \
+      "$public_cli" -e "(+ 40 2)"
+  } >"$out" 2>"$tmp/session.$(basename "$out").stderr"
+}
+session_transcript "$tmp/session.run1.stdout"
+session_transcript "$tmp/session.run2.stdout"
+[[ ! -s "$tmp/session.session.run1.stdout.stderr" && ! -s "$tmp/session.session.run2.stdout.stderr" ]] || \
+  fail session-stderr-not-quiet
+cmp "$tmp/session.run1.stdout" "$tmp/session.run2.stdout" >/dev/null || fail session-not-replayed
+grep -Fq ':schema :pnix.clr-meta.bootstrap-receipt.v1' "$tmp/session.run1.stdout" || fail session-missing-gate-output
+grep -Fq ':value 42' "$tmp/session.run1.stdout" || fail session-missing-eval-output
+session_sha256="$(sha256_stdin <"$tmp/session.run1.stdout")"
+
+# --- Receipt ---
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n \
+  --argjson rows "$rows" \
+  --arg policy_sha256 "$( (command -v sha256sum >/dev/null 2>&1 && sha256sum "$policy_tsv" || shasum -a 256 "$policy_tsv") | awk '{print $1}')" \
+  --arg shadow_rejection_sha256 "$shadow_sha256" \
+  --arg session_transcript_sha256 "$session_sha256" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage10-gate-receipt.v1",
+    checkpoint:"stage10-isolated-load-context-classpath-session-sandbox-replay",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    policy:{
+      path:"proofs/session-sandbox.tsv",
+      sha256:$policy_sha256,
+      row_count:$rows
+    },
+    replay:{
+      load_context_shadow_rejection:{
+        replayed_twice:true,
+        exit_code:2,
+        stderr_sha256:$shadow_rejection_sha256,
+        cleared_after_removal:true
+      },
+      session_replay:{
+        replayed_twice:true,
+        commands:["--gate","-e (+ 40 2)"],
+        stdout_sha256:$session_transcript_sha256
+      }
+    },
+    claims:{
+      stage10:true,
+      load_context_isolation:true,
+      classpath_scoped:true,
+      session_replay_identical:true,
+      stage11_through_15_n:false,
+      self_reproduction:false,
+      fixed_point:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.stage10 == true and
+  .claims["promotion/allowed?"] == false and
+  .replay.load_context_shadow_rejection.replayed_twice == true and
+  .replay.session_replay.replayed_twice == true' \
+  "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost Stage10 gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  policy_rows=$rows"
+echo "  shadow_rejection_sha256=$shadow_sha256"
+echo "  session_transcript_sha256=$session_sha256"

@@ -5,9 +5,15 @@ Full target definitions, stage numbering, and the promotion ordering live in
 for what each stage number *means*; read `STATUS.md` for what is currently
 verified closed. This file is only the prioritized "what's left" map.
 
-## Current Remaining Work (verified 2026-08-11)
+## Current Remaining Work (verified 2026-08-11, updated 2026-08-12)
 
-Verification method this pass: read `STAGE15_N_ROADMAP.md` + `STATUS.md` in
+**2026-08-12 update:** items 1, 2, 3, and 5 below are now all DONE (mini
+backend widening, Stage8, Stage9, and Stage10–15/N respectively) — see each
+item's own entry for what closed and how it was verified. Only items 4, 6,
+and 7 remain open.
+
+Verification method this pass (2026-08-11 baseline, still accurate for what
+it covers): read `STAGE15_N_ROADMAP.md` + `STATUS.md` in
 full, confirmed no `todo.md`/`SCOPE_LOCK.md` existed yet (checked recursively
 across `pnix-clr/`), and spot-checked claims against real files rather than
 trusting doc prose:
@@ -101,15 +107,37 @@ trusting doc prose:
 
 5. **Stage10 (sandbox/session isolation) and Stage11–15/N (multi-domain
    adapters, self-improvement quarantine, long-horizon replay, cross-host
-   law, open-world evidence, constitutional extension) — NEXT PRIORITY now
-   that Stage8/9 are both closed.** State: none of this scaffolding exists in
-   clr-meta yet — no adapter matrix, no quarantine storage, no cross-host
-   export/import commands, nothing. Every other host (`hy-meta`, `rs-meta`
-   confirmed by direct read of their `todo.md`s this session) has fully
-   closed stages 10–15/N, each stage having expanded into dozens of checklist
-   items — so this is a real, large, and *known-shaped* gap: the pattern to
-   port exists, it just hasn't been built for CLR yet. **Size: large** — this
-   is the single biggest remaining item by volume on this list.
+   law, open-world evidence, constitutional extension) — DONE (2026-08-12,
+   same day as Stage8/9).** Was: none of this scaffolding existed — no
+   adapter matrix, no quarantine storage, no cross-host export/import
+   commands, nothing, while every other host (`hy-meta`, `rs-meta`) had
+   already closed this whole range. Built following the same pattern those
+   hosts use (a policy TSV under `proofs/` per stage, declaring an explicit
+   DONE/GROW/HELD/DISABLED stance for every relevant boundary, plus a live
+   replay of whatever's DONE), adapted to clr-meta's actual surfaces:
+   `proofs/session-sandbox.tsv` (Stage10, load-context shadow rejection +
+   session replay), `adapter-schema.tsv` (Stage11), `quarantine-policy.tsv`
+   (Stage12), `horizon-policy.tsv` (Stage13), `cross-impl-schema.tsv`
+   (Stage14 — includes `independent-mini-backend` as the one row already
+   closed to a genuine Trusting-Trust bar, not just local self-consistency),
+   `evidence-federation.tsv` (Stage15), `extension-policy.tsv` (StageN), plus
+   a new `proofs/stage-manifest.tsv` and `scripts/clr-meta-manifest-check`
+   reused as a common replay anchor.
+   **Cost-shape bug found and fixed while building this:** the first draft
+   had every stage replay its predecessor's *entire* gate twice, compounding
+   to quadratic cost by StageN. Fixed so every stage from Stage11 onward
+   calls its predecessor exactly once, and the two references to the
+   expensive Stage8 rebuild (from Stage11 and Stage14) read its latest
+   checked receipt instead of re-running it.
+   **Also fixed live:** `clr-meta-manifest-check`'s first draft used
+   `declare -A` (bash 4+ associative arrays), which fails outright under
+   macOS's system `/bin/bash` (3.2) — this aggregate gate actually runs
+   under that bash in this environment, and the failure surfaced immediately
+   on the first real aggregate run. Rewritten to plain string matching.
+   Verified: full `bin/clr-meta-gate --no-build` PASS end-to-end, Stage1
+   through StageN all green, no regressions. Designs in
+   `STAGE{10,11,12,13,14,15,N}_DESIGN.md`. Do not re-flag this range as open
+   or as "not started."
 
 6. **Independent-interpreter DDC track (distinct from the compiler-backend
    DDC work already closed).** State: not started at all. The DDC gap that

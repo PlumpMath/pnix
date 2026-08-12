@@ -1,0 +1,7 @@
+# extension	status	version_policy	migration_policy	conflict_policy	note
+manifest-index	DONE	versioned-tsv	append-only	fail-closed	proofs/stage-manifest.tsv stays machine-readable and append-oriented
+timeout-cost	DONE	budget-record-required	append-only	fail-closed	every stage manifest row carries max_seconds and cost_note fields
+stageN-seed	DONE	versioned-extension	manifest-index-required	fail-closed	the StageN extension is checked by this policy seed and its own replay closure
+breaking-change	HELD	semver-major	explicit-migration-required	fail-closed	breaking constitutional changes require an explicit migration receipt
+external-law	HELD	explicit-receipt-required	explicit-review-required	fail-closed	external laws or adapters cannot extend clr-meta without a checked receipt
+future-stage	HELD	versioned-proposal	explicit-review-required	fail-closed	new stages beyond stage15 require versioned proposals and local verification

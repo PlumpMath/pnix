@@ -1,0 +1,23 @@
+# stage	status	check	command	max_seconds	cost_note
+evaluator-gen0-2	DONE	bootstrap-test	dotnet Clojure.Main.dll -m pnix.clr-meta.bootstrap-test	60	self-interpretation across 3 physical generations, 9 corpus cases
+tool-gate	DONE	clr-meta-tool-gate	scripts/clr-meta-tool-gate	60	-e/file via evaluator generation 2, strict reader
+compiler-stage1	DONE	clr-meta-compiler-stage1-gate	scripts/clr-meta-compiler-stage1-gate	120	checked-Int64 expression profile, C0-C3 checkpoints
+compiler-selfhost-stage1	DONE	clr-meta-compiler-selfhost-stage1-gate	scripts/clr-meta-compiler-selfhost-stage1-gate	60	seeded compiler artifact, no hidden host-compiler fallback
+compiler-selfhost-stage2	DONE	clr-meta-compiler-selfhost-stage2-gate	scripts/clr-meta-compiler-selfhost-stage2-gate	90	Stage1 compiles Stage2, mutation propagation
+compiler-selfhost-stage3	DONE	clr-meta-compiler-selfhost-stage3-gate	scripts/clr-meta-compiler-selfhost-stage3-gate	120	same-source recompile, structural description equal parent
+compiler-selfhost-stage4	DONE	clr-meta-compiler-selfhost-stage4-gate	scripts/clr-meta-compiler-selfhost-stage4-gate	120	same-source recompile, structural description equal parent
+compiler-selfhost-stage5	DONE	clr-meta-compiler-selfhost-stage5-gate	scripts/clr-meta-compiler-selfhost-stage5-gate	150	same-source recompile, structural description equal parent
+compiler-selfhost-stage6	DONE	clr-meta-compiler-selfhost-stage6-gate	scripts/clr-meta-compiler-selfhost-stage6-gate	150	same-source recompile, structural description equal parent
+compiler-selfhost-stage7	DONE	clr-meta-compiler-selfhost-stage7-gate	scripts/clr-meta-compiler-selfhost-stage7-gate	180	same-source recompile, source-hidden fresh-target replay
+compiler-selfhost-stage8	DONE	clr-meta-compiler-selfhost-stage8-gate	scripts/clr-meta-compiler-selfhost-stage8-gate	300	two independent Stage7 builds byte-identical under PE canonicalization
+compiler-selfhost-stage9	DONE	clr-meta-compiler-selfhost-stage9-gate	scripts/clr-meta-compiler-selfhost-stage9-gate	60	bin/clr-meta entrypoint matrix, clean-process replay
+compiler-selfhost-stage10	DONE	clr-meta-compiler-selfhost-stage10-gate	scripts/clr-meta-compiler-selfhost-stage10-gate	60	load-context shadow rejection, session replay
+compiler-selfhost-stage11	DONE	clr-meta-compiler-selfhost-stage11-gate	scripts/clr-meta-compiler-selfhost-stage11-gate	60	adapter closure, local-clojureclr live replay + compiler-selfhost-native receipt
+compiler-selfhost-stage12	DONE	clr-meta-compiler-selfhost-stage12-gate	scripts/clr-meta-compiler-selfhost-stage12-gate	90	self-improvement quarantine seed and replay
+compiler-selfhost-stage13	DONE	clr-meta-compiler-selfhost-stage13-gate	scripts/clr-meta-compiler-selfhost-stage13-gate	90	long-horizon stale/boundary/degradation policy
+compiler-selfhost-stage14	DONE	clr-meta-compiler-selfhost-stage14-gate	scripts/clr-meta-compiler-selfhost-stage14-gate	90	cross-implementation law and differential receipts
+compiler-selfhost-stage15	DONE	clr-meta-compiler-selfhost-stage15-gate	scripts/clr-meta-compiler-selfhost-stage15-gate	90	external evidence stays evidence-only until replay/admission
+compiler-selfhost-stageN	DONE	clr-meta-compiler-selfhost-stagen-gate	scripts/clr-meta-compiler-selfhost-stagen-gate	90	versioned constitutional extension seed and replay
+compiler-self-reproduction	HELD	none	none	0	compiler B==C fixed point not yet attempted
+clr-il-fixed-point	HELD	none	none	0	raw IL fixed point beyond artifact reproducibility not claimed
+clojureclr-replacement	HELD	none	none	0	broad ClojureCLR compatibility/replacement out of scope

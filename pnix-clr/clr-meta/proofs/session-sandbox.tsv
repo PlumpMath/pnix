@@ -1,0 +1,8 @@
+# boundary	status	replay_policy	sandbox_policy	conflict_policy	note
+load-context-shadow-rejection	DONE	clean-process-replay	fail-closed-before-execution	fail-closed	bin/clr-meta rejects any pnix.clr-meta namespace shadow in the pinned runtime root before running anything, verified live by planting and removing a shadow DLL
+classpath-scoped	DONE	static-source-inspection	product-source-excluded	fail-closed	CLOJURE_LOAD_PATH is always set to clr-meta/src only for tool invocations; product (pnix-clr) source is never on this host's own load path
+session-replay	DONE	clean-process-replay	env-cleared	fail-closed	a multi-command session through bin/clr-meta replays byte-identically across two independent clean (env -i) process runs
+sandbox-env	DONE	local-only	explicit-env-allowlist	fail-closed	every compiler-selfhost stage gate (1-9) runs its dotnet subprocess calls through an explicitly enumerated env -i allowlist, not the ambient environment
+remote-ci	HELD	external-not-fetched	no-boundary-leak	fail-closed	the monorepo-level GitHub Actions workflow (.github/workflows/hosts.yml, clr-gate job) exercises this host on every PR via nix run .#gate, but its outcome is external and not fetched or trusted by any local proof check
+network	HELD	explicit-enable-required	no-network	fail-closed	networked replay (NuGet restore beyond the pinned/cached package, external endpoints) is outside the local proof boundary
+external-sandbox	HELD	receipt-required	explicit-enable-required	fail-closed	nonlocal sandbox or container providers require explicit adapter receipts that do not yet exist

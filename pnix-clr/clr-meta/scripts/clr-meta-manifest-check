@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# manifest-check: validates proofs/stage-manifest.tsv's shape and that every
+# required stage row exists with a known status. Cheap (no subprocess
+# execution, pure text validation) -- reused as a common replay anchor by
+# Stage12+ policy tables the same way this ladder already reuses
+# "stage9-gate"/receipts as anchors between adjacent stages.
+#
+# Deliberately avoids `declare -A` (bash 4+ associative arrays): this script
+# can run under macOS's system /bin/bash (3.2), which rejects it outright.
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+manifest_tsv="$clr_meta_root/proofs/stage-manifest.tsv"
+
+fail() {
+  echo "clr-meta-manifest-check: $1" >&2
+  exit 1
+}
+
+[[ -f "$manifest_tsv" && ! -L "$manifest_tsv" ]] || fail manifest-tsv-missing
+
+required_list="evaluator-gen0-2 tool-gate compiler-stage1 compiler-selfhost-stage1 compiler-selfhost-stage7 compiler-selfhost-stage8 compiler-selfhost-stage9 compiler-selfhost-stage10 compiler-selfhost-stage11 compiler-selfhost-stage12 compiler-selfhost-stage13 compiler-selfhost-stage14 compiler-selfhost-stage15 compiler-selfhost-stageN"
+seen_required=""
+rows=0
+while IFS=$'\t' read -r stage status check command max_seconds cost_note; do
+  [[ -z "$stage" || "$stage" == \#* ]] && continue
+  [[ -n "$stage" && -n "$status" && -n "$check" && -n "$command" \
+     && -n "$max_seconds" && -n "$cost_note" ]] || fail "empty-field:$stage"
+  case "$status" in
+    DONE | GROW | HELD) ;;
+    *) fail "unknown-status:$stage:$status" ;;
+  esac
+  [[ "$max_seconds" =~ ^[0-9]+$ ]] || fail "non-numeric-max-seconds:$stage"
+  case " $required_list " in
+    *" $stage "*)
+      [[ "$status" == "DONE" ]] || fail "required-row-not-done:$stage"
+      seen_required="$seen_required $stage"
+      ;;
+  esac
+  rows=$((rows + 1))
+done <"$manifest_tsv"
+
+[[ "$rows" -ge 15 ]] || fail "too-few-rows:$rows"
+for required in $required_list; do
+  case " $seen_required " in
+    *" $required "*) ;;
+    *) fail "missing-required-row:$required" ;;
+  esac
+done
+
+echo "manifest-check: PASS ($rows rows; required stage rows present)"

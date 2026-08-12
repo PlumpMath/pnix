@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Gate: Stage14 cross-implementation law and differential receipts (the
+# roadmap's own one-line Stage14 definition). Validates
+# proofs/cross-impl-schema.tsv's shape, then live-replays the three DONE
+# implementation rows: clr-meta-local and independent-mini-backend via a
+# fresh bootstrap-test run, compiler-selfhost-native via Stage8's latest
+# checked receipt. See STAGE14_DESIGN.md. Does not claim Stage15/N,
+# self-reproduction, or promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+policy_tsv="$clr_meta_root/proofs/cross-impl-schema.tsv"
+dll="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
+dotnet_bin="$(command -v dotnet || true)"
+receipt_out="${CLR_META_STAGE14_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage14-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage14 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+command -v jq >/dev/null 2>&1 || fail jq-missing
+[[ -f "$policy_tsv" && ! -L "$policy_tsv" ]] || fail policy-tsv-missing
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+[[ -f "$dll" ]] || fail "clojure-main-dll-missing (run ./bin/build-clr first)"
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage14.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+rows=0
+has_local=false
+has_native=false
+has_mini=false
+has_remote_held=false
+has_alt_held=false
+has_mrustc_held=false
+has_fail_closed=true
+while IFS=$'\t' read -r implementation status export_schema comparison_policy conflict_policy note; do
+  [[ -z "$implementation" || "$implementation" == \#* ]] && continue
+  [[ -n "$implementation" && -n "$status" && -n "$export_schema" && -n "$comparison_policy" \
+     && -n "$conflict_policy" && -n "$note" ]] || fail "policy-empty-field:$implementation"
+  case "$status" in
+    DONE | GROW | HELD | DISABLED) ;;
+    *) fail "policy-unknown-status:$implementation:$status" ;;
+  esac
+  [[ "$conflict_policy" == "fail-closed" ]] || has_fail_closed=false
+  case "$implementation:$status" in
+    clr-meta-local:DONE) has_local=true ;;
+    compiler-selfhost-native:DONE) has_native=true ;;
+    independent-mini-backend:DONE) has_mini=true ;;
+    remote-ci:HELD) has_remote_held=true ;;
+    alternate-clojureclr:HELD) has_alt_held=true ;;
+    mrustc-style-second-compiler:HELD) has_mrustc_held=true ;;
+  esac
+  rows=$((rows + 1))
+done <"$policy_tsv"
+[[ "$rows" -ge 6 ]] || fail "policy-too-few-rows:$rows"
+$has_local || fail policy-missing-local
+$has_native || fail policy-missing-native
+$has_mini || fail policy-missing-mini
+$has_remote_held || fail policy-missing-remote-held
+$has_alt_held || fail policy-missing-alt-held
+$has_mrustc_held || fail policy-missing-mrustc-held
+$has_fail_closed || fail policy-missing-fail-closed
+
+# --- Live replay: a single fresh bootstrap-test run covers both
+#     clr-meta-local (the evaluator gen0-2 lane) and independent-mini-backend
+#     (its own clojure.test namespace within the same test run). ---
+export CLOJURE_LOAD_PATH="$clr_meta_root/src:$clr_meta_root/test"
+"$dotnet_bin" "$dll" -m pnix.clr-meta.bootstrap-test \
+  >"$tmp/bootstrap-test.stdout" 2>"$tmp/bootstrap-test.stderr" || {
+  sed -n '1,80p' "$tmp/bootstrap-test.stderr" >&2
+  fail bootstrap-test-failed
+}
+grep -Fq "Testing pnix.clr-meta.independent-mini-backend-test" "$tmp/bootstrap-test.stdout" || \
+  fail bootstrap-test-missing-mini-backend-namespace
+grep -Fq "0 failures, 0 errors." "$tmp/bootstrap-test.stdout" || fail bootstrap-test-not-clean
+grep -Fq ':ready true' "$tmp/bootstrap-test.stdout" || fail bootstrap-test-not-ready
+bootstrap_test_sha256="$(sha256_file "$tmp/bootstrap-test.stdout")"
+
+stage8_receipt="${CLR_META_STAGE8_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage8-gate.receipt.json}"
+[[ -f "$stage8_receipt" && ! -L "$stage8_receipt" ]] || fail compiler-selfhost-native-receipt-missing
+jq -e '
+  .schema == "pnix.clr-meta.compiler-selfhost-stage8-gate-receipt.v1" and
+  .ready == true and .claims.stage8 == true and
+  .reproducibility.byte_identical == true
+' "$stage8_receipt" >/dev/null || fail compiler-selfhost-native-receipt-invalid
+
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n \
+  --argjson rows "$rows" \
+  --arg policy_sha256 "$(sha256_file "$policy_tsv")" \
+  --arg bootstrap_test_sha256 "$bootstrap_test_sha256" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage14-gate-receipt.v1",
+    checkpoint:"stage14-cross-implementation-closure",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    policy:{path:"proofs/cross-impl-schema.tsv", sha256:$policy_sha256, row_count:$rows},
+    replay:{
+      "clr-meta-local":{method:"live-rerun-once", anchor:"bootstrap-test", stdout_sha256:$bootstrap_test_sha256},
+      "independent-mini-backend":{method:"live-rerun-once", anchor:"bootstrap-test (same run)"},
+      "compiler-selfhost-native":{method:"latest-checked-receipt", receipt_path:"work/compiler-selfhost-stage8-gate.receipt.json"}
+    },
+    claims:{
+      stage14:true,
+      cross_impl_schema_declared:true,
+      stage15_n:false,
+      self_reproduction:false,
+      fixed_point:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.stage14 == true and
+  .claims["promotion/allowed?"] == false' "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost Stage14 gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  policy_rows=$rows"

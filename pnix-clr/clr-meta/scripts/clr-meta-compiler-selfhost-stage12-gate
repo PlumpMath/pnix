@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# Gate: Stage12 compiler changes remain quarantined until replay and gate
+# admission (the roadmap's own one-line Stage12 definition). Validates
+# proofs/quarantine-policy.tsv's shape, then live-replays the two DONE gates
+# (local-verification via Stage11, candidate-intake via manifest-check),
+# each run twice. See STAGE12_DESIGN.md. Does not claim Stage13-15/N,
+# self-reproduction, or promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+policy_tsv="$clr_meta_root/proofs/quarantine-policy.tsv"
+receipt_out="${CLR_META_STAGE12_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage12-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage12 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+command -v jq >/dev/null 2>&1 || fail jq-missing
+[[ -f "$policy_tsv" && ! -L "$policy_tsv" ]] || fail policy-tsv-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage12.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+# --- Policy shape ---
+rows=0
+has_local=false
+has_candidate=false
+has_remote_held=false
+has_manual_held=false
+has_selfmod_held=false
+has_fail_closed=true
+while IFS=$'\t' read -r gate status promotion_policy fail_policy required_receipt note; do
+  [[ -z "$gate" || "$gate" == \#* ]] && continue
+  [[ -n "$gate" && -n "$status" && -n "$promotion_policy" && -n "$fail_policy" \
+     && -n "$required_receipt" && -n "$note" ]] || fail "policy-empty-field:$gate"
+  case "$status" in
+    DONE | GROW | HELD | DISABLED) ;;
+    *) fail "policy-unknown-status:$gate:$status" ;;
+  esac
+  [[ "$fail_policy" == "fail-closed" ]] || has_fail_closed=false
+  case "$gate:$status" in
+    local-verification:DONE) has_local=true ;;
+    candidate-intake:DONE) has_candidate=true ;;
+    remote-ci:HELD) has_remote_held=true ;;
+    manual-promotion:HELD) has_manual_held=true ;;
+    self-modification:HELD) has_selfmod_held=true ;;
+  esac
+  rows=$((rows + 1))
+done <"$policy_tsv"
+[[ "$rows" -ge 6 ]] || fail "policy-too-few-rows:$rows"
+$has_local || fail policy-missing-local
+$has_candidate || fail policy-missing-candidate
+$has_remote_held || fail policy-missing-remote-held
+$has_manual_held || fail policy-missing-manual-held
+$has_selfmod_held || fail policy-missing-selfmod-held
+$has_fail_closed || fail policy-missing-fail-closed
+
+# --- Live replay: both DONE gates ---
+# Called ONCE each, not twice: Stage11 (and, transitively, Stage9) already
+# proves its own replay property internally. Re-running the whole referenced
+# gate a second time here would just re-prove the same fact at quadratic
+# cost as the stage ladder gets deeper -- each stage would replay its
+# predecessor twice, which replayed ITS predecessor twice, and so on.
+replay_gate() {
+  local label="$1"
+  local script="$2"
+  [[ -f "$script" && ! -L "$script" ]] || fail "$label-script-missing"
+  "$script" >"$tmp/$label.stdout" 2>"$tmp/$label.stderr" || {
+    sed -n '1,80p' "$tmp/$label.stderr" >&2
+    fail "$label-failed"
+  }
+  grep -Fq "PASS" "$tmp/$label.stdout" || fail "$label-no-pass-marker"
+}
+replay_gate local-verification "$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage11-gate"
+replay_gate candidate-intake "$clr_meta_root/scripts/clr-meta-manifest-check"
+
+# --- Receipt ---
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n \
+  --argjson rows "$rows" \
+  --arg policy_sha256 "$(sha256_file "$policy_tsv")" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage12-gate-receipt.v1",
+    checkpoint:"stage12-quarantine-closure",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    policy:{
+      path:"proofs/quarantine-policy.tsv",
+      sha256:$policy_sha256,
+      row_count:$rows
+    },
+    replay:{
+      "local-verification":{gate:"stage11",method:"live-rerun-once"},
+      "candidate-intake":{gate:"manifest-check",method:"live-rerun-once"}
+    },
+    claims:{
+      stage12:true,
+      quarantine_policy_declared:true,
+      no_auto_promotion:true,
+      stage13_through_15_n:false,
+      self_reproduction:false,
+      fixed_point:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.stage12 == true and
+  .claims["promotion/allowed?"] == false' "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost Stage12 gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  policy_rows=$rows"

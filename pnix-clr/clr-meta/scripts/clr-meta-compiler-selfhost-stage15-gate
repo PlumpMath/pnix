@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Gate: Stage15 external evidence stays evidence-only until replay and
+# explicit admission (the roadmap's own one-line Stage15 definition).
+# Validates proofs/evidence-federation.tsv's shape, then live-replays the
+# two DONE sources (local-proof via Stage14, stage-manifest via
+# manifest-check), each called once. See STAGE15_DESIGN.md. Does not claim
+# StageN, self-reproduction, or promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+policy_tsv="$clr_meta_root/proofs/evidence-federation.tsv"
+receipt_out="${CLR_META_STAGE15_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage15-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage15 gate: $1" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+command -v jq >/dev/null 2>&1 || fail jq-missing
+[[ -f "$policy_tsv" && ! -L "$policy_tsv" ]] || fail policy-tsv-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage15.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+rows=0
+has_local=false
+has_manifest=false
+has_remote_held=false
+has_web_held=false
+has_tool_held=false
+has_human_held=false
+has_fail_closed=true
+while IFS=$'\t' read -r source status evidence_schema approval_policy conflict_policy note; do
+  [[ -z "$source" || "$source" == \#* ]] && continue
+  [[ -n "$source" && -n "$status" && -n "$evidence_schema" && -n "$approval_policy" \
+     && -n "$conflict_policy" && -n "$note" ]] || fail "policy-empty-field:$source"
+  case "$status" in
+    DONE | GROW | HELD | DISABLED) ;;
+    *) fail "policy-unknown-status:$source:$status" ;;
+  esac
+  [[ "$conflict_policy" == "fail-closed" ]] || has_fail_closed=false
+  case "$source:$status" in
+    local-proof:DONE) has_local=true ;;
+    stage-manifest:DONE) has_manifest=true ;;
+    remote-ci:HELD) has_remote_held=true ;;
+    external-web:HELD) has_web_held=true ;;
+    external-tool:HELD) has_tool_held=true ;;
+    human-note:HELD) has_human_held=true ;;
+  esac
+  rows=$((rows + 1))
+done <"$policy_tsv"
+[[ "$rows" -ge 6 ]] || fail "policy-too-few-rows:$rows"
+$has_local || fail policy-missing-local
+$has_manifest || fail policy-missing-manifest
+$has_remote_held || fail policy-missing-remote-held
+$has_web_held || fail policy-missing-web-held
+$has_tool_held || fail policy-missing-tool-held
+$has_human_held || fail policy-missing-human-held
+$has_fail_closed || fail policy-missing-fail-closed
+
+replay_gate() {
+  local label="$1"
+  local script="$2"
+  [[ -f "$script" && ! -L "$script" ]] || fail "$label-script-missing"
+  "$script" >"$tmp/$label.stdout" 2>"$tmp/$label.stderr" || {
+    sed -n '1,80p' "$tmp/$label.stderr" >&2
+    fail "$label-failed"
+  }
+  grep -Fq "PASS" "$tmp/$label.stdout" || fail "$label-no-pass-marker"
+}
+replay_gate local-proof "$clr_meta_root/scripts/clr-meta-compiler-selfhost-stage14-gate"
+replay_gate stage-manifest "$clr_meta_root/scripts/clr-meta-manifest-check"
+
+mkdir -p "$(dirname "$receipt_out")"
+jq -S -n \
+  --argjson rows "$rows" \
+  --arg policy_sha256 "$(sha256_file "$policy_tsv")" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage15-gate-receipt.v1",
+    checkpoint:"stage15-evidence-federation-closure",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    policy:{path:"proofs/evidence-federation.tsv", sha256:$policy_sha256, row_count:$rows},
+    replay:{
+      "local-proof":{gate:"stage14", method:"live-rerun-once"},
+      "stage-manifest":{gate:"manifest-check", method:"live-rerun-once"}
+    },
+    claims:{
+      stage15:true,
+      evidence_federation_declared:true,
+      stageN:false,
+      self_reproduction:false,
+      fixed_point:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.stage15 == true and
+  .claims["promotion/allowed?"] == false' "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost Stage15 gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  policy_rows=$rows"
