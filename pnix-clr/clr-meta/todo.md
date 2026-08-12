@@ -72,12 +72,22 @@ trusting doc prose:
    two things that varied between otherwise-identical recompiles of the same
    frozen kernel. Do not re-flag Stage8 as open or as "not started."
 
-3. **Stage9 — clean-process compiler/runtime replay — NEXT PRIORITY.** State:
-   not started; Stage8's artifact now exists (the gate's own `stage7_run1`
-   bundle, proven byte-reproducible). Done = that artifact runs in an actual
-   fresh `dotnet` process (not in-process eval) and reproduces the same
-   canonical result. **Size: small–medium** — rs-meta and hy-meta both have a
-   working stage9 pattern (clean subprocess + manifest binding) to follow.
+3. **Stage9 — clean-process compiler/runtime replay — DONE (2026-08-12, same
+   day as Stage8).** Was: not started. Found the actual gap by checking what
+   Stage1-8 do NOT cover: every one of them calls
+   `compiler-selfhost-runtime`'s support DLL directly, or runs
+   `bootstrap-test` in-process inheriting the calling shell's environment —
+   none of them exercise `bin/clr-meta` itself (the thing a user actually
+   runs) under a fully cleared environment (`env -i`, nothing inherited).
+   New gate `scripts/clr-meta-compiler-selfhost-stage9-gate` runs a 4-case
+   entrypoint matrix (`--gate`, `-e` eval, single-file, a reader-conditional
+   negative case) through `bin/clr-meta` under `env -i`, each case run
+   *twice* independently and required to produce byte-identical stdout — the
+   replay property, not just correctness. All 4 cases passed with content
+   verified (not just self-consistency) on the first run. Design in
+   `STAGE9_DESIGN.md`; wired into `scripts/clr-meta-gate`. Verified: full
+   `bin/clr-meta-gate --no-build` still green, all Stage1–9 gates PASS, no
+   regressions. Do not re-flag Stage9 as open or as "not started."
 
 4. **Compiler self-reproduction / B==C fixed point.** State: false. Stage3–7
    prove same-source recompile plus structural-description equality to the
@@ -91,17 +101,15 @@ trusting doc prose:
 
 5. **Stage10 (sandbox/session isolation) and Stage11–15/N (multi-domain
    adapters, self-improvement quarantine, long-horizon replay, cross-host
-   law, open-world evidence, constitutional extension).** State: none of
-   this scaffolding exists in clr-meta yet — no adapter matrix, no
-   quarantine storage, no cross-host export/import commands, nothing. Every
-   other host (`hy-meta`, `rs-meta` confirmed by direct read of their
-   `todo.md`s this session) has fully closed stages 10–15/N, each stage
-   having expanded into dozens of checklist items — so this is a real,
-   large, and *known-shaped* gap: the pattern to port exists, it just hasn't
-   been built for CLR yet. **Size: large** — this is the single biggest
-   remaining item by volume, but it is sequenced behind Stage8/9/10 by the
-   roadmap's own ordering (`STAGE15_N_ROADMAP.md` "Ordering toward an actual
-   replacement," step 5), so it is not the next thing to pick up.
+   law, open-world evidence, constitutional extension) — NEXT PRIORITY now
+   that Stage8/9 are both closed.** State: none of this scaffolding exists in
+   clr-meta yet — no adapter matrix, no quarantine storage, no cross-host
+   export/import commands, nothing. Every other host (`hy-meta`, `rs-meta`
+   confirmed by direct read of their `todo.md`s this session) has fully
+   closed stages 10–15/N, each stage having expanded into dozens of checklist
+   items — so this is a real, large, and *known-shaped* gap: the pattern to
+   port exists, it just hasn't been built for CLR yet. **Size: large** — this
+   is the single biggest remaining item by volume on this list.
 
 6. **Independent-interpreter DDC track (distinct from the compiler-backend
    DDC work already closed).** State: not started at all. The DDC gap that

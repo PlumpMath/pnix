@@ -95,10 +95,36 @@ design: STAGE8_DESIGN.md
 gate chain: scripts/clr-meta-gate → …stage7 → stage8
 ```
 
+## Closed this wave (2026-08-12, same day) — Compiler Stage9 clean-process replay
+
+```text
+./scripts/clr-meta-compiler-selfhost-stage9-gate   PASS
+  Every prior stage gate calls the compiler-selfhost-runtime support DLL
+  directly, or runs bootstrap-test in-process inheriting the calling shell's
+  environment -- none of them exercise bin/clr-meta itself (the thing a user
+  actually runs) under a fully cleared environment (env -i, nothing
+  inherited). Stage9 closes that gap and adds a property nothing before it
+  checked: replay -- the same clean-process command run twice must produce
+  byte-identical stdout, not just be correct once.
+  4-case entrypoint matrix, each run twice independently:
+    --gate (evaluator gen0-2 self-interpretation report, :ready true)
+    -e "(+ 40 2)" (evaluator-generation-2 eval mode)
+    single-file mode (same exact output shape as -e)
+    -e '#?(:clj 1 :cljr 2)' (negative: reader conditionals stay rejected)
+  All 4 cases byte-identical across both runs; correctness content also
+  checked (not just self-consistency).
+  claims.stage9 = true; replay_identical_across_two_runs = true;
+    promotion/allowed? = false
+receipt: work/compiler-selfhost-stage9-gate.receipt.json
+design: STAGE9_DESIGN.md
+gate chain: scripts/clr-meta-gate → …stage8 → stage9
+```
+
 ## Open claims (do not claim)
 
 ```text
-compiler_stage9_through_15_n = false
+compiler_stage9 = true
+compiler_stage10_through_15_n = false
 compiler_self_reproduction = false
 clr_il_fixed_point = false
 broad_clojureclr_compatibility / replacement = false

@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# Gate: Stage9 clean-process compiler/runtime replay.
+# Proves bin/clr-meta itself (the top-level product CLI dispatcher, not the
+# compiler-selfhost-runtime support DLL Stage1-8 already exercise directly)
+# behaves correctly AND reproducibly when invoked as a genuinely clean OS
+# process (env -i, no inherited environment) across its real entrypoint
+# matrix (--gate, -e eval, single-file, and a negative case), each run
+# TWICE independently to prove replay, not just correctness. See
+# STAGE9_DESIGN.md. Does not claim Stage10-15/N, self-reproduction, or
+# promotion.
+set -euo pipefail
+umask 077
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd -P)"
+root="$(cd "$clr_meta_root/.." && pwd -P)"
+public_cli="$root/bin/clr-meta"
+dotnet_bin="$(command -v dotnet || true)"
+receipt_out="${CLR_META_STAGE9_RECEIPT:-$clr_meta_root/work/compiler-selfhost-stage9-gate.receipt.json}"
+
+fail() {
+  echo "clr-meta compiler selfhost Stage9 gate: $1" >&2
+  exit 1
+}
+
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+for command in jq dotnet; do
+  command -v "$command" >/dev/null 2>&1 || fail "$command-missing"
+done
+[[ -f "$public_cli" && ! -L "$public_cli" ]] || fail public-cli-missing
+[[ -n "$dotnet_bin" && -f "$dotnet_bin" ]] || fail dotnet-missing
+
+tmp_base="$(cd "${TMPDIR:-/tmp}" && pwd -P)"
+tmp="$(mktemp -d "$tmp_base/clr-meta-selfhost-stage9.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/home"
+
+probe_file="$tmp/probe.clj"
+printf '(+ 20 22)\n' >"$probe_file"
+
+# Every case runs through a fully-cleared environment (env -i) -- only PATH
+# (so dotnet resolves) and a scratch HOME are set. Nothing from the calling
+# shell (CLOJURE_LOAD_PATH, DOTNET_*, locale, etc.) is inherited.
+clean_run() {
+  env -i "PATH=/usr/bin:/bin:$(dirname "$dotnet_bin")" "HOME=$tmp/home" "$@"
+}
+
+# run_case NAME EXPECTED_EXIT [args...] -- runs the case TWICE independently
+# (fresh clean process each time) and requires byte-identical stdout+exit
+# across both runs (the replay claim), writing stdout/exit to
+# $tmp/$NAME.run{1,2}.stdout and recording a sha256 + a JSON row.
+run_case() {
+  local name="$1"
+  local expected_exit="$2"
+  shift 2
+  local rc1 rc2
+  set +e
+  clean_run "$public_cli" "$@" >"$tmp/$name.run1.stdout" 2>"$tmp/$name.run1.stderr"
+  rc1=$?
+  clean_run "$public_cli" "$@" >"$tmp/$name.run2.stdout" 2>"$tmp/$name.run2.stderr"
+  rc2=$?
+  set -e
+  [[ "$rc1" == "$expected_exit" ]] || fail "$name-run1-exit-$rc1-want-$expected_exit"
+  [[ "$rc2" == "$expected_exit" ]] || fail "$name-run2-exit-$rc2-want-$expected_exit"
+  cmp "$tmp/$name.run1.stdout" "$tmp/$name.run2.stdout" >/dev/null || fail "$name-stdout-not-replayed"
+  case_shas+=("$name:$(sha256_stdin <"$tmp/$name.run1.stdout")")
+}
+
+case_shas=()
+
+# bin/clr-meta's tool-level output is Clojure EDN (pr'd, not JSON), so
+# content checks below use exact/substring text matching rather than jq --
+# matching this codebase's existing convention for EDN/text assertions.
+require_exact() {
+  local file="$1"
+  local expected="$2"
+  local label="$3"
+  [[ "$(cat "$file")" == "$expected" ]] || fail "$label"
+}
+require_contains() {
+  local file="$1"
+  local needle="$2"
+  local label="$3"
+  grep -Fq -- "$needle" "$file" || fail "$label"
+}
+
+run_case gate 0 --gate
+require_contains "$tmp/gate.run1.stdout" ':schema :pnix.clr-meta.bootstrap-receipt.v1' gate-content-schema
+require_contains "$tmp/gate.run1.stdout" ':ready true' gate-content-ready
+require_contains "$tmp/gate.run1.stdout" ':ok true}' gate-content-cases-ok
+if grep -Fq ':ok false' "$tmp/gate.run1.stdout"; then
+  fail gate-content-has-failing-case
+fi
+
+run_case eval 0 -e "(+ 40 2)"
+require_exact "$tmp/eval.run1.stdout" \
+  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :done, :execution :evaluator-generation-2, :value 42}' \
+  eval-content
+
+run_case single-file 0 "$probe_file"
+require_exact "$tmp/single-file.run1.stdout" \
+  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :done, :execution :evaluator-generation-2, :value 42}' \
+  single-file-content
+
+run_case reader-conditional-rejected 1 -e '#?(:clj 1 :cljr 2)'
+require_exact "$tmp/reader-conditional-rejected.run1.stdout" \
+  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :failed, :error {:phase :tool-read, :class :reader-conditional-disabled, :message "reader conditionals are outside the admitted tool surface"}}' \
+  reader-conditional-content
+
+# Stderr must stay quiet on the success paths (a clean process shouldn't emit
+# diagnostics for correct input) -- checked on run1 only, since replay
+# equality already covers run2.
+for name in gate eval single-file; do
+  [[ ! -s "$tmp/$name.run1.stderr" ]] || fail "$name-stderr-not-quiet"
+done
+
+# --- Receipt ---
+mkdir -p "$(dirname "$receipt_out")"
+cases_json="[]"
+for entry in "${case_shas[@]}"; do
+  case_name="${entry%%:*}"
+  case_sha="${entry#*:}"
+  cases_json="$(jq -c --arg name "$case_name" --arg sha256 "$case_sha" \
+    '. + [{name:$name, stdout_sha256:$sha256, replayed:true}]' <<<"$cases_json")"
+done
+
+jq -S -n --argjson cases "$cases_json" '
+  {
+    schema:"pnix.clr-meta.compiler-selfhost-stage9-gate-receipt.v1",
+    checkpoint:"stage9-clean-process-replay",
+    family:"pnix.clr-meta.compiler-kernel.v1",
+    entrypoint:"bin/clr-meta",
+    environment_policy:"env -i; only PATH (dotnet resolution) and a scratch HOME set; nothing inherited from the calling shell",
+    cases:$cases,
+    case_count:($cases | length),
+    claims:{
+      stage9:true,
+      clean_process_entrypoint_matrix:true,
+      replay_identical_across_two_runs:true,
+      stage10_through_15_n:false,
+      self_reproduction:false,
+      fixed_point:false,
+      clojureclr_replacement:false,
+      "promotion/allowed?":false
+    },
+    ready:true
+  }
+' >"$receipt_out"
+
+jq -e '.ready == true and .claims.stage9 == true and
+  .claims["promotion/allowed?"] == false and
+  .case_count == 4' "$receipt_out" >/dev/null || fail receipt-contract
+
+echo "clr-meta compiler selfhost Stage9 gate: PASS"
+echo "  receipt: $receipt_out"
+echo "  cases: ${case_shas[*]}"
