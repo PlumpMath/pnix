@@ -34,11 +34,32 @@ top-line claim, but the substance is much closer than "false" implies:
   analyzer + ASM emitter (0 calls into `tools.analyzer.jvm`/host reader),
   U8 fuzzes 10,000 random-program comparisons — all closed, all live gates.
 - `independent-mini-backend-subset` (the real 3-way host≡compiler≡U6-backend
-  DDC row) was widened this session from 14→**43/51** of U6's fixtures
-  (verified by direct grep count against source, matches STATUS.md exactly).
-- **Remaining, size small**: wire U6's other ~8 fixtures into the DDC row
-  (isolated `>`/`>=`/`<=`, isolated `inc`/`dec`/`pos?` — currently only
-  covered in combined form). Mechanical, same pattern as this session's work.
+  DDC row) was widened this session in two passes: 14→43/51, then 43→**46/51**
+  of U6's fixtures (verified by direct grep count against source, matches
+  STATUS.md exactly).
+- **"Wire U6's other ~8 fixtures" item — DONE, closed as "nothing left to
+  wire" (2026-08-12, re-verified).** A prior pass here estimated ~8 remaining
+  fixtures by NAME-matching U6's `:tiny-*` ids against the DDC row's
+  `:mini-backend-*` ids. Re-ran that comparison carefully this pass (fixed a
+  colon-prefix bug in the id-normalization that was inflating the unmatched
+  count) and got 17 nominally-unmatched names, then checked EACH ONE's
+  actual `:source`/`:args`/`:expected` against every existing
+  `mini-backend-*` fixture rather than trusting the name mismatch. All 17
+  turned out to be either byte-identical to an existing fixture under a
+  different name (`tiny-destructure-nested` ≡ `mini-backend-destructure`,
+  `tiny-op-get` ≡ `mini-backend-get`, `tiny-let-shadowing-branch` ≡
+  `mini-backend-let-shadowing`, etc.) or the same *operation* already
+  exercised inside an existing combined fixture (`tiny-op-gt`/`gte`/`lte` →
+  `mini-backend-op-comparisons`; `tiny-op-inc`/`dec`/`pos?` →
+  `mini-backend-op-unary`; `tiny-op-first`/`next-first` →
+  `mini-backend-seq-ops`; `tiny-op-quot`/`rem` →
+  `mini-backend-op-quot-rem`; `tiny-one-arg`'s single-arg `+` → already
+  exercised by `mini-backend-arithmetic`; `tiny-const-arithmetic`'s
+  zero-arg literal arithmetic → already exercised by
+  `mini-backend-do-body`). There is genuinely nothing left to add at the
+  *current* 46-fixture scope — do not re-flag this as "~8 remaining" again;
+  any future gap here would have to come from item below (growing U6's own
+  fixture set past 51), not from wiring existing U6 fixtures into the DDC row.
 - **Remaining, size large**: grow U6's *own* fixture set past 51 toward the
   full 112-case conformance corpus U5 already reaches — this is what upgrades
   the claim from "51-fixture subset" to "full-corpus independent 2nd
@@ -116,12 +137,13 @@ side, not new work here.
 
 ### Bottom line
 Nothing found that contradicts the "a lot is already implemented" framing.
-The only concrete, scoped, small-to-medium next slice is **item 1's two
-sub-steps** (finish wiring U6's remaining ~8 fixtures into the DDC row, then
-grow U6 itself toward the 112-case corpus). Everything else in items 2-4 is
-correctly framed in the existing docs as intentionally-held research
-frontier or permanent architectural boundary, not backlog; item 5 is a
-governance decision, not missing code.
+The "wire U6's remaining fixtures into the DDC row" sub-step is now closed
+(2026-08-12, re-verified — nothing left at the current 46-fixture scope, see
+item 1 above). The only concrete, scoped-but-large remaining slice is
+growing U6 itself toward the 112-case corpus (item 1's other sub-step).
+Everything else in items 2-4 is correctly framed in the existing docs as
+intentionally-held research frontier or permanent architectural boundary,
+not backlog; item 5 is a governance decision, not missing code.
 
 ---
 
