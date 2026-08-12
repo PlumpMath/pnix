@@ -83,9 +83,21 @@ listed here; see the detailed sections below for the full history.
    regression. Do not re-flag "upstream-vs-mini 2-way only" as open; it is
    now a genuine 3-way per-fixture check.
 
-   **(a) still open:** grow the mini-backend fixture set toward clj-meta's
-   `frontend_selfhost.clj` ~50-fixture scope (data literals, `while`/`setv`
-   mutation, `require`/macros). Sizing: small increments, additive — no
+   **(a) partial progress, same day (2026-08-12):** added string literals,
+   list literals as return values, and `setv`/`while` mutation (8→12
+   fixtures). This required a real fix, not just new fixtures:
+   `_emit_defn` previously only ever emitted the function's *last* body
+   form and silently discarded everything before it, so `setv`/`while`
+   (which only make sense as side-effecting statements, never as a final
+   expression) had no way to run at all. Added `_emit_stmt` (turns `setv`
+   into `ast.Assign`, `while` into `ast.While`); `_emit_defn` now emits
+   every body form but the last through it. Verified against both real
+   legs (`bootstrap.py run -c` / `kernel-run -c`) before adding fixtures.
+   `independent-mini-backend-check` -> 12/12, `diverse-double-compile-check`
+   still `reproduced`, full `hy-meta-gate full` ladder still green.
+   **Still open:** `require`/macros, dict literals, nested function
+   definitions, further toward clj-meta's ~50-fixture
+   `frontend_selfhost.clj` scope. Sizing: small increments, additive — no
    architecture change needed, the 3-way plumbing already exists and each new
    fixture automatically gets checked on all three legs.
 

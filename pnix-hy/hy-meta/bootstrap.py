@@ -1643,6 +1643,30 @@ def independent_mini_backend_fixtures() -> list[dict[str, Any]]:
             "expected": 42,
         },
         {"id": "mini-bare-arithmetic", "source": "(+ 1 2)", "expected": 3},
+        {
+            "id": "mini-string-literal",
+            "source": '(defn f [] "hello") (f)',
+            "expected": "hello",
+        },
+        {
+            "id": "mini-list-literal",
+            "source": "(defn f [] [1 2 3]) (f)",
+            "expected": [1, 2, 3],
+        },
+        {
+            "id": "mini-setv-while-loop",
+            "source": (
+                "(defn f [n] (setv total 0) (setv i 0) "
+                "(while (< i n) (setv total (+ total i)) (setv i (+ i 1))) total) "
+                "(f 10)"
+            ),
+            "expected": 45,
+        },
+        {
+            "id": "mini-setv-mutation",
+            "source": "(defn f [x] (setv y (* x 2)) (+ y 1)) (f 20)",
+            "expected": 41,
+        },
     ]
 
 

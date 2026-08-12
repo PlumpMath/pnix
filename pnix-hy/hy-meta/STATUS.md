@@ -131,12 +131,30 @@ bootstrap-fixedpoint-check) still green — no regression from adding the
 **What this closes and what it still doesn't:** a backdoor present in *both*
 upstream Hy and the direct kernel (e.g. inherited by the direct-kernel build
 at some prior bootstrap stage) would still be caught, since the mini backend
-shares no code, tooling, or bootstrap lineage with either. It is still only 8
-fixtures, not the conformance corpus, and — same honest bar as clj-meta and
-cljs-meta already settled on — behavior equivalence, not bit-identical
-artifacts. **Next concrete step:** grow the fixture set (data literals,
-`while`/`setv` mutation, `require`/macros) toward parity with
-`frontend_selfhost.clj`'s ~50-fixture scope on the clj-meta side.
+shares no code, tooling, or bootstrap lineage with either. It is still only
+12 fixtures, not the conformance corpus, and — same honest bar as clj-meta
+and cljs-meta already settled on — behavior equivalence, not bit-identical
+artifacts. **Next concrete step:** continue growing the fixture set
+(`require`/macros, dict literals, nested function definitions) toward parity
+with `frontend_selfhost.clj`'s ~50-fixture scope on the clj-meta side.
+
+**Widened further, same day (2026-08-12):** added string literals, list
+literals as return values, and `setv`/`while` mutation (8→12 fixtures).
+`independent_mini_backend.py`'s `_emit_defn` previously only ever emitted
+the *last* body form (wrapped in `return`) and silently discarded every
+form before it — fine for the existing pure-expression fixtures, but it
+meant `setv`/`while` (which only make sense as statements with side
+effects, not as a final expression) had no way to run at all. Added a new
+`_emit_stmt` that turns `(setv name value)` into a real `ast.Assign` and
+`(while test body...)` into a real `ast.While`, and `_emit_defn` now emits
+every body form but the last through it. Verified against both real legs
+before adding fixtures (not assumed): `bootstrap.py run -c` (upstream) and
+`bootstrap.py kernel-run -c` (direct kernel) both agree with the mini
+backend on a 0..9 summing while-loop (45) and a setv-then-arithmetic case
+(41), plus a bare string and list literal. Verified live:
+`independent-mini-backend-check` -> 12/12 accepted with all three legs
+agreeing, `diverse-double-compile-check` still `reproduced`, full
+`hy-meta-gate full` ladder still green — no regressions.
 
 **Fixed this session: missing native-corpus dependency.** A fresh
 checkout/venv used to fail `diverse-double-compile-check` and other

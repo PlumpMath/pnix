@@ -11,7 +11,8 @@ remain trusted substrate for clj-meta's analogous `frontend_selfhost.clj`.
 
 It is a frontier witness, not a replacement for the production frontend: it
 covers a bounded fixture set (arithmetic, comparisons, `if`, `defn`,
-recursion, boolean/`None` literals), not the Hy language.
+recursion, boolean/`None` literals, string/list literals, and `setv`/`while`
+mutation), not the Hy language.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import ast
 import re
 from typing import Any
 
-TOKEN_RE = re.compile(r"\s*(\(|\)|\[|\]|-?\d+|[^\s()\[\]]+)")
+TOKEN_RE = re.compile(r'\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|-?\d+|[^\s()\[\]]+)')
 
 
 def _tokenize(source: str) -> list[str]:
@@ -63,6 +64,8 @@ def _parse_one(tokens: list[str], i: int) -> tuple[Any, int]:
         return False, i + 1
     if tok == "None":
         return None, i + 1
+    if tok.startswith('"') and tok.endswith('"'):
+        return ast.literal_eval(tok), i + 1
     if re.fullmatch(r"-?\d+", tok):
         return int(tok), i + 1
     return ("__sym__", tok), i + 1
@@ -109,8 +112,12 @@ def _emit_expr(form: Any) -> ast.expr:
         return ast.Constant(value=form)
     if isinstance(form, int):
         return ast.Constant(value=form)
+    if isinstance(form, str):
+        return ast.Constant(value=form)
     if form is None:
         return ast.Constant(value=None)
+    if isinstance(form, list):
+        return ast.List(elts=[_emit_expr(item) for item in form], ctx=ast.Load())
     if _is_sym(form):
         return ast.Name(id=_sym_name(form), ctx=ast.Load())
     if isinstance(form, tuple):
@@ -153,8 +160,36 @@ def _emit_expr(form: Any) -> ast.expr:
     raise SyntaxError(f"tiny analyzer: unsupported form {form!r}")
 
 
+def _emit_stmt(form: Any) -> ast.stmt:
+    """Statement-position forms: `setv` (mutation) and `while` (loop). Any
+    other form is a bare expression statement (evaluated for side effects,
+    if any, and discarded)."""
+    if isinstance(form, tuple) and form and _is_sym(form[0], "setv"):
+        if len(form) != 3:
+            raise SyntaxError("tiny analyzer: setv arity")
+        _, name_f, value_f = form
+        return ast.Assign(
+            targets=[ast.Name(id=_sym_name(name_f), ctx=ast.Store())],
+            value=_emit_expr(value_f),
+        )
+    if isinstance(form, tuple) and form and _is_sym(form[0], "while"):
+        if len(form) < 2:
+            raise SyntaxError("tiny analyzer: while needs a test")
+        _, test_f, *body_fs = form
+        if not body_fs:
+            raise SyntaxError("tiny analyzer: while needs a body")
+        return ast.While(
+            test=_emit_expr(test_f),
+            body=[_emit_stmt(b) for b in body_fs],
+            orelse=[],
+        )
+    return ast.Expr(value=_emit_expr(form))
+
+
 def _emit_defn(form: tuple) -> ast.FunctionDef:
-    # (defn name [params...] body)
+    # (defn name [params...] body...): every body form but the last is a
+    # statement (setv/while/expression-for-effect); the last form's value
+    # is returned.
     _, name_f, params_f, *body_fs = form
     name = _sym_name(name_f)
     if not isinstance(params_f, list):
@@ -162,6 +197,8 @@ def _emit_defn(form: tuple) -> ast.FunctionDef:
     params = [_sym_name(p) for p in params_f]
     if not body_fs:
         raise SyntaxError("tiny analyzer: defn needs a body")
+    body_stmts = [_emit_stmt(f) for f in body_fs[:-1]]
+    body_stmts.append(ast.Return(value=_emit_expr(body_fs[-1])))
     return ast.FunctionDef(
         name=name,
         args=ast.arguments(
@@ -173,7 +210,7 @@ def _emit_defn(form: tuple) -> ast.FunctionDef:
             kwarg=None,
             defaults=[],
         ),
-        body=[ast.Return(value=_emit_expr(body_fs[-1]))],
+        body=body_stmts,
         decorator_list=[],
     )
 
