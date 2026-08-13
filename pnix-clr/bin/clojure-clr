@@ -21,8 +21,9 @@ Admitted:
   clojure-clr -e FORM
   clojure-clr --eval FORM
   clojure-clr FILE                 # exactly one form (trailing fails)
+  clojure-clr -                    # single form from stdin
   clojure-clr --multi-form FILE    # tool-eval-multi: top-level forms L→R, last value
-  clojure-clr --multi-form -       # same, read stdin
+  clojure-clr --multi-form -       # multi-form from stdin
   clojure-clr --multi-e FORM       # tool-eval-multi from inline string
   clojure-clr --multi-eval FORM
 
@@ -63,9 +64,10 @@ if [[ "$#" -eq 2 && ( "$1" == "-e" || "$1" == "--eval" ) ]]; then
   exec "$root/bin/clr-meta" "$@"
 fi
 
-if [[ "$#" -eq 1 && -f "$1" ]]; then
+# Single-form file or stdin ("-").
+if [[ "$#" -eq 1 && ( "$1" == "-" || -f "$1" ) ]]; then
   exec "$root/bin/clr-meta" "$@"
 fi
 
-echo "clojure-clr compatibility: admitted surface is -e FORM, one FORM file, --multi-form FILE|-, or --multi-e FORM; use clojure-clr-bootstrap for the upstream trust root (see --help for profiles)" >&2
+echo "clojure-clr compatibility: admitted surface is -e FORM, one FORM file, '-', --multi-form FILE|-, or --multi-e FORM; use clojure-clr-bootstrap for the upstream trust root (see --help for profiles)" >&2
 exit 2

@@ -39,6 +39,7 @@ Source of truth: `bin/clojure-clr` (fail-closed).
 |----------|------|----------|
 | Yes | `-e FORM` or `--eval FORM` (exactly 2 argv) | `exec bin/clr-meta "$@"` (single form) |
 | Yes | single path that is an existing file (exactly 1 argv) | `exec bin/clr-meta FILE` (single form; trailing fails) |
+| Yes | `-` (exactly 1 argv) | single form from stdin (trailing fails) |
 | Yes | `--multi-form FILE` (exactly 2 argv, file exists) | `tool-eval-multi` — all top-level forms, last value |
 | Yes | `--multi-form -` | `tool-eval-multi` from stdin |
 | Yes | `--multi-e FORM` / `--multi-eval FORM` | `tool-eval-multi` from inline string |

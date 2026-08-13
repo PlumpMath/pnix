@@ -16,7 +16,27 @@ HM path helpers: `pnix-<host>-library` / `pnix-<host>-refs` (see `~/dot-nix/dev/
 
 **P2/P3 roadmap:** [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md)  
 **Mini examples:** [examples/host-import/](examples/host-import/)  
-**Regression:** `./bin/host-import-smoke`
+**Regression:** `./bin/host-import-smoke`  
+**Local library smokes (all hosts):** `./bin/host-library-smokes`
+
+---
+
+## Personal / local library export (not public registries)
+
+Owner policy: **no** Maven Central / npm / crates.io / nuget.org publish.
+Each host has a **local feed** materializer + smoke:
+
+| Host | Export | Smoke | Consumer |
+|------|--------|-------|----------|
+| **clj** | `pnix-clj/pnix-clj/bin/export-pnix-clj-library` | `pnix-clj-library-smoke` | `{:local/root "…/pnix-clj"}` |
+| **cljs** | `pnix-cljs/bin/export-pnix-cljs-library` | `pnix-cljs-library-smoke` | `NODE_PATH=…/lib/node_modules:…/share` |
+| **hy** | `pnix-hy/pnix-hy/bin/export-pnix-hy-library` | `pnix-hy-library-smoke` | `PYTHONPATH=…/site` |
+| **rs** | `pnix-rs/pnix-rs/bin/export-pnix-rs-library` | `pnix-rs-library-smoke` | path-dep or `-L lib -I include` |
+| **clr** | `pnix-clr/bin/export-pnix-clr-library` + `pack-pnix-clr-nupkg` | `pnix-clr-nupkg-smoke` | `PNIX_CLR_LIBRARY` / local nupkg dir |
+
+```bash
+./bin/host-library-smokes   # clj hy rs cljs (+ clr if already exported)
+```
 
 ---
 

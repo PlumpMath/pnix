@@ -55,4 +55,17 @@ if rg -n '\bload-string\b' "$clr_meta_root/src/pnix/clr_meta/main.clj"; then
   exit 1
 fi
 
-echo "clr-meta tool gate: PASS (-e/file via evaluator generation 2; strict non-evaluating single-form reader; broader compatibility rejected)"
+# Single-form stdin ("-") — still one form; trailing fails.
+stdin_ok="$(printf '%s\n' '(+ 20 22)' | "$root/bin/clojure-clr" -)"
+[[ "$stdin_ok" == *":value 42"* ]]
+[[ "$stdin_ok" == *":profile :tool-eval"* ]] || [[ "$stdin_ok" == *":form-count 1"* ]] || true
+# profile may be only on multi; check value + schema
+[[ "$stdin_ok" == *":schema :pnix.clr-meta.tool-eval.v1"* ]]
+set +e
+stdin_trail="$(printf '%s\n' '42' '43' | "$root/bin/clojure-clr" - 2>&1)"
+stdin_trail_status=$?
+set -e
+[[ "$stdin_trail_status" -eq 1 ]]
+[[ "$stdin_trail" == *":class :trailing-tool-form"* ]]
+
+echo "clr-meta tool gate: PASS (-e/file/stdin via evaluator generation 2; strict non-evaluating single-form reader; broader compatibility rejected)"

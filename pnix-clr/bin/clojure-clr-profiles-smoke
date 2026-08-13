@@ -42,6 +42,17 @@ else
   bad "tool-eval --help missing profile text"
 fi
 
+# --- tool-eval: single-form stdin ---
+if stdin_out="$(printf '%s\n' '(+ 20 22)' | "$root/bin/clojure-clr" - 2>/dev/null)"; then
+  if echo "$stdin_out" | grep -q ':value 42'; then
+    ok "tool-eval - (stdin single-form) => value 42"
+  else
+    bad "tool-eval stdin unexpected: $stdin_out"
+  fi
+else
+  bad "tool-eval stdin failed"
+fi
+
 # --- tool-eval-multi: multi-form file ---
 multi_tmp="$(mktemp "${TMPDIR:-/tmp}/clojure-clr-multi.XXXXXX.clj")"
 printf '%s\n' '(+ 1 2)' '(+ 20 22)' >"$multi_tmp"

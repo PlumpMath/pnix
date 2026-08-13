@@ -8,13 +8,19 @@
   ;; dispatched before bootstrap checks. Keep every public form visible here.
   (binding [*out* *err*]
     (println
-     (str "usage: clr-meta [--gate] | -e FORM | FILE"
+     (str "usage: clr-meta [--gate] | -e FORM | FILE | -"
           " | --multi-form FILE | --multi-form -"
           " | --multi-e FORM | --multi-eval FORM"
           " | --build-runtime PLAN OUTPUT SOURCE_ROOT"
           " | --build-compiler-stage1 PROFILE PLAN SOURCE OUTPUT"
           " | --build-compiler-selfhost-stage1 OUTPUT"
           " | --build-compiler-selfhost-stage2 STAGE1_BUNDLE OUTPUT"))))
+
+(defn- read-stdin-source
+  "Read entire stdin as tool source (CLR Console.OpenStandardInput)."
+  []
+  (with-open [r (System.IO.StreamReader. (System.Console/OpenStandardInput))]
+    (.ReadToEnd r)))
 
 (def ^:private tool-environment
   (merge bootstrap/base-env
@@ -225,14 +231,12 @@
         (when (= :failed (:outcome-kind result))
           (System.Environment/Exit 1)))
 
-      ;; tool-eval-multi: file, or "-" = stdin (Console.OpenStandardInput on CLR).
+      ;; tool-eval-multi: file, or "-" = stdin.
       (and (= 2 (count args)) (= "--multi-form" (first args)))
       (let [path (second args)
             source (cond
                      (= path "-")
-                     (with-open [r (System.IO.StreamReader.
-                                    (System.Console/OpenStandardInput))]
-                       (.ReadToEnd r))
+                     (read-stdin-source)
 
                      (.Exists (System.IO.FileInfo. path))
                      (slurp path)
@@ -247,8 +251,18 @@
         (when (= :failed (:outcome-kind result))
           (System.Environment/Exit 1)))
 
+      ;; Single-form file or "-" = stdin (default tool-eval; trailing still fails).
       (= 1 (count args))
-      (let [result (evaluate-source (slurp (first args)))]
+      (let [path (first args)
+            source (if (= path "-")
+                     (read-stdin-source)
+                     (if (.Exists (System.IO.FileInfo. path))
+                       (slurp path)
+                       (do (binding [*out* *err*]
+                             (println (str "clr-meta: FILE must exist or be '-' for stdin (got: " path ")")))
+                           (System.Environment/Exit 2)
+                           "")))
+            result (evaluate-source source)]
         (prn result)
         (when (= :failed (:outcome-kind result))
           (System.Environment/Exit 1)))

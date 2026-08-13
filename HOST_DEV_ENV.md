@@ -3,7 +3,7 @@
 **Audience:** humans, Claude/Codex sessions, and anyone wiring `~/dot-nix` or
 a host flake. Read this before inventing a third naming scheme.
 
-**Last updated:** 2026-08-14 (import smoke + packaging tiers)  
+**Last updated:** 2026-08-14 (import smoke + local library exports)  
 **HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md` (PATH packages, ShellCheck rules)
 
 ---
@@ -57,7 +57,10 @@ nix run .#pnix-<host>-refs     # alias of library printer (where defined)
 # clr also: pnix-clr-library materializes export tree on disk
 ```
 
-See [HOST_IMPORT.md](HOST_IMPORT.md) § packaging tiers.  
+See [HOST_IMPORT.md](HOST_IMPORT.md) § packaging tiers and **personal/local
+library export** (no public registry publish). Aggregate:
+`./bin/host-library-smokes`.
+
 Import cookbooks: **[HOST_IMPORT.md](HOST_IMPORT.md)**.  
 PATH smoke: **`./bin/host-import-smoke`**.
 
