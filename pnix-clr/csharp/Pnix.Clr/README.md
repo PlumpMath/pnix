@@ -62,6 +62,8 @@ Or run `pnix-clr-refs` / `pnix-clr-library` to print absolute paths.
 ./bin/build-pnix-clr-artifact          # guest AOT if missing
 ./bin/export-pnix-clr-library          # → target/pnix-clr-library
 # or: nix run .#pnix-clr-library
+./bin/pack-pnix-clr-nupkg              # optional local .nupkg
+# MSBuild sample: ../Directory.Build.props.sample
 ```
 
 ## Related CLIs

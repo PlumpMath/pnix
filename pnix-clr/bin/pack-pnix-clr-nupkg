@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Optional: pack exported pnix-clr-library as a simple nupkg for local NuGet.
+# Not a crates.io-style publish story — local feed / file path only.
+#
+# Usage:
+#   ./bin/export-pnix-clr-library [OUT]
+#   ./bin/pack-pnix-clr-nupkg [LIBRARY_DIR] [NUPKG_OUT]
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+lib_dir="${1:-$root/pnix-clr/target/pnix-clr-library}"
+out_dir="${2:-$root/pnix-clr/target/nupkg}"
+
+if [[ ! -f "$lib_dir/manifest.json" ]]; then
+  echo "pack-pnix-clr-nupkg: missing $lib_dir/manifest.json — run export-pnix-clr-library first" >&2
+  exit 2
+fi
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "pack-pnix-clr-nupkg: dotnet not on PATH" >&2
+  exit 2
+fi
+
+stage="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clr-nupkg.XXXXXX")"
+cleanup() { rm -rf "$stage"; }
+trap cleanup EXIT
+
+# Minimal nuspec layout: lib/net8.0 + lib/net10.0 + build props
+mkdir -p "$stage/lib/net8.0" "$stage/lib/net10.0" "$stage/build" "$stage/contentFiles"
+cp -f "$lib_dir/lib/net8.0/Pnix.Clr.dll" "$stage/lib/net8.0/" 2>/dev/null || true
+cp -f "$lib_dir/lib/net10.0/Pnix.Clr.dll" "$stage/lib/net10.0/" 2>/dev/null || true
+# xml docs if present
+cp -f "$lib_dir/lib/net8.0/Pnix.Clr.xml" "$stage/lib/net8.0/" 2>/dev/null || true
+cp -f "$lib_dir/lib/net10.0/Pnix.Clr.xml" "$stage/lib/net10.0/" 2>/dev/null || true
+cp -f "$lib_dir/build/Pnix.Clr.props" "$stage/build/"
+cp -f "$lib_dir/build/Pnix.Clr.targets" "$stage/build/"
+
+# Bundle guest AOT under content (not auto-referenced; path via props/env)
+if [[ -d "$lib_dir/lib/net10.0/runtime-artifact" ]]; then
+  mkdir -p "$stage/content/pnix-clr/runtime-artifact"
+  cp -f "$lib_dir/lib/net10.0/runtime-artifact/"* \
+    "$stage/content/pnix-clr/runtime-artifact/" 2>/dev/null || true
+fi
+
+cat >"$stage/Pnix.Clr.nuspec" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Pnix.Clr</id>
+    <version>0.1.0</version>
+    <authors>pnix</authors>
+    <description>C# host-language library for pnix-clr (Eval API + MSBuild props). Host-bound CLR limb; not a portable multi-host .px package.</description>
+    <tags>pnix clojure-clr</tags>
+  </metadata>
+</package>
+EOF
+
+mkdir -p "$out_dir"
+# nuget pack from folder
+(
+  cd "$stage"
+  if command -v nuget >/dev/null 2>&1; then
+    nuget pack Pnix.Clr.nuspec -OutputDirectory "$out_dir" -NonInteractive
+  else
+    # dotnet nuget does not pack raw nuspec easily; zip as .nupkg
+    nupkg="$out_dir/Pnix.Clr.0.1.0.nupkg"
+    rm -f "$nupkg"
+    if command -v zip >/dev/null 2>&1; then
+      zip -qr "$nupkg" .
+    else
+      echo "pack-pnix-clr-nupkg: need nuget or zip on PATH" >&2
+      exit 1
+    fi
+    echo "wrote $nupkg (zip layout; use as local package source)"
+  fi
+)
+
+echo "PNIX_CLR_NUPKG_DIR=$out_dir"
+ls -1 "$out_dir" | sed 's/^/#   /'

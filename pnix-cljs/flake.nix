@@ -294,11 +294,32 @@ JSON
                 --add-flags $out/share/pnix-cljs/pnix-cljs.js
             '';
           };
+          # Host-library path printer (body is share/ + lib/node_modules on pnix-cljs).
+          pnix-cljs-library = pkgs.writeShellApplication {
+            name = "pnix-cljs-library";
+            text = ''
+              pkg="${pnixCljs}"
+              share="$pkg/share/pnix-cljs"
+              nm="$pkg/lib/node_modules"
+              echo "PNIX_CLJS_SHARE=$share"
+              echo "PNIX_CLJS_LIBRARY=$share"
+              echo "PNIX_CLJS=$pkg/bin/pnix-cljs"
+              echo "NODE_PATH=$nm:$share''${NODE_PATH:+:$NODE_PATH}"
+              echo "# require('@plumpmath/pnix-cljs')  or  require('pnix-cljs-module.js')"
+              echo "# Cookbook: HOST_IMPORT.md"
+              if [ -d "$share" ]; then ls -1 "$share" | sed 's/^/#   share\//'; fi
+              if [ -d "$nm/@plumpmath/pnix-cljs" ]; then
+                echo "#   scoped: $nm/@plumpmath/pnix-cljs"
+              fi
+            '';
+          };
         in {
           inherit pnixCljs cljsMeta;
           "pnix-cljs" = pnixCljs;
           "cljs-meta" = cljsMeta;
           "pnix-cljs-cljs" = cljsMeta;
+          "pnix-cljs-library" = pnix-cljs-library;
+          "pnix-cljs-refs" = pnix-cljs-library;
           default = pkgs.symlinkJoin {
             name = "pnix-cljs-toolkit";
             paths = [ pnixCljs cljsMeta ];
@@ -346,6 +367,14 @@ JSON
             program = "${self.packages.${system}.pnix-cljs}/bin/pnix-cljs";
           };
           pnix-cljs-pnix = { type = "app"; program = pkgs.lib.getExe pnixCljsRepl; };
+          pnix-cljs-library = {
+            type = "app";
+            program = "${self.packages.${system}.pnix-cljs-library}/bin/pnix-cljs-library";
+          };
+          pnix-cljs-refs = {
+            type = "app";
+            program = "${self.packages.${system}.pnix-cljs-refs}/bin/pnix-cljs-library";
+          };
           cljs-meta = {
             type = "app";
             program = "${self.packages.${system}.cljs-meta}/bin/cljs-meta";

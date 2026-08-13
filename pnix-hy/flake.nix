@@ -61,10 +61,26 @@
           # the native Hy corpus pulled in below) imports it at module load time,
           # even though hy-meta never invokes pytest itself.
           proofPython = python.withPackages (ps: [ hy ps.pytest ]);
+
+          # Host-library path printer. Body is packages.pnix-hy (import pnix_hy).
+          pnix-hy-library = pkgs.writeShellApplication {
+            name = "pnix-hy-library";
+            text = ''
+              site="${pnix-hy}/${python.sitePackages}"
+              echo "PNIX_HY_LIBRARY=$site"
+              echo "PYTHONPATH=$site''${PYTHONPATH:+:$PYTHONPATH}"
+              echo "PNIX_HY_HOME=''${PNIX_HY_HOME:-<set to monorepo pnix-hy checkout for projection/full tier>}"
+              echo "# Host-main: import pnix_hy as ph; ph.eval_file('x.px')"
+              echo "# NAME: flake app .#pnix-hy-hy is --repl hy (source tree);"
+              echo "#   bare PATH hy (dot-nix) is the Hy interpreter with PYTHONPATH."
+              echo "# Cookbook: ../HOST_IMPORT.md § hy"
+            '';
+          };
         in
         {
           default = pnix-hy;
-          inherit pnix-hy hy proofPython;
+          inherit pnix-hy hy proofPython pnix-hy-library;
+          pnix-hy-refs = pnix-hy-library;
         });
 
       # ---- apps ----------------------------------------------------------
@@ -113,6 +129,14 @@
           pnix-hy-python = { type = "app"; program = pkgs.lib.getExe replPy; };
           hy-meta-hy = { type = "app"; program = pkgs.lib.getExe replMetaHy; };
           hy-meta-python = { type = "app"; program = pkgs.lib.getExe replMetaPy; };
+          pnix-hy-library = {
+            type = "app";
+            program = "${p.pnix-hy-library}/bin/pnix-hy-library";
+          };
+          pnix-hy-refs = {
+            type = "app";
+            program = "${p.pnix-hy-refs}/bin/pnix-hy-library";
+          };
         });
 
       # ---- devShell ------------------------------------------------------

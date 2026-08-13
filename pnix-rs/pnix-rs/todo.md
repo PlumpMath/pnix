@@ -714,7 +714,7 @@ below.
 
 **Still open:**
 
-1. Deeper Cargo integration cookbook (path dep vs system `PNIX_RS_LIB_DIR`).
-2. Optional: crates.io / git package so host crates do not depend on store paths.
+1. ~~Cargo cookbook~~ → `docs/CARGO_HOST_IMPORT.md` + flake `pnix-rs-refs`.
+2. Optional: crates.io / git package (`publish = false` today).
 3. Stable C ABI versioning for the cdylib (semver + header).
 

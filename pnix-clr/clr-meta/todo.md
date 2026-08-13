@@ -274,6 +274,8 @@ below.
 3. Versioned env contract — **done**: `PNIX_CLR_*` (+ library path).
 4. Dual-axis docs — **done**: monorepo `HOST_DEV_ENV.md` + host `CLAUDE.md` /
    `README.md` + HM matrix.
-5. Explicit note: runtime-artifact `.clj.dll` is **host-bound** (CLR), not a
+5. Optional local NuGet — **partial**: `bin/pack-pnix-clr-nupkg` +
+   `csharp/Directory.Build.props.sample` (local feed only; not nuget.org).
+6. Explicit note: runtime-artifact `.clj.dll` is **host-bound** (CLR), not a
    common multi-host .px package. (Still true; document, do not claim otherwise.)
 

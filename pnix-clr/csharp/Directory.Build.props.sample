@@ -1,0 +1,28 @@
+<!--
+  Sample Directory.Build.props for C# projects that host-import pnix-clr.
+
+  Copy next to your .csproj (or import explicitly) after:
+
+    pnix-clr-library   # or: nix run .#pnix-clr-library
+    # sets / prints PNIX_CLR_LIBRARY
+
+  Env required at build time:
+    PNIX_CLR_LIBRARY  — export root (lib/ + build/)
+    PNIX_CLR          — optional; Pnix.Clr.Eval process path
+-->
+<Project>
+  <PropertyGroup>
+    <!-- Prefer env from pnix-clr-cs / pnix-clr-refs / shell profile -->
+    <PnixClrLibrary Condition="'$(PnixClrLibrary)' == '' and '$(PNIX_CLR_LIBRARY)' != ''">$(PNIX_CLR_LIBRARY)</PnixClrLibrary>
+  </PropertyGroup>
+
+  <Import Project="$(PnixClrLibrary)/build/Pnix.Clr.props"
+          Condition="'$(PnixClrLibrary)' != '' and Exists('$(PnixClrLibrary)/build/Pnix.Clr.props')" />
+  <Import Project="$(PnixClrLibrary)/build/Pnix.Clr.targets"
+          Condition="'$(PnixClrLibrary)' != '' and Exists('$(PnixClrLibrary)/build/Pnix.Clr.targets')" />
+
+  <!--
+    Optional: also Reference guest AOT DLLs (ClojureCLR only):
+    <PnixClrImportGuestDlls>true</PnixClrImportGuestDlls>
+  -->
+</Project>

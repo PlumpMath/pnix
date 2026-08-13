@@ -379,9 +379,10 @@ below.
 
 **Still open:**
 
-1. Public `import pnix_hy` API stability (which submodules are host-library API).
+1. Public `import pnix_hy` API stability (which submodules beyond `__all__` are
+   host-library API) — `__all__` + `HOST_IMPORT.md` is the current contract.
 2. Optional: py.typed / package metadata so editors resolve imports without
    store-path PYTHONPATH hacks.
-3. Host import hook for `.px` as Python modules (`install_pnix_import_hook`)
-   documented as host-only, not common-meta.
+3. ~~import hook documented~~ — see monorepo `HOST_IMPORT.md` § hy
+   (`install_pnix_import_hook`); host-only, not common-meta.
 

@@ -18,18 +18,22 @@ HM path helpers: `pnix-<host>-library` / `pnix-<host>-refs` (see `~/dot-nix/dev/
 
 ## Library packaging tiers (do not over-claim)
 
-| Host | Flake package named `*-library`? | Library body | HM helper |
-|------|----------------------------------|--------------|-----------|
-| **clj** | No | `pnix-clj` sources (`-Sdeps` local/root) | `pnix-clj-library` / `refs` |
-| **cljs** | No (body is `packages.pnix-cljs` share/) | `$out/share/pnix-cljs` + optional `lib/node_modules/@plumpmath/pnix-cljs` | `pnix-cljs-library` |
-| **hy** | No (body is `packages.pnix-hy`) | `site-packages/pnix_hy` | `pnix-hy-library` |
-| **rs** | **Yes** `packages.pnix-rs-library` | rlib/a/dylib + header | `pnix-rs-refs` |
-| **clr** | **Yes** app/export `pnix-clr-library` | `Pnix.Clr` + guest AOT + MSBuild props | `pnix-clr-refs` |
+| Host | Flake `*-library` / `*-refs` | Library body | HM helper |
+|------|------------------------------|--------------|-----------|
+| **clj** | app/printer `pnix-clj-library` | `pnix-clj` sources (`-Sdeps` local/root) | `pnix-clj-library` |
+| **cljs** | app/printer `pnix-cljs-library` | share/ + `lib/node_modules/@plumpmath/pnix-cljs` | `pnix-cljs-library` |
+| **hy** | app/printer `pnix-hy-library` | `packages.pnix-hy` site-packages | `pnix-hy-library` |
+| **rs** | **package** `pnix-rs-library` + app `pnix-rs-refs` | rlib/a/dylib + header | `pnix-rs-refs` |
+| **clr** | **export app** `pnix-clr-library` + `pnix-clr-refs` | `Pnix.Clr` + guest AOT + MSBuild props | `pnix-clr-refs` |
 
 ```text
-nix run .#pnix-rs-library     # rs: real package
-nix run .#pnix-clr-library    # clr: export materializer
-# clj / hy / cljs: use the product package + HM *-library helpers, not a separate flake app name
+nix run .#pnix-clj-library    # path contract (sources)
+nix run .#pnix-hy-library
+nix run .#pnix-cljs-library
+nix run .#pnix-rs-library     # real embeddable artifacts
+nix run .#pnix-rs-refs
+nix run .#pnix-clr-library    # materialize export tree
+nix run .#pnix-clr-refs
 ```
 
 ---
@@ -47,6 +51,14 @@ Public top-level exports: see `pnix_hy.__all__` (`eval_source`, `eval_file`,
 `run_px`, interop helpers, …). Proof/meta loaders: `load_proof_api()`,
 `load_meta_api()`.
 
+Optional host-only import hook (not common-meta):
+
+```python
+from pnix_hy import install_pnix_import_hook
+# Install roots so Python import can load host-bound .px modules via pnix-hy.
+# See pnix_hy.interop.install_pnix_import_hook docstring.
+```
+
 **Name clash:** flake app `.#pnix-hy-hy` is `pnix-hy --repl hy` (needs source
 tree). HM PATH bin `pnix-hy-hy` is the **bare Hy interpreter** with
 `PYTHONPATH` for `pnix_hy`. Do not equate them.
@@ -60,6 +72,9 @@ pnix-hy-pnix
 ---
 
 ## rs (Rust)
+
+Cargo patterns: [pnix-rs/docs/CARGO_HOST_IMPORT.md](pnix-rs/docs/CARGO_HOST_IMPORT.md).
+
 
 ```rust
 // After linking with -L $PNIX_RS_LIB_DIR and including pnix_rs.h for C ABI
@@ -88,6 +103,12 @@ Never put full `pnix-rs` + `pnix-rs-library` in one `buildEnv` (dylib clash).
 See `pnix-clr/csharp/Pnix.Clr/README.md`.
 
 ```bash
+./bin/export-pnix-clr-library
+./bin/pack-pnix-clr-nupkg          # optional local nupkg
+# MSBuild: csharp/Directory.Build.props.sample
+```
+
+```bash
 pnix-clr-refs          # may export library on first run
 pnix-clr -e '1 + 2'
 # C#: Eval.File / Eval.Source after Import of $PNIX_CLR_LIBRARY/build/Pnix.Clr.props
@@ -95,13 +116,17 @@ pnix-clr -e '1 + 2'
 
 ---
 
-## Verified smoke (2026-08-14, HM profile + local tip)
+## Verified smoke (2026-08-14)
+
+Also: monorepo `./bin/host-import-smoke` (uses PATH).
+
+## Verified smoke log
 
 | Host | Command | Result |
 |------|---------|--------|
 | clj | `(pnix-clj.core/eval-file …)` → `:value 3` | ok |
 | hy | `pnix_hy.eval_file` → `3` | ok |
-| cljs | `require('pnix-cljs-module.js').evalFileValueJson` → `3` | ok |
+| cljs | `require('@plumpmath/pnix-cljs').evalSourceJson('1+2')` → value 3 | ok (user 2026-08-14) |
 | rs | `pnix-rs px-eval -c '1 + 2'` → `3` | ok |
 | clr | `pnix-clr -e '1 + 2'` → JSON value 3 | ok |
 | helpers | `pnix-*-library` / `pnix-rs-refs` / `pnix-clr-refs` | print paths |

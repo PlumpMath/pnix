@@ -51,15 +51,15 @@ Flake apps (inside each host directory):
 nix run .#pnix-<host>          # runtime CLI
 nix run .#pnix-<host>-pnix     # pnix-main REPL
 nix run .#gate
-nix run .#pnix-rs-library      # rs only: embeddable rlib/dylib package
-nix run .#pnix-clr-library     # clr only: export Pnix.Clr + guest AOT
+nix run .#pnix-<host>-library  # library path printer (all hosts)
+nix run .#pnix-<host>-refs     # alias of library printer (where defined)
+# rs also: packages.pnix-rs-library = real rlib/dylib/header
+# clr also: pnix-clr-library materializes export tree on disk
 ```
 
-**Not every host has `.#pnix-<host>-library`.** See [HOST_IMPORT.md](HOST_IMPORT.md)
-§ packaging tiers. clj/hy/cljs expose the library as the main product package
-(plus HM `pnix-*-library` path printers).
-
-Import cookbooks: **[HOST_IMPORT.md](HOST_IMPORT.md)**.
+See [HOST_IMPORT.md](HOST_IMPORT.md) § packaging tiers.  
+Import cookbooks: **[HOST_IMPORT.md](HOST_IMPORT.md)**.  
+PATH smoke: **`./bin/host-import-smoke`**.
 
 HM reimplements shell runners with **`writeShellScriptBin`** (never raw
 `writeShellApplication` → ShellCheck/GHC on x86_64-darwin). See

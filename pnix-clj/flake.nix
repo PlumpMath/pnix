@@ -99,10 +99,26 @@
                 clojure.main "$@"
             '';
           };
+          # Host-library path printer (library body is pnix-clj sources, not a
+          # separate jar). Symmetric name with pnix-rs-library / pnix-clr-library.
+          pnix-clj-library = pkgs.writeShellApplication {
+            name = "pnix-clj-library";
+            text = ''
+              root="${self}/pnix-clj"
+              echo "PNIX_CLJ_ROOT=$root"
+              echo "PNIX_CLJ_LIBRARY=$root"
+              echo "PNIX_CLJ_SRC=$root/src"
+              echo "# Host-main deps.edn:"
+              echo "#   {:deps {pnix/pnix-clj {:local/root \"$root\"}}}"
+              echo "# Import: (require '[pnix-clj.core :as c]) (c/eval-file \"x.px\")"
+              echo "# Cookbook: pnix-clj/docs/HOST_IMPORT.md"
+            '';
+          };
         in
         {
           default = pnix-clj;
-          inherit pnix-clj pnix-clj-clj pnix-clj-runtime;
+          inherit pnix-clj pnix-clj-clj pnix-clj-runtime pnix-clj-library;
+          pnix-clj-refs = pnix-clj-library;
         });
 
       # ---- apps ----------------------------------------------------------
@@ -252,6 +268,15 @@
           examples = { type = "app"; program = pkgs.lib.getExe examplesApp; };
           clj-meta-gate = { type = "app"; program = pkgs.lib.getExe cljMetaGate; };
           clj-meta-kernel = { type = "app"; program = pkgs.lib.getExe cljMetaKernel; };
+          # host library surface (path contract; body is sources)
+          pnix-clj-library = {
+            type = "app";
+            program = "${self.packages.${system}.pnix-clj-library}/bin/pnix-clj-library";
+          };
+          pnix-clj-refs = {
+            type = "app";
+            program = "${self.packages.${system}.pnix-clj-refs}/bin/pnix-clj-library";
+          };
         });
 
       # ---- devShell ------------------------------------------------------

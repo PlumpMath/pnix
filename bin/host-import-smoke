@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Quick dual-axis / host-library smoke across five hosts.
+# Prefers tools already on PATH (HM profile). Does not require a checkout cwd
+# except where a host CLI needs local files.
+#
+# Usage: ./bin/host-import-smoke
+set -euo pipefail
+
+pass=0
+fail=0
+skip=0
+
+ok() { echo "  OK  $*"; pass=$((pass + 1)); }
+bad() { echo "  FAIL $*"; fail=$((fail + 1)); }
+skp() { echo "  SKIP $*"; skip=$((skip + 1)); }
+
+TMP="$(mktemp /tmp/pnix-import-smoke.XXXX.px)"
+trap 'rm -f "$TMP"' EXIT
+printf '%s\n' '1 + 2' >"$TMP"
+
+echo "== host-import-smoke =="
+echo "px file: $TMP"
+
+# --- clj ---
+if command -v clojure >/dev/null 2>&1; then
+  if out=$(clojure -M -e "(require '[pnix-clj.core :as c]) (print (:value (c/eval-file \"$TMP\")))" 2>/dev/null); then
+    [[ "$out" == *3* ]] && ok "clj eval-file → $out" || bad "clj eval-file unexpected: $out"
+  else
+    bad "clj eval-file"
+  fi
+else
+  skp "clojure not on PATH"
+fi
+
+# --- hy ---
+if command -v python >/dev/null 2>&1; then
+  if out=$(python -c "import pnix_hy as ph; print(ph.eval_file('$TMP'))" 2>/dev/null); then
+    [[ "$out" == *3* ]] && ok "hy eval_file → $out" || bad "hy eval_file unexpected: $out"
+  else
+    bad "hy eval_file (is pnix_hy on PYTHONPATH?)"
+  fi
+else
+  skp "python not on PATH"
+fi
+
+# --- cljs ---
+if command -v node >/dev/null 2>&1; then
+  if out=$(node -e "try{const p=require('@plumpmath/pnix-cljs');console.log(p.evalFileValueJson('$TMP'))}catch(e){const p=require('pnix-cljs-module.js');console.log(p.evalFileValueJson('$TMP'))}" 2>/dev/null); then
+    [[ "$out" == *3* ]] && ok "cljs evalFileValueJson → $out" || bad "cljs unexpected: $out"
+  else
+    bad "cljs require/evalFile"
+  fi
+else
+  skp "node not on PATH"
+fi
+
+# --- rs ---
+if command -v pnix-rs >/dev/null 2>&1; then
+  if out=$(pnix-rs px-eval -c '1 + 2' 2>/dev/null); then
+    [[ "$out" == *3* ]] && ok "rs px-eval → $out" || bad "rs unexpected: $out"
+  else
+    bad "rs px-eval"
+  fi
+else
+  skp "pnix-rs not on PATH"
+fi
+
+# --- clr ---
+if command -v pnix-clr >/dev/null 2>&1; then
+  if out=$(pnix-clr -e '1 + 2' 2>/dev/null); then
+    [[ "$out" == *3* ]] && ok "clr -e → done/3" || bad "clr unexpected: $out"
+  else
+    bad "clr -e (first run may need artifact build)"
+  fi
+else
+  skp "pnix-clr not on PATH"
+fi
+
+# --- path helpers ---
+for h in pnix-clj-library pnix-cljs-library pnix-hy-library pnix-rs-refs pnix-clr-refs; do
+  if command -v "$h" >/dev/null 2>&1; then
+    if "$h" >/dev/null 2>&1; then
+      ok "$h prints env"
+    else
+      bad "$h failed"
+    fi
+  else
+    skp "$h not on PATH"
+  fi
+done
+
+echo "== summary: pass=$pass fail=$fail skip=$skip =="
+[[ "$fail" -eq 0 ]]
