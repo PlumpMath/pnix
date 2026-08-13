@@ -470,6 +470,7 @@ tracked here so nothing is re-developed:
 - [x] M1 follow-up: residual as REUSABLE host artifact (2026-08-14) —
   `specialize-to-host-artifact` + `invoke-host-artifact`; equality is
   **application-only** (fn instances never `=`; prove via invoke vs eval).
+  Report rows: `host-artifact-rows` in specialize report (4 cases).
 - New ns `pnix-clj.specialize`: `(specialize source static-env)` →
   `{:residual-ast .. :residual-source .. :fully-static? .. :value .. :gaps [..]}`.
 - Walk the parsed AST with a static env: fold literals/arithmetic/if-with-static-

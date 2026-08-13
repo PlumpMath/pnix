@@ -158,3 +158,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | M1 per-call `:fold-fuel`; nuget publish fail-closed; in-process eval design |
 | 2026-08-14 | in-process eval spike (net10 ALC) + parity gate (opt-in, not aggregate) |
 | 2026-08-14 | in-process corpus 17-pass; isolated ALC held (CLR Default load); host-artifact API |
+| 2026-08-14 | host-artifact report rows; nupkg-smoke in gate if export; INPROCESS opt-in gate |

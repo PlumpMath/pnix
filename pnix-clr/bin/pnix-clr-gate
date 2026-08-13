@@ -11,6 +11,22 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 "$root/bin/build-pnix-clr-artifact" >/dev/null
 "$root/bin/pnix-clr-artifact-gate" --no-build
 
+# Local nupkg layout when an export already exists (no rebuild; skip if missing).
+lib_dir="${PNIX_CLR_LIBRARY:-$root/pnix-clr/target/pnix-clr-library}"
+if [[ -f "$lib_dir/manifest.json" ]]; then
+  "$root/bin/pnix-clr-nupkg-smoke" --no-export
+else
+  echo "pnix-clr-gate: skip nupkg-smoke (no $lib_dir/manifest.json)"
+fi
+
+# Experimental in-process parity — opt-in (default off until weeks green).
+#   PNIX_CLR_INPROCESS_GATE=1 ./bin/pnix-clr-gate
+if [[ "${PNIX_CLR_INPROCESS_GATE:-0}" == "1" ]]; then
+  "$root/bin/pnix-clr-inprocess-eval-gate"
+else
+  echo "pnix-clr-gate: skip inprocess-eval-gate (set PNIX_CLR_INPROCESS_GATE=1 to run)"
+fi
+
 export CLOJURE_LOAD_PATH="$root/pnix-clr/src:$root/pnix-clr/test"
 "$root/bin/clojure-clr-bootstrap" -m pnix-clr.test-runner "$root"
 "$root/bin/pnix-clr-production-outcome-gate"

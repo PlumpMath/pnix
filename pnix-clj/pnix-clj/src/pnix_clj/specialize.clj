@@ -854,32 +854,87 @@
     (System/gc)
     row))
 
+;; Reusable residual host artifacts (application-equality, multi-dynamics).
+(def host-artifact-cases
+  [{:id :reuse-partial-add
+    :source "x + y" :statics {"x" 40} :dynamic-names ["y"]
+    :invokes [{"y" 2} {"y" 3} {"y" 2}]}
+   {:id :reuse-if-pruned
+    :source "if flag then a + 1 else a - 1"
+    :statics {"flag" true} :dynamic-names ["a"]
+    :invokes [{"a" 10} {"a" 0}]}
+   {:id :reuse-two-dynamics
+    :source "let base = p * 10; in base + x * y"
+    :statics {"p" 4} :dynamic-names ["x" "y"]
+    :invokes [{"x" 1 "y" 2} {"x" 2 "y" 3}]}
+   {:id :const-fully-static
+    :source "builtins.length [ 1 2 3 ]" :statics {} :dynamic-names []
+    :invokes [{}]}])
+
+(defn- run-host-artifact-case
+  "Compile once; invoke for each dynamics map; accept only when every invoke
+  matches eval(source under statics∪dynamics). Drop :fn from the data row."
+  [{:keys [id source statics dynamic-names invokes]}]
+  (let [eval-source (requiring-resolve 'pnix-clj.core/eval-source)
+        art (specialize-to-host-artifact source statics dynamic-names)
+        expected (mapv (fn [dyn]
+                         (eval-source (env-wrap (merge statics dyn) source)))
+                       invokes)
+        results (if (= :ok (:status art))
+                  (mapv #(invoke-host-artifact art %) invokes)
+                  (repeat (count invokes) art))
+        match? (and (= :ok (:status art))
+                    (every? (fn [[exp inv]]
+                              (and (= :ok (:status exp))
+                                   (= :ok (:status inv))
+                                   (= (:value exp) (:value inv))))
+                            (map vector expected results)))]
+    (System/gc)
+    {:id id
+     :source source
+     :status (if match? :accepted :rejected)
+     :dynamic-names (vec dynamic-names)
+     :residual-source (get-in art [:specialize :residual-source])
+     :invoke-count (count invokes)
+     :invokes (mapv (fn [dyn exp inv]
+                      {:dynamics dyn
+                       :expected (select-keys exp [:status :value :reason])
+                       :invoked (select-keys inv [:status :value :reason])})
+                    invokes expected results)}))
+
 (defn report
   []
   (let [rows (mapv run-case cases)
         frows (mapv run-futamura-case-released futamura-cases)
+        arows (mapv run-host-artifact-case host-artifact-cases)
         rejected (+ (count (filter #(= :rejected (:status %)) rows))
-                    (count (filter #(= :rejected (:status %)) frows)))
+                    (count (filter #(= :rejected (:status %)) frows))
+                    (count (filter #(= :rejected (:status %)) arows)))
+        total (+ (count rows) (count frows) (count arows))
         body {:kind :pnix-specialize-report
               :schema :pnix-clj.specialize-report.v1
-              :policy :futamura-stage1-differential-and-host-projection
-              :total (+ (count rows) (count frows))
-              :accepted (- (+ (count rows) (count frows)) rejected)
+              :policy :futamura-stage1-differential-host-projection-and-reusable-artifact
+              :total total
+              :accepted (- total rejected)
               :rejected rejected
               :differential-total (count rows)
               :futamura-total (count frows)
+              :host-artifact-total (count arows)
               :rows rows
-              :futamura-rows frows}]
+              :futamura-rows frows
+              :host-artifact-rows arows}]
     (assoc body
            :status (if (zero? rejected) :ok :failed)
            :report-hash (hash/data-hash
                          [(mapv #(dissoc % :residual-source) rows)
                           (mapv #(dissoc % :residual-source :wrapper-source)
-                                frows)]))))
+                                frows)
+                          (mapv #(dissoc % :residual-source :invokes) arows)]))))
 
 (defn -main
   [& _]
-  (let [{:keys [status total accepted rejected rows futamura-rows]} (report)]
+  (let [{:keys [status total accepted rejected rows futamura-rows
+                host-artifact-rows]} (report)]
     (println (format "pnix-clj specialize: status=%s total=%d accepted=%d rejected=%d"
                      (name status) total accepted rejected))
     (doseq [{:keys [id status fully-static? value gaps]} rows]
@@ -891,4 +946,8 @@
                        (if (= :accepted status) "OK" "REJECT")
                        (name id) (pr-str bytecode-determinism)
                        (pr-str (:value invoked)) (pr-str (:value expected)))))
+    (doseq [{:keys [id status invoke-count]} host-artifact-rows]
+      (println (format "  [%s] host-artifact:%s invokes=%d"
+                       (if (= :accepted status) "OK" "REJECT")
+                       (name id) invoke-count)))
     (shutdown-agents)))

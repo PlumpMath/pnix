@@ -138,4 +138,10 @@ export PNIX_CLR_ARTIFACT=$PWD/pnix-clr/target/runtime-artifact
 export PNIX_CLR_SUBSTRATE=$PWD/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish
 export PNIX_CLR=$PWD/bin/pnix-clr
 ./bin/pnix-clr-inprocess-eval-gate
+
+# Or as part of the product aggregate (opt-in; default off):
+PNIX_CLR_INPROCESS_GATE=1 ./bin/pnix-clr-gate
+
+# HelloPnix demo (net10, same env):
+dotnet run --project csharp/examples/HelloPnix -c Release -- --inprocess '1 + 2'
 ```
