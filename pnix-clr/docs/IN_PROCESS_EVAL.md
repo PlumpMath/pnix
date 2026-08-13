@@ -139,9 +139,14 @@ export PNIX_CLR_SUBSTRATE=$PWD/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure
 export PNIX_CLR=$PWD/bin/pnix-clr
 ./bin/pnix-clr-inprocess-eval-gate
 
-# Or as part of the product aggregate (opt-in; default off):
-PNIX_CLR_INPROCESS_GATE=1 ./bin/pnix-clr-gate
+# Product aggregate: auto-runs when substrate+artifact exist.
+# Skip: PNIX_CLR_INPROCESS_GATE=0 ./bin/pnix-clr-gate
+./bin/pnix-clr-gate
 
 # HelloPnix demo (net10, same env):
-dotnet run --project csharp/examples/HelloPnix -c Release -- --inprocess '1 + 2'
+dotnet run --project csharp/examples/HelloPnix -c Release -f net10.0 -- --inprocess '1 + 2'
 ```
+
+### nuget.org
+
+**Not a product goal** — local `pack-pnix-clr-nupkg` / file feed only (owner).
