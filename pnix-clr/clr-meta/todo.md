@@ -297,8 +297,10 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 4. Honest claims only — no Stage15/N, no "clojure-clr replaces ClojureCLR".
 
 **Order:**
-1. Inventory what `bin/clojure-clr` / `clr-meta` admit today (fail-closed surface).
-2. Choose TFM story (net10 host vs net8 Rhino) — do not mix silently.
+1. ~~Inventory what `bin/clojure-clr` / `clr-meta` admit today~~ →
+   **`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`** (2026-08-14).
+2. Choose TFM story (net10 host vs net8 Rhino) — do not mix silently
+   (partially documented in inventory + monorepo HOST_DEV_ENV).
 3. Template + gate; only then consider nuget.org for Pnix.Clr.
 
 ### clr-meta residual (product, not packaging)

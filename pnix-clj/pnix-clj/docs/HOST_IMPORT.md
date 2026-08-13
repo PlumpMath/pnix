@@ -37,8 +37,11 @@ may change without a deprecation cycle.
 (c/eval-file "path/to/prog.px")
 
 ;; In-memory imports only (no FS): map of target-string -> source
-(c/eval-source-with-imports "import ./lib.px" {"lib.px" "1 + 1"})
+(c/eval-source-with-imports "import ./lib.px" {"./lib.px" "1 + 1"})
 ```
+
+Mini multi-module project: monorepo
+`examples/host-import/clj-imports/` (`main.px` imports `./lib.px`).
 
 Result shape: runtime map with `:status` (`:ok` / `:failed` / `:suspended` …),
 `:value` or `:error`, and parse metadata. Treat non-`:ok` as failure.

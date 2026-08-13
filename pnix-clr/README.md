@@ -24,7 +24,8 @@ upstream compiler sources are vendored here.
 ### Dual-axis + library (read this)
 
 Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).  
-C# package: [`csharp/Pnix.Clr/README.md`](csharp/Pnix.Clr/README.md).
+C# package: [`csharp/Pnix.Clr/README.md`](csharp/Pnix.Clr/README.md).  
+**`clojure-clr` admitted surface (fail-closed):** [`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`](docs/CLOJURE_CLR_ADMITTED_SURFACE.md).
 
 | Axis | Command / surface |
 |------|-------------------|

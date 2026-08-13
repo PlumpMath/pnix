@@ -85,6 +85,7 @@ Do **not** start without an explicit product decision.
 | Acceptance | Documented REPL + multi-file load + Reference assemblies without pnix-only CLI |
 | Depends on | clr-meta substrate stability, not just pnix-clr guest AOT |
 | **Plan detail** | see `pnix-clr/clr-meta/todo.md` § “P3 full ClojureCLR project” |
+| **Step 1 inventory** | **landed** — `pnix-clr/docs/CLOJURE_CLR_ADMITTED_SURFACE.md` (2026-08-14) |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
 
@@ -140,3 +141,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | clj residual / clr-meta / full examples / heavy CI = **todo detail only** until owner pull |
 | 2026-08-14 | P2.2 rs mini crate + P2.3 Phase B library-print matrix **started** |
 | 2026-08-14 | P2.4 py.typed + rs ABI header note; P2.5 `host-import.yml` on push |
+| 2026-08-14 | P3.2 step1 clojure-clr inventory; clj multi-module import example |

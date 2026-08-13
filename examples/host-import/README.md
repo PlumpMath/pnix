@@ -9,6 +9,7 @@ evaluates `../hello.px` (`1 + 2` → `3`).
 | Host | How to run |
 |------|------------|
 | clj | `cd clj && clojure -M -m smoke` |
+| clj multi-module | `cd clj-imports && clojure -M -m smoke` (`import ./lib.px` → 3) |
 | hy | `cd hy && python smoke.py` |
 | cljs | `cd cljs && node smoke.mjs` |
 | rs | `cd rs/pnix-rs-smoke && cargo run -q -- ../../hello.px` |

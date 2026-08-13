@@ -3382,6 +3382,7 @@ owner-gated residual list from host-env work.
 - [x] `examples/host-import/clj` mini project
 - [x] monorepo `bin/host-import-smoke` + CI layout/clj example
 
-### Host-import hard (not started)
-- [ ] Multi-file sample app with `import` / modules map
+### Host-import hard
+- [x] Multi-file sample with `import` / modules map →
+  `examples/host-import/clj-imports/` (2026-08-14)
 - [ ] Published jar coordinate (P3)

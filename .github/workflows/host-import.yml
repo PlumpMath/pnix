@@ -67,6 +67,15 @@ jobs:
             echo "clj example => $out"
             test "$out" = "3"
           '
+      - name: clj multi-module import example
+        run: |
+          nix shell nixpkgs#clojure -c bash -lc '
+            set -euo pipefail
+            cd examples/host-import/clj-imports
+            out=$(clojure -M -m smoke)
+            echo "clj-imports example => $out"
+            test "$out" = "3"
+          '
       - name: rs path-dep crate
         run: |
           nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#stdenv.cc -c bash -lc '
