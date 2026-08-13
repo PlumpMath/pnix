@@ -89,11 +89,17 @@ jobs:
         run: |
           set -euo pipefail
           cd pnix-hy
-          # Build installable package; run smoke.py with its site-packages.
-          nix build --no-write-lock-file .#pnix-hy -o /tmp/pnix-hy-out
-          site="$(find /tmp/pnix-hy-out -type d -path '*/site-packages' | head -1)"
+          # Prefer the library printer (stable PNIX_HY_LIBRARY=…/site-packages)
+          # over find-on-result-link, which is brittle under pipefail/head and
+          # macOS find path matching.
+          site="$(
+            nix run --no-write-lock-file .#pnix-hy-library \
+              | sed -n 's/^PNIX_HY_LIBRARY=//p' | head -n1
+          )"
           test -n "$site"
+          test -d "$site/pnix_hy"
           export PYTHONPATH="$site${PYTHONPATH:+:$PYTHONPATH}"
+          # nix shell preserves PYTHONPATH from the parent env by default.
           out=$(nix shell nixpkgs#python311 -c python ../examples/host-import/hy/smoke.py)
           echo "hy example => $out"
           test "$out" = "3"

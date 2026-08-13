@@ -36,8 +36,13 @@ EOF
 fi
 
 # Opt-in multi-form file profile (named gate: tool-eval-multi).
-if [[ "$#" -eq 2 && "$1" == "--multi-form" && -f "$2" ]]; then
-  exec "$root/bin/clr-meta" --multi-form "$2"
+if [[ "$#" -eq 2 && "$1" == "--multi-form" ]]; then
+  if [[ -f "$2" ]]; then
+    exec "$root/bin/clr-meta" --multi-form "$2"
+  fi
+  echo "clojure-clr: --multi-form requires an existing file (got: $2)" >&2
+  echo "example: printf '%s\\n' '(+ 1 2)' '(+ 20 22)' > multi.clj && clojure-clr --multi-form multi.clj" >&2
+  exit 2
 fi
 
 # Focused compatibility facade now owned by clr-meta. Broader upstream
