@@ -111,6 +111,28 @@
             paths = [ pnix-rs rs-meta pnixRsLibrary ];
             meta.mainProgram = "pnix-rs";
           };
+          # Host-library path printer (ShellCheck-clean: no bare ls).
+          pnix-rs-refs = pkgs.writeShellApplication {
+            name = "pnix-rs-refs";
+            text = ''
+              lib="${pnixRsLibrary}"
+              echo "PNIX_RS_LIB_DIR=$lib/lib"
+              echo "PNIX_RS_INCLUDE_DIR=$lib/include"
+              echo "PNIX_RS_LIBRARY=$lib/lib"
+              echo "PNIX_RS_RUNTIME=${pnix-rs}/bin/pnix-rs"
+              echo "# Link: -L $lib/lib  -I $lib/include  (pnix_rs.h)"
+              echo "# Rust: pnix_rs::eval_file(\"x.px\")   C: pnix_rs_eval"
+              echo "# Cookbook: ../HOST_IMPORT.md § rs + docs/CARGO_HOST_IMPORT.md"
+              if [ -d "$lib/lib" ]; then
+                find "$lib/lib" -maxdepth 1 -type f -printf '#   lib/%f\n' 2>/dev/null \
+                  || find "$lib/lib" -maxdepth 1 -type f | sed 's|.*/|#   lib/|'
+              fi
+              if [ -d "$lib/include" ]; then
+                find "$lib/include" -maxdepth 1 -type f -printf '#   include/%f\n' 2>/dev/null \
+                  || find "$lib/include" -maxdepth 1 -type f | sed 's|.*/|#   include/|'
+              fi
+            '';
+          };
         in
         {
           default = pnix-rs;
@@ -119,6 +141,7 @@
           pnix-rs-android-arm64 = pnixRsAndroidArm64;
           pnix-rs-wasm-wasi = pnixRsWasmWasi;
           pnix-rs-desktop = pnixRsDesktop;
+          inherit pnix-rs-refs;
         } // pkgs.lib.optionalAttrs pkgs.stdenv.isDarwin {
           pnix-rs-ios-arm64 = pnixRsIosArm64;
         });
@@ -215,21 +238,7 @@
           # host library path printer (body is packages.pnix-rs-library)
           pnix-rs-refs = {
             type = "app";
-            program = pkgs.lib.getExe (pkgs.writeShellApplication {
-              name = "pnix-rs-refs";
-              text = ''
-                lib="${p.pnix-rs-library}"
-                echo "PNIX_RS_LIB_DIR=$lib/lib"
-                echo "PNIX_RS_INCLUDE_DIR=$lib/include"
-                echo "PNIX_RS_LIBRARY=$lib/lib"
-                echo "PNIX_RS_RUNTIME=${p.pnix-rs}/bin/pnix-rs"
-                echo "# Link: -L $lib/lib  -I $lib/include  (pnix_rs.h)"
-                echo "# Rust: pnix_rs::eval_file(\"x.px\")   C: pnix_rs_eval"
-                echo "# Cookbook: ../HOST_IMPORT.md § rs + docs/CARGO_HOST_IMPORT.md"
-                ls -1 "$lib/lib" 2>/dev/null | sed 's/^/#   lib\//' || true
-                ls -1 "$lib/include" 2>/dev/null | sed 's/^/#   include\//' || true
-              '';
-            });
+            program = "${p.pnix-rs-refs}/bin/pnix-rs-refs";
           };
           # checks
           gate = { type = "app"; program = pkgs.lib.getExe gateApp; };

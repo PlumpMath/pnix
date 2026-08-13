@@ -307,7 +307,11 @@ JSON
               echo "NODE_PATH=$nm:$share''${NODE_PATH:+:$NODE_PATH}"
               echo "# require('@plumpmath/pnix-cljs')  or  require('pnix-cljs-module.js')"
               echo "# Cookbook: HOST_IMPORT.md"
-              if [ -d "$share" ]; then ls -1 "$share" | sed 's/^/#   share\//'; fi
+              # ShellCheck SC2012: prefer find over ls in writeShellApplication checkPhase
+              if [ -d "$share" ]; then
+                find "$share" -maxdepth 1 -type f -printf '#   share/%f\n' 2>/dev/null \
+                  || find "$share" -maxdepth 1 -type f | sed 's|.*/|#   share/|'
+              fi
               if [ -d "$nm/@plumpmath/pnix-cljs" ]; then
                 echo "#   scoped: $nm/@plumpmath/pnix-cljs"
               fi

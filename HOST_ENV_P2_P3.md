@@ -44,7 +44,7 @@ planned until explicitly pulled. Easy items may land as small examples/CI.
 | Phase A (easy) | layout + `bash -n` + **clj example** + **rs cargo path-dep** |
 | Phase B (medium) | per-host flake jobs that print `pnix-*-library` / `*-refs` env |
 | Phase C (hard) | full 5-host eval like local smoke (needs multi-toolchain matrix; do **not** start until A/B are green for weeks) |
-| **State** | **Phase A+B landed** in `.github/workflows/hosts.yml` |
+| **State** | **Phase A+B landed** in `.github/workflows/hosts.yml` (B = clj/hy/rs; cljs/clr covered by host gates). ShellCheck SC2012 fixed for library printers. |
 
 ### P2.4 Public API polish (docs only unless churn)
 
