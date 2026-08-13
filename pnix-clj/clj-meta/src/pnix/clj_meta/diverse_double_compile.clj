@@ -421,7 +421,19 @@
    {:id :mini-backend-multi-arity-three-way-two-arg
     :source "(fn ([] 42) ([x] x) ([x y] (+ x y)))"
     :args [20 22]
-    :expected 42}])
+    :expected 42}
+   {:id :mini-backend-variadic-one-fixed
+    :source "(fn [a & r] r)"
+    :args [1 2 3]
+    :expected '(2 3)}
+   {:id :mini-backend-variadic-two-fixed
+    :source "(fn [a b & r] [a b r])"
+    :args [1 2 3 4]
+    :expected [1 2 '(3 4)]}
+   {:id :mini-backend-op-count-variadic
+    :source "(fn [& r] (count r))"
+    :args [1 2 3]
+    :expected 3}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

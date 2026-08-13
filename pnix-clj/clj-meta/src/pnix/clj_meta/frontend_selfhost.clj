@@ -9,13 +9,14 @@
             [clojure.pprint :as pp])
   (:import [clojure.asm ClassWriter Label Opcodes Type]
            [clojure.asm.commons GeneratorAdapter Method]
-           [clojure.lang AFunction DynamicClassLoader IFn Keyword Numbers RT Symbol Util]
+           [clojure.lang AFunction DynamicClassLoader IFn Keyword Numbers RestFn RT Symbol Util]
            [java.security MessageDigest]))
 
 (def receipt-path "clj-meta/proof/frontend-selfhost.receipt.edn")
 
 (def ^:private obj-type (Type/getType Object))
 (def ^:private afn-type (Type/getType AFunction))
+(def ^:private restfn-type (Type/getType RestFn))
 (def ^:private numbers-type (Type/getType Numbers))
 (def ^:private rt-type (Type/getType RT))
 (def ^:private util-type (Type/getType Util))
@@ -85,6 +86,8 @@
   (reflect-asm-method RT "next" [Object]))
 (def ^:private rt-get-method
   (reflect-asm-method RT "get" [Object Object]))
+(def ^:private rt-count-method
+  (reflect-asm-method RT "count" [Object]))
 
 (defn- next-class-name
   []
@@ -493,7 +496,7 @@
          :fn op
          :lhs (analyze-expr env (first args))
          :rhs (analyze-expr env (second args))})
-      (inc dec zero? pos? neg? first next)
+      (inc dec zero? pos? neg? first next count)
       (do
         (when-not (= 1 (count args))
           (throw (ex-info "tiny analyzer: unary op arity"
@@ -582,21 +585,39 @@
     (throw (ex-info "tiny analyzer: unsupported quoted form"
                     {:form form}))))
 
+(defn- split-variadic-params
+  "`[a b & r]` -> `[[a b] r]`; `[a b]` -> `[[a b] nil]`. `&` must be
+  second-to-last (exactly one name follows it), matching the one shape
+  `clojure.lang.RestFn` itself supports."
+  [params]
+  (let [amp-idx (first (keep-indexed (fn [i p] (when (= p '&) i)) params))]
+    (if (nil? amp-idx)
+      [params nil]
+      (do
+        (when-not (= amp-idx (- (count params) 2))
+          (throw (ex-info "tiny analyzer: `&` must be second-to-last in params"
+                          {:params params})))
+        [(subvec params 0 amp-idx) (nth params (inc amp-idx))]))))
+
 (defn- analyze-fn-clause
   "A single arity clause `(params-vector body-form...)`, shared by both the
   single-arity `(fn [x] ...)` shape (where the whole tail IS one clause) and
-  each `([x] ...)` entry of a multi-arity `(fn ([x] ...) ([x y] ...))` form."
+  each `([x] ...)` entry of a multi-arity `(fn ([x] ...) ([x y] ...))` form.
+  `params-vector` may end in `& rest-name` for a variadic clause."
   [clause]
-  (let [params (first clause)
+  (let [raw-params (first clause)
         body (rest clause)]
-    (when-not (and (vector? params)
-                   (every? symbol? params)
-                   (= (count params) (count (distinct params)))
-                   (seq body))
+    (when-not (and (vector? raw-params) (seq body))
       (throw (ex-info "tiny analyzer: malformed fn clause" {:clause clause})))
-    (let [env (zipmap params (repeat true))]
-      {:params params
-       :body (analyze-body env body)})))
+    (let [[params rest-param] (split-variadic-params raw-params)
+          all-names (cond-> params rest-param (conj rest-param))]
+      (when-not (and (every? symbol? all-names)
+                     (= (count all-names) (count (distinct all-names))))
+        (throw (ex-info "tiny analyzer: malformed fn clause" {:clause clause})))
+      (let [env (zipmap all-names (repeat true))]
+        {:params params
+         :rest-param rest-param
+         :body (analyze-body env body)}))))
 
 (defn- analyze-fn
   [form]
@@ -614,6 +635,15 @@
       (throw (ex-info "tiny analyzer: fn needs at least one arity" {:form form})))
     (when-not (= (count param-counts) (count (distinct param-counts)))
       (throw (ex-info "tiny analyzer: duplicate fn arity" {:form form})))
+    ;; Deliberately narrow scope: a variadic clause (`& rest`) may only
+    ;; appear alone, not mixed with other fixed arities in the same `fn`.
+    ;; Real `clojure.lang.RestFn` subclasses CAN mix lower fixed arities
+    ;; with one variadic "ceiling" arity, but that needs additional
+    ;; lower-arity `invoke` overrides beyond `doInvoke`+`getRequiredArity` --
+    ;; a separate, larger slice, not attempted here.
+    (when (and (some :rest-param arities) (> (count arities) 1))
+      (throw (ex-info "tiny analyzer: variadic fn cannot be mixed with other arities"
+                      {:form form})))
     {:op :fn
      :arities arities}))
 
@@ -698,7 +728,16 @@
            (.box ga Type/BOOLEAN_TYPE))
     neg? (do
            (.invokeStatic ga numbers-type numbers-isneg-method)
-           (.box ga Type/BOOLEAN_TYPE))))
+           (.box ga Type/BOOLEAN_TYPE))
+    ;; RT.count returns primitive int; real host boxes this via
+    ;; Integer/valueOf (confirmed by disassembling a real host-compiled
+    ;; `(count coll)` -- Clojure's `count` returns a boxed Integer, not
+    ;; Long, unlike every other numeric op in this file). GeneratorAdapter's
+    ;; `.box` picks the matching valueOf automatically from the primitive
+    ;; Type, same mechanism already used for the boolean ops above.
+    count (do
+            (.invokeStatic ga rt-type rt-count-method)
+            (.box ga Type/INT_TYPE))))
 
 (defn- emit-local
   [^GeneratorAdapter ga env name]
@@ -844,38 +883,80 @@
            obj-type
            (into-array Type (repeat arity obj-type))))
 
+(defn- do-invoke-method
+  [arity]
+  (Method. "doInvoke"
+           obj-type
+           (into-array Type (repeat arity obj-type))))
+
+(def ^:private get-required-arity-method
+  (Method. "getRequiredArity" Type/INT_TYPE (into-array Type [])))
+
 (defn- emit-class
   [{:keys [arities]}]
-  (let [class-name (next-class-name)
+  (let [variadic? (boolean (some :rest-param arities))
+        class-name (next-class-name)
         internal (.replace class-name \. \/)
         ctype (Type/getObjectType internal)
+        base-type (if variadic? restfn-type afn-type)
         cw (ClassWriter. (bit-or ClassWriter/COMPUTE_FRAMES
                                  ClassWriter/COMPUTE_MAXS))]
     (.visit cw Opcodes/V1_8 Opcodes/ACC_PUBLIC internal nil
-            (.getInternalName afn-type) nil)
+            (.getInternalName base-type) nil)
     (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC init-method nil nil cw)]
       (.loadThis ga)
-      (.invokeConstructor ga afn-type init-method)
+      (.invokeConstructor ga base-type init-method)
       (.returnValue ga)
       (.endMethod ga))
-    ;; One `invoke` method per arity clause, same class -- this is exactly
-    ;; how the real host compiler emits fixed multi-arity `fn`: AFunction
-    ;; already exposes independently-overridable invoke0..invoke20, and IFn
-    ;; dispatch on the *call side* (host `apply`/`invoke`) already picks the
-    ;; right one by argument count. No RestFn/variadic (`&`) plumbing needed
-    ;; for this -- that is a separate, larger feature, not attempted here.
-    (doseq [{:keys [params body]} arities]
-      (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
-                                  (invoke-method (count params))
+    (if variadic?
+      ;; A single variadic clause: extends RestFn instead of AFunction.
+      ;; RestFn already implements EVERY public invoke(...) overload
+      ;; concretely (confirmed via `javap` on the real clojure.jar) -- it
+      ;; handles argument-count matching and rest-sequence collection
+      ;; entirely on its own. A subclass only supplies the two
+      ;; overridable pieces: getRequiredArity() and the ONE doInvoke
+      ;; overload whose param count is (fixed-params + 1), the last slot
+      ;; being the collected rest sequence (or nil if none were passed).
+      ;; This exact shape -- not merely a similar one -- was
+      ;; reverse-engineered from real host-AOT-compiled `(fn [a & r] r)`,
+      ;; `(fn [& r] r)`, and `(fn [a b & r] r)` via `javap -c` before being
+      ;; written here.
+      (let [{:keys [params rest-param body]} (first arities)
+            all-params (if rest-param (conj params rest-param) params)
+            ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
+                                  (do-invoke-method (count all-params))
                                   nil nil cw)]
         (emit-expr ga
                    (into {}
                          (map-indexed (fn [i p]
                                         [p {:kind :arg :index i}]))
-                         params)
+                         all-params)
                    body)
         (.returnValue ga)
-        (.endMethod ga)))
+        (.endMethod ga)
+        (let [arity-ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
+                                          get-required-arity-method
+                                          nil nil cw)]
+          (.push arity-ga (int (count params)))
+          (.returnValue arity-ga)
+          (.endMethod arity-ga)))
+      ;; One `invoke` method per arity clause, same class -- this is exactly
+      ;; how the real host compiler emits fixed multi-arity `fn`: AFunction
+      ;; already exposes independently-overridable invoke0..invoke20, and IFn
+      ;; dispatch on the *call side* (host `apply`/`invoke`) already picks the
+      ;; right one by argument count.
+      (doseq [{:keys [params body]} arities]
+        (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
+                                    (invoke-method (count params))
+                                    nil nil cw)]
+          (emit-expr ga
+                     (into {}
+                           (map-indexed (fn [i p]
+                                          [p {:kind :arg :index i}]))
+                           params)
+                     body)
+          (.returnValue ga)
+          (.endMethod ga))))
     (.visitEnd cw)
     (let [bytes (.toByteArray cw)
           loader (DynamicClassLoader.
@@ -1156,7 +1237,31 @@
    {:id :tiny-multi-arity-three-way-two-arg
     :source "(fn ([] 42) ([x] x) ([x y] (+ x y)))"
     :args [20 22]
-    :expected 42}])
+    :expected 42}
+   {:id :tiny-variadic-rest-only
+    :source "(fn [& r] r)"
+    :args [1 2 3]
+    :expected '(1 2 3)}
+   {:id :tiny-variadic-rest-empty
+    :source "(fn [a & r] r)"
+    :args [1]
+    :expected nil}
+   {:id :tiny-variadic-one-fixed
+    :source "(fn [a & r] r)"
+    :args [1 2 3]
+    :expected '(2 3)}
+   {:id :tiny-variadic-two-fixed
+    :source "(fn [a b & r] [a b r])"
+    :args [1 2 3 4]
+    :expected [1 2 '(3 4)]}
+   {:id :tiny-op-count-variadic
+    :source "(fn [& r] (count r))"
+    :args [1 2 3]
+    :expected 3}
+   {:id :tiny-op-count-vector
+    :source "(fn [v] (count v))"
+    :args [[1 2 3 4]]
+    :expected 4}])
 
 (defn run
   []

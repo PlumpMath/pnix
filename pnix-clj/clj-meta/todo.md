@@ -84,12 +84,32 @@ top-line claim, but the substance is much closer than "false" implies:
   bigger and riskier to get right without the host compiler's source open
   side-by-side — a separate slice, not bundled into this one to keep this
   DDC witness's fixtures high-confidence rather than "probably right."
+  **Second slice landed same day: variadic `&` rest-args** (55→61), closing
+  the item deferred above. Reverse-engineered `clojure.lang.RestFn`'s exact
+  contract from the real host (AOT-compiled 3 variadic fixtures, `javap -c`'d
+  the class files) rather than guessing: `RestFn` implements every public
+  `invoke(...)` overload concretely already, so a subclass only needs
+  `getRequiredArity()` + one `doInvoke` overload (fixed-arg-count + 1
+  params, last slot = rest `ISeq` or `nil`). `emit-class` now branches to a
+  `RestFn`-extending path when any arity clause carries a `rest-param`.
+  Mixing a variadic clause with other fixed arities in the same `fn` is
+  explicitly rejected (real `RestFn` supports it via additional lower-arity
+  `invoke` overrides, a further slice not attempted here) rather than
+  silently mishandled. Also added `count` (`RT.count`, boxed to `Integer`
+  — confirmed via the same `javap -c` pass that this is `Integer` not
+  `Long`, unlike every other numeric op here). Verified against real host
+  `eval` before adding (3-arg and exactly-1-arg/empty-rest cases, arity
+  mismatch throwing `ArityException` on both sides, mixed-arity rejection).
+  DDC row: 47→50. `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate`
+  `metacircular gate: READY`, no regressions.
+
   Remaining large surface still untouched by U6 at all: exceptions
   (try/catch/finally), Java interop (method calls, field access, `set!`,
   static members, reflection), `deftype`/`defrecord`/`reify`, `case`,
   `letfn`, bignum/ratio/regex reader literals, dynamic vars, `locking`,
-  protocols. Each of those is its own multi-fixture slice, several of them
-  (interop, exceptions, deftype/reify) genuinely large on their own.
+  protocols, and RestFn's mixed-fixed+variadic-arity shape. Each of those is
+  its own multi-fixture slice, several of them (interop, exceptions,
+  deftype/reify) genuinely large on their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

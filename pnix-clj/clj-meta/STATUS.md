@@ -94,9 +94,10 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    55 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
-    quote/13 macros/vector-destructuring/fixed multi-arity fn) with ZERO
-    calls into tools.analyzer.jvm or the host reader.
+    61 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    quote/13 macros/vector-destructuring/fixed multi-arity fn/variadic `&`
+    rest-args/count) with ZERO calls into tools.analyzer.jvm or the host
+    reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
     0 divergences found.
@@ -139,6 +140,39 @@ same 4 multi-arity cases to `mini-backend-ddc-fixtures` in
 `-M:conformance` (116/116, unaffected — this lane doesn't touch
 `compiler.clj`/`kernel.clj`) and full `bin/clj-meta-gate` (`metacircular
 gate: READY`) both still green, no regressions.
+
+**Widened again, same day (2026-08-13): variadic `&` rest-args.** The
+"separate, larger slice" flagged above as deliberately deferred is now done.
+`clojure.lang.RestFn`'s exact contract was reverse-engineered from the real
+host, not guessed: AOT-compiled `(fn [a & r] r)`, `(fn [& r] r)`, and
+`(fn [a b & r] r)` with the trusted host compiler, then `javap -c`'d the
+output `.class` files. Finding: `RestFn` already implements every public
+`invoke(...)` overload (arities 0–20 plus a true-variadic 20+ overload)
+*concretely* — argument-count matching and rest-sequence collection are
+entirely the base class's job. A subclass supplies exactly two things:
+`getRequiredArity()` (the fixed-arg count) and ONE `doInvoke` overload whose
+parameter count is `fixed-arg-count + 1`, the last slot being the collected
+rest sequence (an `ISeq`, or `nil` if no extra args were passed). `emit-class`
+now branches on whether any arity clause has a `rest-param`: if so, the
+class extends `RestFn` instead of `AFunction` and emits exactly that
+`doInvoke`/`getRequiredArity` pair; otherwise the existing per-clause
+`invoke` path (from the multi-arity work above) is unchanged. Scope
+deliberately narrowed: a variadic clause may not be mixed with other fixed
+arities in the same `fn` (real `RestFn` subclasses can do this, but it needs
+additional lower-arity `invoke` overrides beyond the two pieces above — a
+further slice, not attempted here; `analyze-fn` throws a clear error for
+this shape rather than silently miscompiling it). Also added `count` as a
+new unary op (`RT.count`, boxed via `Integer/valueOf` — confirmed via the
+same `javap -c` reverse-engineering that real `count` boxes to `Integer`,
+*not* `Long` like every other numeric op in this file, which would have been
+wrong to assume). Verified against real host `eval` before adding: `(fn [a &
+r] r)` with 3 args and with exactly 1 (rest = `nil`), `(fn [& r] (count r))`,
+`(fn [a b & r] [a b r])`, an unmatched 0-arg call throwing `ArityException`
+on both, and that mixing a variadic clause with a fixed clause is correctly
+rejected. U6: 55→61 fixtures, all accepted. DDC row: 47→50 fixtures (3 new
+variadic cases wired into `independent-mini-backend-subset`, still
+accepted). Full `-M:conformance` (116/116, unaffected) and full
+`bin/clj-meta-gate` (`metacircular gate: READY`) both still green.
 
 **What's still genuinely open:** full Wheeler DDC needs the independent
 backend's coverage to match the *production* corpus, not a 43-fixture subset,
