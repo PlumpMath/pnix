@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Host-language (C#) surface for the pnix-clr product.
+    Process-spawns `pnix-clr` (JSON CLI contract) — does not load guest AOT
+    *.clj.dll in-process. Those DLLs are host-bound ClojureCLR assemblies
+    shipped next to this package for Reference from ClojureCLR projects;
+    see build/Pnix.Clr.props and bin/export-pnix-clr-library.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <AssemblyName>Pnix.Clr</AssemblyName>
+    <RootNamespace>Pnix.Clr</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Deterministic>true</Deterministic>
+    <DebugType>portable</DebugType>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Public API surface is small; missing per-member docs are noise. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Version>0.1.0</Version>
+    <Description>C# host-language library for pnix-clr (eval .px via CLI JSON contract)</Description>
+    <PackageId>Pnix.Clr</PackageId>
+    <Authors>pnix</Authors>
+    <PackageTags>pnix;clojure-clr;nix</PackageTags>
+  </PropertyGroup>
+</Project>

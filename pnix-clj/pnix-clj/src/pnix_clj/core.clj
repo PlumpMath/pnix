@@ -268,6 +268,12 @@
                  :parse-result parsed))
          parsed)))))
 
+(defn eval-file
+  "Host-language import of a `.px` file: slurp + eval-source.
+  Host-bound (JVM/clj); not a portable multi-host bytecode package."
+  [path]
+  (eval-source (slurp path)))
+
 (defn eval-source-with-imports
   "Like eval-source but resolves `import <target>` against the supplied
   in-memory module map (target-string -> pnix source). Pure: no filesystem

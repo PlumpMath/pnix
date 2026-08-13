@@ -17,6 +17,14 @@ pub fn eval(source: &str) -> Result<String, String> {
     px::px_run(source)
 }
 
+/// Host-language import of a `.px` file (read + eval).
+/// Host-bound (Rust/rs); not a portable multi-host bytecode package.
+pub fn eval_file(path: &str) -> Result<String, String> {
+    let source = std::fs::read_to_string(path)
+        .map_err(|e| format!("eval_file: read {path}: {e}"))?;
+    eval(&source)
+}
+
 unsafe fn store_ffi_text(out: *mut *mut c_char, text: String) -> c_int {
     if out.is_null() {
         return -1;

@@ -1,0 +1,35 @@
+<Project>
+  <!--
+    Import this props file from a csproj / Directory.Build.props:
+
+      <Import Project="$(PNIX_CLR_LIBRARY)/build/Pnix.Clr.props"
+              Condition="'$(PNIX_CLR_LIBRARY)' != '' and Exists('$(PNIX_CLR_LIBRARY)/build/Pnix.Clr.props')" />
+
+    Or after export-pnix-clr-library:
+
+      <Import Project="/path/to/pnix-clr-library/build/Pnix.Clr.props" />
+
+    Env contracts (set by dot-nix / export / pnix-clr-library helper):
+      PNIX_CLR_LIBRARY   → exported library root (this package layout)
+      PNIX_CLR_ARTIFACT  → runtime-artifact dir (guest AOT *.clj.dll + manifest)
+      PNIX_CLR_ROOT      → pnix-clr source/cache root
+      PNIX_CLR           → path to pnix-clr executable
+  -->
+  <PropertyGroup>
+    <!-- Prefer explicit MSBuild props, then environment. -->
+    <PnixClrLibrary Condition="'$(PnixClrLibrary)' == '' and '$(PNIX_CLR_LIBRARY)' != ''">$(PNIX_CLR_LIBRARY)</PnixClrLibrary>
+    <PnixClrLibrary Condition="'$(PnixClrLibrary)' == '' and '$(MSBuildThisFileDirectory)' != ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</PnixClrLibrary>
+
+    <PnixClrArtifact Condition="'$(PnixClrArtifact)' == '' and '$(PNIX_CLR_ARTIFACT)' != ''">$(PNIX_CLR_ARTIFACT)</PnixClrArtifact>
+    <PnixClrArtifact Condition="'$(PnixClrArtifact)' == '' and '$(PNIX_CLR_RUNTIME_ARTIFACT)' != ''">$(PNIX_CLR_RUNTIME_ARTIFACT)</PnixClrArtifact>
+    <PnixClrArtifact Condition="'$(PnixClrArtifact)' == '' and '$(PnixClrLibrary)' != '' and Exists('$(PnixClrLibrary)/lib/net10.0/runtime-artifact/manifest.json')">$(PnixClrLibrary)/lib/net10.0/runtime-artifact</PnixClrArtifact>
+
+    <!-- C# host library (process→CLI). Built for net8.0 and net10.0. -->
+    <PnixClrManagedLibDir Condition="'$(PnixClrManagedLibDir)' == '' and '$(PnixClrLibrary)' != ''">$(PnixClrLibrary)/lib</PnixClrManagedLibDir>
+
+    <!-- Opt-in: reference guest AOT DLLs (ClojureCLR hosts only). Default false. -->
+    <PnixClrImportGuestDlls Condition="'$(PnixClrImportGuestDlls)' == ''">false</PnixClrImportGuestDlls>
+    <!-- Opt-in: reference Pnix.Clr managed assembly. Default true when present. -->
+    <PnixClrImportManaged Condition="'$(PnixClrImportManaged)' == ''">true</PnixClrImportManaged>
+  </PropertyGroup>
+</Project>

@@ -6,7 +6,9 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 # and optional ROOT args must resolve from the invocation directory).
 caller_pwd="$PWD"
 dll="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
-artifact="${PNIX_CLR_RUNTIME_ARTIFACT:-$root/pnix-clr/target/runtime-artifact}"
+# PNIX_CLR_ARTIFACT is the documented env contract (dot-nix / library export).
+# PNIX_CLR_RUNTIME_ARTIFACT remains as a legacy alias.
+artifact="${PNIX_CLR_ARTIFACT:-${PNIX_CLR_RUNTIME_ARTIFACT:-$root/pnix-clr/target/runtime-artifact}}"
 plan="$root/pnix-clr/runtime-artifact.edn"
 source_root="$root/pnix-clr/src"
 

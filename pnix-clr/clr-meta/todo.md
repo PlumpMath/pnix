@@ -219,30 +219,28 @@ doable in home-manager alone — they need product work in this tree.
 
 ### Missing product surfaces
 
-1. **Shareable library package (NuGet and/or `lib/` layout)**  
-   - Goal: a csproj can `<Reference>` / `PackageReference` the guest+host
-     surface without hand-copying `target/runtime-artifact/*.dll`.  
-   - Today: AOT emits `pnix_clr.*.clj.dll` + `manifest.json` under a cache
-     tree; no stable package id, no `pnix-clr-library` flake package, no
-     `dotnet pack` story.  
-   - Acceptance sketch: `packages.pnix-clr-library` (or NuGet nupkg) with
-     documented Reference list + substrate (`Clojure` NuGet pin) version.
+1. **Shareable library package (NuGet and/or `lib/` layout)** — **landed 2026-08-13**  
+   - `bin/export-pnix-clr-library` → `lib/{net8,net10}/Pnix.Clr.dll` + guest AOT
+     + `build/Pnix.Clr.props|.targets` + `share/pnix-clr/refs.env`.  
+   - Flake: `packages/apps.pnix-clr-library`, `pnix-clr-refs`, `clojure-clr`.  
+   - C# API: `Pnix.Clr.Eval.Source` / `Eval.File` (process→CLI JSON).  
+   - Still open (optional): `dotnet pack` NuGet id, multi-machine nupkg publish.
 
-2. **`clojure-clr` as a real host substrate, not only a name alias**  
-   - nixpkgs has no `clojure-clr`. dot-nix maps the bare name to `pnix-clr`.  
-   - Still missing: a drop-in that acts like “Clojure on CLR for arbitrary
-     .clj projects” (deps.edn / project.clj on CLR), vs pnix-only eval.
-   - Acceptance sketch: documented story for “plain ClojureCLR REPL +
-     reference assemblies” separate from `pnix-clr` guest eval.
+2. **`clojure-clr` as a real host substrate, not only a name alias** — **partial**  
+   - Flake/dot-nix expose `clojure-clr` → `bin/clojure-clr` (clr-meta `-e`/file).  
+   - Still missing: full “Clojure on CLR for arbitrary .clj projects”
+     (deps.edn / project.clj on CLR) beyond the focused facade.
 
-3. **Stable `DOTNET_*` / Reference env contract**  
-   - `pnix-clr-refs` can print paths after artifact build.  
-   - Missing: versioned env contract (`PNIX_CLR_ARTIFACT`, multi-TFM) and
-     a gate that fails if DLLs move without a manifest bump.
+3. **Stable `DOTNET_*` / Reference env contract** — **landed 2026-08-13**  
+   - `PNIX_CLR`, `PNIX_CLR_ROOT`, `PNIX_CLR_ARTIFACT` (+ legacy
+     `PNIX_CLR_RUNTIME_ARTIFACT`), `PNIX_CLR_LIBRARY`.  
+   - Manifest still gates AOT integrity inside `bin/pnix-clr`.  
+   - Optional later: dedicated gate that fails if export layout drifts.
 
 4. **Developer identity of “stock CLR tools”**  
    - Need clear split: Rhino/net8 plugin SDK vs pnix-clr net10 host SDK so
-     overlays never silently mix TFMs.
+     overlays never silently mix TFMs. (`Pnix.Clr` multi-targets net8+net10
+     so Rhino-side C# can reference the managed Eval API on net8.)
 
 
 ## Host-language import of pnix product library (user intent, 2026-08-13)
@@ -265,12 +263,11 @@ below.
 
 ### clr — remaining product work (high priority for host import)
 
-1. **Library package**: NuGet and/or flake `packages.pnix-clr-library` that
-   exposes stable Reference assemblies (guest AOT DLLs + substrate pin), so
-   csproj can import without cache-tree paths.
-2. **ClojureCLR host library story**: bare `clojure-clr` as more than an alias
-   to the pnix eval CLI — Reference surface for host .clj / C# projects.
-3. Versioned env contract: `PNIX_CLR_ARTIFACT` + manifest-gated DLL set.
+1. **Library package** — **done**: `export-pnix-clr-library` + flake
+   `pnix-clr-library` / `pnix-clr-refs` + C# `Pnix.Clr.Eval` + MSBuild props.
+2. **ClojureCLR host library story** — **partial**: `clojure-clr` facade +
+   guest AOT Reference via props; full arbitrary-.clj project story still open.
+3. Versioned env contract — **done**: `PNIX_CLR_*` (+ library path).
 4. Explicit note: runtime-artifact `.clj.dll` is **host-bound** (CLR), not a
-   common multi-host .px package.
+   common multi-host .px package. (Still true; document, do not claim otherwise.)
 

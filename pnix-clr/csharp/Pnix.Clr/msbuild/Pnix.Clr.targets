@@ -1,0 +1,41 @@
+<Project>
+  <!--
+    Auto-Reference wiring. Import after props:
+
+      <Import Project="$(PnixClrLibrary)/build/Pnix.Clr.targets"
+              Condition="'$(PnixClrLibrary)' != '' and Exists('$(PnixClrLibrary)/build/Pnix.Clr.targets')" />
+  -->
+
+  <!-- Pnix.Clr managed host library (Eval API). -->
+  <ItemGroup Condition="'$(PnixClrImportManaged)' == 'true' and '$(PnixClrManagedLibDir)' != ''">
+    <Reference Include="Pnix.Clr"
+               Condition="Exists('$(PnixClrManagedLibDir)/$(TargetFramework)/Pnix.Clr.dll')">
+      <HintPath>$(PnixClrManagedLibDir)/$(TargetFramework)/Pnix.Clr.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <!-- Fallback: net8.0 build of Pnix.Clr when TFM-specific missing (e.g. net9). -->
+    <Reference Include="Pnix.Clr"
+               Condition="!Exists('$(PnixClrManagedLibDir)/$(TargetFramework)/Pnix.Clr.dll')
+                          and Exists('$(PnixClrManagedLibDir)/net8.0/Pnix.Clr.dll')">
+      <HintPath>$(PnixClrManagedLibDir)/net8.0/Pnix.Clr.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!--
+    Guest AOT namespace DLLs. These are ClojureCLR assemblies (not a normal
+    C# API surface). Enable only for projects that load them via ClojureCLR
+    (CLOJURE_LOAD_PATH / Assembly.LoadFrom), not casual net8 app code.
+    Wildcard Include is enough; MSBuild skips missing globs as empty.
+  -->
+  <ItemGroup Condition="'$(PnixClrImportGuestDlls)' == 'true' and '$(PnixClrArtifact)' != ''">
+    <Reference Include="$(PnixClrArtifact)/pnix_clr.*.clj.dll">
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Expose paths as compiler constants for optional source use. -->
+  <PropertyGroup Condition="'$(PnixClrArtifact)' != ''">
+    <DefineConstants>$(DefineConstants);PNIX_CLR_ARTIFACT_KNOWN</DefineConstants>
+  </PropertyGroup>
+</Project>

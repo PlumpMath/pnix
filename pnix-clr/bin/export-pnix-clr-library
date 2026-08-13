@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# Materialize a shareable pnix-clr host library layout for C# / ClojureCLR.
+#
+# Layout (OUT):
+#   lib/net10.0/runtime-artifact/   guest AOT *.clj.dll + manifest.json
+#   lib/net8.0/Pnix.Clr.dll         C# Eval surface (process→CLI)
+#   lib/net10.0/Pnix.Clr.dll
+#   build/Pnix.Clr.props|targets    MSBuild Reference wiring
+#   share/pnix-clr/refs.env         env contract snippet
+#   share/pnix-clr/substrate.txt    path hints for Clojure.dll (if present)
+#   csharp/                         sources (for rebuild)
+#   README.md
+#
+# Usage:
+#   ./bin/export-pnix-clr-library [OUT]
+# Default OUT: $PNIX_CLR_LIBRARY or <repo>/pnix-clr/target/pnix-clr-library
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+default_out="${PNIX_CLR_LIBRARY:-$root/pnix-clr/target/pnix-clr-library}"
+out="${1:-$default_out}"
+artifact_src="${PNIX_CLR_ARTIFACT:-${PNIX_CLR_RUNTIME_ARTIFACT:-$root/pnix-clr/target/runtime-artifact}}"
+csproj="$root/csharp/Pnix.Clr/Pnix.Clr.csproj"
+cfg="${PNIX_CLR_LIBRARY_CONFIG:-Release}"
+
+if [[ "$#" -gt 1 ]]; then
+  echo "usage: export-pnix-clr-library [OUT]" >&2
+  exit 2
+fi
+
+if [[ ! -f "$csproj" ]]; then
+  echo "export-pnix-clr-library: missing $csproj" >&2
+  exit 2
+fi
+
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "export-pnix-clr-library: dotnet not on PATH" >&2
+  exit 2
+fi
+
+# Ensure guest AOT artifact exists and is current enough to run.
+if [[ ! -f "$artifact_src/manifest.json" ]]; then
+  echo "export-pnix-clr-library: building runtime artifact..." >&2
+  "$root/bin/build-pnix-clr-artifact" "$artifact_src"
+fi
+if [[ ! -f "$artifact_src/manifest.json" ]]; then
+  echo "export-pnix-clr-library: artifact missing after build: $artifact_src" >&2
+  exit 1
+fi
+
+# Build managed Pnix.Clr for both TFMs into a staging dir.
+stage="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clr-library.XXXXXX")"
+cleanup() { rm -rf "$stage"; }
+trap cleanup EXIT
+
+echo "export-pnix-clr-library: building Pnix.Clr ($cfg)..." >&2
+dotnet build "$csproj" \
+  --configuration "$cfg" \
+  --nologo \
+  -v q \
+  -p:BaseOutputPath="$stage/bin/" \
+  -p:BaseIntermediateOutputPath="$stage/obj/"
+
+mkdir -p "$out"/{lib/net8.0,lib/net10.0/runtime-artifact,build,share/pnix-clr,csharp}
+
+# Copy guest AOT
+cp -f "$artifact_src/manifest.json" "$out/lib/net10.0/runtime-artifact/"
+# shellcheck disable=SC2086
+cp -f "$artifact_src"/pnix_clr.*.clj.dll "$out/lib/net10.0/runtime-artifact/" 2>/dev/null \
+  || find "$artifact_src" -maxdepth 1 -name 'pnix_clr.*.clj.dll' -exec cp -f {} "$out/lib/net10.0/runtime-artifact/" \;
+
+# Copy managed assemblies per TFM
+copy_managed() {
+  local tfm="$1"
+  local dll
+  dll="$(find "$stage" -type f -path "*/${tfm}/*" -name 'Pnix.Clr.dll' | head -1)"
+  if [[ -z "$dll" || ! -f "$dll" ]]; then
+    echo "export-pnix-clr-library: Pnix.Clr.dll not found for $tfm" >&2
+    find "$stage" -name 'Pnix.Clr.dll' -print >&2 || true
+    exit 1
+  fi
+  cp -f "$dll" "$out/lib/$tfm/Pnix.Clr.dll"
+  # Optional satellites
+  local pdb="${dll%.dll}.pdb"
+  [[ -f "$pdb" ]] && cp -f "$pdb" "$out/lib/$tfm/" || true
+  local xml="${dll%.dll}.xml"
+  [[ -f "$xml" ]] && cp -f "$xml" "$out/lib/$tfm/" || true
+}
+copy_managed net8.0
+copy_managed net10.0
+
+# MSBuild props/targets (source lives under msbuild/ — monorepo ignores build/)
+cp -f "$root/csharp/Pnix.Clr/msbuild/Pnix.Clr.props" "$out/build/"
+cp -f "$root/csharp/Pnix.Clr/msbuild/Pnix.Clr.targets" "$out/build/"
+
+# Sources for rebuild / ProjectReference
+rm -rf "$out/csharp/Pnix.Clr"
+mkdir -p "$out/csharp"
+cp -R "$root/csharp/Pnix.Clr" "$out/csharp/"
+# Drop any bin/obj if present under the copy
+rm -rf "$out/csharp/Pnix.Clr/bin" "$out/csharp/Pnix.Clr/obj" 2>/dev/null || true
+
+# Substrate path hint (not copied — large, machine-local publish tree)
+substrate="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish"
+{
+  echo "# ClojureCLR substrate (bootstrap trust root). Not redistributed by this export."
+  echo "# Build with: ./bin/build-clr"
+  if [[ -f "$substrate/Clojure.dll" ]]; then
+    echo "CLOJURE_CLR_PUBLISH=$substrate"
+    echo "CLOJURE_DLL=$substrate/Clojure.dll"
+    echo "CLOJURE_MAIN_DLL=$substrate/Clojure.Main.dll"
+  else
+    echo "# substrate not built yet; run ./bin/build-clr from pnix-clr root"
+  fi
+} >"$out/share/pnix-clr/substrate.txt"
+
+# Env contract
+{
+  echo "export PNIX_CLR_LIBRARY=\"$out\""
+  echo "export PNIX_CLR_ARTIFACT=\"$out/lib/net10.0/runtime-artifact\""
+  echo "export PNIX_CLR_RUNTIME_ARTIFACT=\"\$PNIX_CLR_ARTIFACT\""
+  echo "export PNIX_CLR_ROOT=\"$root\""
+  if [[ -x "$root/bin/pnix-clr" ]]; then
+    echo "export PNIX_CLR=\"$root/bin/pnix-clr\""
+  fi
+} >"$out/share/pnix-clr/refs.env"
+
+# Library manifest (export identity, not the AOT schema)
+if command -v sha256sum >/dev/null 2>&1; then
+  hash_cmd=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  hash_cmd=(shasum -a 256)
+else
+  hash_cmd=()
+fi
+
+artifact_hash="unknown"
+if [[ ${#hash_cmd[@]} -gt 0 ]]; then
+  artifact_hash="$("${hash_cmd[@]}" "$out/lib/net10.0/runtime-artifact/manifest.json" | awk '{print $1}')"
+fi
+
+cat >"$out/manifest.json" <<EOF
+{
+  "schema": "pnix.clr-library.v1",
+  "producer": "export-pnix-clr-library",
+  "version": "0.1.0",
+  "host": "pnix-clr",
+  "managed_tfms": ["net8.0", "net10.0"],
+  "artifact_manifest_sha256": "$artifact_hash",
+  "surfaces": {
+    "csharp_eval": "lib/{tfm}/Pnix.Clr.dll",
+    "guest_aot": "lib/net10.0/runtime-artifact",
+    "msbuild": "build/Pnix.Clr.props"
+  },
+  "note": "Host-bound CLR library; not a portable multi-host .px package."
+}
+EOF
+
+cp -f "$root/csharp/Pnix.Clr/README.md" "$out/README.md"
+
+# Convenience: print contract for callers / CI
+echo "PNIX_CLR_LIBRARY=$out"
+echo "PNIX_CLR_ARTIFACT=$out/lib/net10.0/runtime-artifact"
+echo "export-pnix-clr-library: ok → $out" >&2

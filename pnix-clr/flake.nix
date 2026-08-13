@@ -92,10 +92,56 @@
             script = "bin/pnix-clr-gate";
             extraRuntimeInputs = [ pkgs.nix ];
           };
+          # Materialize host library (guest AOT + Pnix.Clr managed + MSBuild).
+          # Impure: builds AOT/NuGet into cache or checkout; prints PNIX_CLR_LIBRARY=.
+          pnixClrLibrary = sourceRunner {
+            name = "pnix-clr-library";
+            script = "bin/export-pnix-clr-library";
+            prepare = ''
+              if [ ! -f "$source_root/pnix-clr/target/runtime-artifact/manifest.json" ]; then
+                "$source_root/bin/build-pnix-clr-artifact" >/dev/null
+              fi
+              # Default export into the cache/checkout target tree unless OUT is given.
+              if [ "$#" -eq 0 ]; then
+                set -- "$source_root/pnix-clr/target/pnix-clr-library"
+              fi
+            '';
+          };
+          # Bare-name host substrate facade (clojure-clr → focused clr-meta -e/file).
+          clojureClr = sourceRunner {
+            name = "clojure-clr";
+            script = "bin/clojure-clr";
+          };
+          # Print Reference / env paths after ensuring the library export exists.
+          pnixClrRefs = sourceRunner {
+            name = "pnix-clr-refs";
+            script = "bin/export-pnix-clr-library";
+            prepare = ''
+              lib_out="$source_root/pnix-clr/target/pnix-clr-library"
+              if [ ! -f "$lib_out/manifest.json" ]; then
+                "$source_root/bin/export-pnix-clr-library" "$lib_out" >/dev/null
+              fi
+              echo "PNIX_CLR_ROOT=$source_root"
+              echo "PNIX_CLR_LIBRARY=$lib_out"
+              echo "PNIX_CLR_ARTIFACT=$lib_out/lib/net10.0/runtime-artifact"
+              if [ -f "$lib_out/share/pnix-clr/refs.env" ]; then
+                echo "# --- refs.env ---"
+                cat "$lib_out/share/pnix-clr/refs.env"
+              fi
+              echo "# Guest AOT DLLs:"
+              find "$lib_out/lib/net10.0/runtime-artifact" -maxdepth 1 -name '*.dll' -print | sort
+              echo "# Managed Pnix.Clr:"
+              find "$lib_out/lib" -name 'Pnix.Clr.dll' -print | sort
+              exit 0
+            '';
+          };
         in {
           default = pnixClr;
           pnix-clr = pnixClr;
           pnix-clr-pnix = pnixClrRepl;
+          pnix-clr-library = pnixClrLibrary;
+          pnix-clr-refs = pnixClrRefs;
+          clojure-clr = clojureClr;
           clr-meta = clrMeta;
           inherit gate;
         });
@@ -115,6 +161,21 @@
           type = "app";
           program = "${self.packages.${system}.pnix-clr-pnix}/bin/pnix-clr-pnix";
           meta.description = "Interactive PNIX REPL on the ClojureCLR host";
+        };
+        pnix-clr-library = {
+          type = "app";
+          program = "${self.packages.${system}.pnix-clr-library}/bin/pnix-clr-library";
+          meta.description = "Export C# + guest AOT library layout (PNIX_CLR_LIBRARY)";
+        };
+        pnix-clr-refs = {
+          type = "app";
+          program = "${self.packages.${system}.pnix-clr-refs}/bin/pnix-clr-refs";
+          meta.description = "Print DLL/Reference paths for the exported CLR library";
+        };
+        clojure-clr = {
+          type = "app";
+          program = "${self.packages.${system}.clojure-clr}/bin/clojure-clr";
+          meta.description = "Focused ClojureCLR -e / single-file facade (clr-meta)";
         };
         clr-meta = {
           type = "app";

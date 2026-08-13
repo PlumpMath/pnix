@@ -60,6 +60,10 @@ from .pnix_runtime import (
     runtime_context,
 )
 
+# Host-language import of a `.px` file. Alias of run_px for a stable name
+# parallel to clj eval-file / rs eval_file / C# Eval.File.
+eval_file = run_px
+
 
 def load_proof_api() -> Any:
     """Explicitly load service/proof verification APIs."""
@@ -100,6 +104,7 @@ __all__ = [
     "eval_normalized_source",
     "runtime_context",
     "run_px",
+    "eval_file",
     "run_px_source",
     "run_px_source_raw",
     "to_host",
