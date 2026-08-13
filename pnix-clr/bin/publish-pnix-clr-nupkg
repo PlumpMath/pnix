@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Push a local Pnix.Clr nupkg to a NuGet source (default: nuget.org).
+# Fail-closed without credentials — never invents a silent publish.
+#
+# Prerequisites:
+#   1. ./bin/export-pnix-clr-library  (or existing library layout)
+#   2. ./bin/pack-pnix-clr-nupkg      (or pass existing nupkg path)
+#   3. NUGET_API_KEY set (or --api-key)
+#
+# Usage:
+#   NUGET_API_KEY=… ./bin/publish-pnix-clr-nupkg
+#   ./bin/publish-pnix-clr-nupkg --dry-run
+#   ./bin/publish-pnix-clr-nupkg /path/to/Pnix.Clr.0.1.0.nupkg
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+source_url="${NUGET_SOURCE:-https://api.nuget.org/v3/index.json}"
+api_key="${NUGET_API_KEY:-}"
+dry_run=0
+nupkg=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) dry_run=1; shift ;;
+    --api-key) api_key="${2:-}"; shift 2 ;;
+    --source) source_url="${2:-}"; shift 2 ;;
+    -h|--help)
+      sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      nupkg="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$nupkg" ]]; then
+  pack_dir="${PNIX_CLR_NUPKG_DIR:-$root/pnix-clr/target/nupkg}"
+  if [[ ! -d "$pack_dir" ]] || ! compgen -G "$pack_dir/Pnix.Clr"*.nupkg >/dev/null; then
+    echo "publish-pnix-clr-nupkg: packing local nupkg first…"
+    "$root/bin/pack-pnix-clr-nupkg" \
+      "${PNIX_CLR_LIBRARY:-$root/pnix-clr/target/pnix-clr-library}" \
+      "$pack_dir"
+  fi
+  nupkg="$(find "$pack_dir" -maxdepth 1 -name 'Pnix.Clr*.nupkg' -type f | sort | tail -1)"
+fi
+
+if [[ -z "$nupkg" || ! -f "$nupkg" ]]; then
+  echo "publish-pnix-clr-nupkg: no nupkg found" >&2
+  exit 2
+fi
+
+echo "package: $nupkg"
+echo "source:  $source_url"
+
+if [[ "$dry_run" -eq 1 ]]; then
+  echo "dry-run: would push (no API call)"
+  exit 0
+fi
+
+if [[ -z "$api_key" ]]; then
+  echo "publish-pnix-clr-nupkg: NUGET_API_KEY (or --api-key) required for real push" >&2
+  echo "  local pack only: ./bin/pack-pnix-clr-nupkg && ./bin/pnix-clr-nupkg-smoke" >&2
+  echo "  dry-run:         ./bin/publish-pnix-clr-nupkg --dry-run" >&2
+  exit 2
+fi
+
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "publish-pnix-clr-nupkg: dotnet not on PATH" >&2
+  exit 2
+fi
+
+dotnet nuget push "$nupkg" --api-key "$api_key" --source "$source_url" --skip-duplicate
+echo "publish-pnix-clr-nupkg: pushed $nupkg"

@@ -102,11 +102,23 @@
        (empty? lams)
        (not (contains? literal-ops (:op node)))))
 
-(def ^:private fold-fuel
-  "Step budget for folding :heavy (call/lambda-bearing) closed subtrees. Small
-  enough that a divergent fold burns out quickly, large enough for ordinary
-  builtin applications."
+(def default-fold-fuel
+  "Default step budget for folding :heavy (call/lambda-bearing) closed
+  subtrees. Small enough that a divergent fold burns out quickly, large
+  enough for ordinary builtin applications. Override per call via
+  `(specialize source statics {:fold-fuel n})`."
   4096)
+
+(def ^:dynamic *fold-fuel*
+  "Active fold fuel for the current specialize walk. Bound by `specialize`."
+  default-fold-fuel)
+
+(defn- normalize-fold-fuel
+  "Positive integer fuel, else default-fold-fuel."
+  [fuel]
+  (if (and (integer? fuel) (pos? fuel))
+    fuel
+    default-fold-fuel))
 
 (defn- try-fold
   "Fold a closed subtree by running the real evaluator on it. Non-heavy
@@ -119,8 +131,9 @@
   (if (or dyn? (seq sibs) (seq lams)
           (contains? literal-ops (:op node)))
     result
-    (let [r (if heavy?
-              (evaluator/eval-ast-with-fuel node fold-fuel)
+    (let [fuel *fold-fuel*
+          r (if heavy?
+              (evaluator/eval-ast-with-fuel node fuel)
               (try
                 (evaluator/eval-ast node)
                 (catch Throwable t
@@ -135,7 +148,7 @@
         (= :suspended (:status r))
         (do (vswap! gaps conj {:reason :fold-fuel-exhausted
                                :op (:op node)
-                               :fuel fold-fuel})
+                               :fuel fuel})
             result)
 
         :else
@@ -421,41 +434,50 @@
 (defn specialize
   "Partially evaluate pnix `source` under `static-env` (map of name -> data
   value). Returns {:status :ok :fully-static? .. :value .. :residual-ast ..
-  :residual-source .. :gaps [..]} or a failed map."
-  [source static-env]
-  (cond
-    (not (every? (fn [[k v]] (and (string? k) (data-value? v))) static-env))
-    (err/failed :specialize
-                :static-env-not-data
-                {:static-env-keys (vec (keys static-env))})
+  :residual-source .. :gaps [..] :fold-fuel n} or a failed map.
 
-    :else
-    (let [{:keys [status ast] :as parsed} (parser/parse-source (str source))]
-      (cond
-        (not= :ok status)
-        parsed
+  Optional `opts`:
+    :fold-fuel positive-int  — step budget for heavy (call/lambda) folds
+                               (default `default-fold-fuel` = 4096)."
+  ([source static-env]
+   (specialize source static-env nil))
+  ([source static-env opts]
+   (let [fuel (normalize-fold-fuel (:fold-fuel opts))]
+     (cond
+       (not (every? (fn [[k v]] (and (string? k) (data-value? v))) static-env))
+       (err/failed :specialize
+                   :static-env-not-data
+                   {:static-env-keys (vec (keys static-env))})
 
-        (observes-positions? ast)
-        (err/failed :specialize
-                    :position-observing-source-not-specializable
-                    {:builtin "unsafeGetAttrPos"})
+       :else
+       (let [{:keys [status ast] :as parsed} (parser/parse-source (str source))]
+         (cond
+           (not= :ok status)
+           parsed
 
-        :else
-        (let [gaps (volatile! [])
-              result (walk ast static-env #{} #{} gaps)
-              residual (:node result)
-              fully-static? (and (empty? @gaps)
-                                 (contains? #{:int :float :bool :null :string}
-                                            (:op residual)))
-              value (when fully-static? (:value residual))
-              residual-source (unparse/unparse residual)]
-          {:status :ok
-           :fully-static? (boolean fully-static?)
-           :value value
-           :residual-ast residual
-           :residual-source residual-source
-           :residual-hash (hash/data-hash (unparse/strip-positions residual))
-           :gaps @gaps})))))
+           (observes-positions? ast)
+           (err/failed :specialize
+                       :position-observing-source-not-specializable
+                       {:builtin "unsafeGetAttrPos"})
+
+           :else
+           (binding [*fold-fuel* fuel]
+             (let [gaps (volatile! [])
+                   result (walk ast static-env #{} #{} gaps)
+                   residual (:node result)
+                   fully-static? (and (empty? @gaps)
+                                      (contains? #{:int :float :bool :null :string}
+                                                 (:op residual)))
+                   value (when fully-static? (:value residual))
+                   residual-source (unparse/unparse residual)]
+               {:status :ok
+                :fully-static? (boolean fully-static?)
+                :value value
+                :residual-ast residual
+                :residual-source residual-source
+                :residual-hash (hash/data-hash (unparse/strip-positions residual))
+                :fold-fuel fuel
+                :gaps @gaps}))))))))
 
 ;; --- differential verification report -----------------------------------------
 
@@ -605,35 +627,40 @@
 
 (defn specialize-cached
   "specialize with content-addressed memoization. Key = position-stripped AST
-  hash + statics hash + epoch. Parse failures, non-data statics, and held
-  results bypass (always computed fresh). The result carries
-  :cache {:status :hit|:miss|:bypass ...}."
-  [source static-env]
-  (let [bypass (fn [r reason]
-                 (swap! cache-stats* update :bypasses inc)
-                 (assoc r :cache {:status :bypass :reason reason}))
-        {:keys [status ast] :as parsed} (parser/parse-source (str source))]
-    (cond
-      (not= :ok status)
-      (bypass parsed :parse-failed)
+  hash + statics hash + fold-fuel + epoch. Parse failures, non-data statics,
+  and held results bypass (always computed fresh). The result carries
+  :cache {:status :hit|:miss|:bypass ...}. Optional `opts` same as specialize
+  (`:fold-fuel`)."
+  ([source static-env]
+   (specialize-cached source static-env nil))
+  ([source static-env opts]
+   (let [fuel (normalize-fold-fuel (:fold-fuel opts))
+         bypass (fn [r reason]
+                  (swap! cache-stats* update :bypasses inc)
+                  (assoc r :cache {:status :bypass :reason reason}))
+         {:keys [status ast] :as parsed} (parser/parse-source (str source))]
+     (cond
+       (not= :ok status)
+       (bypass parsed :parse-failed)
 
-      (not (every? (fn [[k v]] (and (string? k) (data-value? v))) static-env))
-      (bypass (specialize source static-env) :static-env-not-data)
+       (not (every? (fn [[k v]] (and (string? k) (data-value? v))) static-env))
+       (bypass (specialize source static-env opts) :static-env-not-data)
 
-      :else
-      (let [k {:schema :pnix-clj.specialize-cache-key.v0
-               :content-hash (hash/data-hash (unparse/strip-positions ast))
-               :statics-hash (hash/data-hash (into (sorted-map) static-env))
-               :epoch specialize-cache-epoch}]
-        (if-let [hit (get @specialize-cache k)]
-          (do (swap! cache-stats* update :hits inc)
-              (assoc hit :cache {:status :hit :key k}))
-          (let [r (specialize source static-env)]
-            (if (= :ok (:status r))
-              (do (swap! specialize-cache assoc k r)
-                  (swap! cache-stats* update :misses inc)
-                  (assoc r :cache {:status :miss :key k}))
-              (bypass r :specialize-held))))))))
+       :else
+       (let [k {:schema :pnix-clj.specialize-cache-key.v0
+                :content-hash (hash/data-hash (unparse/strip-positions ast))
+                :statics-hash (hash/data-hash (into (sorted-map) static-env))
+                :fold-fuel fuel
+                :epoch specialize-cache-epoch}]
+         (if-let [hit (get @specialize-cache k)]
+           (do (swap! cache-stats* update :hits inc)
+               (assoc hit :cache {:status :hit :key k}))
+           (let [r (specialize source static-env opts)]
+             (if (= :ok (:status r))
+               (do (swap! specialize-cache assoc k r)
+                   (swap! cache-stats* update :misses inc)
+                   (assoc r :cache {:status :miss :key k}))
+               (bypass r :specialize-held)))))))))
 
 ;; --- Futamura projection: residual -> lowering -> clj-meta host artifact ------
 

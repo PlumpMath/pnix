@@ -5261,7 +5261,26 @@
   (testing "a divergent fold burns fuel into a gap, not a hang"
     (let [sp (specialize/specialize "let f = x: f x; in f 1" {})]
       (is (not (:fully-static? sp)))
-      (is (some #(= :fold-fuel-exhausted (:reason %)) (:gaps sp)))))
+      (is (some #(= :fold-fuel-exhausted (:reason %)) (:gaps sp)))
+      (is (= specialize/default-fold-fuel (:fold-fuel sp)))))
+  (testing "per-call :fold-fuel option is honored and cache-key distinguishing"
+    (let [src "let f = x: f x; in f 1"
+          low (specialize/specialize src {} {:fold-fuel 16})
+          def (specialize/specialize src {})]
+      (is (= 16 (:fold-fuel low)))
+      (is (some #(and (= :fold-fuel-exhausted (:reason %))
+                      (= 16 (:fuel %)))
+                (:gaps low)))
+      (is (= specialize/default-fold-fuel (:fold-fuel def))))
+    (specialize/clear-specialize-cache!)
+    (let [src "builtins.length [ 1 2 3 ]"
+          a (specialize/specialize-cached src {} {:fold-fuel 64})
+          b (specialize/specialize-cached src {} {:fold-fuel 64})
+          c (specialize/specialize-cached src {} {:fold-fuel 128})]
+      (is (= :miss (get-in a [:cache :status])))
+      (is (= :hit (get-in b [:cache :status])))
+      (is (= :miss (get-in c [:cache :status])) "different fold-fuel differs")
+      (is (= 3 (:value a) (:value b) (:value c)))))
   (testing "partial select picks a static entry from a mixed attrset"
     (let [sp (specialize/specialize "{ s = a + 1; d = y; }.s" {"a" 1})]
       (is (= 2 (:value sp)))))

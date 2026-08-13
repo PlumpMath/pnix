@@ -20,9 +20,17 @@
     <!-- Public API surface is small; missing per-member docs are noise. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <Version>0.1.0</Version>
-    <Description>C# host-language library for pnix-clr (eval .px via CLI JSON contract)</Description>
+    <Description>C# host-language library for pnix-clr (eval .px via CLI JSON contract; process-spawn default)</Description>
     <PackageId>Pnix.Clr</PackageId>
     <Authors>pnix</Authors>
     <PackageTags>pnix;clojure-clr;nix</PackageTags>
+    <PackageProjectUrl>https://github.com/PlumpMath/pnix</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/PlumpMath/pnix.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" Condition="Exists('README.md')" />
+  </ItemGroup>
 </Project>

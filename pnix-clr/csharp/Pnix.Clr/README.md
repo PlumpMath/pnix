@@ -11,7 +11,8 @@ portable multi-host `.px` library.
 
 | Surface | Role |
 |---------|------|
-| `Pnix.Clr.Eval` | Process-spawn `pnix-clr`, parse JSON CLI result |
+| `Pnix.Clr.Eval.Source` / `File` | **Supported:** process-spawn `pnix-clr`, parse JSON CLI result |
+| `Eval.SourceInProcess` / `FileInProcess` | **Not admitted** — always throws; design in [`docs/IN_PROCESS_EVAL.md`](../../docs/IN_PROCESS_EVAL.md) |
 | `lib/net10.0/runtime-artifact/*.clj.dll` | Guest AOT (ClojureCLR-bound) |
 | `build/Pnix.Clr.props` + `.targets` (export layout; sources under `msbuild/`) | MSBuild HintPath / Reference wiring |
 
@@ -62,8 +63,11 @@ Or run `pnix-clr-refs` / `pnix-clr-library` to print absolute paths.
 ./bin/build-pnix-clr-artifact          # guest AOT if missing
 ./bin/export-pnix-clr-library          # → target/pnix-clr-library
 # or: nix run .#pnix-clr-library
-./bin/pack-pnix-clr-nupkg              # optional local .nupkg
+./bin/pack-pnix-clr-nupkg              # local .nupkg (PNIX_CLR_NUPKG_VERSION)
+./bin/pnix-clr-nupkg-smoke             # layout gate
+./bin/publish-pnix-clr-nupkg --dry-run # nuget.org needs NUGET_API_KEY (fail-closed)
 # MSBuild sample: ../Directory.Build.props.sample
+# In-process design: ../../docs/IN_PROCESS_EVAL.md
 ```
 
 ## Related CLIs

@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# Optional: pack exported pnix-clr-library as a simple nupkg for local NuGet.
-# Not a crates.io-style publish story — local feed / file path only.
+# Pack exported pnix-clr-library as a nupkg for a *local* NuGet feed.
+# Publish to nuget.org is a separate fail-closed step: bin/publish-pnix-clr-nupkg.
 #
 # Usage:
 #   ./bin/export-pnix-clr-library [OUT]
 #   ./bin/pack-pnix-clr-nupkg [LIBRARY_DIR] [NUPKG_OUT]
+#
+# Env:
+#   PNIX_CLR_NUPKG_VERSION  — package version (default: 0.1.0, or csproj Version)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 lib_dir="${1:-$root/pnix-clr/target/pnix-clr-library}"
 out_dir="${2:-$root/pnix-clr/target/nupkg}"
+csproj="$root/csharp/Pnix.Clr/Pnix.Clr.csproj"
 
 if [[ ! -f "$lib_dir/manifest.json" ]]; then
   echo "pack-pnix-clr-nupkg: missing $lib_dir/manifest.json — run export-pnix-clr-library first" >&2
@@ -19,6 +23,13 @@ if ! command -v dotnet >/dev/null 2>&1; then
   echo "pack-pnix-clr-nupkg: dotnet not on PATH" >&2
   exit 2
 fi
+
+# Version: env > csproj <Version> > 0.1.0
+version="${PNIX_CLR_NUPKG_VERSION:-}"
+if [[ -z "$version" && -f "$csproj" ]]; then
+  version="$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' "$csproj" | head -1)"
+fi
+version="${version:-0.1.0}"
 
 stage="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clr-nupkg.XXXXXX")"
 cleanup() { rm -rf "$stage"; }
@@ -41,28 +52,45 @@ if [[ -d "$lib_dir/lib/net10.0/runtime-artifact" ]]; then
     "$stage/content/pnix-clr/runtime-artifact/" 2>/dev/null || true
 fi
 
-cat >"$stage/Pnix.Clr.nuspec" <<'EOF'
+# Require at least one TFM DLL so empty packs fail closed.
+if [[ ! -f "$stage/lib/net8.0/Pnix.Clr.dll" && ! -f "$stage/lib/net10.0/Pnix.Clr.dll" ]]; then
+  echo "pack-pnix-clr-nupkg: no Pnix.Clr.dll under $lib_dir/lib/{net8,net10}" >&2
+  exit 1
+fi
+
+cat >"$stage/Pnix.Clr.nuspec" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>Pnix.Clr</id>
-    <version>0.1.0</version>
+    <version>${version}</version>
     <authors>pnix</authors>
-    <description>C# host-language library for pnix-clr (Eval API + MSBuild props). Host-bound CLR limb; not a portable multi-host .px package.</description>
-    <tags>pnix clojure-clr</tags>
+    <description>C# host-language library for pnix-clr (Eval API + MSBuild props). Host-bound CLR limb; not a portable multi-host .px package. Default eval is process-spawn of pnix-clr; in-process is design-only (see docs/IN_PROCESS_EVAL.md).</description>
+    <tags>pnix clojure-clr nix</tags>
+    <readme>README.md</readme>
+    <projectUrl>https://github.com/PlumpMath/pnix</projectUrl>
+    <repository type="git" url="https://github.com/PlumpMath/pnix.git" />
+    <license type="expression">MIT</license>
   </metadata>
 </package>
 EOF
 
+# Optional package readme for nuget.org UI (local feed ignores if missing tooling).
+if [[ -f "$root/csharp/Pnix.Clr/README.md" ]]; then
+  cp -f "$root/csharp/Pnix.Clr/README.md" "$stage/README.md"
+else
+  printf '%s\n' '# Pnix.Clr' 'Host-bound C# eval surface for pnix-clr.' >"$stage/README.md"
+fi
+
 mkdir -p "$out_dir"
-# nuget pack from folder
+nupkg_name="Pnix.Clr.${version}.nupkg"
 (
   cd "$stage"
   if command -v nuget >/dev/null 2>&1; then
     nuget pack Pnix.Clr.nuspec -OutputDirectory "$out_dir" -NonInteractive
   else
     # dotnet nuget does not pack raw nuspec easily; zip as .nupkg
-    nupkg="$out_dir/Pnix.Clr.0.1.0.nupkg"
+    nupkg="$out_dir/$nupkg_name"
     rm -f "$nupkg"
     if command -v zip >/dev/null 2>&1; then
       zip -qr "$nupkg" .
@@ -75,4 +103,5 @@ mkdir -p "$out_dir"
 )
 
 echo "PNIX_CLR_NUPKG_DIR=$out_dir"
-ls -1 "$out_dir" | sed 's/^/#   /'
+echo "PNIX_CLR_NUPKG_VERSION=$version"
+find "$out_dir" -maxdepth 1 -name 'Pnix.Clr*.nupkg' -type f | sed 's/^/#   /'

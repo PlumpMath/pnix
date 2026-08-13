@@ -319,6 +319,11 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 - Widen guest eval only with artifact plan + hash gates.
 - Do not renumber stages for packaging work.
 
-### Host-import hard (not started)
-- [ ] In-process C# evaluator (no process spawn) — large; needs embedding design
-- [ ] nuget.org publish of Pnix.Clr — owner secrets/signing; local pack green first
+### Host-import hard
+- [x] In-process C# evaluator **design** — `docs/IN_PROCESS_EVAL.md` + fail-closed
+  `Eval.SourceInProcess` / `FileInProcess` (2026-08-14). Implementation = later
+  spike per that doc; process-spawn remains default.
+- [x] nuget.org **publish path fail-closed** — `bin/publish-pnix-clr-nupkg`
+  (needs `NUGET_API_KEY`; dry-run ok). Local pack + smoke already green.
+- [ ] In-process implementation / parity gate (only after design acceptance)
+- [ ] Actual nuget.org push (owner key)

@@ -90,10 +90,12 @@ namespace Pnix.Clr
 
     /// <summary>
     /// Evaluate pnix source or a <c>.px</c> file from C#.
+    /// Default path process-spawns <c>pnix-clr</c>. In-process embedding is
+    /// design-only — see <c>docs/IN_PROCESS_EVAL.md</c>.
     /// </summary>
     public static class Eval
     {
-        /// <summary>Evaluate an inline pnix expression.</summary>
+        /// <summary>Evaluate an inline pnix expression (process-spawn CLI).</summary>
         public static EvalResult Source(string source, EvalOptions? options = null)
         {
             if (source is null)
@@ -101,7 +103,7 @@ namespace Pnix.Clr
             return Run(new[] { "-e", source }, options);
         }
 
-        /// <summary>Evaluate a <c>.px</c> file (host-bound import of a pnix program).</summary>
+        /// <summary>Evaluate a <c>.px</c> file (process-spawn CLI).</summary>
         public static EvalResult File(string path, EvalOptions? options = null)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -110,6 +112,35 @@ namespace Pnix.Clr
             if (!System.IO.File.Exists(full))
                 throw new FileNotFoundException("pnix source file not found", full);
             return Run(new[] { full }, options);
+        }
+
+        /// <summary>
+        /// In-process evaluation is <b>not admitted</b>. Always throws.
+        /// Use <see cref="Source"/> / <see cref="File"/> (process-spawn).
+        /// Design: monorepo <c>pnix-clr/docs/IN_PROCESS_EVAL.md</c>.
+        /// </summary>
+        public static EvalResult SourceInProcess(string source, EvalOptions? options = null)
+        {
+            _ = source;
+            _ = options;
+            throw new NotSupportedException(
+                "Pnix.Clr in-process eval is not admitted. " +
+                "Use Eval.Source (process-spawn pnix-clr). " +
+                "See docs/IN_PROCESS_EVAL.md for the embedding design.");
+        }
+
+        /// <summary>
+        /// In-process file eval is <b>not admitted</b>. Always throws.
+        /// Use <see cref="File"/> instead.
+        /// </summary>
+        public static EvalResult FileInProcess(string path, EvalOptions? options = null)
+        {
+            _ = path;
+            _ = options;
+            throw new NotSupportedException(
+                "Pnix.Clr in-process eval is not admitted. " +
+                "Use Eval.File (process-spawn pnix-clr). " +
+                "See docs/IN_PROCESS_EVAL.md for the embedding design.");
         }
 
         /// <summary>Async evaluate an inline expression.</summary>
