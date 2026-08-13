@@ -34,17 +34,17 @@ planned until explicitly pulled. Easy items may land as small examples/CI.
 | Field | Content |
 |-------|---------|
 | Effort | small |
-| **State** | **easy start: skeletons under `examples/host-import/`** (this PR) |
+| **State** | **landed** skeletons + **rs path-dep crate** `examples/host-import/rs/pnix-rs-smoke` |
 
 ### P2.3 CI for import regression
 
 | Field | Content |
 |-------|---------|
 | Goal | PR cannot delete smoke/examples without notice |
-| Phase A (easy) | layout + `bash -n` + **clj example** via `nix shell nixpkgs#clojure` |
-| Phase B (medium) | per-host flake jobs that only print `pnix-*-library` env |
-| Phase C (hard) | full 5-host eval like local smoke (needs multi-toolchain matrix; do **not** start until A is green for weeks) |
-| **State** | **Phase A started** in `.github/workflows/hosts.yml` |
+| Phase A (easy) | layout + `bash -n` + **clj example** + **rs cargo path-dep** |
+| Phase B (medium) | per-host flake jobs that print `pnix-*-library` / `*-refs` env |
+| Phase C (hard) | full 5-host eval like local smoke (needs multi-toolchain matrix; do **not** start until A/B are green for weeks) |
+| **State** | **Phase A+B landed** in `.github/workflows/hosts.yml` |
 
 ### P2.4 Public API polish (docs only unless churn)
 
@@ -130,3 +130,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | Host dual-axis + library import declared **closed** for day-to-day dev env |
 | 2026-08-14 | P2.2 skeletons + P2.3 Phase A CI **started**; P3 registry/full CLR/common-.px **plan only** |
 | 2026-08-14 | clj residual / clr-meta / full examples / heavy CI = **todo detail only** until owner pull |
+| 2026-08-14 | P2.2 rs mini crate + P2.3 Phase B library-print matrix **started** |

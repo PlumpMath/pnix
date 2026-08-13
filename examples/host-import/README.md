@@ -11,7 +11,7 @@ evaluates `../hello.px` (`1 + 2` → `3`).
 | clj | `cd clj && clojure -M -m smoke` |
 | hy | `cd hy && python smoke.py` |
 | cljs | `cd cljs && node smoke.mjs` |
-| rs | see `rs/README.md` (path dep or `pnix-rs px-eval`) |
+| rs | `cd rs/pnix-rs-smoke && cargo run -q -- ../../hello.px` |
 | clr | see `clr/README.md` → existing HelloPnix |
 
 Shared source: [`hello.px`](hello.px).

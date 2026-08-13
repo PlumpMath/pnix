@@ -1,0 +1,14 @@
+[package]
+name = "pnix-rs-smoke"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Minimal host-main demo: path-dep on monorepo pnix-rs library"
+
+[[bin]]
+name = "pnix-rs-smoke"
+path = "src/main.rs"
+
+[dependencies]
+# Crate package name is pnix-rs; lib target name is pnix_rs.
+pnix-rs = { path = "../../../../pnix-rs/pnix-rs", package = "pnix-rs" }

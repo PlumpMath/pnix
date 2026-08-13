@@ -48,12 +48,17 @@ Prefer **path dependency** on the monorepo when you develop inside `~/pnix`
 
 ## B. Path dependency (checkout)
 
-From a sibling crate next to the monorepo:
+In-tree mini demo:
+
+```bash
+cd examples/host-import/rs/pnix-rs-smoke
+cargo run -q -- ../../hello.px   # => 3
+```
 
 ```toml
 # Cargo.toml
 [dependencies]
-pnix_rs = { path = "../pnix/pnix-rs/pnix-rs", package = "pnix-rs" }
+pnix-rs = { path = "../../../../pnix-rs/pnix-rs", package = "pnix-rs" }
 ```
 
 ```rust
