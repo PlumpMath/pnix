@@ -391,3 +391,8 @@ below.
 Host dual-axis + library import for this host is **closed** for day-to-day.
 Optional P2/P3 and residual product work: monorepo `HOST_ENV_P2_P3.md`.
 Do not reopen host-env packaging as a primary gate unless env contracts break.
+
+### Local library export (2026-08-14)
+- [x] `bin/export-pnix-hy-library` → `target/pnix-hy-library/site` + `py.typed`
+- [x] `bin/pnix-hy-library-smoke` (eval_file → 3)
+- Not PyPI — personal/local PYTHONPATH feed only.

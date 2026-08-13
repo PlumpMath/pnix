@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Materialize a local PYTHONPATH layout for host-main import of pnix_hy.
+# Personal / local feed only — not PyPI.
+#
+# Layout (OUT):
+#   site/pnix_hy/…     package tree (+ py.typed)
+#   refs.env
+#   consumer-hint.txt
+#   README.md
+#   manifest.json
+#
+# Usage:
+#   ./bin/export-pnix-hy-library [OUT]
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+pkg_root="$(cd "$here/.." && pwd)"   # …/pnix-hy/pnix-hy (has pnix_hy/)
+default_out="${PNIX_HY_LIBRARY_EXPORT:-$pkg_root/target/pnix-hy-library}"
+out="${1:-$default_out}"
+version="${PNIX_HY_LIBRARY_VERSION:-0.1.0-local}"
+
+if [[ "$#" -gt 1 ]]; then
+  echo "usage: export-pnix-hy-library [OUT]" >&2
+  exit 2
+fi
+if [[ ! -d "$pkg_root/pnix_hy" ]]; then
+  echo "export-pnix-hy-library: missing $pkg_root/pnix_hy" >&2
+  exit 2
+fi
+
+rm -rf "$out"
+mkdir -p "$out/site"
+
+rsync -a --delete \
+  --exclude '__pycache__' --exclude '*.pyc' --exclude '.git' \
+  "$pkg_root/pnix_hy" "$out/site/"
+
+# Ensure PEP 561 marker
+if [[ ! -f "$out/site/pnix_hy/py.typed" ]]; then
+  : >"$out/site/pnix_hy/py.typed"
+fi
+
+cat >"$out/refs.env" <<EOF
+PNIX_HY_LIBRARY=$out/site
+PYTHONPATH=$out/site\${PYTHONPATH:+:\$PYTHONPATH}
+# import pnix_hy as ph; ph.eval_file("x.px")
+# Cookbook: monorepo HOST_IMPORT.md § hy
+EOF
+
+cat >"$out/consumer-hint.txt" <<EOF
+export PYTHONPATH=$out/site:\$PYTHONPATH
+python -c "import pnix_hy as ph; print(ph.eval_file('prog.px'))"
+EOF
+
+cat >"$out/README.md" <<EOF
+# pnix-hy local library export
+
+**Version:** $version  
+**Scope:** host-main Python import (local feed only). Not PyPI.
+
+\`\`\`bash
+set -a; source $out/refs.env; set +a
+python -c "import pnix_hy as ph; print(ph.eval_file('x.px'))"
+\`\`\`
+EOF
+
+cat >"$out/manifest.json" <<EOF
+{
+  "schema": "pnix-hy.library-export.v1",
+  "version": "$version",
+  "producer": "export-pnix-hy-library",
+  "site_packages": "site",
+  "local_only": true,
+  "pypi": false
+}
+EOF
+
+echo "PNIX_HY_LIBRARY=$out/site"
+echo "PYTHONPATH=$out/site"

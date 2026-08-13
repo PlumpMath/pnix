@@ -46,6 +46,17 @@ Prefer **path dependency** on the monorepo when you develop inside `~/pnix`
 
 ---
 
+## Local export (personal feed, not crates.io)
+
+```bash
+cd pnix-rs/pnix-rs
+./bin/export-pnix-rs-library          # → target/pnix-rs-library/{lib,include}
+./bin/pnix-rs-library-smoke
+set -a; source target/pnix-rs-library/refs.env; set +a
+```
+
+`publish = false` remains; use path dep or the exported `lib/` + `include/`.
+
 ## B. Path dependency (checkout)
 
 In-tree mini demo:

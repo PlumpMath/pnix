@@ -712,11 +712,15 @@ below.
    (HM `pnix-rs-rs` wraps cargo/rustc).
 4. Host-language `.px` import: `pnix_rs::eval_file` + C `pnix_rs_eval`.
 
-**Still open:**
+**Still open / landed:**
 
 1. ~~Cargo cookbook~~ → `docs/CARGO_HOST_IMPORT.md` + flake `pnix-rs-refs`.
-2. Optional: crates.io / git package (`publish = false` today).
-3. Stable C ABI versioning for the cdylib (semver + header).
+2. ~~Local library export~~ → `bin/export-pnix-rs-library` +
+   `pnix-rs-library-smoke` (personal feed; crates.io stays `publish = false`,
+   2026-08-14).
+3. C ABI versioning — header + `PNIX_RS_ABI_VERSION = 1` already; bump policy
+   in `include/pnix_rs.h` on breaks.
+4. crates.io public publish — not a product goal for this owner (local only).
 
 ## Post host-env plan (2026-08-14) — plan only
 

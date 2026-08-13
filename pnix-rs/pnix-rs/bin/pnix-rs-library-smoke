@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Local library export smoke (not crates.io).
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+crate="$(cd "$here/.." && pwd)"
+out="${PNIX_RS_LIBRARY:-$crate/target/pnix-rs-library}"
+no_export=0
+if [[ "${1:-}" == "--no-export" ]]; then
+  no_export=1
+elif [[ -n "${1:-}" ]]; then
+  echo "usage: pnix-rs-library-smoke [--no-export]" >&2
+  exit 2
+fi
+
+echo "== pnix-rs-library-smoke (local feed only) =="
+
+if [[ ! -f "$out/manifest.json" ]]; then
+  if [[ "$no_export" -eq 1 ]]; then
+    echo "FAIL: missing $out/manifest.json — run export-pnix-rs-library" >&2
+    exit 1
+  fi
+  echo "  library missing — exporting → $out"
+  "$here/export-pnix-rs-library" "$out"
+fi
+
+test -f "$out/include/pnix_rs.h"
+test -f "$out/refs.env"
+test -f "$out/consumer-Cargo.toml.sample"
+# at least one library artifact
+if ! find "$out/lib" -maxdepth 1 -type f \( -name 'libpnix_rs.*' -o -name 'pnix_rs.dll' \) | grep -q .; then
+  echo "FAIL: no libpnix_rs.* under $out/lib" >&2
+  exit 1
+fi
+echo "  OK  export layout (lib + header)"
+
+# Header advertises ABI version 1
+if ! grep -q 'PNIX_RS_ABI_VERSION' "$out/include/pnix_rs.h" \
+  && ! grep -q 'abi version is 1' "$out/include/pnix_rs.h"; then
+  # comment form in header
+  if ! grep -q 'Current ABI version is 1' "$out/include/pnix_rs.h"; then
+    echo "FAIL: header missing ABI version note" >&2
+    exit 1
+  fi
+fi
+echo "  OK  header ABI note"
+
+# Path-dep eval still works from monorepo crate (export does not replace path dep).
+if command -v cargo >/dev/null 2>&1; then
+  # crate = …/pnix/pnix-rs/pnix-rs → monorepo = …/pnix
+  mono="$(cd "$crate/../.." && pwd)"
+  mini="$mono/examples/host-import/rs/pnix-rs-smoke"
+  hello="$mono/examples/host-import/hello.px"
+  if [[ -f "$mini/Cargo.toml" && -f "$hello" ]]; then
+    out_eval="$(
+      cd "$mini"
+      cargo run -q -- "$hello"
+    )"
+    if [[ "$out_eval" != "3" ]]; then
+      echo "FAIL: path-dep smoke => '$out_eval' (want 3)" >&2
+      exit 1
+    fi
+    echo "  OK  path-dep pnix-rs-smoke eval_file => 3"
+  else
+    echo "  SKIP path-dep mini crate (not in tree: $mini)"
+  fi
+else
+  echo "  SKIP cargo (not on PATH)"
+fi
+
+echo "== summary: PASS (local library only; not crates.io) =="

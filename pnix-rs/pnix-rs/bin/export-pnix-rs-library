@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Materialize a local embeddable layout for host-main import of pnix-rs.
+# Personal / local feed only — crates.io stays publish = false.
+#
+# Layout (OUT):
+#   lib/libpnix_rs.{a,dylib,so,rlib}  (platform-dependent)
+#   include/pnix_rs.h
+#   path-dep/                         symlink or copy of crate for Cargo path dep
+#   refs.env
+#   consumer-Cargo.toml.sample
+#   README.md
+#   manifest.json
+#
+# Usage:
+#   ./bin/export-pnix-rs-library [OUT]
+# Default OUT: $PNIX_RS_LIBRARY or <crate>/target/pnix-rs-library
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+crate="$(cd "$here/.." && pwd)"
+default_out="${PNIX_RS_LIBRARY:-$crate/target/pnix-rs-library}"
+out="${1:-$default_out}"
+version="${PNIX_RS_LIBRARY_VERSION:-0.0.1-local}"
+cfg="${PNIX_RS_LIBRARY_CONFIG:-release}"
+
+if [[ "$#" -gt 1 ]]; then
+  echo "usage: export-pnix-rs-library [OUT]" >&2
+  exit 2
+fi
+if [[ ! -f "$crate/Cargo.toml" || ! -f "$crate/include/pnix_rs.h" ]]; then
+  echo "export-pnix-rs-library: missing crate at $crate" >&2
+  exit 2
+fi
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "export-pnix-rs-library: cargo not on PATH" >&2
+  exit 2
+fi
+
+echo "export-pnix-rs-library: cargo build --lib --$cfg …"
+(
+  cd "$crate"
+  if [[ "$cfg" == "release" ]]; then
+    cargo build --lib --release
+  else
+    cargo build --lib
+  fi
+)
+
+build_dir="$crate/target/$cfg"
+rm -rf "$out"
+mkdir -p "$out/lib" "$out/include" "$out/share/pnix-rs"
+
+# Prefer non-deps artifacts (match flake installPhase).
+copied=0
+for name in libpnix_rs.rlib libpnix_rs.a libpnix_rs.dylib libpnix_rs.so pnix_rs.dll; do
+  # shellcheck disable=SC2044
+  while IFS= read -r f; do
+    case "$f" in
+      */deps/*) continue ;;
+    esac
+    cp -f "$f" "$out/lib/"
+    copied=$((copied + 1))
+  done < <(find "$build_dir" -type f -name "$name" 2>/dev/null || true)
+done
+if [[ "$copied" -eq 0 ]]; then
+  echo "export-pnix-rs-library: no libpnix_rs.* under $build_dir" >&2
+  exit 1
+fi
+
+cp -f "$crate/include/pnix_rs.h" "$out/include/pnix_rs.h"
+
+# Path-dep mirror: thin Cargo.toml pointing at monorepo sources is fragile if
+# OUT is moved; instead document absolute path to this checkout's crate.
+# Copy only public API surface for offline consumers is too large (whole crate).
+# We ship a path-dep sample that uses PNIX_RS_PATH_DEP (absolute crate path).
+cat >"$out/consumer-Cargo.toml.sample" <<EOF
+# Personal local feed — not crates.io.
+# Either path-dep on the monorepo crate, or link lib/ + include/ via env.
+
+[package]
+name = "my-app"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+# Path dep (preferred for pure Rust):
+pnix-rs = { path = "$crate", package = "pnix-rs" }
+
+# Or: link the exported static/dylib with build.rs using:
+#   PNIX_RS_LIB_DIR=$out/lib
+#   PNIX_RS_INCLUDE_DIR=$out/include
+EOF
+
+cat >"$out/refs.env" <<EOF
+PNIX_RS_LIBRARY=$out
+PNIX_RS_LIB_DIR=$out/lib
+PNIX_RS_INCLUDE_DIR=$out/include
+PNIX_RS_PATH_DEP=$crate
+# Rust path dep: pnix-rs = { path = "\$PNIX_RS_PATH_DEP", package = "pnix-rs" }
+# C: -I\$PNIX_RS_INCLUDE_DIR -L\$PNIX_RS_LIB_DIR -lpnix_rs
+# Cookbook: docs/CARGO_HOST_IMPORT.md
+EOF
+
+cat >"$out/README.md" <<EOF
+# pnix-rs local library export
+
+**Version:** $version  
+**Scope:** host-bound Rust/C library (local feed only). \`publish = false\` on crates.io.
+
+## Layout
+
+- \`lib/\` — rlib / static / dylib (what this platform built)
+- \`include/pnix_rs.h\` — C ABI (\`PNIX_RS_ABI_VERSION\` = 1)
+- \`refs.env\` — env contract
+
+## Use
+
+\`\`\`bash
+set -a; source $out/refs.env; set +a
+# pure Rust path dep: see consumer-Cargo.toml.sample
+# C: cc -I\$PNIX_RS_INCLUDE_DIR -L\$PNIX_RS_LIB_DIR -lpnix_rs …
+\`\`\`
+EOF
+
+cat >"$out/manifest.json" <<EOF
+{
+  "schema": "pnix-rs.library-export.v1",
+  "version": "$version",
+  "producer": "export-pnix-rs-library",
+  "config": "$cfg",
+  "abi_version": 1,
+  "local_only": true,
+  "crates_io": false
+}
+EOF
+
+echo "PNIX_RS_LIBRARY=$out"
+echo "PNIX_RS_LIB_DIR=$out/lib"
+echo "PNIX_RS_INCLUDE_DIR=$out/include"
+find "$out/lib" -maxdepth 1 -type f | sed 's/^/#   /'

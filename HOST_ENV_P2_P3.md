@@ -94,6 +94,8 @@ Do **not** start without an explicit product decision.
 | **nuget.org publish** | **dropped** — owner uses local feed only; no nuget.org track |
 | **In-process C# eval** | **experimental** — net10 + parity gate; aggregate when substrate present |
 | **clj local export** | **landed** — `export-pnix-clj-library` + library-smoke (local only) |
+| **rs local export** | **landed** — `export-pnix-rs-library` + library-smoke (local only) |
+| **hy local export** | **landed** — `export-pnix-hy-library` + library-smoke (local only) |
 | **Still open** | further facade only with new gates; machine tail if pillar |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
@@ -163,3 +165,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | nuget.org publish **dropped** (local-only); inprocess gate auto when substrate+artifact |
 | 2026-08-14 | clj local library export + smoke; inprocess reentrancy = serialized lock |
 | 2026-08-14 | tool-eval-multi: --multi-e + --multi-form - (stdin); default -e stays single-form |
+| 2026-08-14 | rs/hy local library export + smoke (personal feed; not crates.io/PyPI) |

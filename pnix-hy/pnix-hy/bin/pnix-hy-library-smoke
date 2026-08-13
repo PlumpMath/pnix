@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Local library export smoke (not PyPI).
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+pkg_root="$(cd "$here/.." && pwd)"
+out="${PNIX_HY_LIBRARY_EXPORT:-$pkg_root/target/pnix-hy-library}"
+no_export=0
+if [[ "${1:-}" == "--no-export" ]]; then
+  no_export=1
+elif [[ -n "${1:-}" ]]; then
+  echo "usage: pnix-hy-library-smoke [--no-export]" >&2
+  exit 2
+fi
+
+echo "== pnix-hy-library-smoke (local feed only) =="
+
+if [[ ! -f "$out/manifest.json" ]]; then
+  if [[ "$no_export" -eq 1 ]]; then
+    echo "FAIL: missing $out/manifest.json — run export-pnix-hy-library" >&2
+    exit 1
+  fi
+  echo "  library missing — exporting → $out"
+  "$here/export-pnix-hy-library" "$out"
+fi
+
+test -d "$out/site/pnix_hy"
+test -f "$out/site/pnix_hy/py.typed"
+test -f "$out/refs.env"
+echo "  OK  export layout (+ py.typed)"
+
+if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
+  echo "FAIL: python not on PATH" >&2
+  exit 1
+fi
+py=python3
+command -v python3 >/dev/null 2>&1 || py=python
+
+px="$(mktemp "${TMPDIR:-/tmp}/pnix-hy-lib-smoke.XXXXXX.px")"
+trap 'rm -f "$px"' EXIT
+printf '%s\n' '1 + 2' >"$px"
+
+val="$(
+  PYTHONPATH="$out/site${PYTHONPATH:+:$PYTHONPATH}" \
+    "$py" -c "import pnix_hy as ph; print(ph.eval_file('$px'))"
+)"
+if [[ "$val" != "3" ]]; then
+  echo "FAIL: eval_file via export => '$val' (want 3)" >&2
+  exit 1
+fi
+echo "  OK  eval_file via PYTHONPATH export => 3"
+
+echo "== summary: PASS (local library only; not PyPI) =="
