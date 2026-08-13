@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Gate: two namespaces load from disk without pnix-clr guest CLI.
+# Uses clojure-clr-bootstrap (upstream substrate), not bin/clojure-clr facade.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+out="$("$here/run" 2>/dev/null | tail -1 | tr -d '\r')"
+if [[ "$out" != "42" ]]; then
+  echo "clojure-clr-project smoke: expected 42, got: $out" >&2
+  # show full run for diagnosis
+  "$here/run" >&2 || true
+  exit 1
+fi
+echo "clojure-clr-project smoke: PASS (42)"

@@ -297,11 +297,14 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 4. Honest claims only — no Stage15/N, no "clojure-clr replaces ClojureCLR".
 
 **Order:**
-1. ~~Inventory what `bin/clojure-clr` / `clr-meta` admit today~~ →
-   **`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`** (2026-08-14).
-2. Choose TFM story (net10 host vs net8 Rhino) — do not mix silently
-   (partially documented in inventory + monorepo HOST_DEV_ENV).
-3. Template + gate; only then consider nuget.org for Pnix.Clr.
+1. ~~Inventory~~ → `docs/CLOJURE_CLR_ADMITTED_SURFACE.md` (2026-08-14).
+2. ~~TFM story~~ → `docs/TFM_POLICY.md` (2026-08-14).
+3. ~~Template + smoke (bootstrap multi-ns)~~ →
+   `examples/clojure-clr-project/` (`./run` / `./smoke` → 42) via
+   **clojure-clr-bootstrap**, not the facade (2026-08-14).
+4. **Next:** named facade profiles (expand `bin/clojure-clr` only with gates)
+   or wire `./smoke` into an optional aggregate if cost is acceptable.
+5. nuget.org only after the above stay green.
 
 ### clr-meta residual (product, not packaging)
 - Continue stage ladder honesty via STATUS.md + design docs.

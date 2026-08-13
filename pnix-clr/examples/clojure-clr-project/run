@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Run the multi-ns demo on the *upstream* ClojureCLR substrate
+# (bin/clojure-clr-bootstrap), NOT the focused clojure-clr facade.
+#
+# Usage (from this directory):
+#   ./run
+# Expect stdout: 42
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+root="$(cd "$here/../.." && pwd)"
+bootstrap="$root/bin/clojure-clr-bootstrap"
+
+if [[ ! -x "$bootstrap" ]]; then
+  echo "run: missing $bootstrap" >&2
+  exit 2
+fi
+
+# Ensure substrate publish exists (build-clr if needed).
+dll="$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
+if [[ ! -f "$dll" ]]; then
+  echo "run: building ClojureCLR substrate (first run)..." >&2
+  "$root/bin/build-clr"
+fi
+
+export CLOJURE_LOAD_PATH="$here/src${CLOJURE_LOAD_PATH:+:$CLOJURE_LOAD_PATH}"
+cd "$here"
+
+# Prefer require + -main (namespace load path). Fallback: -i both files.
+exec "$bootstrap" -e '(require (quote demo.main)) (demo.main/-main)'

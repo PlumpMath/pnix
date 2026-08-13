@@ -25,7 +25,9 @@ upstream compiler sources are vendored here.
 
 Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).  
 C# package: [`csharp/Pnix.Clr/README.md`](csharp/Pnix.Clr/README.md).  
-**`clojure-clr` admitted surface (fail-closed):** [`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`](docs/CLOJURE_CLR_ADMITTED_SURFACE.md).
+**`clojure-clr` admitted surface (fail-closed):** [`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`](docs/CLOJURE_CLR_ADMITTED_SURFACE.md).  
+**TFM policy:** [`docs/TFM_POLICY.md`](docs/TFM_POLICY.md).  
+**Multi-ns bootstrap template:** [`examples/clojure-clr-project/`](examples/clojure-clr-project/).
 
 | Axis | Command / surface |
 |------|-------------------|

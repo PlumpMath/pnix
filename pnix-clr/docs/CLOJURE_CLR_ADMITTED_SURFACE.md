@@ -90,12 +90,15 @@ the `clojure-clr` facade.
 From `clr-meta/todo.md` Post host-env / P3.2:
 
 1. **[x] Inventory** (this document).
-2. **[ ] TFM policy write-up** — net10 product vs net8 Rhino; document in
-   `HOST_DEV_ENV` / dot-nix only where packaging touches both.
-3. **[ ] Named profiles** — admit one extra surface at a time (e.g. multi-form
-   file, then multi-file load, then project template), each with a gate.
-4. **[ ] Project template + smoke** — two namespaces from disk without
-   `pnix-clr` guest CLI; still **not** full `clojure` CLI replacement.
+2. **[x] TFM policy write-up** — [`TFM_POLICY.md`](TFM_POLICY.md) (net10 product
+   vs net8 Rhino / multi-target Pnix.Clr).
+3. **[x] Project template + smoke (bootstrap profile)** —
+   `examples/clojure-clr-project/` loads **two namespaces** via
+   `clojure-clr-bootstrap` + `CLOJURE_LOAD_PATH` (not the facade).
+   `./smoke` expects `42`. Still **not** `clojure-clr` multi-file, not
+   deps.edn parity.
+4. **[ ] Named facade profiles** — grow `bin/clojure-clr` only with explicit
+   gates (multi-form file, etc.); do not silently stretch the facade.
 5. **[ ] nuget.org / registry** — only after template + local pack are stable.
 
 Forbidden shortcuts:
