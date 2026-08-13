@@ -15,7 +15,7 @@ instead of silently stretching the facade.
 | Profile | Entrypoint | Role |
 |---------|------------|------|
 | **`tool-eval`** | `bin/clojure-clr` | Focused facade: `-e` / one **single-form** file |
-| **`tool-eval-multi`** | `clojure-clr --multi-form FILE` | Opt-in: multiple top-level forms L→R, last value (named gate) |
+| **`tool-eval-multi`** | `--multi-form FILE\|-` / `--multi-e FORM` | Opt-in: multiple top-level forms L→R, last value (named gate) |
 | **`bootstrap`** | `bin/clojure-clr-bootstrap` | Upstream Clojure.Main (full CLI flags the substrate admits) |
 | **`bootstrap-project`** | `examples/clojure-clr-project/` | Multi-ns sample on bootstrap + `CLOJURE_LOAD_PATH` |
 | **`meta`** | `bin/clr-meta` | Selfhost builders, gates, runtime-artifact, tool-eval family |
@@ -40,6 +40,8 @@ Source of truth: `bin/clojure-clr` (fail-closed).
 | Yes | `-e FORM` or `--eval FORM` (exactly 2 argv) | `exec bin/clr-meta "$@"` (single form) |
 | Yes | single path that is an existing file (exactly 1 argv) | `exec bin/clr-meta FILE` (single form; trailing fails) |
 | Yes | `--multi-form FILE` (exactly 2 argv, file exists) | `tool-eval-multi` — all top-level forms, last value |
+| Yes | `--multi-form -` | `tool-eval-multi` from stdin |
+| Yes | `--multi-e FORM` / `--multi-eval FORM` | `tool-eval-multi` from inline string |
 | No | REPL, `-i`, `-M`, deps.edn, clojure CLI parity | stderr + exit 2 |
 
 Error text (verbatim intent):

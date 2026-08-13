@@ -2,7 +2,9 @@
 # Profile: tool-eval (default)
 #   Focused compatibility facade over clr-meta form eval.
 #   Admitted: -e FORM | --eval FORM | one existing FILE (single form)
-#   Opt-in:   --multi-form FILE  (tool-eval-multi; multiple top-level forms)
+#   Opt-in tool-eval-multi:
+#     --multi-form FILE | --multi-form -
+#     --multi-e FORM | --multi-eval FORM
 # Other profiles are explicit entrypoints — do not stretch this facade silently:
 #   bootstrap          → bin/clojure-clr-bootstrap  (upstream Clojure.Main)
 #   bootstrap-project  → examples/clojure-clr-project/  (multi-ns template)
@@ -18,10 +20,14 @@ clojure-clr — named profile: tool-eval (fail-closed)
 Admitted:
   clojure-clr -e FORM
   clojure-clr --eval FORM
-  clojure-clr FILE              # exactly one form (trailing fails)
-  clojure-clr --multi-form FILE # tool-eval-multi: top-level forms L→R, last value
+  clojure-clr FILE                 # exactly one form (trailing fails)
+  clojure-clr --multi-form FILE    # tool-eval-multi: top-level forms L→R, last value
+  clojure-clr --multi-form -       # same, read stdin
+  clojure-clr --multi-e FORM       # tool-eval-multi from inline string
+  clojure-clr --multi-eval FORM
 
 Not admitted (exit 2): REPL, -i, -M, deps.edn, clojure CLI parity.
+Default -e / FILE stay single-form (trailing fails closed).
 
 Other profiles (separate entrypoints):
   clojure-clr-bootstrap     # upstream Clojure.Main (net10 substrate)
@@ -35,13 +41,19 @@ EOF
   exit 0
 fi
 
-# Opt-in multi-form file profile (named gate: tool-eval-multi).
+# Opt-in multi-form inline string (named gate covers this with file/stdin).
+if [[ "$#" -eq 2 && ( "$1" == "--multi-e" || "$1" == "--multi-eval" ) ]]; then
+  exec "$root/bin/clr-meta" --multi-e "$2"
+fi
+
+# Opt-in multi-form file or stdin ("-").
 if [[ "$#" -eq 2 && "$1" == "--multi-form" ]]; then
-  if [[ -f "$2" ]]; then
+  if [[ "$2" == "-" || -f "$2" ]]; then
     exec "$root/bin/clr-meta" --multi-form "$2"
   fi
-  echo "clojure-clr: --multi-form requires an existing file (got: $2)" >&2
+  echo "clojure-clr: --multi-form requires an existing file or '-' for stdin (got: $2)" >&2
   echo "example: printf '%s\\n' '(+ 1 2)' '(+ 20 22)' > multi.clj && clojure-clr --multi-form multi.clj" >&2
+  echo "     or: printf '%s\\n' '(+ 1 2)' '(+ 20 22)' | clojure-clr --multi-form -" >&2
   exit 2
 fi
 
@@ -55,5 +67,5 @@ if [[ "$#" -eq 1 && -f "$1" ]]; then
   exec "$root/bin/clr-meta" "$@"
 fi
 
-echo "clojure-clr compatibility: admitted surface is -e FORM, one FORM file, or --multi-form FILE; use clojure-clr-bootstrap for the upstream trust root (see --help for profiles)" >&2
+echo "clojure-clr compatibility: admitted surface is -e FORM, one FORM file, --multi-form FILE|-, or --multi-e FORM; use clojure-clr-bootstrap for the upstream trust root (see --help for profiles)" >&2
 exit 2

@@ -312,8 +312,10 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 7. ~~Local nupkg pack smoke~~ → `bin/pnix-clr-nupkg-smoke` (export layout +
    pack dual-TFM; local feed only, 2026-08-14).
 8. ~~nuget.org~~ → **dropped** (owner: personal/local feed only, 2026-08-14).
-9. **Next:** further tool-eval surfaces only with new named gates;
-   in-process admission polish (isolated ALC still held).
+9. ~~tool-eval-multi-e / stdin~~ → `--multi-e FORM`, `--multi-form -`
+   in multi-gate (2026-08-14); default `-e` still single-form.
+10. **Next:** further tool-eval surfaces only with new named gates;
+    isolated ALC still held.
 
 ### clr-meta residual (product, not packaging)
 - Continue stage ladder honesty via STATUS.md + design docs.

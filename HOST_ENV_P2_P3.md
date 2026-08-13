@@ -89,7 +89,7 @@ Do **not** start without an explicit product decision.
 | **Step 2 TFM** | **landed** — `pnix-clr/docs/TFM_POLICY.md` |
 | **Step 3 template+smoke** | **landed** — `pnix-clr/examples/clojure-clr-project/` (bootstrap multi-ns → 42) |
 | **Profiles smoke** | **landed** — `bin/clojure-clr-profiles-smoke` (also in `pnix-clr-gate`) |
-| **tool-eval-multi** | **landed** — `--multi-form FILE` + named gate in `clr-meta-gate` |
+| **tool-eval-multi** | **landed** — `--multi-form FILE\|-`, `--multi-e FORM` + named gate |
 | **Local nupkg smoke** | **landed** — `bin/pnix-clr-nupkg-smoke` (local feed only) |
 | **nuget.org publish** | **dropped** — owner uses local feed only; no nuget.org track |
 | **In-process C# eval** | **experimental** — net10 + parity gate; aggregate when substrate present |
@@ -162,3 +162,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | host-artifact report rows; nupkg-smoke in gate if export; INPROCESS opt-in gate |
 | 2026-08-14 | nuget.org publish **dropped** (local-only); inprocess gate auto when substrate+artifact |
 | 2026-08-14 | clj local library export + smoke; inprocess reentrancy = serialized lock |
+| 2026-08-14 | tool-eval-multi: --multi-e + --multi-form - (stdin); default -e stays single-form |

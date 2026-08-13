@@ -57,6 +57,28 @@ else
 fi
 rm -f "$multi_tmp"
 
+# --- tool-eval-multi: --multi-e ---
+if multi_e_out="$("$root/bin/clojure-clr" --multi-e $'(+ 1 2)\n(+ 20 22)' 2>/dev/null)"; then
+  if echo "$multi_e_out" | grep -q ':value 42'; then
+    ok "tool-eval-multi --multi-e => value 42"
+  else
+    bad "tool-eval-multi --multi-e unexpected: $multi_e_out"
+  fi
+else
+  bad "tool-eval-multi --multi-e failed"
+fi
+
+# --- tool-eval-multi: stdin ---
+if multi_in_out="$(printf '%s\n' '(+ 1 2)' '(+ 20 22)' | "$root/bin/clojure-clr" --multi-form - 2>/dev/null)"; then
+  if echo "$multi_in_out" | grep -q ':value 42'; then
+    ok "tool-eval-multi --multi-form - (stdin) => value 42"
+  else
+    bad "tool-eval-multi stdin unexpected: $multi_in_out"
+  fi
+else
+  bad "tool-eval-multi stdin failed"
+fi
+
 # --- bootstrap-project multi-ns ---
 if [[ -x "$root/examples/clojure-clr-project/smoke" ]]; then
   if "$root/examples/clojure-clr-project/smoke" >/dev/null 2>&1; then

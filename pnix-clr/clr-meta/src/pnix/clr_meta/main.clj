@@ -9,7 +9,8 @@
   (binding [*out* *err*]
     (println
      (str "usage: clr-meta [--gate] | -e FORM | FILE"
-          " | --multi-form FILE"
+          " | --multi-form FILE | --multi-form -"
+          " | --multi-e FORM | --multi-eval FORM"
           " | --build-runtime PLAN OUTPUT SOURCE_ROOT"
           " | --build-compiler-stage1 PROFILE PLAN SOURCE OUTPUT"
           " | --build-compiler-selfhost-stage1 OUTPUT"
@@ -216,10 +217,32 @@
         (when (= :failed (:outcome-kind result))
           (System.Environment/Exit 1)))
 
+      ;; tool-eval-multi: inline multi-form string (opt-in; -e stays single-form).
       (and (= 2 (count args))
-           (= "--multi-form" (first args))
-           (.Exists (System.IO.FileInfo. (second args))))
-      (let [result (evaluate-source-multi (slurp (second args)))]
+           (contains? #{"--multi-e" "--multi-eval"} (first args)))
+      (let [result (evaluate-source-multi (second args))]
+        (prn result)
+        (when (= :failed (:outcome-kind result))
+          (System.Environment/Exit 1)))
+
+      ;; tool-eval-multi: file, or "-" = stdin (Console.OpenStandardInput on CLR).
+      (and (= 2 (count args)) (= "--multi-form" (first args)))
+      (let [path (second args)
+            source (cond
+                     (= path "-")
+                     (with-open [r (System.IO.StreamReader.
+                                    (System.Console/OpenStandardInput))]
+                       (.ReadToEnd r))
+
+                     (.Exists (System.IO.FileInfo. path))
+                     (slurp path)
+
+                     :else
+                     (do (binding [*out* *err*]
+                           (println (str "clr-meta: --multi-form requires an existing file or '-' for stdin (got: " path ")")))
+                         (System.Environment/Exit 2)
+                         ""))
+            result (evaluate-source-multi source)]
         (prn result)
         (when (= :failed (:outcome-kind result))
           (System.Environment/Exit 1)))

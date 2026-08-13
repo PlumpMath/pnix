@@ -49,4 +49,25 @@ set -e
 [[ "$empty_status" -eq 1 ]]
 [[ "$empty_out" == *":class :empty-tool-source"* ]]
 
-echo "clr-meta tool-eval-multi gate: PASS (multi last-value 42; single trailing still fails; domain closed)"
+# --multi-e inline string (same last-value semantics)
+multi_e="$("$root/bin/clojure-clr" --multi-e $'(+ 1 2)\n(+ 20 22)')"
+[[ "$multi_e" == *":profile :tool-eval-multi"* ]]
+[[ "$multi_e" == *":form-count 2"* ]]
+[[ "$multi_e" == *":value 42"* ]]
+direct_e="$("$root/bin/clr-meta" --multi-e $'(+ 1 2)\n(+ 20 22)')"
+[[ "$direct_e" == *":value 42"* ]]
+
+# --multi-form - reads stdin
+stdin_out="$(printf '%s\n' '(+ 1 2)' '(+ 20 22)' | "$root/bin/clojure-clr" --multi-form -)"
+[[ "$stdin_out" == *":profile :tool-eval-multi"* ]]
+[[ "$stdin_out" == *":value 42"* ]]
+
+# Default -e stays single-form (two forms in one string fail trailing)
+set +e
+single_e="$("$root/bin/clojure-clr" -e $'42\n43' 2>&1)"
+single_e_status=$?
+set -e
+[[ "$single_e_status" -eq 1 ]]
+[[ "$single_e" == *":class :trailing-tool-form"* ]]
+
+echo "clr-meta tool-eval-multi gate: PASS (file/multi-e/stdin last-value 42; -e trailing fails; domain closed)"
