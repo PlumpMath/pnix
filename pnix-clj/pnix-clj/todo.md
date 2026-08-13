@@ -3377,16 +3377,17 @@ owner-gated residual list from host-env work.
 1. **Machine fragment growth** (M-series) — only if a pillar needs it.
 2. ~~Specialize residual fuel / fold options~~ — **per-call `:fold-fuel` +
    reusable host artifact** landed 2026-08-14.
-3. **Maven publish of pnix-clj** — P3 registry; needs version + public API freeze
-   (`docs/HOST_IMPORT.md` is the require surface).
+3. ~~Local library export~~ — `bin/export-pnix-clj-library` +
+   `pnix-clj-library-smoke` (personal feed; **not** Maven Central, 2026-08-14).
 4. **Conformance Phase D** — still DEFERRED (see backlog status at top).
 
 ### Host-import follow-ups (easy already done)
 - [x] `eval-file` public helper
 - [x] `examples/host-import/clj` mini project
 - [x] monorepo `bin/host-import-smoke` + CI layout/clj example
+- [x] Local export layout + smoke (2026-08-14)
 
 ### Host-import hard
 - [x] Multi-file sample with `import` / modules map →
   `examples/host-import/clj-imports/` (2026-08-14)
-- [ ] Published jar coordinate (P3)
+- [x] Local library coordinate via export (not public Maven)

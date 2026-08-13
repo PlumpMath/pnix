@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Materialize a shareable local layout for host-main import of pnix-clj.
+# Personal / local feed only — not Maven Central publish.
+#
+# Layout (OUT):
+#   clj-meta/          substrate (local/root of pnix-clj)
+#   pnix-clj/          product sources + resources + deps.edn
+#   consumer-deps.edn  drop-in snippet for caller projects
+#   refs.env           env contract
+#   README.md
+#   manifest.json
+#
+# Usage:
+#   ./bin/export-pnix-clj-library [OUT]
+# Default OUT: $PNIX_CLJ_LIBRARY or <repo>/pnix-clj/target/pnix-clj-library
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+product="$(cd "$here/.." && pwd)"                 # …/pnix-clj/pnix-clj
+host_root="$(cd "$product/.." && pwd)"            # …/pnix-clj
+clj_meta="$host_root/clj-meta"
+default_out="${PNIX_CLJ_LIBRARY:-$product/target/pnix-clj-library}"
+out="${1:-$default_out}"
+version="${PNIX_CLJ_LIBRARY_VERSION:-0.1.0-local}"
+
+if [[ "$#" -gt 1 ]]; then
+  echo "usage: export-pnix-clj-library [OUT]" >&2
+  exit 2
+fi
+if [[ ! -d "$product/src" || ! -f "$product/deps.edn" ]]; then
+  echo "export-pnix-clj-library: missing product tree at $product" >&2
+  exit 2
+fi
+if [[ ! -d "$clj_meta/src" || ! -f "$clj_meta/deps.edn" ]]; then
+  echo "export-pnix-clj-library: missing clj-meta at $clj_meta" >&2
+  exit 2
+fi
+
+rm -rf "$out"
+mkdir -p "$out/clj-meta" "$out/pnix-clj"
+
+# Copy sources only (no .git, target, test unless needed for require).
+rsync -a --delete \
+  --exclude '.git' --exclude 'target' --exclude 'bin' --exclude 'logs' \
+  --exclude '.cpcache' --exclude '*.class' \
+  "$clj_meta/src" "$clj_meta/deps.edn" \
+  "$out/clj-meta/"
+
+rsync -a --delete \
+  --exclude '.git' --exclude 'target' --exclude 'bin' --exclude 'logs' \
+  --exclude '.cpcache' --exclude 'test' --exclude '*.class' \
+  "$product/src" "$product/resources" \
+  "$out/pnix-clj/"
+
+# Product deps.edn: pin clj-meta to sibling local/root; keep runtime MVN deps.
+cat >"$out/pnix-clj/deps.edn" <<EOF
+{:paths ["src" "resources"]
+ :deps {pnix/clj-meta {:local/root "../clj-meta"}
+        org.clojure/data.json {:mvn/version "2.5.2"}
+        org.clojure/tools.analyzer.jvm {:mvn/version "1.3.4"}
+        org.ow2.asm/asm-util {:mvn/version "9.10.1"}}}
+EOF
+
+# Consumer snippet (caller project).
+cat >"$out/consumer-deps.edn" <<EOF
+;; Drop into your app deps.edn (local feed only — not Maven Central).
+{:deps {pnix/pnix-clj {:local/root "$(cd "$out/pnix-clj" && pwd)"}}}
+EOF
+
+cat >"$out/refs.env" <<EOF
+PNIX_CLJ_LIBRARY=$out
+PNIX_CLJ_ROOT=$out/pnix-clj
+PNIX_CLJ_SRC=$out/pnix-clj/src
+# deps: pnix/pnix-clj {:local/root "\$PNIX_CLJ_ROOT"}
+# (require '[pnix-clj.core :as c]) (c/eval-file "x.px")
+EOF
+
+cat >"$out/README.md" <<EOF
+# pnix-clj local library export
+
+**Version:** $version  
+**Scope:** host-main JVM import (local feed only). Not a multi-host \`.px\` package.
+Not Maven Central.
+
+## Use
+
+\`\`\`clojure
+;; deps.edn
+{:deps {pnix/pnix-clj {:local/root "$out/pnix-clj"}}}
+\`\`\`
+
+\`\`\`clojure
+(require '[pnix-clj.core :as c])
+(:value (c/eval-file "prog.px"))
+\`\`\`
+
+See monorepo \`pnix-clj/docs/HOST_IMPORT.md\`.
+EOF
+
+# Minimal manifest for smoke gates.
+cat >"$out/manifest.json" <<EOF
+{
+  "schema": "pnix-clj.library-export.v1",
+  "version": "$version",
+  "producer": "export-pnix-clj-library",
+  "pnix_clj": "pnix-clj",
+  "clj_meta": "clj-meta",
+  "local_only": true
+}
+EOF
+
+echo "PNIX_CLJ_LIBRARY=$out"
+echo "PNIX_CLJ_ROOT=$out/pnix-clj"
+echo "# consumer: {:deps {pnix/pnix-clj {:local/root \"$out/pnix-clj\"}}}"

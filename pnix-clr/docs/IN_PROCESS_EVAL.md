@@ -126,8 +126,11 @@ Rewrite evaluator in C# / F#. **Rejected for now** — second semantic source of
   that collapses to Default. Documented tradeoff; revisit only with a
   substrate that supports ALC-aware load.
 - [x] Wire into `pnix-clr-gate` when substrate+artifact present (`PNIX_CLR_INPROCESS_GATE=0` skips)
+- [x] Reentrancy policy — **serialized**: global lock around eval-source
+  (ClojureCLR RT is process-wide). Concurrent callers queue; `*Async`
+  helpers exist but share the same lock. Not multi-threaded RT.
 - [ ] net8 host story (keep process-spawn)
-- [ ] Unload / multi-thread reentrancy policy
+- [ ] Unload / collectible ALC (blocked — see above)
 - [ ] No Stage15/N claims from embedding
 
 ### Run

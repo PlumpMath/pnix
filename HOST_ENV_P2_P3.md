@@ -93,7 +93,8 @@ Do **not** start without an explicit product decision.
 | **Local nupkg smoke** | **landed** — `bin/pnix-clr-nupkg-smoke` (local feed only) |
 | **nuget.org publish** | **dropped** — owner uses local feed only; no nuget.org track |
 | **In-process C# eval** | **experimental** — net10 + parity gate; aggregate when substrate present |
-| **Still open** | in-process admission polish; further facade only with new gates |
+| **clj local export** | **landed** — `export-pnix-clj-library` + library-smoke (local only) |
+| **Still open** | further facade only with new gates; machine tail if pillar |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
 
@@ -120,7 +121,7 @@ These were listed as “next after host-env”. **No implementation in this cut.
 
 | Source of truth | `pnix-clj/pnix-clj/todo.md` § REMAINING WORK + `docs/REMAINING_DECISION.md` |
 | Rule | Do not invent a new residual menu; pillar-driven (M-series) or oracle divergence only |
-| Next candidates (owner picks) | machine fragment growth; specialize residual fuel; conformance Phase D **deferred** |
+| Next candidates (owner picks) | machine fragment growth (if pillar); local clj export **landed**; Phase D **deferred** |
 | Host-import interaction | none required — `eval-file` / classpath inject already green |
 | **Detail** | `pnix-clj/pnix-clj/todo.md` § “Post host-env plan (2026-08-14)” |
 
@@ -160,3 +161,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | in-process corpus 17-pass; isolated ALC held (CLR Default load); host-artifact API |
 | 2026-08-14 | host-artifact report rows; nupkg-smoke in gate if export; INPROCESS opt-in gate |
 | 2026-08-14 | nuget.org publish **dropped** (local-only); inprocess gate auto when substrate+artifact |
+| 2026-08-14 | clj local library export + smoke; inprocess reentrancy = serialized lock |

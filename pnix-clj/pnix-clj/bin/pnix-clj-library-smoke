@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Local library export smoke (not Maven Central).
+# export-pnix-clj-library then eval-file via the exported local/root.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+product="$(cd "$here/.." && pwd)"
+out="${PNIX_CLJ_LIBRARY:-$product/target/pnix-clj-library}"
+no_export=0
+if [[ "${1:-}" == "--no-export" ]]; then
+  no_export=1
+elif [[ -n "${1:-}" ]]; then
+  echo "usage: pnix-clj-library-smoke [--no-export]" >&2
+  exit 2
+fi
+
+echo "== pnix-clj-library-smoke (local feed only) =="
+
+if [[ ! -f "$out/manifest.json" ]]; then
+  if [[ "$no_export" -eq 1 ]]; then
+    echo "FAIL: missing $out/manifest.json — run export-pnix-clj-library" >&2
+    exit 1
+  fi
+  echo "  library missing — exporting → $out"
+  "$here/export-pnix-clj-library" "$out"
+fi
+
+for need in \
+  "manifest.json" \
+  "pnix-clj/deps.edn" \
+  "pnix-clj/src/pnix_clj/core.clj" \
+  "clj-meta/src" \
+  "consumer-deps.edn" \
+  "refs.env"
+do
+  if [[ ! -e "$out/$need" ]]; then
+    echo "FAIL: export layout missing $need" >&2
+    exit 1
+  fi
+done
+echo "  OK  export layout"
+
+if ! command -v clojure >/dev/null 2>&1; then
+  echo "FAIL: clojure not on PATH" >&2
+  exit 1
+fi
+
+px="$(mktemp "${TMPDIR:-/tmp}/pnix-clj-lib-smoke.XXXXXX.px")"
+trap 'rm -f "$px"' EXIT
+printf '%s\n' '1 + 2' >"$px"
+
+# Run from exported product root so local/root ../clj-meta resolves.
+val="$(
+  cd "$out/pnix-clj"
+  clojure -M -e \
+    "(require '[pnix-clj.core :as c]) (print (:value (c/eval-file \"$px\")))"
+)"
+if [[ "$val" != "3" ]]; then
+  echo "FAIL: eval-file via export => '$val' (want 3)" >&2
+  exit 1
+fi
+echo "  OK  eval-file via exported local/root => 3"
+
+# Sanity: consumer-deps.edn points at absolute local/root under export.
+if ! grep -q 'local/root' "$out/consumer-deps.edn"; then
+  echo "FAIL: consumer-deps.edn missing local/root" >&2
+  exit 1
+fi
+echo "  OK  consumer-deps.edn"
+
+echo "== summary: PASS (local library only; not Maven Central) =="

@@ -157,7 +157,7 @@ namespace Pnix.Clr
 #endif
         }
 
-        /// <summary>Async evaluate an inline expression.</summary>
+        /// <summary>Async evaluate an inline expression (process-spawn).</summary>
         public static Task<EvalResult> SourceAsync(
             string source, EvalOptions? options = null, CancellationToken ct = default)
         {
@@ -166,7 +166,7 @@ namespace Pnix.Clr
             return RunAsync(new[] { "-e", source }, options, ct);
         }
 
-        /// <summary>Async evaluate a <c>.px</c> file.</summary>
+        /// <summary>Async evaluate a <c>.px</c> file (process-spawn).</summary>
         public static Task<EvalResult> FileAsync(
             string path, EvalOptions? options = null, CancellationToken ct = default)
         {
@@ -177,6 +177,23 @@ namespace Pnix.Clr
                 throw new FileNotFoundException("pnix source file not found", full);
             return RunAsync(new[] { full }, options, ct);
         }
+
+        /// <summary>
+        /// Async experimental in-process eval. Serialized on the same global
+        /// lock as <see cref="SourceInProcess"/> (ClojureCLR RT is process-wide).
+        /// </summary>
+        public static Task<EvalResult> SourceInProcessAsync(
+            string source, EvalOptions? options = null, CancellationToken ct = default)
+        {
+            if (source is null)
+                throw new ArgumentNullException(nameof(source));
+            return Task.Run(() => SourceInProcess(source, options), ct);
+        }
+
+        /// <summary>Async experimental in-process file eval (serialized).</summary>
+        public static Task<EvalResult> FileInProcessAsync(
+            string path, EvalOptions? options = null, CancellationToken ct = default)
+            => Task.Run(() => FileInProcess(path, options), ct);
 
         /// <summary>
         /// Resolve the directory of guest AOT DLLs (runtime-artifact).

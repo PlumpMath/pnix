@@ -70,7 +70,14 @@ Proof / generator / fuzzer namespaces (`generate`, `grammar-fuzzer`,
 - Not a portable multi-host `.px` bytecode package.
 - Not a substitute for stock `clojure` without the inject wrapper when you need
   jars / `libexec` — use `clojure-stock` in nix for those.
-- Optional later: Maven coordinate so projects need not `local/root`.
+- **Local library export** (personal feed, not Maven Central):
+  ```bash
+  ./bin/export-pnix-clj-library          # → target/pnix-clj-library/
+  ./bin/pnix-clj-library-smoke
+  # then: {:deps {pnix/pnix-clj {:local/root "…/pnix-clj-library/pnix-clj"}}}
+  ```
+- Maven Central / public registry publish is **not** a product goal for this
+  owner (same policy as clr local nupkg).
 
 ---
 
