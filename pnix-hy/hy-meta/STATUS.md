@@ -132,11 +132,11 @@ bootstrap-fixedpoint-check) still green — no regression from adding the
 upstream Hy and the direct kernel (e.g. inherited by the direct-kernel build
 at some prior bootstrap stage) would still be caught, since the mini backend
 shares no code, tooling, or bootstrap lineage with either. It is still only
-12 fixtures, not the conformance corpus, and — same honest bar as clj-meta
+14 fixtures, not the conformance corpus, and — same honest bar as clj-meta
 and cljs-meta already settled on — behavior equivalence, not bit-identical
-artifacts. **Next concrete step:** continue growing the fixture set
-(`require`/macros, dict literals, nested function definitions) toward parity
-with `frontend_selfhost.clj`'s ~50-fixture scope on the clj-meta side.
+artifacts. **Next concrete step:** continue growing the fixture set (more
+seq/dict ops, further macro coverage) toward parity with
+`frontend_selfhost.clj`'s ~50-fixture scope on the clj-meta side.
 
 **Widened further, same day (2026-08-12):** added string literals, list
 literals as return values, and `setv`/`while` mutation (8→12 fixtures).
@@ -153,6 +153,24 @@ before adding fixtures (not assumed): `bootstrap.py run -c` (upstream) and
 backend on a 0..9 summing while-loop (45) and a setv-then-arithmetic case
 (41), plus a bare string and list literal. Verified live:
 `independent-mini-backend-check` -> 12/12 accepted with all three legs
+agreeing, `diverse-double-compile-check` still `reproduced`, full
+`hy-meta-gate full` ladder still green — no regressions.
+
+**Widened again, 2026-08-13:** added dict literals (string keys only —
+Hy keyword literals read as `hy.models.Keyword` objects on the real host, a
+reader-model identity this from-scratch backend deliberately does not
+reproduce, so keyword-keyed dicts stay out of scope) and a
+multi-`defn`-composition fixture (one top-level `defn` calling another,
+already supported by the existing `compile_and_eval` loop with no code
+change — each `defn` becomes a real module-level `FunctionDef`, so a later
+one can call an earlier one by name through the shared `exec()` namespace;
+verified this was true rather than assumed). New tokenizer/reader support:
+`{`/`}` now tokenize, and `_parse_one` builds a `("__dict__", pairs)`
+marker form, emitted via a new `_is_dict` check ahead of the general
+call-form dispatch (`ast.Dict` with `ast.Constant` string keys). Verified
+against both real legs (`bootstrap.py run -c` / `kernel-run -c`) before
+adding fixtures (8→12→14 total). Verified live:
+`independent-mini-backend-check` -> 14/14 accepted with all three legs
 agreeing, `diverse-double-compile-check` still `reproduced`, full
 `hy-meta-gate full` ladder still green — no regressions.
 

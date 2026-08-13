@@ -95,8 +95,28 @@ listed here; see the detailed sections below for the full history.
    legs (`bootstrap.py run -c` / `kernel-run -c`) before adding fixtures.
    `independent-mini-backend-check` -> 12/12, `diverse-double-compile-check`
    still `reproduced`, full `hy-meta-gate full` ladder still green.
-   **Still open:** `require`/macros, dict literals, nested function
-   definitions, further toward clj-meta's ~50-fixture
+
+   **Further progress, same day (2026-08-13):** added dict literals
+   (`{"a" 1 "b" 2}`, string keys only — see STATUS.md for why keyword keys
+   are out of scope) and a multi-`defn`-composition fixture (12→14 total).
+   The multi-`defn` case required no backend change — `compile_and_eval`
+   already emits every top-level `defn` as a real module-level
+   `FunctionDef`, so a later one calling an earlier one by name already
+   worked; this was verified rather than assumed before being added as a
+   fixture. Dict literals needed real reader/emitter additions:
+   `{`/`}` tokenization, a `("__dict__", pairs)` marker form in `_parse_one`,
+   and a `_is_dict` emit case (`ast.Dict`) checked ahead of the general
+   call-form dispatch. Verified against both real legs before adding.
+   `independent-mini-backend-check` -> 14/14, `diverse-double-compile-check`
+   still `reproduced`, full `hy-meta-gate full` ladder still green.
+
+   **Still open:** `require`/macros (macro expansion is a materially bigger
+   feature than the fixture-additive pattern used so far — would need real
+   compile-time macro-expansion machinery, not just new reader/emitter
+   cases; not attempted this pass), keyword-keyed dict literals (would need
+   to construct real `hy.models.Keyword` objects to match upstream
+   equality/`repr`, a bigger lift than string keys), more seq ops (`get`,
+   `len`, list mutation), further toward clj-meta's ~50-fixture
    `frontend_selfhost.clj` scope. Sizing: small increments, additive — no
    architecture change needed, the 3-way plumbing already exists and each new
    fixture automatically gets checked on all three legs.

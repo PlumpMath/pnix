@@ -1667,6 +1667,16 @@ def independent_mini_backend_fixtures() -> list[dict[str, Any]]:
             "source": "(defn f [x] (setv y (* x 2)) (+ y 1)) (f 20)",
             "expected": 41,
         },
+        {
+            "id": "mini-dict-literal",
+            "source": '(defn f [] {"a" 1 "b" 2}) (f)',
+            "expected": {"a": 1, "b": 2},
+        },
+        {
+            "id": "mini-nested-defn-composition",
+            "source": "(defn double [x] (* x 2)) (defn quad [x] (double (double x))) (quad 5)",
+            "expected": 20,
+        },
     ]
 
 

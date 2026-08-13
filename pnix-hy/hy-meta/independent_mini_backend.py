@@ -11,8 +11,9 @@ remain trusted substrate for clj-meta's analogous `frontend_selfhost.clj`.
 
 It is a frontier witness, not a replacement for the production frontend: it
 covers a bounded fixture set (arithmetic, comparisons, `if`, `defn`,
-recursion, boolean/`None` literals, string/list literals, and `setv`/`while`
-mutation), not the Hy language.
+recursion, calling between top-level `defn`s, boolean/`None` literals,
+string/list/dict literals (dict keys are string literals only), and
+`setv`/`while` mutation), not the Hy language.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import ast
 import re
 from typing import Any
 
-TOKEN_RE = re.compile(r'\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|-?\d+|[^\s()\[\]]+)')
+TOKEN_RE = re.compile(r'\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|\{|\}|-?\d+|[^\s()\[\]{}]+)')
 
 
 def _tokenize(source: str) -> list[str]:
@@ -56,7 +57,17 @@ def _parse_one(tokens: list[str], i: int) -> tuple[Any, int]:
             item, i = _parse_one(tokens, i)
             items.append(item)
         return list(items), i + 1
-    if tok in (")", "]"):
+    if tok == "{":
+        items = []
+        i += 1
+        while tokens[i] != "}":
+            item, i = _parse_one(tokens, i)
+            items.append(item)
+        if len(items) % 2 != 0:
+            raise SyntaxError("tiny reader: malformed dict literal")
+        pairs = [(items[k], items[k + 1]) for k in range(0, len(items), 2)]
+        return ("__dict__", pairs), i + 1
+    if tok in (")", "]", "}"):
         raise SyntaxError(f"tiny reader: unexpected closing delimiter {tok!r}")
     if tok == "True":
         return True, i + 1
@@ -107,6 +118,10 @@ def _sym_name(form: Any) -> str:
     return form[1]
 
 
+def _is_dict(form: Any) -> bool:
+    return isinstance(form, tuple) and len(form) == 2 and form[0] == "__dict__"
+
+
 def _emit_expr(form: Any) -> ast.expr:
     if isinstance(form, bool):
         return ast.Constant(value=form)
@@ -120,6 +135,21 @@ def _emit_expr(form: Any) -> ast.expr:
         return ast.List(elts=[_emit_expr(item) for item in form], ctx=ast.Load())
     if _is_sym(form):
         return ast.Name(id=_sym_name(form), ctx=ast.Load())
+    if _is_dict(form):
+        # Keys are string literals only (the DDC fixtures this backend
+        # targets) -- Hy keyword literals (`:a`) read as `hy.models.Keyword`
+        # objects on the real host, a reader-model identity this backend
+        # does not reproduce, so keyword-keyed dict literals are out of
+        # scope here.
+        _, pairs = form
+        keys = []
+        values = []
+        for key_f, value_f in pairs:
+            if not isinstance(key_f, str):
+                raise SyntaxError("tiny analyzer: dict literal key must be a string literal")
+            keys.append(ast.Constant(value=key_f))
+            values.append(_emit_expr(value_f))
+        return ast.Dict(keys=keys, values=values)
     if isinstance(form, tuple):
         if not form:
             raise SyntaxError("tiny analyzer: empty call form")
