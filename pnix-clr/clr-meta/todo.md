@@ -311,8 +311,9 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
    `clojure-clr-profiles-smoke` after `clr-meta-gate` (~17s, 2026-08-14).
 7. ~~Local nupkg pack smoke~~ → `bin/pnix-clr-nupkg-smoke` (export layout +
    pack dual-TFM; local feed only, 2026-08-14).
-8. **Next:** further tool-eval surfaces only with new named gates; nuget.org
-   only after local pack stays green (secrets/signing = owner decision).
+8. ~~nuget.org~~ → **dropped** (owner: personal/local feed only, 2026-08-14).
+9. **Next:** further tool-eval surfaces only with new named gates;
+   in-process admission polish (isolated ALC still held).
 
 ### clr-meta residual (product, not packaging)
 - Continue stage ladder honesty via STATUS.md + design docs.
@@ -322,10 +323,10 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 ### Host-import hard
 - [x] In-process C# evaluator **design** — `docs/IN_PROCESS_EVAL.md` (2026-08-14).
 - [x] In-process **spike** — `InProcessEval.cs` + `SourceInProcess` (net10),
-  parity gate `bin/pnix-clr-inprocess-eval-gate` (4 fixtures + negative;
-  not in default aggregate). Process-spawn remains product default.
-- [x] nuget.org **publish path fail-closed** — `bin/publish-pnix-clr-nupkg`
-  (needs `NUGET_API_KEY`; dry-run ok). Local pack + smoke already green.
+  parity gate `bin/pnix-clr-inprocess-eval-gate` (17-pass). Process-spawn
+  remains the supported API default; gate auto when substrate present.
+- [x] Local NuGet pack path — `pack-pnix-clr-nupkg` + `pnix-clr-nupkg-smoke`.
+  nuget.org publish **dropped** (owner local-only, 2026-08-14).
 - [x] In-process broader corpus (14 sources + file + negatives) — gate 17-pass
-- [ ] In-process admission (isolated ALC blocked on CLR Default load; aggregate wire after weeks)
-- [ ] Actual nuget.org push (owner key)
+- [x] In-process in `pnix-clr-gate` when substrate+artifact present
+  (`PNIX_CLR_INPROCESS_GATE=0` to skip). Isolated ALC still held.

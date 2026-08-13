@@ -64,12 +64,10 @@ Or run `pnix-clr-refs` / `pnix-clr-library` to print absolute paths.
 ./bin/export-pnix-clr-library          # → target/pnix-clr-library
 # or: nix run .#pnix-clr-library
 ./bin/pack-pnix-clr-nupkg              # local .nupkg (PNIX_CLR_NUPKG_VERSION)
-./bin/pnix-clr-nupkg-smoke             # layout gate
-./bin/publish-pnix-clr-nupkg --dry-run # nuget.org needs NUGET_API_KEY (fail-closed)
+./bin/pnix-clr-nupkg-smoke             # layout gate (local feed only; no nuget.org)
 # MSBuild sample: ../Directory.Build.props.sample
-# In-process design: ../../docs/IN_PROCESS_EVAL.md
+# In-process: ../../docs/IN_PROCESS_EVAL.md  ·  HelloPnix --inprocess
 ```
-
 ## Related CLIs
 
 - `pnix-clr` / `pnix-clr-pnix` — eval / REPL  

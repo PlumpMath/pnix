@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Push a local Pnix.Clr nupkg to a NuGet source (default: nuget.org).
-# Fail-closed without credentials — never invents a silent publish.
+# OPTIONAL: push a local Pnix.Clr nupkg to some NuGet source.
 #
-# Prerequisites:
-#   1. ./bin/export-pnix-clr-library  (or existing library layout)
-#   2. ./bin/pack-pnix-clr-nupkg      (or pass existing nupkg path)
-#   3. NUGET_API_KEY set (or --api-key)
+# Product track: **local feed only**. nuget.org publish is not a pnix goal
+# (owner 2026-08-14: personal use). Prefer:
+#   ./bin/pack-pnix-clr-nupkg && ./bin/pnix-clr-nupkg-smoke
+# and point projects at that directory / a file source.
+#
+# This script remains for rare private feeds. Fail-closed without API key.
 #
 # Usage:
-#   NUGET_API_KEY=… ./bin/publish-pnix-clr-nupkg
 #   ./bin/publish-pnix-clr-nupkg --dry-run
-#   ./bin/publish-pnix-clr-nupkg /path/to/Pnix.Clr.0.1.0.nupkg
+#   NUGET_API_KEY=… NUGET_SOURCE=https://… ./bin/publish-pnix-clr-nupkg
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

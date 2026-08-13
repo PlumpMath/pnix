@@ -19,12 +19,21 @@ else
   echo "pnix-clr-gate: skip nupkg-smoke (no $lib_dir/manifest.json)"
 fi
 
-# Experimental in-process parity — opt-in (default off until weeks green).
-#   PNIX_CLR_INPROCESS_GATE=1 ./bin/pnix-clr-gate
-if [[ "${PNIX_CLR_INPROCESS_GATE:-0}" == "1" ]]; then
+# Experimental in-process parity: run when substrate + artifact are present.
+# Skip with PNIX_CLR_INPROCESS_GATE=0 (or if paths missing).
+substrate="${PNIX_CLR_SUBSTRATE:-$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish}"
+artifact="${PNIX_CLR_ARTIFACT:-${PNIX_CLR_RUNTIME_ARTIFACT:-$root/pnix-clr/target/runtime-artifact}}"
+if [[ "${PNIX_CLR_INPROCESS_GATE:-auto}" == "0" ]]; then
+  echo "pnix-clr-gate: skip inprocess-eval-gate (PNIX_CLR_INPROCESS_GATE=0)"
+elif [[ -f "$substrate/Clojure.dll" && -f "$artifact/manifest.json" ]]; then
+  export PNIX_CLR_SUBSTRATE="$substrate"
+  export PNIX_CLR_ARTIFACT="$artifact"
+  export PNIX_CLR_RUNTIME_ARTIFACT="$artifact"
+  export PNIX_CLR="${PNIX_CLR:-$root/bin/pnix-clr}"
+  export PNIX_CLR_ROOT="${PNIX_CLR_ROOT:-$root}"
   "$root/bin/pnix-clr-inprocess-eval-gate"
 else
-  echo "pnix-clr-gate: skip inprocess-eval-gate (set PNIX_CLR_INPROCESS_GATE=1 to run)"
+  echo "pnix-clr-gate: skip inprocess-eval-gate (need substrate+artifact; or set paths)"
 fi
 
 export CLOJURE_LOAD_PATH="$root/pnix-clr/src:$root/pnix-clr/test"

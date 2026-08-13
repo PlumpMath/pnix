@@ -125,7 +125,7 @@ Rewrite evaluator in C# / F#. **Rejected for now** — second semantic source of
   ALC cannot see substrate types already loaded there without dual Resolving
   that collapses to Default. Documented tradeoff; revisit only with a
   substrate that supports ALC-aware load.
-- [ ] Wire into `pnix-clr-gate` aggregate only after weeks green
+- [x] Wire into `pnix-clr-gate` when substrate+artifact present (`PNIX_CLR_INPROCESS_GATE=0` skips)
 - [ ] net8 host story (keep process-spawn)
 - [ ] Unload / multi-thread reentrancy policy
 - [ ] No Stage15/N claims from embedding

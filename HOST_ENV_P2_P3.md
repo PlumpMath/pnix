@@ -54,7 +54,7 @@ planned until explicitly pulled. Easy items may land as small examples/CI.
 | hy | Freeze `__all__`; optional py.typed | low | **py.typed landed** (PEP 561 marker) |
 | cljs | Scoped require already verified; optional npm publish = P3 | — | — |
 | rs | CARGO_HOST_IMPORT.md done; C ABI semver policy note in header | low | **ABI comment + version pin note landed**; full semver process still P3 |
-| clr | pack local nupkg done; nuget.org = P3 | — | — |
+| clr | pack local nupkg done; nuget.org **dropped** (local feed only) | — | — |
 
 ### P2.5 Dedicated host-import workflow on push
 
@@ -77,7 +77,7 @@ Do **not** start without an explicit product decision.
 | Maven | `pnix-clj` jar | versioning, source jar, which namespaces public |
 | npm | `@plumpmath/pnix-cljs` | already scoped name in store; need CI publish secrets |
 | crates.io | `pnix-rs` | currently `publish = false`; zero-deps story must stay |
-| nuget.org | `Pnix.Clr` | pack script exists; signing, version, artifact bundle policy |
+| nuget.org | `Pnix.Clr` | **won't do (owner 2026-08-14)** — personal/local feed only; pack+smoke stay |
 
 ### P3.2 Full ClojureCLR project story
 
@@ -91,9 +91,9 @@ Do **not** start without an explicit product decision.
 | **Profiles smoke** | **landed** — `bin/clojure-clr-profiles-smoke` (also in `pnix-clr-gate`) |
 | **tool-eval-multi** | **landed** — `--multi-form FILE` + named gate in `clr-meta-gate` |
 | **Local nupkg smoke** | **landed** — `bin/pnix-clr-nupkg-smoke` (local feed only) |
-| **nuget publish path** | **landed fail-closed** — `bin/publish-pnix-clr-nupkg` (needs API key) |
-| **In-process C# eval** | **experimental spike** — net10 `SourceInProcess` + `pnix-clr-inprocess-eval-gate` |
-| **Still open** | real nuget.org push (owner key); in-process implementation; further facade only with new gates |
+| **nuget.org publish** | **dropped** — owner uses local feed only; no nuget.org track |
+| **In-process C# eval** | **experimental** — net10 + parity gate; aggregate when substrate present |
+| **Still open** | in-process admission polish; further facade only with new gates |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
 
@@ -159,3 +159,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | in-process eval spike (net10 ALC) + parity gate (opt-in, not aggregate) |
 | 2026-08-14 | in-process corpus 17-pass; isolated ALC held (CLR Default load); host-artifact API |
 | 2026-08-14 | host-artifact report rows; nupkg-smoke in gate if export; INPROCESS opt-in gate |
+| 2026-08-14 | nuget.org publish **dropped** (local-only); inprocess gate auto when substrate+artifact |

@@ -116,8 +116,7 @@ From `clr-meta/todo.md` Post host-env / P3.2:
    `clojure-clr-profiles-smoke` (~17s, 2026-08-14).
 7. **[x] Local nupkg pack smoke** — `bin/pnix-clr-nupkg-smoke` (export layout +
    dual-TFM pack; local feed only, 2026-08-14).
-8. **[ ] nuget.org / registry** — only after local pack stays green; needs
-   owner secrets/signing (do not auto-publish).
+8. **[x] nuget.org** — **won't do** (owner: personal/local feed only, 2026-08-14).
 
 Forbidden shortcuts:
 
