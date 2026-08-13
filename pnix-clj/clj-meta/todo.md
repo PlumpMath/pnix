@@ -61,12 +61,35 @@ top-line claim, but the substance is much closer than "false" implies:
   any future gap here would have to come from item below (growing U6's own
   fixture set past 51), not from wiring existing U6 fixtures into the DDC row.
 - **Remaining, size large**: grow U6's *own* fixture set past 51 toward the
-  full 112-case conformance corpus U5 already reaches — this is what upgrades
+  full conformance corpus U5 already reaches (116 cases as of this pass, up
+  from 112 — grows over time via `examples/*.clj`) — this is what upgrades
   the claim from "51-fixture subset" to "full-corpus independent 2nd
   compiler." Each new fixture needs its own tiny-frontend support (new
   syntax/op coverage in `frontend_selfhost.clj`), so this is proportional to
   how much of Clojure's surface remains unimplemented there — plausibly
   several more sessions at the pace of the 14→43 slice.
+
+  **One real slice landed, 2026-08-13: fixed multi-arity `fn`** (51→55).
+  `(fn ([x] ...) ([x y] ...))` — multiple *fixed*-arity clauses on one
+  function, each compiled to its own ASM `invoke` method on the same
+  `AFunction` subclass (exactly how the real host compiler does it; `IFn`'s
+  normal argument-count dispatch on the call side needs no glue). Verified
+  against real host `eval` (2-arity, 3-arity, and the arity-mismatch
+  `ArityException` case) before adding. Also wired the same 4 cases into the
+  live `independent-mini-backend-subset` DDC row (43→47). Deliberately did
+  NOT attempt variadic `&` rest-args in the same pass — that needs
+  `clojure.lang.RestFn`, a different base class with its own
+  arity-dispatch/rest-collection contract (multiple `invoke` overloads
+  forwarding to `doInvoke` with the tail packaged as a seq), materially
+  bigger and riskier to get right without the host compiler's source open
+  side-by-side — a separate slice, not bundled into this one to keep this
+  DDC witness's fixtures high-confidence rather than "probably right."
+  Remaining large surface still untouched by U6 at all: exceptions
+  (try/catch/finally), Java interop (method calls, field access, `set!`,
+  static members, reflection), `deftype`/`defrecord`/`reify`, `case`,
+  `letfn`, bignum/ratio/regex reader literals, dynamic vars, `locking`,
+  protocols. Each of those is its own multi-fixture slice, several of them
+  (interop, exceptions, deftype/reify) genuinely large on their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
@@ -86,8 +109,9 @@ todo-list item; sizing it as "large" undersells it — it's arguably out of
 scope for incremental work at all.
 
 ### 3. Production frontend / full runtime self-host (R5f/R6f) — LARGE
-- R5f: `frontend_selfhost.clj` covers 51 fixtures (fn/if/do/let/loop-recur/
-  17 macros/destructuring/data literals) but is still a subset; the
+- R5f: `frontend_selfhost.clj` covers 55 fixtures (fn/if/do/let/loop-recur/
+  17 macros/destructuring/data literals/fixed multi-arity fn) but is still a
+  subset; the
   production path (`compiler.clj`'s main line) still depends on
   `tools.analyzer.jvm` + host reader for anything outside that subset. Full
   closure = self-hosting Clojure's entire reader+macroexpander+analyzer,

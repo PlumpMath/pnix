@@ -94,9 +94,9 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    51 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
-    quote/13 macros/vector-destructuring) with ZERO calls into
-    tools.analyzer.jvm or the host reader.
+    55 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    quote/13 macros/vector-destructuring/fixed multi-arity fn) with ZERO
+    calls into tools.analyzer.jvm or the host reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
     0 divergences found.
@@ -117,6 +117,28 @@ string+keyword/map/set), all three quote forms, the remaining 13 macros
 `zero?`/`neg?`. Re-ran `-M:ddc`: `independent-mini-backend-subset -> accepted`
 (43/43 agree), full `diverse-double-compile: OK`, no regressions in the other
 15 rows. Receipt digest: `4688b206f7cd9c22beb0f3bbc4ae5a69d61fcdb01d806726ef24125f3827838c`.
+
+**Widened again, 2026-08-13: fixed multi-arity `fn` support.** `analyze-fn`
+now handles both `(fn [x] ...)` (single arity, unchanged) and `(fn ([x] ...)
+([x y] ...))` (multiple *fixed* arities on one function) by generalizing its
+AST to a list of arity clauses; `emit-class` emits one ASM `invoke` method per
+clause on the same `AFunction` subclass — the same mechanism the real host
+compiler uses (each `invoke0..invoke20` override is independently dispatched
+by `IFn`'s normal argument-count-based call resolution, so no glue code is
+needed on the call side). Variadic `&` rest-args were NOT attempted — that
+needs `clojure.lang.RestFn`, a materially different base class with its own
+arity-dispatch/rest-collection contract, a separate and larger feature.
+Verified against real host `eval` before adding (2-arity and 3-arity cases,
+plus that calling with an unmatched arity throws `ArityException` on both
+sides, matching host behavior exactly) — not assumed from reading the ASM
+code. U6: 51→55 fixtures (`frontend_selfhost.clj`'s own standalone check,
+`-M:frontend-selfhost`: all 55 accepted). DDC row: 43→47 fixtures (added the
+same 4 multi-arity cases to `mini-backend-ddc-fixtures` in
+`diverse_double_compile.clj`, live 3-way host≡compiler≡mini-backend check —
+`independent-mini-backend-subset -> accepted`, 47/47 agree). Full
+`-M:conformance` (116/116, unaffected — this lane doesn't touch
+`compiler.clj`/`kernel.clj`) and full `bin/clj-meta-gate` (`metacircular
+gate: READY`) both still green, no regressions.
 
 **What's still genuinely open:** full Wheeler DDC needs the independent
 backend's coverage to match the *production* corpus, not a 43-fixture subset,

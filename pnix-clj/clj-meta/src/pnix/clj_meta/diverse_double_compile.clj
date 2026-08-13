@@ -405,6 +405,22 @@
    {:id :mini-backend-macro-when-not
     :source "(fn [x] (when-not (< x 0) (+ x 1)))"
     :args [41]
+    :expected 42}
+   {:id :mini-backend-multi-arity-one-arg
+    :source "(fn ([x] x) ([x y] (+ x y)))"
+    :args [42]
+    :expected 42}
+   {:id :mini-backend-multi-arity-two-arg
+    :source "(fn ([x] x) ([x y] (+ x y)))"
+    :args [20 22]
+    :expected 42}
+   {:id :mini-backend-multi-arity-three-way-zero-arg
+    :source "(fn ([] 42) ([x] x) ([x y] (+ x y)))"
+    :args []
+    :expected 42}
+   {:id :mini-backend-multi-arity-three-way-two-arg
+    :source "(fn ([] 42) ([x] x) ([x y] (+ x y)))"
+    :args [20 22]
     :expected 42}])
 
 (defn- mini-backend-case-row

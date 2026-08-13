@@ -582,20 +582,40 @@
     (throw (ex-info "tiny analyzer: unsupported quoted form"
                     {:form form}))))
 
-(defn- analyze-fn
-  [form]
-  (when-not (and (seq? form) (= 'fn (first form)))
-    (throw (ex-info "tiny analyzer: expected fn form" {:form form})))
-  (let [[_ params & body] form]
+(defn- analyze-fn-clause
+  "A single arity clause `(params-vector body-form...)`, shared by both the
+  single-arity `(fn [x] ...)` shape (where the whole tail IS one clause) and
+  each `([x] ...)` entry of a multi-arity `(fn ([x] ...) ([x y] ...))` form."
+  [clause]
+  (let [params (first clause)
+        body (rest clause)]
     (when-not (and (vector? params)
                    (every? symbol? params)
                    (= (count params) (count (distinct params)))
                    (seq body))
-      (throw (ex-info "tiny analyzer: malformed fn" {:form form})))
+      (throw (ex-info "tiny analyzer: malformed fn clause" {:clause clause})))
     (let [env (zipmap params (repeat true))]
-      {:op :fn
-       :params params
+      {:params params
        :body (analyze-body env body)})))
+
+(defn- analyze-fn
+  [form]
+  (when-not (and (seq? form) (= 'fn (first form)))
+    (throw (ex-info "tiny analyzer: expected fn form" {:form form})))
+  (let [rest-form (rest form)
+        ;; `(fn ([x] ..) ([x y] ..))`: every clause after `fn` is itself a
+        ;; list. `(fn [x] ..)`: the single clause IS `rest-form` (its head is
+        ;; a vector, not a list), so it is wrapped as the sole clause below.
+        multi-arity? (and (seq rest-form) (seq? (first rest-form)))
+        clauses (if multi-arity? rest-form [rest-form])
+        arities (mapv analyze-fn-clause clauses)
+        param-counts (map (comp count :params) arities)]
+    (when-not (seq arities)
+      (throw (ex-info "tiny analyzer: fn needs at least one arity" {:form form})))
+    (when-not (= (count param-counts) (count (distinct param-counts)))
+      (throw (ex-info "tiny analyzer: duplicate fn arity" {:form form})))
+    {:op :fn
+     :arities arities}))
 
 (declare emit-expr)
 
@@ -825,7 +845,7 @@
            (into-array Type (repeat arity obj-type))))
 
 (defn- emit-class
-  [{:keys [params body]}]
+  [{:keys [arities]}]
   (let [class-name (next-class-name)
         internal (.replace class-name \. \/)
         ctype (Type/getObjectType internal)
@@ -838,17 +858,24 @@
       (.invokeConstructor ga afn-type init-method)
       (.returnValue ga)
       (.endMethod ga))
-    (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
-                                (invoke-method (count params))
-                                nil nil cw)]
-      (emit-expr ga
-                 (into {}
-                       (map-indexed (fn [i p]
-                                      [p {:kind :arg :index i}]))
-                       params)
-                 body)
-      (.returnValue ga)
-      (.endMethod ga))
+    ;; One `invoke` method per arity clause, same class -- this is exactly
+    ;; how the real host compiler emits fixed multi-arity `fn`: AFunction
+    ;; already exposes independently-overridable invoke0..invoke20, and IFn
+    ;; dispatch on the *call side* (host `apply`/`invoke`) already picks the
+    ;; right one by argument count. No RestFn/variadic (`&`) plumbing needed
+    ;; for this -- that is a separate, larger feature, not attempted here.
+    (doseq [{:keys [params body]} arities]
+      (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
+                                  (invoke-method (count params))
+                                  nil nil cw)]
+        (emit-expr ga
+                   (into {}
+                         (map-indexed (fn [i p]
+                                        [p {:kind :arg :index i}]))
+                         params)
+                   body)
+        (.returnValue ga)
+        (.endMethod ga)))
     (.visitEnd cw)
     (let [bytes (.toByteArray cw)
           loader (DynamicClassLoader.
@@ -1113,6 +1140,22 @@
    {:id :tiny-destructure-with-rest-positions
     :source "(fn [v] (let [[a b c] v] (if (nil? c) (+ a b) (+ a (+ b c)))))"
     :args [[20 22]]
+    :expected 42}
+   {:id :tiny-multi-arity-one-arg
+    :source "(fn ([x] x) ([x y] (+ x y)))"
+    :args [42]
+    :expected 42}
+   {:id :tiny-multi-arity-two-arg
+    :source "(fn ([x] x) ([x y] (+ x y)))"
+    :args [20 22]
+    :expected 42}
+   {:id :tiny-multi-arity-three-way-zero-arg
+    :source "(fn ([] 42) ([x] x) ([x y] (+ x y)))"
+    :args []
+    :expected 42}
+   {:id :tiny-multi-arity-three-way-two-arg
+    :source "(fn ([] 42) ([x] x) ([x y] (+ x y)))"
+    :args [20 22]
     :expected 42}])
 
 (defn run
