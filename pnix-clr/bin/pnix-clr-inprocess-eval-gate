@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Named gate: experimental in-process Eval vs process-spawn parity (net10).
+# Not wired into default aggregate yet — opt-in until green for weeks.
+#
+# Requires: dotnet, built runtime-artifact, ClojureCLR publish, pnix-clr on PATH
+# or PNIX_CLR set.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+artifact="${PNIX_CLR_ARTIFACT:-${PNIX_CLR_RUNTIME_ARTIFACT:-$root/pnix-clr/target/runtime-artifact}}"
+substrate="${PNIX_CLR_SUBSTRATE:-$root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish}"
+proj="$root/csharp/examples/InProcessParity/InProcessParity.csproj"
+
+if [[ ! -f "$artifact/manifest.json" ]]; then
+  echo "pnix-clr-inprocess-eval-gate: missing artifact at $artifact" >&2
+  echo "  run: ./bin/build-pnix-clr-artifact" >&2
+  exit 2
+fi
+if [[ ! -f "$substrate/Clojure.dll" ]]; then
+  echo "pnix-clr-inprocess-eval-gate: missing substrate at $substrate" >&2
+  echo "  run: ./bin/build-clr" >&2
+  exit 2
+fi
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "pnix-clr-inprocess-eval-gate: dotnet not on PATH" >&2
+  exit 2
+fi
+
+export PNIX_CLR_ROOT="${PNIX_CLR_ROOT:-$root}"
+export PNIX_CLR_ARTIFACT="$artifact"
+export PNIX_CLR_RUNTIME_ARTIFACT="$artifact"
+export PNIX_CLR_SUBSTRATE="$substrate"
+export PNIX_CLR="${PNIX_CLR:-$root/bin/pnix-clr}"
+
+echo "== pnix-clr-inprocess-eval-gate =="
+echo "  PNIX_CLR_ROOT=$PNIX_CLR_ROOT"
+echo "  PNIX_CLR_ARTIFACT=$PNIX_CLR_ARTIFACT"
+echo "  PNIX_CLR_SUBSTRATE=$PNIX_CLR_SUBSTRATE"
+echo "  PNIX_CLR=$PNIX_CLR"
+
+dotnet run --project "$proj" -c Release
+echo "pnix-clr-inprocess-eval-gate: PASS"

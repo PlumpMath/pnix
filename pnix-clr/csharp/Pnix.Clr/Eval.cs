@@ -86,6 +86,13 @@ namespace Pnix.Clr
 
         /// <summary>Extra environment variables for the child process.</summary>
         public IReadOnlyDictionary<string, string>? ExtraEnv { get; init; }
+
+        /// <summary>
+        /// Optional absolute path to ClojureCLR net10 publish dir (contains
+        /// <c>Clojure.dll</c>). Used by experimental in-process eval; also
+        /// read from env <c>PNIX_CLR_SUBSTRATE</c>.
+        /// </summary>
+        public string? SubstrateDir { get; init; }
     }
 
     /// <summary>
@@ -115,32 +122,39 @@ namespace Pnix.Clr
         }
 
         /// <summary>
-        /// In-process evaluation is <b>not admitted</b>. Always throws.
-        /// Use <see cref="Source"/> / <see cref="File"/> (process-spawn).
-        /// Design: monorepo <c>pnix-clr/docs/IN_PROCESS_EVAL.md</c>.
+        /// Experimental in-process eval (net10+). Loads ClojureCLR + guest AOT
+        /// without <c>Process.Start</c>. Requires substrate + artifact paths
+        /// (see <c>docs/IN_PROCESS_EVAL.md</c>). Default supported path remains
+        /// <see cref="Source"/> (process-spawn).
         /// </summary>
         public static EvalResult SourceInProcess(string source, EvalOptions? options = null)
         {
+#if NET10_0_OR_GREATER
+            return InProcessEval.Source(source, options);
+#else
             _ = source;
             _ = options;
             throw new NotSupportedException(
-                "Pnix.Clr in-process eval is not admitted. " +
-                "Use Eval.Source (process-spawn pnix-clr). " +
-                "See docs/IN_PROCESS_EVAL.md for the embedding design.");
+                "Pnix.Clr in-process eval requires net10.0+ (product TFM). " +
+                "On net8 use Eval.Source (process-spawn). See docs/IN_PROCESS_EVAL.md.");
+#endif
         }
 
         /// <summary>
-        /// In-process file eval is <b>not admitted</b>. Always throws.
-        /// Use <see cref="File"/> instead.
+        /// Experimental in-process file eval (net10+). See
+        /// <see cref="SourceInProcess"/>.
         /// </summary>
         public static EvalResult FileInProcess(string path, EvalOptions? options = null)
         {
+#if NET10_0_OR_GREATER
+            return InProcessEval.File(path, options);
+#else
             _ = path;
             _ = options;
             throw new NotSupportedException(
-                "Pnix.Clr in-process eval is not admitted. " +
-                "Use Eval.File (process-spawn pnix-clr). " +
-                "See docs/IN_PROCESS_EVAL.md for the embedding design.");
+                "Pnix.Clr in-process eval requires net10.0+ (product TFM). " +
+                "On net8 use Eval.File (process-spawn). See docs/IN_PROCESS_EVAL.md.");
+#endif
         }
 
         /// <summary>Async evaluate an inline expression.</summary>

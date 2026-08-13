@@ -1,10 +1,10 @@
-# In-process C# evaluator (design — not admitted)
+# In-process C# evaluator (experimental spike)
 
-**Status:** design only (2026-08-14).  
-**Current supported surface:** `Pnix.Clr.Eval.Source` / `Eval.File` — **process-spawn** `pnix-clr`, JSON CLI contract.  
-**Do not claim** in-process eval closed until the acceptance gate below is green.
+**Status:** experimental spike (2026-08-14) — **not** the product default.  
+**Supported default:** `Pnix.Clr.Eval.Source` / `Eval.File` — **process-spawn** `pnix-clr`, JSON CLI contract.  
+**Opt-in:** `Eval.SourceInProcess` / `FileInProcess` on **net10.0+** only.
 
-Related: `csharp/Pnix.Clr/Eval.cs` · monorepo `HOST_ENV_P2_P3.md` · `clr-meta/todo.md` § Host-import hard.
+Related: `csharp/Pnix.Clr/InProcessEval.cs` · monorepo `HOST_ENV_P2_P3.md` · `clr-meta/todo.md`.
 
 ---
 
@@ -83,11 +83,54 @@ Rewrite evaluator in C# / F#. **Rejected for now** — second semantic source of
 
 ---
 
-## Suggested first implementation slice (later)
+## Spike landed (2026-08-14)
 
-1. Spike: ALC load of published Clojure.Main + one `pnix-clr` AOT DLL; call a tiny known entry; capture stdout/JSON.
-2. Map to `EvalResult`; compare to `Eval.Source` on `"1 + 2"`.
-3. Named gate `bin/pnix-clr-inprocess-eval-gate` (opt-in; not in default aggregate until green for weeks).
-4. Expand corpus only with the gate green.
+| Piece | Location |
+|-------|----------|
+| Implementation | `csharp/Pnix.Clr/InProcessEval.cs` (net10 `#if`) |
+| API | `Eval.SourceInProcess` / `FileInProcess` |
+| Parity example | `csharp/examples/InProcessParity/` |
+| Gate | `bin/pnix-clr-inprocess-eval-gate` (opt-in; **not** in `pnix-clr-gate` yet) |
 
-Until then, callers must use process-spawn `Eval.Source` / `Eval.File`.
+### How it works
+
+1. Resolve **substrate** (`PNIX_CLR_SUBSTRATE` or checkout `clojure-clr-…/net10.0/publish`) and **artifact** (`PNIX_CLR_ARTIFACT`).
+2. Hook `AssemblyLoadContext.Default.Resolving` so guest AOT DLLs find `Clojure.dll`.
+3. Preload substrate assemblies; `require` `pnix-clr.evaluator` / `main` / `json`.
+4. Invoke `eval-source` (or `eval-file`) + `projection` + `write-json` via reflection — **no** `Environment.Exit` from `-main`.
+5. Parse into the same `EvalResult` shape as the process path.
+
+### Env contract
+
+| Variable | Role |
+|----------|------|
+| `PNIX_CLR_ARTIFACT` | Guest AOT dir (`manifest.json` + `*.clj.dll`) |
+| `PNIX_CLR_SUBSTRATE` | ClojureCLR net10 publish dir (`Clojure.dll`) |
+| `PNIX_CLR_ROOT` | Host root (import confinement) |
+| `PNIX_CLR` | Process path still used by parity comparison |
+
+### Verified corpus (gate)
+
+- `1 + 2` → 3  
+- `true && !false` → true  
+- `if true then 40 + 2 else 0` → 42  
+- `1 / 0` → failed / division-by-zero (parity)  
+- Missing substrate → `NotSupportedException` (fail closed)
+
+### Still open before “admitted”
+
+- [ ] Collectible isolated ALC (today uses Default + Resolving — intentional spike tradeoff)
+- [ ] Broader parity corpus + wire into aggregate only after weeks green
+- [ ] net8 host story (keep process-spawn)
+- [ ] Unload / multi-thread reentrancy policy
+- [ ] No Stage15/N claims from embedding
+
+### Run
+
+```bash
+export PNIX_CLR_ROOT=$PWD
+export PNIX_CLR_ARTIFACT=$PWD/pnix-clr/target/runtime-artifact
+export PNIX_CLR_SUBSTRATE=$PWD/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish
+export PNIX_CLR=$PWD/bin/pnix-clr
+./bin/pnix-clr-inprocess-eval-gate
+```

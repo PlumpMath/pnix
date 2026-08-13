@@ -12,7 +12,7 @@ portable multi-host `.px` library.
 | Surface | Role |
 |---------|------|
 | `Pnix.Clr.Eval.Source` / `File` | **Supported:** process-spawn `pnix-clr`, parse JSON CLI result |
-| `Eval.SourceInProcess` / `FileInProcess` | **Not admitted** — always throws; design in [`docs/IN_PROCESS_EVAL.md`](../../docs/IN_PROCESS_EVAL.md) |
+| `Eval.SourceInProcess` / `FileInProcess` | **Experimental (net10+)** — ALC/substrate embed; gate `bin/pnix-clr-inprocess-eval-gate`; see [`docs/IN_PROCESS_EVAL.md`](../../docs/IN_PROCESS_EVAL.md) |
 | `lib/net10.0/runtime-artifact/*.clj.dll` | Guest AOT (ClojureCLR-bound) |
 | `build/Pnix.Clr.props` + `.targets` (export layout; sources under `msbuild/`) | MSBuild HintPath / Reference wiring |
 

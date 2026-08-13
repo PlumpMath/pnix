@@ -320,10 +320,11 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 - Do not renumber stages for packaging work.
 
 ### Host-import hard
-- [x] In-process C# evaluator **design** — `docs/IN_PROCESS_EVAL.md` + fail-closed
-  `Eval.SourceInProcess` / `FileInProcess` (2026-08-14). Implementation = later
-  spike per that doc; process-spawn remains default.
+- [x] In-process C# evaluator **design** — `docs/IN_PROCESS_EVAL.md` (2026-08-14).
+- [x] In-process **spike** — `InProcessEval.cs` + `SourceInProcess` (net10),
+  parity gate `bin/pnix-clr-inprocess-eval-gate` (4 fixtures + negative;
+  not in default aggregate). Process-spawn remains product default.
 - [x] nuget.org **publish path fail-closed** — `bin/publish-pnix-clr-nupkg`
   (needs `NUGET_API_KEY`; dry-run ok). Local pack + smoke already green.
-- [ ] In-process implementation / parity gate (only after design acceptance)
+- [ ] In-process admission (isolated ALC, broader corpus, aggregate wire)
 - [ ] Actual nuget.org push (owner key)

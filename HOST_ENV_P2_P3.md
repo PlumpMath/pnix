@@ -92,7 +92,7 @@ Do **not** start without an explicit product decision.
 | **tool-eval-multi** | **landed** — `--multi-form FILE` + named gate in `clr-meta-gate` |
 | **Local nupkg smoke** | **landed** — `bin/pnix-clr-nupkg-smoke` (local feed only) |
 | **nuget publish path** | **landed fail-closed** — `bin/publish-pnix-clr-nupkg` (needs API key) |
-| **In-process C# eval** | **design only** — `pnix-clr/docs/IN_PROCESS_EVAL.md` + throw stubs |
+| **In-process C# eval** | **experimental spike** — net10 `SourceInProcess` + `pnix-clr-inprocess-eval-gate` |
 | **Still open** | real nuget.org push (owner key); in-process implementation; further facade only with new gates |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
@@ -156,3 +156,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | profiles-smoke wired into pnix-clr-gate (~17s) |
 | 2026-08-14 | local nupkg pack smoke (`pnix-clr-nupkg-smoke`); nuget.org still owner-gated |
 | 2026-08-14 | M1 per-call `:fold-fuel`; nuget publish fail-closed; in-process eval design |
+| 2026-08-14 | in-process eval spike (net10 ALC) + parity gate (opt-in, not aggregate) |
