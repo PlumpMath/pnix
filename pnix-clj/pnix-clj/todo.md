@@ -3355,7 +3355,7 @@ below.
 
 **Still open (optional product polish):**
 
-1. Document which namespaces are the **public** require surface after inject.
+1. ~~Document public require surface~~ → `docs/HOST_IMPORT.md` (2026-08-14).
 2. Optional: published Maven/local jar coordinate so projects need not local/root
    the monorepo path.
 3. Any “compiled .px” artifact remains host-bound unless a common packaging

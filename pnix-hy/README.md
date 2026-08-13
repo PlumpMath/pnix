@@ -28,6 +28,9 @@ Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`
 | **library** | installable `pnix_hy` package — **host-bound**, not portable `.px` |
 | **import `.px` from Python** | `import pnix_hy as ph; ph.eval_file("x.px")` |
 
+**Name clash:** flake `.#pnix-hy-hy` = `--repl hy` (source tree). HM PATH
+`pnix-hy-hy` = bare Hy with `PYTHONPATH`. See [`../HOST_IMPORT.md`](../HOST_IMPORT.md).
+
 ---
 
 ## Python 모듈로 설치 (pip)

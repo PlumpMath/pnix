@@ -3,7 +3,7 @@
 **Audience:** humans, Claude/Codex sessions, and anyone wiring `~/dot-nix` or
 a host flake. Read this before inventing a third naming scheme.
 
-**Last updated:** 2026-08-14  
+**Last updated:** 2026-08-14 (import smoke + packaging tiers)  
 **HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md` (PATH packages, ShellCheck rules)
 
 ---
@@ -50,9 +50,16 @@ Flake apps (inside each host directory):
 ```text
 nix run .#pnix-<host>          # runtime CLI
 nix run .#pnix-<host>-pnix     # pnix-main REPL
-nix run .#pnix-<host>-library  # where the host exposes it (esp. clr, rs)
 nix run .#gate
+nix run .#pnix-rs-library      # rs only: embeddable rlib/dylib package
+nix run .#pnix-clr-library     # clr only: export Pnix.Clr + guest AOT
 ```
+
+**Not every host has `.#pnix-<host>-library`.** See [HOST_IMPORT.md](HOST_IMPORT.md)
+§ packaging tiers. clj/hy/cljs expose the library as the main product package
+(plus HM `pnix-*-library` path printers).
+
+Import cookbooks: **[HOST_IMPORT.md](HOST_IMPORT.md)**.
 
 HM reimplements shell runners with **`writeShellScriptBin`** (never raw
 `writeShellApplication` → ShellCheck/GHC on x86_64-darwin). See
@@ -66,8 +73,8 @@ Libraries are **host-bound**. Prefer these entry points:
 
 | Host | From host language |
 |------|--------------------|
-| clj | `(pnix-clj.core/eval-file "x.px")` after classpath inject; or `eval-source` |
-| cljs | packaged module `evalFile` / `evalSource` (see `share/pnix-cljs`) |
+| clj | `(pnix-clj.core/eval-file "x.px")` — public API: [docs/HOST_IMPORT.md](pnix-clj/pnix-clj/docs/HOST_IMPORT.md) |
+| cljs | `require('@plumpmath/pnix-cljs')` → `evalFile` / `evalSource` ([HOST_IMPORT.md](pnix-cljs/HOST_IMPORT.md)) |
 | hy | `import pnix_hy as ph; ph.eval_file("x.px")` (= `run_px`) |
 | rs | `pnix_rs::eval_file("x.px")` / C ABI `pnix_rs_eval` |
 | clr | `Pnix.Clr.Eval.File("x.px")` or `pnix-clr x.px` (JSON CLI result) |
@@ -105,8 +112,14 @@ packages.pnix-rs-library → $out/lib/libpnix_rs.* + $out/include/pnix_rs.h
 ### CLJS library layout (product)
 
 ```text
-packages.pnix-cljs → $out/share/pnix-cljs/  (NODE_PATH)
+packages.pnix-cljs →
+  $out/share/pnix-cljs/                         # flat: pnix-cljs-module.js
+  $out/lib/node_modules/@plumpmath/pnix-cljs/   # scoped require (preferred)
+NODE_PATH must include lib/node_modules and/or share/
+# require('@plumpmath/pnix-cljs')  or  require('pnix-cljs-module.js')
 ```
+
+Detail: [pnix-cljs/HOST_IMPORT.md](pnix-cljs/HOST_IMPORT.md).
 
 ### HY library layout (product)
 
@@ -164,6 +177,16 @@ cannot be done with PATH alone lives in the host tree (this monorepo).
 HM packaging truth: `~/dot-nix/dev/PNIX-HOSTS.md`.
 
 ---
+
+## Hy name clash (important)
+
+| Name | Meaning |
+|------|---------|
+| flake `.#pnix-hy-hy` | `pnix-hy --repl hy` (source tree / proof Python) |
+| HM bin `pnix-hy-hy` | bare **Hy interpreter** with `PYTHONPATH` for `pnix_hy` |
+
+They share a name but are **not** the same program. Prefer docs that say
+“bare `hy` via `pnix-hy-host`” vs “flake app `pnix-hy-hy` REPL mode”.
 
 ## Smoke (orientation)
 

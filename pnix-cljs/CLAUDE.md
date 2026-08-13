@@ -40,6 +40,7 @@ Canonical monorepo doc: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md).
 | **library** | flake package `share/pnix-cljs` | host-bound JS module, not portable `.px` |
 | **meta** | `cljs-meta` / `pnix-cljs-cljs` | fixed-point host mechanism |
 
-Host-language `.px` import: module `evalFile` / `evalSource` from the share tree.  
+Host-language `.px` import: `require('@plumpmath/pnix-cljs')` or
+`require('pnix-cljs-module.js')` — see [`HOST_IMPORT.md`](HOST_IMPORT.md).  
 `shadow-cljs` remains a **build orchestrator**; default runtime host is `pnix-cljs`.  
 HM: `~/dot-nix/dev/cljs` (`pnix-cljs-host`).

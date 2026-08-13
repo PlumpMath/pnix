@@ -65,7 +65,8 @@ Each host must support **both** orientations. Libraries are **host-bound**
 (not a shared multi-host `.px` package). Full matrix, env contracts, and
 import APIs:
 
-→ **[HOST_DEV_ENV.md](HOST_DEV_ENV.md)** (canonical for agents and developers)
+→ **[HOST_DEV_ENV.md](HOST_DEV_ENV.md)** (canonical dual-axis for agents/developers)  
+→ **[HOST_IMPORT.md](HOST_IMPORT.md)** (per-host import cookbooks + packaging tiers)
 
 | Orientation | Name pattern | Intent |
 |-------------|--------------|--------|

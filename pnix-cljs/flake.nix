@@ -260,11 +260,37 @@ buildPhase = ''
               node bin/artifact-identity.js --check
               test -f pnix-cljs/dist/pnix-cljs.js
               test -f pnix-cljs/dist/pnix-cljs-module.js
-              mkdir -p $out/bin $out/share/pnix-cljs
+              # Host-language library layout (Node):
+              #   share/pnix-cljs/                 — flat files (NODE_PATH entry)
+              #   lib/node_modules/@plumpmath/pnix-cljs/ — scoped package so
+              #     require('@plumpmath/pnix-cljs') works when NODE_PATH includes
+              #     lib/node_modules.
+              # Source package.json points main at dist/; the install tree is
+              # flat, so we rewrite main for the shipped package.json.
+              mkdir -p $out/bin \
+                       $out/share/pnix-cljs \
+                       $out/lib/node_modules/@plumpmath/pnix-cljs
               cp pnix-cljs/dist/pnix-cljs.js \
-                 pnix-cljs/dist/pnix-cljs-module.js $out/share/pnix-cljs/
-              cp pnix-cljs/package.json $out/share/pnix-cljs/package.json
+                 pnix-cljs/dist/pnix-cljs-module.js \
+                 $out/share/pnix-cljs/
+              cp pnix-cljs/dist/pnix-cljs.js \
+                 pnix-cljs/dist/pnix-cljs-module.js \
+                 $out/lib/node_modules/@plumpmath/pnix-cljs/
+              cat > $out/share/pnix-cljs/package.json <<'JSON'
+{
+  "name": "@plumpmath/pnix-cljs",
+  "version": "0.1.0",
+  "description": "PNIX runtime implemented in ClojureScript (host-bound library)",
+  "main": "pnix-cljs-module.js",
+  "bin": { "pnix-cljs": "pnix-cljs.js" }
+}
+JSON
+              cp $out/share/pnix-cljs/package.json \
+                 $out/lib/node_modules/@plumpmath/pnix-cljs/package.json
               makeWrapper ${pkgs.nodejs}/bin/node $out/bin/pnix-cljs \
+                --prefix NODE_PATH : "$out/lib/node_modules:$out/share/pnix-cljs" \
+                --set-default PNIX_CLJS_SHARE "$out/share/pnix-cljs" \
+                --set-default PNIX_CLJS_LIBRARY "$out/share/pnix-cljs" \
                 --add-flags $out/share/pnix-cljs/pnix-cljs.js
             '';
           };

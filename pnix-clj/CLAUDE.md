@@ -30,4 +30,5 @@ Canonical monorepo doc: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md).
 | **meta** | `clj-meta` | pnix-agnostic |
 
 Host-language `.px` import: `(pnix-clj.core/eval-file "x.px")` / `eval-source`.  
+Public surface: [`pnix-clj/docs/HOST_IMPORT.md`](pnix-clj/docs/HOST_IMPORT.md).  
 HM: `~/dot-nix/dev/clj` + overlay.

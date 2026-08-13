@@ -272,8 +272,8 @@ below.
 
 **Still open:**
 
-1. Document exact Node `require` entry names (module id, ESM vs CJS) in a short
-   cookbook section.
+1. ~~Document Node require entry~~ → `../HOST_IMPORT.md` + scoped
+   `lib/node_modules/@plumpmath/pnix-cljs` in flake install (2026-08-14).
 2. Optional npm package publish so host projects need not rely on nix store
    `NODE_PATH`.
 3. Shadow hooks remain optional; runtime host is **pnix-cljs**, not a portable

@@ -19,7 +19,7 @@ Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`
 | **host-main** | `pnix-clj-clj` / bare `clojure` — injects this tree via `-Sdeps` |
 | **pnix-main** | `nix run .#pnix-clj-pnix` |
 | **library** | `pnix-clj` sources on classpath; `PNIX_CLJ_ROOT` — **host-bound**, not portable `.px` |
-| **import `.px` from Clojure** | `(pnix-clj.core/eval-file "x.px")` |
+| **import `.px` from Clojure** | `(pnix-clj.core/eval-file "x.px")` — [docs/HOST_IMPORT.md](pnix-clj/docs/HOST_IMPORT.md) |
 
 ## Layout
 

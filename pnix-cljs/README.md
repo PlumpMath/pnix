@@ -28,7 +28,7 @@ Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`
 | **host-main** | bare `clojurescript` → `pnix-cljs`; Node with `NODE_PATH` → `share/pnix-cljs` |
 | **pnix-main** | `nix run .#pnix-cljs-pnix` / `pnix-cljs --repl` |
 | **library** | flake package `$out/share/pnix-cljs` — **host-bound** JS, not portable `.px` |
-| **import `.px` from Node** | module `evalFile` / `evalSource` from the share tree |
+| **import `.px` from Node** | `require('@plumpmath/pnix-cljs')` → `evalFile*` — see [HOST_IMPORT.md](HOST_IMPORT.md) |
 
 `shadow-cljs` may remain the **build orchestrator**; the default **runtime** host
 is `pnix-cljs`, not a portable multi-host bytecode package.
