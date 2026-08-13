@@ -1,0 +1,132 @@
+# Host env P2 / P3 + next product tracks (planning)
+
+**Status:** dual-axis + library import **closed** (smoke 10/10, 2026-08-14).  
+**Doctrine:** [HOST_DEV_ENV.md](HOST_DEV_ENV.md) · [HOST_IMPORT.md](HOST_IMPORT.md)  
+**Local regression:** `./bin/host-import-smoke`
+
+This file is the **owner-facing plan** for optional follow-ups. Hard items stay
+planned until explicitly pulled. Easy items may land as small examples/CI.
+
+---
+
+## P2 — quality / convenience (host-import track)
+
+### P2.1 Periodic smoke (ops)
+
+| Field | Content |
+|-------|---------|
+| Goal | After every `dot-nix` rebuild that bumps pnix inputs, re-run import smoke |
+| How | `~/pnix/bin/host-import-smoke` |
+| Done when | Documented habit + optional CI (P2.3) |
+| Effort | trivial |
+| **State** | **landed** as script + docs; habit is operator-side |
+
+### P2.2 Real mini projects (host-main demos)
+
+| Host | Skeleton | Done when |
+|------|----------|-----------|
+| clj | `examples/host-import/clj/` + `deps.edn` local/root | `clojure -M -m smoke` prints 3 |
+| cljs | `examples/host-import/cljs/smoke.mjs` | `node smoke.mjs` prints 3 (needs NODE_PATH / HM) |
+| hy | `examples/host-import/hy/smoke.py` | `python smoke.py` prints 3 |
+| rs | `examples/host-import/rs/README.md` path-dep or link flags | documented; optional tiny crate later |
+| clr | point at `pnix-clr/csharp/examples/HelloPnix` + props sample | already exists |
+
+| Field | Content |
+|-------|---------|
+| Effort | small |
+| **State** | **easy start: skeletons under `examples/host-import/`** (this PR) |
+
+### P2.3 CI for import regression
+
+| Field | Content |
+|-------|---------|
+| Goal | PR cannot delete smoke/examples without notice |
+| Phase A (easy) | layout + `bash -n` + **clj example** via `nix shell nixpkgs#clojure` |
+| Phase B (medium) | per-host flake jobs that only print `pnix-*-library` env |
+| Phase C (hard) | full 5-host eval like local smoke (needs multi-toolchain matrix; do **not** start until A is green for weeks) |
+| **State** | **Phase A started** in `.github/workflows/hosts.yml` |
+
+### P2.4 Public API polish (docs only unless churn)
+
+| Host | Work | Priority |
+|------|------|----------|
+| clj | Keep `docs/HOST_IMPORT.md` as source of truth; expand only when API grows | low |
+| hy | Freeze `__all__`; optional py.typed | low |
+| cljs | Scoped require already verified; optional npm publish = P3 | — |
+| rs | CARGO_HOST_IMPORT.md done; C ABI semver = P3 | — |
+| clr | pack local nupkg done; nuget.org = P3 | — |
+
+---
+
+## P3 — distribution / large product (plan only)
+
+Do **not** start without an explicit product decision.
+
+### P3.1 Registry publish
+
+| Registry | Package | Blockers |
+|----------|---------|----------|
+| Maven | `pnix-clj` jar | versioning, source jar, which namespaces public |
+| npm | `@plumpmath/pnix-cljs` | already scoped name in store; need CI publish secrets |
+| crates.io | `pnix-rs` | currently `publish = false`; zero-deps story must stay |
+| nuget.org | `Pnix.Clr` | pack script exists; signing, version, artifact bundle policy |
+
+### P3.2 Full ClojureCLR project story
+
+| Goal | Drop-in `deps.edn` / project.clj style CLR host beyond `-e` / single file |
+| Acceptance | Documented REPL + multi-file load + Reference assemblies without pnix-only CLI |
+| Depends on | clr-meta substrate stability, not just pnix-clr guest AOT |
+| **Plan detail** | see `pnix-clr/clr-meta/todo.md` § “P3 full ClojureCLR project” |
+
+### P3.3 Common portable `.px` library (historical pnix-meta)
+
+| Goal | One portable library corpus loadable by all five hosts with equal semantics |
+| Status | **deferred** — do not block host-local import |
+| Acceptance | packaging contract + five-host gate slice + no host-leak builtins |
+| **Plan** | reopen only after host gates admit a shared corpus again |
+
+### P3.4 ABI / typing contracts
+
+| Item | Host | Plan |
+|------|------|------|
+| C ABI semver for `pnix_rs.h` | rs | version macro + changelog; bump on any struct/export change |
+| `py.typed` + stub | hy | empty py.typed + export only `__all__` |
+| MSBuild multi-TFM NuGet | clr | net8+net10 already multi-target managed DLL |
+
+---
+
+## Adjacent product tracks (plan only — not host-env)
+
+These were listed as “next after host-env”. **No implementation in this cut.**
+
+### A. clj residual / product residual
+
+| Source of truth | `pnix-clj/pnix-clj/todo.md` § REMAINING WORK + `docs/REMAINING_DECISION.md` |
+| Rule | Do not invent a new residual menu; pillar-driven (M-series) or oracle divergence only |
+| Next candidates (owner picks) | machine fragment growth; specialize residual fuel; conformance Phase D **deferred** |
+| Host-import interaction | none required — `eval-file` / classpath inject already green |
+| **Detail** | `pnix-clj/pnix-clj/todo.md` § “Post host-env plan (2026-08-14)” |
+
+### B. clr-meta residual
+
+| Source of truth | `pnix-clr/clr-meta/todo.md` + `STATUS.md` + stage design docs |
+| Rule | meta first; no Stage15/N promotion claims without receipts |
+| Next candidates | widen admitted eval surface carefully; compiler stage ladder honesty; full CLR project story (P3.2) |
+| Host-import interaction | export library already depends on artifact builder |
+| **Detail** | `pnix-clr/clr-meta/todo.md` § “Post host-env plan (2026-08-14)” |
+
+### C. Other hosts residual
+
+| hy | `pnix-hy/pnix-hy/todo.md` — gate green; projection polish only |
+| rs | `pnix-rs/pnix-rs/todo.md` — substrate-check / stage ladder in rs-meta |
+| cljs | corpus admission still open per monorepo README |
+
+---
+
+## Decision log
+
+| Date | Decision |
+|------|----------|
+| 2026-08-14 | Host dual-axis + library import declared **closed** for day-to-day dev env |
+| 2026-08-14 | P2.2 skeletons + P2.3 Phase A CI **started**; P3 registry/full CLR/common-.px **plan only** |
+| 2026-08-14 | clj residual / clr-meta / full examples / heavy CI = **todo detail only** until owner pull |

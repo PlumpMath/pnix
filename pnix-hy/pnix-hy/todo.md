@@ -386,3 +386,8 @@ below.
 3. ~~import hook documented~~ — see monorepo `HOST_IMPORT.md` § hy
    (`install_pnix_import_hook`); host-only, not common-meta.
 
+## Post host-env plan (2026-08-14) — plan only
+
+Host dual-axis + library import for this host is **closed** for day-to-day.
+Optional P2/P3 and residual product work: monorepo `HOST_ENV_P2_P3.md`.
+Do not reopen host-env packaging as a primary gate unless env contracts break.

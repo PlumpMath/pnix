@@ -3361,3 +3361,27 @@ below.
 3. Any “compiled .px” artifact remains host-bound unless a common packaging
    contract is designed — do not claim otherwise.
 
+## Post host-env plan (2026-08-14) — plan only unless owner pulls
+
+Host dual-axis + `eval-file` / classpath inject are **closed** for day-to-day.
+See monorepo `HOST_ENV_P2_P3.md`.
+
+### Do not re-open as "residual menu"
+Follow `docs/REMAINING_DECISION.md` and § REMAINING WORK above. No new
+owner-gated residual list from host-env work.
+
+### Optional product pulls (priority order when free)
+1. **Machine fragment growth** (M-series) — only if a pillar needs it.
+2. **Specialize residual fuel / fold options** — M1 follow-ups already listed.
+3. **Maven publish of pnix-clj** — P3 registry; needs version + public API freeze
+   (`docs/HOST_IMPORT.md` is the require surface).
+4. **Conformance Phase D** — still DEFERRED (see backlog status at top).
+
+### Host-import follow-ups (easy already done)
+- [x] `eval-file` public helper
+- [x] `examples/host-import/clj` mini project
+- [x] monorepo `bin/host-import-smoke` + CI layout/clj example
+
+### Host-import hard (not started)
+- [ ] Multi-file sample app with `import` / modules map
+- [ ] Published jar coordinate (P3)

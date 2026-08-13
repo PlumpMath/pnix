@@ -718,3 +718,8 @@ below.
 2. Optional: crates.io / git package (`publish = false` today).
 3. Stable C ABI versioning for the cdylib (semver + header).
 
+## Post host-env plan (2026-08-14) — plan only
+
+Host dual-axis + library import for this host is **closed** for day-to-day.
+Optional P2/P3 and residual product work: monorepo `HOST_ENV_P2_P3.md`.
+Do not reopen host-env packaging as a primary gate unless env contracts break.

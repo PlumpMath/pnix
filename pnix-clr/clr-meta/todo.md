@@ -279,3 +279,33 @@ below.
 6. Explicit note: runtime-artifact `.clj.dll` is **host-bound** (CLR), not a
    common multi-host .px package. (Still true; document, do not claim otherwise.)
 
+## Post host-env plan (2026-08-14) — plan only unless owner pulls
+
+Host library export (`export-pnix-clr-library`, `Pnix.Clr.Eval`, MSBuild props,
+local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
+`HOST_ENV_P2_P3.md`.
+
+### P3 full ClojureCLR project (detail)
+**Goal:** beyond focused `clojure-clr -e` / single-file facade — multi-file
+`.clj` projects with stable substrate References.
+
+**Acceptance sketch:**
+1. Documented "plain ClojureCLR REPL" entry separate from `pnix-clr` guest eval.
+2. Project template: deps or .csproj that References Clojure NuGet pin + optional
+   guest AOT path via `PNIX_CLR_ARTIFACT`.
+3. Gate: smoke that loads 2 namespaces from disk without pnix product CLI.
+4. Honest claims only — no Stage15/N, no "clojure-clr replaces ClojureCLR".
+
+**Order:**
+1. Inventory what `bin/clojure-clr` / `clr-meta` admit today (fail-closed surface).
+2. Choose TFM story (net10 host vs net8 Rhino) — do not mix silently.
+3. Template + gate; only then consider nuget.org for Pnix.Clr.
+
+### clr-meta residual (product, not packaging)
+- Continue stage ladder honesty via STATUS.md + design docs.
+- Widen guest eval only with artifact plan + hash gates.
+- Do not renumber stages for packaging work.
+
+### Host-import hard (not started)
+- [ ] In-process C# evaluator (no process spawn) — large; needs embedding design
+- [ ] nuget.org publish of Pnix.Clr

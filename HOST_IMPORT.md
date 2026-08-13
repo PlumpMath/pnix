@@ -14,6 +14,10 @@ Per-host detail:
 
 HM path helpers: `pnix-<host>-library` / `pnix-<host>-refs` (see `~/dot-nix/dev/PNIX-HOSTS.md`).
 
+**P2/P3 roadmap:** [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md)  
+**Mini examples:** [examples/host-import/](examples/host-import/)  
+**Regression:** `./bin/host-import-smoke`
+
 ---
 
 ## Library packaging tiers (do not over-claim)
