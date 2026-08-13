@@ -680,3 +680,29 @@ substrate-checked).
   cross-host .px corpus 원본 (c05/c09 vendored, 나머지는 로드맵).
 - `~/pnix-hy/pnix-hy/todo.md` — px 의미 감사(A4 재귀 let 등), SCOPE LOCK 문화.
 - `../rs-meta/todo.md` — substrate의 stage ladder / evaluated subset 현황.
+
+## Host-language import of pnix product library (user intent, 2026-08-13)
+
+Context from home-manager (`dot-nix`) integration:
+
+- `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
+- `pnix-<host>-<lang>` = host-language interpreter/compiler used for day-to-day
+  host development.
+- Libraries produced by the **pnix product half** of this host are **host-
+  language libraries**: they must load in *this* host language. They are **not**
+  assumed to be portable common bytecode for other hosts.
+- A future **common portable `.px` library** track (historical pnix-meta style)
+  is deferred; do not block host-local import work on that.
+
+dot-nix can only set PATH/env (classpath, PYTHONPATH, link paths, NODE_PATH,
+DLL HintPath). Anything that requires a real packaging format is product work
+below.
+
+
+### rs — remaining product work
+
+1. Document Cargo integration: path dep vs system `PNIX_RS_LIB_DIR` /
+   `libpnix_rs.{rlib,a,dylib}` + `pnix_rs.h`.
+2. Optional: crates.io / git package so host crates do not depend on store paths.
+3. Stable C ABI versioning for the cdylib (semver + header).
+

@@ -3322,3 +3322,31 @@ stage15 in pnix-hy
 
 Any copied checklist item that cannot be translated through this table should be
 deleted or rewritten before implementation.
+
+## Host-language import of pnix product library (user intent, 2026-08-13)
+
+Context from home-manager (`dot-nix`) integration:
+
+- `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
+- `pnix-<host>-<lang>` = host-language interpreter/compiler used for day-to-day
+  host development.
+- Libraries produced by the **pnix product half** of this host are **host-
+  language libraries**: they must load in *this* host language. They are **not**
+  assumed to be portable common bytecode for other hosts.
+- A future **common portable `.px` library** track (historical pnix-meta style)
+  is deferred; do not block host-local import work on that.
+
+dot-nix can only set PATH/env (classpath, PYTHONPATH, link paths, NODE_PATH,
+DLL HintPath). Anything that requires a real packaging format is product work
+below.
+
+
+### clj — remaining product work
+
+1. Document the supported require surface for caller projects after
+   `-Sdeps {pnix/pnix-clj {:local/root …}}` (which namespaces are public API).
+2. Optional: published Maven/local jar coordinate so projects need not local/root
+   the monorepo path.
+3. Clarify that any “compiled .px” artifact is host-bound unless a common
+   packaging contract is designed.
+

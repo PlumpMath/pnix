@@ -332,3 +332,44 @@ sacred 무접촉, 공유 ABI envelope 무변경(0024는 payload-레벨 설계로
   - 테스트: 중복 정적 구조가 1회로; parity.
 - [~] **Q1-3 → 0030 context propagation P1 SHIPPED** — CPS 전면 재작성 대신 Bondorf CPS **효과**(문맥 전파)를 commuting conversion으로 realize: `_commute_binary_if`가 `(if c then a else b) op R`(R=static scalar)를 브랜치로 push→폴딩. `pe_size_report.commuting_conversion`. 스펙 `docs/proposals/0030-context-propagation.md`. P2(apply-through-if/let-bound/전면 CPS)는 실익 우리 워크로드 미검증이라 보류.
 - [ ] **(연구-open, 현재 비착수)** Q2.2(c) LMS `Rep[T]` 타입-스테이징 심화 · Q2.3 등가-보존 검증 방법론(translation validation/refinement/bisimulation) — 별도 평가기 미추진 결정으로 **결정엔 무관**. 필요 시 4차 리서치.
+
+## Host PATH (dot-nix, 2026-08-13)
+
+dot-nix exposes `pnix-hy-python` / `pnix-hy-hy` and joins them as
+`python`/`python3`/`hy` via `pnix-hy-host`. Global override of
+`pkgs.python311` is intentionally **not** done (breaks nixpkgs builders).
+
+### Open (product / packaging)
+
+1. Single interpreter story: proofPython (Hy pin) vs kimchi python-with-packages
+   still dual — document which is “the” host for pure pnix vs science stacks.
+2. Optional: ship a `packages.pnix-hy-host` from the flake so consumers need
+   not re-implement the symlinkJoin in every HM tree.
+
+
+## Host-language import of pnix product library (user intent, 2026-08-13)
+
+Context from home-manager (`dot-nix`) integration:
+
+- `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
+- `pnix-<host>-<lang>` = host-language interpreter/compiler used for day-to-day
+  host development.
+- Libraries produced by the **pnix product half** of this host are **host-
+  language libraries**: they must load in *this* host language. They are **not**
+  assumed to be portable common bytecode for other hosts.
+- A future **common portable `.px` library** track (historical pnix-meta style)
+  is deferred; do not block host-local import work on that.
+
+dot-nix can only set PATH/env (classpath, PYTHONPATH, link paths, NODE_PATH,
+DLL HintPath). Anything that requires a real packaging format is product work
+below.
+
+
+### hy — remaining product work
+
+1. Public `import pnix_hy` API stability (which submodules are host-library API).
+2. Optional: py.typed / package metadata so editors resolve imports without
+   store-path PYTHONPATH hacks.
+3. Host import hook for `.px` as Python modules (`install_pnix_import_hook`)
+   documented as host-only, not common-meta.
+

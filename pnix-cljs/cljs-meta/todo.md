@@ -224,3 +224,44 @@ self-hosting proof this repo targets.
    recommended action is the optional STATUS.md wording tweak in #3 so the
    "Open claims" list doesn't read as three more TODOs of the same kind as
    #1/#2.
+
+## Host toolchain (dot-nix, 2026-08-13)
+
+dot-nix wraps `shadow-cljs` to inject `PNIX_CLJS` and installs `pnix-cljs` /
+`clojurescript` as the **runtime** host. Full replacement of shadow as the
+**build backend** (compile CLJS projects without shadow) is **not** claimed.
+
+### Open
+
+1. Optional pnix-native CLJS build pipeline that can replace shadow for
+   non-Kimchi / simple modules (if ever desired).
+2. Document which shadow hooks should call `pnix-cljs` vs cljs-meta for
+   eval-at-build-time.
+
+
+## Host-language import of pnix product library (user intent, 2026-08-13)
+
+Context from home-manager (`dot-nix`) integration:
+
+- `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
+- `pnix-<host>-<lang>` = host-language interpreter/compiler used for day-to-day
+  host development.
+- Libraries produced by the **pnix product half** of this host are **host-
+  language libraries**: they must load in *this* host language. They are **not**
+  assumed to be portable common bytecode for other hosts.
+- A future **common portable `.px` library** track (historical pnix-meta style)
+  is deferred; do not block host-local import work on that.
+
+dot-nix can only set PATH/env (classpath, PYTHONPATH, link paths, NODE_PATH,
+DLL HintPath). Anything that requires a real packaging format is product work
+below.
+
+
+### cljs — remaining product work
+
+1. Document Node `require` entry for `share/pnix-cljs` (module name, ESM/CJS).
+2. Optional npm package publish so host CLJS/Node projects do not rely on
+   NODE_PATH to a nix store share/.
+3. Shadow integration hooks remain optional; runtime host is pnix-cljs, not a
+   portable .px bytecode package.
+

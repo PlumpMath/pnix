@@ -209,3 +209,68 @@ export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 See `STATUS.md` "Primary gate" section for the full script chain and
 `STAGE15_N_ROADMAP.md` for stage definitions and the promotion ordering this
 list follows.
+
+## Host toolchain / library export (from dot-nix integration, 2026-08-13)
+
+dot-nix can already expose **CLI runners** (`pnix-clr`, `pnix-clr-pnix`,
+`clojure-clr` alias, `pnix-clr-refs` helper). The following are **not**
+doable in home-manager alone — they need product work in this tree.
+**Do not claim them closed from packaging wrappers.**
+
+### Missing product surfaces
+
+1. **Shareable library package (NuGet and/or `lib/` layout)**  
+   - Goal: a csproj can `<Reference>` / `PackageReference` the guest+host
+     surface without hand-copying `target/runtime-artifact/*.dll`.  
+   - Today: AOT emits `pnix_clr.*.clj.dll` + `manifest.json` under a cache
+     tree; no stable package id, no `pnix-clr-library` flake package, no
+     `dotnet pack` story.  
+   - Acceptance sketch: `packages.pnix-clr-library` (or NuGet nupkg) with
+     documented Reference list + substrate (`Clojure` NuGet pin) version.
+
+2. **`clojure-clr` as a real host substrate, not only a name alias**  
+   - nixpkgs has no `clojure-clr`. dot-nix maps the bare name to `pnix-clr`.  
+   - Still missing: a drop-in that acts like “Clojure on CLR for arbitrary
+     .clj projects” (deps.edn / project.clj on CLR), vs pnix-only eval.
+   - Acceptance sketch: documented story for “plain ClojureCLR REPL +
+     reference assemblies” separate from `pnix-clr` guest eval.
+
+3. **Stable `DOTNET_*` / Reference env contract**  
+   - `pnix-clr-refs` can print paths after artifact build.  
+   - Missing: versioned env contract (`PNIX_CLR_ARTIFACT`, multi-TFM) and
+     a gate that fails if DLLs move without a manifest bump.
+
+4. **Developer identity of “stock CLR tools”**  
+   - Need clear split: Rhino/net8 plugin SDK vs pnix-clr net10 host SDK so
+     overlays never silently mix TFMs.
+
+
+## Host-language import of pnix product library (user intent, 2026-08-13)
+
+Context from home-manager (`dot-nix`) integration:
+
+- `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
+- `pnix-<host>-<lang>` = host-language interpreter/compiler used for day-to-day
+  host development.
+- Libraries produced by the **pnix product half** of this host are **host-
+  language libraries**: they must load in *this* host language. They are **not**
+  assumed to be portable common bytecode for other hosts.
+- A future **common portable `.px` library** track (historical pnix-meta style)
+  is deferred; do not block host-local import work on that.
+
+dot-nix can only set PATH/env (classpath, PYTHONPATH, link paths, NODE_PATH,
+DLL HintPath). Anything that requires a real packaging format is product work
+below.
+
+
+### clr — remaining product work (high priority for host import)
+
+1. **Library package**: NuGet and/or flake `packages.pnix-clr-library` that
+   exposes stable Reference assemblies (guest AOT DLLs + substrate pin), so
+   csproj can import without cache-tree paths.
+2. **ClojureCLR host library story**: bare `clojure-clr` as more than an alias
+   to the pnix eval CLI — Reference surface for host .clj / C# projects.
+3. Versioned env contract: `PNIX_CLR_ARTIFACT` + manifest-gated DLL set.
+4. Explicit note: runtime-artifact `.clj.dll` is **host-bound** (CLR), not a
+   common multi-host .px package.
+
