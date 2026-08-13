@@ -664,6 +664,13 @@
 
 ;; --- Futamura projection: residual -> lowering -> clj-meta host artifact ------
 
+(defn- residual-lambda-source
+  "Close residual source as a nested single-arg pnix lambda over sorted names."
+  [residual-source names]
+  (if (empty? names)
+    (str "(" residual-source ")")
+    (str "(" (str/join ": " names) ": (" residual-source "))")))
+
 (defn specialize-to-host
   "The actual Futamura projection: specialize `source` under `statics`, close
   the residual over its dynamic parameter names (sorted), lower the resulting
@@ -676,10 +683,7 @@
     (if (not= :ok (:status sp))
       sp
       (let [names (vec (sort (keys dynamics)))
-            lambda-source (if (empty? names)
-                            (str "(" (:residual-source sp) ")")
-                            (str "(" (str/join ": " names)
-                                 ": (" (:residual-source sp) "))"))
+            lambda-source (residual-lambda-source (:residual-source sp) names)
             ;; clj-meta verifies eval-form == compiled value, and two function
             ;; INSTANCES never compare equal — so the form handed to the host
             ;; lane is the residual lambda APPLIED to the dynamic arguments (a
@@ -714,6 +718,96 @@
                    :bytecode-determinism
                    (get-in cm [:compile-receipt :determinism :status])
                    :invoked {:status :ok :value (:value cm)}})))))))))
+
+(defn specialize-to-host-artifact
+  "Compile a REUSABLE residual host artifact under `statics`.
+
+  `dynamic-names` is the ordered (will be sorted) set of free dynamic
+  parameters the residual is closed over. Dynamics are NOT required at
+  compile time — apply later via `invoke-host-artifact`.
+
+  Equality story (honest): host function instances are not compared for
+  identity (clj-meta's eval==compile check cannot hold for two fn values).
+  Soundness is only via application: for any dynamics map,
+  (invoke-host-artifact art dynamics) must equal eval of the original
+  source under (merge statics dynamics). See tests."
+  [source statics dynamic-names]
+  (let [names (vec (sort (map str dynamic-names)))
+        sp (specialize source statics)]
+    (if (not= :ok (:status sp))
+      sp
+      (let [lambda-source (residual-lambda-source (:residual-source sp) names)
+            parsed (parser/parse-source lambda-source)]
+        (if (not= :ok (:status parsed))
+          (assoc parsed :phase :artifact-parse :lambda-source lambda-source)
+          (let [lowered (lowering/lower-ast (:ast parsed))]
+            (if (not= :ok (:status lowered))
+              (assoc lowered :phase :lowering :lambda-source lambda-source)
+              ;; eval-form only: do NOT require eval-value == compile-value for
+              ;; function-typed results (the equality story this API documents).
+              (try
+                (let [eval-form* (requiring-resolve 'pnix.clj-meta.compiler/eval-form)
+                      v (lowering/force-normal (eval-form* (:form lowered)))]
+                  (cond
+                    (fn? v)
+                    {:status :ok
+                     :schema :pnix-clj.host-artifact.v0
+                     :specialize sp
+                     :dynamic-names names
+                     :lambda-source lambda-source
+                     :lowered-form (:form lowered)
+                     :fn v}
+
+                    ;; Fully-static residual folded to data: zero-arg thunk.
+                    (and (empty? names) (data-value? v))
+                    {:status :ok
+                     :schema :pnix-clj.host-artifact.v0
+                     :specialize sp
+                     :dynamic-names names
+                     :lambda-source lambda-source
+                     :lowered-form (:form lowered)
+                     :fn (fn [] v)
+                     :const-value v}
+
+                    :else
+                    (err/failed :specialize
+                                :host-artifact-not-fn
+                                {:value-type (str (type v))
+                                 :lambda-source lambda-source})))
+                (catch Throwable t
+                  (err/failed-throwable :specialize :host-artifact-eval-threw t))))))))))
+
+(defn invoke-host-artifact
+  "Apply a reusable host artifact to `dynamics` (map name->data value).
+  Nested single-arg application over sorted :dynamic-names. Empty names call
+  the zero-arg constant thunk (fully-static residual). Missing keys or
+  non-data values fail closed. Returns {:status :ok :value v} or failed map."
+  [art dynamics]
+  (cond
+    (not= :ok (:status art))
+    art
+
+    (not (fn? (:fn art)))
+    (err/failed :specialize :host-artifact-not-fn {})
+
+    (not (every? (fn [[k v]] (and (string? k) (data-value? v))) dynamics))
+    (err/failed :specialize :dynamics-not-data
+                {:keys (vec (keys dynamics))})
+
+    :else
+    (let [names (:dynamic-names art)]
+      (if-let [missing (seq (remove #(contains? dynamics %) names))]
+        (err/failed :specialize :missing-dynamic
+                    {:missing (vec missing)})
+        (try
+          (let [value (if (empty? names)
+                        ((:fn art))
+                        (reduce (fn [f n] (f (get dynamics n)))
+                                (:fn art)
+                                names))]
+            {:status :ok :value value})
+          (catch Throwable t
+            (err/failed-throwable :specialize :host-artifact-invoke-threw t)))))))
 
 (def futamura-cases
   [{:id :arith-partial

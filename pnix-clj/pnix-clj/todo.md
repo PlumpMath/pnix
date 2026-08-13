@@ -466,9 +466,10 @@ tracked here so nothing is re-developed:
   specialize-residual layer now runs through it, so repeated corpus
   climbs pay the fold cost once per epoch.
 - [x] M1 follow-up: per-call fold-fuel option (2026-08-14) —
-  `(specialize src statics {:fold-fuel n})` + cache key includes fuel;
-  residual lambdas as REUSABLE compiled artifacts still open (needs a
-  function-value equality story in the host lane).
+  `(specialize src statics {:fold-fuel n})` + cache key includes fuel.
+- [x] M1 follow-up: residual as REUSABLE host artifact (2026-08-14) —
+  `specialize-to-host-artifact` + `invoke-host-artifact`; equality is
+  **application-only** (fn instances never `=`; prove via invoke vs eval).
 - New ns `pnix-clj.specialize`: `(specialize source static-env)` →
   `{:residual-ast .. :residual-source .. :fully-static? .. :value .. :gaps [..]}`.
 - Walk the parsed AST with a static env: fold literals/arithmetic/if-with-static-
@@ -3373,8 +3374,8 @@ owner-gated residual list from host-env work.
 
 ### Optional product pulls (priority order when free)
 1. **Machine fragment growth** (M-series) — only if a pillar needs it.
-2. ~~Specialize residual fuel / fold options~~ — **per-call `:fold-fuel` landed
-   2026-08-14**; residual-as-reusable-host-artifact still open.
+2. ~~Specialize residual fuel / fold options~~ — **per-call `:fold-fuel` +
+   reusable host artifact** landed 2026-08-14.
 3. **Maven publish of pnix-clj** — P3 registry; needs version + public API freeze
    (`docs/HOST_IMPORT.md` is the require surface).
 4. **Conformance Phase D** — still DEFERRED (see backlog status at top).

@@ -326,5 +326,6 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
   not in default aggregate). Process-spawn remains product default.
 - [x] nuget.org **publish path fail-closed** — `bin/publish-pnix-clr-nupkg`
   (needs `NUGET_API_KEY`; dry-run ok). Local pack + smoke already green.
-- [ ] In-process admission (isolated ALC, broader corpus, aggregate wire)
+- [x] In-process broader corpus (14 sources + file + negatives) — gate 17-pass
+- [ ] In-process admission (isolated ALC blocked on CLR Default load; aggregate wire after weeks)
 - [ ] Actual nuget.org push (owner key)

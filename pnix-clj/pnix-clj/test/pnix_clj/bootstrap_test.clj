@@ -5304,7 +5304,30 @@
       (is (some #(= :if-non-bool-condition (:reason %)) (:gaps sp)))))
   (testing "non-data static env is held"
     (is (= :static-env-not-data
-           (:reason (specialize/specialize "x" {"x" (fn [])}))))))
+           (:reason (specialize/specialize "x" {"x" (fn [])})))))
+  (testing "reusable host artifact: one compile, many dynamics (application equality)"
+    (let [art (specialize/specialize-to-host-artifact
+               "x + y" {"x" 40} ["y"])]
+      (is (= :ok (:status art)))
+      (is (fn? (:fn art)))
+      (is (= ["y"] (:dynamic-names art)))
+      (let [a (specialize/invoke-host-artifact art {"y" 2})
+            b (specialize/invoke-host-artifact art {"y" 3})
+            c (specialize/invoke-host-artifact art {"y" 2})]
+        (is (= :ok (:status a) (:status b) (:status c)))
+        (is (= 42 (:value a)))
+        (is (= 43 (:value b)))
+        (is (= 42 (:value c)) "same artifact reused")))
+    (let [art (specialize/specialize-to-host-artifact
+               "if flag then a + 1 else a - 1" {"flag" true} ["a"])
+          r (specialize/invoke-host-artifact art {"a" 10})]
+      (is (= :ok (:status art)))
+      (is (= 11 (:value r))))
+    (let [art (specialize/specialize-to-host-artifact
+               "builtins.length [ 1 2 3 ]" {} [])
+          r (specialize/invoke-host-artifact art {})]
+      (is (= :ok (:status art)))
+      (is (= 3 (:value r))))))
 
 (deftest evaluator-string-context-core
   ;; Pure simulation of Nix string context (Completeness Roadmap item 3, first

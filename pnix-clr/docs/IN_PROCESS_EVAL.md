@@ -119,8 +119,13 @@ Rewrite evaluator in C# / F#. **Rejected for now** — second semantic source of
 
 ### Still open before “admitted”
 
-- [ ] Collectible isolated ALC (today uses Default + Resolving — intentional spike tradeoff)
-- [ ] Broader parity corpus + wire into aggregate only after weeks green
+- [x] Broader parity corpus (14 source cases + file + 2 negatives) — gate 2026-08-14
+- [ ] Collectible isolated ALC — **blocked for now**: ClojureCLR guest AOT
+  initializes via `Assembly.Load` into the **default** context; a collectible
+  ALC cannot see substrate types already loaded there without dual Resolving
+  that collapses to Default. Documented tradeoff; revisit only with a
+  substrate that supports ALC-aware load.
+- [ ] Wire into `pnix-clr-gate` aggregate only after weeks green
 - [ ] net8 host story (keep process-spawn)
 - [ ] Unload / multi-thread reentrancy policy
 - [ ] No Stage15/N claims from embedding
