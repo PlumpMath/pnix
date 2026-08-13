@@ -49,6 +49,12 @@
             nativeBuildInputs = [ python.pkgs.setuptools python.pkgs.wheel ];
             doCheck = false;
             pythonImportsCheck = [ "pnix_hy" ];
+            # Ensure PEP 561 marker is installed (setuptools package-data is flaky
+            # under some buildPythonApplication paths).
+            postInstall = ''
+              install -Dm644 ${./pnix-hy/pnix_hy/py.typed} \
+                "$out/${python.sitePackages}/pnix_hy/py.typed"
+            '';
             meta = {
               description = "Meta-circular projection toolkit between Hy/Python and pnix";
               mainProgram = "pnix-hy-project";

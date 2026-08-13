@@ -1,0 +1,124 @@
+name: host-import
+
+# Lightweight dual-axis / library import checks. Runs on push to main and PRs
+# so host-env regressions surface without waiting for a PR-only full host matrix.
+# Full per-host gates remain in hosts.yml (PR / workflow_dispatch).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bin/host-import-smoke"
+      - "examples/host-import/**"
+      - "HOST_*.md"
+      - "pnix-clj/flake.nix"
+      - "pnix-hy/**"
+      - "pnix-rs/**"
+      - "pnix-cljs/flake.nix"
+      - "pnix-clr/flake.nix"
+      - ".github/workflows/host-import.yml"
+  pull_request:
+    paths:
+      - "bin/host-import-smoke"
+      - "examples/host-import/**"
+      - "HOST_*.md"
+      - "pnix-clj/flake.nix"
+      - "pnix-hy/**"
+      - "pnix-rs/**"
+      - "pnix-cljs/flake.nix"
+      - "pnix-clr/flake.nix"
+      - ".github/workflows/host-import.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: host-import-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NIX_CONFIG: "experimental-features = nix-command flakes"
+
+jobs:
+  layout-and-examples:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: cachix/install-nix-action@v31.10.7
+      - name: Check smoke script + examples layout
+        run: |
+          test -x bin/host-import-smoke
+          bash -n bin/host-import-smoke
+          test -f HOST_ENV_P2_P3.md
+          test -f examples/host-import/hello.px
+          test -f examples/host-import/clj/deps.edn
+          test -f examples/host-import/clj/smoke.clj
+          test -f examples/host-import/hy/smoke.py
+          test -f examples/host-import/cljs/smoke.mjs
+          test -f examples/host-import/rs/pnix-rs-smoke/Cargo.toml
+      - name: clj host-import example
+        run: |
+          nix shell nixpkgs#clojure -c bash -lc '
+            set -euo pipefail
+            cd examples/host-import/clj
+            out=$(clojure -M -m smoke)
+            echo "clj example => $out"
+            test "$out" = "3"
+          '
+      - name: rs path-dep crate
+        run: |
+          nix shell nixpkgs#cargo nixpkgs#rustc nixpkgs#stdenv.cc -c bash -lc '
+            set -euo pipefail
+            cd examples/host-import/rs/pnix-rs-smoke
+            out=$(cargo run -q -- ../../hello.px)
+            echo "rs example => $out"
+            test "$out" = "3"
+          '
+      - name: hy host-import example (flake package)
+        run: |
+          set -euo pipefail
+          cd pnix-hy
+          # Build installable package; run smoke.py with its site-packages.
+          nix build --no-write-lock-file .#pnix-hy -o /tmp/pnix-hy-out
+          site="$(find /tmp/pnix-hy-out -type d -path '*/site-packages' | head -1)"
+          test -n "$site"
+          export PYTHONPATH="$site${PYTHONPATH:+:$PYTHONPATH}"
+          out=$(nix shell nixpkgs#python311 -c python ../examples/host-import/hy/smoke.py)
+          echo "hy example => $out"
+          test "$out" = "3"
+
+  library-print:
+    name: library-print-${{ matrix.host }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: clj
+            dir: pnix-clj
+            app: pnix-clj-library
+            expect: PNIX_CLJ_ROOT=
+            timeout: 25
+          - host: hy
+            dir: pnix-hy
+            app: pnix-hy-library
+            expect: PNIX_HY_LIBRARY=
+            timeout: 60
+          - host: rs
+            dir: pnix-rs
+            app: pnix-rs-refs
+            expect: PNIX_RS_LIB_DIR=
+            timeout: 60
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: cachix/install-nix-action@v31.10.7
+      - name: Print library env (${{ matrix.host }})
+        run: |
+          set -euo pipefail
+          cd "${{ matrix.dir }}"
+          out=$(nix run --no-write-lock-file ".#${{ matrix.app }}")
+          echo "$out"
+          echo "$out" | grep -F "${{ matrix.expect }}"

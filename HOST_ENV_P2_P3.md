@@ -48,13 +48,21 @@ planned until explicitly pulled. Easy items may land as small examples/CI.
 
 ### P2.4 Public API polish (docs only unless churn)
 
-| Host | Work | Priority |
-|------|------|----------|
-| clj | Keep `docs/HOST_IMPORT.md` as source of truth; expand only when API grows | low |
-| hy | Freeze `__all__`; optional py.typed | low |
-| cljs | Scoped require already verified; optional npm publish = P3 | — |
-| rs | CARGO_HOST_IMPORT.md done; C ABI semver = P3 | — |
-| clr | pack local nupkg done; nuget.org = P3 | — |
+| Host | Work | Priority | State |
+|------|------|----------|-------|
+| clj | Keep `docs/HOST_IMPORT.md` as source of truth; expand only when API grows | low | docs landed |
+| hy | Freeze `__all__`; optional py.typed | low | **py.typed landed** (PEP 561 marker) |
+| cljs | Scoped require already verified; optional npm publish = P3 | — | — |
+| rs | CARGO_HOST_IMPORT.md done; C ABI semver policy note in header | low | **ABI comment + version pin note landed**; full semver process still P3 |
+| clr | pack local nupkg done; nuget.org = P3 | — | — |
+
+### P2.5 Dedicated host-import workflow on push
+
+| Field | Content |
+|-------|---------|
+| Goal | Main-branch pushes that touch host-env files get import CI without full gate matrix |
+| How | `.github/workflows/host-import.yml` (path-filtered push + PR) |
+| **State** | **landed** — layout/examples + library-print (clj/hy/rs); hy example via flake package |
 
 ---
 
@@ -131,3 +139,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | P2.2 skeletons + P2.3 Phase A CI **started**; P3 registry/full CLR/common-.px **plan only** |
 | 2026-08-14 | clj residual / clr-meta / full examples / heavy CI = **todo detail only** until owner pull |
 | 2026-08-14 | P2.2 rs mini crate + P2.3 Phase B library-print matrix **started** |
+| 2026-08-14 | P2.4 py.typed + rs ABI header note; P2.5 `host-import.yml` on push |
