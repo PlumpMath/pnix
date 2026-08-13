@@ -10,16 +10,23 @@ instead of silently stretching the facade.
 
 ---
 
-## Three distinct entrypoints (do not conflate)
+## Named profiles (do not conflate)
 
-| Name | Path | Role |
-|------|------|------|
-| **`clojure-clr`** | `bin/clojure-clr` | **Focused compatibility facade** over clr-meta tool-eval |
-| **`clr-meta`** | `bin/clr-meta` | Full meta bootstrap + compiler selfhost + gates + builders |
-| **`clojure-clr-bootstrap`** | `bin/clojure-clr-bootstrap` (+ `bin/build-clr`) | Upstream **Clojure NuGet** pin publish (trust root) |
+| Profile | Entrypoint | Role |
+|---------|------------|------|
+| **`tool-eval`** | `bin/clojure-clr` | Focused facade over clr-meta form eval (`-e` / one file) |
+| **`bootstrap`** | `bin/clojure-clr-bootstrap` | Upstream Clojure.Main (full CLI flags the substrate admits) |
+| **`bootstrap-project`** | `examples/clojure-clr-project/` | Multi-ns sample on bootstrap + `CLOJURE_LOAD_PATH` |
+| **`meta`** | `bin/clr-meta` | Selfhost builders, gates, runtime-artifact, tool-eval family |
 
-TFM today: product/runtime paths target **net10.0**. Rhino/plugin work in
-dot-nix may use **sdk_8** separately — never mix TFMs silently.
+Gate for the first three profiles:
+
+```bash
+./bin/clojure-clr-profiles-smoke
+# tool-eval positive + fail-closed multi-arg + bootstrap-project → 42
+```
+
+TFM: **net10.0** product path; Rhino **sdk_8** separate — see `TFM_POLICY.md`.
 
 ---
 
@@ -97,8 +104,10 @@ From `clr-meta/todo.md` Post host-env / P3.2:
    `clojure-clr-bootstrap` + `CLOJURE_LOAD_PATH` (not the facade).
    `./smoke` expects `42`. Still **not** `clojure-clr` multi-file, not
    deps.edn parity.
-4. **[ ] Named facade profiles** — grow `bin/clojure-clr` only with explicit
-   gates (multi-form file, etc.); do not silently stretch the facade.
+4. **[x] Named profiles + dual smoke** — `tool-eval` / `bootstrap` /
+   `bootstrap-project` documented; `bin/clojure-clr-profiles-smoke` +
+   `clojure-clr --help` (2026-08-14). Growing **tool-eval** still requires a
+   new named gate per surface (multi-form file, etc.).
 5. **[ ] nuget.org / registry** — only after template + local pack are stable.
 
 Forbidden shortcuts:

@@ -88,7 +88,8 @@ Do **not** start without an explicit product decision.
 | **Step 1 inventory** | **landed** — `pnix-clr/docs/CLOJURE_CLR_ADMITTED_SURFACE.md` |
 | **Step 2 TFM** | **landed** — `pnix-clr/docs/TFM_POLICY.md` |
 | **Step 3 template+smoke** | **landed** — `pnix-clr/examples/clojure-clr-project/` (bootstrap multi-ns → 42) |
-| **Still open** | facade multi-file profiles; nuget.org |
+| **Profiles smoke** | **landed** — `bin/clojure-clr-profiles-smoke` (tool-eval + bootstrap-project) |
+| **Still open** | expanding tool-eval multi-form; nuget.org |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
 
@@ -146,3 +147,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | P2.4 py.typed + rs ABI header note; P2.5 `host-import.yml` on push |
 | 2026-08-14 | P3.2 step1 clojure-clr inventory; clj multi-module import example |
 | 2026-08-14 | P3.2 step2 TFM + step3 bootstrap multi-ns project smoke |
+| 2026-08-14 | P3.2 named profiles + clojure-clr-profiles-smoke (4/4) |

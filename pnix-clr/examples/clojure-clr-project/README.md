@@ -24,6 +24,9 @@ cd pnix-clr/examples/clojure-clr-project
 
 ./smoke
 # => clojure-clr-project smoke: PASS (42)
+
+# All named profiles (facade + this template):
+#   ../../bin/clojure-clr-profiles-smoke
 ```
 
 First run may call `bin/build-clr` (NuGet publish of pinned Clojure package).

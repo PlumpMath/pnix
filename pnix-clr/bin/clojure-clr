@@ -1,7 +1,37 @@
 #!/usr/bin/env bash
+# Profile: tool-eval (default)
+#   Focused compatibility facade over clr-meta form eval.
+#   Admitted: -e FORM | --eval FORM | one existing FILE
+# Other profiles are explicit entrypoints — do not stretch this facade silently:
+#   bootstrap          → bin/clojure-clr-bootstrap  (upstream Clojure.Main)
+#   bootstrap-project  → examples/clojure-clr-project/  (multi-ns template)
+# Docs: docs/CLOJURE_CLR_ADMITTED_SURFACE.md · docs/TFM_POLICY.md
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+clojure-clr — named profile: tool-eval (fail-closed)
+
+Admitted:
+  clojure-clr -e FORM
+  clojure-clr --eval FORM
+  clojure-clr FILE          # single form file
+
+Not admitted (exit 2): REPL, -i, -M, multi-file, deps.edn, clojure CLI parity.
+
+Other profiles (separate entrypoints):
+  clojure-clr-bootstrap     # upstream Clojure.Main (net10 substrate)
+  examples/clojure-clr-project/run   # multi-ns project template (bootstrap)
+  bin/clojure-clr-profiles-smoke     # gate: tool-eval + bootstrap-project
+
+Docs:
+  docs/CLOJURE_CLR_ADMITTED_SURFACE.md
+  docs/TFM_POLICY.md
+EOF
+  exit 0
+fi
 
 # Focused compatibility facade now owned by clr-meta. Broader upstream
 # bootstrap/compiler operations remain explicit under clojure-clr-bootstrap.
@@ -13,5 +43,5 @@ if [[ "$#" -eq 1 && -f "$1" ]]; then
   exec "$root/bin/clr-meta" "$@"
 fi
 
-echo "clojure-clr compatibility: admitted surface is -e FORM or one FORM file; use clojure-clr-bootstrap for the upstream trust root" >&2
+echo "clojure-clr compatibility: admitted surface is -e FORM or one FORM file; use clojure-clr-bootstrap for the upstream trust root (see --help for profiles)" >&2
 exit 2

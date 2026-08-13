@@ -302,9 +302,11 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 3. ~~Template + smoke (bootstrap multi-ns)~~ →
    `examples/clojure-clr-project/` (`./run` / `./smoke` → 42) via
    **clojure-clr-bootstrap**, not the facade (2026-08-14).
-4. **Next:** named facade profiles (expand `bin/clojure-clr` only with gates)
-   or wire `./smoke` into an optional aggregate if cost is acceptable.
-5. nuget.org only after the above stay green.
+4. ~~Named profiles + dual smoke~~ → `bin/clojure-clr --help`,
+   `bin/clojure-clr-profiles-smoke` (tool-eval + bootstrap-project) (2026-08-14).
+5. **Next:** expand **tool-eval** only with a new named gate per surface
+   (e.g. multi-form file); or optional wire of profiles-smoke into aggregate.
+6. nuget.org only after the above stay green.
 
 ### clr-meta residual (product, not packaging)
 - Continue stage ladder honesty via STATUS.md + design docs.

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Gate named ClojureCLR entry profiles (honest split).
+#
+# Profiles under test:
+#   tool-eval          — bin/clojure-clr  (-e / one file; multi-arg fails closed)
+#   bootstrap-project  — examples/clojure-clr-project multi-ns → 42
+#
+# Does not claim full ClojureCLR replacement or Stage15/N.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+pass=0
+fail=0
+
+ok() { echo "  OK  $*"; pass=$((pass + 1)); }
+bad() { echo "  FAIL $*"; fail=$((fail + 1)); }
+
+echo "== clojure-clr-profiles-smoke =="
+
+# --- tool-eval: positive ---
+if out="$("$root/bin/clojure-clr" -e '(+ 20 22)' 2>/dev/null)"; then
+  if echo "$out" | grep -q ':value 42'; then
+    ok "tool-eval -e => value 42"
+  else
+    bad "tool-eval -e unexpected: $out"
+  fi
+else
+  bad "tool-eval -e failed (substrate/build-clr needed?)"
+fi
+
+# --- tool-eval: fail-closed multi-arg ---
+if "$root/bin/clojure-clr" -i x -e 1 >/dev/null 2>&1; then
+  bad "tool-eval should reject -i/-e multi-arg"
+else
+  ok "tool-eval rejects multi-arg (exit non-zero)"
+fi
+
+# --- tool-eval: --help ---
+if "$root/bin/clojure-clr" --help 2>/dev/null | grep -q 'tool-eval'; then
+  ok "tool-eval --help lists profile"
+else
+  bad "tool-eval --help missing profile text"
+fi
+
+# --- bootstrap-project multi-ns ---
+if [[ -x "$root/examples/clojure-clr-project/smoke" ]]; then
+  if "$root/examples/clojure-clr-project/smoke" >/dev/null 2>&1; then
+    ok "bootstrap-project multi-ns smoke (42)"
+  else
+    bad "bootstrap-project smoke failed"
+  fi
+else
+  bad "missing examples/clojure-clr-project/smoke"
+fi
+
+echo "== summary: pass=$pass fail=$fail =="
+[[ "$fail" -eq 0 ]]
