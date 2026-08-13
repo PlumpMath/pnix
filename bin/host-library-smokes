@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Run personal/local library export smokes for hosts that have them.
+# Not registry publish (Maven/npm/crates.io/nuget.org).
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+fail=0
+
+run() {
+  local name="$1" script="$2"
+  if [[ ! -x "$script" ]]; then
+    echo "== $name: SKIP (missing $script)"
+    return 0
+  fi
+  echo ""
+  if "$script"; then
+    echo "== $name: PASS"
+  else
+    echo "== $name: FAIL"
+    fail=$((fail + 1))
+  fi
+}
+
+echo "== host-library-smokes (local feeds only) =="
+
+run clj  "$root/pnix-clj/pnix-clj/bin/pnix-clj-library-smoke"
+run hy   "$root/pnix-hy/pnix-hy/bin/pnix-hy-library-smoke"
+run rs   "$root/pnix-rs/pnix-rs/bin/pnix-rs-library-smoke"
+run cljs "$root/pnix-cljs/bin/pnix-cljs-library-smoke"
+# clr uses nupkg smoke (export is separate / heavier)
+clr_smoke="$root/pnix-clr/bin/pnix-clr-nupkg-smoke"
+clr_lib="${PNIX_CLR_LIBRARY:-$root/pnix-clr/pnix-clr/target/pnix-clr-library}"
+if [[ -x "$clr_smoke" ]]; then
+  if [[ -f "$clr_lib/manifest.json" ]]; then
+    echo ""
+    if "$clr_smoke" --no-export; then
+      echo "== clr: PASS"
+    else
+      echo "== clr: FAIL"
+      fail=$((fail + 1))
+    fi
+  else
+    echo "== clr: SKIP (no export; run export-pnix-clr-library first)"
+  fi
+fi
+
+echo ""
+if [[ "$fail" -eq 0 ]]; then
+  echo "== host-library-smokes: all PASS =="
+  exit 0
+fi
+echo "== host-library-smokes: FAIL count=$fail =="
+exit 1

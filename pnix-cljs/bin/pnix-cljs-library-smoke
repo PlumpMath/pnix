@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Local library export smoke (not npm registry).
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+host="$(cd "$here/.." && pwd)"
+product="$host/pnix-cljs"
+out="${PNIX_CLJS_LIBRARY_EXPORT:-$product/target/pnix-cljs-library}"
+no_export=0
+if [[ "${1:-}" == "--no-export" ]]; then
+  no_export=1
+elif [[ -n "${1:-}" ]]; then
+  echo "usage: pnix-cljs-library-smoke [--no-export]" >&2
+  exit 2
+fi
+
+echo "== pnix-cljs-library-smoke (local feed only) =="
+
+if [[ ! -f "$out/manifest.json" ]]; then
+  if [[ "$no_export" -eq 1 ]]; then
+    echo "FAIL: missing $out/manifest.json — run export-pnix-cljs-library" >&2
+    exit 1
+  fi
+  echo "  library missing — exporting → $out"
+  "$here/export-pnix-cljs-library" "$out"
+fi
+
+test -f "$out/share/pnix-cljs/pnix-cljs-module.js"
+test -f "$out/lib/node_modules/@plumpmath/pnix-cljs/package.json"
+test -f "$out/refs.env"
+echo "  OK  export layout (share + scoped package)"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "FAIL: node not on PATH" >&2
+  exit 1
+fi
+
+px="$(mktemp "${TMPDIR:-/tmp}/pnix-cljs-lib-smoke.XXXXXX.px")"
+trap 'rm -f "$px"' EXIT
+printf '%s\n' '1 + 2' >"$px"
+
+export NODE_PATH="$out/lib/node_modules:$out/share/pnix-cljs${NODE_PATH:+:$NODE_PATH}"
+
+# Scoped require
+scoped="$(
+  node -e "const p=require('@plumpmath/pnix-cljs'); process.stdout.write(String(p.evalFileValueJson(process.argv[1])))" "$px"
+)"
+if [[ "$scoped" != "3" ]]; then
+  echo "FAIL: scoped require evalFileValueJson => '$scoped' (want 3)" >&2
+  exit 1
+fi
+echo "  OK  require('@plumpmath/pnix-cljs') => 3"
+
+# Flat fallback
+flat="$(
+  node -e "const p=require('pnix-cljs-module.js'); process.stdout.write(String(p.evalFileValueJson(process.argv[1])))" "$px"
+)"
+if [[ "$flat" != "3" ]]; then
+  echo "FAIL: flat require => '$flat' (want 3)" >&2
+  exit 1
+fi
+echo "  OK  require('pnix-cljs-module.js') => 3"
+
+# Mini example if present
+smoke_mjs="$(cd "$host/.." && pwd)/examples/host-import/cljs/smoke.mjs"
+if [[ -f "$smoke_mjs" ]]; then
+  ex="$(node "$smoke_mjs" 2>/dev/null | tr -d '[:space:]')"
+  if [[ "$ex" != "3" ]]; then
+    echo "FAIL: examples/host-import/cljs/smoke.mjs => '$ex' (want 3)" >&2
+    exit 1
+  fi
+  echo "  OK  host-import cljs/smoke.mjs => 3"
+else
+  echo "  SKIP host-import smoke.mjs"
+fi
+
+echo "== summary: PASS (local library only; not npm) =="

@@ -52,7 +52,7 @@ planned until explicitly pulled. Easy items may land as small examples/CI.
 |------|------|----------|-------|
 | clj | Keep `docs/HOST_IMPORT.md` as source of truth; expand only when API grows | low | docs landed |
 | hy | Freeze `__all__`; optional py.typed | low | **py.typed landed** (PEP 561 marker) |
-| cljs | Scoped require already verified; optional npm publish = P3 | — | — |
+| cljs | Scoped require verified; local export landed; npm publish **dropped** | — | **export+smoke** |
 | rs | CARGO_HOST_IMPORT.md done; C ABI semver policy note in header | low | **ABI comment + version pin note landed**; full semver process still P3 |
 | clr | pack local nupkg done; nuget.org **dropped** (local feed only) | — | — |
 
@@ -96,6 +96,7 @@ Do **not** start without an explicit product decision.
 | **clj local export** | **landed** — `export-pnix-clj-library` + library-smoke (local only) |
 | **rs local export** | **landed** — `export-pnix-rs-library` + library-smoke (local only) |
 | **hy local export** | **landed** — `export-pnix-hy-library` + library-smoke (local only) |
+| **cljs local export** | **landed** — `export-pnix-cljs-library` + library-smoke (local only) |
 | **Still open** | further facade only with new gates; machine tail if pillar |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
@@ -166,3 +167,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | clj local library export + smoke; inprocess reentrancy = serialized lock |
 | 2026-08-14 | tool-eval-multi: --multi-e + --multi-form - (stdin); default -e stays single-form |
 | 2026-08-14 | rs/hy local library export + smoke (personal feed; not crates.io/PyPI) |
+| 2026-08-14 | cljs local library export + smoke; bin/host-library-smokes aggregator |

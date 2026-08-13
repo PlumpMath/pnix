@@ -81,4 +81,13 @@ pnix-cljs-pnix               # pnix-main REPL
 
 - Portable multi-host `.px` package  
 - Full replacement of the shadow-cljs build graph  
-- npm registry publish (optional later; use nix share / NODE_PATH today)
+- npm registry publish (not a product goal for this owner — local feed only)
+
+## Local export (personal feed)
+
+```bash
+# needs pnix-cljs/dist/ (from prior build-cljs / nix build)
+./bin/export-pnix-cljs-library          # → pnix-cljs/target/pnix-cljs-library
+./bin/pnix-cljs-library-smoke
+set -a; source pnix-cljs/target/pnix-cljs-library/refs.env; set +a
+```

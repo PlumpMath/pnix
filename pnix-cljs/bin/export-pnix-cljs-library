@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Materialize a local NODE_PATH layout for host-main import of pnix-cljs.
+# Personal / local feed only — not npm registry publish.
+#
+# Layout (OUT):
+#   share/pnix-cljs/                 flat require('pnix-cljs-module.js')
+#   lib/node_modules/@plumpmath/pnix-cljs/  scoped require
+#   refs.env
+#   README.md
+#   manifest.json
+#
+# Requires prebuilt dist/ (./bin/build-cljs or prior nix build). Does not
+# run a full CLJS compile by default (slow); set PNIX_CLJS_EXPORT_BUILD=1
+# to attempt ./bin/build-cljs when dist is missing.
+#
+# Usage:
+#   ./bin/export-pnix-cljs-library [OUT]
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+host="$(cd "$here/.." && pwd)"                 # …/pnix-cljs
+product="$host/pnix-cljs"
+default_out="${PNIX_CLJS_LIBRARY_EXPORT:-$product/target/pnix-cljs-library}"
+out="${1:-$default_out}"
+version="${PNIX_CLJS_LIBRARY_VERSION:-0.1.0-local}"
+
+if [[ "$#" -gt 1 ]]; then
+  echo "usage: export-pnix-cljs-library [OUT]" >&2
+  exit 2
+fi
+
+dist_mod="$product/dist/pnix-cljs-module.js"
+dist_cli="$product/dist/pnix-cljs.js"
+if [[ ! -f "$dist_mod" ]]; then
+  if [[ "${PNIX_CLJS_EXPORT_BUILD:-0}" == "1" && -x "$host/bin/build-cljs" ]]; then
+    echo "export-pnix-cljs-library: dist missing — running build-cljs …"
+    (cd "$host" && ./bin/build-cljs)
+  fi
+fi
+if [[ ! -f "$dist_mod" ]]; then
+  echo "export-pnix-cljs-library: missing $dist_mod" >&2
+  echo "  build first (nix build .#pnix-cljs or ./bin/build-cljs), then re-run" >&2
+  exit 2
+fi
+
+rm -rf "$out"
+mkdir -p "$out/share/pnix-cljs" \
+  "$out/lib/node_modules/@plumpmath/pnix-cljs"
+
+cp -f "$dist_mod" "$out/share/pnix-cljs/pnix-cljs-module.js"
+if [[ -f "$dist_cli" ]]; then
+  cp -f "$dist_cli" "$out/share/pnix-cljs/pnix-cljs.js"
+fi
+
+cat >"$out/share/pnix-cljs/package.json" <<EOF
+{
+  "name": "@plumpmath/pnix-cljs",
+  "version": "$version",
+  "description": "PNIX runtime implemented in ClojureScript (host-bound library, local feed)",
+  "main": "pnix-cljs-module.js"
+}
+EOF
+
+cp -f "$out/share/pnix-cljs/pnix-cljs-module.js" \
+  "$out/lib/node_modules/@plumpmath/pnix-cljs/"
+if [[ -f "$out/share/pnix-cljs/pnix-cljs.js" ]]; then
+  cp -f "$out/share/pnix-cljs/pnix-cljs.js" \
+    "$out/lib/node_modules/@plumpmath/pnix-cljs/"
+fi
+cp -f "$out/share/pnix-cljs/package.json" \
+  "$out/lib/node_modules/@plumpmath/pnix-cljs/package.json"
+
+cat >"$out/refs.env" <<EOF
+PNIX_CLJS_LIBRARY=$out/share/pnix-cljs
+PNIX_CLJS_SHARE=$out/share/pnix-cljs
+NODE_PATH=$out/lib/node_modules:$out/share/pnix-cljs\${NODE_PATH:+:\$NODE_PATH}
+# require('@plumpmath/pnix-cljs')  or  require('pnix-cljs-module.js')
+# Cookbook: HOST_IMPORT.md
+EOF
+
+cat >"$out/README.md" <<EOF
+# pnix-cljs local library export
+
+**Version:** $version  
+**Scope:** host-bound Node/CLJS library (local feed only). Not npm publish.
+
+\`\`\`bash
+set -a; source $out/refs.env; set +a
+node -e "const p=require('@plumpmath/pnix-cljs'); console.log(p.evalValueJson('1 + 2'))"
+\`\`\`
+EOF
+
+cat >"$out/manifest.json" <<EOF
+{
+  "schema": "pnix-cljs.library-export.v1",
+  "version": "$version",
+  "producer": "export-pnix-cljs-library",
+  "local_only": true,
+  "npm": false
+}
+EOF
+
+echo "PNIX_CLJS_LIBRARY=$out/share/pnix-cljs"
+echo "PNIX_CLJS_SHARE=$out/share/pnix-cljs"
+echo "NODE_PATH=$out/lib/node_modules:$out/share/pnix-cljs"
