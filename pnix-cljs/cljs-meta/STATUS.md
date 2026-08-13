@@ -70,22 +70,30 @@ substrate, the same honest role the JVM classfile format plays for clj-meta's
 `frontend_selfhost.clj` and Python's `ast`/`compile()` play for hy-meta's
 `independent_mini_backend.py`.
 
-Covers 21 fixtures (`let` including vector destructuring, `if`, `do`,
-`+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`, booleans, keyword literals, string
-literals, vector and map literals as return values, the seq ops
-`get`/`nth`/`count`/`conj`/`nil?`, and named `fn` literals including
-self-recursion — factorial and fibonacci). Cross-validated against the real
-self-hosted compiler (`dist/cljs-meta-module.js`'s `evaluate()`, the actual
-cljs.js-backed production path) — both agree on all 21. Wired into
+Covers 34 fixtures (`let` including recursive/nested vector destructuring,
+`if`, `do`, `when`, `cond`, `->`, `+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`, booleans,
+keyword literals, string literals, vector/map/set literals as return values,
+the seq ops `get`/`nth`/`count`/`conj`/`nil?`, `assoc`/`update` on maps, and
+named `fn` literals including self-recursion — factorial and fibonacci).
+Cross-validated against the real self-hosted compiler
+(`dist/cljs-meta-module.js`'s `evaluate()`, the actual cljs.js-backed
+production path) — both agree on all 34. Wired into
 `test/independent_mini_backend_test.js`, run from both
 `cljs-meta/bin/cljs-meta-gate` and the top-level `bin/pnix-cljs-gate`.
-Verified live this session (2026-08-11 widening pass, then a same-day
-2026-08-12 second widening pass): `independent mini backend DDC: PASS (21
-fixtures)`, full `pnix-cljs aggregate gate: PASS`, no regressions in
-self-test, runtime matrix, fixed-point runtime, or identity gates. Map
-literal keys are keyword/string literals only, emitted as a plain JS object
-with string keys — matching what `clj->js` produces for a returned map on
-the real host, so results still compare via `assert.deepEqual`.
+Verified live this session (2026-08-11 widening pass, a same-day 2026-08-12
+second widening pass, then a 2026-08-13 third widening pass adding nested
+destructuring/`assoc`/`update`/set literals/`when`/`cond`/`->`):
+`independent mini backend DDC: PASS (34 fixtures)`, full `pnix-cljs aggregate
+gate: PASS`, no regressions in self-test, runtime matrix, fixed-point
+runtime, or identity gates. Map literal keys are keyword/string literals
+only, emitted as a plain JS object with string keys — matching what
+`clj->js` produces for a returned map on the real host, so results still
+compare via `assert.deepEqual`. Set literals are represented as plain JS
+arrays (confirmed live: `clj->js` turns a small cljs set into a JS array with
+stable insertion order on the real host), not deduplicated at emit time since
+the fixture literals never contain duplicates — this is a narrower
+representation than a true set and is not claimed to generalize beyond the
+literal-return-value fixture shape.
 
 Note on scope: `core/evaluate` runs `cljs.js`'s `eval-str` with `:context
 :expr`, which only accepts a single top-level expression — multiple
@@ -100,13 +108,14 @@ but reference-distinct JS arrays on the two independently-emitting backends.
 **What this closes and what it still doesn't:** this is now a genuine 2-way
 behavioral comparison (self-hosted cljs.js-backed compiler ≡ independent
 from-scratch mini backend) on a small fixture set, not merely documented as a
-plan. It is still only 21 fixtures, not the conformance surface, and — same
+plan. It is still only 34 fixtures, not the conformance surface, and — same
 honest bar as clj-meta and hy-meta already settled on — behavior equivalence,
 not bit-identical JS text, since two independently-authored emitters
 targeting the same language by coincidence would not be expected to produce
-identical source text. **Next concrete step:** continue widening (nested
-destructuring, `assoc`/`update`, set literals, more macros) toward parity
-with clj-meta's ~50-fixture `frontend_selfhost.clj` scope.
+identical source text. **Next concrete step:** continue widening (more
+macros such as `when-let`/`if-let`, `str`, more seq ops) toward parity with
+clj-meta's ~50-fixture `frontend_selfhost.clj` scope — small, optional,
+additive increments, not a hard bar.
 
 Node.js, the Google Closure runtime, and `cljs.core` itself remain shared
 trust-root substrate even with this closed — DDC at the compiler level does

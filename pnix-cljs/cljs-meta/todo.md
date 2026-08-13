@@ -66,13 +66,14 @@ infra-and-execution, not design.
 ### 2. Trusting-Trust / DDC depth — actionable, small-to-medium, incremental
 
 **State:** `independent_mini_backend.js` (added 2026-08-11, widened
-2026-08-11 and again 2026-08-12) is a genuine from-scratch tokenizer/reader +
-direct JS-text emitter sharing zero code with
+2026-08-11, again 2026-08-12, and again 2026-08-13) is a genuine from-scratch
+tokenizer/reader + direct JS-text emitter sharing zero code with
 `cljs.js`/`cljs.compiler`/`cljs.analyzer`, cross-validated against the real
-self-hosted compiler's `evaluate()`. Covers 21 fixtures: `let` (including
-vector destructuring), `if`, `do`, `+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`,
-booleans, keyword literals, string literals, vector and map literals as
-return values, the seq ops `get`/`nth`/`count`/`conj`/`nil?`, and named `fn`
+self-hosted compiler's `evaluate()`. Covers 34 fixtures: `let` (including
+recursive/nested vector destructuring), `if`, `do`, `when`, `cond`, `->`,
+`+`/`-`/`*`, `<`/`>`/`<=`/`>=`/`=`, booleans, keyword literals, string
+literals, vector/map/set literals as return values, the seq ops
+`get`/`nth`/`count`/`conj`/`nil?`, `assoc`/`update` on maps, and named `fn`
 literals including self-recursion (factorial, fibonacci). Wired into
 `test/independent_mini_backend_test.js` (using `assert.deepEqual` so
 vector/map-returning fixtures compare structurally, not by reference), run
@@ -110,13 +111,34 @@ architecture change needed.
 - [x] Vector destructuring in `let` bindings (out-of-bounds positions bind to
       `nil`/JS `null`, not `undefined`, matching this backend's own `nil`
       mapping — verified against `(nil? c)` on a too-short source vector).
-- [ ] Nested destructuring (`[[a b] c]`), map destructuring in `let`/`fn`
-      params — explicitly not yet supported (`emitFn`'s params and this
-      `let` binding loop both throw on a non-symbol, non-flat-vector name).
+- [x] Nested destructuring in `let` bindings (`[[a b] c]`,
+      `[a [b c] d]`) — `bindPattern` now recurses; verified against the real
+      host. Map destructuring in `let`/`fn` params is still unsupported
+      (`emitFn`'s params only accept flat symbols).
+- [x] `assoc` (variadic key/value pairs) and `update` (with a `fn`-literal
+      updater; bare-symbol updater functions like `inc` are not yet
+      supported — `update`'s third argument must itself emit as a callable
+      expression, and this backend has no builtin-symbol-as-value table
+      yet).
+- [x] Set literals (`#{...}`) as return values, represented as a plain JS
+      array — confirmed live that `clj->js` gives a small cljs set stable
+      insertion order on the real host, so `assert.deepEqual` comparison
+      holds; not de-duplicated at emit time (fixtures never contain
+      duplicate elements), so this is a narrower model than a true set.
+- [x] `when`, `cond`, `->` macros (thread-first rewritten to nested list
+      forms at the AST level before a single `emitExpr` pass, not emitted as
+      a JS-level threading helper).
 - [ ] Keywords-as-values in non-branch position (currently only appear as
       branch results/map keys/vector elements — not yet a documented gap,
       just unexercised by a fixture).
-- [ ] Set literals, `assoc`/`update`, more macros (`when`, `cond`, `->`).
+- [ ] Map destructuring in `let`/`fn` params (`{:keys [a b]}` style) — still
+      open, no fixture or backend support.
+- [ ] Bare-symbol call values (e.g. `inc`/`dec` used as `update`'s updater or
+      as a `->` step without parens) — still open; would need a small table
+      mapping known builtin symbol names to inline JS arrow functions when
+      they appear in value position rather than call-head position.
+- [ ] `when-let`/`if-let`, `str`, more seq ops (`map`/`filter`/`reduce`) —
+      still open, natural next widening targets.
 - [ ] Re-run STATUS.md's "Trusting-Trust defense roadmap" honesty language
       (fixture count, scope caveat) after each widening pass so the doc never
       drifts ahead of actual coverage.

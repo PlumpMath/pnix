@@ -31,6 +31,19 @@ const FIXTURES = [
   ["(nth [10 20 30] 1)", 20],
   ["(let [[a b] [20 22]] (+ a b))", 42],
   ["(let [[a b c] [20 22]] (if (nil? c) (+ a b) 0))", 42],
+  ["(let [[[a b] c] [[1 2] 3]] (+ (+ a b) c))", 6],
+  ["(let [[a [b c] d] [1 [2 3] 4]] (+ (+ a b) (+ c d)))", 10],
+  ["#{1 2 3}", [1, 2, 3]],
+  ["(count #{1 2 3})", 3],
+  ["(assoc {:a 1} :b 2)", { a: 1, b: 2 }],
+  ["(assoc {:a 1} :b 2 :c 3)", { a: 1, b: 2, c: 3 }],
+  ["(update {:a 1} :a (fn [x] (+ x 1)))", { a: 2 }],
+  ["(when true 42)", 42],
+  ["(when false 42)", null],
+  ["(when (> 5 3) (+ 1 2))", 3],
+  ["(cond false 1 true 2 :else 3)", 2],
+  ["(cond false 1 false 2 :else 99)", 99],
+  ["(-> 1 (+ 2) (* 3))", 9],
 ];
 
 (async () => {

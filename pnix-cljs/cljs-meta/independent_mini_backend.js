@@ -13,9 +13,10 @@
  *
  * It is a frontier witness, not a replacement for the production frontend:
  * it covers a bounded fixture set (arithmetic, comparisons, `if`, `let`
- * (including vector destructuring), `do`, named `fn` literals/recursion,
- * strings, vector/map literals, booleans/keywords, and the seq ops
- * `get`/`nth`/`count`/`conj`/`nil?`), not ClojureScript. The host side of
+ * (including nested vector destructuring), `do`, named `fn`
+ * literals/recursion, strings, vector/map/set literals, booleans/keywords,
+ * the seq ops `get`/`nth`/`count`/`conj`/`nil?`, `assoc`/`update` on maps,
+ * and the `when`/`cond`/`->` macros), not ClojureScript. The host side of
  * this DDC pair
  * (`cljs.js` via `core/evaluate`) runs `eval-str` with `:context :expr`,
  * which only accepts a single top-level expression, so this backend does
@@ -25,7 +26,7 @@
  * `((fn fact [n] (if (<= n 1) 1 (* n (fact (- n 1))))) 6)`.
  */
 
-const TOKEN_RE = /\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|\{|\}|:[^\s()\[\]{}]+|-?\d+|[^\s()\[\]{}]+)/y;
+const TOKEN_RE = /\s*("(?:[^"\\]|\\.)*"|#\{|\(|\)|\[|\]|\{|\}|:[^\s()\[\]{}]+|-?\d+|[^\s()\[\]{}]+)/y;
 
 function tokenize(source) {
   const tokens = [];
@@ -82,6 +83,17 @@ function parseOne(tokens, i) {
     }
     return [{ kind: "map", items }, i + 1];
   }
+  if (tok === "#{") {
+    const items = [];
+    i += 1;
+    while (tokens[i] !== "}") {
+      if (i >= tokens.length) throw new SyntaxError("tiny reader: missing }");
+      const [item, next] = parseOne(tokens, i);
+      items.push(item);
+      i = next;
+    }
+    return [{ kind: "set", items }, i + 1];
+  }
   if (tok === ")" || tok === "]" || tok === "}") {
     throw new SyntaxError(`tiny reader: unexpected closing delimiter ${tok}`);
   }
@@ -114,6 +126,30 @@ let jsIdCounter = 0;
 function freshName(prefix) {
   jsIdCounter += 1;
   return `${prefix}_${jsIdCounter}`;
+}
+
+function bindPattern(nameForm, jsExprCode, decls, innerEnv) {
+  if (nameForm.kind === "sym") {
+    const jsName = freshName(nameForm.name);
+    decls.push(`let ${jsName} = ${jsExprCode};`);
+    innerEnv.set(nameForm.name, jsName);
+    return;
+  }
+  if (nameForm.kind === "vector") {
+    // Vector destructuring `[a b c]`, recursively so nested patterns like
+    // `[[a b] c]` work too. Positions past the source's length (or missing
+    // nested elements) bind to nil (JS `null`, matching this backend's own
+    // `nil` -> `null` mapping), not JS `undefined`, so `(nil? c)` on a
+    // missing position works the same way it does on the real host.
+    const jsTemp = freshName("destructure");
+    decls.push(`let ${jsTemp} = ${jsExprCode};`);
+    for (let k = 0; k < nameForm.items.length; k += 1) {
+      const subCode = `(${jsTemp}[${k}] === undefined ? null : ${jsTemp}[${k}])`;
+      bindPattern(nameForm.items[k], subCode, decls, innerEnv);
+    }
+    return;
+  }
+  throw new SyntaxError("tiny analyzer: let binding name");
 }
 
 function emitFn(args, env) {
@@ -176,6 +212,14 @@ function emitExpr(form, env) {
       }
       return `{${pairs.join(", ")}}`;
     }
+    case "set":
+      // Represented as a JS array (matching clj->js's own set -> array
+      // conversion, confirmed live against the real host: `#{1 2 3}`
+      // evaluates to `[1,2,3]` with stable insertion order for the small
+      // literal sets this backend's fixtures use). Literal set fixtures are
+      // written without duplicate elements, so no de-duplication is needed
+      // here.
+      return `[${form.items.map((f) => emitExpr(f, env)).join(", ")}]`;
     case "sym": {
       if (!env.has(form.name)) {
         throw new SyntaxError(`tiny analyzer: unknown local ${form.name}`);
@@ -215,32 +259,7 @@ function emitExpr(form, env) {
           const nameForm = bindingsForm.items[i];
           const initForm = bindingsForm.items[i + 1];
           const initCode = emitExpr(initForm, innerEnv);
-          if (nameForm.kind === "sym") {
-            const jsName = freshName(nameForm.name);
-            decls.push(`let ${jsName} = ${initCode};`);
-            innerEnv.set(nameForm.name, jsName);
-          } else if (nameForm.kind === "vector") {
-            // Vector destructuring `[a b c]`: extra names beyond the
-            // source's length bind to nil (JS `null`, matching this
-            // backend's own `nil` -> `null` mapping), not JS `undefined`,
-            // so `(nil? c)` on a missing position works the same way it
-            // does on the real host.
-            const jsTemp = freshName("destructure");
-            decls.push(`let ${jsTemp} = ${initCode};`);
-            for (let k = 0; k < nameForm.items.length; k += 1) {
-              const subName = nameForm.items[k];
-              if (subName.kind !== "sym") {
-                throw new SyntaxError("tiny analyzer: nested destructuring not supported");
-              }
-              const jsSubName = freshName(subName.name);
-              decls.push(
-                `let ${jsSubName} = (${jsTemp}[${k}] === undefined ? null : ${jsTemp}[${k}]);`
-              );
-              innerEnv.set(subName.name, jsSubName);
-            }
-          } else {
-            throw new SyntaxError("tiny analyzer: let binding name");
-          }
+          bindPattern(nameForm, initCode, decls, innerEnv);
         }
         const bodyCode = body.map((f) => emitExpr(f, innerEnv));
         const returnCode = bodyCode[bodyCode.length - 1];
@@ -273,6 +292,72 @@ function emitExpr(form, env) {
       if (head.name === "nil?") {
         if (args.length !== 1) throw new SyntaxError("tiny analyzer: nil? arity");
         return `(${emitExpr(args[0], env)} === null)`;
+      }
+      if (head.name === "assoc") {
+        // Variadic `(assoc m k1 v1 k2 v2 ...)`. Keys are emitted as computed
+        // properties, so keyword keys (which emit as JSON-quoted strings,
+        // matching cljs's own clj->js keyword -> string-key conversion) and
+        // other key expressions both work uniformly.
+        if (args.length < 3 || args.length % 2 !== 1) {
+          throw new SyntaxError("tiny analyzer: assoc arity");
+        }
+        const mapCode = emitExpr(args[0], env);
+        const pairs = [];
+        for (let i = 1; i < args.length; i += 2) {
+          pairs.push(`[${emitExpr(args[i], env)}]: ${emitExpr(args[i + 1], env)}`);
+        }
+        return `{...(${mapCode}), ${pairs.join(", ")}}`;
+      }
+      if (head.name === "update") {
+        if (args.length !== 3) throw new SyntaxError("tiny analyzer: update arity");
+        const mapCode = emitExpr(args[0], env);
+        const keyCode = emitExpr(args[1], env);
+        const fnCode = emitExpr(args[2], env);
+        const jsTemp = freshName("update_map");
+        const jsKey = freshName("update_key");
+        return `(function(){ let ${jsTemp} = (${mapCode}); let ${jsKey} = (${keyCode}); return {...${jsTemp}, [${jsKey}]: (${fnCode})(${jsTemp}[${jsKey}])}; })()`;
+      }
+      if (head.name === "when") {
+        if (args.length < 2) throw new SyntaxError("tiny analyzer: when arity");
+        const [test, ...body] = args;
+        const bodyCode = body.map((f) => emitExpr(f, env));
+        const doCode =
+          bodyCode.length === 1
+            ? bodyCode[0]
+            : `(function(){ ${bodyCode
+                .slice(0, -1)
+                .map((c) => `${c};`)
+                .join(" ")} return (${bodyCode[bodyCode.length - 1]}); })()`;
+        return `(${emitExpr(test, env)} !== false && ${emitExpr(test, env)} !== null ? (${doCode}) : null)`;
+      }
+      if (head.name === "cond") {
+        if (args.length % 2 !== 0) throw new SyntaxError("tiny analyzer: malformed cond");
+        const buildCond = (i) => {
+          if (i >= args.length) return "null";
+          const testCode = emitExpr(args[i], env);
+          const exprCode = emitExpr(args[i + 1], env);
+          return `(${testCode} !== false && ${testCode} !== null ? (${exprCode}) : (${buildCond(i + 2)}))`;
+        };
+        return buildCond(0);
+      }
+      if (head.name === "->") {
+        // Thread-first: rewrite to nested list forms at the AST level, then
+        // emit once. `(-> x (op a))` -> `(op x a)`; a bare-symbol step `(->
+        // x f)` -> `(f x)` (only reachable when `f` is itself a recognized
+        // call head or bound local, same as any other call-head dispatch).
+        if (args.length === 0) throw new SyntaxError("tiny analyzer: -> arity");
+        let acc = args[0];
+        for (let i = 1; i < args.length; i += 1) {
+          const step = args[i];
+          if (step.kind === "sym") {
+            acc = { kind: "list", items: [step, acc] };
+          } else if (step.kind === "list") {
+            acc = { kind: "list", items: [step.items[0], acc, ...step.items.slice(1)] };
+          } else {
+            throw new SyntaxError("tiny analyzer: -> step must be a symbol or list");
+          }
+        }
+        return emitExpr(acc, env);
       }
       if (env.has(head.name)) {
         const argsCode = args.map((f) => emitExpr(f, env));
