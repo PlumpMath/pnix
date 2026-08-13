@@ -42,6 +42,21 @@ else
   bad "tool-eval --help missing profile text"
 fi
 
+# --- tool-eval-multi: multi-form file ---
+multi_tmp="$(mktemp "${TMPDIR:-/tmp}/clojure-clr-multi.XXXXXX.clj")"
+printf '%s\n' '(+ 1 2)' '(+ 20 22)' >"$multi_tmp"
+if multi_out="$("$root/bin/clojure-clr" --multi-form "$multi_tmp" 2>/dev/null)"; then
+  if echo "$multi_out" | grep -q ':profile :tool-eval-multi' \
+    && echo "$multi_out" | grep -q ':value 42'; then
+    ok "tool-eval-multi --multi-form => value 42"
+  else
+    bad "tool-eval-multi unexpected: $multi_out"
+  fi
+else
+  bad "tool-eval-multi --multi-form failed"
+fi
+rm -f "$multi_tmp"
+
 # --- bootstrap-project multi-ns ---
 if [[ -x "$root/examples/clojure-clr-project/smoke" ]]; then
   if "$root/examples/clojure-clr-project/smoke" >/dev/null 2>&1; then

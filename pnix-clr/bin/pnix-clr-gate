@@ -6,6 +6,8 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 "$root/bin/build-clr"
 "$root/bin/pnix-clr-identity-gate"
 "$root/clr-meta/scripts/clr-meta-gate" --no-build
+# Named ClojureCLR profiles (tool-eval / multi / bootstrap-project); ~17s.
+"$root/bin/clojure-clr-profiles-smoke"
 "$root/bin/build-pnix-clr-artifact" >/dev/null
 "$root/bin/pnix-clr-artifact-gate" --no-build
 

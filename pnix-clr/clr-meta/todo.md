@@ -274,8 +274,9 @@ below.
 3. Versioned env contract — **done**: `PNIX_CLR_*` (+ library path).
 4. Dual-axis docs — **done**: monorepo `HOST_DEV_ENV.md` + host `CLAUDE.md` /
    `README.md` + HM matrix.
-5. Optional local NuGet — **partial**: `bin/pack-pnix-clr-nupkg` +
-   `csharp/Directory.Build.props.sample` (local feed only; not nuget.org).
+5. Optional local NuGet — **landed enough**: `bin/pack-pnix-clr-nupkg` +
+   `bin/pnix-clr-nupkg-smoke` + `csharp/Directory.Build.props.sample`
+   (local feed only; not nuget.org).
 6. Explicit note: runtime-artifact `.clj.dll` is **host-bound** (CLR), not a
    common multi-host .px package. (Still true; document, do not claim otherwise.)
 
@@ -303,10 +304,15 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
    `examples/clojure-clr-project/` (`./run` / `./smoke` → 42) via
    **clojure-clr-bootstrap**, not the facade (2026-08-14).
 4. ~~Named profiles + dual smoke~~ → `bin/clojure-clr --help`,
-   `bin/clojure-clr-profiles-smoke` (tool-eval + bootstrap-project) (2026-08-14).
-5. **Next:** expand **tool-eval** only with a new named gate per surface
-   (e.g. multi-form file); or optional wire of profiles-smoke into aggregate.
-6. nuget.org only after the above stay green.
+   `bin/clojure-clr-profiles-smoke` (2026-08-14).
+5. ~~tool-eval-multi~~ → `--multi-form FILE` +
+   `scripts/clr-meta-tool-eval-multi-gate` in `clr-meta-gate` (2026-08-14).
+6. ~~Wire profiles-smoke into aggregate~~ → `bin/pnix-clr-gate` runs
+   `clojure-clr-profiles-smoke` after `clr-meta-gate` (~17s, 2026-08-14).
+7. ~~Local nupkg pack smoke~~ → `bin/pnix-clr-nupkg-smoke` (export layout +
+   pack dual-TFM; local feed only, 2026-08-14).
+8. **Next:** further tool-eval surfaces only with new named gates; nuget.org
+   only after local pack stays green (secrets/signing = owner decision).
 
 ### clr-meta residual (product, not packaging)
 - Continue stage ladder honesty via STATUS.md + design docs.
@@ -315,4 +321,4 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 
 ### Host-import hard (not started)
 - [ ] In-process C# evaluator (no process spawn) — large; needs embedding design
-- [ ] nuget.org publish of Pnix.Clr
+- [ ] nuget.org publish of Pnix.Clr — owner secrets/signing; local pack green first

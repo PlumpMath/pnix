@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Local NuGet pack smoke (NOT nuget.org publish).
+#
+# Requires a materialized library layout (export-pnix-clr-library) then
+# pack-pnix-clr-nupkg. Checks .nupkg zip layout for dual TFM + build props.
+#
+# Usage:
+#   ./bin/pnix-clr-nupkg-smoke              # export if missing, then pack
+#   ./bin/pnix-clr-nupkg-smoke --no-export  # fail if library dir missing
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+lib_dir="${PNIX_CLR_LIBRARY:-$root/pnix-clr/target/pnix-clr-library}"
+no_export=0
+if [[ "${1:-}" == "--no-export" ]]; then
+  no_export=1
+elif [[ -n "${1:-}" ]]; then
+  echo "usage: pnix-clr-nupkg-smoke [--no-export]" >&2
+  exit 2
+fi
+
+echo "== pnix-clr-nupkg-smoke (local feed only) =="
+
+if [[ ! -f "$lib_dir/manifest.json" ]]; then
+  if [[ "$no_export" -eq 1 ]]; then
+    echo "FAIL: missing $lib_dir/manifest.json (run export-pnix-clr-library)" >&2
+    exit 1
+  fi
+  echo "  library missing — running export-pnix-clr-library → $lib_dir"
+  "$root/bin/export-pnix-clr-library" "$lib_dir"
+fi
+
+for need in \
+  "lib/net8.0/Pnix.Clr.dll" \
+  "lib/net10.0/Pnix.Clr.dll" \
+  "build/Pnix.Clr.props" \
+  "build/Pnix.Clr.targets"
+do
+  if [[ ! -f "$lib_dir/$need" ]]; then
+    echo "FAIL: library layout missing $need under $lib_dir" >&2
+    exit 1
+  fi
+done
+echo "  OK  library layout (net8 + net10 + props/targets)"
+
+stage="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clr-nupkg-smoke.XXXXXX")"
+trap 'rm -rf "$stage"' EXIT
+
+"$root/bin/pack-pnix-clr-nupkg" "$lib_dir" "$stage/out" >/dev/null
+
+nupkg="$(find "$stage/out" -maxdepth 1 -name 'Pnix.Clr*.nupkg' -type f | head -1)"
+if [[ -z "$nupkg" || ! -f "$nupkg" ]]; then
+  echo "FAIL: no Pnix.Clr*.nupkg written under $stage/out" >&2
+  ls -la "$stage/out" 2>/dev/null || true
+  exit 1
+fi
+echo "  OK  packed $(basename "$nupkg")"
+
+# Zip layout checks (dotnet nuget pack / zip path both produce zip containers).
+listing="$(unzip -Z1 "$nupkg" 2>/dev/null || zipinfo -1 "$nupkg")"
+for entry in \
+  "lib/net8.0/Pnix.Clr.dll" \
+  "lib/net10.0/Pnix.Clr.dll" \
+  "build/Pnix.Clr.props" \
+  "build/Pnix.Clr.targets" \
+  "Pnix.Clr.nuspec"
+do
+  if ! echo "$listing" | grep -qxF "$entry" \
+    && ! echo "$listing" | grep -qF "./$entry" \
+    && ! echo "$listing" | grep -qF "$entry"; then
+    echo "FAIL: nupkg missing entry: $entry" >&2
+    echo "$listing" | head -40 >&2
+    exit 1
+  fi
+done
+echo "  OK  nupkg contains dual-TFM DLLs + build props + nuspec"
+
+echo "== summary: PASS (local nupkg only; not nuget.org) =="

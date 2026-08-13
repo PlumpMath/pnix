@@ -14,16 +14,17 @@ instead of silently stretching the facade.
 
 | Profile | Entrypoint | Role |
 |---------|------------|------|
-| **`tool-eval`** | `bin/clojure-clr` | Focused facade over clr-meta form eval (`-e` / one file) |
+| **`tool-eval`** | `bin/clojure-clr` | Focused facade: `-e` / one **single-form** file |
+| **`tool-eval-multi`** | `clojure-clr --multi-form FILE` | Opt-in: multiple top-level forms L→R, last value (named gate) |
 | **`bootstrap`** | `bin/clojure-clr-bootstrap` | Upstream Clojure.Main (full CLI flags the substrate admits) |
 | **`bootstrap-project`** | `examples/clojure-clr-project/` | Multi-ns sample on bootstrap + `CLOJURE_LOAD_PATH` |
 | **`meta`** | `bin/clr-meta` | Selfhost builders, gates, runtime-artifact, tool-eval family |
 
-Gate for the first three profiles:
+Gate for the named profiles (also wired into `bin/pnix-clr-gate`):
 
 ```bash
 ./bin/clojure-clr-profiles-smoke
-# tool-eval positive + fail-closed multi-arg + bootstrap-project → 42
+# tool-eval + tool-eval-multi + bootstrap-project → 42 (5 checks)
 ```
 
 TFM: **net10.0** product path; Rhino **sdk_8** separate — see `TFM_POLICY.md`.
@@ -36,9 +37,10 @@ Source of truth: `bin/clojure-clr` (fail-closed).
 
 | Admitted | Form | Behavior |
 |----------|------|----------|
-| Yes | `-e FORM` or `--eval FORM` (exactly 2 argv) | `exec bin/clr-meta "$@"` |
-| Yes | single path that is an existing file (exactly 1 argv) | `exec bin/clr-meta FILE` |
-| No | REPL, multi-file projects, `-M`, `deps.edn`, `clojure` CLI parity | stderr + exit 2 |
+| Yes | `-e FORM` or `--eval FORM` (exactly 2 argv) | `exec bin/clr-meta "$@"` (single form) |
+| Yes | single path that is an existing file (exactly 1 argv) | `exec bin/clr-meta FILE` (single form; trailing fails) |
+| Yes | `--multi-form FILE` (exactly 2 argv, file exists) | `tool-eval-multi` — all top-level forms, last value |
+| No | REPL, `-i`, `-M`, deps.edn, clojure CLI parity | stderr + exit 2 |
 
 Error text (verbatim intent):
 
@@ -106,9 +108,16 @@ From `clr-meta/todo.md` Post host-env / P3.2:
    deps.edn parity.
 4. **[x] Named profiles + dual smoke** — `tool-eval` / `bootstrap` /
    `bootstrap-project` documented; `bin/clojure-clr-profiles-smoke` +
-   `clojure-clr --help` (2026-08-14). Growing **tool-eval** still requires a
-   new named gate per surface (multi-form file, etc.).
-5. **[ ] nuget.org / registry** — only after template + local pack are stable.
+   `clojure-clr --help` (2026-08-14).
+5. **[x] tool-eval-multi** — `--multi-form FILE` +
+   `scripts/clr-meta-tool-eval-multi-gate` (wired into `clr-meta-gate`);
+   default single-form trailing rejection preserved (2026-08-14).
+6. **[x] profiles-smoke in product aggregate** — `bin/pnix-clr-gate` runs
+   `clojure-clr-profiles-smoke` (~17s, 2026-08-14).
+7. **[x] Local nupkg pack smoke** — `bin/pnix-clr-nupkg-smoke` (export layout +
+   dual-TFM pack; local feed only, 2026-08-14).
+8. **[ ] nuget.org / registry** — only after local pack stays green; needs
+   owner secrets/signing (do not auto-publish).
 
 Forbidden shortcuts:
 

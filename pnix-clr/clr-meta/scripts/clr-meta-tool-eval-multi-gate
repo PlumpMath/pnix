@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Named gate: tool-eval-multi (opt-in multi-form FILE).
+# Default -e / FILE remain single-form (trailing still fails — tool-gate).
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$clr_meta_root/.." && pwd)"
+temp="$(mktemp -d "${TMPDIR:-/tmp}/clr-meta-tool-eval-multi.XXXXXX")"
+trap 'rm -rf "$temp"' EXIT
+
+# Multi-form file: last value wins.
+printf '%s\n' '(+ 1 2)' '(+ 20 22)' >"$temp/multi.clj"
+multi="$("$root/bin/clojure-clr" --multi-form "$temp/multi.clj")"
+[[ "$multi" == *":schema :pnix.clr-meta.tool-eval.v1"* ]]
+[[ "$multi" == *":profile :tool-eval-multi"* ]]
+[[ "$multi" == *":form-count 2"* ]]
+[[ "$multi" == *":outcome-kind :done"* ]]
+[[ "$multi" == *":value 42"* ]]
+
+# clr-meta direct path matches facade
+direct="$("$root/bin/clr-meta" --multi-form "$temp/multi.clj")"
+[[ "$direct" == *":value 42"* ]]
+[[ "$direct" == *":profile :tool-eval-multi"* ]]
+
+# Single-form default FILE still rejects trailing forms
+printf '%s\n' '42' '43' >"$temp/trailing.clj"
+set +e
+trail="$("$root/bin/clojure-clr" "$temp/trailing.clj" 2>&1)"
+trail_status=$?
+set -e
+[[ "$trail_status" -eq 1 ]]
+[[ "$trail" == *":class :trailing-tool-form"* ]]
+
+# Multi-form still rejects non-portable domain (map)
+printf '%s\n' '{:x 1}' >"$temp/map.clj"
+set +e
+map_out="$("$root/bin/clojure-clr" --multi-form "$temp/map.clj" 2>&1)"
+map_status=$?
+set -e
+[[ "$map_status" -eq 1 ]]
+[[ "$map_out" == *":class :non-portable-reader-value"* ]]
+
+# Empty multi-form fails
+: >"$temp/empty.clj"
+set +e
+empty_out="$("$root/bin/clojure-clr" --multi-form "$temp/empty.clj" 2>&1)"
+empty_status=$?
+set -e
+[[ "$empty_status" -eq 1 ]]
+[[ "$empty_out" == *":class :empty-tool-source"* ]]
+
+echo "clr-meta tool-eval-multi gate: PASS (multi last-value 42; single trailing still fails; domain closed)"
