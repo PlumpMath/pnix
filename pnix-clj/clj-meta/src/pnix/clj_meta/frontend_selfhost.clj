@@ -170,7 +170,7 @@
 
 (def ^:private tiny-macro-rules
   [:when :and :or :not :nil? :thread-first :thread-last :cond :when-not :if-not
-   :if-let :when-let :as-> :cond-> :cond->> :some-> :some->>])
+   :if-let :when-let :as-> :cond-> :cond->> :some-> :some->> :case])
 
 (defn- macro-local
   [prefix counter]
@@ -219,6 +219,42 @@
     (= 1 (count args))
     (throw (ex-info "tiny macroexpander: cond needs even forms" {:args args}))
     :else (list 'if (first args) (second args) (expand-cond (drop 2 args)))))
+
+;; `(case x v1 r1 v2 r2 ... default)` -> a `let`-bound test value plus a
+;; nested `if`/`=` chain. Real `case` uses hash-based O(1) dispatch (a JVM
+;; lookupswitch/tableswitch), not a linear `=` chain -- this backend's bar is
+;; behavior equivalence on the covered fixtures, not bytecode-shape
+;; equivalence, and a sequential `=` chain gives the identical result for
+;; every fixture here (int/keyword/string literal tests, verified against
+;; the real host before being added). Case-test values are spliced in
+;; unquoted: this tiny language's `analyze-expr` already treats a bare
+;; integer/keyword/string/nil/boolean atom as a self-evaluating constant (no
+;; `quote` needed), matching how the tiny reader itself hands them back.
+;;
+;; Deliberately narrow scope: a trailing default clause is REQUIRED. Real
+;; `case` with no default and no matching clause throws
+;; `IllegalArgumentException`; this tiny language has no `throw` special
+;; form (a separate, larger feature), so rather than silently falling
+;; through to `nil` on no-match -- a genuine behavior gap from the real
+;; host, caught by testing this exact case against `eval` before deciding
+;; how to handle it -- a default-less `case` is rejected up front by this
+;; macroexpander instead of ever being compiled into a wrong answer.
+(defn- expand-case
+  [counter args]
+  (when (empty? args)
+    (throw (ex-info "tiny macroexpander: case needs a test expr" {:args args})))
+  (let [[expr & clauses] args]
+    (when-not (odd? (count clauses))
+      (throw (ex-info "tiny macroexpander: case requires a trailing default clause (no-default no-match throws on the real host; unsupported here)"
+                      {:args args})))
+    (let [default (last clauses)
+          pairs (partition 2 (butlast clauses))
+          g (macro-local "case_test" counter)]
+      (list 'let [g expr]
+            (reduce (fn [else-form [test-val result]]
+                      (list 'if (list '= g test-val) result else-form))
+                    default
+                    (reverse pairs))))))
 
 (defn- expand-if-let
   [counter args]
@@ -331,6 +367,7 @@
                                   (if (= 3 (count args)) (nth args 2) nil)
                                   (second args))))
       cond (expand-form counter (expand-cond args))
+      case (expand-form counter (expand-case counter args))
       if-let (expand-form counter (expand-if-let counter args))
       when-let (do
                  (when (empty? args)
@@ -1261,7 +1298,23 @@
    {:id :tiny-op-count-vector
     :source "(fn [v] (count v))"
     :args [[1 2 3 4]]
-    :expected 4}])
+    :expected 4}
+   {:id :tiny-macro-case-int
+    :source "(fn [n] (case n 1 :one 2 :two :other))"
+    :args [2]
+    :expected :two}
+   {:id :tiny-macro-case-int-default
+    :source "(fn [n] (case n 1 :one 2 :two :other))"
+    :args [99]
+    :expected :other}
+   {:id :tiny-macro-case-keyword
+    :source "(fn [k] (case k :a 1 :b 2 :c 3 :d 4 :e 5 :f 6 :g 7 :h 8 0))"
+    :args [:g]
+    :expected 7}
+   {:id :tiny-macro-case-string
+    :source "(fn [s] (case s \"Aa\" 1 \"BB\" 2 :other))"
+    :args ["BB"]
+    :expected 2}])
 
 (defn run
   []
@@ -1317,7 +1370,11 @@
                                             :tiny-macro-some->
                                             :tiny-macro-some->-nil
                                             :tiny-macro-some->>
-                                            :tiny-macro-nil?}
+                                            :tiny-macro-nil?
+                                            :tiny-macro-case-int
+                                            :tiny-macro-case-int-default
+                                            :tiny-macro-case-keyword
+                                            :tiny-macro-case-string}
                                           :id)
                                     rows))
                     :op-subset-accepted
@@ -1326,7 +1383,8 @@
                                             :tiny-op-quot :tiny-op-rem
                                             :tiny-op-inc :tiny-op-dec
                                             :tiny-op-zero? :tiny-op-pos? :tiny-op-neg?
-                                            :tiny-op-first :tiny-op-next-first :tiny-op-get}
+                                            :tiny-op-first :tiny-op-next-first :tiny-op-get
+                                            :tiny-op-count-variadic :tiny-op-count-vector}
                                           :id)
                                     rows))
                     :destructure-subset-accepted

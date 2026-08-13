@@ -433,7 +433,15 @@
    {:id :mini-backend-op-count-variadic
     :source "(fn [& r] (count r))"
     :args [1 2 3]
-    :expected 3}])
+    :expected 3}
+   {:id :mini-backend-macro-case-int
+    :source "(fn [n] (case n 1 :one 2 :two :other))"
+    :args [2]
+    :expected :two}
+   {:id :mini-backend-macro-case-keyword
+    :source "(fn [k] (case k :a 1 :b 2 :c 3 :d 4 :e 5 :f 6 :g 7 :h 8 0))"
+    :args [:g]
+    :expected 7}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

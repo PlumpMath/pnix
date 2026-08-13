@@ -94,10 +94,10 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    61 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
-    quote/13 macros/vector-destructuring/fixed multi-arity fn/variadic `&`
-    rest-args/count) with ZERO calls into tools.analyzer.jvm or the host
-    reader.
+    65 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    quote/14 macros incl. `case`/vector-destructuring/fixed multi-arity
+    fn/variadic `&` rest-args/count) with ZERO calls into tools.analyzer.jvm
+    or the host reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
     0 divergences found.
@@ -173,6 +173,29 @@ rejected. U6: 55→61 fixtures, all accepted. DDC row: 47→50 fixtures (3 new
 variadic cases wired into `independent-mini-backend-subset`, still
 accepted). Full `-M:conformance` (116/116, unaffected) and full
 `bin/clj-meta-gate` (`metacircular gate: READY`) both still green.
+
+**Widened a third time, same day (2026-08-13): `case`.** Added as a macro
+expansion (`expand-case`, alongside the existing `cond`/`when`/threading
+macros) into a `let`-bound test value plus a nested `if`/`=` chain — no new
+ASM/bytecode work needed, reusing the `if`/`=` machinery that already
+exists. Real `case` uses hash-based O(1) dispatch (a JVM
+lookupswitch/tableswitch); this backend's bar stays behavior equivalence on
+the covered fixtures, not bytecode-shape equivalence, and a sequential `=`
+chain gives an identical result for every int/keyword/string-literal fixture
+here. **Found and fixed a real correctness gap before adding any fixture,
+not after:** the first draft let a `case` with no trailing default and no
+matching clause silently fall through to `nil`; testing that exact shape
+against the real host showed it throws `IllegalArgumentException` instead.
+Rather than special-case `throw` (a separate, larger feature this tiny
+language doesn't have at all), `expand-case` now requires a trailing default
+clause and rejects a default-less `case` outright — an honest, fail-closed
+scope limit instead of a silent miscompile. Verified against real host
+`eval` (matching int/keyword/string dispatch, the default-fallthrough case,
+and that the no-default form is correctly rejected) before adding fixtures.
+U6: 61→65. DDC row: 50→52 (2 new `case` cases wired into
+`independent-mini-backend-subset`, still accepted). Full `-M:conformance`
+(116/116, unaffected) and full `bin/clj-meta-gate` (`metacircular gate:
+READY`) both still green.
 
 **What's still genuinely open:** full Wheeler DDC needs the independent
 backend's coverage to match the *production* corpus, not a 43-fixture subset,

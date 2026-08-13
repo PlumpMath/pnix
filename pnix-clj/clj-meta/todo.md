@@ -103,13 +103,25 @@ top-line claim, but the substance is much closer than "false" implies:
   DDC row: 47→50. `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate`
   `metacircular gate: READY`, no regressions.
 
+  **Third slice landed same day: `case`** (61→65), via macro expansion
+  (`expand-case`) into a `let` + nested `if`/`=` chain — reuses existing
+  machinery, no new ASM code. Caught a real gap before it became a
+  fixture: a default-less `case` with no match should throw
+  `IllegalArgumentException` on the real host (confirmed live), but this
+  tiny language has no `throw` special form at all — rather than silently
+  return `nil` (wrong), `expand-case` now requires a trailing default clause
+  and rejects the default-less shape outright. DDC row: 50→52.
+  `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate` `metacircular
+  gate: READY`, no regressions.
+
   Remaining large surface still untouched by U6 at all: exceptions
-  (try/catch/finally), Java interop (method calls, field access, `set!`,
-  static members, reflection), `deftype`/`defrecord`/`reify`, `case`,
-  `letfn`, bignum/ratio/regex reader literals, dynamic vars, `locking`,
-  protocols, and RestFn's mixed-fixed+variadic-arity shape. Each of those is
-  its own multi-fixture slice, several of them (interop, exceptions,
-  deftype/reify) genuinely large on their own.
+  (try/catch/finally, and `throw` in general — needed properly for a
+  full `case`, not just this scoped subset), Java interop (method calls,
+  field access, `set!`, static members, reflection), `deftype`/`defrecord`/
+  `reify`, `letfn`, bignum/ratio/regex reader literals, dynamic vars,
+  `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape. Each
+  of those is its own multi-fixture slice, several of them (interop,
+  exceptions, deftype/reify) genuinely large on their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
