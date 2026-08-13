@@ -64,3 +64,29 @@ version-pinned package is the explicit bootstrap trust root; no upstream
 compiler sources are vendored here. The cloned JVM/domain surfaces were
 deliberately not carried into the active CLR host: port only CLR-owned
 mechanism here, since a textual rename is not CLR evidence.
+
+## Dual-axis + host library (do not confuse)
+
+Canonical monorepo doc: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md).  
+C# surface detail: [`csharp/Pnix.Clr/README.md`](csharp/Pnix.Clr/README.md).
+
+| Axis | Entry | Role |
+|------|-------|------|
+| **host-main (C#)** | `pnix-clr-cs` / MSBuild + `Pnix.Clr` | process→CLI Eval API |
+| **host-main (CLR)** | `pnix-clr-clr` / `clojure-clr` | focused `-e`/file facade + library env |
+| **pnix-main** | `pnix-clr-pnix` / `pnix-clr` | pnix REPL / eval of `.px` |
+| **library** | `bin/export-pnix-clr-library` → `pnix-clr-library` | guest AOT `*.clj.dll` + managed DLL + props |
+| **meta** | `clr-meta` | pnix-agnostic |
+
+Env: `PNIX_CLR`, `PNIX_CLR_ROOT`, `PNIX_CLR_ARTIFACT` (+ legacy
+`PNIX_CLR_RUNTIME_ARTIFACT`), `PNIX_CLR_LIBRARY`.
+
+```bash
+./bin/export-pnix-clr-library
+# flake: nix run .#pnix-clr-library   /   nix run .#pnix-clr-refs
+```
+
+Guest AOT DLLs are **ClojureCLR-bound**, not a portable multi-host `.px` package.
+Do not claim compiler Stage15/N from evaluator generations. Rhino plugins pin
+**sdk_8**; this host’s AOT/runtime is **net10** — do not silently mix TFMs.  
+HM: `~/dot-nix/dev/cs`.

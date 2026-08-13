@@ -3,6 +3,10 @@
 Host-language import surface so **C#** projects can evaluate pnix (`.px`) and
 wire **CLR guest AOT DLLs** without hand-copying cache paths.
 
+**Doctrine (all hosts):** monorepo [`../../../HOST_DEV_ENV.md`](../../../HOST_DEV_ENV.md).  
+This package is the **host-main C#** surface for the clr host only — not a
+portable multi-host `.px` library.
+
 ## What this is / is not
 
 | Surface | Role |

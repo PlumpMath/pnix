@@ -17,6 +17,17 @@ Python 언어 생태계(**Hy**, Python)와 **pnix**(순수·지연·Nix 계열 �
 > (`--check` 56/56, `--gate` PASS). 즉 *선언된 범위 기준으로 완성*이지 "전부 완성"이 아니다.
 > `SCOPE_LOCK.md` 참고.
 
+### Dual-axis + library (read this)
+
+Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).
+
+| Axis | Command / surface |
+|------|-------------------|
+| **host-main** | `python` / `hy` with `PYTHONPATH` → `pnix_hy` (`pnix-hy-python` / `pnix-hy-hy`) |
+| **pnix-main** | `nix run .#pnix-hy-pnix` / `pnix-hy-project --repl pnix` |
+| **library** | installable `pnix_hy` package — **host-bound**, not portable `.px` |
+| **import `.px` from Python** | `import pnix_hy as ph; ph.eval_file("x.px")` |
+
 ---
 
 ## Python 모듈로 설치 (pip)

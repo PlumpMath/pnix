@@ -17,3 +17,17 @@ Non-negotiable here: **meta first, never cram** — do not grow this host's
 product surface ahead of its `clj-meta` foundation. **Non-regression** — keep this
 repo's gate green. This repo's own `SCOPE_LOCK.md` (if present) governs local
 scope.
+
+## Dual-axis + host library (do not confuse)
+
+Canonical monorepo doc: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md).
+
+| Axis | Entry | Role |
+|------|-------|------|
+| **host-main** | `pnix-clj-clj` / bare `clojure` | injects `pnix-clj` via `-Sdeps` local/root |
+| **pnix-main** | `pnix-clj-pnix` | pnix REPL / eval of `.px` |
+| **library** | `pnix-clj` sources; `PNIX_CLJ_ROOT` | host-bound JVM library, not portable `.px` |
+| **meta** | `clj-meta` | pnix-agnostic |
+
+Host-language `.px` import: `(pnix-clj.core/eval-file "x.px")` / `eval-source`.  
+HM: `~/dot-nix/dev/clj` + overlay.

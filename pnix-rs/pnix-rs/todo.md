@@ -683,6 +683,9 @@ substrate-checked).
 
 ## Host-language import of pnix product library (user intent, 2026-08-13)
 
+**Canonical doctrine:** [`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md)  
+**HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md`
+
 Context from home-manager (`dot-nix`) integration:
 
 - `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
@@ -699,10 +702,19 @@ DLL HintPath). Anything that requires a real packaging format is product work
 below.
 
 
-### rs — remaining product work
+### rs — status (2026-08-14)
 
-1. Document Cargo integration: path dep vs system `PNIX_RS_LIB_DIR` /
-   `libpnix_rs.{rlib,a,dylib}` + `pnix_rs.h`.
+**Landed:**
+
+1. Dual-axis docs: `HOST_DEV_ENV.md`, host `CLAUDE.md` / `README.md`.
+2. Flake `packages.pnix-rs-library` + C header `pnix_rs.h`.
+3. Host-main env: `PNIX_RS_LIB_DIR` / `PNIX_RS_INCLUDE_DIR` / `PNIX_RS_RUNTIME`
+   (HM `pnix-rs-rs` wraps cargo/rustc).
+4. Host-language `.px` import: `pnix_rs::eval_file` + C `pnix_rs_eval`.
+
+**Still open:**
+
+1. Deeper Cargo integration cookbook (path dep vs system `PNIX_RS_LIB_DIR`).
 2. Optional: crates.io / git package so host crates do not depend on store paths.
 3. Stable C ABI versioning for the cdylib (semver + header).
 

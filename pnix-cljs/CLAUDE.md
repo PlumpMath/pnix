@@ -28,3 +28,18 @@ pnix-cljs
   though the builtin surface was substantially widened in the 2026-08-11
   maturity pass (math, bitwise, list/attrset helpers ported from the
   reference host's `evaluator.clj`).
+
+## Dual-axis + host library (do not confuse)
+
+Canonical monorepo doc: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md).
+
+| Axis | Entry | Role |
+|------|-------|------|
+| **host-main** | `clojurescript` → `pnix-cljs`; `node` with `NODE_PATH` | load `share/pnix-cljs` |
+| **pnix-main** | `pnix-cljs-pnix` | pnix REPL / eval of `.px` |
+| **library** | flake package `share/pnix-cljs` | host-bound JS module, not portable `.px` |
+| **meta** | `cljs-meta` / `pnix-cljs-cljs` | fixed-point host mechanism |
+
+Host-language `.px` import: module `evalFile` / `evalSource` from the share tree.  
+`shadow-cljs` remains a **build orchestrator**; default runtime host is `pnix-cljs`.  
+HM: `~/dot-nix/dev/cljs` (`pnix-cljs-host`).

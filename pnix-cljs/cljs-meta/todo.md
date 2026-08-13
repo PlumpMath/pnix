@@ -241,6 +241,9 @@ dot-nix wraps `shadow-cljs` to inject `PNIX_CLJS` and installs `pnix-cljs` /
 
 ## Host-language import of pnix product library (user intent, 2026-08-13)
 
+**Canonical doctrine:** [`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md)  
+**HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md`
+
 Context from home-manager (`dot-nix`) integration:
 
 - `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
@@ -257,11 +260,22 @@ DLL HintPath). Anything that requires a real packaging format is product work
 below.
 
 
-### cljs — remaining product work
+### cljs — status (2026-08-14)
 
-1. Document Node `require` entry for `share/pnix-cljs` (module name, ESM/CJS).
-2. Optional npm package publish so host CLJS/Node projects do not rely on
-   NODE_PATH to a nix store share/.
-3. Shadow integration hooks remain optional; runtime host is pnix-cljs, not a
-   portable .px bytecode package.
+**Landed:**
+
+1. Dual-axis docs: `HOST_DEV_ENV.md`, host `CLAUDE.md` / `README.md`.
+2. Flake package ships `share/pnix-cljs` (Node/CommonJS module surface).
+3. Host-main: bare `clojurescript` → `pnix-cljs`; HM `pnix-cljs-host` wraps
+   `node` with `NODE_PATH` / `PNIX_CLJS_*`.
+4. Pnix-main: `pnix-cljs-pnix`. Module exports include `evalFile` / `evalSource`.
+
+**Still open:**
+
+1. Document exact Node `require` entry names (module id, ESM vs CJS) in a short
+   cookbook section.
+2. Optional npm package publish so host projects need not rely on nix store
+   `NODE_PATH`.
+3. Shadow hooks remain optional; runtime host is **pnix-cljs**, not a portable
+   multi-host `.px` bytecode package.
 

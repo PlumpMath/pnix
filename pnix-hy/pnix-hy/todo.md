@@ -349,6 +349,9 @@ dot-nix exposes `pnix-hy-python` / `pnix-hy-hy` and joins them as
 
 ## Host-language import of pnix product library (user intent, 2026-08-13)
 
+**Canonical doctrine:** [`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md)  
+**HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md`
+
 Context from home-manager (`dot-nix`) integration:
 
 - `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
@@ -365,7 +368,16 @@ DLL HintPath). Anything that requires a real packaging format is product work
 below.
 
 
-### hy — remaining product work
+### hy — status (2026-08-14)
+
+**Landed:**
+
+1. Dual-axis docs: `HOST_DEV_ENV.md`, host `CLAUDE.md` / `README.md`.
+2. Host-main: `PYTHONPATH` + `pnix_hy` via HM `pnix-hy-host` (`python`/`hy`).
+3. Host-language `.px` import: `pnix_hy.eval_file` (= `run_px`); package install.
+4. Env: `PNIX_HY_HOME`, `PNIX_HY_LIBRARY`, `PNIX_HY_PYTHON`.
+
+**Still open:**
 
 1. Public `import pnix_hy` API stability (which submodules are host-library API).
 2. Optional: py.typed / package metadata so editors resolve imports without

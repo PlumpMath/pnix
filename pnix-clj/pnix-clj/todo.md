@@ -3325,6 +3325,9 @@ deleted or rewritten before implementation.
 
 ## Host-language import of pnix product library (user intent, 2026-08-13)
 
+**Canonical doctrine:** [`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md)  
+**HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md`
+
 Context from home-manager (`dot-nix`) integration:
 
 - `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
@@ -3341,12 +3344,20 @@ DLL HintPath). Anything that requires a real packaging format is product work
 below.
 
 
-### clj — remaining product work
+### clj — status (2026-08-14)
 
-1. Document the supported require surface for caller projects after
-   `-Sdeps {pnix/pnix-clj {:local/root …}}` (which namespaces are public API).
+**Landed (product + docs):**
+
+1. Dual-axis docs: monorepo `HOST_DEV_ENV.md`, host `CLAUDE.md` / `README.md`.
+2. Host-main inject: `pnix-clj-clj` / bare `clojure` with `-Sdeps` local/root.
+3. Host-language `.px` import helper: `pnix-clj.core/eval-file`.
+4. Env: `PNIX_CLJ_ROOT` / `PNIX_CLJ_LIBRARY` (HM + wrappers).
+
+**Still open (optional product polish):**
+
+1. Document which namespaces are the **public** require surface after inject.
 2. Optional: published Maven/local jar coordinate so projects need not local/root
    the monorepo path.
-3. Clarify that any “compiled .px” artifact is host-bound unless a common
-   packaging contract is designed.
+3. Any “compiled .px” artifact remains host-bound unless a common packaging
+   contract is designed — do not claim otherwise.
 

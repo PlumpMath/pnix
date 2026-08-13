@@ -52,11 +52,27 @@ so what you learn on one carries to the others. With `<host>` one of `clj`, `clj
 | App | What it is |
 |---|---|
 | `.#pnix-<host>` | the pnix runtime CLI |
-| `.#pnix-<host>-pnix` | interactive pnix REPL |
-| `.#pnix-<host>-<lang>` | REPL in the host's own language, where it has one |
+| `.#pnix-<host>-pnix` | interactive pnix REPL (**pnix-main**) |
+| `.#pnix-<host>-<lang>` | host language toolchain / REPL (**host-main**), where it has one |
+| `.#pnix-<host>-library` | host product library export (where the host ships one, e.g. clr/rs) |
 | `.#<host>-meta` | that host language's mechanism CLI (`clj-meta`, `rs-meta`, …) |
 | `.#gate` | that host's full gate |
 | `.#default` | same as `.#pnix-<host>` |
+
+### Dual-axis development (host-main ↔ pnix-main)
+
+Each host must support **both** orientations. Libraries are **host-bound**
+(not a shared multi-host `.px` package). Full matrix, env contracts, and
+import APIs:
+
+→ **[HOST_DEV_ENV.md](HOST_DEV_ENV.md)** (canonical for agents and developers)
+
+| Orientation | Name pattern | Intent |
+|-------------|--------------|--------|
+| **pnix-main** | `pnix-<host>-pnix` | live in `.px`; eval/REPL on this host |
+| **host-main** | `pnix-<host>-<lang>` / `pnix-<host>-<host>` | live in Clojure/Node/Python/Rust/C#; load this host’s pnix **library** |
+
+HM wiring (PATH, `writeShellScriptBin`, no ShellCheck): `~/dot-nix/dev/PNIX-HOSTS.md`.
 
 So the pnix REPL is `.#pnix-clj-pnix` on the JVM and `.#pnix-rs-pnix` on Rust, and the gate is `.#gate` everywhere:
 
@@ -70,7 +86,7 @@ cd pnix-rs && nix run .#pnix-rs-pnix
 cd pnix-clj && nix run .#gate
 ```
 
-Individual hosts add their own extras — `nix run .#pnix-rs-px-eval`, `.#substrate-check`, `.#tower`, `.#deps-lock`. 
+Individual hosts add their own extras — `nix run .#pnix-rs-px-eval`, `.#substrate-check`, `.#tower`, `.#deps-lock`, `.#pnix-clr-library`. 
 Run `nix flake show` inside a host to see everything it exposes.
 
 개별 호스트는 `nix run .#pnix-rs-px-eval`, `.#substrate-check`, `.#tower`, `.#deps-lock`과 같은 자체 추가 기능을 추가합니다.  

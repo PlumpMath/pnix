@@ -17,3 +17,18 @@ Non-negotiable here: **meta first, never cram** — do not grow this host's
 product surface ahead of its `hy-meta` foundation. **Non-regression** — keep this
 repo's gate green. This repo's own `SCOPE_LOCK.md` (if present) governs local
 scope.
+
+## Dual-axis + host library (do not confuse)
+
+Canonical monorepo doc: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md).
+
+| Axis | Entry | Role |
+|------|-------|------|
+| **host-main** | `pnix-hy-python` / `pnix-hy-hy` (bare `python`/`hy`) | `PYTHONPATH` → `pnix_hy` |
+| **pnix-main** | `pnix-hy-pnix` | pnix REPL / eval of `.px` |
+| **library** | installable `pnix_hy`; `PNIX_HY_HOME` / `PNIX_HY_LIBRARY` | host-bound Python package |
+| **meta** | `hy-meta` | pnix-agnostic |
+
+Host-language `.px` import: `import pnix_hy as ph; ph.eval_file("x.px")` (`run_px`).  
+Do **not** globally override `pkgs.python311` in nix overlays — PATH join only.  
+HM: `~/dot-nix/dev/py`.

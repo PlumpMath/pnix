@@ -19,6 +19,20 @@ ClojureScript source
 cljs-meta (cljs.js self-host substrate)
 ```
 
+### Dual-axis + library (read this)
+
+Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).
+
+| Axis | Command / surface |
+|------|-------------------|
+| **host-main** | bare `clojurescript` → `pnix-cljs`; Node with `NODE_PATH` → `share/pnix-cljs` |
+| **pnix-main** | `nix run .#pnix-cljs-pnix` / `pnix-cljs --repl` |
+| **library** | flake package `$out/share/pnix-cljs` — **host-bound** JS, not portable `.px` |
+| **import `.px` from Node** | module `evalFile` / `evalSource` from the share tree |
+
+`shadow-cljs` may remain the **build orchestrator**; the default **runtime** host
+is `pnix-cljs`, not a portable multi-host bytecode package.
+
 ## Build
 
 The checked-in `clojurescript-r1.12.145` tree is the development compiler

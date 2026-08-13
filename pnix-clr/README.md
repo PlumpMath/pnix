@@ -21,6 +21,31 @@ future work. The pinned CLR substrate is the upstream `Clojure` NuGet package
 (`1.12.3-alpha8`), published by `bin/build-clr` from `clr-bootstrap/`; no
 upstream compiler sources are vendored here.
 
+### Dual-axis + library (read this)
+
+Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).  
+C# package: [`csharp/Pnix.Clr/README.md`](csharp/Pnix.Clr/README.md).
+
+| Axis | Command / surface |
+|------|-------------------|
+| **host-main (C#)** | `Pnix.Clr.Eval` after `export-pnix-clr-library`; MSBuild props |
+| **host-main (CLR)** | `bin/clojure-clr` / flake `clojure-clr` (focused `-e` / single file) |
+| **pnix-main** | `./bin/pnix-clr --repl` / `nix run .#pnix-clr-pnix` |
+| **library** | `./bin/export-pnix-clr-library` → guest AOT + managed DLL + props |
+| **import `.px` from C#** | `Eval.File("x.px")` / `Eval.Source("1+2")` |
+
+Env contract: `PNIX_CLR`, `PNIX_CLR_ROOT`, `PNIX_CLR_ARTIFACT` (legacy alias
+`PNIX_CLR_RUNTIME_ARTIFACT`), `PNIX_CLR_LIBRARY`. Guest `*.clj.dll` are
+**ClojureCLR-bound** — not a portable multi-host `.px` package.
+
+```sh
+./bin/build-pnix-clr-artifact
+./bin/export-pnix-clr-library
+# → pnix-clr/target/pnix-clr-library/{lib,build,share}
+nix run .#pnix-clr-library
+nix run .#pnix-clr-refs
+```
+
 ## Bootstrap
 
 Requirements for direct runtime scripts: .NET SDK 10 and `jq`. The aggregate

@@ -29,8 +29,24 @@ cd pnix-rs  && nix run ..#substrate-check   # rs-meta ↔ pnix-rs 3-way 의존 �
 nix develop
 ```
 
-`packages`: `rs-meta`, `pnix-rs`(default). `apps`: `pnix-rs`, `rs-meta`,
-`rs-meta-check`, `pnix-rs-check`, `substrate-check`.
+`packages`: `rs-meta`, `pnix-rs`(default), **`pnix-rs-library`** (embeddable
+rlib/a/dylib + `pnix_rs.h`). `apps`: `pnix-rs`, `rs-meta`, `pnix-rs-pnix`,
+`pnix-rs-rust`, `pnix-rs-px-eval`, `rs-meta-check`, `pnix-rs-check`,
+`substrate-check`, `gate`.
+
+### Dual-axis + library (read this)
+
+Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).
+
+| Axis | Command / surface |
+|------|-------------------|
+| **host-main** | `cargo` / `rustc` with `PNIX_RS_LIB_DIR` / `PNIX_RS_INCLUDE_DIR` |
+| **pnix-main** | `nix run .#pnix-rs-pnix` / `pnix-rs px-eval` |
+| **library** | `nix build .#pnix-rs-library` — **host-bound**, not portable `.px` |
+| **import `.px` from Rust** | `pnix_rs::eval_file` / C `pnix_rs_eval` |
+
+Never install full `pnix-rs` + `pnix-rs-library` into the same `buildEnv`
+(both ship `libpnix_rs.dylib`). Use CLI-only + library package separately.
 
 ## 예제 — plain Rust의 한계 vs Rust↔pnix 방식
 

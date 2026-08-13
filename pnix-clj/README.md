@@ -10,6 +10,17 @@ mirror — and collapsed to a single value by the self-hosting **tower**.
 > This is the Clojure/JVM sibling of [`pnix-hy`](../pnix-hy) (Hy/Python ↔ pnix).
 > The projection target here is **only** Clojure/JVM (clj-meta) — no Python/Hy.
 
+### Dual-axis + library (read this)
+
+Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).
+
+| Axis | Command / surface |
+|------|-------------------|
+| **host-main** | `pnix-clj-clj` / bare `clojure` — injects this tree via `-Sdeps` |
+| **pnix-main** | `nix run .#pnix-clj-pnix` |
+| **library** | `pnix-clj` sources on classpath; `PNIX_CLJ_ROOT` — **host-bound**, not portable `.px` |
+| **import `.px` from Clojure** | `(pnix-clj.core/eval-file "x.px")` |
+
 ## Layout
 
 ```

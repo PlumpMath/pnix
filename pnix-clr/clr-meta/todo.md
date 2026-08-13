@@ -245,6 +245,10 @@ doable in home-manager alone — they need product work in this tree.
 
 ## Host-language import of pnix product library (user intent, 2026-08-13)
 
+**Canonical doctrine:** [`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md)  
+**HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md`  
+**C# surface:** [`../csharp/Pnix.Clr/README.md`](../csharp/Pnix.Clr/README.md)
+
 Context from home-manager (`dot-nix`) integration:
 
 - `pnix-<host>-pnix` = pnix-language surface (REPL/eval of `.px`) on this host.
@@ -261,13 +265,15 @@ DLL HintPath). Anything that requires a real packaging format is product work
 below.
 
 
-### clr — remaining product work (high priority for host import)
+### clr — status (2026-08-14)
 
 1. **Library package** — **done**: `export-pnix-clr-library` + flake
    `pnix-clr-library` / `pnix-clr-refs` + C# `Pnix.Clr.Eval` + MSBuild props.
 2. **ClojureCLR host library story** — **partial**: `clojure-clr` facade +
    guest AOT Reference via props; full arbitrary-.clj project story still open.
 3. Versioned env contract — **done**: `PNIX_CLR_*` (+ library path).
-4. Explicit note: runtime-artifact `.clj.dll` is **host-bound** (CLR), not a
+4. Dual-axis docs — **done**: monorepo `HOST_DEV_ENV.md` + host `CLAUDE.md` /
+   `README.md` + HM matrix.
+5. Explicit note: runtime-artifact `.clj.dll` is **host-bound** (CLR), not a
    common multi-host .px package. (Still true; document, do not claim otherwise.)
 
