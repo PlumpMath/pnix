@@ -1,5 +1,9 @@
 # examples — 왜 meta-circular인가 (plain Rust의 한계 vs pnix-rs/rs-meta)
 
+> **Cross-host balance:** monorepo
+> [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md)
+> (rs ≈ mid catalog; clj/hy dense; cljs/clr core 00–06).
+>
 > **Foundation entry point:** [FOUNDATION_PATH.md](FOUNDATION_PATH.md) and
 > [`00-foundation`](00-foundation/README.md). The PNIX runtime and rs-meta
 > meta-circular mechanism are basic capabilities. Mirror/proof receipts and

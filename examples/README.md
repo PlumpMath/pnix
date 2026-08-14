@@ -1,6 +1,22 @@
 # examples/
 
-Host-language import demos live under **`host-import/`**, not this directory.
+Two layers:
+
+1. **Per-host product catalogs** — `pnix-<host>/pnix-<host>/examples/`  
+   Theme balance / maturity: **[EXAMPLES_BALANCE.md](EXAMPLES_BALANCE.md)**
+2. **Monorepo host-import smokes** — **`host-import/`** (dual-axis day-1 demos)
+
+## Host product catalogs (not this directory)
+
+| Host | Path | Depth |
+|------|------|--------|
+| clj | `pnix-clj/pnix-clj/examples/` | dense (~90) |
+| hy | `pnix-hy/pnix-hy/examples/` | dense (~35) |
+| rs | `pnix-rs/pnix-rs/examples/` | mid (~15) |
+| cljs | `pnix-cljs/pnix-cljs/examples/` | core 00–06 |
+| clr | `pnix-clr/pnix-clr/examples/` | core 00–06 |
+
+## host-import (this tree)
 
 ```bash
 # single-file eval-file
