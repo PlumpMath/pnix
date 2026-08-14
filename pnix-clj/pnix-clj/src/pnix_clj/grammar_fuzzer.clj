@@ -76,9 +76,12 @@
      :source source
      :source-hash (hash/sha256 source)
      :fixture-class class
+     ;; Error templates are deterministic semantic failures (div0, empty head,
+     ;; unbound, assert false). verify-source reports :failed, not a policy
+     ;; :held frontier — match that honest shape.
      :expected-status (case class
                         :positive :accepted
-                        :error :held)
+                        :error :failed)
      :generator {:schema :pnix-clj.grammar-fuzzer.v0
                  :seed seed
                  :index index
@@ -108,11 +111,9 @@
           (range error-count))))))
 
 (defn- gate-status
+  "Row ok iff the multi-lane receipt status matches the fixture expectation."
   [expected actual]
-  (case expected
-    :accepted (if (= :accepted actual) :ok :failed)
-    :held (if (= :held actual) :ok :failed)
-    :failed))
+  (if (= expected actual) :ok :failed))
 
 (defn- fuzzer-row
   [case]

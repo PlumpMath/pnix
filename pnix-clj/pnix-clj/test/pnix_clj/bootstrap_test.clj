@@ -5584,7 +5584,7 @@
                                        :seed 0})]
     (is (= :pnix-grammar-fuzzer-report (:kind report)))
     (is (= :pnix-clj.grammar-fuzzer-report.v0 (:schema report)))
-    (is (= :generated-programs-through-run-source-differential-gate
+    (is (= :generated-programs-through-verify-source-differential-gate
            (:policy report)))
     (is (= 7 (:source-count report)))
     (is (= 5 (:positive-count report)))
@@ -5592,7 +5592,9 @@
     (is (= 7 (:ok report)))
     (is (= 0 (:failed report)))
     (is (nil? (:first-failed report)))
-    (is (= {:accepted 5 :held 2} (:actual-status-counts report)))
+    ;; Error fixtures are honest semantic :failed (div0/head[]/unbound/assert),
+    ;; not pre-R1 policy :held.
+    (is (= {:accepted 5 :failed 2} (:actual-status-counts report)))
     (is (every? #(= :ok (:status %)) (:rows report)))))
 
 (deftest optional-live-oracle-is-gated-and-compares-when-available
