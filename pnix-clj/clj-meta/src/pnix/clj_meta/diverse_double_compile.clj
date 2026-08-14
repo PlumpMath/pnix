@@ -441,7 +441,15 @@
    {:id :mini-backend-macro-case-keyword
     :source "(fn [k] (case k :a 1 :b 2 :c 3 :d 4 :e 5 :f 6 :g 7 :h 8 0))"
     :args [:g]
-    :expected 7}])
+    :expected 7}
+   {:id :mini-backend-try-catch-no-throw
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero)))"
+    :args [2]
+    :expected 5}
+   {:id :mini-backend-try-catch-caught
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero)))"
+    :args [0]
+    :expected :divzero}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

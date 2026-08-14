@@ -508,6 +508,17 @@
     (throw (ex-info "tiny analyzer: quote arity" {:form form})))
   (analyze-quoted (first args)))
 
+;; Deliberately narrow allowlist, not general Java class resolution: this
+;; tiny language has no way to name arbitrary host classes, so `catch`
+;; targets are restricted to a small set of exception types actually
+;; reachable from ops this backend already supports (`quot`/`rem` throw
+;; ArithmeticException on divide-by-zero).
+(def ^:private catch-classes
+  {'ArithmeticException ArithmeticException
+   'Exception Exception
+   'RuntimeException RuntimeException
+   'Throwable Throwable})
+
 (defn- analyze-call
   [env form]
   (let [[op & args] form]
@@ -517,6 +528,32 @@
       let (analyze-let env form args)
       loop (analyze-loop env form args)
       recur (analyze-recur env form args)
+      try
+      (do
+        ;; Deliberately narrow scope: exactly one body expression and one
+        ;; `catch` clause (no `finally`, no multi-catch, no multi-form
+        ;; try/catch bodies) -- a single-expression try/catch is enough to
+        ;; cover the conformance-corpus shape this backend targets
+        ;; (`(try (quot 10 x) (catch ArithmeticException e :divzero))`), and
+        ;; keeps the AST/emitter change small and easy to verify.
+        (when-not (= 2 (count args))
+          (throw (ex-info "tiny analyzer: try requires exactly one body form and one catch clause"
+                          {:form form})))
+        (let [[body-form catch-form] args]
+          (when-not (and (seq? catch-form) (= 'catch (first catch-form)))
+            (throw (ex-info "tiny analyzer: try's second form must be a catch clause"
+                            {:form form})))
+          (let [[_ class-sym name-sym catch-body-form] catch-form]
+            (when-not (and (= 4 (count catch-form))
+                           (contains? catch-classes class-sym)
+                           (symbol? name-sym))
+              (throw (ex-info "tiny analyzer: malformed catch clause (supported classes: ArithmeticException, Exception, RuntimeException, Throwable)"
+                              {:form form})))
+            {:op :try
+             :body (analyze-expr env body-form)
+             :catch-class (get catch-classes class-sym)
+             :catch-name name-sym
+             :catch-body (analyze-expr (assoc env name-sym true) catch-body-form)})))
       if (do
            (when-not (= 3 (count args))
              (throw (ex-info "tiny analyzer: if arity" {:form form})))
@@ -807,6 +844,23 @@
                (assoc env name {:kind :let :slot slot})))
       (emit-expr ga env body))))
 
+(defn- emit-try
+  [^GeneratorAdapter ga env {:keys [body catch-class catch-name catch-body]}]
+  (let [start (Label.)
+        end (Label.)
+        handler (Label.)
+        after (Label.)
+        catch-slot (.newLocal ga obj-type)]
+    (.visitTryCatchBlock ga start end handler (Type/getInternalName catch-class))
+    (.mark ga start)
+    (emit-expr ga env body)
+    (.mark ga end)
+    (.goTo ga after)
+    (.mark ga handler)
+    (.storeLocal ga catch-slot)
+    (emit-expr ga (assoc env catch-name {:kind :let :slot catch-slot}) catch-body)
+    (.mark ga after)))
+
 (defn- emit-recur
   [^GeneratorAdapter ga env exprs]
   (let [{:keys [label slots]} (get env recur-target-key)]
@@ -901,6 +955,7 @@
     :list (emit-list ga env (:items node))
     :do (emit-do ga env (:exprs node))
     :let (emit-let ga env node)
+    :try (emit-try ga env node)
     :loop (emit-loop ga env node)
     :recur (emit-recur ga env (:exprs node))
     :if (let [else-label (Label.)
@@ -1314,7 +1369,23 @@
    {:id :tiny-macro-case-string
     :source "(fn [s] (case s \"Aa\" 1 \"BB\" 2 :other))"
     :args ["BB"]
-    :expected 2}])
+    :expected 2}
+   {:id :tiny-try-catch-no-throw
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero)))"
+    :args [2]
+    :expected 5}
+   {:id :tiny-try-catch-caught
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero)))"
+    :args [0]
+    :expected :divzero}
+   {:id :tiny-try-catch-exception-not-nil
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e (nil? e))))"
+    :args [0]
+    :expected false}
+   {:id :tiny-try-catch-composes-with-let
+    :source "(fn [x] (let [r (try (quot 10 x) (catch ArithmeticException e -1))] (+ r 1)))"
+    :args [2]
+    :expected 6}])
 
 (defn run
   []

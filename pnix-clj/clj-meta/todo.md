@@ -114,13 +114,26 @@ top-line claim, but the substance is much closer than "false" implies:
   `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate` `metacircular
   gate: READY`, no regressions.
 
-  Remaining large surface still untouched by U6 at all: exceptions
-  (try/catch/finally, and `throw` in general — needed properly for a
-  full `case`, not just this scoped subset), Java interop (method calls,
-  field access, `set!`, static members, reflection), `deftype`/`defrecord`/
-  `reify`, `letfn`, bignum/ratio/regex reader literals, dynamic vars,
-  `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape. Each
-  of those is its own multi-fixture slice, several of them (interop,
+  **Fourth slice landed 2026-08-14: single-clause `try`/`catch`** (65→69).
+  Real ASM exception-table emission (`visitTryCatchBlock` + labels), not a
+  macro expansion. Scope: exactly one body expr + one `catch` clause, catch
+  class from a small explicit allowlist (`ArithmeticException`/`Exception`/
+  `RuntimeException`/`Throwable`) rather than general class resolution. This
+  only *catches* exceptions arising from ops already supported here (mainly
+  `quot`/`rem` divide-by-zero) — a user-facing `throw` special form is still
+  open and is what would fully close `case`'s no-default gap noted above.
+  Verified against real host `eval` (caught divide-by-zero, non-throwing
+  passthrough, caught-exception-object identity via `(nil? e)`, composition
+  with `let`) before adding fixtures. DDC row: 52→54. `-M:conformance`
+  116/116 unaffected, `bin/clj-meta-gate` `metacircular gate: READY`, no
+  regressions.
+
+  Remaining large surface still untouched by U6 at all: `throw`/`finally`/
+  multi-catch (this slice's own natural continuation), Java interop (method
+  calls, field access, `set!`, static members, reflection), `deftype`/
+  `defrecord`/`reify`, `letfn`, bignum/ratio/regex reader literals, dynamic
+  vars, `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape.
+  Each of those is its own multi-fixture slice, several of them (interop,
   exceptions, deftype/reify) genuinely large on their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully

@@ -94,10 +94,10 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    65 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    69 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case`/vector-destructuring/fixed multi-arity
-    fn/variadic `&` rest-args/count) with ZERO calls into tools.analyzer.jvm
-    or the host reader.
+    fn/variadic `&` rest-args/count/single-clause `try`/`catch`) with ZERO
+    calls into tools.analyzer.jvm or the host reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
     0 divergences found.
@@ -196,6 +196,30 @@ U6: 61→65. DDC row: 50→52 (2 new `case` cases wired into
 `independent-mini-backend-subset`, still accepted). Full `-M:conformance`
 (116/116, unaffected) and full `bin/clj-meta-gate` (`metacircular gate:
 READY`) both still green.
+
+**Widened a fourth time, same day (2026-08-14): single-clause `try`/`catch`.**
+Real ASM exception-table emission (`GeneratorAdapter.visitTryCatchBlock` +
+`mark`/`goTo` labels around the protected region and handler, matching the
+same label/branch idiom `if` already uses in this file), not a macro
+expansion — `case`'s scope note flagged that a proper no-default `case`
+needs real `throw`, and `try`/`catch` is a real, independent step toward
+that (not yet closing it: this slice only *catches* exceptions that already
+arise from ops this backend supports, most usefully `quot`/`rem`'s
+`ArithmeticException` on divide-by-zero; a user-facing `throw` special form
+allowing arbitrary rejection, needed to fully close `case`'s no-default gap,
+is still open). Deliberately narrow scope, matching this file's established
+pattern: exactly one body expression and one `catch` clause (no `finally`,
+no multi-catch, no multi-form try/catch bodies), and the caught class must
+be one of a small explicit allowlist (`ArithmeticException`/`Exception`/
+`RuntimeException`/`Throwable`) rather than general Java class resolution,
+since this tiny language has no way to name arbitrary host classes. Verified
+against real host `eval` before adding fixtures: divide-by-zero caught
+(`:divzero`), non-throwing path passes through untouched, the caught
+exception object binds correctly to the catch name (`(nil? e)` -> `false`,
+not `true`), and `try`/`catch` composes correctly nested inside `let`. U6:
+65→69. DDC row: 52→54 (2 new cases). Full `-M:conformance` (116/116,
+unaffected) and full `bin/clj-meta-gate` (`metacircular gate: READY`) both
+still green.
 
 **What's still genuinely open:** full Wheeler DDC needs the independent
 backend's coverage to match the *production* corpus, not a 43-fixture subset,
