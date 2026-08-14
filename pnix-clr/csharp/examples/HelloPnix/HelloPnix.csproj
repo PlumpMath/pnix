@@ -8,18 +8,30 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
-  <!-- Prefer exported library; fall back to in-tree build props. -->
+  <!--
+    Prefer in-tree ProjectReference when developing in the monorepo so HelloPnix
+    always sees latest Pnix.Clr APIs (exported DLLs can lag). Override with
+    PnixClrUseExport=true to force PNIX_CLR_LIBRARY props + DLL Reference.
+  -->
   <PropertyGroup>
+    <_PnixClrCsproj>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../Pnix.Clr/Pnix.Clr.csproj'))</_PnixClrCsproj>
+    <_UseProjectRef Condition="'$(PnixClrUseExport)' != 'true' and Exists('$(_PnixClrCsproj)')">true</_UseProjectRef>
     <_PnixLib Condition="'$(PNIX_CLR_LIBRARY)' != ''">$(PNIX_CLR_LIBRARY)</_PnixLib>
-    <_PnixLib Condition="'$(_PnixLib)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../target/pnix-clr-library'))</_PnixLib>
+    <_PnixLib Condition="'$(_PnixLib)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../pnix-clr/target/pnix-clr-library'))</_PnixLib>
   </PropertyGroup>
-  <Import Project="$(_PnixLib)/build/Pnix.Clr.props"
-          Condition="Exists('$(_PnixLib)/build/Pnix.Clr.props')" />
-  <Import Project="$(_PnixLib)/build/Pnix.Clr.targets"
-          Condition="Exists('$(_PnixLib)/build/Pnix.Clr.targets')" />
 
-  <!-- In-tree ProjectReference when library not yet exported. -->
-  <ItemGroup Condition="!Exists('$(_PnixLib)/lib/net8.0/Pnix.Clr.dll')">
+  <Import Project="$(_PnixLib)/build/Pnix.Clr.props"
+          Condition="'$(_UseProjectRef)' != 'true' and Exists('$(_PnixLib)/build/Pnix.Clr.props')" />
+  <Import Project="$(_PnixLib)/build/Pnix.Clr.targets"
+          Condition="'$(_UseProjectRef)' != 'true' and Exists('$(_PnixLib)/build/Pnix.Clr.targets')" />
+
+  <ItemGroup Condition="'$(_UseProjectRef)' == 'true'">
     <ProjectReference Include="../../Pnix.Clr/Pnix.Clr.csproj" />
+  </ItemGroup>
+  <!-- Export-only: reference packaged DLL when not using project ref. -->
+  <ItemGroup Condition="'$(_UseProjectRef)' != 'true' and Exists('$(_PnixLib)/lib/net10.0/Pnix.Clr.dll')">
+    <Reference Include="Pnix.Clr">
+      <HintPath>$(_PnixLib)/lib/net10.0/Pnix.Clr.dll</HintPath>
+    </Reference>
   </ItemGroup>
 </Project>

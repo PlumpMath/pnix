@@ -32,7 +32,7 @@ Each host has a **local feed** materializer + smoke:
 | **cljs** | `pnix-cljs/bin/export-pnix-cljs-library` | `pnix-cljs-library-smoke` | `NODE_PATH=…/lib/node_modules:…/share` |
 | **hy** | `pnix-hy/pnix-hy/bin/export-pnix-hy-library` | `pnix-hy-library-smoke` | `PYTHONPATH=…/site` |
 | **rs** | `pnix-rs/pnix-rs/bin/export-pnix-rs-library` | `pnix-rs-library-smoke` | path-dep or `-L lib -I include` |
-| **clr** | `pnix-clr/bin/export-pnix-clr-library` + `pack-pnix-clr-nupkg` | `pnix-clr-nupkg-smoke` | `PNIX_CLR_LIBRARY` / local nupkg dir |
+| **clr** | `pnix-clr/bin/export-pnix-clr-library` (+ pack) | `pnix-clr-library-smoke` | `PNIX_CLR_LIBRARY` / local nupkg dir |
 
 ```bash
 ./bin/host-library-smokes   # clj hy rs cljs (+ clr if already exported)

@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Local clr library export smoke (not nuget.org).
+# Rebuilds export if missing/stale API surface, packs nupkg, checks layout.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+lib="${PNIX_CLR_LIBRARY:-$root/pnix-clr/target/pnix-clr-library}"
+no_export=0
+if [[ "${1:-}" == "--no-export" ]]; then
+  no_export=1
+elif [[ -n "${1:-}" ]]; then
+  echo "usage: pnix-clr-library-smoke [--no-export]" >&2
+  exit 2
+fi
+
+echo "== pnix-clr-library-smoke (local feed only) =="
+
+need_export=0
+if [[ ! -f "$lib/manifest.json" ]]; then
+  need_export=1
+elif ! command -v strings >/dev/null 2>&1; then
+  # can't check API symbols; re-export if forced
+  :
+elif ! strings "$lib/lib/net10.0/Pnix.Clr.dll" 2>/dev/null | grep -q 'SourceInProcess'; then
+  echo "  exported Pnix.Clr.dll lacks SourceInProcess — will re-export"
+  need_export=1
+fi
+
+if [[ "$need_export" -eq 1 ]]; then
+  if [[ "$no_export" -eq 1 ]]; then
+    echo "FAIL: library missing or stale at $lib (run export-pnix-clr-library)" >&2
+    exit 1
+  fi
+  echo "  exporting → $lib"
+  "$root/bin/export-pnix-clr-library" "$lib"
+fi
+
+for need in \
+  "manifest.json" \
+  "lib/net8.0/Pnix.Clr.dll" \
+  "lib/net10.0/Pnix.Clr.dll" \
+  "build/Pnix.Clr.props" \
+  "build/Pnix.Clr.targets"
+do
+  if [[ ! -f "$lib/$need" ]]; then
+    echo "FAIL: missing $lib/$need" >&2
+    exit 1
+  fi
+done
+echo "  OK  export layout (dual TFM + props)"
+
+# API surface sanity on net10 DLL
+if command -v strings >/dev/null 2>&1; then
+  if ! strings "$lib/lib/net10.0/Pnix.Clr.dll" | grep -q 'SourceInProcess'; then
+    echo "FAIL: net10 Pnix.Clr.dll missing SourceInProcess after export" >&2
+    exit 1
+  fi
+  if ! strings "$lib/lib/net10.0/Pnix.Clr.dll" | grep -q 'FileInProcess'; then
+    echo "FAIL: net10 Pnix.Clr.dll missing FileInProcess after export" >&2
+    exit 1
+  fi
+  echo "  OK  net10 API includes SourceInProcess / FileInProcess"
+fi
+
+# nupkg layout gate (reuses pack)
+if [[ -x "$root/bin/pnix-clr-nupkg-smoke" ]]; then
+  PNIX_CLR_LIBRARY="$lib" "$root/bin/pnix-clr-nupkg-smoke" --no-export
+else
+  echo "  SKIP nupkg-smoke (missing script)"
+fi
+
+# Process-spawn eval via HelloPnix if pnix-clr runnable
+if [[ -x "$root/bin/pnix-clr" ]] && command -v dotnet >/dev/null 2>&1; then
+  export PNIX_CLR="$root/bin/pnix-clr"
+  export PNIX_CLR_ROOT="$root"
+  export PNIX_CLR_ARTIFACT="${PNIX_CLR_ARTIFACT:-$root/pnix-clr/target/runtime-artifact}"
+  hello="$root/../examples/host-import/hello.px"
+  if [[ -f "$hello" ]]; then
+    out="$(
+      cd "$root"
+      # Use project ref (default) so we don't require export for HelloPnix build
+      dotnet run --project csharp/examples/HelloPnix -c Release -v q -- --file "$hello" 2>/dev/null \
+        | awk 'NF{line=$0} END{print line}' | tr -d '[:space:]'
+    )"
+    if [[ "$out" != "3" ]]; then
+      echo "FAIL: HelloPnix eval => '$out' (want 3)" >&2
+      exit 1
+    fi
+    echo "  OK  HelloPnix process-spawn => 3"
+  fi
+fi
+
+echo "== summary: PASS (local clr library only; not nuget.org) =="

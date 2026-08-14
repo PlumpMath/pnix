@@ -63,10 +63,13 @@ Or run `pnix-clr-refs` / `pnix-clr-library` to print absolute paths.
 ./bin/build-pnix-clr-artifact          # guest AOT if missing
 ./bin/export-pnix-clr-library          # → target/pnix-clr-library
 # or: nix run .#pnix-clr-library
-./bin/pack-pnix-clr-nupkg              # local .nupkg (PNIX_CLR_NUPKG_VERSION)
-./bin/pnix-clr-nupkg-smoke             # layout gate (local feed only; no nuget.org)
+./bin/export-pnix-clr-library          # rebuild dual-TFM DLL + props
+./bin/pnix-clr-library-smoke           # export + API check + nupkg + HelloPnix
+./bin/pack-pnix-clr-nupkg              # local .nupkg only
 # MSBuild sample: ../Directory.Build.props.sample
 # In-process: ../../docs/IN_PROCESS_EVAL.md  ·  HelloPnix --inprocess
+# HelloPnix defaults to ProjectReference (latest APIs); set PnixClrUseExport=true
+# to force PNIX_CLR_LIBRARY DLL Reference.
 ```
 ## Related CLIs
 

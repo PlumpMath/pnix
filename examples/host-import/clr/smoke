@@ -26,15 +26,11 @@ if ! command -v dotnet >/dev/null 2>&1; then
   exit 0
 fi
 
-# Materialize library if missing (may take a while first time).
-if [[ ! -f "$lib/manifest.json" ]]; then
-  if [[ -x "$clr_root/bin/export-pnix-clr-library" ]]; then
-    echo "smoke: exporting pnix-clr-library …"
-    (cd "$clr_root" && ./bin/export-pnix-clr-library "$lib")
-  else
-    echo "SKIP: no library at $lib and no export-pnix-clr-library"
-    exit 0
-  fi
+# Process-spawn needs pnix-clr on disk; library export optional (HelloPnix
+# uses in-tree ProjectReference by default).
+if [[ ! -x "${PNIX_CLR:-$clr_root/bin/pnix-clr}" ]]; then
+  echo "SKIP: pnix-clr not executable"
+  exit 0
 fi
 
 export PNIX_CLR="${PNIX_CLR:-$clr_root/bin/pnix-clr}"
@@ -45,18 +41,13 @@ elif [[ -d "$clr_root/pnix-clr/target/runtime-artifact" ]]; then
   export PNIX_CLR_ARTIFACT="$clr_root/pnix-clr/target/runtime-artifact"
 fi
 
-# Prefer in-tree ProjectReference so HelloPnix always sees latest Pnix.Clr
-# APIs. Exported library DLLs can lag behind source; still keep export on
-# disk for props consumers. Point PNIX_CLR_LIBRARY at a missing path to
-# force ProjectReference (HelloPnix.csproj).
-export PNIX_CLR_LIBRARY="${PNIX_CLR_LIBRARY_FORCE:-/nonexistent-pnix-clr-library-for-project-ref}"
-
+# HelloPnix prefers in-tree ProjectReference (see HelloPnix.csproj).
+# PNIX_CLR is still required for process-spawn Eval.File.
 # HelloPnix is net10-only in-tree.
 out="$(
   cd "$clr_root"
   # Capture only the final stdout line (value), not MSBuild noise.
-  dotnet run --project csharp/examples/HelloPnix -c Release -v q --no-restore 2>/dev/null -- --file "$hello" \
-    || dotnet run --project csharp/examples/HelloPnix -c Release -v q -- --file "$hello"
+  dotnet run --project csharp/examples/HelloPnix -c Release -v q -- --file "$hello"
 )"
 # Last non-empty line is the value.
 out="$(echo "$out" | awk 'NF{line=$0} END{print line}' | tr -d '[:space:]')"

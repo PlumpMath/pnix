@@ -48,18 +48,11 @@ if [[ ! -f "$artifact_src/manifest.json" ]]; then
   exit 1
 fi
 
-# Build managed Pnix.Clr for both TFMs into a staging dir.
+# Build managed Pnix.Clr per TFM with isolated output paths (multi-TFM + shared
+# BaseIntermediateOutputPath duplicates AssemblyInfo attributes).
 stage="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clr-library.XXXXXX")"
 cleanup() { rm -rf "$stage"; }
 trap cleanup EXIT
-
-echo "export-pnix-clr-library: building Pnix.Clr ($cfg)..." >&2
-dotnet build "$csproj" \
-  --configuration "$cfg" \
-  --nologo \
-  -v q \
-  -p:BaseOutputPath="$stage/bin/" \
-  -p:BaseIntermediateOutputPath="$stage/obj/"
 
 mkdir -p "$out"/{lib/net8.0,lib/net10.0/runtime-artifact,build,share/pnix-clr,csharp}
 
@@ -69,25 +62,28 @@ cp -f "$artifact_src/manifest.json" "$out/lib/net10.0/runtime-artifact/"
 cp -f "$artifact_src"/pnix_clr.*.clj.dll "$out/lib/net10.0/runtime-artifact/" 2>/dev/null \
   || find "$artifact_src" -maxdepth 1 -name 'pnix_clr.*.clj.dll' -exec cp -f {} "$out/lib/net10.0/runtime-artifact/" \;
 
-# Copy managed assemblies per TFM
-copy_managed() {
-  local tfm="$1"
-  local dll
-  dll="$(find "$stage" -type f -path "*/${tfm}/*" -name 'Pnix.Clr.dll' | head -1)"
-  if [[ -z "$dll" || ! -f "$dll" ]]; then
-    echo "export-pnix-clr-library: Pnix.Clr.dll not found for $tfm" >&2
+echo "export-pnix-clr-library: building Pnix.Clr ($cfg) per TFM..." >&2
+for tfm in net8.0 net10.0; do
+  mkdir -p "$stage/out/$tfm" "$stage/obj/$tfm"
+  # Trailing slashes required for IntermediateOutputPath / OutputPath.
+  dotnet build "$csproj" \
+    --configuration "$cfg" \
+    --framework "$tfm" \
+    --nologo \
+    -v q \
+    -p:OutputPath="$stage/out/$tfm/" \
+    -p:IntermediateOutputPath="$stage/obj/$tfm/" \
+    -p:AppendTargetFrameworkToOutputPath=false
+  dll="$stage/out/$tfm/Pnix.Clr.dll"
+  if [[ ! -f "$dll" ]]; then
+    echo "export-pnix-clr-library: Pnix.Clr.dll not found for $tfm at $dll" >&2
     find "$stage" -name 'Pnix.Clr.dll' -print >&2 || true
     exit 1
   fi
   cp -f "$dll" "$out/lib/$tfm/Pnix.Clr.dll"
-  # Optional satellites
-  local pdb="${dll%.dll}.pdb"
-  [[ -f "$pdb" ]] && cp -f "$pdb" "$out/lib/$tfm/" || true
-  local xml="${dll%.dll}.xml"
-  [[ -f "$xml" ]] && cp -f "$xml" "$out/lib/$tfm/" || true
-}
-copy_managed net8.0
-copy_managed net10.0
+  [[ -f "$stage/out/$tfm/Pnix.Clr.pdb" ]] && cp -f "$stage/out/$tfm/Pnix.Clr.pdb" "$out/lib/$tfm/" || true
+  [[ -f "$stage/out/$tfm/Pnix.Clr.xml" ]] && cp -f "$stage/out/$tfm/Pnix.Clr.xml" "$out/lib/$tfm/" || true
+done
 
 # MSBuild props/targets (source lives under msbuild/ — monorepo ignores build/)
 cp -f "$root/csharp/Pnix.Clr/msbuild/Pnix.Clr.props" "$out/build/"
