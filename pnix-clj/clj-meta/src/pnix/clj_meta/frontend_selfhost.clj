@@ -619,45 +619,58 @@
       recur (analyze-recur env form args)
       try
       (do
-        ;; Deliberately narrow scope: exactly one body expression and one
-        ;; `catch` OR one `finally` clause (no combined `catch`+`finally`,
-        ;; no multi-catch, no multi-form try/catch/finally bodies) -- this
+        ;; Deliberately narrow scope: exactly one body expression, and
+        ;; either a `catch` clause, a `finally` clause, or a `catch`
+        ;; followed by a `finally` (no multi-catch, no multi-form
+        ;; try/catch/finally bodies, no `finally` before `catch`) -- this
         ;; covers the conformance-corpus shapes this backend targets
-        ;; (`(try (quot 10 x) (catch ArithmeticException e :divzero))` and
-        ;; `(try 10 (finally (.incrementAndGet a)))`) while keeping each
-        ;; AST/emitter addition small and easy to verify independently.
-        ;; Combining `catch` and `finally` on the same `try` is a further,
-        ;; separate slice (needs a nested try-catch-block shape), not
-        ;; attempted here.
-        (when-not (= 2 (count args))
-          (throw (ex-info "tiny analyzer: try requires exactly one body form and one catch or finally clause"
+        ;; (`(try (quot 10 x) (catch ArithmeticException e :divzero))`,
+        ;; `(try 10 (finally (.incrementAndGet a)))`, and the combined
+        ;; `(try (quot 10 x) (catch ArithmeticException e :divzero) (finally
+        ;; (.incrementAndGet a)))`) while keeping each AST/emitter addition
+        ;; small and easy to verify independently.
+        (when-not (<= 2 (count args) 3)
+          (throw (ex-info "tiny analyzer: try requires one body form plus a catch clause, a finally clause, or both (catch before finally)"
                           {:form form})))
-        (let [[body-form clause-form] args]
+        (let [[body-form & clause-forms] args
+              catch-form? #(and (seq? %) (= 'catch (first %)))
+              finally-form? #(and (seq? %) (= 'finally (first %)))
+              analyze-catch-clause
+              (fn [clause-form]
+                (let [[_ class-sym name-sym catch-body-form] clause-form]
+                  (when-not (and (= 4 (count clause-form))
+                                 (contains? known-exception-classes class-sym)
+                                 (symbol? name-sym))
+                    (throw (ex-info "tiny analyzer: malformed catch clause (supported classes: ArithmeticException, Exception, RuntimeException, Throwable, IllegalArgumentException)"
+                                    {:form form})))
+                  {:catch-class (get known-exception-classes class-sym)
+                   :catch-name name-sym
+                   :catch-body (analyze-expr (assoc env name-sym true) catch-body-form)}))
+              analyze-finally-clause
+              (fn [clause-form]
+                (when-not (= 2 (count clause-form))
+                  (throw (ex-info "tiny analyzer: finally takes exactly one body form"
+                                  {:form form})))
+                (analyze-expr env (second clause-form)))]
           (cond
-            (and (seq? clause-form) (= 'catch (first clause-form)))
-            (let [[_ class-sym name-sym catch-body-form] clause-form]
-              (when-not (and (= 4 (count clause-form))
-                             (contains? known-exception-classes class-sym)
-                             (symbol? name-sym))
-                (throw (ex-info "tiny analyzer: malformed catch clause (supported classes: ArithmeticException, Exception, RuntimeException, Throwable, IllegalArgumentException)"
-                                {:form form})))
-              {:op :try
-               :body (analyze-expr env body-form)
-               :catch-class (get known-exception-classes class-sym)
-               :catch-name name-sym
-               :catch-body (analyze-expr (assoc env name-sym true) catch-body-form)})
+            (and (= 1 (count clause-forms)) (catch-form? (first clause-forms)))
+            (merge {:op :try :body (analyze-expr env body-form)}
+                   (analyze-catch-clause (first clause-forms)))
 
-            (and (seq? clause-form) (= 'finally (first clause-form)))
-            (do
-              (when-not (= 2 (count clause-form))
-                (throw (ex-info "tiny analyzer: finally takes exactly one body form"
-                                {:form form})))
-              {:op :try-finally
-               :body (analyze-expr env body-form)
-               :finally-body (analyze-expr env (second clause-form))})
+            (and (= 1 (count clause-forms)) (finally-form? (first clause-forms)))
+            {:op :try-finally
+             :body (analyze-expr env body-form)
+             :finally-body (analyze-finally-clause (first clause-forms))}
+
+            (and (= 2 (count clause-forms))
+                 (catch-form? (first clause-forms))
+                 (finally-form? (second clause-forms)))
+            (merge {:op :try-catch-finally :body (analyze-expr env body-form)}
+                   (analyze-catch-clause (first clause-forms))
+                   {:finally-body (analyze-finally-clause (second clause-forms))})
 
             :else
-            (throw (ex-info "tiny analyzer: try's second form must be a catch or finally clause"
+            (throw (ex-info "tiny analyzer: try's clauses must be catch, finally, or catch then finally"
                             {:form form})))))
       if (do
            (when-not (= 3 (count args))
@@ -1026,6 +1039,68 @@
     (.loadLocal ga result-slot)
     (.visitTryCatchBlock ga start end handler nil)))
 
+(defn- emit-try-catch-finally
+  "Combines the two shapes above: `finally` is duplicated on THREE exit
+  paths -- normal body completion, successful `catch` completion, and any
+  exception not fully handled by either (including one thrown from inside
+  `catch-body` itself) -- matching the real host's own shape exactly,
+  reverse-engineered via `javap -c -v` on a host-AOT-compiled `(try (quot 10
+  x) (catch ArithmeticException e :divzero) (finally (.incrementAndGet
+  a)))` before writing any code. The exception table needs THREE entries:
+  [try-start,try-end) -> catch-start for `catch-class` specifically,
+  [try-start,try-end) -> any-handler as a catch-all (so an exception NOT
+  matching `catch-class` still runs `finally` before propagating), and
+  [catch-start,catch-end) -> any-handler as a catch-all (so an exception
+  thrown from `catch-body` itself still runs `finally` before propagating).
+  Registration order matters twice over here (see `emit-try`'s docstring for
+  the general reason): the two [try-start,try-end) entries must be
+  registered with the specific `catch-class` BEFORE the any-handler (else
+  `catch-class` would never be reached, matching the confirmed real bug
+  pattern from the try/catch widening), and -- like every try* emitter in
+  this file -- registration overall happens last, after body/catch-body/
+  finally-body are fully emitted, so anything nested inside THIS construct
+  registers first."
+  [^GeneratorAdapter ga env {:keys [body catch-class catch-name catch-body finally-body]}]
+  (let [try-start (Label.)
+        try-end (Label.)
+        catch-start (Label.)
+        catch-end (Label.)
+        any-handler (Label.)
+        after (Label.)
+        result-slot (.newLocal ga obj-type)
+        catch-exception-slot (.newLocal ga obj-type)
+        any-exception-slot (.newLocal ga obj-type)]
+    (.mark ga try-start)
+    (emit-expr ga env body)
+    (.storeLocal ga result-slot)
+    (.mark ga try-end)
+    (emit-expr ga env finally-body)
+    (.pop ga)
+    (.goTo ga after)
+
+    (.mark ga catch-start)
+    (.storeLocal ga catch-exception-slot)
+    (emit-expr ga (assoc env catch-name {:kind :let :slot catch-exception-slot}) catch-body)
+    (.storeLocal ga result-slot)
+    (.mark ga catch-end)
+    (emit-expr ga env finally-body)
+    (.pop ga)
+    (.goTo ga after)
+
+    (.mark ga any-handler)
+    (.storeLocal ga any-exception-slot)
+    (emit-expr ga env finally-body)
+    (.pop ga)
+    (.loadLocal ga any-exception-slot)
+    (.throwException ga)
+
+    (.mark ga after)
+    (.loadLocal ga result-slot)
+
+    (.visitTryCatchBlock ga try-start try-end catch-start (Type/getInternalName catch-class))
+    (.visitTryCatchBlock ga try-start try-end any-handler nil)
+    (.visitTryCatchBlock ga catch-start catch-end any-handler nil)))
+
 (defn- emit-new
   [^GeneratorAdapter ga env {:keys [class arg]}]
   (let [ctype (Type/getType ^Class class)]
@@ -1154,6 +1229,7 @@
     :let (emit-let ga env node)
     :try (emit-try ga env node)
     :try-finally (emit-try-finally ga env node)
+    :try-catch-finally (emit-try-catch-finally ga env node)
     :new (emit-new ga env node)
     :throw (emit-throw ga env node)
     :interop-call (emit-interop-call ga env node)
@@ -1663,6 +1739,30 @@
    {:id :tiny-try-finally-runs-on-exceptional-path-nested
     :source "(fn [a x] (do (try (try (quot 10 x) (finally (.incrementAndGet a))) (catch ArithmeticException e :caught)) (.get a)))"
     :args [(java.util.concurrent.atomic.AtomicInteger. 0) 0]
+    :expected 1}
+   {:id :tiny-try-catch-finally-normal-path-value
+    :source "(fn [a x] (try (quot 10 x) (catch ArithmeticException e :divzero) (finally (.incrementAndGet a))))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0) 2]
+    :expected 5}
+   {:id :tiny-try-catch-finally-normal-path-counter
+    :source "(fn [a x] (do (try (quot 10 x) (catch ArithmeticException e :divzero) (finally (.incrementAndGet a))) (.get a)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0) 2]
+    :expected 1}
+   {:id :tiny-try-catch-finally-caught-path-value
+    :source "(fn [a x] (try (quot 10 x) (catch ArithmeticException e :divzero) (finally (.incrementAndGet a))))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0) 0]
+    :expected :divzero}
+   {:id :tiny-try-catch-finally-caught-path-counter
+    :source "(fn [a x] (do (try (quot 10 x) (catch ArithmeticException e :divzero) (finally (.incrementAndGet a))) (.get a)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0) 0]
+    :expected 1}
+   {:id :tiny-try-catch-finally-unmatched-type-still-runs-finally
+    :source "(fn [a] (try (try (throw (IllegalArgumentException. \"boom\")) (catch ArithmeticException e :wrong-type) (finally (.incrementAndGet a))) (catch IllegalArgumentException e2 :outer-caught)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
+    :expected :outer-caught}
+   {:id :tiny-try-catch-finally-unmatched-type-counter
+    :source "(fn [a] (do (try (try (throw (IllegalArgumentException. \"boom\")) (catch ArithmeticException e :wrong-type) (finally (.incrementAndGet a))) (catch IllegalArgumentException e2 :outer-caught)) (.get a)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
     :expected 1}])
 
 (defn run

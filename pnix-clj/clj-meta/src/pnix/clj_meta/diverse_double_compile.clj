@@ -487,7 +487,20 @@
    {:id :mini-backend-try-finally-nested-in-try-catch-exceptional
     :source "(fn [x] (try (try (quot 10 x) (finally :ignored)) (catch ArithmeticException e :caught)))"
     :args [0]
-    :expected :caught}])
+    :expected :caught}
+   ;; Constant, side-effect-free finally bodies here (not the mutable
+   ;; AtomicInteger fixtures from frontend_selfhost.clj's own set) for the
+   ;; same reason noted above the try-finally rows: this row applies the
+   ;; same `args` vector to all three legs in sequence, so mutable state
+   ;; shared across legs would make the comparison meaningless.
+   {:id :mini-backend-try-catch-finally-normal-path
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero) (finally 99)))"
+    :args [2]
+    :expected 5}
+   {:id :mini-backend-try-catch-finally-caught-path
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero) (finally 99)))"
+    :args [0]
+    :expected :divzero}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

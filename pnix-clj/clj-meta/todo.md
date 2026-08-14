@@ -202,15 +202,33 @@ top-line claim, but the substance is much closer than "false" implies:
   U6-only). `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate`
   `metacircular gate: READY`, no regressions.
 
-  Remaining large surface still untouched by U6 at all: combined
-  `catch`+`finally` on one `try`, multi-catch, field access/`set!`, general
-  class construction beyond the small exception allowlist, general
-  class-name resolution beyond the small static-interop allowlist,
-  `deftype`/`defrecord`/`reify`, `letfn`, `str`/string concatenation,
-  bignum/ratio/regex reader literals, dynamic vars, `locking`, protocols,
-  and RestFn's mixed-fixed+variadic-arity shape. Each of those is its own
-  multi-fixture slice, several of them (deftype/reify) genuinely large on
-  their own.
+  **Ninth slice landed 2026-08-14: combined `catch`+`finally` on one
+  `try`** (88→94), closing the gap explicitly deferred above. Real host
+  duplicates `finally` on THREE exit paths, not two (normal, caught, and
+  any exception unhandled by either — including one from inside
+  `catch-body` itself), confirmed via `javap -c -v` before writing code.
+  Needs three exception-table entries: the specific `catch-class` and a
+  catch-all "any" handler both covering the try-body's range (specific
+  registered first — same ordering lesson the previous slice's real bug
+  taught), plus a catch-all covering the catch-body's own range too. `try`'s
+  arity check widened to 2-or-3 args (`catch` alone, `finally` alone, or
+  `catch` then `finally`); the existing catch-only/finally-only paths are
+  byte-for-byte unchanged (verified via matching digests before adding any
+  new fixture). Verified against real host: normal/caught value+counter
+  paths, and the earlier nesting-bug scenario reused as a regression check
+  on this new combined path (an unmatched exception type still runs
+  `finally` before reaching an outer `catch`). DDC row: 62→64.
+  `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate` `metacircular
+  gate: READY`, no regressions.
+
+  Remaining large surface still untouched by U6 at all: multi-catch, field
+  access/`set!`, general class construction beyond the small exception
+  allowlist, general class-name resolution beyond the small static-interop
+  allowlist, `deftype`/`defrecord`/`reify`, `letfn`, `str`/string
+  concatenation, bignum/ratio/regex reader literals, dynamic vars,
+  `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape. Each
+  of those is its own multi-fixture slice, several of them (deftype/reify)
+  genuinely large on their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
