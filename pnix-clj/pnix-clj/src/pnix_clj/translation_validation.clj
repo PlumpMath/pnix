@@ -1,6 +1,7 @@
 (ns pnix-clj.translation-validation
   "Per-compilation translation validation: for each source-form -> clj-meta bytecode lowering, verify semantic preservation for THAT run (Necula/Pnueli style), not whole-compiler correctness."
-  (:require [pnix-clj.core :as pnix]
+  (:require [pnix-clj.clj-meta :as clj-meta]
+            [pnix-clj.core :as pnix]
             [pnix-clj.hash :as hash]))
 
 (def lane-classification
@@ -84,60 +85,73 @@
     :else :rejected))
 
 (defn- sample-rows
-  [receipt]
-  [{:validator :parse-source
-    :status (if (= :ok (get-in receipt [:receipts 0 :status])) :ok :failed)
-    :evidence {:parse-status (get-in receipt [:receipts 0 :status])
-               :ast-hash (:ast-hash receipt)}}
-   {:validator :evaluator-oracle
-    :status (status (= (get-in receipt [:eval-result :value])
-                       (get-in receipt [:oracle-result :value]))
-                    (not= :ok (get-in receipt [:oracle-result :status])))
-    :evidence {:evaluator-status (get-in receipt [:eval-result :status])
-               :oracle-status (get-in receipt [:oracle-result :status])}}
-   {:validator :lowering-clj-meta
-    :status (status (= (get-in receipt [:eval-result :value])
-                       (get-in receipt [:clj-meta-result :value]))
-                    (not= :ok (get-in receipt [:clj-meta-result :status])))
-    :evidence {:lowering-status (get-in receipt [:receipts 2 :status])
-               :clj-meta-status (get-in receipt [:clj-meta-result :status])}}
-   {:validator :compile-receipt
-    :status (if (and (= :ok (get-in receipt [:clj-meta-result
-                                             :compile-receipt
-                                             :determinism
-                                             :status]))
-                     (= :ok (get-in receipt [:clj-meta-result
-                                             :compile-receipt
-                                             :bytecode-artifact
-                                             :status])))
-              :ok
-              :held)
-    :evidence {:determinism-status (get-in receipt [:clj-meta-result
-                                                   :compile-receipt
-                                                   :determinism
-                                                   :status])
-               :bytecode-status (get-in receipt [:clj-meta-result
-                                                :compile-receipt
-                                                :bytecode-artifact
-                                                :status])}}
-   {:validator :px-runtime
-    :status (status (= (get-in receipt [:eval-result :value])
-                       (get-in receipt [:px-runtime :value]))
-                    (not= :ok (get-in receipt [:px-runtime :status])))
-    :evidence {:px-runtime-status (get-in receipt [:px-runtime :status])}}
-   {:validator :pnix-mirror
-    :status (status (= (get-in receipt [:eval-result :value])
-                       (get-in receipt [:pnix-mirror :value]))
-                    (not= :ok (get-in receipt [:pnix-mirror :status])))
-    :evidence {:pnix-mirror-status (get-in receipt [:pnix-mirror :status])}}
-   {:validator :cross-mirror
-    :status (if (and (= :ok (get-in receipt [:cross-mirror-verdict :status]))
-                     (= :agree (get-in receipt [:cross-mirror-verdict
-                                               :equivalence])))
-              :ok
-              :held)
-    :evidence (select-keys (:cross-mirror-verdict receipt)
-                           [:status :reason :equivalence])}])
+  "Build validator rows from a multi-lane `verify-source` receipt plus an
+  optional proof-lane compile result. Basic host execution (clj-meta-executor)
+  intentionally omits compile receipts; the compile-receipt validator uses the
+  separate clj-meta proof client when available."
+  [receipt proof-compile]
+  (let [compile-receipt (or (get-in receipt [:clj-meta-result :compile-receipt])
+                            (:compile-receipt proof-compile))]
+    [{:validator :parse-source
+      :status (if (= :ok (get-in receipt [:receipts 0 :status])) :ok :failed)
+      :evidence {:parse-status (get-in receipt [:receipts 0 :status])
+                 :ast-hash (:ast-hash receipt)}}
+     {:validator :evaluator-oracle
+      :status (status (= (get-in receipt [:eval-result :value])
+                         (get-in receipt [:oracle-result :value]))
+                      (not= :ok (get-in receipt [:oracle-result :status])))
+      :evidence {:evaluator-status (get-in receipt [:eval-result :status])
+                 :oracle-status (get-in receipt [:oracle-result :status])}}
+     {:validator :lowering-clj-meta
+      :status (status (= (get-in receipt [:eval-result :value])
+                         (get-in receipt [:clj-meta-result :value]))
+                      (not= :ok (get-in receipt [:clj-meta-result :status])))
+      :evidence {:lowering-status (get-in receipt [:receipts 2 :status])
+                 :clj-meta-status (get-in receipt [:clj-meta-result :status])}}
+     {:validator :compile-receipt
+      :status (if (and (= :ok (get-in compile-receipt [:determinism :status]))
+                       (= :ok (get-in compile-receipt
+                                      [:bytecode-artifact :status])))
+                :ok
+                :held)
+      :evidence {:determinism-status (get-in compile-receipt
+                                             [:determinism :status])
+                 :bytecode-status (get-in compile-receipt
+                                          [:bytecode-artifact :status])
+                 :proof-lane-status (:status proof-compile)
+                 :proof-lane-mode (:mode proof-compile)}}
+     {:validator :px-runtime
+      :status (status (= (get-in receipt [:eval-result :value])
+                         (get-in receipt [:px-runtime :value]))
+                      (not= :ok (get-in receipt [:px-runtime :status])))
+      :evidence {:px-runtime-status (get-in receipt [:px-runtime :status])}}
+     {:validator :pnix-mirror
+      :status (status (= (get-in receipt [:eval-result :value])
+                         (get-in receipt [:pnix-mirror :value]))
+                      (not= :ok (get-in receipt [:pnix-mirror :status])))
+      :evidence {:pnix-mirror-status (get-in receipt [:pnix-mirror :status])}}
+     {:validator :cross-mirror
+      :status (if (and (= :ok (get-in receipt [:cross-mirror-verdict :status]))
+                       (= :agree (get-in receipt [:cross-mirror-verdict
+                                                 :equivalence])))
+                :ok
+                :held)
+      :evidence (select-keys (:cross-mirror-verdict receipt)
+                             [:status :reason :equivalence])}]))
+
+(defn- proof-compile-for
+  "Run the clj-meta proof client (with compile-receipt) on a lowered form.
+  Bounded class retention keeps the TV smoke finite."
+  [lowered-form]
+  (when lowered-form
+    (try
+      (clj-meta/eval-lowered-bounded lowered-form 32)
+      (catch Throwable t
+        {:status :failed
+         :reason :proof-compile-threw
+         :error {:phase :host-compile
+                 :class :proof-compile-threw
+                 :message (.getMessage t)}}))))
 
 (defn report
   []
@@ -146,7 +160,8 @@
                                   :oracle-result {:status :ok
                                                   :authority :inline-tv-smoke
                                                   :value 42}})
-        rows (sample-rows receipt)
+        proof-compile (proof-compile-for (:lowered-form receipt))
+        rows (sample-rows receipt proof-compile)
         held-or-rejected (remove #(= :ok (:status %)) rows)
         canonical {:validators validator-catalog
                    :sample-rows rows}]
