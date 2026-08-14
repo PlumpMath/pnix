@@ -676,10 +676,28 @@ top-line claim, but the substance is much closer than "false" implies:
   `bin/clj-meta-gate` `metacircular gate: READY ✅` +
   `reproducible DDC lane: OK`, 회귀 없음.
 
+  **37번째 슬라이스, 2026-08-15: `reify`/`deftype` PRIMITIVE 파라미터
+  지원** (216→219, 실측 확인). `javap -c` 확인:
+  `IntUnaryOperator.applyAsInt(int)`는 파라미터가 진짜 primitive로
+  들어오고(`iload_1`), 리턴 쪽 `coerce-reify-return!`의 정반대
+  방향 — 메서드 진입 시점에 그 자리에서 박싱해서 이미-박싱된
+  local처럼 취급하면 이 위트니스의 "본문은 전부 Object" 가정과
+  충돌 없이 맞음. `emit-reify-class`/`emit-deftype-class`에 완전히
+  똑같이 중복돼 있던 메서드별 구성 루프를 `emit-reified-methods!`
+  하나로 통합하면서 PRIMITIVE 파라미터만 새 `:let` local에 박싱해
+  담는 분기 추가, REFERENCE 파라미터는 기존 `:arg` 그대로.
+  `analyze-reify-method`의 프리미티브 파라미터 거부 가드 제거.
+  1개/2개 파라미터, `deftype`+실제 Java 인터페이스+프리미티브
+  파라미터 조합까지 실제 host 대비 검증. `compiler.clj`도 지원
+  확인 후 reify 단독 fixture 하나를 DDC 행에 연결(121→122, 실측
+  확인). `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate`
+  `metacircular gate: READY ✅` + `reproducible DDC lane: OK`, 회귀
+  없음.
+
   U6에 남은 큰 gap: 중첩 closure는 단일 arity로만 범위 제한(깊이
   제한은 해제됨),
-  `reify`/
-  `deftype`은 단일/reference-typed 파라미터만, protocol은 fast
+  `reify`/`deftype`은 단일 인터페이스만(multi-interface `reify`
+  없음), protocol은 fast
   path만(진짜 `extend-protocol` 디스패치 없음).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully

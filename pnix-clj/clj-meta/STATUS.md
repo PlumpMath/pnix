@@ -1091,9 +1091,36 @@ gate: READY ✅`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
 누적 오프-바이-원 오차. 과거 커밋 메시지까지 소급 정정하지는
 않되, 지금부터는 매 슬라이스마다 실측 `count`로 재확인.
 
-U6에 남은 큰 gap: `reify`/`deftype`은 단일 인터페이스·
-reference-typed 파라미터만, protocol은 fast path만(진짜
-`extend-protocol` 디스패치 없음).
+**같은 날 서른일곱 번째 확장 (2026-08-15): `reify`/`deftype` 메서드의
+PRIMITIVE 파라미터 지원.** 남은 4개 갭 중 세 번째. `javap -c`로
+host-AOT-컴파일된 `(reify java.util.function.IntUnaryOperator
+(applyAsInt [this x] (+ x n)))`를 확인: `applyAsInt(int)`는 실제로
+`int` 그대로 받되(`iload_1`), 리턴 쪽의 `coerce-reify-return!`가
+이미 하고 있던 것과 정반대 방향의 처리를 진입부에서 함 — 즉
+파라미터를 그대로 두는 게 아니라, 이 위트니스의 "본문은 전부
+Object" 가정과 맞추려면 메서드 진입 시점에 그 자리에서 박싱해서
+평범한 이미 박싱된 local처럼 취급하면 충분함(리턴 쪽 `unbox`와
+정확히 대칭). `emit-reify-class`/`emit-deftype-class`에 완전히
+동일하게 중복돼 있던 "메서드별 GeneratorAdapter 구성 + arg-env
+구성" 루프를 `emit-reified-methods!` 하나로 통합하면서, PRIMITIVE
+타입 파라미터만 새 local(`{:kind :let :slot ...}`)에 박싱해서 담고
+REFERENCE 타입 파라미터는 기존 `{:kind :arg ...}` 그대로 유지하는
+분기를 추가. `analyze-reify-method`의 프리미티브 파라미터 거부
+가드를 제거. `IntUnaryOperator`(파라미터 1개)/`IntBinaryOperator`
+(2개) 양쪽, 그리고 `deftype`이 실제 Java 인터페이스를 구현하며
+프리미티브 파라미터 메서드를 갖는 조합까지 전부 실제 host 대비
+검증. U6: 216→219(`:tiny-reify-primitive-int-param`,
+`:tiny-reify-two-primitive-int-params`,
+`:tiny-deftype-implements-java-interface-primitive-param`).
+`compiler.clj`도 지원함을 먼저 확인한 뒤 reify(단독, deftype
+아님) fixture 하나를 DDC 행에 연결(`mini-backend-ddc-fixtures`
+121→122, 실측 확인). 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY ✅`, `reproducible
+DDC lane: OK`) 녹색, 회귀 없음.
+
+U6에 남은 큰 gap: `reify`/`deftype`은 단일 인터페이스만(multi-interface
+`reify` 없음), protocol은 fast path만(진짜 `extend-protocol`
+디스패치 없음).
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

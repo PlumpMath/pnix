@@ -1510,14 +1510,15 @@
 ;; established "behavior equivalence, not bytecode-shape equivalence" bar
 ;; used throughout this file. Deliberately narrow scope beyond that:
 ;; exactly ONE fully-qualified interface (no multi-interface `reify`, no
-;; protocols specifically), and every implemented method's parameters must
-;; be reference types (a primitive parameter, e.g. `int`, would need
-;; auto-boxing on method entry before this witness's uniformly-`Object`
-;; local-resolution machinery could use it -- not attempted here; a
-;; PRIMITIVE RETURN type, e.g. `Comparator/compare`'s `int`, IS supported,
-;; since coercing this witness's always-boxed body result down to a
-;; primitive at the `return` site is the much more common/needed case and
-;; doesn't touch the local-resolution machinery at all).
+;; protocols specifically). A PRIMITIVE parameter (e.g. `int
+;; applyAsInt(int)` on `java.util.function.IntUnaryOperator`) IS supported:
+;; `emit-reified-methods!` boxes it into a fresh local right at method
+;; entry (`GeneratorAdapter/box`, the exact mirror of `coerce-reify-return!`'s
+;; own `unbox` on the return side), so this witness's uniformly-`Object`
+;; local-resolution machinery can treat it as an ordinary already-boxed
+;; local for the rest of the method body -- the param's `arg-env` entry is
+;; `{:kind :let :slot ...}` rather than the usual `{:kind :arg ...}`, never
+;; touching the raw arg slot again after that one entry-point box.
 (defn- reflect-interface-method
   ^java.lang.reflect.Method [^Class iface method-name arg-count]
   (first (filter (fn [^java.lang.reflect.Method m]
@@ -1538,9 +1539,6 @@
     (when-not rmethod
       (throw (ex-info "tiny analyzer: reify method does not match any method on the reified interface"
                       {:method mname :arg-count (count arg-syms) :interface iface})))
-    (when (some #(.isPrimitive ^Class %) (.getParameterTypes rmethod))
-      (throw (ex-info "tiny analyzer: reify methods with primitive parameters are not yet supported"
-                      {:method mname})))
     (let [method-env (into (assoc env this-sym true) (zipmap arg-syms (repeat true)))]
       {:name (name mname)
        :this-sym this-sym
@@ -2824,16 +2822,57 @@
 ;; After emitting a reify method body (which always produces a boxed
 ;; Object, exactly like every other emitted expression in this file), coerce
 ;; it to match the reified interface method's OWN declared return type --
-;; `void` pops the unused value, a primitive return type unboxes it (safe:
-;; params with primitive types are already rejected at analyze time, so
-;; only the return side ever needs this), and a reference return type
-;; (including plain `Object`) needs no coercion at all.
+;; `void` pops the unused value, a primitive return type unboxes it, and a
+;; reference return type (including plain `Object`) needs no coercion at
+;; all. The mirror-image operation for PARAMETERS (box on entry rather than
+;; unbox on exit) is `emit-reified-methods!`'s per-primitive-param handling
+;; below.
 (defn- coerce-reify-return!
   [^GeneratorAdapter ga ^Class return-type]
   (cond
     (= Void/TYPE return-type) (.pop ga)
     (.isPrimitive return-type) (.unbox ga (Type/getType return-type))
     :else nil))
+
+;; Shared by `emit-reify-class` and `emit-deftype-class`: both build a class
+;; implementing one or more reflected interface methods (`analyze-reify-method`
+;; produces the same `{:this-sym :arg-syms :reflected :body}` shape for
+;; both), differing only in what `base-env` already contains (capture
+;; fields for `reify`, the deftype's own declared fields for `deftype`) --
+;; `this-sym` still varies per method (Clojure lets each method name its own
+;; receiver arg), so `:self` is assoc'd in fresh per method, same as before
+;; this was factored out. A PRIMITIVE-typed param is boxed into a fresh
+;; local right at method entry (`.loadArg` here reads the RAW primitive
+;; value, per the method descriptor's own declared type -- `box` needs
+;; exactly that, not an already-Object value) and resolves as an ordinary
+;; already-boxed `:let` local for the rest of the body; a REFERENCE-typed
+;; param needs no such step and keeps the plain `:arg` treatment, since any
+;; reference type is already compatible with this witness's uniformly-
+;; `Object` body-emission machinery.
+(defn- emit-reified-methods!
+  [^ClassWriter cw base-env methods]
+  (doseq [{:keys [this-sym arg-syms reflected body]} methods]
+    (let [^java.lang.reflect.Method rmethod reflected
+          ret-type (Type/getType (.getReturnType rmethod))
+          ptypes (.getParameterTypes rmethod)
+          param-types (into-array Type (map #(Type/getType ^Class %) ptypes))
+          asm-method (Method. (.getName rmethod) ret-type param-types)
+          ga (GeneratorAdapter. Opcodes/ACC_PUBLIC asm-method nil nil cw)
+          arg-env (reduce (fn [env [i p ^Class ptype]]
+                             (if (.isPrimitive ptype)
+                               (let [t (Type/getType ptype)
+                                     slot (.newLocal ga obj-type)]
+                                 (.loadArg ga (int i))
+                                 (.box ga t)
+                                 (.storeLocal ga slot)
+                                 (assoc env p {:kind :let :slot slot}))
+                               (assoc env p {:kind :arg :index i})))
+                           (assoc base-env this-sym {:kind :self})
+                           (map vector (range) arg-syms ptypes))]
+      (emit-expr ga arg-env body)
+      (coerce-reify-return! ga (.getReturnType rmethod))
+      (.returnValue ga)
+      (.endMethod ga))))
 
 (defn- emit-reify-class
   [^Class interface methods captures]
@@ -2867,19 +2906,7 @@
         (.invokeConstructor ga obj-type init-method)
         (.returnValue ga)
         (.endMethod ga)))
-    (doseq [{:keys [this-sym arg-syms reflected body]} methods]
-      (let [^java.lang.reflect.Method rmethod reflected
-            ret-type (Type/getType (.getReturnType rmethod))
-            param-types (into-array Type (map #(Type/getType ^Class %) (.getParameterTypes rmethod)))
-            asm-method (Method. (.getName rmethod) ret-type param-types)
-            ga (GeneratorAdapter. Opcodes/ACC_PUBLIC asm-method nil nil cw)
-            arg-env (into (assoc capture-env this-sym {:kind :self})
-                          (map-indexed (fn [i p] [p {:kind :arg :index i}]))
-                          arg-syms)]
-        (emit-expr ga arg-env body)
-        (coerce-reify-return! ga (.getReturnType rmethod))
-        (.returnValue ga)
-        (.endMethod ga)))
+    (emit-reified-methods! cw capture-env methods)
     (.visitEnd cw)
     (let [bytes (.toByteArray cw)
           loader (DynamicClassLoader.
@@ -2942,20 +2969,8 @@
         (.putField ga ctype (name f) obj-type))
       (.returnValue ga)
       (.endMethod ga))
-    (doseq [{:keys [methods]} impls
-            {:keys [this-sym arg-syms reflected body]} methods]
-      (let [^java.lang.reflect.Method rmethod reflected
-            ret-type (Type/getType (.getReturnType rmethod))
-            param-types (into-array Type (map #(Type/getType ^Class %) (.getParameterTypes rmethod)))
-            asm-method (Method. (.getName rmethod) ret-type param-types)
-            ga (GeneratorAdapter. Opcodes/ACC_PUBLIC asm-method nil nil cw)
-            arg-env (into (assoc field-env this-sym {:kind :self})
-                          (map-indexed (fn [i p] [p {:kind :arg :index i}]))
-                          arg-syms)]
-        (emit-expr ga arg-env body)
-        (coerce-reify-return! ga (.getReturnType rmethod))
-        (.returnValue ga)
-        (.endMethod ga)))
+    (doseq [{:keys [methods]} impls]
+      (emit-reified-methods! cw field-env methods))
     (.visitEnd cw)
     (let [bytes (.toByteArray cw)
           loader (DynamicClassLoader.
@@ -3848,6 +3863,14 @@
     :source "(fn [] (.get (reify java.util.function.Supplier (get [this] 42))))"
     :args []
     :expected 42}
+   {:id :tiny-reify-primitive-int-param
+    :source "(fn [n] (.applyAsInt (reify java.util.function.IntUnaryOperator (applyAsInt [this x] (+ x n))) 5))"
+    :args [10]
+    :expected 15}
+   {:id :tiny-reify-two-primitive-int-params
+    :source "(fn [] (.applyAsInt (reify java.util.function.IntBinaryOperator (applyAsInt [this a b] (* a b))) 6 7))"
+    :args []
+    :expected 42}
    {:id :tiny-deftype-construct-and-access
     :source "(do (deftype Point [x y]) (fn [a b] (let [p (Point. a b)] (+ (.-x p) (.-y p)))))"
     :args [3 4]
@@ -3888,6 +3911,10 @@
     :source "(do (defprotocol Shape (area [this]) (perimeter [this])) (deftype Rect [w h] Shape (area [this] (* w h)) (perimeter [this] (* 2 (+ w h)))) (fn [a b] (+ (area (Rect. a b)) (perimeter (Rect. a b)))))"
     :args [3 4]
     :expected 26}
+   {:id :tiny-deftype-implements-java-interface-primitive-param
+    :source "(do (deftype Adder [base] java.util.function.IntUnaryOperator (applyAsInt [this x] (+ x base))) (fn [n] (.applyAsInt (Adder. n) 5)))"
+    :args [100]
+    :expected 105}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

@@ -728,7 +728,11 @@
    {:id :mini-backend-reify-comparator-used-by-sort
     :source "(fn [coll] (sort (reify java.util.Comparator (compare [this a b] (- a b))) coll))"
     :args [[5 1 9 3]]
-    :expected '(1 3 5 9)}])
+    :expected '(1 3 5 9)}
+   {:id :mini-backend-reify-primitive-int-param
+    :source "(fn [n] (.applyAsInt (reify java.util.function.IntUnaryOperator (applyAsInt [this x] (+ x n))) 5))"
+    :args [10]
+    :expected 15}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
