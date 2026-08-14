@@ -632,6 +632,26 @@
     (when-let [cls (get known-static-classes (namespace op))]
       [cls (name op)])))
 
+;; `pkg.pkg.ClassName/methodName args...` -- the general fallback for any
+;; class NOT in the small `known-static-classes` allowlist above (checked
+;; first; this is only reached when that lookup misses). Confirmed via
+;; `javap -c` on `(Character/isDigit c)` for an untyped `c`: real host
+;; resolves even a SHORT class name like `Character` to its fully-qualified
+;; `java.lang.Character` (via its own default-imports table for
+;; `java.lang.*`) and, since `Character.isDigit` has two ambiguous 1-arg
+;; overloads (`char` and `int`), falls back to the exact same
+;; `RT.classForName(String)` + `Reflector.invokeStaticMethod(Class, String,
+;; Object[])` mechanism `general-constructor-class-name` already uses for
+;; construction. This tiny language has no import table of its own, so
+;; unlike real host it requires the FULLY QUALIFIED class name here (e.g.
+;; `java.lang.Character/isDigit`, not bare `Character/isDigit`) -- an
+;; honest, narrower scope than real host's own name resolution, not a
+;; claim of matching it.
+(defn- general-static-interop-target
+  [op]
+  (when (and (symbol? op) (namespace op) (not (contains? known-static-classes (namespace op))))
+    [(namespace op) (name op)]))
+
 (defn- analyze-call
   [env form]
   (let [[op & args] form]
@@ -671,6 +691,13 @@
       (let [[cls method] (static-interop-target op)]
         {:op :static-interop-call
          :class cls
+         :method method
+         :args (mapv #(analyze-expr env %) args)})
+
+      (general-static-interop-target op)
+      (let [[class-name method] (general-static-interop-target op)]
+        {:op :general-static-interop-call
+         :class-name class-name
          :method method
          :args (mapv #(analyze-expr env %) args)})
 
@@ -1436,6 +1463,14 @@
   (emit-object-array ga env args)
   (.invokeStatic ga reflector-type reflector-invoke-static-method-method))
 
+(defn- emit-general-static-interop-call
+  [^GeneratorAdapter ga env {:keys [class-name method args]}]
+  (.push ga ^String class-name)
+  (.invokeStatic ga rt-type rt-classfor-name-method)
+  (.push ga ^String method)
+  (emit-object-array ga env args)
+  (.invokeStatic ga reflector-type reflector-invoke-static-method-method))
+
 (defn- emit-general-new
   [^GeneratorAdapter ga env {:keys [class-name args]}]
   (.push ga ^String class-name)
@@ -1551,6 +1586,7 @@
     :throw (emit-throw ga env node)
     :interop-call (emit-interop-call ga env node)
     :static-interop-call (emit-static-interop-call ga env node)
+    :general-static-interop-call (emit-general-static-interop-call ga env node)
     :core-fn-call (emit-core-fn-call ga env node)
     :field-get (emit-field-get ga env node)
     :field-set (emit-field-set ga env node)
@@ -2181,7 +2217,19 @@
    {:id :tiny-general-new-no-arg
     :source "(fn [] (.size (java.util.ArrayList.)))"
     :args []
-    :expected 0}])
+    :expected 0}
+   {:id :tiny-general-static-interop-digit-true
+    :source "(fn [c] (java.lang.Character/isDigit c))"
+    :args [\5]
+    :expected true}
+   {:id :tiny-general-static-interop-digit-false
+    :source "(fn [c] (java.lang.Character/isDigit c))"
+    :args [\a]
+    :expected false}
+   {:id :tiny-general-static-interop-no-arg
+    :source "(fn [] (java.util.Collections/emptyList))"
+    :args []
+    :expected []}])
 
 (defn run
   []

@@ -552,7 +552,11 @@
    {:id :mini-backend-general-new-ambiguous-arity
     :source "(fn [n] (.size (java.util.ArrayList. n)))"
     :args [4]
-    :expected 0}])
+    :expected 0}
+   {:id :mini-backend-general-static-interop-digit
+    :source "(fn [c] (java.lang.Character/isDigit c))"
+    :args [\5]
+    :expected true}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

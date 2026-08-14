@@ -93,15 +93,14 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    121 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    124 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
     `try` with any combination of (single- or multi-)`catch` and
-    `finally`/`throw`/general class construction (allowlisted exceptions
-    via direct `NEW`/`INVOKESPECIAL`, any other class via
-    `RT.classForName`+`Reflector.invokeConstructor`)/`locking`/
-    `.methodName` instance interop/
-    `ClassName/methodName` static interop/`.-fieldName` field access and
+    `finally`/`throw`/general class construction and general static
+    interop (allowlisted classes via direct bytecode, any other
+    fully-qualified class via `RT.classForName`+`Reflector`)/`locking`/
+    `.methodName` instance interop/`.-fieldName` field access and
     `set!` (all via `clojure.lang.Reflector`)/
     `str` (via `clojure.lang.Var` + `IFn.invoke`, the same mechanism real
     host uses for any ordinary function call))
@@ -465,6 +464,25 @@ host처럼 analyze 시점이 아니라 `RT.classForName`이 실행되는 **런�
 디스패치되어 `.size` `3`), 무인자 생성자 — 전부 host와 일치, 그리고
 필드 접근(`.-x`)·instance interop(`.size`)과도 자연스럽게 합성됨을
 확인. U6: 117→121. DDC 행: 72→74. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 열여섯 번째 확장 (2026-08-14): 일반 static interop(작은
+static-interop 허용목록을 넘어서) — 바로 앞 일반 클래스 생성과 같은
+원리를 static method 호출에 그대로 적용.** `(Character/isDigit c)`를
+`javap -c`로 확인: real host는 짧은 클래스 이름 `Character`도 자기
+default-import 표(`java.lang.*`)로 `java.lang.Character`로 완전히
+해석하고, `Character.isDigit`이 `(char)`/`(int)` 두 오버로드로 애매하니
+일반 클래스 생성 때와 **똑같은** `RT.classForName(String)` +
+`Reflector.invokeStaticMethod(Class, String, Object[])`로 폴백한다. 이
+tiny 언어엔 자체 import 표가 없어서 real host와 달리 **완전히 정규화된
+클래스 이름**을 요구함(`java.lang.Character/isDigit`, 짧은
+`Character/isDigit`은 안 됨) — real host의 이름 해석 자체를 흉내내는 게
+아니라 정직하게 더 좁은 범위. 기존 작은 `known-static-classes`
+허용목록(`Math`/`Integer`/`Long`/`String`) 경로는 전혀 안 건드리고(먼저
+체크), 새 `general-static-interop-target`을 폴백으로 추가. 실제 host
+`eval` 대비 검증(추가 전): `isDigit` 참/거짓 둘 다, 무인자 static
+호출(`Collections/emptyList`) — 전부 host와 일치. U6: 121→124. DDC 행:
+74→75. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture

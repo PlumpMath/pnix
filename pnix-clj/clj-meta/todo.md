@@ -312,8 +312,21 @@ top-line claim, but the substance is much closer than "false" implies:
   합성도 확인. DDC 행: 72→74. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
-  U6에 아직 전혀 없는 큰 표면: 작은 static-interop 허용목록을 넘는
-  일반 클래스명 해석, `deftype`/`defrecord`/`reify`, `letfn`,
+  **16번째 슬라이스, 2026-08-14: 일반 static interop**(121→124, 작은
+  static-interop 허용목록을 넘어서 — 앞 일반 클래스 생성과 같은 원리).
+  `(Character/isDigit c)`를 `javap -c`로 확인: real host는 짧은 클래스
+  이름도 자기 default-import 표로 완전히 해석하고, `isDigit`의
+  `(char)`/`(int)` 오버로드가 애매하니 앞의 일반 클래스 생성과 **같은**
+  `RT.classForName` + `Reflector.invokeStaticMethod` 폴백을 씀. 이 tiny
+  언어엔 import 표가 없어 real host와 달리 완전히 정규화된 클래스
+  이름을 요구함(`java.lang.Character/isDigit`, 짧은 이름 안 됨) — 정직하게
+  더 좁은 범위. 기존 작은 `known-static-classes` 허용목록은 안 건드리고
+  새 `general-static-interop-target`을 폴백으로 추가. 실제 host `eval`
+  대비 검증(추가 전): `isDigit` 참/거짓, 무인자 static 호출 — 전부 host와
+  일치. DDC 행: 74→75. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
   bignum/ratio/regex reader 리터럴, dynamic var, protocol, RestFn의
   fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture 슬라이스이며,
   그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
