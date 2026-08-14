@@ -2879,6 +2879,35 @@
                       (recur (rest remaining)))))))
             nil))))
 
+    :hasAttr
+    ;; builtins.hasAttr is STRICT (unlike `?`, which is false on non-sets).
+    ;; (contains? nil k) is false — wrong VALUE vs nix-instantiate.
+    (when-not (attrset-value? (second args))
+      (err/failed :builtin :has-attr-arg-not-attrset
+                  {:builtin name :arg (second args)}))
+
+    :intersectAttrs
+    (let [[left right] args]
+      (cond
+        (not (attrset-value? left))
+        (err/failed :builtin :intersect-attrs-left-not-attrset
+                    {:builtin name :arg left})
+        (not (attrset-value? right))
+        (err/failed :builtin :intersect-attrs-right-not-attrset
+                    {:builtin name :arg right})
+        :else nil))
+
+    :mapAttrs
+    ;; null short-circuits sorted-attr-keys → {} (wrong VALUE).
+    (when-not (attrset-value? (second args))
+      (err/failed :builtin :map-attrs-arg-not-attrset
+                  {:builtin name :arg (second args)}))
+
+    :groupBy
+    (when-not (vector? (second args))
+      (err/failed :builtin :group-by-arg-not-list
+                  {:builtin name :arg (second args)}))
+
     :pathExists
     (if *pure-eval*
       (err/failed :builtin

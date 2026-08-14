@@ -5817,7 +5817,26 @@
     (is (= :list-to-attrs-element-not-attrset
            (:reason (pnix/eval-source "builtins.listToAttrs [ 1 ]"))))
     (is (= {"a" 1} (:value (pnix/eval-source
-                            "builtins.listToAttrs [ { name = \"a\"; value = 1; } ]"))))))
+                            "builtins.listToAttrs [ { name = \"a\"; value = 1; } ]")))))
+  (testing "hasAttr/intersectAttrs/mapAttrs/groupBy reject null (wrong VALUE → {})"
+    ;; `?` is false on non-sets; hasAttr stays strict (oracle).
+    (is (= :has-attr-arg-not-attrset
+           (:reason (pnix/eval-source "builtins.hasAttr \"a\" null"))))
+    (is (= false (:value (pnix/eval-source "null ? a"))))
+    (is (= true (:value (pnix/eval-source "builtins.hasAttr \"a\" { a = 1; }"))))
+    (is (= :intersect-attrs-left-not-attrset
+           (:reason (pnix/eval-source "builtins.intersectAttrs null { a = 1; }"))))
+    (is (= :intersect-attrs-right-not-attrset
+           (:reason (pnix/eval-source "builtins.intersectAttrs { a = 1; } null"))))
+    (is (= {"b" 3} (:value (pnix/eval-source
+                            "builtins.intersectAttrs { a = 1; b = 2; } { b = 3; c = 4; }"))))
+    (is (= :map-attrs-arg-not-attrset
+           (:reason (pnix/eval-source "builtins.mapAttrs (n: v: v) null"))))
+    (is (= {"a" 1} (:value (pnix/eval-source "builtins.mapAttrs (n: v: v) { a = 1; }"))))
+    (is (= :group-by-arg-not-list
+           (:reason (pnix/eval-source "builtins.groupBy (x: x) null"))))
+    (is (= {"g" [1 2]}
+           (:value (pnix/eval-source "builtins.groupBy (x: \"g\") [ 1 2 ]"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by

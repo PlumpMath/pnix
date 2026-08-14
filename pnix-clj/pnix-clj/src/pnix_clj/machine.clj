@@ -1004,6 +1004,9 @@
    "builtins.toJSON (x: x)" "with null; 1"
    "builtins.catAttrs \"a\" null" "builtins.listToAttrs [ 1 ]"
    "({ a = 1; }.b).c or 9" "{ a = {}; }.a.b or 7" "{ a = 1; }.b or 9"
+   "builtins.hasAttr \"a\" null" "builtins.intersectAttrs null { a = 1; }"
+   "builtins.mapAttrs (n: v: v) null" "builtins.groupBy (x: x) null"
+   "null ? a"
    "[1 [2 [3]]]"
    "let a = 1; b = a + 1; in a + b" "let a = b + 1; b = 1; in a"
    ;; D22 dotted let (parser path->nested + machine follows evaluator)
