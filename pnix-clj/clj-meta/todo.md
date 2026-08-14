@@ -624,11 +624,26 @@ top-line claim, but the substance is much closer than "false" implies:
   으로 7번 재빌드, jar 내용 비교)해서 새로 계산된 진짜 증거로 복구.
   가짜로 채우지 않고 실제 빌드를 끝까지 기다림.
 
+  **34번째 슬라이스, 2026-08-15: `deftype` + protocol 결합** (210→212).
+  `javap -p -c` 확인: `(deftype Rect [w h] Shape (area [this] (* w
+  h)))`에서 `area()` 안 `w`/`h`는 closure/`reify` 캡처와 완전히 같은
+  `this.fieldName` 방식으로 읽힘 — 차이는 자유변수 분석 없이 항상
+  무조건 존재한다는 것뿐(top-level 정의라 캡처할 바깥 스코프가 없음).
+  `analyze-reify-method`를 그대로 재사용(env만 "필드 목록"으로 교체),
+  `emit-deftype-class`를 확장해서 `implements` + 메서드 바디 방출.
+  **버그 발견**: `emit-leading-program-forms`가 앞쪽 form 처리 중
+  dynamic var를 전혀 바인딩 안 해서 뒤쪽 `deftype`이 앞선 protocol을
+  못 찾음 — `binding`이 `try`로 확장돼 `recur`가 못 건너가므로
+  `loop`+`recur` 대신 일반 재귀 호출로 수정. 단일/2-메서드 protocol
+  구현, 필드 전용 deftype 회귀 없음 전부 검증(U6 전용). DDC 행 변화
+  없음(114 유지). `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY` + `reproducible DDC
+  lane: OK`, 회귀 없음.
+
   U6에 남은 큰 gap: 중첩 closure는 1단계/단일 arity로 범위 제한,
-  `letfn`은 진짜 상호재귀(생성-후-backpatch) 아직 없음, `reify`는 단일
-  인터페이스/reference-typed 파라미터만, protocol은 fast path만(진짜
-  `extend-protocol` 디스패치 없음), `deftype`/`defrecord`의 protocol/
-  인터페이스 구현 버전은 아직(지금은 필드만).
+  `letfn`은 진짜 상호재귀(생성-후-backpatch) 아직 없음, `reify`/
+  `deftype`은 단일/reference-typed 파라미터만, protocol은 fast
+  path만(진짜 `extend-protocol` 디스패치 없음).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

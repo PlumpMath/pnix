@@ -1508,19 +1508,66 @@
 ;; expression usable inline, it can only appear as one of the leading forms
 ;; of a top-level `(do (deftype ...)... (fn ...))` program -- see
 ;; `compile-source` -- never nested inside a `fn` body.
+;; Splits the forms AFTER `deftype`'s field vector into interface/protocol
+;; groups: every SYMBOL starts a new group, and every LIST immediately
+;; following it (until the next symbol) is one of its method
+;; implementations -- the same alternating shape real host's own `deftype`
+;; syntax uses.
+(defn- parse-deftype-impl-groups
+  [forms]
+  (loop [forms forms acc []]
+    (if (empty? forms)
+      acc
+      (let [iface-sym (first forms)]
+        (when-not (symbol? iface-sym)
+          (throw (ex-info "tiny analyzer: expected an interface/protocol name in deftype"
+                          {:form iface-sym})))
+        (let [[methods rest-forms] (split-with seq? (rest forms))]
+          (recur rest-forms (conj acc {:interface-sym iface-sym :method-forms (vec methods)})))))))
+
+;; `deftype` may ALSO implement interfaces/protocols with method bodies --
+;; confirmed via `javap -p -c` on a host-AOT-compiled `(deftype Rect [w h]
+;; Shape (area [this] (* w h)))`: `Rect implements Shape, IType`, and
+;; INSIDE `area()`, the declared fields `w`/`h` are read via a plain
+;; `aload_0 (this); getfield w` -- i.e. exactly the same `this.fieldName`
+;; shape this file's own closure/reify captures already use (`emit-local`'s
+;; `:capture` case), just with the fields being EXPLICITLY DECLARED
+;; (`[w h]`) rather than computed via free-variable analysis: a `deftype`
+;; is a top-level definition with no enclosing lexical scope to capture
+;; from at all (unlike `reify`, which is nested inside a `fn` and DOES
+;; capture free variables), so its "captures" are simply always its own
+;; field list, unconditionally, in every method. `analyze-reify-method` is
+;; reused UNCHANGED for each method body (method/interface matching,
+;; primitive-param rejection, body analysis are identical); only the
+;; `env` passed to it differs -- deftype's own field names instead of an
+;; enclosing scope.
 (defn- analyze-deftype-form
   [form]
-  (when-not (and (seq? form) (= 'deftype (first form))
-                 (= 3 (count form))
+  (when-not (and (seq? form) (< 2 (count form))
+                 (= 'deftype (first form))
                  (symbol? (second form))
                  (vector? (nth form 2))
                  (seq (nth form 2))
                  (every? symbol? (nth form 2))
                  (= (count (nth form 2)) (count (distinct (nth form 2)))))
-    (throw (ex-info "tiny analyzer: malformed deftype -- expected (deftype Name [field...])"
+    (throw (ex-info "tiny analyzer: malformed deftype -- expected (deftype Name [field...] Interface? (method [this args...] body...)?...)"
                     {:form form})))
-  {:name (second form)
-   :fields (vec (nth form 2))})
+  (let [fields (vec (nth form 2))
+        field-env (zipmap fields (repeat true))
+        impl-groups (parse-deftype-impl-groups (drop 3 form))
+        impls (mapv (fn [{:keys [interface-sym method-forms]}]
+                      (let [iface (or (get *known-protocol-interfaces* interface-sym)
+                                      (when (not (namespace interface-sym))
+                                        (try (Class/forName (name interface-sym)) (catch Throwable _ nil))))]
+                        (when-not (and iface (.isInterface ^Class iface))
+                          (throw (ex-info "tiny analyzer: deftype interface not found (must be a known protocol name or a fully-qualified interface name)"
+                                          {:interface interface-sym})))
+                        {:interface iface
+                         :methods (mapv #(analyze-reify-method field-env iface %) method-forms)}))
+                    impl-groups)]
+    {:name (second form)
+     :fields fields
+     :impls impls}))
 
 ;; `defprotocol` -- confirmed via `javap -p` on a host-AOT-compiled
 ;; `(defprotocol Greet (greet [this]))`: real host generates a public
@@ -2716,15 +2763,27 @@
 ;; by `compile-source`'s multi-form program path -- NOT recursively emitted
 ;; from within another method's body the way `emit-closure`/`emit-reify`
 ;; are, since `deftype` is a top-level program element, not an expression.
+;; `:impls` (empty for a fields-only `deftype`) is a vector of `{:interface
+;; :methods}` -- each method emitted exactly like `emit-reify-class`'s
+;; (Method descriptor built from the REFLECTED param/return types, body
+;; coerced to match a primitive return via `coerce-reify-return!`), just
+;; with `field-env` (the deftype's own declared fields, ALWAYS present, no
+;; free-variable computation needed -- see `analyze-deftype-form`) standing
+;; in for what closures/`reify` call "captures".
 (defn- emit-deftype-class
-  [{:keys [fields]}]
+  [{:keys [fields impls]}]
   (let [class-name (next-class-name)
         internal (.replace class-name \. \/)
         ctype (Type/getObjectType internal)
+        interfaces (into-array String (map #(.getInternalName (Type/getType ^Class (:interface %))) impls))
         cw (ClassWriter. (bit-or ClassWriter/COMPUTE_FRAMES
-                                 ClassWriter/COMPUTE_MAXS))]
+                                 ClassWriter/COMPUTE_MAXS))
+        field-env (into {}
+                        (map (fn [f]
+                               [f {:kind :capture :owner ctype :field-name (name f)}]))
+                        fields)]
     (.visit cw Opcodes/V1_8 Opcodes/ACC_PUBLIC internal nil
-            (.getInternalName obj-type) nil)
+            (.getInternalName obj-type) interfaces)
     (doseq [f fields]
       (.visitEnd (.visitField cw (bit-or Opcodes/ACC_PUBLIC Opcodes/ACC_FINAL)
                               (name f) (.getDescriptor obj-type) nil nil)))
@@ -2738,6 +2797,20 @@
         (.putField ga ctype (name f) obj-type))
       (.returnValue ga)
       (.endMethod ga))
+    (doseq [{:keys [methods]} impls
+            {:keys [this-sym arg-syms reflected body]} methods]
+      (let [^java.lang.reflect.Method rmethod reflected
+            ret-type (Type/getType (.getReturnType rmethod))
+            param-types (into-array Type (map #(Type/getType ^Class %) (.getParameterTypes rmethod)))
+            asm-method (Method. (.getName rmethod) ret-type param-types)
+            ga (GeneratorAdapter. Opcodes/ACC_PUBLIC asm-method nil nil cw)
+            arg-env (into (assoc field-env this-sym {:kind :self})
+                          (map-indexed (fn [i p] [p {:kind :arg :index i}]))
+                          arg-syms)]
+        (emit-expr ga arg-env body)
+        (coerce-reify-return! ga (.getReturnType rmethod))
+        (.returnValue ga)
+        (.endMethod ga)))
     (.visitEnd cw)
     (let [bytes (.toByteArray cw)
           loader (DynamicClassLoader.
@@ -2828,28 +2901,46 @@
 ;; earlier one (no forward/mutual reference between top-level definitions
 ;; attempted here, matching this file's other narrow-scope-on-purpose
 ;; boundaries).
+;; Plain (non-tail) recursion, NOT `reduce`/`loop`+`recur`: each leading
+;; form is analyzed/emitted with the registries built from every form
+;; BEFORE it already bound (so `(deftype Rect [w h] Shape ...)` can see a
+;; `Shape` protocol declared earlier in the same program) -- `binding`
+;; expands through a `try`/`finally`, and `recur` cannot cross a `try`
+;; boundary, so a `loop`+`recur` version of this rebind-per-step pattern
+;; would not compile; ordinary recursive calls have no such restriction
+;; and this list is always small (a handful of leading declarations).
 (defn- emit-leading-program-forms
-  [forms]
-  (reduce
-   (fn [acc form]
-     (if (= 'deftype (first form))
-       (let [spec (analyze-deftype-form form)
-             artifact (emit-deftype-class spec)]
-         (-> acc
-             (update :artifacts conj artifact)
-             (update :deftype-classes assoc (:name spec) (:class artifact))))
-       (let [spec (analyze-defprotocol-form form)
-             artifact (emit-protocol-interface spec)
-             iface (:class artifact)]
-         (-> acc
-             (update :artifacts conj artifact)
-             (update :protocol-interfaces assoc (:name spec) iface)
-             (update :protocol-methods into
-                     (map (fn [m] [(symbol (:name m))
-                                   {:interface iface :method (:name m) :arity (:arity m)}])
-                          (:methods spec)))))))
-   {:artifacts [] :deftype-classes {} :protocol-interfaces {} :protocol-methods {}}
-   forms))
+  ([forms]
+   (emit-leading-program-forms
+    forms
+    {:artifacts [] :deftype-classes {} :protocol-interfaces {} :protocol-methods {}}))
+  ([forms acc]
+   (if (empty? forms)
+     acc
+     (binding [*known-deftype-classes* (:deftype-classes acc)
+               *known-protocol-interfaces* (:protocol-interfaces acc)
+               *known-protocol-methods* (:protocol-methods acc)]
+       (let [form (first forms)]
+         (if (= 'deftype (first form))
+           (let [spec (analyze-deftype-form form)
+                 artifact (emit-deftype-class spec)]
+             (emit-leading-program-forms
+              (rest forms)
+              (-> acc
+                  (update :artifacts conj artifact)
+                  (update :deftype-classes assoc (:name spec) (:class artifact)))))
+           (let [spec (analyze-defprotocol-form form)
+                 artifact (emit-protocol-interface spec)
+                 iface (:class artifact)]
+             (emit-leading-program-forms
+              (rest forms)
+              (-> acc
+                  (update :artifacts conj artifact)
+                  (update :protocol-interfaces assoc (:name spec) iface)
+                  (update :protocol-methods into
+                          (map (fn [m] [(symbol (:name m))
+                                        {:interface iface :method (:name m) :arity (:arity m)}])
+                               (:methods spec))))))))))))
 
 (defn compile-source
   [source]
@@ -3624,6 +3715,14 @@
     :source "(do (defprotocol Greet (greet [this])) (deftype Person [name]) (fn [] (greet (reify Greet (greet [this] :hi)))))"
     :args []
     :expected :hi}
+   {:id :tiny-deftype-implements-protocol
+    :source "(do (defprotocol Shape (area [this])) (deftype Rect [w h] Shape (area [this] (* w h))) (fn [a b] (area (Rect. a b))))"
+    :args [3 4]
+    :expected 12}
+   {:id :tiny-deftype-implements-protocol-two-methods
+    :source "(do (defprotocol Shape (area [this]) (perimeter [this])) (deftype Rect [w h] Shape (area [this] (* w h)) (perimeter [this] (* 2 (+ w h)))) (fn [a b] (+ (area (Rect. a b)) (perimeter (Rect. a b)))))"
+    :args [3 4]
+    :expected 26}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

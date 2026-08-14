@@ -93,7 +93,14 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    210 fixtures (fn/if/do/let/loop-recur/`defprotocol`+protocol method
+    212 fixtures (fn/if/do/let/loop-recur/`deftype` implementing
+    protocols/interfaces with method bodies -- confirmed via `javap
+    -p -c` that a declared field is read INSIDE a method body via
+    exactly the same `this.fieldName` shape closure/`reify` captures
+    already use, just unconditionally present (no free-variable
+    analysis needed: `deftype` has no enclosing lexical scope to
+    capture from at all), reusing `analyze-reify-method` unchanged
+    with the field list standing in for an enclosing scope/`defprotocol`+protocol method
     dispatch -- a leading top-level form (alongside `deftype`) that
     generates a plain abstract interface (one method per protocol
     method, all Object-typed -- no pre-existing type to reflect
@@ -985,6 +992,35 @@ false`로 이미 명시된 선택적 레인)이 `clj-meta/proof/stage-chain.rece
 복구. 가짜로 채우는 대신 실제 빌드를 끝까지 기다림 — 이 프로젝트
 자신의 "정직한 부재 증거, Held 금지 fabrication" 원칙을 그대로 적용한
 사례.
+
+**같은 날 서른네 번째 확장 (2026-08-15): `deftype` + protocol 결합.**
+사용자가 남은 문제들을 계속 해결하라고 지시. `javap -p -c`로
+`(deftype Rect [w h] Shape (area [this] (* w h)))`를 확인하니 `Rect
+implements Shape, IType`이고, `area()` 안에서 `w`/`h`는 정확히
+closure/`reify` 캡처와 **완전히 같은** `this.fieldName`(`aload_0;
+getfield`) 방식으로 읽힌다 — 차이는 `deftype`의 필드가 자유변수
+분석 없이 **항상 무조건** 존재한다는 것뿐(top-level 정의라 캡처할
+바깥 렉시컬 스코프 자체가 없음). `analyze-reify-method`를 그대로
+재사용(메서드/인터페이스 매칭, primitive 파라미터 거부, body 분석
+전부 동일 로직) — 넘기는 env만 "바깥 스코프" 대신 "deftype 자신의
+필드 목록"으로 바뀜. `emit-deftype-class`를 확장해서 `implements`
+절과 메서드 바디를 추가로 방출(`emit-reify-class`와 같은 패턴,
+필드가 캡처 자리를 대신함).
+
+**구현 중 진짜 버그 하나 발견·수정**: `emit-leading-program-forms`가
+앞쪽 top-level form들을 처리하는 동안 `*known-protocol-interfaces*`
+등 dynamic var를 전혀 바인딩 안 하고 있었다 — 그래서 `deftype Rect
+... Shape ...`처럼 **앞서 정의된 protocol을 뒤쪽 leading form이
+바로 참조**해야 하는 경우("interface not found") 실패. 원래
+`reduce` 기반이었는데, `binding`은 내부적으로 `try`/`finally`로
+확장되고 `recur`는 `try` 경계를 못 건너뛰므로 `loop`+`recur`로는 이
+"매 스텝마다 재바인딩" 패턴을 못 짬 — 일반 (꼬리재귀 아닌) 재귀
+호출로 바꿔서 해결(앞쪽 선언 개수가 항상 적어서 스택 문제 없음).
+단일 메서드 protocol 구현/2-메서드 구현/필드 전용 deftype 회귀 없음
+전부 실제 host 대비 검증(U6 전용, DDC 행 미연결 — deftype과 같은
+이유). U6: 210→212. DDC 행 변화 없음(114 유지). 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
+READY`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)
