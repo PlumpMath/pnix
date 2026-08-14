@@ -93,12 +93,14 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    88 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    100 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
-    single-clause `try`/`catch`, single-clause `try`/`finally`/`throw`/
-    allowlisted exception construction/`.methodName` instance interop and
-    `ClassName/methodName` static interop, both via `clojure.lang.Reflector`)
+    `try` with `catch`, `finally`, or both combined/`throw`/allowlisted
+    exception construction/`.methodName` instance interop/
+    `ClassName/methodName` static interop (via `clojure.lang.Reflector`)/
+    `str` (via `clojure.lang.Var` + `IFn.invoke`, the same mechanism real
+    host uses for any ordinary function call))
     with ZERO calls into tools.analyzer.jvm or the host reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
@@ -312,6 +314,48 @@ finally 부수 효과를 관찰하는 버전). DDC 행: 60→62(순수 값 fixtu
 순차 leg(host/compiler/mini)에 공유되는 mutable AtomicInteger arg는 leg 간
 mutation이 쌓여 비교를 무의미하게 하므로 U6 전용). 전체 `-M:conformance`
 (116/116)와 `bin/clj-meta-gate` 녹색.
+
+**같은 날 아홉 번째 확장 (2026-08-14): 하나의 `try`에 `catch`+`finally` 동시
+지원.** 바로 앞에서 의도적으로 미룬 갭을 닫음. 실제 호스트는 `finally`를
+정상 경로·`catch` 성공 경로·(catch-body 내부에서 던져진 것 포함) 둘 중
+어느 쪽도 완전히 처리하지 못한 예외 경로까지 **세 개** 종료 경로에
+복제 — 코드 작성 전 host-AOT `(try (quot 10 x) (catch ArithmeticException
+e :divzero) (finally (.incrementAndGet a)))`를 `javap -c -v`로 확인.
+exception table entry가 세 개 필요: `[try-start,try-end) -> catch-start`
+(특정 `catch-class`), `[try-start,try-end) -> any-handler`(catch-all —
+`catch-class`와 안 맞는 예외도 propagate 전에 `finally`가 돌게), 그리고
+`[catch-start,catch-end) -> any-handler`(catch-all — catch-body 자체가
+던진 예외도 `finally`가 돌게). 등록 순서가 두 겹으로 중요: 같은
+`[try-start,try-end)` 범위에선 특정 `catch-class`가 any-handler보다
+먼저 등록돼야 하고(바로 앞 슬라이스의 실제 버그와 같은 교훈), 이
+파일의 모든 try* emitter처럼 세 등록 전부 `body`/`catch-body`/
+`finally-body`를 다 방출한 뒤 맨 마지막에 이뤄져 — 이 구문 안에 중첩된
+것이 먼저 등록되게. `try`의 arity 체크를 정확히 2에서 2~3으로 넓힘
+(`catch`만, `finally`만, 또는 `catch` 다음 `finally`); 기존 catch-only·
+finally-only 경로는 변경 없음(새 fixture 추가 전 digest 일치로 확인).
+실제 host `eval` 대비 검증: 정상/catch 경로의 값+counter, 그리고 앞선
+중첩-버그 시나리오를 이 새 결합 경로에 재사용한 regression 체크(안쪽
+`catch-class`와도 안 맞고 잡히지도 않는 예외 타입이어도 바깥 `catch`에
+닿기 전에 `finally`가 돎 — host·이 backend 둘 다 결과 `:outer-caught`,
+counter `1`). U6: 88→94. DDC 행: 62→64(상수 `finally` fixture 두 개,
+mutable arg 공유 문제는 앞과 동일 이유로 회피). 전체 `-M:conformance`
+(116/116)와 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색.
+
+**같은 날 열 번째 확장 (2026-08-14): `str`.** 실제 host에서 `str`은
+컴파일러 특수형이 **전혀 아니다** — `javap -c`로 확인: `(str a b)`는
+`RT.var("clojure.core", "str")`로 Var를 찾고, `getRawRoot()`로 실제 함수
+값을 읽고, `IFn`으로 캐스트해서 `.invoke(...)`를 호출 — 일반 사용자 정의
+함수 호출과 완전히 같은 메커니즘. 이 emitter도 그 형태를 그대로
+따름(매 호출마다 인라인으로 Var 조회 — 실제 host는 `const__N` static
+field에 캐싱하지만, 그건 성능 차이일 뿐 `Var.getRawRoot()`가 주는
+값 자체는 동일하므로 행동 차이는 없음). 이 메커니즘은 원리상 `str` 외에
+다른 `clojure.core` 함수로도 일반화되지만, 이번 슬라이스는 `str`만
+fixture로 검증해 연결함. 실제 host `eval` 대비 검증(추가 전): 2-인자
+문자열 연결, 숫자 인자, 1-인자, 0-인자(`""`), `nil` 인자는 `"null"`이
+아니라 빈 문자열로 처리되는 Clojure 고유 동작(`(str nil "x")` → `"x"`),
+문자열 리터럴과 섞어 쓰기. U6: 94→100. DDC 행: 64→66(2개 — mutable arg
+공유 문제와 무관한 순수 값 fixture). 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

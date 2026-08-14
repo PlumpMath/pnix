@@ -221,14 +221,23 @@ top-line claim, but the substance is much closer than "false" implies:
   `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate` `metacircular
   gate: READY`, no regressions.
 
-  Remaining large surface still untouched by U6 at all: multi-catch, field
-  access/`set!`, general class construction beyond the small exception
-  allowlist, general class-name resolution beyond the small static-interop
-  allowlist, `deftype`/`defrecord`/`reify`, `letfn`, `str`/string
-  concatenation, bignum/ratio/regex reader literals, dynamic vars,
-  `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape. Each
-  of those is its own multi-fixture slice, several of them (deftype/reify)
-  genuinely large on their own.
+  **10번째 슬라이스, 2026-08-14: `str`** (94→100). 실제 host에서 `str`은
+  컴파일러 특수형이 전혀 아니다 — `javap -c`로 확인: `RT.var("clojure.core",
+  "str")`로 Var를 찾고 `getRawRoot()`로 실제 함수 값을 읽어 `IFn`으로
+  캐스트해서 `.invoke(...)` — 일반 사용자 정의 함수 호출과 똑같은
+  메커니즘. 원리상 다른 `clojure.core` 함수로도 일반화되는 재사용 가능한
+  메커니즘이지만, 이번 슬라이스는 `str`만 fixture로 검증해 연결. 실제 host
+  `eval` 대비 검증(추가 전): 2-인자 연결, 숫자 인자, 1/0-인자, `nil` 인자가
+  `"null"`이 아니라 빈 문자열이 되는 Clojure 고유 동작, 문자열 리터럴과
+  섞어 쓰기. DDC 행: 64→66. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: multi-catch, field access/`set!`, 작은 예외
+  허용목록을 넘는 일반 클래스 생성, 작은 static-interop 허용목록을 넘는
+  일반 클래스명 해석, `deftype`/`defrecord`/`reify`, `letfn`,
+  bignum/ratio/regex reader 리터럴, dynamic var, `locking`, protocol,
+  RestFn의 fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture
+  슬라이스이며, 그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
