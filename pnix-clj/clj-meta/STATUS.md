@@ -93,11 +93,11 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    103 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    105 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
     `try` with `catch`, `finally`, or both combined/`throw`/allowlisted
-    exception construction/`.methodName` instance interop/
+    exception construction/`locking`/`.methodName` instance interop/
     `ClassName/methodName` static interop/`.-fieldName` field access and
     `set!` (all via `clojure.lang.Reflector`)/
     `str` (via `clojure.lang.Var` + `IFn.invoke`, the same mechanism real
@@ -376,6 +376,26 @@ Object)`로 가는데, 이 메서드 자체가 대입된 값을 반환해 Clojur
 실제로 객체를 mutate하는지(대입 후 다시 읽어서 확인) 셋 다 host와 일치.
 U6: 100→103. DDC 행: 66→67(읽기 전용 fixture만 — mutation 관찰 fixture는
 공유 mutable arg 문제로 U6 전용). 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 열두 번째 확장 (2026-08-14): `locking`.** host-AOT `(locking sb
+(.append sb "x"))`를 `javap -c -v`로 확인한 결과, `emit-try-finally`와
+구조적으로 완전히 동일하다 — 다만 "finally에 해당하는 것"이 임의 표현식이
+아니라 항상 lock 객체에 대한 `MONITOREXIT` 하나뿐이고, 보호 구역 시작 전에
+`MONITORENTER`가 한 번 더 실행된다는 점만 다르다. 실제 host는
+`MONITORENTER`/`MONITOREXIT` 뒤에 `ACONST_NULL`을 push했다 바로 pop하는
+코드도 남기는데(Clojure의 일반 표현식-지향 컴파일러가 `monitor-enter`/
+`monitor-exit`을 statement 위치에서 `nil`로 평가되는 표현식으로 다루는
+데서 온 부수 효과), 이건 관찰 가능한 차이가 없는 화장용 잔재라 재현하지
+않았다. 범위는 의도적으로 좁게: lock 표현식 + 단일 body 표현식만(다중
+form body 없음), 이 파일의 기존 최소-범위 패턴과 동일. 실제 host `eval`
+대비 검증(추가 전): 정상 경로에서 `StringBuilder`에 append, 그리고
+`locking`이 감싼 body에서 던진 예외가 `try`/`catch`를 정상적으로
+통과해 나가는지(host·이 backend 둘 다 `:caught`, 예외 클래스·메시지
+일치) 확인. U6: 103→105. DDC 행: 67→68(예외 경로 fixture만 — 정상 경로
+fixture는 `StringBuilder`가 leg마다 계속 mutate되어 세 leg에 걸쳐
+누적되므로 공유 mutable arg 문제로 U6 전용; 예외 경로 fixture는 관찰되는
+mutation이 없는 plain `Object`라 안전). 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture

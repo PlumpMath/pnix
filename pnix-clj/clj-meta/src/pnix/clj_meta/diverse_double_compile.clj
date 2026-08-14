@@ -515,7 +515,17 @@
    {:id :mini-backend-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]
-    :expected 7}])
+    :expected 7}
+   ;; Exceptional-path only, not the normal-path fixture from
+   ;; frontend_selfhost.clj's own set: normal-path uses a StringBuilder
+   ;; mutated by .append, and (same reason as the other shared-mutable-arg
+   ;; rows above) applying that same builder across all three sequential
+   ;; legs would accumulate appended text and break the comparison. This
+   ;; row's arg is a plain Object with no observed mutation, so it is safe.
+   {:id :mini-backend-locking-exceptional-path
+    :source "(fn [lock x] (try (locking lock (quot 10 x)) (catch ArithmeticException e :caught)))"
+    :args [(Object.) 0]
+    :expected :caught}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

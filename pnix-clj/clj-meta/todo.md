@@ -249,12 +249,26 @@ top-line claim, but the substance is much closer than "false" implies:
   `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate` `metacircular
   gate: READY`, 회귀 없음.
 
+  **12번째 슬라이스, 2026-08-14: `locking`** (103→105). host-AOT
+  `(locking sb (.append sb "x"))`를 `javap -c -v`로 확인하니
+  `emit-try-finally`와 구조적으로 완전히 동일 — "finally"에 해당하는
+  게 항상 lock 객체에 대한 `MONITOREXIT` 하나뿐이고, 보호 구역 시작
+  전에 `MONITORENTER`가 한 번 더 실행된다는 점만 다름. 실제 host가
+  남기는 `MONITORENTER`/`MONITOREXIT` 뒤 `ACONST_NULL` push-then-pop은
+  관찰 가능한 차이 없는 화장용 잔재라 재현 안 함. 범위: lock 표현식 +
+  단일 body 표현식만. 실제 host `eval` 대비 검증(추가 전): 정상 경로
+  `StringBuilder` append, `locking` body에서 던진 예외가 `try`/`catch`를
+  정상 통과하는지(host·backend 둘 다 `:caught`, 예외 클래스·메시지
+  일치). DDC 행: 67→68(예외 경로만 — 정상 경로는 `StringBuilder`가
+  leg마다 누적 mutate되므로 U6 전용). `-M:conformance` 116/116 영향
+  없음, `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: multi-catch, 작은 예외 허용목록을 넘는
   일반 클래스 생성, 작은 static-interop 허용목록을 넘는 일반 클래스명
   해석, `deftype`/`defrecord`/`reify`, `letfn`, bignum/ratio/regex
-  reader 리터럴, dynamic var, `locking`, protocol, RestFn의
-  fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture 슬라이스이며,
-  그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
+  reader 리터럴, dynamic var, protocol, RestFn의 fixed+variadic 혼합
+  arity 형태. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇
+  (deftype/reify)은 그 자체로 진짜 크다.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

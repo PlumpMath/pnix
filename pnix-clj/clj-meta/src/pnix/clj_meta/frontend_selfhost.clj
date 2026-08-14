@@ -751,6 +751,17 @@
            :field (field-access-name (first target-form))
            :receiver (analyze-expr env (second target-form))
            :value (analyze-expr env value-form)}))
+      locking
+      (do
+        ;; Deliberately narrow scope: a lock expression plus exactly one
+        ;; body expression (no multi-form `locking` body), matching this
+        ;; file's established minimal-scope pattern.
+        (when-not (= 2 (count args))
+          (throw (ex-info "tiny analyzer: locking requires a lock expression and one body expression"
+                          {:form form})))
+        {:op :locking
+         :lock (analyze-expr env (first args))
+         :body (analyze-expr env (second args))})
       (throw (ex-info "tiny analyzer: unsupported call"
                       {:form form :op op}))))))
 
@@ -1150,6 +1161,51 @@
     (.visitTryCatchBlock ga try-start try-end any-handler nil)
     (.visitTryCatchBlock ga catch-start catch-end any-handler nil)))
 
+(defn- emit-locking
+  "Structurally identical to `emit-try-finally` -- reverse-engineered via
+  `javap -c -v` on a host-AOT-compiled `(locking sb (.append sb \"x\"))`
+  before writing any code -- except the `finally`-equivalent is always
+  exactly `MONITOREXIT` on the lock object rather than an arbitrary
+  expression, and `MONITORENTER` runs once, right after the lock
+  expression is evaluated and stored, before the protected region begins.
+  Real host also pushes and immediately pops an `ACONST_NULL` after each
+  `MONITORENTER`/`MONITOREXIT` (representing `monitor-enter`/`monitor-exit`
+  as statement-position expressions that evaluate to `nil` in Clojure's own
+  general expression-oriented compiler) -- that push/pop pair is a
+  cosmetic artifact of that general mechanism with no observable effect
+  here, so it is not reproduced."
+  [^GeneratorAdapter ga env {:keys [lock body]}]
+  (let [start (Label.)
+        end (Label.)
+        handler (Label.)
+        after (Label.)
+        lock-slot (.newLocal ga obj-type)
+        result-slot (.newLocal ga obj-type)
+        exception-slot (.newLocal ga obj-type)]
+    (emit-expr ga env lock)
+    (.storeLocal ga lock-slot)
+    (.loadLocal ga lock-slot)
+    (.monitorEnter ga)
+
+    (.mark ga start)
+    (emit-expr ga env body)
+    (.storeLocal ga result-slot)
+    (.mark ga end)
+    (.loadLocal ga lock-slot)
+    (.monitorExit ga)
+    (.goTo ga after)
+
+    (.mark ga handler)
+    (.storeLocal ga exception-slot)
+    (.loadLocal ga lock-slot)
+    (.monitorExit ga)
+    (.loadLocal ga exception-slot)
+    (.throwException ga)
+
+    (.mark ga after)
+    (.loadLocal ga result-slot)
+    (.visitTryCatchBlock ga start end handler nil)))
+
 (defn- emit-new
   [^GeneratorAdapter ga env {:keys [class arg]}]
   (let [ctype (Type/getType ^Class class)]
@@ -1330,6 +1386,7 @@
     :try (emit-try ga env node)
     :try-finally (emit-try-finally ga env node)
     :try-catch-finally (emit-try-catch-finally ga env node)
+    :locking (emit-locking ga env node)
     :new (emit-new ga env node)
     :throw (emit-throw ga env node)
     :interop-call (emit-interop-call ga env node)
@@ -1896,7 +1953,15 @@
    {:id :tiny-field-set-mutates-then-readback
     :source "(fn [p] (do (set! (.-x p) 7) (.-x p)))"
     :args [(java.awt.Point.)]
-    :expected 7}])
+    :expected 7}
+   {:id :tiny-locking-normal-path
+    :source "(fn [sb] (do (locking sb (.append sb \"x\")) (.toString sb)))"
+    :args [(StringBuilder.)]
+    :expected "x"}
+   {:id :tiny-locking-exceptional-path-propagates
+    :source "(fn [lock x] (try (locking lock (quot 10 x)) (catch ArithmeticException e :caught)))"
+    :args [(Object.) 0]
+    :expected :caught}])
 
 (defn run
   []
