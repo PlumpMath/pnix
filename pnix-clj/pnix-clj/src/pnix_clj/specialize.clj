@@ -294,39 +294,63 @@
         (try-fold residual gaps)))
 
     :select
+    ;; Single-segment (`:attr`) or continuous multi-segment attrPath (`:attrs`).
     (let [t (walk (:target ast) env lambda-bound sib-names gaps)
-          [k kr] (walk-attr-key (:attr ast) env lambda-bound sib-names gaps)
+          segments (or (:attrs ast) (when-let [a (:attr ast)] [a]))
+          walked (mapv #(walk-attr-key % env lambda-bound sib-names gaps)
+                       segments)
+          keys (mapv first walked)
+          krs (mapv second walked)
           d (some-> (:default ast) (walk env lambda-bound sib-names gaps))
           tn (:node t)
-          ;; Partial select: when the target is a plain, non-recursive attrset
-          ;; literal whose keys are all static strings, selecting one entry is
-          ;; sound even if OTHER entries stay dynamic — attrset values are
-          ;; lazy, so the discarded entries were never going to be forced.
-          plain-entries (when (and (= :attrset (:op tn))
-                                   (not (:recursive tn))
-                                   (every? #(and (string? (:key %))
-                                                 (not (:path %)))
-                                           (:attrs tn)))
-                          (:attrs tn))
-          picked (when (and plain-entries (string? k))
-                   (some #(when (= k (:key %)) %) plain-entries))]
+          plain-entries (fn [node]
+                          (when (and (= :attrset (:op node))
+                                     (not (:recursive node))
+                                     (every? #(and (string? (:key %))
+                                                   (not (:path %)))
+                                             (:attrs node)))
+                            (:attrs node)))
+          ;; Walk a static path over plain attrset literals; miss + default
+          ;; folds to the default (Nix continuous attrPath + or).
+          path-fold (loop [node tn remaining keys]
+                      (cond
+                        (empty? remaining)
+                        {:status :hit :node node}
+
+                        (not (every? string? remaining))
+                        {:status :dynamic}
+
+                        :else
+                        (let [entries (plain-entries node)
+                              k (first remaining)]
+                          (if-not entries
+                            {:status :opaque}
+                            (if-let [picked (some #(when (= k (:key %)) %)
+                                                  entries)]
+                              (recur (:value picked) (rest remaining))
+                              {:status :miss})))))]
       (cond
-        picked
-        (try-fold (merge {:node (:value picked)}
+        (= :hit (:status path-fold))
+        (try-fold (merge {:node (:node path-fold)}
                          (select-keys t [:dyn? :heavy? :sibs]))
                   gaps)
 
-        ;; key set fully known and missing: the default (if any) applies
-        (and plain-entries (string? k) d)
+        (and (= :miss (:status path-fold)) d)
         (try-fold (merge {:node (:node d)}
                          (select-keys d [:dyn? :heavy? :sibs]))
                   gaps)
 
         :else
-        (try-fold (merge {:node (cond-> (assoc ast :target tn :attr k)
-                                  d (assoc :default (:node d)))}
-                         (combine (remove nil? [t kr d])))
-                  gaps)))
+        (let [node (if (= 1 (count keys))
+                     (cond-> (assoc ast :target tn :attr (first keys))
+                       true (dissoc :attrs :attr-spans)
+                       d (assoc :default (:node d)))
+                     (cond-> (assoc ast :target tn :attrs keys)
+                       true (dissoc :attr :attr-span)
+                       d (assoc :default (:node d))))]
+          (try-fold (merge {:node node}
+                           (combine (remove nil? (into [t d] krs))))
+                    gaps))))
 
     :has-attr
     (let [t (walk (:target ast) env lambda-bound sib-names gaps)

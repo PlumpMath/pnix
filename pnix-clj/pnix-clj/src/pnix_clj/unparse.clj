@@ -157,9 +157,12 @@
     (str "(" (lambda-param ast) ": " (paren (:body ast)) ")")
 
     :select
-    (str (paren (:target ast)) "." (attr-name (:attr ast))
-         (when-let [d (:default ast)]
-           (str " or " (paren d))))
+    ;; Continuous attrPath (`:attrs`) or single-segment (`:attr`).
+    (let [path (or (:attrs ast) (when-let [a (:attr ast)] [a]))]
+      (str (paren (:target ast))
+           (apply str (map #(str "." (attr-name %)) path))
+           (when-let [d (:default ast)]
+             (str " or " (paren d)))))
 
     :has-attr
     (str (paren (:target ast)) " ? " (attr-name (:attr ast)))
@@ -182,8 +185,8 @@
     (throw (ex-info "unparse: unsupported AST op" {:op op}))))
 
 (def ^:private position-keys
-  [:span :source :source-hash :attr-span :name-span :target-span :param-span
-   :key-span :path-spans :expr-span])
+  [:span :source :source-hash :attr-span :attr-spans :name-span :target-span
+   :param-span :key-span :path-spans :expr-span])
 
 (defn strip-positions
   "Remove span/source metadata recursively so structurally-equal ASTs from
