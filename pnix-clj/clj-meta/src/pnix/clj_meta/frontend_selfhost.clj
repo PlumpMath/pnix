@@ -1081,20 +1081,42 @@
         multi-arity? (and (seq rest-form) (seq? (first rest-form)))
         clauses (if multi-arity? rest-form [rest-form])
         arities (mapv analyze-fn-clause clauses)
-        param-counts (map (comp count :params) arities)]
+        ;; Only compared among FIXED clauses: a fixed clause sharing its
+        ;; param count with the (separately checked, at-most-one) variadic
+        ;; clause is not a duplicate at all -- confirmed live, `(fn ([a b]
+        ;; :fixed) ([a b & r] :variadic))` compiles fine on real host, and
+        ;; the fixed clause's own `invoke(N)` override simply takes
+        ;; precedence for that exact arity (see below).
+        param-counts (map (comp count :params) (remove :rest-param arities))]
     (when-not (seq arities)
       (throw (ex-info "tiny analyzer: fn needs at least one arity" {:form form})))
     (when-not (= (count param-counts) (count (distinct param-counts)))
       (throw (ex-info "tiny analyzer: duplicate fn arity" {:form form})))
-    ;; Deliberately narrow scope: a variadic clause (`& rest`) may only
-    ;; appear alone, not mixed with other fixed arities in the same `fn`.
-    ;; Real `clojure.lang.RestFn` subclasses CAN mix lower fixed arities
-    ;; with one variadic "ceiling" arity, but that needs additional
-    ;; lower-arity `invoke` overrides beyond `doInvoke`+`getRequiredArity` --
-    ;; a separate, larger slice, not attempted here.
-    (when (and (some :rest-param arities) (> (count arities) 1))
-      (throw (ex-info "tiny analyzer: variadic fn cannot be mixed with other arities"
-                      {:form form})))
+    ;; At most one variadic clause per `fn` -- `clojure.lang.RestFn` only
+    ;; supports one `doInvoke`/one `getRequiredArity` ceiling, and real host
+    ;; itself rejects a second `&`-clause the same way (a plain duplicate
+    ;; arity, since two variadic clauses would both need the same fixed
+    ;; param count to even be distinguishable).
+    (let [variadic-arities (filter :rest-param arities)]
+      (when (< 1 (count variadic-arities))
+        (throw (ex-info "tiny analyzer: fn cannot have more than one variadic clause"
+                        {:form form})))
+      ;; Real host rejects a fixed clause with MORE params than the variadic
+      ;; clause's own fixed-param count -- confirmed live: `(fn ([a b c] 1)
+      ;; ([a & r] 2))` throws "Can't have fixed arity function with more
+      ;; params than variadic function". A fixed clause with EQUAL param
+      ;; count is fine and takes precedence over the variadic clause for
+      ;; that exact arity (confirmed live: `(f 1 2)` picks the `([a b] ...)`
+      ;; clause, not `([a b & r] ...)`, when both exist) -- this falls out
+      ;; for free from emitting a direct `invoke(N)` override for every
+      ;; fixed clause, same as the pure-fixed-multi-arity path already does:
+      ;; the JVM dispatches to the most-derived override, no extra runtime
+      ;; logic needed.
+      (when-let [{variadic-params :params} (first variadic-arities)]
+        (when (some #(> (count (:params %)) (count variadic-params))
+                    (remove :rest-param arities))
+          (throw (ex-info "tiny analyzer: fixed arity cannot have more params than the variadic arity"
+                          {:form form})))))
     {:op :fn
      :arities arities}))
 
@@ -1881,21 +1903,43 @@
       (.invokeConstructor ga base-type init-method)
       (.returnValue ga)
       (.endMethod ga))
-    (if variadic?
-      ;; A single variadic clause: extends RestFn instead of AFunction.
-      ;; RestFn already implements EVERY public invoke(...) overload
-      ;; concretely (confirmed via `javap` on the real clojure.jar) -- it
-      ;; handles argument-count matching and rest-sequence collection
-      ;; entirely on its own. A subclass only supplies the two
-      ;; overridable pieces: getRequiredArity() and the ONE doInvoke
-      ;; overload whose param count is (fixed-params + 1), the last slot
-      ;; being the collected rest sequence (or nil if none were passed).
-      ;; This exact shape -- not merely a similar one -- was
-      ;; reverse-engineered from real host-AOT-compiled `(fn [a & r] r)`,
-      ;; `(fn [& r] r)`, and `(fn [a b & r] r)` via `javap -c` before being
+    ;; One `invoke` method per FIXED (non-variadic) arity clause, same
+    ;; class -- exactly how real host compiler emits fixed multi-arity
+    ;; `fn`, whether or not a variadic clause is ALSO present in the same
+    ;; `fn` (confirmed via `javap -c` on a mixed `(fn ([a] a) ([a b] (+ a
+    ;; b)) ([a b & r] ...))`): AFunction/RestFn already expose
+    ;; independently-overridable invoke0..invoke20, and IFn dispatch on the
+    ;; *call side* picks the right one by argument count. When a fixed
+    ;; clause's param count equals the variadic clause's own fixed-param
+    ;; count, this override simply wins over RestFn's inherited
+    ;; doInvoke-routing default for that exact arity -- confirmed live, see
+    ;; `analyze-fn`'s validation above -- no extra runtime logic needed.
+    (doseq [{:keys [params body]} (remove :rest-param arities)]
+        (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
+                                    (invoke-method (count params))
+                                    nil nil cw)]
+          (emit-expr ga
+                     (into {}
+                           (map-indexed (fn [i p]
+                                          [p {:kind :arg :index i}]))
+                           params)
+                     body)
+          (.returnValue ga)
+          (.endMethod ga)))
+    (when variadic?
+      ;; The ONE variadic clause: RestFn already implements EVERY public
+      ;; invoke(...) overload concretely (confirmed via `javap` on the real
+      ;; clojure.jar) for arities >= getRequiredArity(), routing through
+      ;; doInvoke -- a subclass only supplies the two overridable pieces:
+      ;; getRequiredArity() and the ONE doInvoke overload whose param count
+      ;; is (fixed-params + 1), the last slot being the collected rest
+      ;; sequence (or nil if none were passed). This exact shape -- not
+      ;; merely a similar one -- was reverse-engineered from real
+      ;; host-AOT-compiled `(fn [a & r] r)`, `(fn [a b & r] r)`, and the
+      ;; mixed fixed+variadic case above via `javap -c` before being
       ;; written here.
-      (let [{:keys [params rest-param body]} (first arities)
-            all-params (if rest-param (conj params rest-param) params)
+      (let [{:keys [params rest-param body]} (first (filter :rest-param arities))
+            all-params (conj params rest-param)
             ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
                                   (do-invoke-method (count all-params))
                                   nil nil cw)]
@@ -1912,24 +1956,7 @@
                                           nil nil cw)]
           (.push arity-ga (int (count params)))
           (.returnValue arity-ga)
-          (.endMethod arity-ga)))
-      ;; One `invoke` method per arity clause, same class -- this is exactly
-      ;; how the real host compiler emits fixed multi-arity `fn`: AFunction
-      ;; already exposes independently-overridable invoke0..invoke20, and IFn
-      ;; dispatch on the *call side* (host `apply`/`invoke`) already picks the
-      ;; right one by argument count.
-      (doseq [{:keys [params body]} arities]
-        (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
-                                    (invoke-method (count params))
-                                    nil nil cw)]
-          (emit-expr ga
-                     (into {}
-                           (map-indexed (fn [i p]
-                                          [p {:kind :arg :index i}]))
-                           params)
-                     body)
-          (.returnValue ga)
-          (.endMethod ga))))
+          (.endMethod arity-ga))))
     (.visitEnd cw)
     (let [bytes (.toByteArray cw)
           loader (DynamicClassLoader.
@@ -2227,6 +2254,22 @@
     :source "(fn [a b & r] [a b r])"
     :args [1 2 3 4]
     :expected [1 2 '(3 4)]}
+   {:id :tiny-mixed-arity-fixed-one-clause
+    :source "(fn ([a] a) ([a b] (+ a b)) ([a b & r] (+ (+ a b) (count r))))"
+    :args [1]
+    :expected 1}
+   {:id :tiny-mixed-arity-fixed-clause-wins-over-variadic
+    :source "(fn ([a] a) ([a b] (+ a b)) ([a b & r] (+ (+ a b) (count r))))"
+    :args [1 2]
+    :expected 3}
+   {:id :tiny-mixed-arity-variadic-clause-empty-rest
+    :source "(fn ([a] a) ([a b] (+ a b)) ([a b & r] (+ (+ a b) (count r))))"
+    :args [1 2 3]
+    :expected 4}
+   {:id :tiny-mixed-arity-variadic-clause-multi-rest
+    :source "(fn ([a] a) ([a b] (+ a b)) ([a b & r] (+ (+ a b) (count r))))"
+    :args [1 2 3 4]
+    :expected 5}
    {:id :tiny-op-count-variadic
     :source "(fn [& r] (count r))"
     :args [1 2 3]

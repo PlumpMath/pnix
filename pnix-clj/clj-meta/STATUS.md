@@ -93,7 +93,7 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    137 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
+    141 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
     incl. `N`/`M` bignum literals (real `clojure.lang.BigInt`/
     `java.math.BigDecimal`, composing with the existing `+`/`-`/`*`/`=`
     ops), regex literals (`#"..."` -> `java.util.regex.Pattern`), and
@@ -101,7 +101,9 @@ U6  frontend-selfhost
     `Numbers/divide` at parse time)/`binding`+dynamic-var deref (real
     `push-thread-bindings`/`pop-thread-bindings`, exact host bytecode
     shape)/quote/14 macros incl. `case` with a real no-default throw/vector-
-    destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
+    destructuring/fixed multi-arity fn mixed with one variadic `&`
+    rest-args ceiling (real `RestFn` `invoke(N)`+`doInvoke`+
+    `getRequiredArity` overrides, exact host bytecode shape)/count/
     `try` with any combination of (single- or multi-)`catch` and
     `finally`/`throw`/general class construction and general static
     interop (allowlisted classes via direct bytecode, any other
@@ -560,6 +562,23 @@ DDC 행: 81→84. 전체 `-M:conformance`(116/116)와
 별도 클래스 + 상호 참조 필드를 생성하는 걸 확인했는데(`javap -c`), 지금
 U6는 클래스를 하나만 찍는 구조라 `deftype`/`reify`급 아키텍처 확장이
 필요함 — 그 둘과 묶어서 나중에.
+
+**같은 날 스무 번째 확장 (2026-08-14, 배치 진행): 고정 arity와 variadic
+`&` ceiling의 혼합.** 그동안 U6는 "고정 multi-arity만" 또는 "variadic
+단독 하나만"만 지원하고 둘을 섞으면 거부했는데, `javap -c`로
+`(fn ([a] a) ([a b] (+ a b)) ([a b & r] ...))`를 확인하니 real host는
+`RestFn`을 상속한 같은 클래스 안에 고정 arity마다 `invoke(N)` 오버라이드를
+평소처럼 찍고, variadic 절 하나만 `doInvoke`+`getRequiredArity`로 감싸는
+단순 조합이었다 — 별도 클래스 불필요, `letfn`/`deftype`급이 아니었음.
+고정 절의 param 개수가 variadic 절과 같으면 그 arity는 고정 절의
+`invoke(N)`이 상속된 `RestFn` 기본 동작(`doInvoke`로 라우팅)을 그냥
+오버라이드로 이기는 것도 라이브로 확인(`(f 1 2)`가 `([a b] ...)`를 선택,
+`([a b & r] ...)` 아님) — 별도 런타임 로직 없이 JVM 오버라이드 우선순위
+그대로 성립. real host의 "고정 arity가 variadic보다 param이 많으면
+거부"(`Can't have fixed arity function with more params than variadic
+function`) 검증도 그대로 재현. U6: 137→141. DDC 행: 84→86. 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
+READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

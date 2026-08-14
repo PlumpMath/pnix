@@ -386,10 +386,20 @@ top-line claim, but the substance is much closer than "false" implies:
   U6는 클래스를 하나만 찍는 구조라 `deftype`/`reify`급 아키텍처 확장이
   필요함 — 그 둘과 묶어서 나중에.
 
+  **20번째 슬라이스, 2026-08-14 (배치 진행): 고정 arity + variadic `&`
+  ceiling 혼합** (137→141). `javap -c`로 `(fn ([a] a) ([a b] (+ a b))
+  ([a b & r] ...))`를 확인하니 `RestFn` 상속 클래스 안에 고정 arity마다
+  `invoke(N)` + variadic 절 하나만 `doInvoke`+`getRequiredArity`인 단순
+  조합 — 별도 클래스 불필요, `letfn`/`deftype`급이 아니었다. 고정 절
+  param 개수가 variadic과 같으면 그 arity는 고정 절의 `invoke(N)`
+  오버라이드가 이긴다는 것도 라이브 확인(`(f 1 2)`가 `([a b] ...)` 선택).
+  real host의 "고정 arity가 variadic보다 param 많으면 거부" 검증도
+  재현. DDC 행: 84→86. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
-  protocol, RestFn의 fixed+variadic 혼합 arity 형태. 각각 자체
-  multi-fixture 슬라이스이며, 그중 몇몇(deftype/reify/letfn)은 그 자체로
-  진짜 크다(다중 클래스 생성이 필요).
+  protocol. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/
+  reify/letfn)은 그 자체로 진짜 크다(다중 클래스 생성이 필요).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

@@ -592,7 +592,15 @@
    {:id :mini-backend-binding-reverts-after-exceptional-exit
     :source "(fn [] (do (try (binding [pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var* 99] (throw (RuntimeException.))) (catch RuntimeException e nil)) pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var*))"
     :args []
-    :expected :tiny-dynamic-var-root}])
+    :expected :tiny-dynamic-var-root}
+   {:id :mini-backend-mixed-arity-fixed-clause-wins
+    :source "(fn ([a] a) ([a b] (+ a b)) ([a b & r] (+ (+ a b) (count r))))"
+    :args [1 2]
+    :expected 3}
+   {:id :mini-backend-mixed-arity-variadic-clause
+    :source "(fn ([a] a) ([a b] (+ a b)) ([a b & r] (+ (+ a b) (count r))))"
+    :args [1 2 3 4]
+    :expected 5}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
