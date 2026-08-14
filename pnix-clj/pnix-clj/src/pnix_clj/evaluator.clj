@@ -3794,9 +3794,23 @@
        :value (vec (cons (first args) (second args)))}
 
       :elemAt
-      (if-not (vector? (first args))
-        (err/failed :builtin :elem-at-arg-not-list {:builtin name :arg (first args)})
-        (force-value (nth (first args) (second args))))
+      ;; Oracle: OOB / negative index are structured errors, not host
+      ;; IndexOutOfBounds → :builtin-dispatch-failed. Index type is guarded
+      ;; in finish-extra-builtin (:elem-at-index-not-int).
+      (let [xs (first args)
+            i (second args)]
+        (cond
+          (not (vector? xs))
+          (err/failed :builtin :elem-at-arg-not-list {:builtin name :arg xs})
+          (not (integer? i))
+          (err/failed :builtin :elem-at-index-not-int {:builtin name :arg i})
+          (or (neg? (long i)) (>= (long i) (count xs)))
+          (err/failed :builtin :elem-at-index-out-of-bounds
+                      {:builtin name
+                       :index (long i)
+                       :size (count xs)})
+          :else
+          (force-value (nth xs (long i)))))
 
       :elem
       (loop [remaining (second args)]

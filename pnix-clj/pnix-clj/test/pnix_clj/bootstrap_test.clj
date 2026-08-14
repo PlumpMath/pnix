@@ -5894,7 +5894,15 @@
     (let [r (pnix/eval-source "./a + ./b")]
       (is (= :ok (:status r)))
       (is (= "./a./b" (get (:value r) "path"))))
-    (is (= "x./a" (:value (pnix/eval-source "\"x\" + ./a"))))))
+    (is (= "x./a" (:value (pnix/eval-source "\"x\" + ./a")))))
+  (testing "elemAt bounds are structured (oracle: not host IndexOutOfBounds)"
+    (is (= :elem-at-index-out-of-bounds
+           (:reason (pnix/eval-source "builtins.elemAt [1 2] 2"))))
+    (is (= :elem-at-index-out-of-bounds
+           (:reason (pnix/eval-source "builtins.elemAt [1 2] (-1)"))))
+    (is (= :elem-at-index-not-int
+           (:reason (pnix/eval-source "builtins.elemAt [1 2] 1.0"))))
+    (is (= 20 (:value (pnix/eval-source "builtins.elemAt [10 20 30] 1"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by
