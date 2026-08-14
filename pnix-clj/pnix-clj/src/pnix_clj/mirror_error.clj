@@ -129,13 +129,18 @@
       :runtime-ast-tag (:expected-runtime-ast-tag case)
       :runtime-error-contains (:expected-error-contains case)}
      :observed
+     ;; Machine error model v1 stores the taxonomy class under :class (not
+     ;; :reason). Surface both: eval-error-reason mirrors the lane :reason
+     ;; (gate pin equality), eval-error-class is the machine class.
      {:top-status (:status receipt)
       :top-reason (:reason receipt)
       :eval-status (get-in receipt [:eval-result :status])
       :eval-reason (get-in receipt [:eval-result :reason])
       :eval-error-schema (get-in receipt [:eval-result :error :schema])
       :eval-error-phase (get-in receipt [:eval-result :error :phase])
-      :eval-error-reason (get-in receipt [:eval-result :error :reason])
+      :eval-error-reason (or (get-in receipt [:eval-result :error :reason])
+                             (get-in receipt [:eval-result :reason]))
+      :eval-error-class (get-in receipt [:eval-result :error :class])
       :px-runtime-status (get-in receipt [:px-runtime :status])
       :px-runtime-reason (get-in receipt [:px-runtime :reason])
       :runtime-mirror-schema (get runtime-receipt "mirror_schema")

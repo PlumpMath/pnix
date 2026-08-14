@@ -94,11 +94,14 @@
              lifted-lanes)))
 
 (defn- semantic-error-checks
+  "Cycle/unbound rows are deterministic semantic failures on every lifted
+  lane (lineage note on the fixture set) — not policy holds or frontiers.
+  Expect :failed, not the pre-R1 :held frontier shape."
   [_case _receipt lane-by lifted-lanes]
   (mapv (fn [lane]
           (check-row (keyword (str "lane-" (name lane)))
-                     (= :held (:status (lane-by lane)))
-                     :held
+                     (= :failed (:status (lane-by lane)))
+                     :failed
                      (:status (lane-by lane))))
         lifted-lanes))
 

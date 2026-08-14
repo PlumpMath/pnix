@@ -2,6 +2,7 @@
   "JVM class-file artifact receipts -- content hashes of the classes clj-meta emits, so a compiled artifact's identity is verifiable and stable."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [pnix-clj.clj-meta :as clj-meta]
             [pnix-clj.clojure-form :as clojure-form]
             [pnix-clj.core :as pnix]
             [pnix-clj.hash :as hash]))
@@ -89,13 +90,27 @@
      :verified-ok? (get-in verified [:verification :ok])}))
 
 (defn- pnix-compile-row
+  "Proof-lane compile of a tiny pnix source. `compile-source` is host-execution
+  only and intentionally omits compile receipts; classfile identity needs the
+  clj-meta form-proof client (same split as translation-validation)."
   []
-  (let [compiled (pnix/compile-source "42")]
+  (let [lowered (pnix/lower-source "42")
+        form (when (= :ok (:status lowered)) (:form lowered))
+        compiled (when form
+                   (try
+                     (clj-meta/eval-lowered-bounded form 32)
+                     (catch Throwable t
+                       {:status :failed
+                        :reason :proof-compile-threw
+                        :error {:phase :host-compile
+                                :class :proof-compile-threw
+                                :message (.getMessage t)}})))
+        receipt (:compile-receipt compiled)]
     {:source-id :pnix-compile/literal-42
      :source "42"
-     :status (:status compiled)
-     :receipt-schema (get-in compiled [:compile-receipt :schema])
-     :summary (class-artifact-summary (:compile-receipt compiled))}))
+     :status (or (:status compiled) (:status lowered) :failed)
+     :receipt-schema (:schema receipt)
+     :summary (class-artifact-summary receipt)}))
 
 (defn- generated-class-rows
   []
