@@ -94,10 +94,11 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    69 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
-    quote/14 macros incl. `case`/vector-destructuring/fixed multi-arity
-    fn/variadic `&` rest-args/count/single-clause `try`/`catch`) with ZERO
-    calls into tools.analyzer.jvm or the host reader.
+    74 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    quote/14 macros incl. `case` with a real no-default throw/vector-
+    destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
+    single-clause `try`/`catch`/`throw`/allowlisted exception construction)
+    with ZERO calls into tools.analyzer.jvm or the host reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
     0 divergences found.
@@ -220,6 +221,47 @@ not `true`), and `try`/`catch` composes correctly nested inside `let`. U6:
 65→69. DDC row: 52→54 (2 new cases). Full `-M:conformance` (116/116,
 unaffected) and full `bin/clj-meta-gate` (`metacircular gate: READY`) both
 still green.
+
+**Widened a fifth time, same day (2026-08-14): `throw` and allowlisted
+exception construction — closes `case`'s no-default gap for real.** Two
+additions, both reverse-engineered from real host bytecode via `javap -c`
+before being written (AOT-compiled `(fn [x] (throw x))` and
+`(fn [] (throw (IllegalArgumentException. "boom")))`, matching this file's
+established discipline for anything touching JVM internals):
+
+- **`throw`**: `(throw expr)` emits `expr`'s code, then `CHECKCAST
+  Throwable; ATHROW` — the *exact* real host shape, not an approximation.
+  Works on any expression, including a caught-exception local, so re-throw
+  (`(throw e)` inside a `catch` body) works.
+- **`ClassName.` constructor calls** (the real host's own dot-suffixed
+  interop syntax, not an invented `new` keyword): `(IllegalArgumentException.)`
+  or `(IllegalArgumentException. "msg")` emit `NEW; DUP; [args]; INVOKESPECIAL
+  <init>`, again the exact real shape. Deliberately narrow: only the same
+  small class allowlist `catch` already uses (now including
+  `IllegalArgumentException`), not general Java class resolution — this tiny
+  language still has no way to name arbitrary host classes.
+
+`expand-case`'s no-default restriction (added in the previous widening) is
+now lifted: a default-less `case` with no match expands to `(throw
+(IllegalArgumentException. "No matching clause"))` instead of being
+rejected. Honest caveat: the real host's message is dynamic (`"No matching
+clause: <value>"`, built via `str`, which this tiny language doesn't have),
+so the thrown message here is a fixed string, not an exact match — but the
+exception *class*, and *that it throws at all*, match exactly, which is what
+every `try`/`catch`-wrapped fixture actually observes. One debugging note
+worth recording: an early manual test of plain exception construction
+(`(IllegalArgumentException. "boom")`, no `throw`) appeared to throw when
+called, which would have been a real bug (construction alone must never
+throw) — re-tested in an isolated process and it was a REPL/session
+artifact from a prior failed eval in the same `clojure -e` process, not a
+real defect; the isolated re-test, a raw `javap -c` bytecode dump, and the
+final fixture run all agree the construction-only path never throws.
+Verified against real host `eval` before adding fixtures: throw-with-message
+caught, no-arg-constructor throw caught, a caught exception re-thrown to an
+outer `catch`, and both branches of the newly-unlocked no-default `case`
+(matching clause still works; no-match now throws and is catchable). U6:
+69→74. DDC row: 54→56. Full `-M:conformance` (116/116, unaffected) and full
+`bin/clj-meta-gate` (`metacircular gate: READY`) both still green.
 
 **What's still genuinely open:** full Wheeler DDC needs the independent
 backend's coverage to match the *production* corpus, not a 43-fixture subset,

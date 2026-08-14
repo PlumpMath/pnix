@@ -22,6 +22,8 @@
 (def ^:private util-type (Type/getType Util))
 (def ^:private keyword-type (Type/getType Keyword))
 (def ^:private symbol-type (Type/getType Symbol))
+(def ^:private throwable-type (Type/getType Throwable))
+(def ^:private string-type (Type/getType String))
 (def ^:private object-array-class (Class/forName "[Ljava.lang.Object;"))
 (def ^:private init-method
   (Method. "<init>" Type/VOID_TYPE (into-array Type [])))
@@ -231,30 +233,30 @@
 ;; integer/keyword/string/nil/boolean atom as a self-evaluating constant (no
 ;; `quote` needed), matching how the tiny reader itself hands them back.
 ;;
-;; Deliberately narrow scope: a trailing default clause is REQUIRED. Real
-;; `case` with no default and no matching clause throws
-;; `IllegalArgumentException`; this tiny language has no `throw` special
-;; form (a separate, larger feature), so rather than silently falling
-;; through to `nil` on no-match -- a genuine behavior gap from the real
-;; host, caught by testing this exact case against `eval` before deciding
-;; how to handle it -- a default-less `case` is rejected up front by this
-;; macroexpander instead of ever being compiled into a wrong answer.
+;; No-default no-match now throws `IllegalArgumentException`, matching real
+;; `case` (confirmed live: real host's message is dynamic, "No matching
+;; clause: <value>", built via `str`; this tiny language has no string
+;; concatenation, so the thrown message here is a fixed
+;; "No matching clause" instead -- an honest, narrower approximation of the
+;; real message text, not a claim of exact message equality. The exception
+;; *class* and *that it throws at all* match the real host exactly, which is
+;; what `try`/`catch` fixtures actually observe.
 (defn- expand-case
   [counter args]
   (when (empty? args)
     (throw (ex-info "tiny macroexpander: case needs a test expr" {:args args})))
-  (let [[expr & clauses] args]
-    (when-not (odd? (count clauses))
-      (throw (ex-info "tiny macroexpander: case requires a trailing default clause (no-default no-match throws on the real host; unsupported here)"
-                      {:args args})))
-    (let [default (last clauses)
-          pairs (partition 2 (butlast clauses))
-          g (macro-local "case_test" counter)]
-      (list 'let [g expr]
-            (reduce (fn [else-form [test-val result]]
-                      (list 'if (list '= g test-val) result else-form))
-                    default
-                    (reverse pairs))))))
+  (let [[expr & clauses] args
+        has-default? (odd? (count clauses))
+        default (if has-default?
+                  (last clauses)
+                  (list 'throw (list 'IllegalArgumentException. "No matching clause")))
+        pairs (partition 2 (if has-default? (butlast clauses) clauses))
+        g (macro-local "case_test" counter)]
+    (list 'let [g expr]
+          (reduce (fn [else-form [test-val result]]
+                    (list 'if (list '= g test-val) result else-form))
+                  default
+                  (reverse pairs)))))
 
 (defn- expand-if-let
   [counter args]
@@ -509,20 +511,41 @@
   (analyze-quoted (first args)))
 
 ;; Deliberately narrow allowlist, not general Java class resolution: this
-;; tiny language has no way to name arbitrary host classes, so `catch`
-;; targets are restricted to a small set of exception types actually
-;; reachable from ops this backend already supports (`quot`/`rem` throw
-;; ArithmeticException on divide-by-zero).
-(def ^:private catch-classes
+;; tiny language has no way to name arbitrary host classes, so both `catch`
+;; targets and constructible exception types (below) are restricted to a
+;; small set actually reachable from ops this backend supports (`quot`/`rem`
+;; throw ArithmeticException on divide-by-zero; `IllegalArgumentException`
+;; is what `case`'s no-default no-match path needs to match real host
+;; behavior, see `expand-case`).
+(def ^:private known-exception-classes
   {'ArithmeticException ArithmeticException
    'Exception Exception
    'RuntimeException RuntimeException
-   'Throwable Throwable})
+   'Throwable Throwable
+   'IllegalArgumentException IllegalArgumentException})
+
+(defn- exception-constructor-class
+  "`ClassName.` (the real host's dot-suffixed constructor-call syntax) for
+  an allowlisted exception class -> the Class; else nil. Reader-level: the
+  tiny reader already reads `IllegalArgumentException.` as a plain symbol
+  (the trailing `.` is just part of the symbol's name), so no reader change
+  is needed to recognize this shape."
+  [op]
+  (when (and (symbol? op) (.endsWith (name op) "."))
+    (get known-exception-classes (symbol (subs (name op) 0 (dec (count (name op))))))))
 
 (defn- analyze-call
   [env form]
   (let [[op & args] form]
-    (case op
+    (if-let [cls (exception-constructor-class op)]
+      (do
+        (when-not (<= 0 (count args) 1)
+          (throw (ex-info "tiny analyzer: exception constructor takes 0 or 1 (String message) args"
+                          {:form form})))
+        {:op :new
+         :class cls
+         :arg (when (seq args) (analyze-expr env (first args)))})
+      (case op
       quote (analyze-quote form args)
       do (analyze-body env args)
       let (analyze-let env form args)
@@ -545,13 +568,13 @@
                             {:form form})))
           (let [[_ class-sym name-sym catch-body-form] catch-form]
             (when-not (and (= 4 (count catch-form))
-                           (contains? catch-classes class-sym)
+                           (contains? known-exception-classes class-sym)
                            (symbol? name-sym))
               (throw (ex-info "tiny analyzer: malformed catch clause (supported classes: ArithmeticException, Exception, RuntimeException, Throwable)"
                               {:form form})))
             {:op :try
              :body (analyze-expr env body-form)
-             :catch-class (get catch-classes class-sym)
+             :catch-class (get known-exception-classes class-sym)
              :catch-name name-sym
              :catch-body (analyze-expr (assoc env name-sym true) catch-body-form)})))
       if (do
@@ -578,8 +601,14 @@
         {:op :unary
          :fn op
          :arg (analyze-expr env (first args))})
+      throw
+      (do
+        (when-not (= 1 (count args))
+          (throw (ex-info "tiny analyzer: throw arity" {:form form})))
+        {:op :throw
+         :expr (analyze-expr env (first args))})
       (throw (ex-info "tiny analyzer: unsupported call"
-                      {:form form :op op})))))
+                      {:form form :op op}))))))
 
 (defn- analyze-expr
   [env form]
@@ -861,6 +890,24 @@
     (emit-expr ga (assoc env catch-name {:kind :let :slot catch-slot}) catch-body)
     (.mark ga after)))
 
+(defn- emit-new
+  [^GeneratorAdapter ga env {:keys [class arg]}]
+  (let [ctype (Type/getType ^Class class)]
+    (.newInstance ga ctype)
+    (.dup ga)
+    (if arg
+      (do
+        (emit-expr ga env arg)
+        (.checkCast ga string-type)
+        (.invokeConstructor ga ctype (Method. "<init>" Type/VOID_TYPE (into-array Type [string-type]))))
+      (.invokeConstructor ga ctype init-method))))
+
+(defn- emit-throw
+  [^GeneratorAdapter ga env {:keys [expr]}]
+  (emit-expr ga env expr)
+  (.checkCast ga throwable-type)
+  (.throwException ga))
+
 (defn- emit-recur
   [^GeneratorAdapter ga env exprs]
   (let [{:keys [label slots]} (get env recur-target-key)]
@@ -956,6 +1003,8 @@
     :do (emit-do ga env (:exprs node))
     :let (emit-let ga env node)
     :try (emit-try ga env node)
+    :new (emit-new ga env node)
+    :throw (emit-throw ga env node)
     :loop (emit-loop ga env node)
     :recur (emit-recur ga env (:exprs node))
     :if (let [else-label (Label.)
@@ -1385,7 +1434,27 @@
    {:id :tiny-try-catch-composes-with-let
     :source "(fn [x] (let [r (try (quot 10 x) (catch ArithmeticException e -1))] (+ r 1)))"
     :args [2]
-    :expected 6}])
+    :expected 6}
+   {:id :tiny-throw-one-arg-constructor
+    :source "(fn [] (try (throw (IllegalArgumentException. \"boom\")) (catch IllegalArgumentException e (nil? e))))"
+    :args []
+    :expected false}
+   {:id :tiny-throw-no-arg-constructor
+    :source "(fn [] (try (throw (IllegalArgumentException.)) (catch IllegalArgumentException e :caught)))"
+    :args []
+    :expected :caught}
+   {:id :tiny-throw-rethrow-caught-exception
+    :source "(fn [x] (try (try (quot 10 x) (catch ArithmeticException e (throw e))) (catch ArithmeticException e2 :outer-caught)))"
+    :args [0]
+    :expected :outer-caught}
+   {:id :tiny-macro-case-no-default-throws
+    :source "(fn [n] (try (case n 1 :one 2 :two) (catch IllegalArgumentException e :no-match)))"
+    :args [99]
+    :expected :no-match}
+   {:id :tiny-macro-case-no-default-matches
+    :source "(fn [n] (try (case n 1 :one 2 :two) (catch IllegalArgumentException e :no-match)))"
+    :args [1]
+    :expected :one}])
 
 (defn run
   []

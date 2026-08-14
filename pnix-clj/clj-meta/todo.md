@@ -128,13 +128,31 @@ top-line claim, but the substance is much closer than "false" implies:
   116/116 unaffected, `bin/clj-meta-gate` `metacircular gate: READY`, no
   regressions.
 
-  Remaining large surface still untouched by U6 at all: `throw`/`finally`/
-  multi-catch (this slice's own natural continuation), Java interop (method
-  calls, field access, `set!`, static members, reflection), `deftype`/
-  `defrecord`/`reify`, `letfn`, bignum/ratio/regex reader literals, dynamic
-  vars, `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape.
-  Each of those is its own multi-fixture slice, several of them (interop,
-  exceptions, deftype/reify) genuinely large on their own.
+  **Fifth slice landed 2026-08-14: `throw` + allowlisted `ClassName.`
+  exception construction** (69→74), closing the `case` no-default gap for
+  real. Both reverse-engineered from real host bytecode (`javap -c` on
+  AOT-compiled `throw`/constructor forms) before writing any ASM code:
+  `throw` emits `CHECKCAST Throwable; ATHROW` (exact real shape, works on
+  re-thrown caught-exception locals too); `ClassName.` constructor calls
+  emit `NEW; DUP; [args]; INVOKESPECIAL <init>` (exact real shape), scoped
+  to the same small exception-class allowlist `catch` already uses (now
+  including `IllegalArgumentException`). `expand-case`'s no-default
+  rejection is lifted: no-match now expands to `(throw
+  (IllegalArgumentException. "No matching clause"))` — real host's message
+  is dynamic (needs `str`, which this language doesn't have) so the message
+  text is a fixed approximation, but the exception class and the fact that
+  it throws at all match exactly. DDC row: 54→56. `-M:conformance` 116/116
+  unaffected, `bin/clj-meta-gate` `metacircular gate: READY`, no
+  regressions.
+
+  Remaining large surface still untouched by U6 at all: `finally`,
+  multi-catch, general Java interop (method calls, field access, `set!`,
+  static members, reflection, general class resolution beyond the small
+  exception allowlist), `deftype`/`defrecord`/`reify`, `letfn`, `str`/string
+  concatenation, bignum/ratio/regex reader literals, dynamic vars,
+  `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape. Each
+  of those is its own multi-fixture slice, several of them (interop,
+  deftype/reify) genuinely large on their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

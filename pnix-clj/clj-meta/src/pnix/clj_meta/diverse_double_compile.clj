@@ -449,7 +449,15 @@
    {:id :mini-backend-try-catch-caught
     :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero)))"
     :args [0]
-    :expected :divzero}])
+    :expected :divzero}
+   {:id :mini-backend-throw-one-arg-constructor
+    :source "(fn [] (try (throw (IllegalArgumentException. \"boom\")) (catch IllegalArgumentException e (nil? e))))"
+    :args []
+    :expected false}
+   {:id :mini-backend-macro-case-no-default-throws
+    :source "(fn [n] (try (case n 1 :one 2 :two) (catch IllegalArgumentException e :no-match)))"
+    :args [99]
+    :expected :no-match}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
