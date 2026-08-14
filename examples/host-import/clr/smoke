@@ -41,18 +41,38 @@ elif [[ -d "$clr_root/pnix-clr/target/runtime-artifact" ]]; then
   export PNIX_CLR_ARTIFACT="$clr_root/pnix-clr/target/runtime-artifact"
 fi
 
+# Layout / GHA runners often have `dotnet` + the pnix-clr *script*, but no
+# built substrate (runtime-artifact or published Clojure.Main). Without that,
+# HelloPnix process-spawn cannot succeed — skip instead of FAIL (host-import
+# CI is layout+other-host demos, not a full clr gate).
+artifact="${PNIX_CLR_ARTIFACT:-}"
+main_dll="$clr_root/clojure-clr-clojure-1.12.3-alpha8/Clojure/Clojure.Main/bin/Release/net10.0/publish/Clojure.Main.dll"
+if [[ -z "$artifact" || ! -d "$artifact" ]] && [[ ! -f "$main_dll" ]]; then
+  echo "SKIP: pnix-clr substrate not built (no runtime-artifact / Clojure.Main publish)"
+  exit 0
+fi
+
 # HelloPnix prefers in-tree ProjectReference (see HelloPnix.csproj).
 # PNIX_CLR is still required for process-spawn Eval.File.
 # HelloPnix is net10-only in-tree.
-out="$(
+set +e
+raw="$(
   cd "$clr_root"
   # Capture only the final stdout line (value), not MSBuild noise.
-  dotnet run --project csharp/examples/HelloPnix -c Release -v q -- --file "$hello"
+  dotnet run --project csharp/examples/HelloPnix -c Release -v q -- --file "$hello" 2>&1
 )"
+st=$?
+set -e
 # Last non-empty line is the value.
-out="$(echo "$out" | awk 'NF{line=$0} END{print line}' | tr -d '[:space:]')"
-if [[ "$out" != "3" ]]; then
-  echo "FAIL: HelloPnix --file hello.px => '$out' (want 3)" >&2
+out="$(echo "$raw" | awk 'NF{line=$0} END{print line}' | tr -d '[:space:]')"
+if [[ "$st" -ne 0 || "$out" != "3" ]]; then
+  # Incomplete SDK / TFM on the runner → skip, not a product regression.
+  if echo "$raw" | grep -qiE 'error NETSDK|No .NET SDKs|net10\.0|framework reference'; then
+    echo "SKIP: HelloPnix cannot run (dotnet/net10 incomplete on this host)"
+    exit 0
+  fi
+  echo "FAIL: HelloPnix --file hello.px => '$out' (want 3; exit $st)" >&2
+  echo "$raw" | tail -n 20 >&2
   exit 1
 fi
 echo "3"

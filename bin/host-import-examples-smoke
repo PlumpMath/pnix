@@ -83,18 +83,21 @@ else
   skp "cargo / rs mini crate"
 fi
 
-# clr
+# clr (skips when substrate/dotnet incomplete — not a full clr gate)
 if [[ -x "$ex/clr/smoke" ]]; then
   set +e
   clr_out="$("$ex/clr/smoke" 2>&1)"
   clr_st=$?
   set -e
-  if [[ "$clr_st" -eq 0 ]] && echo "$clr_out" | grep -q 'eval_file => 3'; then
+  if [[ "$clr_st" -eq 0 ]] && echo "$clr_out" | grep -qE 'eval_file => 3|^3$'; then
     ok "clr HelloPnix smoke => 3"
+  elif [[ "$clr_st" -eq 0 ]] && echo "$clr_out" | grep -q '^SKIP:'; then
+    skp "clr ($(echo "$clr_out" | grep '^SKIP:' | head -1))"
   elif echo "$clr_out" | grep -q '^SKIP:'; then
-    skp "clr ($(echo "$clr_out" | head -1))"
+    skp "clr ($(echo "$clr_out" | grep '^SKIP:' | head -1))"
   else
     bad "clr smoke"
+    echo "$clr_out" | tail -n 15 | sed 's/^/    /'
   fi
 else
   skp "clr/smoke missing"

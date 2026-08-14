@@ -182,3 +182,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | machine differential +4 dotted-let rows; F2 Jones measured witness todo closed |
 | 2026-08-14 | oracle D: `++` requires list operands (was wrong VALUE via Clojure concat nil) |
 | 2026-08-14 | oracle D: `//` requires attrset operands (was wrong VALUE via Clojure merge nil) |
+| 2026-08-14 | host-import CI: clr examples smoke SKIPs without substrate (not FAIL) |
