@@ -93,11 +93,11 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    111 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    117 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
-    `try` with `catch` (single or multi-catch), `finally`, or catch+finally
-    combined/`throw`/allowlisted exception construction/`locking`/
+    `try` with any combination of (single- or multi-)`catch` and
+    `finally`/`throw`/allowlisted exception construction/`locking`/
     `.methodName` instance interop/
     `ClassName/methodName` static interop/`.-fieldName` field access and
     `set!` (all via `clojure.lang.Reflector`)/
@@ -416,6 +416,28 @@ bare try)도 사소하게 지원 — 그냥 `body`와 동일하게 처리. multi
 매치, 3개 catch 중 세 번째가 매치 — 다 host와 일치. U6: 105→111. DDC
 행: 68→70. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 열네 번째 확장 (2026-08-14): multi-catch + `finally` 결합.**
+바로 앞에서 범위 밖으로 미룬 것을 닫음. host-AOT `(try (quot 10 x) (catch
+ArithmeticException e :divzero) (catch IllegalArgumentException e
+:bad-arg) (finally (.incrementAndGet a)))`를 `javap -c -v`로 확인 —
+`emit-try-catch-finally`의 N-catch 일반화. 각 catch 절은 여전히 자기만의
+구체 클래스 exception-table entry를 try-body 범위에 갖고(소스 순서대로,
+`emit-try-multi-catch`와 동일), 거기에 try-body 범위 전체를 덮는
+공유 catch-all `finally` entry 하나가 추가되며, **각 catch-body 자신의
+범위도** 독립적으로 같은 `finally` handler를 가리키는 catch-all entry를
+갖는다(어느 catch-body 안에서 예외가 나도 `finally`가 돌게). 등록 순서:
+같은 `[try-start,try-end)` 범위에서 각 catch의 구체 entry가 공유
+any-handler entry보다 먼저(기존 순서 규칙 그대로), catch-body별
+any-handler entry들은 서로/다른 것과 겹치지 않으므로 상호 순서는 무관.
+실제 host `eval` 대비 검증(추가 전): 정상 경로 값+counter, 첫 번째
+catch 매치 값+counter, 두 번째 catch 매치 값, 그리고 가장 까다로운
+경우 — **catch-body 안에서 예외가 다시 던져져도** `finally`가 돌고
+바깥 `try`/`catch`로 정상 전파되는지(host·이 backend 둘 다
+`:outer-caught`, counter `1`) — 전부 일치. U6: 111→117. DDC 행: 70→72
+(상수 `finally` fixture만 — mutable arg 공유 문제 회피). 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
+READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

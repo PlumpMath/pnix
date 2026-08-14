@@ -533,6 +533,17 @@
    {:id :mini-backend-try-multi-catch-second-clause-triggered
     :source "(fn [] (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg)))"
     :args []
+    :expected :bad-arg}
+   ;; Constant, side-effect-free finally bodies here, not the mutable
+   ;; AtomicInteger fixtures from frontend_selfhost.clj's own set -- same
+   ;; shared-mutable-arg-across-legs reason as the other try/finally rows.
+   {:id :mini-backend-try-multi-catch-finally-normal-path
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg) (finally 99)))"
+    :args [2]
+    :expected 5}
+   {:id :mini-backend-try-multi-catch-finally-second-clause
+    :source "(fn [] (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg) (finally 99)))"
+    :args []
     :expected :bad-arg}])
 
 (defn- mini-backend-case-row

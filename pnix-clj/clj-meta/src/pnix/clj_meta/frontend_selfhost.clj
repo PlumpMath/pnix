@@ -700,6 +700,19 @@
                    (analyze-catch-clause (first clause-forms))
                    {:finally-body (analyze-finally-clause (second clause-forms))})
 
+            (and (< 2 (count clause-forms))
+                 (finally-form? (last clause-forms))
+                 (every? catch-form? (butlast clause-forms)))
+            (let [catches (mapv analyze-catch-clause (butlast clause-forms))
+                  classes (map :catch-class catches)]
+              (when-not (= (count classes) (count (distinct classes)))
+                (throw (ex-info "tiny analyzer: duplicate catch class in multi-catch"
+                                {:form form})))
+              {:op :try-multi-catch-finally
+               :body (analyze-expr env body-form)
+               :catches catches
+               :finally-body (analyze-finally-clause (last clause-forms))})
+
             (and (< 1 (count clause-forms)) (every? catch-form? clause-forms))
             (let [catches (mapv analyze-catch-clause clause-forms)
                   classes (map :catch-class catches)]
@@ -1250,6 +1263,66 @@
     (doseq [[{:keys [catch-class]} handler] (map vector catches handlers)]
       (.visitTryCatchBlock ga try-start try-end handler (Type/getInternalName catch-class)))))
 
+(defn- emit-try-multi-catch-finally
+  "The N-catch generalization of `emit-try-catch-finally` -- reverse-
+  engineered via `javap -c -v` on a host-AOT-compiled `(try (quot 10 x)
+  (catch ArithmeticException e :divzero) (catch IllegalArgumentException e
+  :bad-arg) (finally (.incrementAndGet a)))` before writing any code. Each
+  catch clause keeps its own specific-class exception-table entry over the
+  try-body range (as in `emit-try-multi-catch`, source order), PLUS the
+  try-body range gets ONE shared catch-all `finally` entry, PLUS each
+  catch-body's OWN range independently gets a catch-all entry pointing to
+  that SAME `finally` handler (so an exception thrown from inside any
+  catch-body still runs `finally` before propagating). Registration order:
+  each catch's specific entry before the shared any-handler entry for the
+  SAME [try-start,try-end) range (the established ordering rule), then the
+  per-catch-body any-handler entries (order among those doesn't matter,
+  none of their ranges overlap each other or the try range)."
+  [^GeneratorAdapter ga env {:keys [body catches finally-body]}]
+  (let [try-start (Label.)
+        try-end (Label.)
+        any-handler (Label.)
+        after (Label.)
+        result-slot (.newLocal ga obj-type)
+        any-exception-slot (.newLocal ga obj-type)
+        catch-handlers (mapv (fn [_] (Label.)) catches)
+        catch-ends (mapv (fn [_] (Label.)) catches)]
+    (.mark ga try-start)
+    (emit-expr ga env body)
+    (.storeLocal ga result-slot)
+    (.mark ga try-end)
+    (emit-expr ga env finally-body)
+    (.pop ga)
+    (.goTo ga after)
+
+    (doseq [[{:keys [catch-name catch-body]} handler end]
+            (map vector catches catch-handlers catch-ends)]
+      (.mark ga handler)
+      (let [exception-slot (.newLocal ga obj-type)]
+        (.storeLocal ga exception-slot)
+        (emit-expr ga (assoc env catch-name {:kind :let :slot exception-slot}) catch-body))
+      (.storeLocal ga result-slot)
+      (.mark ga end)
+      (emit-expr ga env finally-body)
+      (.pop ga)
+      (.goTo ga after))
+
+    (.mark ga any-handler)
+    (.storeLocal ga any-exception-slot)
+    (emit-expr ga env finally-body)
+    (.pop ga)
+    (.loadLocal ga any-exception-slot)
+    (.throwException ga)
+
+    (.mark ga after)
+    (.loadLocal ga result-slot)
+
+    (doseq [[{:keys [catch-class]} handler] (map vector catches catch-handlers)]
+      (.visitTryCatchBlock ga try-start try-end handler (Type/getInternalName catch-class)))
+    (.visitTryCatchBlock ga try-start try-end any-handler nil)
+    (doseq [[handler end] (map vector catch-handlers catch-ends)]
+      (.visitTryCatchBlock ga handler end any-handler nil))))
+
 (defn- emit-new
   [^GeneratorAdapter ga env {:keys [class arg]}]
   (let [ctype (Type/getType ^Class class)]
@@ -1432,6 +1505,7 @@
     :try-catch-finally (emit-try-catch-finally ga env node)
     :locking (emit-locking ga env node)
     :try-multi-catch (emit-try-multi-catch ga env node)
+    :try-multi-catch-finally (emit-try-multi-catch-finally ga env node)
     :new (emit-new ga env node)
     :throw (emit-throw ga env node)
     :interop-call (emit-interop-call ga env node)
@@ -2026,7 +2100,31 @@
    {:id :tiny-try-multi-catch-three-clauses-third-triggered
     :source "(fn [] (try (throw (RuntimeException. \"boom\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg) (catch RuntimeException e :runtime)))"
     :args []
-    :expected :runtime}])
+    :expected :runtime}
+   {:id :tiny-try-multi-catch-finally-normal-path
+    :source "(fn [a x] (try (quot 10 x) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg) (finally (.incrementAndGet a))))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0) 2]
+    :expected 5}
+   {:id :tiny-try-multi-catch-finally-first-clause-value
+    :source "(fn [a x] (try (quot 10 x) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg) (finally (.incrementAndGet a))))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0) 0]
+    :expected :divzero}
+   {:id :tiny-try-multi-catch-finally-first-clause-counter
+    :source "(fn [a x] (do (try (quot 10 x) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg) (finally (.incrementAndGet a))) (.get a)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0) 0]
+    :expected 1}
+   {:id :tiny-try-multi-catch-finally-second-clause-value
+    :source "(fn [a] (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg) (finally (.incrementAndGet a))))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
+    :expected :bad-arg}
+   {:id :tiny-try-multi-catch-finally-exception-in-catch-body-still-runs-finally
+    :source "(fn [a] (try (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e (throw (RuntimeException. \"from-catch\"))) (finally (.incrementAndGet a))) (catch RuntimeException e2 :outer-caught)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
+    :expected :outer-caught}
+   {:id :tiny-try-multi-catch-finally-exception-in-catch-body-counter
+    :source "(fn [a] (do (try (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e (throw (RuntimeException. \"from-catch\"))) (finally (.incrementAndGet a))) (catch RuntimeException e2 :outer-caught)) (.get a)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
+    :expected 1}])
 
 (defn run
   []

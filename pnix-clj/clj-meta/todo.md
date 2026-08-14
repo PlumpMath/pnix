@@ -278,12 +278,28 @@ top-line claim, but the substance is much closer than "false" implies:
   일치. DDC 행: 68→70. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
-  U6에 아직 전혀 없는 큰 표면: multi-catch+`finally` 결합, 작은 예외
-  허용목록을 넘는 일반 클래스 생성, 작은 static-interop 허용목록을 넘는
-  일반 클래스명 해석, `deftype`/`defrecord`/`reify`, `letfn`,
-  bignum/ratio/regex reader 리터럴, dynamic var, protocol, RestFn의
-  fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture 슬라이스이며,
-  그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
+  **14번째 슬라이스, 2026-08-14: multi-catch + `finally` 결합**
+  (111→117), 바로 앞에서 미룬 것을 닫음. host-AOT `(try (quot 10 x)
+  (catch ArithmeticException e :divzero) (catch IllegalArgumentException e
+  :bad-arg) (finally (.incrementAndGet a)))`를 `javap -c -v`로 확인 —
+  `emit-try-catch-finally`의 N-catch 일반화. 각 catch는 여전히 자기만의
+  구체 클래스 entry를 try-body 범위에 갖고, 거기에 try-body 범위 전체를
+  덮는 공유 catch-all `finally` entry 하나, 그리고 **각 catch-body
+  자신의 범위도** 독립적으로 같은 `finally` handler를 가리키는 catch-all
+  entry를 가짐(catch-body 안에서 예외가 나도 `finally`가 돌게). 실제
+  host `eval` 대비 검증(추가 전): 정상 경로 값+counter, 첫/두 번째
+  catch 매치, 그리고 가장 까다로운 경우인 catch-body 안에서 예외가 다시
+  던져져도 `finally`가 돌고 바깥 `try`/`catch`로 정상 전파되는지(host·
+  backend 둘 다 `:outer-caught`, counter `1`) — 전부 일치. DDC 행:
+  70→72(상수 `finally` fixture만). `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: 작은 예외 허용목록을 넘는 일반 클래스
+  생성, 작은 static-interop 허용목록을 넘는 일반 클래스명 해석,
+  `deftype`/`defrecord`/`reify`, `letfn`, bignum/ratio/regex reader
+  리터럴, dynamic var, protocol, RestFn의 fixed+variadic 혼합 arity
+  형태. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/reify)은
+  그 자체로 진짜 크다.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
