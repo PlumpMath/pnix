@@ -1022,6 +1022,28 @@ getfield`) 방식으로 읽힌다 — 차이는 `deftype`의 필드가 자유변
 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
 READY`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
 
+**같은 날 서른다섯 번째 확장 (2026-08-15): closure 중첩 깊이 제한 제거
+(1단계 → 무제한).** "남은 문제들 해결해봐" 지시에 따라 남은 4개 갭
+중 첫 번째 착수. `javap -c`로 host-AOT-컴파일된 `(fn [x] (fn [y] (fn
+[z] (+ x (+ y z)))))`를 확인하니 **전이적 캡처(transitive
+capture)**가 필요함을 확인 — 중간 closure(`y`를 받는 fn)가 자기
+body에서는 전혀 참조하지 않는 `x`를, 오직 안쪽 closure의 생성자에
+넘기기 위해서만 캡처해야 함. `ast-referenced-names`에 `:op
+:closure` 노드를 특별 취급하는 case 추가(자신의 `:captures`를
+바깥 스코프가 "참조"하는 것으로 간주하되 `:body`는 재귀하지
+않음) — 이 한 가지 변경만으로 기존 자유변수 계산 메커니즘이
+임의 깊이에서 그대로 작동. `analyze-nested-fn`의 depth-1 초과 시
+throw하던 가드를 제거. depth 2(`(((f 1) 2) 3)` → `6`)와 depth
+4(`((((f 1) 2) 3) 4)` → `10`) 양쪽 모두 실제 host 대비 검증,
+기존 단일-레벨 closure fixture 전부 회귀 없음(standalone U6 체크
+전부 OK). `compiler.clj`(DDC 2번째 레그)도 double-nested 패턴을
+동일하게 지원함을 먼저 확인한 뒤 DDC 행에 연결. U6:
+212→214(`:tiny-closure-double-nested-transitive-capture`,
+`:tiny-closure-quadruple-nested`). DDC 행: 114→115
+(`:mini-backend-closure-double-nested-transitive-capture`). 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular
+gate: READY ✅`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
+
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)
 behavior-identical이 아니라 bit-identical 출력이 필요합니다 — 우연히 같은

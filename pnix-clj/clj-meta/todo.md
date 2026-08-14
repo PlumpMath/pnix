@@ -640,7 +640,21 @@ top-line claim, but the substance is much closer than "false" implies:
   `bin/clj-meta-gate` `metacircular gate: READY` + `reproducible DDC
   lane: OK`, 회귀 없음.
 
-  U6에 남은 큰 gap: 중첩 closure는 1단계/단일 arity로 범위 제한,
+  **35번째 슬라이스, 2026-08-15: closure 중첩 깊이 제한 제거**
+  (212→214). `javap -c` 확인: `(fn [x] (fn [y] (fn [z] (+ x (+ y
+  z)))))`에서 중간 closure(`y`)가 자기 body엔 없는 `x`를 안쪽
+  closure 생성자에 넘기려고 캡처하는 "전이적 캡처"가 필요함을 확인.
+  `ast-referenced-names`에 `:op :closure` 케이스 추가(자신의
+  `:captures`를 바깥이 참조하는 것으로 간주, `:body`는 재귀 안 함) —
+  이 한 변경으로 기존 자유변수 계산이 임의 깊이에서 그대로 작동.
+  depth-1 초과 시 throw하던 가드 제거. depth 2/4 실제 host 대비
+  검증, 기존 fixture 전부 회귀 없음. `compiler.clj`도 지원 확인 후
+  DDC 행 연결(114→115). `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY ✅` +
+  `reproducible DDC lane: OK`, 회귀 없음.
+
+  U6에 남은 큰 gap: 중첩 closure는 단일 arity로만 범위 제한(깊이
+  제한은 해제됨),
   `letfn`은 진짜 상호재귀(생성-후-backpatch) 아직 없음, `reify`/
   `deftype`은 단일/reference-typed 파라미터만, protocol은 fast
   path만(진짜 `extend-protocol` 디스패치 없음).

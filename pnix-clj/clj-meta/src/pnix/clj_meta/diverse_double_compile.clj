@@ -705,6 +705,10 @@
     :source "(fn [x y] ((fn [z] (+ x (+ y z))) 3))"
     :args [1 2]
     :expected 6}
+   {:id :mini-backend-closure-double-nested-transitive-capture
+    :source "(fn [x] (((fn [y] (fn [z] (+ x (+ y z)))) 2) 3))"
+    :args [1]
+    :expected 6}
    {:id :mini-backend-letfn-single-binding
     :source "(fn [x] (letfn [(add-x [y] (+ x y))] (add-x 10)))"
     :args [3]

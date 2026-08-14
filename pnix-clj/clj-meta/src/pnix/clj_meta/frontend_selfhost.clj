@@ -1376,6 +1376,20 @@
     (and (map? node) (contains? #{:local :local-fn-call} (:op node)))
     (into #{(:name node)} (mapcat ast-referenced-names (vals (dissoc node :op :name))))
 
+    ;; A NESTED closure's own `:captures` (already computed as free
+    ;; relative to IT) must also count as "referenced" by whatever
+    ;; encloses it -- confirmed via `javap -c` on a host-AOT-compiled
+    ;; `(fn [x] (fn [y] (fn [z] (+ x (+ y z)))))`: the MIDDLE closure
+    ;; captures `x` as one of its OWN fields even though its OWN body
+    ;; never references `x` directly -- it only needs `x` to construct
+    ;; the INNERMOST closure. Deliberately do NOT recurse into the nested
+    ;; closure's `:body` here: its OWN params/self-name are already
+    ;; excluded from ITS OWN captures (by `analyze-nested-fn`), so walking
+    ;; into `:body` would only surface names meaningless to THIS
+    ;; (enclosing) scope's own capture computation.
+    (and (map? node) (= :closure (:op node)))
+    (set (:captures node))
+
     (map? node)
     (into #{} (mapcat ast-referenced-names (vals node)))
 
@@ -1389,13 +1403,18 @@
   "A `fn` literal appearing WITHIN another fn's body (not the top-level form
   `compile-source` itself compiles) -- a genuine closure, unlike the
   top-level case. Deliberately narrow scope: a single arity clause only (no
-  `([x] ..) ([x y] ..)` multi-arity nested closures) and exactly one level
-  of nesting (a closure inside a closure is rejected) -- both real,
-  separately-sizeable extensions, not attempted here."
+  `([x] ..) ([x y] ..)` multi-arity nested closures) -- a separate,
+  sizeable extension, not attempted here. Nesting depth itself is
+  UNBOUNDED (a closure inside a closure inside a closure...): confirmed
+  via `javap -c` on a host-AOT-compiled `(fn [x] (fn [y] (fn [z] (+ x (+ y
+  z)))))` that a MIDDLE closure captures a name purely to pass it through
+  to an INNER closure's constructor, even when the middle closure's own
+  body never references that name directly -- `ast-referenced-names`
+  handles this by treating a nested `:closure` node's own `:captures` as
+  \"referenced\" by whatever encloses it, so this transitive threading
+  falls out of the SAME free-variable computation used for one level,
+  with no depth-specific logic needed at all."
   [env args]
-  (when (contains? env closure-depth-key)
-    (throw (ex-info "tiny analyzer: closures nested more than one level deep are not yet supported"
-                    {:form args})))
   (let [fn-name (when (symbol? (first args)) (first args))
         rest-args (if fn-name (rest args) args)]
     (when (and (seq rest-args) (seq? (first rest-args)))
@@ -3651,6 +3670,14 @@
     :source "(fn [x] ((fn [& r] (cons x r)) 2 3))"
     :args [1]
     :expected '(1 2 3)}
+   {:id :tiny-closure-double-nested-transitive-capture
+    :source "(fn [x] (((fn [y] (fn [z] (+ x (+ y z)))) 2) 3))"
+    :args [1]
+    :expected 6}
+   {:id :tiny-closure-quadruple-nested
+    :source "(fn [a] ((((fn [b] (fn [c] (fn [d] (+ a (+ b (+ c d)))))) 2) 3) 4))"
+    :args [1]
+    :expected 10}
    {:id :tiny-letfn-single-binding-captures-outer
     :source "(fn [x] (letfn [(add-x [y] (+ x y))] (add-x 10)))"
     :args [3]
