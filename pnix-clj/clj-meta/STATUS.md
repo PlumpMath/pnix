@@ -93,11 +93,13 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    117 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    121 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
     `try` with any combination of (single- or multi-)`catch` and
-    `finally`/`throw`/allowlisted exception construction/`locking`/
+    `finally`/`throw`/general class construction (allowlisted exceptions
+    via direct `NEW`/`INVOKESPECIAL`, any other class via
+    `RT.classForName`+`Reflector.invokeConstructor`)/`locking`/
     `.methodName` instance interop/
     `ClassName/methodName` static interop/`.-fieldName` field access and
     `set!` (all via `clojure.lang.Reflector`)/
@@ -438,6 +440,32 @@ catch 매치 값+counter, 두 번째 catch 매치 값, 그리고 가장 까다�
 (상수 `finally` fixture만 — mutable arg 공유 문제 회피). 전체
 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
 READY`) 녹색, 회귀 없음.
+
+**같은 날 열다섯 번째 확장 (2026-08-14): 일반 클래스 생성(작은 예외
+허용목록을 넘어서).** `java.awt.Point.`/`java.util.ArrayList.`를
+`javap -c`로 확인해서 real host 자신의 정확한 메커니즘을 그대로 씀:
+(클래스, arity) 쌍이 컴파일타임에 생성자를 유일하게 특정하면(예:
+`Point(int,int)`는 하나뿐) real host는 직접 `NEW`/`INVOKESPECIAL`을
+내지만, 특정 안 되면(예: `ArrayList(int)`는 `ArrayList(int)`와
+`ArrayList(Collection)` 둘이 arity 1로 겹침) `RT.classForName(String)` +
+`Reflector.invokeConstructor(Class, Object[])`로 **런타임** 반사
+디스패치로 폴백한다 — `.methodName`/`ClassName/methodName`이 이미 쓰던
+것과 같은 일반 메커니즘. 이 백엔드는 이 애매한-arity 경우의 폴백 경로만
+사용(어떤 클래스든, 어떤 인자 개수든 일반적으로 처리) — 유일-arity
+경우의 컴파일타임 직접 호출 최적화는 안 함(`case`/static interop에서
+이미 정한 "바이트코드 모양이 아니라 행동이 같으면 됨" 기준과 동일).
+기존 작은 예외 허용목록(`known-exception-classes`) 경로는 전혀 안
+건드리고(먼저 체크되어 우선함), 새로운 `general-constructor-class-name`
+검사를 폴백으로 추가. 정직한 caveat: 존재하지 않는 클래스 이름은 real
+host처럼 analyze 시점이 아니라 `RT.classForName`이 실행되는 **런타임**에
+실패함 — 이 백엔드의 fixture가 계산하는 어떤 값에도 영향 없는, 잘못된
+소스에 대해서만 나는 차이. 실제 host `eval` 대비 검증(추가 전):
+유일-arity 생성자(`Point`), 애매한-arity 생성자를 int 인자로(`.size`
+`0`), 같은 애매한 생성자를 Collection 인자로(다른 오버로드로 정확히
+디스패치되어 `.size` `3`), 무인자 생성자 — 전부 host와 일치, 그리고
+필드 접근(`.-x`)·instance interop(`.size`)과도 자연스럽게 합성됨을
+확인. U6: 117→121. DDC 행: 72→74. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

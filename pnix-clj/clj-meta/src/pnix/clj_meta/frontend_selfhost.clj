@@ -105,6 +105,10 @@
   (reflect-asm-method Reflector "invokeNoArgInstanceMember" [Object String Boolean/TYPE]))
 (def ^:private reflector-set-instance-field-method
   (reflect-asm-method Reflector "setInstanceField" [Object String Object]))
+(def ^:private rt-classfor-name-method
+  (reflect-asm-method RT "classForName" [String]))
+(def ^:private reflector-invoke-constructor-method
+  (reflect-asm-method Reflector "invokeConstructor" [Class object-array-class]))
 
 (defn- next-class-name
   []
@@ -549,6 +553,30 @@
   (when (and (symbol? op) (.endsWith (name op) "."))
     (get known-exception-classes (symbol (subs (name op) 0 (dec (count (name op))))))))
 
+;; General `ClassName.` construction, for any class NOT in the small
+;; exception allowlist above (checked first; this is only reached as a
+;; fallback). Unlike the exception path's direct `NEW`/`INVOKESPECIAL`
+;; (valid there because every allowlisted class only ever needs a 0- or
+;; 1-arg constructor this backend hand-picks), this is genuinely general:
+;; any class name, any arg count. Confirmed via `javap -c` that real host
+;; ALSO falls back to exactly this mechanism -- `RT.classForName(String)` +
+;; `Reflector.invokeConstructor(Class, Object[])` -- whenever the
+;; (class, arity) pair does not uniquely identify one constructor at
+;; compile time (e.g. `java.util.ArrayList(int)` is ambiguous with
+;; `ArrayList(Collection)`); when it IS unique (e.g. `java.awt.Point(int,
+;; int)`, `java.util.ArrayList()`), real host instead emits a direct
+;; `NEW`/`INVOKESPECIAL`, an optimization this backend does not attempt to
+;; replicate for the general case -- same behavior-not-bytecode-shape bar
+;; already established for `case`/static interop. Honest caveat: an
+;; unresolvable class name here fails at RUNTIME (when `RT.classForName`
+;; runs), not at analyze time the way real host's own compile-time
+;; resolution would reject it -- a difference only for malformed source,
+;; not for any value this backend's fixtures compute.
+(defn- general-constructor-class-name
+  [op]
+  (when (and (symbol? op) (< 1 (count (name op))) (.endsWith (name op) "."))
+    (subs (name op) 0 (dec (count (name op))))))
+
 ;; `.methodName receiver args...` -- the real host's own dot-prefixed
 ;; instance-interop syntax. Unlike the constructor allowlist above, this is
 ;; NOT restricted to known classes: real Clojure itself falls back to
@@ -616,6 +644,11 @@
         {:op :new
          :class cls
          :arg (when (seq args) (analyze-expr env (first args)))})
+
+      (general-constructor-class-name op)
+      {:op :general-new
+       :class-name (general-constructor-class-name op)
+       :args (mapv #(analyze-expr env %) args)}
 
       (field-access-name op)
       (do
@@ -1403,6 +1436,13 @@
   (emit-object-array ga env args)
   (.invokeStatic ga reflector-type reflector-invoke-static-method-method))
 
+(defn- emit-general-new
+  [^GeneratorAdapter ga env {:keys [class-name args]}]
+  (.push ga ^String class-name)
+  (.invokeStatic ga rt-type rt-classfor-name-method)
+  (emit-object-array ga env args)
+  (.invokeStatic ga reflector-type reflector-invoke-constructor-method))
+
 (defn- invoke-method
   [arity]
   (Method. "invoke"
@@ -1507,6 +1547,7 @@
     :try-multi-catch (emit-try-multi-catch ga env node)
     :try-multi-catch-finally (emit-try-multi-catch-finally ga env node)
     :new (emit-new ga env node)
+    :general-new (emit-general-new ga env node)
     :throw (emit-throw ga env node)
     :interop-call (emit-interop-call ga env node)
     :static-interop-call (emit-static-interop-call ga env node)
@@ -2124,7 +2165,23 @@
    {:id :tiny-try-multi-catch-finally-exception-in-catch-body-counter
     :source "(fn [a] (do (try (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e (throw (RuntimeException. \"from-catch\"))) (finally (.incrementAndGet a))) (catch RuntimeException e2 :outer-caught)) (.get a)))"
     :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
-    :expected 1}])
+    :expected 1}
+   {:id :tiny-general-new-unique-arity
+    :source "(fn [x y] (.-x (java.awt.Point. x y)))"
+    :args [7 9]
+    :expected 7}
+   {:id :tiny-general-new-ambiguous-arity-int-overload
+    :source "(fn [n] (.size (java.util.ArrayList. n)))"
+    :args [4]
+    :expected 0}
+   {:id :tiny-general-new-ambiguous-arity-collection-overload
+    :source "(fn [coll] (.size (java.util.ArrayList. coll)))"
+    :args [(java.util.Arrays/asList (into-array [1 2 3]))]
+    :expected 3}
+   {:id :tiny-general-new-no-arg
+    :source "(fn [] (.size (java.util.ArrayList.)))"
+    :args []
+    :expected 0}])
 
 (defn run
   []

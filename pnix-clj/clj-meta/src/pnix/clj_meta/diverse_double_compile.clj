@@ -544,7 +544,15 @@
    {:id :mini-backend-try-multi-catch-finally-second-clause
     :source "(fn [] (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg) (finally 99)))"
     :args []
-    :expected :bad-arg}])
+    :expected :bad-arg}
+   {:id :mini-backend-general-new-unique-arity
+    :source "(fn [x y] (.-x (java.awt.Point. x y)))"
+    :args [7 9]
+    :expected 7}
+   {:id :mini-backend-general-new-ambiguous-arity
+    :source "(fn [n] (.size (java.util.ArrayList. n)))"
+    :args [4]
+    :expected 0}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

@@ -294,12 +294,29 @@ top-line claim, but the substance is much closer than "false" implies:
   70→72(상수 `finally` fixture만). `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
-  U6에 아직 전혀 없는 큰 표면: 작은 예외 허용목록을 넘는 일반 클래스
-  생성, 작은 static-interop 허용목록을 넘는 일반 클래스명 해석,
-  `deftype`/`defrecord`/`reify`, `letfn`, bignum/ratio/regex reader
-  리터럴, dynamic var, protocol, RestFn의 fixed+variadic 혼합 arity
-  형태. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/reify)은
-  그 자체로 진짜 크다.
+  **15번째 슬라이스, 2026-08-14: 일반 클래스 생성**(117→121, 작은 예외
+  허용목록을 넘어서). `java.awt.Point.`/`java.util.ArrayList.`를
+  `javap -c`로 확인: (클래스, arity)가 컴파일타임에 생성자를 유일하게
+  특정하면 real host가 직접 `NEW`/`INVOKESPECIAL`을 내지만, 특정 안
+  되면(예: `ArrayList(int)` vs `ArrayList(Collection)`, 둘 다 arity 1)
+  `RT.classForName(String)` + `Reflector.invokeConstructor(Class,
+  Object[])`로 런타임 반사 디스패치 폴백 — `.methodName`/
+  `ClassName/methodName`이 이미 쓰던 것과 같은 메커니즘. 이 백엔드는
+  애매한-arity 폴백 경로만 사용(유일-arity 컴파일타임 최적화는 안 함,
+  기존 behavior-not-bytecode 기준과 동일). 기존 예외 허용목록 경로는
+  안 건드리고 새 `general-constructor-class-name`을 폴백으로 추가.
+  정직한 caveat: 존재하지 않는 클래스는 analyze 시점이 아니라 런타임에
+  실패(잘못된 소스에 대해서만 나는 차이). 실제 host `eval` 대비
+  검증(추가 전): 유일-arity, 애매한-arity(int/Collection 두 오버로드
+  각각), 무인자 — 전부 host와 일치, field access·instance interop과의
+  합성도 확인. DDC 행: 72→74. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: 작은 static-interop 허용목록을 넘는
+  일반 클래스명 해석, `deftype`/`defrecord`/`reify`, `letfn`,
+  bignum/ratio/regex reader 리터럴, dynamic var, protocol, RestFn의
+  fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture 슬라이스이며,
+  그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
