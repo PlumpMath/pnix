@@ -355,10 +355,21 @@ top-line claim, but the substance is much closer than "false" implies:
   `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate` `metacircular
   gate: READY`, 회귀 없음.
 
+  **18번째 슬라이스, 2026-08-14 (배치 진행): regex(`#"..."`)/ratio(`1/3`)
+  리터럴** (130→134). regex는 real host도 `Pattern.compile(String)`
+  직접 호출(리더 의존 없음, 그대로 재현). ratio는 bignum과 같은
+  `RT.readString` 경로라 또 일부러 안 씀 — `Numbers/divide`를 parse
+  시점에 호출(실제 reader와 동일 메커니즘, 라이브 확인: `4/2`→`Long`
+  collapse)해서 이미 reduce된 numerator/denominator로 `new
+  Ratio(BigInteger,BigInteger)` 생성. `Pattern`은 `.equals` 미오버라이드
+  (`(= #"a+" #"a+")` → `false`, 라이브 확인)라 fixture는 `.pattern`
+  문자열로 비교. DDC 행: 78→81. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
-  ratio/regex reader 리터럴, dynamic var, protocol, RestFn의
-  fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture 슬라이스이며,
-  그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
+  dynamic var, protocol, RestFn의 fixed+variadic 혼합 arity 형태. 각각
+  자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/reify)은 그 자체로
+  진짜 크다.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

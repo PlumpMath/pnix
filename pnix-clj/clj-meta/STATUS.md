@@ -93,10 +93,12 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    130 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
+    134 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
     incl. `N`/`M` bignum literals (real `clojure.lang.BigInt`/
     `java.math.BigDecimal`, composing with the existing `+`/`-`/`*`/`=`
-    ops)/quote/14 macros incl. `case` with a real no-default throw/vector-
+    ops), regex literals (`#"..."` -> `java.util.regex.Pattern`), and
+    ratio literals (`1/3` -> `clojure.lang.Ratio`, reduced/collapsed via
+    `Numbers/divide` at parse time)/quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
     `try` with any combination of (single- or multi-)`catch` and
     `finally`/`throw`/general class construction and general static
@@ -522,6 +524,18 @@ BigInteger(String))`로 고쳤다. `M` 접미사는 처음부터 진짜
 host와 일치(값·클래스 둘 다). U6: 124→130. DDC 행: 75→78. 전체
 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
 READY`) 녹색, 회귀 없음.
+
+**같은 날 열여덟 번째 확장 (2026-08-14, 배치 진행): regex 리터럴(`#"..."`)
++ ratio 리터럴(`1/3`).** `javap -c` 확인: regex는 real host도 그냥
+`Pattern.compile(String)` 직접 호출(리더 의존 없음, 그대로 재현); ratio는
+bignum과 같은 `RT.readString` 경로라 이번에도 일부러 안 씀 — 대신
+`Numbers/divide`를 parse 시점에 호출(실제 reader와 동일 메커니즘, 라이브
+확인: `1/3`→reduced `Ratio`, `4/2`→`Long 2`로 collapse)해서 이미
+reduce된 numerator/denominator로 `new Ratio(BigInteger,BigInteger)`
+직접 생성. `Pattern`은 `.equals`를 오버라이드 안 해서(`(= #"a+" #"a+")`
+→ `false`, 라이브 확인) fixture는 `.pattern` 문자열로 비교. U6: 130→134.
+DDC 행: 78→81. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

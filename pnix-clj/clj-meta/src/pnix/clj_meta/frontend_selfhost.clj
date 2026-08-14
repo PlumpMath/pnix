@@ -9,9 +9,10 @@
             [clojure.pprint :as pp])
   (:import [clojure.asm ClassWriter Label Opcodes Type]
            [clojure.asm.commons GeneratorAdapter Method]
-           [clojure.lang AFunction BigInt DynamicClassLoader IFn Keyword Numbers Reflector RestFn RT Symbol Util Var]
+           [clojure.lang AFunction BigInt DynamicClassLoader IFn Keyword Numbers Ratio Reflector RestFn RT Symbol Util Var]
            [java.math BigDecimal BigInteger]
-           [java.security MessageDigest]))
+           [java.security MessageDigest]
+           [java.util.regex Pattern]))
 
 (def receipt-path "clj-meta/proof/frontend-selfhost.receipt.edn")
 
@@ -28,11 +29,15 @@
 (def ^:private java-biginteger-type (Type/getType BigInteger))
 (def ^:private clj-bigint-type (Type/getType BigInt))
 (def ^:private bigdec-type (Type/getType BigDecimal))
+(def ^:private ratio-type (Type/getType Ratio))
+(def ^:private pattern-type (Type/getType Pattern))
 (def ^:private object-array-class (Class/forName "[Ljava.lang.Object;"))
 (def ^:private init-method
   (Method. "<init>" Type/VOID_TYPE (into-array Type [])))
 (def ^:private string-arg-ctor-method
   (Method. "<init>" Type/VOID_TYPE (into-array Type [string-type])))
+(def ^:private ratio-ctor-method
+  (Method. "<init>" Type/VOID_TYPE (into-array Type [java-biginteger-type java-biginteger-type])))
 (def ^:private class-counter (atom -1))
 
 (defn- sha256-string
@@ -46,6 +51,8 @@
   ^Method [^Class cls ^String mname param-classes]
   (Method/getMethod (.getMethod cls mname (into-array Class param-classes))))
 
+(def ^:private pattern-compile-method
+  (reflect-asm-method Pattern "compile" [String]))
 (def ^:private numbers-add-method
   (reflect-asm-method Numbers "add" [Object Object]))
 (def ^:private numbers-minus-method
@@ -129,7 +136,7 @@
 
 (defn- tokenize
   [source]
-  (->> (re-seq #"\s*(#\{|\"[^\"]*\"|[\(\)\[\]\{\}]|[^\s\(\)\[\]\{\}]+)" source)
+  (->> (re-seq #"\s*(#\{|#\"[^\"]*\"|\"[^\"]*\"|[\(\)\[\]\{\}]|[^\s\(\)\[\]\{\}]+)" source)
        (mapv second)))
 
 (declare parse-one)
@@ -161,6 +168,10 @@
            (.endsWith ^String token "\""))
       (subs token 1 (dec (count token)))
 
+      (and (.startsWith ^String token "#\"")
+           (.endsWith ^String token "\""))
+      (Pattern/compile (subs token 2 (dec (count token))))
+
       (and (.startsWith ^String token ":")
            (< 1 (count token)))
       (keyword (subs token 1))
@@ -176,6 +187,17 @@
 
       (re-matches #"-?\d+\.\d+M" token)
       (BigDecimal. ^String (subs token 0 (dec (count token))))
+
+      ;; Ratio literals reduce (or collapse to `Long` when evenly divisible)
+      ;; at *parse* time via `Numbers/divide` -- the exact mechanism real
+      ;; Clojure's reader itself uses, confirmed live: `(Numbers/divide 2 4)`
+      ;; => `1/2` (auto-reduced `Ratio`), `(Numbers/divide 4 2)` => `2`
+      ;; (`Long`, not `Ratio`). Deliberately NOT via `RT/readString` (real
+      ;; host's actual bytecode mechanism), matching the same independence
+      ;; principle already applied to BigInt/BigDecimal literals above.
+      (re-matches #"-?\d+/\d+" token)
+      (let [[_ n d] (re-matches #"(-?\d+)/(\d+)" token)]
+        (Numbers/divide (Long/parseLong ^String n) (Long/parseLong ^String d)))
 
       (re-matches #"-?\d+" token)
       (Long/parseLong token)
@@ -887,7 +909,8 @@
     ;; there would silently truncate a `BigInt` past Long/MAX_VALUE.
     ;; `BigDecimal` isn't `integer?` at all, so it needs its own branch
     ;; regardless.
-    (or (instance? BigInt form) (instance? BigDecimal form))
+    (or (instance? BigInt form) (instance? BigDecimal form)
+        (instance? Pattern form) (instance? Ratio form))
     {:op :const :value form}
 
     (integer? form)
@@ -1061,6 +1084,37 @@
       (.dup ga)
       (.push ga (.toString ^BigDecimal value))
       (.invokeConstructor ga bigdec-type string-arg-ctor-method))
+
+    ;; Regex literals: real host's own bytecode (confirmed via `javap -c`)
+    ;; is a direct `ldc "pattern"; invokestatic Pattern.compile(String)` --
+    ;; no reader dependency at all, so this is reproduced exactly as-is.
+    (instance? Pattern value)
+    (do
+      (.push ga (.pattern ^Pattern value))
+      (.invokeStatic ga pattern-type pattern-compile-method))
+
+    ;; Ratios are ALREADY reduced by the time they reach here (`parse-atom`
+    ;; reduces via `Numbers/divide` at parse time, collapsing evenly
+    ;; divisible cases to plain `Long`, exactly mirroring real host reader
+    ;; semantics -- confirmed live). So construction here is a direct,
+    ;; non-reducing `new Ratio(BigInteger, BigInteger)` from the
+    ;; already-reduced numerator/denominator, deliberately NOT via
+    ;; `RT/readString` (real host's actual bytecode mechanism for these),
+    ;; matching the same independence principle as the BigInt/BigDecimal
+    ;; branches above.
+    (instance? Ratio value)
+    (do
+      (.newInstance ga ratio-type)
+      (.dup ga)
+      (.newInstance ga java-biginteger-type)
+      (.dup ga)
+      (.push ga (.toString ^BigInteger (.numerator ^Ratio value)))
+      (.invokeConstructor ga java-biginteger-type string-arg-ctor-method)
+      (.newInstance ga java-biginteger-type)
+      (.dup ga)
+      (.push ga (.toString ^BigInteger (.denominator ^Ratio value)))
+      (.invokeConstructor ga java-biginteger-type string-arg-ctor-method)
+      (.invokeConstructor ga ratio-type ratio-ctor-method))
 
     (integer? value)
     (do
@@ -2315,7 +2369,28 @@
    {:id :tiny-bigint-equals-long
     :source "(fn [] (= 5N 5))"
     :args []
-    :expected true}])
+    :expected true}
+   ;; `java.util.regex.Pattern` does not override `.equals` (identity-based),
+   ;; confirmed live: `(= #"a+" #"a+")` is `false` for two distinct
+   ;; instances -- so this fixture compares the pattern SOURCE STRING via
+   ;; `.pattern`, not the `Pattern` object itself, which the already-general
+   ;; Reflector-based `.methodName` interop call handles for free.
+   {:id :tiny-regex-literal-pattern-source
+    :source "(fn [] (.pattern #\"a+\"))"
+    :args []
+    :expected "a+"}
+   {:id :tiny-ratio-literal
+    :source "(fn [] 1/3)"
+    :args []
+    :expected 1/3}
+   {:id :tiny-ratio-literal-collapses-to-long
+    :source "(fn [] 4/2)"
+    :args []
+    :expected 2}
+   {:id :tiny-ratio-arithmetic
+    :source "(fn [] (+ 1/3 1/3))"
+    :args []
+    :expected 2/3}])
 
 (defn run
   []

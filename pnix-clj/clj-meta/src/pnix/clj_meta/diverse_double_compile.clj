@@ -568,7 +568,19 @@
    {:id :mini-backend-bigdec-arithmetic
     :source "(fn [] (* 1.5M 2))"
     :args []
-    :expected 3.0M}])
+    :expected 3.0M}
+   {:id :mini-backend-regex-literal-pattern-source
+    :source "(fn [] (.pattern #\"a+\"))"
+    :args []
+    :expected "a+"}
+   {:id :mini-backend-ratio-literal
+    :source "(fn [] 1/3)"
+    :args []
+    :expected 1/3}
+   {:id :mini-backend-ratio-arithmetic
+    :source "(fn [] (+ 1/3 1/3))"
+    :args []
+    :expected 2/3}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
