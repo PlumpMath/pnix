@@ -163,7 +163,10 @@
                                                :known (vec (keys by-id))}))))
                         command-ids)
          rows (mapv #(runner % timeout-ms) selected)
-         held (filter #(not= :ok (:status %)) rows)
+         ;; Non-ok command rows are "held" in the execution receipt sense
+         ;; (CLI + bootstrap pin: held-count / first-held).
+         held (filterv #(not= :ok (:status %)) rows)
+         ok-count (- (count rows) (count held))
          canonical {:command-ids (vec command-ids)
                     :timeout-ms timeout-ms
                     :rows (mapv #(select-keys % [:id :status :reason :exit
@@ -183,6 +186,10 @@
       :selected-command-count (count selected)
       :timeout-ms timeout-ms
       :rows rows
+      :ok-count ok-count
+      :held-count (count held)
+      :first-held (first held)
+      ;; Aliases kept for any reader that used the failed-* naming.
       :failed-count (count held)
       :first-failed (first held)
       :receipt-hash (hash/data-hash canonical)})))
