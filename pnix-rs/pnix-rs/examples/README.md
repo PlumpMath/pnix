@@ -1,13 +1,13 @@
 # examples — 왜 meta-circular인가 (plain Rust의 한계 vs pnix-rs/rs-meta)
 
-> **Cross-host balance:** monorepo
+> **호스트 간 균형:** 모노레포
 > [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md)
-> (rs ≈ mid catalog; clj/hy dense; cljs/clr core 00–06).
+> (rs ≈ 중간 카탈로그; clj/hy 조밀; cljs/clr 코어 00–06).
 >
-> **Foundation entry point:** [FOUNDATION_PATH.md](FOUNDATION_PATH.md) and
-> [`00-foundation`](00-foundation/README.md). The PNIX runtime and rs-meta
-> meta-circular mechanism are basic capabilities. Mirror/proof receipts and
-> service admission are independent checks, not prerequisites for evaluation.
+> **파운데이션 진입:** [FOUNDATION_PATH.md](FOUNDATION_PATH.md) 와
+> [`00-foundation`](00-foundation/README.md). PNIX 런타임과 rs-meta
+> meta-circular 메커니즘은 기본 능력이다. Mirror/proof 영수증과 서비스
+> admission 은 독립 검사이며 평가의 전제가 아니다.
 
 The existing numbered examples remain the extended verification/research
 catalog. They do not make proof status part of the PNIX language outcome.

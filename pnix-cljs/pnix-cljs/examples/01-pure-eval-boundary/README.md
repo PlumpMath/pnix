@@ -1,4 +1,4 @@
-# 01 — pure eval boundary (Node)
+# 01 — 순수 평가 경계 (Node)
 
 ## 쉽게 말하면
 
@@ -8,7 +8,7 @@ Node의 `eval` / 동적 함수 생성은 게스트 언어 경계가 아니다. �
 
 ## plain Node 한계 (`limit_node.js`)
 
-주석으로만 위험 패턴을 표시한다 (실행하지 않음).
+위험 패턴은 주석으로만 표시한다 (실행하지 않음).
 
 ## pnix-cljs 방식 (`pnix_cljs_way.js`)
 

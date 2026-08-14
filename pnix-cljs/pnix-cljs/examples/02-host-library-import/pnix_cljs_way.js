@@ -1,7 +1,7 @@
-// Documented entry: prefer the library smoke / host-import smoke for CI.
-// This file shows the shape only (paths depend on export layout).
+// 문서용 진입점: CI 에서는 라이브러리 스모크 / host-import 스모크를 우선한다.
+// 이 파일은 모양만 보여 준다 (경로는 export 레이아웃에 의존).
 //
-//   const pnix = require("@plumpmath/pnix-cljs"); // after export NODE_PATH
+//   const pnix = require("@plumpmath/pnix-cljs"); // export 후 NODE_PATH
 //   console.log(pnix.evalFileValueJson("hello.px"));
 //
-console.log("see README — run bin/pnix-cljs-library-smoke or examples/host-import/cljs");
+console.log("README 참고 — bin/pnix-cljs-library-smoke 또는 examples/host-import/cljs");

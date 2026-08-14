@@ -1,46 +1,45 @@
 # examples — pnix-clr (ClojureCLR / .NET)
 
-> **Maturity:** experimental seed. These examples exercise the **admitted**
-> surface (pnix-main CLI, local NuGet/library export, C# host-main, optional
-> in-process). They do **not** claim Stage15/N, nuget.org publish, or five-host
-> semantic parity.
+> **성숙도:** experimental seed. 여기서는 **인정된 표면**만 다룬다
+> (pnix-main CLI, 로컬 NuGet/라이브러리 export, C# host-main, 선택적 in-process).  
+> Stage15/N, nuget.org 공개 배포, 다섯 호스트 의미 패리티를 **주장하지 않는다**.
 
-## Counts vs peers
+## 형제 호스트와 규모
 
-| Host | Catalog size (order of magnitude) |
-|------|-----------------------------------|
-| clj / hy | dense research catalogs |
-| rs | mid-size pillar catalog |
-| **clr** | **core 00–06** (this tree) — grow only with real surface |
+| 호스트 | 카탈로그 크기 (대략) |
+|--------|----------------------|
+| clj / hy | 연구용 dense 카탈로그 |
+| rs | 중간 pillar 카탈로그 |
+| **clr** | **코어 00–06** (이 트리) — 실표면이 있을 때만 확장 |
 
-Shared theme map: monorepo [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
+공유 테마 표: 모노레포 [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
 
-## Pattern
+## 패턴
 
-Each numbered slice has:
+번호 슬라이스마다 보통:
 
-- `README.md` — what / why / how to run
-- `.px` and/or pointers to C# projects under `pnix-clr/csharp/examples/`
+- `README.md` — 무엇 / 왜 / 실행 방법
+- `.px` 및/또는 `pnix-clr/csharp/examples/` C# 프로젝트 포인터
 
-## Catalog
+## 카탈로그
 
-| Dir | Theme |
-|-----|--------|
-| [`00-foundation`](00-foundation/) | pnix-main seed + meta smoke pointer |
-| [`01-pure-eval-boundary`](01-pure-eval-boundary/) | plain .NET eval vs guest boundary |
-| [`02-host-library-import`](02-host-library-import/) | local Pnix.Clr library export (not nuget.org) |
-| [`03-outcome-projection`](03-outcome-projection/) | production outcome / fail-closed shape |
+| 디렉터리 | 테마 |
+|----------|------|
+| [`00-foundation`](00-foundation/) | pnix-main seed + meta smoke 포인터 |
+| [`01-pure-eval-boundary`](01-pure-eval-boundary/) | plain .NET eval vs 게스트 경계 |
+| [`02-host-library-import`](02-host-library-import/) | 로컬 Pnix.Clr export (nuget.org 아님) |
+| [`03-outcome-projection`](03-outcome-projection/) | production outcome / fail-closed 모양 |
 | [`04-csharp-embed-pnix`](04-csharp-embed-pnix/) | host-main HelloPnix |
-| [`05-inprocess-opt-in`](05-inprocess-opt-in/) | experimental in-process (net10); process-spawn default |
-| [`06-meta-pair-boundary`](06-meta-pair-boundary/) | pnix-clr vs clr-meta roles |
+| [`05-inprocess-opt-in`](05-inprocess-opt-in/) | experimental in-process (net10); 기본은 process-spawn |
+| [`06-meta-pair-boundary`](06-meta-pair-boundary/) | pnix-clr vs clr-meta 역할 |
 
-## Run (typical)
+## 실행 (대표)
 
 ```bash
 cd pnix-clr
-./bin/build-pnix-clr-artifact   # when artifact missing
+./bin/build-pnix-clr-artifact   # artifact 없을 때
 ./bin/pnix-clr pnix-clr/examples/00-foundation/program.px
-./bin/pnix-clr-library-smoke    # local feed only
+./bin/pnix-clr-library-smoke    # 로컬 피드만
 ```
 
-See also monorepo `examples/host-import/clr/` and `examples/clojure-clr-project/`.
+모노레포 `examples/host-import/clr/`, `examples/clojure-clr-project/` 도 참고.

@@ -4,5 +4,5 @@ const pnix = require(path.join(__dirname, "..", "..", "dist", "pnix-cljs-module.
 
 const px = path.join(__dirname, "snippet.px");
 const source = fs.readFileSync(px, "utf8");
-console.log("host-main evaluates:", source.trim());
+console.log("host-main 평가:", source.trim());
 console.log(pnix.evalSource(source));

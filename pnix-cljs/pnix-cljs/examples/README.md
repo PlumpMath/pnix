@@ -1,46 +1,46 @@
 # examples — pnix-cljs (ClojureScript / Node)
 
-> **Maturity:** experimental seed. These examples exercise the **admitted**
-> surface (parse/eval, Node library import, Done/Failed outcomes). They do
-> **not** claim five-host parity, Stage15/N, or a full metacircular tower.
+> **성숙도:** experimental seed. 여기서는 **인정된 표면**만 다룬다
+> (parse/eval, Node 라이브러리 import, Done/Failed 결과 모양).  
+> 다섯 호스트 패리티, Stage15/N, 완전한 meta-circular 타워를 **주장하지 않는다**.
 
-## Counts vs peers
+## 형제 호스트와 규모
 
-| Host | Catalog size (order of magnitude) |
-|------|-----------------------------------|
-| clj / hy | dense research catalogs |
-| rs | mid-size pillar catalog |
-| **cljs** | **core 00–06** (this tree) — grow only with real surface |
+| 호스트 | 카탈로그 크기 (대략) |
+|--------|----------------------|
+| clj / hy | 연구용 dense 카탈로그 |
+| rs | 중간 pillar 카탈로그 |
+| **cljs** | **코어 00–06** (이 트리) — 실표면이 있을 때만 확장 |
 
-Shared theme map: monorepo [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
+공유 테마 표: 모노레포 [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
 
-## Pattern
+## 패턴
 
-Each numbered slice has:
+번호 슬라이스마다 보통:
 
-- `README.md` — what / why / how to run
-- host-native “limit” or “way” files (JS or `.px`) where useful
+- `README.md` — 무엇 / 왜 / 실행 방법
+- 필요 시 호스트 네이티브 limit 또는 way 파일 (JS / `.px`)
 
-## Catalog
+## 카탈로그
 
-| Dir | Theme |
-|-----|--------|
-| [`00-foundation`](00-foundation/) | seed eval through dist module |
-| [`01-pure-eval-boundary`](01-pure-eval-boundary/) | plain Node `eval` vs pnix eval boundary |
-| [`02-host-library-import`](02-host-library-import/) | require local library export + `evalFile` |
-| [`03-outcome-projection`](03-outcome-projection/) | Done / Failed (not silent throw-only) |
-| [`04-js-embed-pnix`](04-js-embed-pnix/) | host-main: JS drives `.px` |
-| [`05-experimental-honesty`](05-experimental-honesty/) | what this host does **not** claim |
-| [`06-meta-pair-boundary`](06-meta-pair-boundary/) | pnix-cljs vs cljs-meta roles |
+| 디렉터리 | 테마 |
+|----------|------|
+| [`00-foundation`](00-foundation/) | dist 모듈로 seed eval |
+| [`01-pure-eval-boundary`](01-pure-eval-boundary/) | plain Node `eval` vs pnix 평가 경계 |
+| [`02-host-library-import`](02-host-library-import/) | 로컬 라이브러리 export + `evalFile` |
+| [`03-outcome-projection`](03-outcome-projection/) | Done / Failed (조용한 throw만 아님) |
+| [`04-js-embed-pnix`](04-js-embed-pnix/) | host-main: JS가 `.px` 를 돌림 |
+| [`05-experimental-honesty`](05-experimental-honesty/) | 이 호스트가 **주장하지 않는 것** |
+| [`06-meta-pair-boundary`](06-meta-pair-boundary/) | pnix-cljs vs cljs-meta 역할 |
 
-## Run (typical)
+## 실행 (대표)
 
 ```bash
 cd pnix-cljs
-./bin/build-cljs   # when dist is missing/stale
+./bin/build-cljs   # dist 가 없거나 오래됐을 때
 node pnix-cljs/examples/00-foundation/node.js
-# library import smoke (monorepo):
+# 라이브러리 import 스모크 (모노레포):
 #   ./bin/pnix-cljs-library-smoke
 ```
 
-See also monorepo `examples/host-import/cljs/`.
+모노레포 `examples/host-import/cljs/` 도 참고.

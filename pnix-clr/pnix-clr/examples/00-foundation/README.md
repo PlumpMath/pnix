@@ -1,8 +1,8 @@
-# 00 — foundation (clr seed)
+# 00 — 파운데이션 (clr seed)
 
-First step of the **core 00–06** path (see [FOUNDATION_PATH.md](../FOUNDATION_PATH.md)).
+**코어 00–06** 경로의 첫 단계 ([FOUNDATION_PATH.md](../FOUNDATION_PATH.md)).
 
-From the outer `pnix-clr/` directory:
+바깥 `pnix-clr/` 에서:
 
 ```sh
 ./bin/pnix-clr pnix-clr/examples/00-foundation/program.px
@@ -10,12 +10,11 @@ From the outer `pnix-clr/` directory:
 ./bin/pnix-clr --pnix-meta-smoke
 ```
 
-The first command exercises the CLR-native seed directly. The second exercises
-the source-originated Int64 arithmetic path. The smoke command loads canonical
-`bool-01`, `builtin-dead-import-01`, `hasattr-apply-precedence-01`, and
-`production-checked-i64-01` cases from the sibling `pnix-meta` tree and
-requires each canonical JSON record to match its pin. This example does not
-claim float/BigInt/general numeric promotion or primitive-manifest enforcement.
+첫 명령은 CLR 네이티브 seed 를 직접 돌린다. 둘째는 소스 기원 Int64 산술 경로.
+smoke 는 형제 `pnix-meta` 트리의 정규 케이스
+`bool-01`, `builtin-dead-import-01`, `hasattr-apply-precedence-01`,
+`production-checked-i64-01` 를 로드해 핀 JSON 과 맞춘다.
+float/BigInt/일반 수치 승격이나 primitive-manifest 강제를 주장하지 않는다.
 
-Catalog index: [../README.md](../README.md). Cross-host balance:
-monorepo `examples/EXAMPLES_BALANCE.md`.
+카탈로그 색인: [../README.md](../README.md).  
+호스트 간 균형: 모노레포 `examples/EXAMPLES_BALANCE.md`.
