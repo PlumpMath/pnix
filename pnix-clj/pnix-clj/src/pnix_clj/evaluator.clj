@@ -2908,6 +2908,23 @@
       (err/failed :builtin :group-by-arg-not-list
                   {:builtin name :arg (second args)}))
 
+    :zipAttrsWith
+    ;; force-list-values on nil yields [] → wrong VALUE {}.
+    (when-not (vector? (second args))
+      (err/failed :builtin :zip-attrs-with-arg-not-list
+                  {:builtin name :arg (second args)}))
+
+    :genericClosure
+    (when-not (attrset-value? (first args))
+      (err/failed :builtin :generic-closure-arg-not-attrset
+                  {:builtin name :arg (first args)}))
+
+    :elemAt
+    ;; Clojure (nth xs 1.0) coerces; Nix requires an integer index.
+    (when-not (integer? (second args))
+      (err/failed :builtin :elem-at-index-not-int
+                  {:builtin name :arg (second args)}))
+
     :pathExists
     (if *pure-eval*
       (err/failed :builtin
@@ -4246,6 +4263,12 @@
                         to (:value to-result)]
                     (or (audit-string-list name :from from)
                         (audit-string-list name :to to)
+                        (when (not= (count from) (count to))
+                          (err/failed :builtin
+                                    :replace-strings-length-mismatch
+                                    {:builtin name
+                                     :from-count (count from)
+                                     :to-count (count to)}))
                         ;; Context-aware: needles match on content; the result
                         ;; carries the original string's context plus the
                         ;; context of every replacement actually USED (unused

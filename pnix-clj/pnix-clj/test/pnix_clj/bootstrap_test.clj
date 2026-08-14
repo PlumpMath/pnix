@@ -5836,7 +5836,25 @@
     (is (= :group-by-arg-not-list
            (:reason (pnix/eval-source "builtins.groupBy (x: x) null"))))
     (is (= {"g" [1 2]}
-           (:value (pnix/eval-source "builtins.groupBy (x: \"g\") [ 1 2 ]"))))))
+           (:value (pnix/eval-source "builtins.groupBy (x: \"g\") [ 1 2 ]")))))
+  (testing "zipAttrsWith/genericClosure/elemAt/replaceStrings type edges"
+    (is (= :zip-attrs-with-arg-not-list
+           (:reason (pnix/eval-source "builtins.zipAttrsWith (n: vs: vs) null"))))
+    (is (= {"a" [1 2] "b" [3]}
+           (:value (pnix/eval-source
+                    "builtins.zipAttrsWith (n: vs: vs) [ { a = 1; } { a = 2; b = 3; } ]"))))
+    (is (= :generic-closure-arg-not-attrset
+           (:reason (pnix/eval-source "builtins.genericClosure 1"))))
+    (is (= [] (:value (pnix/eval-source
+                       "builtins.genericClosure { startSet = []; operator = x: []; }"))))
+    (is (= :elem-at-index-not-int
+           (:reason (pnix/eval-source "builtins.elemAt [1 2] 1.0"))))
+    (is (= 2 (:value (pnix/eval-source "builtins.elemAt [1 2] 1"))))
+    (is (= :replace-strings-length-mismatch
+           (:reason (pnix/eval-source
+                     "builtins.replaceStrings [\"a\"] [\"b\" \"c\"] \"a\""))))
+    (is (= "b" (:value (pnix/eval-source
+                        "builtins.replaceStrings [\"a\"] [\"b\"] \"a\""))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by
