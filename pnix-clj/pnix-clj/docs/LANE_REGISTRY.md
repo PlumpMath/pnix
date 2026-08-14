@@ -6,7 +6,7 @@ This document is generated from top-level `src/pnix_clj/*.clj` `lane-classificat
 
 ## Counts
 
-- `:core`: 44
+- `:core`: 43
 - `:experimental`: 7
 - `:proof-only`: 28
 
@@ -39,7 +39,6 @@ This document is generated from top-level `src/pnix_clj/*.clj` `lane-classificat
 | core | pnix-clj.nrepl | meta-circular-interactive-control-surface | allowed | eval-routes-through-core-only | forbidden | interactive-eval-session |
 | core | pnix-clj.parser | source-to-ast-boundary | allowed | syntax-only | forbidden | parsed-ast-or-held-parse-result |
 | core | pnix-clj.persist | durable-evidence-persistence-boundary | allowed | durable-evidence-only | forbidden | persistent-store-handle-or-integrity-report |
-| core | pnix-clj.pnix-meta | external-common-px-loader-and-conformance | allowed | loads-pnix-meta-owns-no-semantics | conformance-verdict | loaded-value-or-conformance-report |
 | core | pnix-clj.primitive-kernel | production-checked-i64-primitive-kernel | allowed | pnix-meta-manifest-only | forbidden | sealed-primitive-outcome |
 | core | pnix-clj.purity | purity-determinism-event-spine | allowed | evidence-only | fail-closed | purity-event-or-violation-report |
 | core | pnix-clj.px-runtime | px-runtime-artifact-boundary | allowed | runtime-artifact-evidence-only | forbidden | runtime-boundary-or-artifact-report |
@@ -96,4 +95,4 @@ This document is generated from top-level `src/pnix_clj/*.clj` `lane-classificat
 
 ## Registry hash
 
-`00d0c387993fbe13abf395c3518acc44616fab2acfe28202e48d2c4ea9cdca2f`
+`8876488ea4230f7409ba3b92c1469b6a4a66df2d2a95b12f847c20ef879c8ab1`
