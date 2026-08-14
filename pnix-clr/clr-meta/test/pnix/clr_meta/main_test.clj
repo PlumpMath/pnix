@@ -10,6 +10,8 @@
   (is (= {:schema :pnix.clr-meta.tool-eval.v1
           :outcome-kind :done
           :execution :evaluator-generation-2
+          :profile :tool-eval
+          :form-count 1
           :value 42}
          (main/evaluate-source "(+ 20 22)"))))
 

@@ -100,17 +100,17 @@ fi
 
 run_case eval 0 -e "(+ 40 2)"
 require_exact "$tmp/eval.run1.stdout" \
-  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :done, :execution :evaluator-generation-2, :value 42}' \
+  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :done, :execution :evaluator-generation-2, :profile :tool-eval, :form-count 1, :value 42}' \
   eval-content
 
 run_case single-file 0 "$probe_file"
 require_exact "$tmp/single-file.run1.stdout" \
-  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :done, :execution :evaluator-generation-2, :value 42}' \
+  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :done, :execution :evaluator-generation-2, :profile :tool-eval, :form-count 1, :value 42}' \
   single-file-content
 
 run_case reader-conditional-rejected 1 -e '#?(:clj 1 :cljr 2)'
 require_exact "$tmp/reader-conditional-rejected.run1.stdout" \
-  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :failed, :error {:phase :tool-read, :class :reader-conditional-disabled, :message "reader conditionals are outside the admitted tool surface"}}' \
+  '{:schema :pnix.clr-meta.tool-eval.v1, :outcome-kind :failed, :execution :evaluator-generation-2, :profile :tool-eval, :error {:phase :tool-read, :class :reader-conditional-disabled, :message "reader conditionals are outside the admitted tool surface"}}' \
   reader-conditional-content
 
 # Stderr must stay quiet on the success paths (a clean process shouldn't emit
