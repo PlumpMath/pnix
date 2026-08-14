@@ -93,7 +93,9 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    152 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
+    161 fixtures (fn/if/do/let/loop-recur/variadic `+`/`-`/`*` (0/1/2/N
+    args, left-folded exactly as real host does)/unary `-`/arithmetic/
+    compare/data-literals
     incl. `N`/`M` bignum literals (real `clojure.lang.BigInt`/
     `java.math.BigDecimal`, composing with the existing `+`/`-`/`*`/`=`
     ops), regex literals (`#"..."` -> `java.util.regex.Pattern`), and
@@ -620,6 +622,20 @@ host는 이 경우 Var 룩업이 전혀 없이 그냥 local 값을 `IFn`으로
 `map`/`filter`/`reduce`에 넘기는 것도 가능해짐. 실제 host 대비 대조
 검증. U6: 149→152. DDC 행: 91→93. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 스물세 번째 확장 (2026-08-14, 배치 진행): `+`/`-`/`*` variadic화
++ unary `-`.** 지금까지 `+`/`-`/`*`는 정확히 2-인자만 받았는데(`<`/`=`
+같은 비교 연산과 같은 취급), `javap -c`로 `(+ a b c)`를 확인하니 real
+host는 `Numbers.add(Numbers.add(a,b),c)`처럼 **왼쪽부터 fold**해서
+컴파일했다 — 그래서 3개 이상 인자는 analyze 시점에 기존 `:binary` 노드로
+왼쪽 fold desugar, emitter는 전혀 안 건드림. `(+)`→0, `(*)`→1, `(+ a)`/
+`(* a)`→`a` 그대로(라이브 확인)도 반영. `(- a)`(단항 음수)는 `(- a b)`와
+다른 오버로드(`Numbers.minus(Object)` 1-인자, 기존 2-인자
+`Numbers.minus(Object,Object)`와 별개)임을 `javap -c`로 확인하고
+`inc`/`dec`와 같은 `:unary` 부류에 새로 추가. `(-)` 0-인자는 real host도
+`ArityException`으로 거부하는 것 확인, 그대로 재현. U6: 152→161. DDC 행:
+93→97. 전체 `-M:conformance`(116/116)와 `bin/clj-meta-gate`
+(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

@@ -85,6 +85,8 @@
   (reflect-asm-method Numbers "quotient" [Object Object]))
 (def ^:private numbers-remainder-method
   (reflect-asm-method Numbers "remainder" [Object Object]))
+(def ^:private numbers-minus-unary-method
+  (reflect-asm-method Numbers "minus" [Object]))
 (def ^:private numbers-inc-method
   (reflect-asm-method Numbers "inc" [Object]))
 (def ^:private numbers-dec-method
@@ -881,7 +883,7 @@
             :test (analyze-expr env (nth args 0))
             :then (analyze-expr env (nth args 1))
             :else (analyze-expr env (nth args 2))})
-      (+ - * < = > >= <= quot rem get)
+      (< = > >= <= quot rem get)
       (do
         (when-not (= 2 (count args))
           (throw (ex-info "tiny analyzer: binary op arity"
@@ -890,6 +892,36 @@
          :fn op
          :lhs (analyze-expr env (first args))
          :rhs (analyze-expr env (second args))})
+      ;; `+`/`-`/`*` are variadic on real host, unlike the strictly-binary
+      ;; comparison ops above -- confirmed via `javap -c` that `(+ a b c)`
+      ;; compiles to LEFT-FOLDED nested `Numbers.add` calls
+      ;; (`Numbers.add(Numbers.add(a,b),c)`), so N>2 args are desugared
+      ;; here at analyze time into nested `:binary` nodes, reusing the
+      ;; existing emitter unchanged. 0-arg `(+)`/`(*)` and 1-arg
+      ;; `(+ a)`/`(* a)` match real host's own identity-element/passthrough
+      ;; values (confirmed live: `(+)` => 0, `(*)` => 1, `(+ a)`/`(* a)` =>
+      ;; `a` itself, no-op). `(- a)` (unary negation, confirmed via
+      ;; `javap -c` to be `Numbers.minus(Object)`, a genuinely different
+      ;; single-arg overload, not a 2-arg subtraction) is handled by the
+      ;; `unary` case below instead, alongside `inc`/`dec`/etc.
+      (+ - *)
+      (cond
+        (and (= '- op) (empty? args))
+        (throw (ex-info "tiny analyzer: - requires at least 1 arg" {:form form}))
+
+        (empty? args)
+        {:op :const :value (if (= '+ op) 0 1)}
+
+        (= 1 (count args))
+        (if (= '- op)
+          {:op :unary :fn '- :arg (analyze-expr env (first args))}
+          (analyze-expr env (first args)))
+
+        :else
+        (reduce (fn [lhs-node arg-form]
+                  {:op :binary :fn op :lhs lhs-node :rhs (analyze-expr env arg-form)})
+                (analyze-expr env (first args))
+                (rest args)))
       (inc dec zero? pos? neg? first next count)
       (do
         (when-not (= 1 (count args))
@@ -1303,6 +1335,7 @@
   [^GeneratorAdapter ga env {:keys [fn arg]}]
   (emit-expr ga env arg)
   (case fn
+    - (.invokeStatic ga numbers-type numbers-minus-unary-method)
     inc (.invokeStatic ga numbers-type numbers-inc-method)
     dec (.invokeStatic ga numbers-type numbers-dec-method)
     first (.invokeStatic ga rt-type rt-first-method)
@@ -2546,6 +2579,42 @@
     :source "(fn [x] (let [f inc] (f x)))"
     :args [5]
     :expected 6}
+   {:id :tiny-variadic-plus-three-args
+    :source "(fn [a b c] (+ a b c))"
+    :args [1 2 3]
+    :expected 6}
+   {:id :tiny-variadic-plus-four-args
+    :source "(fn [a b c d] (+ a b c d))"
+    :args [1 2 3 4]
+    :expected 10}
+   {:id :tiny-variadic-plus-zero-args
+    :source "(fn [] (+))"
+    :args []
+    :expected 0}
+   {:id :tiny-variadic-plus-one-arg
+    :source "(fn [a] (+ a))"
+    :args [5]
+    :expected 5}
+   {:id :tiny-variadic-minus-three-args
+    :source "(fn [a b c] (- a b c))"
+    :args [10 2 3]
+    :expected 5}
+   {:id :tiny-unary-minus
+    :source "(fn [a] (- a))"
+    :args [5]
+    :expected -5}
+   {:id :tiny-variadic-times-three-args
+    :source "(fn [a b c] (* a b c))"
+    :args [2 3 4]
+    :expected 24}
+   {:id :tiny-variadic-times-zero-args
+    :source "(fn [] (*))"
+    :args []
+    :expected 1}
+   {:id :tiny-variadic-times-one-arg
+    :source "(fn [a] (* a))"
+    :args [7]
+    :expected 7}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

@@ -628,7 +628,23 @@
    {:id :mini-backend-local-fn-call-passed-to-core-fn
     :source "(fn [coll f] (map f coll))"
     :args [[1 2 3] inc]
-    :expected '(2 3 4)}])
+    :expected '(2 3 4)}
+   {:id :mini-backend-variadic-plus-three-args
+    :source "(fn [a b c] (+ a b c))"
+    :args [1 2 3]
+    :expected 6}
+   {:id :mini-backend-variadic-minus-three-args
+    :source "(fn [a b c] (- a b c))"
+    :args [10 2 3]
+    :expected 5}
+   {:id :mini-backend-unary-minus
+    :source "(fn [a] (- a))"
+    :args [5]
+    :expected -5}
+   {:id :mini-backend-variadic-times-three-args
+    :source "(fn [a b c] (* a b c))"
+    :args [2 3 4]
+    :expected 24}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

@@ -423,9 +423,22 @@ top-line claim, but the substance is much closer than "false" implies:
   것도 가능. DDC 행: 91→93. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **23번째 슬라이스, 2026-08-14 (배치 진행): `+`/`-`/`*` variadic화 +
+  unary `-`** (152→161). `javap -c`로 `(+ a b c)`가
+  `Numbers.add(Numbers.add(a,b),c)`처럼 왼쪽부터 fold되는 걸 확인 —
+  3개 이상 인자는 analyze 시점에 기존 `:binary` 노드로 desugar, emitter
+  변경 없음. `(+)`→0/`(*)`→1/`(+ a)`·`(* a)`→`a` 그대로도 반영. `(- a)`
+  단항 음수는 `Numbers.minus(Object)` 1-인자 오버로드(2-인자와 다른
+  메서드, `javap -c` 확인)라 `inc`/`dec`류 `:unary`에 추가. `(-)` 0-인자
+  거부(real host도 `ArityException`)도 재현. DDC 행: 93→97.
+  `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate`
+  `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
-  protocol. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/
-  reify/letfn)은 그 자체로 진짜 크다(다중 클래스 생성이 필요).
+  protocol, 중첩 `fn` 리터럴(진짜 closure — free variable을 캡처하는
+  별도 클래스가 필요, `javap` 확인은 아직 안 함). 각각 자체 multi-fixture
+  슬라이스이며, 그중 몇몇(deftype/reify/letfn/중첩 closure)은 그 자체로
+  진짜 크다(다중 클래스 생성이 필요).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
