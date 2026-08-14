@@ -129,9 +129,31 @@ These were listed as “next after host-env”. **No implementation in this cut.
 
 | Source of truth | `pnix-clj/pnix-clj/todo.md` § REMAINING WORK + `docs/REMAINING_DECISION.md` |
 | Rule | Do not invent a new residual menu; pillar-driven (M-series) or oracle divergence only |
-| Next candidates (owner picks) | machine fragment growth (if pillar); local clj export **landed**; Phase D **deferred** |
+| Next candidates (owner picks) | machine fragment growth (if pillar); Phase D **deferred** |
 | Host-import interaction | none required — `eval-file` / classpath inject already green |
 | **Detail** | `pnix-clj/pnix-clj/todo.md` § “Post host-env plan (2026-08-14)” |
+
+#### Oracle D-type surface (2026-08-14) — closed enough
+
+Repeated `nix-instantiate` sweeps (wrong-VALUE, over-strict, both-ok) on real
+Nix builtins/operators are **green enough** for day-to-day. Landed this day
+includes: `++`/`//` operands, attr/list null guards, string/version types,
+`toJSON` functions, `with` non-attrset no-op, select-`or` intermediate miss,
+empty regex, path `+` and path `<`, `elemAt` OOB, `baseNameOf "/"`, etc.
+Machine differential tracks the same value algebra (**~216 rows, 0 diverge**).
+
+**Intentional / non-bugs (do not “fix” without a product decision):**
+
+| Topic | Stance |
+|-------|--------|
+| Path absolute vs relative | Pure relative path text (`./a`); Nix resolves to abs via FS |
+| `toString ./a` | Relative text, not abs path |
+| Host-only builtins (`mod`, `hasPrefix`, `take`, …) | May exist in pnix; absent on stock Nix builtins |
+| `tryEval` type errors | Propagate (only throw/assert false caught) — Nix-aligned |
+| String interp of int/bool | Error without `toString` — Nix-aligned (2.34) |
+
+**Next oracle work** only on a new nix-instantiate divergence or pillar need —
+not checklist grinding.
 
 ### B. clr-meta residual
 
@@ -195,3 +217,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | oracle D: path + string/path concatenation (was over-strict held) |
 | 2026-08-14 | oracle D: elemAt OOB/negative → :elem-at-index-out-of-bounds (not throwable) |
 | 2026-08-14 | oracle D: path `<`/`lessThan` (stored path-text order; was incomparable) |
+| 2026-08-14 | oracle D-type surface declared closed enough; intentional pure-path notes |

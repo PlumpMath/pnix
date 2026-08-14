@@ -1090,8 +1090,9 @@
    "rec { n = 5; ${\"m\"} = n * 2; }.m"
    "./a" "./a == ./a" "./a == ./b" "{ p = ./x; }.p" "toString ./x"
    "./a + \"/b\"" "./a + ./b" "./a + \"b\"" "\"x\" + ./a"
-   "./a < ./b" "./b < ./a" "./a < ./a" "./a <= ./b"
-   "builtins.lessThan ./a ./b"
+   "./a < ./b" "./b < ./a" "./a < ./a" "./a <= ./b" "./a >= ./a"
+   "./z < ./a" "builtins.lessThan ./a ./b"
+   "builtins.baseNameOf (./a + \"/b\")" "builtins.dirOf (./a + \"/b\")"
    "\"${./x}\"" "[ ./a ./b ]"
    "builtins.typeOf ./a" "builtins.typeOf (./a + \"/b\")" "import ./m"])
 

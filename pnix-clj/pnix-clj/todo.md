@@ -3374,13 +3374,16 @@ owner-gated residual list from host-env work.
 
 ### Optional product pulls (priority order when free)
 1. **Machine fragment growth** (M-series) — only if a pillar needs it;
-   differential corpus now includes D22 dotted-let rows (159 sources).
+   differential corpus grown through D22 + 2026-08-14 oracle pins (~216 rows).
 2. ~~Specialize residual fuel / fold options~~ — **per-call `:fold-fuel` +
    reusable host artifact** landed 2026-08-14.
 3. ~~Local library export~~ — `bin/export-pnix-clj-library` +
    `pnix-clj-library-smoke` (personal feed; **not** Maven Central, 2026-08-14).
 4. ~~F2 Jones measured witness~~ — landed (see roadmap.edn / futamura).
 5. **Conformance Phase D** — still DEFERRED (see backlog status at top).
+6. ~~Oracle D-type wrong-VALUE / over-strict sweep (2026-08-14)~~ — **closed
+   enough** (see monorepo `HOST_ENV_P2_P3.md` § Oracle D-type surface). Further
+   D-work only on new nix-instantiate divergence.
 
 ### Host-import follow-ups (easy already done)
 - [x] `eval-file` public helper
