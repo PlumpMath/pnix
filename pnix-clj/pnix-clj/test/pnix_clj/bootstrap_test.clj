@@ -5740,7 +5740,16 @@
     (is (= [2 3] (:value (pnix/eval-source "builtins.filter (x: x > 1) [1 2 3]"))))
     (is (= [1 1 2 2] (:value (pnix/eval-source "builtins.concatMap (x: [x x]) [1 2]"))))
     (is (= [1 2 3] (:value (pnix/eval-source "builtins.sort (a: b: a < b) [3 1 2]"))))
-    (is (= [] (:value (pnix/eval-source "builtins.map (x: x) []"))))))
+    (is (= [] (:value (pnix/eval-source "builtins.map (x: x) []")))))
+  (testing "++ requires list operands (oracle: expected a list but found null/int)"
+    ;; Pre-fix: Clojure (concat xs nil) treated null as empty → wrong VALUE.
+    (is (= :concat-operand-not-list (:reason (pnix/eval-source "[] ++ null"))))
+    (is (= :concat-operand-not-list (:reason (pnix/eval-source "null ++ []"))))
+    (is (= :concat-operand-not-list (:reason (pnix/eval-source "[1] ++ null"))))
+    (is (= :concat-operand-not-list (:reason (pnix/eval-source "[1] ++ 2"))))
+    (is (= :concat-operand-not-list (:reason (pnix/eval-source "[] ++ \"x\""))))
+    (is (= [1 2 3] (:value (pnix/eval-source "[1] ++ [2 3]"))))
+    (is (= [] (:value (pnix/eval-source "[] ++ []"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by

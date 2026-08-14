@@ -180,3 +180,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | host-env residual cut closed enough; tool-eval failures carry :profile; examples smoke aggregator |
 | 2026-08-14 | clr-meta-tool-surface-gate: full admitted CLI matrix in clr-meta-gate |
 | 2026-08-14 | machine differential +4 dotted-let rows; F2 Jones measured witness todo closed |
+| 2026-08-14 | oracle D: `++` requires list operands (was wrong VALUE via Clojure concat nil) |

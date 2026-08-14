@@ -1639,8 +1639,23 @@
                       right)
       "//" {:status :ok
             :value (merge left right)}
-      "++" {:status :ok
-            :value (vec (concat left right))}
+      ;; List concatenation: BOTH operands must be lists. Clojure's
+      ;; (concat xs nil) treats nil as empty — that is NOT Nix (oracle:
+      ;; "expected a list but found null"). Same for string/int right.
+      "++" (cond
+             (not (vector? left))
+             (err/failed :eval :concat-operand-not-list
+                         {:operator "++"
+                          :side :left
+                          :value-type (strict-type left)})
+             (not (vector? right))
+             (err/failed :eval :concat-operand-not-list
+                         {:operator "++"
+                          :side :right
+                          :value-type (strict-type right)})
+             :else
+             {:status :ok
+              :value (vec (concat left right))})
       "==" (nix-equal-result left right)
       "!=" (let [r (nix-equal-result left right)]
              (if (= :ok (:status r))
