@@ -1838,17 +1838,12 @@
 (defn- eval-select
   [env {:keys [target attr default]}]
   (let [target-result (force-result-value (eval-ast* env target))
-        attr-result (eval-attr-key env attr)
-        miss-reasons #{:missing-attr :select-target-not-attrset}]
+        attr-result (eval-attr-key env attr)]
     (cond
-      ;; `a.b or d`: the default catches a missing attr or non-attrset target,
-      ;; including a missing intermediate attr on the path, but NOT other
-      ;; evaluation errors (an unbound variable, say, still propagates).
-      (and default
-           (= :failed (:status target-result))
-           (contains? miss-reasons (:reason target-result)))
-      (eval-ast* env default)
-
+      ;; Target evaluation failures always propagate. `or` does NOT catch a
+      ;; missing *intermediate* select (oracle: `({a=1;}.b).c or 9` errors on
+      ;; `.b`). Defaults apply only when the target evaluates to a WHNF value
+      ;; that is a non-attrset or lacks the attr (`null.x or 5`, `{}.a or 1`).
       (not= :ok (:status target-result))
       target-result
 
@@ -2853,6 +2848,36 @@
     (when-not (string-like? (first args))
       (err/failed :builtin :from-json-arg-not-string
                   {:builtin name :arg (first args)}))
+
+    :catAttrs
+    ;; Second arg must be a list. Clojure (seq nil) is empty → wrong VALUE [].
+    (when-not (vector? (second args))
+      (err/failed :builtin :cat-attrs-arg-not-list
+                  {:builtin name :arg (second args)}))
+
+    :listToAttrs
+    ;; Arg must be a list of attrsets with name/value. A bare int row used to
+    ;; produce {nil nil} via force-attr miss (wrong VALUE).
+    (let [xs (first args)]
+      (cond
+        (not (vector? xs))
+        (err/failed :builtin :list-to-attrs-arg-not-list
+                    {:builtin name :arg xs})
+        :else
+        (loop [remaining xs]
+          (if-let [row0 (first remaining)]
+            (let [row-result (force-value row0)]
+              (if (not= :ok (:status row-result))
+                row-result
+                (let [row (:value row-result)]
+                  (if-not (attrset-value? row)
+                    (err/failed :builtin :list-to-attrs-element-not-attrset
+                                {:builtin name :arg row})
+                    (if-not (and (contains? row "name") (contains? row "value"))
+                      (err/failed :builtin :list-to-attrs-element-missing-name-value
+                                  {:builtin name :arg row})
+                      (recur (rest remaining)))))))
+            nil))))
 
     :pathExists
     (if *pure-eval*

@@ -186,3 +186,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | oracle D: attrNames/attrValues/elem/genList reject null/bad length (wrong VALUE) |
 | 2026-08-14 | oracle D: fromJSON/compareVersions/dirOf/baseNameOf/toJSON-fn; with non-attrset no-op |
 | 2026-08-14 | Day-1 checklist in HOST_DEV_ENV; host-import-smoke python3; tool-eval result keys doc |
+| 2026-08-14 | oracle D: select-or no longer swallows intermediate missing-attr; catAttrs/listToAttrs types |

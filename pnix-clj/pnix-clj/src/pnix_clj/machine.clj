@@ -20,8 +20,8 @@
     :value  — return a WHNF value to the top control frame
     :force  — enter a thunk (memoizing store protocol; :update frame)
     :unwind — propagate a held result outward, memoizing pending :update
-              frames; a [:select-attr] frame with an `or` default CATCHES a
-              missing-attr class held exactly like eval-select does
+              frames; `or` default is applied in select-transition after a
+              WHNF target (nested intermediate missing-attr propagates)
 
   Fragment (v3, honest): literals, var (incl. __curPos), list, let
   (recursive, lazy, incl. plain inherit), attrset (rec included; static keys
@@ -176,12 +176,6 @@
 (def ^:private scopes-key ::with-scopes)
 
 ;; ── the machine ───────────────────────────────────────────────────────────
-
-(def ^:private select-miss-reasons
-  ;; eval-select's `or` default catches exactly these (a missing attr or a
-  ;; non-attrset target, including from a nested select inside the target),
-  ;; and no other evaluation error.
-  #{:missing-attr :select-target-not-attrset})
 
 (defn- select-transition
   "eval-select's decision on a WHNF target and a RESOLVED string key, as a
@@ -837,9 +831,9 @@
 
       ;; ── propagate a held outward ─────────────────────────────────────
       ;; Pending :update frames memoize the held (exactly force-value's
-      ;; memoize-the-held behavior); a [:select-attr] frame with an `or`
-      ;; default CATCHES a missing-attr class held (eval-select parity —
-      ;; other frames and other reasons pass it through).
+      ;; memoize-the-held behavior). select-attr does NOT catch held targets:
+      ;; `or` applies only after a WHNF target (select-transition), matching
+      ;; eval-select / nix-instantiate (nested missing intermediate propagates).
       :unwind
       (if (empty? kont)
         x
@@ -850,14 +844,6 @@
             (do
               (reset! (nth f 1) {:phase :done :result x})
               (recur :unwind x env kont))
-
-            :select-attr
-            (let [[_ _attr default fenv _span] f]
-              (if (and default
-                       (= :held (:status x))
-                       (contains? select-miss-reasons (:reason x)))
-                (recur :eval default fenv kont)
-                (recur :unwind x env kont)))
 
             :try-eval
             ;; Nix tryEval catches only throw and assert (D3 taxonomy);
@@ -1016,6 +1002,8 @@
    "builtins.fromJSON 1" "builtins.compareVersions 1 2"
    "builtins.dirOf 1" "builtins.baseNameOf 1"
    "builtins.toJSON (x: x)" "with null; 1"
+   "builtins.catAttrs \"a\" null" "builtins.listToAttrs [ 1 ]"
+   "({ a = 1; }.b).c or 9" "{ a = {}; }.a.b or 7" "{ a = 1; }.b or 9"
    "[1 [2 [3]]]"
    "let a = 1; b = a + 1; in a + b" "let a = b + 1; b = 1; in a"
    ;; D22 dotted let (parser path->nested + machine follows evaluator)

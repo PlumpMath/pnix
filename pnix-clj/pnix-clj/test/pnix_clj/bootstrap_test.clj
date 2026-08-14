@@ -3117,8 +3117,9 @@
       (is (= 7 (:value elem-result))))))
 
 (deftest evaluator-select-or-default
-  ;; `a.b or default`: a fallback for a missing attribute. It catches a missing
-  ;; attr (and a missing intermediate attr on the path) but not other errors.
+  ;; `a.b or default`: fallback when the *final* select's target is WHNF and
+  ;; lacks the attr / is non-attrset. Does NOT catch a failed intermediate
+  ;; select (oracle: `{a=1;}.b.c or 7` and `({a=1;}.b).c or 9` error on `.b`).
   (testing "returns the attribute when present"
     (let [r (pnix/eval-source "{ a = 1; }.a or 99")]
       (is (= :ok (:status r)))
@@ -3127,10 +3128,19 @@
     (let [r (pnix/eval-source "{ a = 1; }.b or 99")]
       (is (= :ok (:status r)))
       (is (= 99 (:value r)))))
-  (testing "catches a missing intermediate attr on the path"
-    (let [r (pnix/eval-source "{ a = 1; }.b.c or 7")]
+  (testing "present intermediate then missing final uses default (oracle)"
+    (let [r (pnix/eval-source "{ a = {}; }.a.b or 7")]
       (is (= :ok (:status r)))
       (is (= 7 (:value r)))))
+  (testing "missing intermediate select is NOT caught by outer or (oracle)"
+    (let [r (pnix/eval-source "{ a = 1; }.b.c or 7")]
+      (is (= :failed (:status r)))
+      (is (= :missing-attr (:reason r))))
+    (let [r (pnix/eval-source "({ a = 1; }.b).c or 9")]
+      (is (= :failed (:status r)))
+      (is (= :missing-attr (:reason r)))))
+  (testing "null target with or uses default (oracle)"
+    (is (= 5 (:value (pnix/eval-source "null.x or 5")))))
   (testing "does not swallow an unbound variable"
     (let [r (pnix/eval-source "missing.b or 7")]
       (is (= :failed (:status r)))
@@ -5798,7 +5808,16 @@
     (is (= :to-json-cannot-convert-function
            (:reason (pnix/eval-source "builtins.toJSON (x: x)"))))
     (is (= "null" (:value (pnix/eval-source "builtins.toJSON null"))))
-    (is (= "true" (:value (pnix/eval-source "builtins.toJSON true"))))))
+    (is (= "true" (:value (pnix/eval-source "builtins.toJSON true")))))
+  (testing "catAttrs / listToAttrs type checks (oracle wrong-VALUE class)"
+    (is (= :cat-attrs-arg-not-list
+           (:reason (pnix/eval-source "builtins.catAttrs \"a\" null"))))
+    (is (= [1 2] (:value (pnix/eval-source
+                          "builtins.catAttrs \"a\" [ { a = 1; } { a = 2; } ]"))))
+    (is (= :list-to-attrs-element-not-attrset
+           (:reason (pnix/eval-source "builtins.listToAttrs [ 1 ]"))))
+    (is (= {"a" 1} (:value (pnix/eval-source
+                            "builtins.listToAttrs [ { name = \"a\"; value = 1; } ]"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by
