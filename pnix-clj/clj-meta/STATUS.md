@@ -93,11 +93,12 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    105 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    111 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
-    `try` with `catch`, `finally`, or both combined/`throw`/allowlisted
-    exception construction/`locking`/`.methodName` instance interop/
+    `try` with `catch` (single or multi-catch), `finally`, or catch+finally
+    combined/`throw`/allowlisted exception construction/`locking`/
+    `.methodName` instance interop/
     `ClassName/methodName` static interop/`.-fieldName` field access and
     `set!` (all via `clojure.lang.Reflector`)/
     `str` (via `clojure.lang.Var` + `IFn.invoke`, the same mechanism real
@@ -396,6 +397,24 @@ form body 없음), 이 파일의 기존 최소-범위 패턴과 동일. 실제 h
 fixture는 `StringBuilder`가 leg마다 계속 mutate되어 세 leg에 걸쳐
 누적되므로 공유 mutable arg 문제로 U6 전용; 예외 경로 fixture는 관찰되는
 mutation이 없는 plain `Object`라 안전). 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 열세 번째 확장 (2026-08-14): multi-catch.** host-AOT `(try
+(quot 10 x) (catch ArithmeticException e :divzero) (catch
+IllegalArgumentException e :bad-arg))`를 `javap -c -v`로 확인. `finally`의
+catch-all `nil`-type entry와 달리, 여기선 각 `catch` 절이 자기만의
+handler와 자기만의 exception-table entry를 갖는다 — 전부 같은
+`[try-start,try-end)` 범위를 커버하지만 (handler, 구체 클래스) 쌍이
+서로 다르고, 소스 순서 그대로 등록된다(real host와 정확히 일치).
+`finally`를 guarantee할 필요가 없으니 catch-all entry는 필요 없음.
+기존 단일-catch/`finally`-only/`catch`+`finally` 경로는 전혀 안 건드리고
+`:try-multi-catch`라는 새 AST 노드+emitter를 따로 추가(이미 검증된
+코드 경로를 건드리는 리스크를 최소화). 김에 `(try body)`(clause 없는
+bare try)도 사소하게 지원 — 그냥 `body`와 동일하게 처리. multi-catch에
+`finally`를 같이 쓰는 것은 범위 밖, 별도 슬라이스. 실제 host `eval`
+대비 검증(추가 전): 2개 catch 중 첫 번째가 매치, 2개 중 두 번째가
+매치, 3개 catch 중 세 번째가 매치 — 다 host와 일치. U6: 105→111. DDC
+행: 68→70. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture

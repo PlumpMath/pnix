@@ -525,7 +525,15 @@
    {:id :mini-backend-locking-exceptional-path
     :source "(fn [lock x] (try (locking lock (quot 10 x)) (catch ArithmeticException e :caught)))"
     :args [(Object.) 0]
-    :expected :caught}])
+    :expected :caught}
+   {:id :mini-backend-try-multi-catch-first-clause-triggered
+    :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg)))"
+    :args [0]
+    :expected :divzero}
+   {:id :mini-backend-try-multi-catch-second-clause-triggered
+    :source "(fn [] (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e :bad-arg)))"
+    :args []
+    :expected :bad-arg}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
