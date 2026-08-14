@@ -194,3 +194,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | oracle D: match/split reject empty regex (Java would match every pos) |
 | 2026-08-14 | oracle D: path + string/path concatenation (was over-strict held) |
 | 2026-08-14 | oracle D: elemAt OOB/negative → :elem-at-index-out-of-bounds (not throwable) |
+| 2026-08-14 | oracle D: path `<`/`lessThan` (stored path-text order; was incomparable) |

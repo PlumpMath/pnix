@@ -1407,9 +1407,11 @@
         (eval-ast* final-env body)))))
 
 (defn- pnix-less-than-result
-  "Nix `<` ordering: numbers numerically, strings lexicographically, and lists
-  lexicographically (element by element; a proper prefix is smaller). Returns an
-  eval result so forcing a lazy element can propagate held errors."
+  "Nix `<` ordering: numbers numerically, strings lexicographically, paths by
+  their path text (Nix uses absolute forms; we compare stored path strings for
+  purity), and lists lexicographically (element by element; a proper prefix is
+  smaller). Returns an eval result so forcing a lazy element can propagate held
+  errors."
   [a b]
   (let [ar (force-value a)
         br (when (= :ok (:status ar)) (force-value b))]
@@ -1433,8 +1435,12 @@
               {:status :ok :value (neg? (compare xa xb))}
               (err/failed :eval :raw-bytes-compare-non-string {:construct :<})))
 
-          (and (string? a) (string? b))
-          {:status :ok :value (neg? (compare a b))}
+          (and (path-value? a) (path-value? b))
+          {:status :ok :value (neg? (compare (get a "path") (get b "path")))}
+
+          (and (string-like? a) (string-like? b))
+          {:status :ok
+           :value (neg? (compare (string-content a) (string-content b)))}
 
           (and (vector? a) (vector? b))
           (loop [xs a

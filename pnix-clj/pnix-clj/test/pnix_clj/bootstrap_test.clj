@@ -5902,7 +5902,16 @@
            (:reason (pnix/eval-source "builtins.elemAt [1 2] (-1)"))))
     (is (= :elem-at-index-not-int
            (:reason (pnix/eval-source "builtins.elemAt [1 2] 1.0"))))
-    (is (= 20 (:value (pnix/eval-source "builtins.elemAt [10 20 30] 1"))))))
+    (is (= 20 (:value (pnix/eval-source "builtins.elemAt [10 20 30] 1")))))
+  (testing "path ordering via < (oracle: path/path compare; pure path-text order)"
+    ;; Was :eval-binary-failed / incomparable. Mixed path/string stays held.
+    (is (= true (:value (pnix/eval-source "./a < ./b"))))
+    (is (= false (:value (pnix/eval-source "./b < ./a"))))
+    (is (= false (:value (pnix/eval-source "./a < ./a"))))
+    (is (= true (:value (pnix/eval-source "./a <= ./b"))))
+    (is (= false (:value (pnix/eval-source "./a > ./b"))))
+    (is (= true (:value (pnix/eval-source "builtins.lessThan ./a ./b"))))
+    (is (= :failed (:status (pnix/eval-source "./a < \"./b\""))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by
