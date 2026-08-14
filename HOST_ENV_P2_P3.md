@@ -190,3 +190,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | oracle D: hasAttr/intersectAttrs/mapAttrs/groupBy reject null (was false/{}) |
 | 2026-08-14 | oracle D: zipAttrsWith null, genericClosure non-set, elemAt float, replaceStrings len |
 | 2026-08-14 | oracle D: catAttrs name must be string; getAttr requires attrset |
+| 2026-08-14 | oracle D: baseNameOf \"/\" is \"\" not null (Clojure split edge) |

@@ -5864,7 +5864,14 @@
                           "builtins.catAttrs \"a\" [ { a = 1; } { a = 2; } ]"))))
     (is (= :get-attr-arg-not-attrset
            (:reason (pnix/eval-source "builtins.getAttr \"a\" null"))))
-    (is (= 1 (:value (pnix/eval-source "builtins.getAttr \"a\" { a = 1; }"))))))
+    (is (= 1 (:value (pnix/eval-source "builtins.getAttr \"a\" { a = 1; }")))))
+  (testing "baseNameOf root and trailing-slash (oracle: \"/\" → \"\")"
+    (is (= "" (:value (pnix/eval-source "builtins.baseNameOf \"/\""))))
+    (is (= "" (:value (pnix/eval-source "builtins.baseNameOf \"\""))))
+    (is (= "a" (:value (pnix/eval-source "builtins.baseNameOf \"/a/\""))))
+    (is (= "a" (:value (pnix/eval-source "builtins.baseNameOf \"a/\""))))
+    (is (= "c" (:value (pnix/eval-source "builtins.baseNameOf \"a/b/c\""))))
+    (is (= "/" (:value (pnix/eval-source "builtins.dirOf \"/\""))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by

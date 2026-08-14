@@ -3566,8 +3566,17 @@
                 :else "unknown")}
 
       :baseNameOf
+      ;; Oracle: baseNameOf "/" = "" (not null). Clojure (str/split "/" #"/")
+      ;; drops empties → (last []) = nil. Strip trailing slashes (except root)
+      ;; then take the segment after the last '/'.
       {:status :ok
-       :value (last (str/split (path-or-string (first args)) #"/"))}
+       :value (let [raw (path-or-string (first args))
+                    s (loop [t (str raw)]
+                        (if (and (> (count t) 1) (str/ends-with? t "/"))
+                          (recur (subs t 0 (dec (count t))))
+                          t))
+                    i (str/last-index-of s "/")]
+                (if (nil? i) s (subs s (inc i))))}
 
       ;; pathExists/readFile/readDir/getEnv handled in finish-extra-builtin
 

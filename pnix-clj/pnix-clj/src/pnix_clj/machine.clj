@@ -1011,6 +1011,8 @@
    "builtins.elemAt [1 2] 1.0"
    "builtins.replaceStrings [\"a\"] [\"b\" \"c\"] \"a\""
    "builtins.catAttrs null [ ]" "builtins.getAttr \"a\" null"
+   "builtins.baseNameOf \"/\"" "builtins.baseNameOf \"a/b/c\""
+   "builtins.dirOf \"/\""
    "[1 [2 [3]]]"
    "let a = 1; b = a + 1; in a + b" "let a = b + 1; b = 1; in a"
    ;; D22 dotted let (parser path->nested + machine follows evaluator)
