@@ -170,3 +170,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | rs/hy local library export + smoke (personal feed; not crates.io/PyPI) |
 | 2026-08-14 | cljs local library export + smoke; bin/host-library-smokes aggregator |
 | 2026-08-14 | tool-eval single-form stdin `-`; HOST_IMPORT local-export table for all hosts |
+| 2026-08-14 | CI: local export script layout + clj/hy(/cljs) library smokes on host-import |

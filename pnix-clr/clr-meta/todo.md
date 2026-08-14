@@ -224,7 +224,8 @@ doable in home-manager alone — they need product work in this tree.
      + `build/Pnix.Clr.props|.targets` + `share/pnix-clr/refs.env`.  
    - Flake: `packages/apps.pnix-clr-library`, `pnix-clr-refs`, `clojure-clr`.  
    - C# API: `Pnix.Clr.Eval.Source` / `Eval.File` (process→CLI JSON).  
-   - Still open (optional): `dotnet pack` NuGet id, multi-machine nupkg publish.
+   - Optional `dotnet pack` / multi-machine nupkg: **dropped** with nuget.org
+     (owner local feed only, 2026-08-14).
 
 2. **`clojure-clr` as a real host substrate, not only a name alias** — **partial**  
    - Flake/dot-nix expose `clojure-clr` → `bin/clojure-clr` (clr-meta `-e`/file).  

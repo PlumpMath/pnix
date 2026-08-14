@@ -9,8 +9,19 @@ on:
     branches: [main]
     paths:
       - "bin/host-import-smoke"
+      - "bin/host-library-smokes"
       - "examples/host-import/**"
       - "HOST_*.md"
+      - "pnix-clj/**/export-pnix-clj-library"
+      - "pnix-clj/**/pnix-clj-library-smoke"
+      - "pnix-hy/**/export-pnix-hy-library"
+      - "pnix-hy/**/pnix-hy-library-smoke"
+      - "pnix-rs/**/export-pnix-rs-library"
+      - "pnix-rs/**/pnix-rs-library-smoke"
+      - "pnix-cljs/bin/export-pnix-cljs-library"
+      - "pnix-cljs/bin/pnix-cljs-library-smoke"
+      - "pnix-clr/bin/export-pnix-clr-library"
+      - "pnix-clr/bin/pnix-clr-nupkg-smoke"
       - "pnix-clj/flake.nix"
       - "pnix-hy/**"
       - "pnix-rs/**"
@@ -20,8 +31,19 @@ on:
   pull_request:
     paths:
       - "bin/host-import-smoke"
+      - "bin/host-library-smokes"
       - "examples/host-import/**"
       - "HOST_*.md"
+      - "pnix-clj/**/export-pnix-clj-library"
+      - "pnix-clj/**/pnix-clj-library-smoke"
+      - "pnix-hy/**/export-pnix-hy-library"
+      - "pnix-hy/**/pnix-hy-library-smoke"
+      - "pnix-rs/**/export-pnix-rs-library"
+      - "pnix-rs/**/pnix-rs-library-smoke"
+      - "pnix-cljs/bin/export-pnix-cljs-library"
+      - "pnix-cljs/bin/pnix-cljs-library-smoke"
+      - "pnix-clr/bin/export-pnix-clr-library"
+      - "pnix-clr/bin/pnix-clr-nupkg-smoke"
       - "pnix-clj/flake.nix"
       - "pnix-hy/**"
       - "pnix-rs/**"
@@ -51,13 +73,36 @@ jobs:
         run: |
           test -x bin/host-import-smoke
           bash -n bin/host-import-smoke
+          test -x bin/host-library-smokes
+          bash -n bin/host-library-smokes
           test -f HOST_ENV_P2_P3.md
+          test -f HOST_IMPORT.md
           test -f examples/host-import/hello.px
           test -f examples/host-import/clj/deps.edn
           test -f examples/host-import/clj/smoke.clj
           test -f examples/host-import/hy/smoke.py
           test -f examples/host-import/cljs/smoke.mjs
           test -f examples/host-import/rs/pnix-rs-smoke/Cargo.toml
+      - name: Check local library export scripts (layout only)
+        run: |
+          set -euo pipefail
+          for s in \
+            pnix-clj/pnix-clj/bin/export-pnix-clj-library \
+            pnix-clj/pnix-clj/bin/pnix-clj-library-smoke \
+            pnix-hy/pnix-hy/bin/export-pnix-hy-library \
+            pnix-hy/pnix-hy/bin/pnix-hy-library-smoke \
+            pnix-rs/pnix-rs/bin/export-pnix-rs-library \
+            pnix-rs/pnix-rs/bin/pnix-rs-library-smoke \
+            pnix-cljs/bin/export-pnix-cljs-library \
+            pnix-cljs/bin/pnix-cljs-library-smoke \
+            pnix-clr/bin/export-pnix-clr-library \
+            pnix-clr/bin/pack-pnix-clr-nupkg \
+            pnix-clr/bin/pnix-clr-nupkg-smoke
+          do
+            test -x "$s"
+            bash -n "$s"
+          done
+          echo "local export scripts: OK"
       - name: clj host-import example
         run: |
           nix shell nixpkgs#clojure -c bash -lc '
@@ -103,6 +148,32 @@ jobs:
           out=$(nix shell nixpkgs#python311 -c python ../examples/host-import/hy/smoke.py)
           echo "hy example => $out"
           test "$out" = "3"
+      - name: clj local library export smoke
+        run: |
+          nix shell nixpkgs#clojure nixpkgs#rsync -c bash -lc '
+            set -euo pipefail
+            cd pnix-clj/pnix-clj
+            ./bin/pnix-clj-library-smoke
+          '
+      - name: hy local library export smoke
+        run: |
+          nix shell nixpkgs#python311 nixpkgs#rsync -c bash -lc '
+            set -euo pipefail
+            cd pnix-hy/pnix-hy
+            ./bin/pnix-hy-library-smoke
+          '
+      - name: cljs local library export smoke (if dist present)
+        run: |
+          set -euo pipefail
+          if [[ -f pnix-cljs/pnix-cljs/dist/pnix-cljs-module.js ]]; then
+            nix shell nixpkgs#nodejs -c bash -lc '
+              set -euo pipefail
+              cd pnix-cljs
+              ./bin/pnix-cljs-library-smoke
+            '
+          else
+            echo "SKIP cljs library smoke (no dist/; offline build or nix build)"
+          fi
 
   library-print:
     name: library-print-${{ matrix.host }}

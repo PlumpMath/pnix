@@ -68,7 +68,8 @@ import APIs:
 → **[HOST_DEV_ENV.md](HOST_DEV_ENV.md)** (canonical dual-axis for agents/developers)  
 → **[HOST_IMPORT.md](HOST_IMPORT.md)** (per-host import cookbooks + packaging tiers)  
 → **[HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md)** (optional P2/P3 + residual plans)  
-→ **[examples/host-import/](examples/host-import/)** (mini host-main demos)
+→ **[examples/host-import/](examples/host-import/)** (mini host-main demos)  
+→ **`./bin/host-import-smoke`** · **`./bin/host-library-smokes`** (local import / library feeds)
 
 | Orientation | Name pattern | Intent |
 |-------------|--------------|--------|
