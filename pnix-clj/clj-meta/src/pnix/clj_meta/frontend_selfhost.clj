@@ -811,10 +811,29 @@
   (when (and (symbol? op) (namespace op) (not (contains? known-static-classes (namespace op))))
     [(namespace op) (name op)]))
 
+;; Bound (only) by `compile-source`'s `(do (deftype ...)... (fn ...))`
+;; top-level program path -- see there -- to a `{type-name-symbol Class}`
+;; registry of `deftype`s defined earlier in the SAME program, so
+;; `(Name. args...)` inside the trailing `fn` can construct them directly.
+;; A dynamic var, matching real host's own use of compilation-scoped
+;; dynamic state (`*ns*` et al.), rather than threading an extra parameter
+;; through every analyze/emit function signature in this file.
+(def ^:private ^:dynamic *known-deftype-classes* {})
+
+(defn- known-deftype-constructor-class
+  [op]
+  (when (and (symbol? op) (< 1 (count (name op))) (.endsWith (name op) "."))
+    (get *known-deftype-classes* (symbol (subs (name op) 0 (dec (count (name op))))))))
+
 (defn- analyze-call
   [env form]
   (let [[op & args] form]
     (cond
+      (known-deftype-constructor-class op)
+      {:op :deftype-new
+       :class (known-deftype-constructor-class op)
+       :args (mapv #(analyze-expr env %) args)}
+
       (exception-constructor-class op)
       (let [cls (exception-constructor-class op)]
         (when-not (<= 0 (count args) 1)
@@ -1431,6 +1450,36 @@
          :methods methods
          :captures captures}))))
 
+;; `deftype` -- confirmed via `javap -p -c` on a host-AOT-compiled
+;; `(deftype Point [x y])` with NO protocol/interface implementations: a
+;; class with one PUBLIC FINAL field per declared field name and a
+;; constructor storing each constructor arg into its field, nothing else
+;; essential (real host also implements the marker interface
+;; `clojure.lang.IType` and a static `getBasis` reflection helper, neither
+;; of which affects observable field/construction behavior -- not
+;; reproduced here, matching this file's established behavior-equivalence
+;; bar). Deliberately narrow scope: field declarations ONLY, no protocol or
+;; interface method implementations (that's a separate, larger extension
+;; layering `reify`'s interface-implementing machinery onto a NAMED,
+;; multi-field-constructor class) -- and, since `deftype` generates a
+;; NAMED top-level class tied to a compilation unit rather than an
+;; expression usable inline, it can only appear as one of the leading forms
+;; of a top-level `(do (deftype ...)... (fn ...))` program -- see
+;; `compile-source` -- never nested inside a `fn` body.
+(defn- analyze-deftype-form
+  [form]
+  (when-not (and (seq? form) (= 'deftype (first form))
+                 (= 3 (count form))
+                 (symbol? (second form))
+                 (vector? (nth form 2))
+                 (seq (nth form 2))
+                 (every? symbol? (nth form 2))
+                 (= (count (nth form 2)) (count (distinct (nth form 2)))))
+    (throw (ex-info "tiny analyzer: malformed deftype -- expected (deftype Name [field...])"
+                    {:form form})))
+  {:name (second form)
+   :fields (vec (nth form 2))})
+
 (defn- analyze-fn
   [form]
   (when-not (and (seq? form) (= 'fn (first form)))
@@ -1496,6 +1545,7 @@
 (declare emit-expr)
 (declare emit-closure)
 (declare emit-reify)
+(declare emit-deftype-new)
 
 (defn- emit-nil
   [^GeneratorAdapter ga]
@@ -2322,6 +2372,7 @@
     :local-fn-call (emit-local-fn-call ga env node)
     :closure (emit-closure ga env node)
     :reify (emit-reify ga env node)
+    :deftype-new (emit-deftype-new ga env node)
     :computed-fn-call (emit-computed-fn-call ga env node)
     :core-fn-value (emit-core-fn-value ga (:fn-name node))
     :field-get (emit-field-get ga env node)
@@ -2575,19 +2626,102 @@
       (emit-local ga env cap))
     (.invokeConstructor ga inner-type ctor-method)))
 
+;; The `deftype` class itself: a named-purpose class defined ONCE, up front,
+;; by `compile-source`'s multi-form program path -- NOT recursively emitted
+;; from within another method's body the way `emit-closure`/`emit-reify`
+;; are, since `deftype` is a top-level program element, not an expression.
+(defn- emit-deftype-class
+  [{:keys [fields]}]
+  (let [class-name (next-class-name)
+        internal (.replace class-name \. \/)
+        ctype (Type/getObjectType internal)
+        cw (ClassWriter. (bit-or ClassWriter/COMPUTE_FRAMES
+                                 ClassWriter/COMPUTE_MAXS))]
+    (.visit cw Opcodes/V1_8 Opcodes/ACC_PUBLIC internal nil
+            (.getInternalName obj-type) nil)
+    (doseq [f fields]
+      (.visitEnd (.visitField cw (bit-or Opcodes/ACC_PUBLIC Opcodes/ACC_FINAL)
+                              (name f) (.getDescriptor obj-type) nil nil)))
+    (let [ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count fields) obj-type)))
+          ga (GeneratorAdapter. Opcodes/ACC_PUBLIC ctor-method nil nil cw)]
+      (.loadThis ga)
+      (.invokeConstructor ga obj-type init-method)
+      (doseq [[i f] (map-indexed vector fields)]
+        (.loadThis ga)
+        (.loadArg ga (int i))
+        (.putField ga ctype (name f) obj-type))
+      (.returnValue ga)
+      (.endMethod ga))
+    (.visitEnd cw)
+    (let [bytes (.toByteArray cw)
+          loader (DynamicClassLoader.
+                  (.getContextClassLoader (Thread/currentThread)))
+          klass (.defineClass loader class-name bytes nil)]
+      {:class klass
+       :class-name class-name
+       :bytes bytes
+       :digest (sha256-string (seq bytes))})))
+
+;; `(Name. args...)` for a `deftype` defined earlier in the SAME top-level
+;; program -- direct `NEW/DUP/<args>/INVOKESPECIAL`, matching real host's
+;; own bytecode shape for a compile-time-known type exactly (unlike the
+;; small-allowlist/general-construction paths above, which both exist
+;; specifically because THEY don't have a compile-time-resolved Class to
+;; construct against).
+(defn- emit-deftype-new
+  [^GeneratorAdapter ga env {:keys [class args]}]
+  (let [ctype (Type/getType ^Class class)
+        ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count args) obj-type)))]
+    (.newInstance ga ctype)
+    (.dup ga)
+    (doseq [arg args] (emit-expr ga env arg))
+    (.invokeConstructor ga ctype ctor-method)))
+
+;; `(do (deftype Name [field...])... (fn ...))` -- the ONLY shape allowing
+;; `deftype` at all, since it defines a named top-level class rather than
+;; an inline expression (see `analyze-deftype-form`). Every form but the
+;; last must be a `deftype`; the last must be the `fn` this compile unit
+;; still ultimately returns -- deliberately narrow (no other top-level
+;; forms, e.g. no top-level `def`, mixed in) to keep this a small, explicit
+;; addition to `compile-source` rather than a general multi-form program
+;; model.
+(defn- deftype-program-form?
+  [form]
+  (and (seq? form) (= 'do (first form)) (< 1 (count form))
+       (every? #(and (seq? %) (= 'deftype (first %))) (butlast (rest form)))
+       (seq? (last form)) (= 'fn (first (last form)))))
+
 (defn compile-source
   [source]
   (let [form (tiny-read source)
-        expanded-form (tiny-expand form)
-        ast (analyze-fn expanded-form)
-        artifact (emit-class ast)
-        f (.newInstance ^Class (:class artifact))]
-    {:source source
-     :form form
-     :expanded-form expanded-form
-     :ast ast
-     :artifact artifact
-     :fn f}))
+        expanded-form (tiny-expand form)]
+    (if (deftype-program-form? expanded-form)
+      (let [deftype-forms (butlast (rest expanded-form))
+            fn-form (last expanded-form)
+            deftype-specs (mapv analyze-deftype-form deftype-forms)
+            deftype-artifacts (mapv emit-deftype-class deftype-specs)
+            registry (into {} (map (fn [spec artifact] [(:name spec) (:class artifact)])
+                                   deftype-specs deftype-artifacts))]
+        (binding [*known-deftype-classes* registry]
+          (let [ast (analyze-fn fn-form)
+                artifact (emit-class ast)
+                f (.newInstance ^Class (:class artifact))]
+            {:source source
+             :form form
+             :expanded-form expanded-form
+             :deftype-artifacts deftype-artifacts
+             :ast ast
+             :artifact artifact
+             :fn f})))
+      (let [ast (analyze-fn expanded-form)
+            artifact (emit-class ast)
+            f (.newInstance ^Class (:class artifact))]
+        {:source source
+         :form form
+         :expanded-form expanded-form
+         :ast ast
+         :artifact artifact
+         :fn f}))))
 
 (defn- case-row
   [{:keys [id source args expected]}]
@@ -3298,6 +3432,22 @@
     :source "(fn [] (.get (reify java.util.function.Supplier (get [this] 42))))"
     :args []
     :expected 42}
+   {:id :tiny-deftype-construct-and-access
+    :source "(do (deftype Point [x y]) (fn [a b] (let [p (Point. a b)] (+ (.-x p) (.-y p)))))"
+    :args [3 4]
+    :expected 7}
+   {:id :tiny-deftype-field-directly
+    :source "(do (deftype Point [x y]) (fn [a b] (.-x (Point. a b))))"
+    :args [10 20]
+    :expected 10}
+   {:id :tiny-deftype-three-fields
+    :source "(do (deftype Vec3 [x y z]) (fn [] (let [v (Vec3. 1 2 3)] (+ (.-x v) (+ (.-y v) (.-z v))))))"
+    :args []
+    :expected 6}
+   {:id :tiny-deftype-two-independent-types
+    :source "(do (deftype A [n]) (deftype B [n]) (fn [] (+ (.-n (A. 10)) (.-n (B. 20)))))"
+    :args []
+    :expected 30}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

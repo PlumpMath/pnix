@@ -574,12 +574,33 @@ top-line claim, but the substance is much closer than "false" implies:
   `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate`
   `metacircular gate: READY`, 회귀 없음.
 
-  U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`, protocol(둘 다
-  하니스가 "fn 하나만 컴파일"하는 구조라 top-level multi-form 지원으로
-  아키텍처 변경이 필요해 `reify`보다 훨씬 큼). 남은 gap: 중첩 closure는
-  1단계/단일 arity로 범위 제한, `letfn`은 진짜 상호재귀(생성-후-
-  backpatch) 아직 없음, `reify`는 단일 인터페이스/reference-typed
-  파라미터만.
+  **32번째 슬라이스, 2026-08-15: `deftype`(필드만)** (202→206). `javap
+  -p -c` 확인: protocol 구현 없는 최소 `deftype`은 public final 필드
+  + 생성자뿐 — `IType`/`getBasis`는 관찰 가능한 동작과 무관해 재현
+  안 함. `deftype`은 표현식이 아니라 컴파일 단위 전체에 묶인 이름
+  있는 클래스라 `fn` body에 중첩 불가 — `compile-source`에 새 top-level
+  진입 형태 `(do (deftype Name [field...])... (fn ...))` 추가(기존
+  "fn 하나만" 경로는 100% 그대로, 이 형태일 때만 새 경로). 앞쪽
+  `deftype`들을 먼저 emit해서 `{이름 Class}` registry를 만들고
+  dynamic var(`*known-deftype-classes*`)로 뒤쪽 `fn`의 analysis에
+  전달 — `(Name. args...)`가 컴파일타임에 알려진 타입으로 직접
+  `NEW/DUP/INVOKESPECIAL`. 필드 접근(`.-x`)은 기존 일반 reflection
+  메커니즘으로 새 코드 없이 그냥 됨. **real host 자신도**
+  `(do (deftype ...) (fn ...))`를 하나의 문자열로 eval하면 "class not
+  found"로 똑같이 실패함을 확인 — deftype이 진짜 별도 컴파일 단위여야
+  하는 게 real host의 실제 제약이라, 앞쪽 deftype을 먼저 별도 emit하는
+  내 witness 접근이 오히려 그 진짜 순서를 정확히 반영. compiler.clj도
+  같은 이유로 이 do-wrap 문자열 하나로는 실패 확인 — 그래서 U6 전용,
+  DDC 행 연결 안 함(기존 shared-mutable-arg류 U6 전용 처리와 같은
+  패턴). DDC 행 변화 없음(114 유지). `-M:conformance` 116/116 영향
+  없음, `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: protocol(defprotocol도 deftype과 같은
+  이유로 top-level 전용, 게다가 인터페이스 생성 + dispatch 함수까지
+  필요해 더 큼), `deftype`/`defrecord`의 protocol/인터페이스 구현
+  버전(지금은 필드만). 남은 gap: 중첩 closure는 1단계/단일 arity로
+  범위 제한, `letfn`은 진짜 상호재귀(생성-후-backpatch) 아직 없음,
+  `reify`는 단일 인터페이스/reference-typed 파라미터만.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

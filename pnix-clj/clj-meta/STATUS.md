@@ -93,7 +93,21 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    202 fixtures (fn/if/do/let/loop-recur/`reify` -- one fully-qualified
+    206 fixtures (fn/if/do/let/loop-recur/`deftype` (fields only, no
+    protocol/interface method implementations) via a NEW top-level
+    program shape `(do (deftype Name [field...])... (fn ...))` --
+    the only way `deftype` can appear at all, since it defines a
+    NAMED class tied to the whole compile unit rather than an inline
+    expression; a dynamic var threads the leading `deftype`s'
+    `{name Class}` registry into the trailing `fn`'s analysis so
+    `(Name. args...)` there constructs directly (`NEW`/`DUP`/
+    `INVOKESPECIAL`, matching real host's own compile-time-known-type
+    shape exactly, not the Reflector-based general-construction path);
+    field access already worked for free via the existing general
+    `.-fieldName` reflection mechanism; confirmed real host itself
+    can't compile this exact do-wrapped single-string shape either
+    (same "class not yet defined" issue), so these stay U6-only, not
+    wired into the DDC row/`reify` -- one fully-qualified
     interface, resolved via `Class/forName` at analyze time to reflect
     its methods and match each `reify` method form by name+arity;
     reference-typed params only (a primitive param would need
@@ -882,6 +896,38 @@ primitive인 건 지원**(`Comparator/compare`의 `int`처럼, body가 항상
 primitive 파라미터 거부, 다중 인터페이스 거부 둘 다 명확한 에러로
 확인. compiler.clj도 `reify` 지원 확인 후 DDC 행에 연결. U6: 197→202.
 DDC 행: 114→116. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 서른두 번째 확장 (2026-08-15): `deftype`(필드만, protocol/
+인터페이스 구현 없음).** `javap -p -c`로 protocol 구현 없는 최소
+`(deftype Point [x y])`를 확인하니 그냥 public final 필드 2개 + 그
+값을 필드에 저장하는 생성자뿐 — real host가 항상 추가하는
+`clojure.lang.IType`(마커 인터페이스)와 `getBasis`(reflection 헬퍼)는
+관찰 가능한 필드/생성 동작에 영향 없어 재현 안 함.
+
+`deftype`은 (closure/reify와 달리) 표현식이 아니라 컴파일 단위 전체에
+묶인 이름 있는 클래스를 정의하므로, `fn` body 안에 중첩될 수 없음 —
+그래서 `compile-source`에 완전히 새로운 top-level 진입 형태
+`(do (deftype Name [field...])... (fn ...))`를 추가(기존 "fn 하나만
+컴파일" 경로는 100% 그대로 유지, 이 형태일 때만 새 경로를 탐).
+앞쪽 `deftype`들을 먼저 analyze+emit해서 `{이름 Class}` registry를
+만들고, dynamic var(`*known-deftype-classes*`, real host 자신도
+`*ns*` 같은 컴파일 범위 dynamic state를 쓰는 것과 같은 방식)로 이
+registry를 뒤쪽 `fn`의 analysis에 전달 — `fn` 안의 `(Name. args...)`가
+이 registry를 찾아 컴파일타임에 알려진 타입으로 직접
+`NEW/DUP/INVOKESPECIAL`(real host와 같은 모양, Reflector 안 씀,
+컴파일타임에 Class를 이미 알기 때문). 필드 접근(`.-x`)은 이미 있는
+일반 reflection 기반 `.-fieldName` 메커니즘으로 새 코드 없이 그냥
+됨. 2필드/3필드/독립된 두 타입 조합 전부 실제 host 대비 검증(단,
+real host 자신도 `(do (deftype ...) (fn ...))`를 **하나의 문자열로
+eval**하면 "class not found"로 똑같이 실패함을 확인 — deftype은
+실제로 별도 컴파일 단위여야 하는 게 real host의 진짜 제약이라, 내
+witness의 접근(앞쪽 deftype을 먼저 별도로 emit)이 오히려 그 진짜
+순서를 정확히 반영한 것. `compiler.clj`도 이 do-wrap 문자열 하나로는
+같은 이유로 실패 확인 — 그래서 이 fixture들은 U6 전용으로 남기고 DDC
+행에는 연결 안 함(기존에도 shared-mutable-arg 등으로 U6 전용 처리한
+전례와 같은 패턴). U6: 202→206. DDC 행 변화 없음(114→114, deftype은
+연결 불가능). 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
