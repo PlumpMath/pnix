@@ -1044,6 +1044,57 @@ throw하던 가드를 제거. depth 2(`(((f 1) 2) 3)` → `6`)와 depth
 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular
 gate: READY ✅`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
 
+**같은 날 서른여섯 번째 확장 (2026-08-15): `letfn` 진짜 상호재귀
+(mutual recursion).** 남은 4개 갭 중 두 번째. `javap -c`로
+host-AOT-컴파일된 `(letfn [(my-even? [x] ...) (my-odd? [x]
+...)] ...)`를 확인: 각 바인딩이 자기만의 closure 클래스로
+컴파일되는 건 같지만, 상대를 가리키는 필드가 `final`이 아님 —
+바깥 메서드가 먼저 모든 바인딩의 local 슬롯을 `null`로 초기화한
+뒤, 작성 순서대로 각 closure를 생성자 호출로 만들면서(아직
+안 만들어진 앞쪽 참조는 그 시점 슬롯 값 그대로, 즉 `null`을
+넘김) 슬롯에 저장하고, **전부 다 만들어진 뒤에야** 형제를
+참조하는 모든 필드를 진짜 인스턴스로 `putfield` 되짚어 채움
+(backpatch) — 참조 그래프가 순방향/역방향/순환 어느 쪽이든
+이 2단계(생성 → backpatch) 하나로 전부 처리되고, 위상 정렬이
+전혀 필요 없음. 매크로 전개 단계의 `raw-form-contains-symbol?`
+스캔으로 상호참조 여부를 미리 판정해서, 상호참조가 없으면
+기존의 저비용 nested-`let` desugar(`expand-letfn`)를 그대로
+타고, 상호참조가 있으면 desugar하지 않고 `letfn` 형태를 그대로
+analyzer까지 보존(`analyze-letfn-mutual`)해서 진짜 closure-field
+배선을 새로 함(`emit-letfn`) — 기존 단일/자기재귀 binding
+fixture는 전혀 건드리지 않는 구조. 자기 자신을 부르는
+바인딩은 기존 named-fn 메커니즘 그대로 `this`로 처리(캡처
+필드가 아예 안 생김). `emit-class`에 `:final-captures?`
+옵션을 추가해 letfn 전용 클래스만 필드를 non-final(+public
+— 각 `emit-class` 호출이 독립된 `DynamicClassLoader`를 새로
+띄우기 때문에, backpatch를 수행하는 제3의 클래스가 접근하려면
+package-private로는 부족해서 `IllegalAccessError`로 실제
+확인 후 `public`으로 조정)로 선언. 2-way/3-way 상호재귀, 자기재귀
++ 형제 혼합, 바깥 스코프 캡처 + 형제 혼합 4가지 조합 전부 실제
+host 대비 검증(값 일치). U6: 213→216(`:tiny-letfn-mutual-recursion`,
+`:tiny-letfn-mutual-recursion-three-way-cycle`,
+`:tiny-letfn-self-recursion-plus-mutual-sibling`). `compiler.clj`는
+이미 이 패턴을 지원하고 있었음(별도 `fixtures`의
+`:letfn-mutual-recursion`이 기존에도 accepted였음)을 확인한 뒤
+DDC 행에 U6측 fixture 연결(`:mini-backend-letfn-mutual-recursion`,
+`mini-backend-ddc-fixtures` 120→121). 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular
+gate: READY ✅`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
+
+**이 슬라이스 도중 발견한 사소한 기록 오차**: 위 숫자들을 이번엔
+`(count specs)`/`(count (mini-backend-ddc-fixtures))`로 직접
+재확인했는데, 서른다섯 번째 확장 문단이 적어둔 "U6 212→214·DDC
+행 114→115"가 실제 커밋된 값(213→214는 맞지만 시작점 212가 아니라
+211, DDC 행도 114가 아니라 119)과 어긋나 있었음 — 게이트/영수증
+자체는 항상 실측값으로 돌아가서 전혀 영향 없고(READY/OK는 코드
+실행 결과지 이 산문 숫자에서 나오는 게 아님), 순수히 산문 기록의
+누적 오프-바이-원 오차. 과거 커밋 메시지까지 소급 정정하지는
+않되, 지금부터는 매 슬라이스마다 실측 `count`로 재확인.
+
+U6에 남은 큰 gap: `reify`/`deftype`은 단일 인터페이스·
+reference-typed 파라미터만, protocol은 fast path만(진짜
+`extend-protocol` 디스패치 없음).
+
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)
 behavior-identical이 아니라 bit-identical 출력이 필요합니다 — 우연히 같은

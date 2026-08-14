@@ -344,42 +344,45 @@
     (coll? form) (boolean (some #(raw-form-contains-symbol? % syms) form))
     :else false))
 
-;; `letfn` desugars into nested `let`s of self-named `fn`s -- confirmed via
-;; `javap -c` on a host-AOT-compiled single-binding, non-mutually-recursive
+(defn- validate-letfn-bindings!
+  [bindings]
+  (when-not (and (vector? bindings)
+                 (seq bindings)
+                 (every? #(and (seq? %) (symbol? (first %)) (vector? (second %)))
+                         bindings))
+    (throw (ex-info "tiny macroexpander: letfn requires a vector of (name [params] body...) bindings"
+                    {:bindings bindings}))))
+
+;; A binding whose body's raw form mentions any OTHER binding's name is a
+;; genuine mutual reference (`even?` calling `odd?` and vice versa) -- these
+;; go through `analyze-letfn-mutual`/`emit-letfn` instead of the desugaring
+;; below, since they need real closure-field wiring, not nested `let`s. A
+;; simple raw-form symbol-membership scan is enough to decide this cheaply,
+;; before any analysis happens.
+(defn- letfn-mutual?
+  [bindings]
+  (let [fnames (set (map first bindings))]
+    (boolean (some (fn [[fname _params & fbody]]
+                      (raw-form-contains-symbol? fbody (disj fnames fname)))
+                    bindings))))
+
+;; Non-mutually-recursive `letfn` desugars into nested `let`s of self-named
+;; `fn`s -- confirmed via `javap -c` on a host-AOT-compiled single-binding
 ;; `(letfn [(add-x [y] (+ x y))] (add-x 10))`: it is exactly the same shape
 ;; as `(let [add-x (fn add-x [y] (+ x y))] (add-x 10))` -- capturing `x` as
 ;; a real closure field, storing the constructed instance in an ordinary
 ;; local slot, calling it via the same `local-fn-call` mechanism -- ALL
-;; already-built machinery, needing zero new bytecode here. Real host's
-;; MUTUALLY recursive shape (`even?` calling `odd?` and vice versa) is
-;; structurally different (each binding's constructor is called with the
-;; OTHER, still-under-construction bindings' current -- possibly still-null
-;; -- values, then every field referencing a not-yet-constructed sibling is
-;; backpatched via a direct `putfield` once all bindings exist) -- a real,
-;; separately-sizeable extension (needs non-final capture fields and a
-;; two-phase construct-then-backpatch emission), not attempted here.
-;; Detected and rejected with a clear error at macro-expansion time (a
-;; simple raw-form symbol-membership scan, cheaper than deferring to
-;; analysis's own "unknown local" for a forward-referenced sibling), rather
-;; than a confusing downstream failure.
+;; already-built machinery, needing zero new bytecode here. Only ever called
+;; once `expand-list` has already confirmed (via `letfn-mutual?`) that no
+;; binding references another sibling.
 (defn- expand-letfn
   [args]
   (let [[bindings & body] args]
-    (when-not (and (vector? bindings)
-                   (seq bindings)
-                   (every? #(and (seq? %) (symbol? (first %)) (vector? (second %)))
-                           bindings))
-      (throw (ex-info "tiny macroexpander: letfn requires a vector of (name [params] body...) bindings"
-                      {:bindings bindings})))
-    (let [fnames (set (map first bindings))]
-      (doseq [[fname _params & fbody] bindings]
-        (when (raw-form-contains-symbol? fbody (disj fnames fname))
-          (throw (ex-info "tiny macroexpander: letfn bindings mutually referencing OTHER letfn siblings are not yet supported -- only self-recursion and references to the enclosing scope are"
-                          {:binding-name fname :bindings bindings}))))
-      (reduce (fn [inner-body [fname params & fbody]]
-                (list 'let [fname (list* 'fn fname params fbody)] inner-body))
-              (cons 'do body)
-              (reverse bindings)))))
+    (validate-letfn-bindings! bindings)
+    (reduce (fn [inner-body [fname params & fbody]]
+              (list 'let [fname (list* 'fn fname params fbody)] inner-body))
+            (cons 'do body)
+            (reverse bindings))))
 
 (defn- expand-as->
   [args]
@@ -482,7 +485,17 @@
       cond (expand-form counter (expand-cond args))
       case (expand-form counter (expand-case counter args))
       if-let (expand-form counter (expand-if-let counter args))
-      letfn (expand-form counter (expand-letfn args))
+      letfn (let [[bindings & _body] args]
+              (validate-letfn-bindings! bindings)
+              ;; A genuinely mutual binding survives expansion AS `letfn`
+              ;; (children still recursively expanded, same as any other
+              ;; form not specially desugared below) for
+              ;; `analyze-letfn-mutual`/`emit-letfn` to handle with real
+              ;; closure-field wiring; a non-mutual one still takes the
+              ;; cheap nested-`let` desugar above.
+              (if (letfn-mutual? bindings)
+                (apply list (map #(expand-form counter %) form))
+                (expand-form counter (expand-letfn args))))
       when-let (do
                  (when (empty? args)
                    (throw (ex-info "tiny macroexpander: when-let arity"
@@ -548,6 +561,7 @@
 (declare analyze-quoted)
 (declare analyze-nested-fn)
 (declare analyze-reify)
+(declare analyze-letfn-mutual)
 
 (def ^:private recur-arity-key ::recur-arity)
 (def ^:private recur-target-key ::recur-target)
@@ -1158,6 +1172,8 @@
       (analyze-nested-fn env args)
       reify
       (analyze-reify env args)
+      letfn
+      (analyze-letfn-mutual env args)
       (cond
         ;; A CALL HEAD that is itself an expression, not a bare symbol,
         ;; e.g. `((constantly x) 99)` -- confirmed via `javap -c`: real
@@ -1435,6 +1451,52 @@
        :body body
        :captures captures})))
 
+;; `letfn` with genuine MUTUAL reference between siblings (`even?` calling
+;; `odd?` and vice versa) -- confirmed via `javap -c` on a host-AOT-compiled
+;; `(letfn [(my-even? [x] (if (zero? x) true (my-odd? (dec x))))
+;;          (my-odd? [x] (if (zero? x) false (my-even? (dec x))))] ...)`:
+;; each binding compiles to its OWN closure class exactly like a nested
+;; `fn`, but the field it uses to reach a sibling is NOT `final` -- the
+;; enclosing method first stores `null` into every binding's local slot,
+;; THEN constructs each closure in written order (passing whatever
+;; CURRENTLY sits in each referenced sibling's slot -- `null` for a
+;; not-yet-constructed forward reference), and only AFTER every binding is
+;; constructed does it go back and `putfield` each sibling-capturing field
+;; with the sibling's real, by-then-fully-constructed instance. This
+;; two-phase "null-init, construct-in-order, backpatch-siblings" shape is
+;; the SAME regardless of the reference graph (forward, backward, or
+;; cyclic) -- no topological ordering is needed, unlike a naive
+;; dependency-sorted `let`. A self-reference (a binding calling itself) is
+;; excluded from its own capture list exactly like a plain named `fn`
+;; already is -- it resolves via `this` (`emit-local`'s `:self` case), not
+;; a field, needing no backpatch at all. Deliberately narrow scope, like
+;; `analyze-nested-fn`: a single arity clause per binding only (already
+;; enforced by `validate-letfn-bindings!` before this is ever reached).
+(defn- analyze-letfn-mutual
+  [env args]
+  (let [[bindings & body] args
+        fnames (mapv first bindings)
+        fnames-set (set fnames)
+        letfn-env (into env (zipmap fnames (repeat true)))
+        analyzed-bindings
+        (mapv (fn [[fname params & fbody]]
+                (let [{:keys [params rest-param body]}
+                      (analyze-fn-clause (cons params fbody) fname letfn-env)
+                      own-names (into #{fname} (cond-> params rest-param (conj rest-param)))
+                      referenced (ast-referenced-names body)
+                      available (disj (into (set (keys env)) fnames-set) closure-depth-key)
+                      captures (vec (filter #(and (available %) (not (own-names %))) referenced))]
+                  {:name fname
+                   :params params
+                   :rest-param rest-param
+                   :body body
+                   :captures captures}))
+              bindings)]
+    {:op :letfn
+     :fnames fnames
+     :bindings analyzed-bindings
+     :body (analyze-body letfn-env body)}))
+
 ;; `reify` -- confirmed via `javap -c` on a host-AOT-compiled `(reify
 ;; Comparator (compare [this a b] ...))`: a fresh class `implements` the
 ;; named interface(s) directly (NOT extending `AFunction`/`RestFn` --
@@ -1697,6 +1759,7 @@
 (declare emit-reify)
 (declare emit-deftype-new)
 (declare emit-protocol-call)
+(declare emit-letfn)
 
 (defn- emit-nil
   [^GeneratorAdapter ga]
@@ -2522,6 +2585,7 @@
     :core-fn-call (emit-core-fn-call ga env node)
     :local-fn-call (emit-local-fn-call ga env node)
     :closure (emit-closure ga env node)
+    :letfn (emit-letfn ga env node)
     :reify (emit-reify ga env node)
     :deftype-new (emit-deftype-new ga env node)
     :protocol-call (emit-protocol-call ga env node)
@@ -2558,8 +2622,21 @@
   captured name, a constructor taking their values (in `captures` order)
   instead of the usual no-arg one, and every reference to a captured name
   inside the class's own methods reads the field instead of an arg/local
-  slot -- see `emit-local`'s `:capture` case."
-  [{:keys [arities fn-name captures]}]
+  slot -- see `emit-local`'s `:capture` case. `final-captures?` (default
+  true) is false only for `emit-letfn`'s mutually-recursive closures: real
+  host does NOT mark a letfn-sibling capture field `final` there -- it gets
+  `putfield`-backpatched from OUTSIDE the constructor once every sibling
+  exists, which the JVM verifier only permits on a non-final field. That
+  backpatch site is a THIRD class (the enclosing method's own), and unlike
+  real host -- where every class in one compiled file shares a single
+  classloader and package, so plain package-private access already works
+  -- each `emit-class` call here gets its OWN fresh `DynamicClassLoader`
+  (see below), making even same-named-package fields mutually inaccessible
+  across calls; the field is made `public` (not just non-final) to cross
+  that boundary, confirmed necessary by a live `IllegalAccessError`
+  otherwise."
+  [{:keys [arities fn-name captures final-captures?]
+    :or {final-captures? true}}]
   (let [variadic? (boolean (some :rest-param arities))
         class-name (next-class-name)
         internal (.replace class-name \. \/)
@@ -2567,6 +2644,7 @@
         base-type (if variadic? restfn-type afn-type)
         cw (ClassWriter. (bit-or ClassWriter/COMPUTE_FRAMES
                                  ClassWriter/COMPUTE_MAXS))
+        field-access (if final-captures? Opcodes/ACC_FINAL Opcodes/ACC_PUBLIC)
         capture-env (into {}
                           (map (fn [cap]
                                  [cap {:kind :capture :owner ctype :field-name (name cap)}]))
@@ -2576,7 +2654,7 @@
     (.visit cw Opcodes/V1_8 Opcodes/ACC_PUBLIC internal nil
             (.getInternalName base-type) nil)
     (doseq [cap captures]
-      (.visitEnd (.visitField cw Opcodes/ACC_FINAL (name cap) (.getDescriptor obj-type) nil nil)))
+      (.visitEnd (.visitField cw field-access (name cap) (.getDescriptor obj-type) nil nil)))
     (if (seq captures)
       (let [ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count captures) obj-type)))
             ga (GeneratorAdapter. Opcodes/ACC_PUBLIC ctor-method nil nil cw)]
@@ -2694,6 +2772,54 @@
     (doseq [cap captures]
       (emit-local ga env cap))
     (.invokeConstructor ga inner-type ctor-method)))
+
+;; `letfn` with genuine mutual reference -- see `analyze-letfn-mutual` for
+;; the full `javap -c`-confirmed shape. Three phases in the enclosing
+;; method's own bytecode: (1) reserve one ordinary local slot per binding
+;; and null-init all of them, (2) construct each binding's closure in
+;; written order via `emit-class`/`NEW`+`INVOKESPECIAL` (exactly like
+;; `emit-closure`, just with `:final-captures? false`), pushing each
+;; capture's CURRENT slot value -- `null` for a still-unconstructed forward
+;; sibling reference -- and storing the result into that binding's own
+;; slot, then (3) for every binding, `putfield`-backpatch each of its
+;; SIBLING captures (never its outer-scope ones, which were already correct
+;; at construction and never change) now that every sibling slot holds its
+;; real instance. The trailing body is emitted with each binding name
+;; resolving as an ordinary `:let` local -- exactly the same `local-fn-call`
+;; mechanism the non-mutual desugared case already uses.
+(defn- emit-letfn
+  [^GeneratorAdapter ga env {:keys [fnames bindings body]}]
+  (let [fnames-set (set fnames)
+        slots (into {} (map (fn [fname] [fname (.newLocal ga obj-type)])) fnames)
+        letfn-env (into env (map (fn [fname] [fname {:kind :let :slot (get slots fname)}])) fnames)
+        artifacts (mapv (fn [{:keys [name params rest-param body captures]}]
+                           (let [artifact (emit-class {:arities [{:params params :rest-param rest-param :body body}]
+                                                       :fn-name name
+                                                       :captures captures
+                                                       :final-captures? false})]
+                             {:name name
+                              :captures captures
+                              :inner-type (Type/getObjectType (.replace ^String (:class-name artifact) \. \/))
+                              :ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count captures) obj-type)))}))
+                         bindings)]
+    (doseq [fname fnames]
+      (emit-nil ga)
+      (.storeLocal ga (int (get slots fname))))
+    (doseq [{:keys [name captures inner-type ctor-method]} artifacts]
+      (.newInstance ga inner-type)
+      (.dup ga)
+      (doseq [cap captures]
+        (emit-local ga letfn-env cap))
+      (.invokeConstructor ga inner-type ctor-method)
+      (.storeLocal ga (int (get slots name))))
+    (doseq [{:keys [name captures inner-type]} artifacts]
+      (doseq [cap captures]
+        (when (fnames-set cap)
+          (.loadLocal ga (int (get slots name)))
+          (.checkCast ga inner-type)
+          (.loadLocal ga (int (get slots cap)))
+          (.putField ga inner-type (clojure.core/name cap) obj-type))))
+    (emit-expr ga letfn-env body)))
 
 ;; After emitting a reify method body (which always produces a boxed
 ;; Object, exactly like every other emitted expression in this file), coerce
@@ -3690,6 +3816,18 @@
     :source "(fn [x] (letfn [(add-x [y] (+ x y)) (double-x [] (* x 2))] (+ (add-x 10) (double-x))))"
     :args [3]
     :expected 19}
+   {:id :tiny-letfn-mutual-recursion
+    :source "(fn [n] (letfn [(my-even? [x] (if (zero? x) true (my-odd? (dec x)))) (my-odd? [x] (if (zero? x) false (my-even? (dec x))))] (my-even? n)))"
+    :args [7]
+    :expected false}
+   {:id :tiny-letfn-mutual-recursion-three-way-cycle
+    :source "(fn [n] (letfn [(a? [x] (if (zero? x) 1 (b? (dec x)))) (b? [x] (if (zero? x) 2 (c? (dec x)))) (c? [x] (if (zero? x) 3 (a? (dec x))))] (a? n)))"
+    :args [3]
+    :expected 1}
+   {:id :tiny-letfn-self-recursion-plus-mutual-sibling
+    :source "(fn [n] (letfn [(count-down [x] (if (zero? x) (helper x) (count-down (dec x)))) (helper [x] (+ x 100))] (count-down n)))"
+    :args [5]
+    :expected 100}
    {:id :tiny-reify-function-apply
     :source "(fn [x a] (.apply (reify java.util.function.Function (apply [this y] (+ x y))) a))"
     :args [10 5]

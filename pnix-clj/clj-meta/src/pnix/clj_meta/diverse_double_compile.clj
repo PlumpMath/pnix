@@ -717,6 +717,10 @@
     :source "(fn [n] (letfn [(fact [i] (if (= i 0) 1 (* i (fact (- i 1)))))] (fact n)))"
     :args [5]
     :expected 120}
+   {:id :mini-backend-letfn-mutual-recursion
+    :source "(fn [n] (letfn [(my-even? [x] (if (zero? x) true (my-odd? (dec x)))) (my-odd? [x] (if (zero? x) false (my-even? (dec x))))] (my-even? n)))"
+    :args [7]
+    :expected false}
    {:id :mini-backend-reify-function-apply
     :source "(fn [x a] (.apply (reify java.util.function.Function (apply [this y] (+ x y))) a))"
     :args [10 5]

@@ -653,9 +653,32 @@ top-line claim, but the substance is much closer than "false" implies:
   `bin/clj-meta-gate` `metacircular gate: READY ✅` +
   `reproducible DDC lane: OK`, 회귀 없음.
 
+  **36번째 슬라이스, 2026-08-15: `letfn` 진짜 상호재귀** (213→216,
+  `(count specs)`로 실측 확인 — 이전 슬라이스 문단의 "214" 표기는
+  기록 오차, STATUS.md 참고).
+  `javap -c` 확인: 상호재귀 binding은 각자 자기만의 closure
+  클래스로 컴파일되지만 상대를 가리키는 필드가 non-final —
+  모든 바인딩 슬롯을 먼저 `null`로 초기화 → 작성 순서대로 생성
+  (앞쪽 참조는 그 시점 슬롯 값, 즉 아직 `null`일 수 있음) →
+  전부 생성된 뒤 형제 참조 필드를 진짜 인스턴스로 `putfield`
+  backpatch, 이 순서 무관 2단계 알고리즘 하나로 순방향/역방향/
+  순환 전부 처리. `raw-form-contains-symbol?`로 상호참조 여부를
+  매크로 전개 단계에서 미리 판정해 비-상호재귀는 기존
+  desugar(`expand-letfn`) 그대로, 상호재귀만 `letfn` 형태를
+  analyzer까지 보존해 새 경로(`analyze-letfn-mutual`/
+  `emit-letfn`) 사용. `emit-class`에 `:final-captures?` 옵션 추가
+  (letfn 전용 클래스만 non-final+public — 각 `emit-class` 호출이
+  독립 `DynamicClassLoader`를 쓰기 때문에 backpatch하는 제3의
+  클래스가 접근하려면 public이 필요함을 `IllegalAccessError`로
+  실제 확인). 2-way/3-way/자기재귀+형제/바깥캡처+형제 전부 실제
+  host 대비 검증. `compiler.clj`는 이미 지원하고 있었음을 확인 후
+  DDC 행 연결(120→121, 마찬가지로 실측 확인). `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY ✅` +
+  `reproducible DDC lane: OK`, 회귀 없음.
+
   U6에 남은 큰 gap: 중첩 closure는 단일 arity로만 범위 제한(깊이
   제한은 해제됨),
-  `letfn`은 진짜 상호재귀(생성-후-backpatch) 아직 없음, `reify`/
+  `reify`/
   `deftype`은 단일/reference-typed 파라미터만, protocol은 fast
   path만(진짜 `extend-protocol` 디스패치 없음).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
