@@ -160,15 +160,32 @@ top-line claim, but the substance is much closer than "false" implies:
   116/116 unaffected, `bin/clj-meta-gate` `metacircular gate: READY`, no
   regressions.
 
+  **Seventh slice landed 2026-08-14: static interop `ClassName/methodName`**
+  (79→83), via `Reflector.invokeStaticMethod(Class, String, Object[])` — the
+  runtime-dispatch counterpart to what instance interop already used, scoped
+  to a small class allowlist (`Math`/`Integer`/`Long`/`String`; real host
+  resolves the class+method at compile time here since the class name is
+  syntactically present, confirmed via `javap -c`, but matching that exact
+  mechanism was out of scope — this backend uses Reflector's own runtime
+  static-dispatch primitive instead, same behavior-not-bytecode-shape bar as
+  `case`). Verified against real host, including a notable negative case:
+  `(Math/max 1 2.0)` is rejected by real host (ambiguous int/double overload,
+  `IllegalArgumentException: "No matching method max found taking 2 args"` —
+  this is one of `conformance.clj`'s own negative-corpus rows) and this
+  backend's Reflector-based call rejects it with the *exact same* exception
+  class and message, confirming the substitution is faithful on the
+  rejection path too, not just the happy path. DDC row: 58→60.
+  `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate` `metacircular
+  gate: READY`, no regressions.
+
   Remaining large surface still untouched by U6 at all: `finally`,
-  multi-catch, static-method interop (`ClassName/methodName`, a DIFFERENT
-  symbol convention from the instance `.methodName` just closed), field
-  access/`set!`, general class construction beyond the small exception
-  allowlist, `deftype`/`defrecord`/`reify`, `letfn`, `str`/string
-  concatenation, bignum/ratio/regex reader literals, dynamic vars,
-  `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape. Each
-  of those is its own multi-fixture slice, several of them (deftype/reify)
-  genuinely large on their own.
+  multi-catch, field access/`set!`, general class construction beyond the
+  small exception allowlist, general class-name resolution beyond the small
+  static-interop allowlist, `deftype`/`defrecord`/`reify`, `letfn`,
+  `str`/string concatenation, bignum/ratio/regex reader literals, dynamic
+  vars, `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape.
+  Each of those is its own multi-fixture slice, several of them
+  (deftype/reify) genuinely large on their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

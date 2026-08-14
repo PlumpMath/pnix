@@ -94,12 +94,13 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    79 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    83 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
     single-clause `try`/`catch`/`throw`/allowlisted exception construction/
-    `.methodName` instance interop via `clojure.lang.Reflector`) with ZERO
-    calls into tools.analyzer.jvm or the host reader.
+    `.methodName` instance interop and `ClassName/methodName` static interop,
+    both via `clojure.lang.Reflector`) with ZERO calls into
+    tools.analyzer.jvm or the host reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
     0 divergences found.
@@ -291,6 +292,32 @@ host `eval` before adding fixtures: `.getMessage` on a caught exception,
 directly), and `.equals` both true/false branches. U6: 74→79. DDC row:
 56→58. Full `-M:conformance` (116/116, unaffected) and full
 `bin/clj-meta-gate` (`metacircular gate: READY`) both still green.
+
+**Widened a seventh time, same day (2026-08-14): static interop
+(`ClassName/methodName`).** Real host resolves the target class+method at
+*compile* time here (unlike instance interop, since the class name is
+syntactically present) and often emits a direct `invokestatic` — confirmed
+via `javap -c` that even `(Integer/toString x)` for an untyped `x` still got
+compile-time-resolved, not routed through Reflector. Matching that exact
+Java-overload-resolution mechanism is out of scope; instead this uses
+`clojure.lang.Reflector.invokeStaticMethod(Class, String, Object[])`, the
+runtime-dispatch primitive Reflector itself exposes for static calls — same
+behavior-equivalence-not-bytecode-shape bar `case`'s `=`-chain already
+established. Deliberately scoped to a small class allowlist (`Math`,
+`Integer`, `Long`, `String` — this tiny language has no general class-name
+resolution), reusing the reader's own namespace-qualified symbol parsing:
+`(symbol "Math/sqrt")` already splits into namespace `"Math"` + name
+`"sqrt"` with zero reader changes needed. Verified against real host `eval`
+before adding fixtures, including the interesting negative case: real
+`(Math/max 1 2.0)` is rejected by the real host with `IllegalArgumentException:
+"No matching method max found taking 2 args"` (ambiguous int/double
+overload — this is one of `conformance.clj`'s own negative-corpus rows) —
+this backend's `Reflector.invokeStaticMethod` rejects the identical call
+with the *exact same* exception class and message, not a different or
+silently-accepted result, confirming the runtime-dispatch substitution is
+behaviorally faithful even on the rejection path, not just the happy path.
+U6: 79→83. DDC row: 58→60. Full `-M:conformance` (116/116, unaffected) and
+full `bin/clj-meta-gate` (`metacircular gate: READY`) both still green.
 
 **What's still genuinely open:** full Wheeler DDC needs the independent
 backend's coverage to match the *production* corpus, not a 43-fixture subset,

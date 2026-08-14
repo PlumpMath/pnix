@@ -93,6 +93,8 @@
 (def ^:private reflector-type (Type/getType Reflector))
 (def ^:private reflector-invoke-instance-method-method
   (reflect-asm-method Reflector "invokeInstanceMethod" [Object String object-array-class]))
+(def ^:private reflector-invoke-static-method-method
+  (reflect-asm-method Reflector "invokeStaticMethod" [Class String object-array-class]))
 
 (defn- next-class-name
   []
@@ -552,6 +554,33 @@
   (when (and (symbol? op) (< 1 (count (name op))) (.startsWith (name op) "."))
     (subs (name op) 1)))
 
+;; `ClassName/methodName args...` -- static interop. Real host resolves the
+;; target class+method at COMPILE time (it can, since the class name is
+;; syntactically present) and often emits a direct `invokestatic`, unlike
+;; the always-runtime-reflective instance-interop path above -- confirmed
+;; via `javap -c` on `(Integer/toString x)` for an untyped `x`, which still
+;; got compile-time-resolved to a direct call, not Reflector. Matching that
+;; exact compile-time-overload-resolution mechanism is out of scope here;
+;; instead this uses `clojure.lang.Reflector.invokeStaticMethod`, the same
+;; *runtime* dispatch primitive Reflector itself exposes for static calls --
+;; same behavior-equivalence bar as `case`'s `=`-chain-instead-of-switch
+;; choice: matching results, not matching bytecode shape. Deliberately
+;; scoped to a small class allowlist (this tiny language has no general
+;; class-name resolution), reusing the reader's own namespace-qualified
+;; symbol parsing: `(symbol "Math/sqrt")` already splits into namespace
+;; "Math" + name "sqrt" with zero reader changes needed.
+(def ^:private known-static-classes
+  {"Math" Math
+   "Integer" Integer
+   "Long" Long
+   "String" String})
+
+(defn- static-interop-target
+  [op]
+  (when (and (symbol? op) (namespace op))
+    (when-let [cls (get known-static-classes (namespace op))]
+      [cls (name op)])))
+
 (defn- analyze-call
   [env form]
   (let [[op & args] form]
@@ -573,6 +602,13 @@
          :method (interop-method-name op)
          :receiver (analyze-expr env (first args))
          :args (mapv #(analyze-expr env %) (rest args))})
+
+      (static-interop-target op)
+      (let [[cls method] (static-interop-target op)]
+        {:op :static-interop-call
+         :class cls
+         :method method
+         :args (mapv #(analyze-expr env %) args)})
 
       :else
       (case op
@@ -993,6 +1029,13 @@
   (emit-object-array ga env args)
   (.invokeStatic ga reflector-type reflector-invoke-instance-method-method))
 
+(defn- emit-static-interop-call
+  [^GeneratorAdapter ga env {:keys [class method args]}]
+  (.push ga (Type/getType ^Class class))
+  (.push ga ^String method)
+  (emit-object-array ga env args)
+  (.invokeStatic ga reflector-type reflector-invoke-static-method-method))
+
 (defn- emit-vector
   [^GeneratorAdapter ga env items]
   (emit-object-array ga env items)
@@ -1043,6 +1086,7 @@
     :new (emit-new ga env node)
     :throw (emit-throw ga env node)
     :interop-call (emit-interop-call ga env node)
+    :static-interop-call (emit-static-interop-call ga env node)
     :loop (emit-loop ga env node)
     :recur (emit-recur ga env (:exprs node))
     :if (let [else-label (Label.)
@@ -1512,7 +1556,23 @@
    {:id :tiny-interop-equals-false
     :source "(fn [a b] (.equals a b))"
     :args [1 2]
-    :expected false}])
+    :expected false}
+   {:id :tiny-static-interop-math-sqrt
+    :source "(fn [x] (Math/sqrt x))"
+    :args [16.0]
+    :expected 4.0}
+   {:id :tiny-static-interop-integer-tostring
+    :source "(fn [x] (Integer/toString x))"
+    :args [42]
+    :expected "42"}
+   {:id :tiny-static-interop-string-valueof
+    :source "(fn [x] (String/valueOf x))"
+    :args [42]
+    :expected "42"}
+   {:id :tiny-static-interop-ambiguous-overload-rejected
+    :source "(fn [a b] (try (Math/max a b) (catch IllegalArgumentException e :ambiguous)))"
+    :args [1 2.0]
+    :expected :ambiguous}])
 
 (defn run
   []

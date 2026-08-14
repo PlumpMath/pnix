@@ -465,7 +465,15 @@
    {:id :mini-backend-interop-equals
     :source "(fn [a b] (.equals a b))"
     :args [1 2]
-    :expected false}])
+    :expected false}
+   {:id :mini-backend-static-interop-math-sqrt
+    :source "(fn [x] (Math/sqrt x))"
+    :args [16.0]
+    :expected 4.0}
+   {:id :mini-backend-static-interop-ambiguous-rejected
+    :source "(fn [a b] (try (Math/max a b) (catch IllegalArgumentException e :ambiguous)))"
+    :args [1 2.0]
+    :expected :ambiguous}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
