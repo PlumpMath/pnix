@@ -9,7 +9,7 @@
             [clojure.pprint :as pp])
   (:import [clojure.asm ClassWriter Label Opcodes Type]
            [clojure.asm.commons GeneratorAdapter Method]
-           [clojure.lang AFunction DynamicClassLoader IFn Keyword Numbers Reflector RestFn RT Symbol Util]
+           [clojure.lang AFunction DynamicClassLoader IFn Keyword Numbers Reflector RestFn RT Symbol Util Var]
            [java.security MessageDigest]))
 
 (def receipt-path "clj-meta/proof/frontend-selfhost.receipt.edn")
@@ -95,6 +95,12 @@
   (reflect-asm-method Reflector "invokeInstanceMethod" [Object String object-array-class]))
 (def ^:private reflector-invoke-static-method-method
   (reflect-asm-method Reflector "invokeStaticMethod" [Class String object-array-class]))
+(def ^:private var-type (Type/getType Var))
+(def ^:private ifn-type (Type/getType IFn))
+(def ^:private rt-var-method
+  (reflect-asm-method RT "var" [String String]))
+(def ^:private var-getrawroot-method
+  (reflect-asm-method Var "getRawRoot" []))
 
 (defn- next-class-name
   []
@@ -702,6 +708,10 @@
           (throw (ex-info "tiny analyzer: throw arity" {:form form})))
         {:op :throw
          :expr (analyze-expr env (first args))})
+      str
+      {:op :core-fn-call
+       :fn-name "str"
+       :args (mapv #(analyze-expr env %) args)}
       (throw (ex-info "tiny analyzer: unsupported call"
                       {:form form :op op}))))))
 
@@ -1181,6 +1191,34 @@
   (emit-object-array ga env args)
   (.invokeStatic ga reflector-type reflector-invoke-static-method-method))
 
+(defn- invoke-method
+  [arity]
+  (Method. "invoke"
+           obj-type
+           (into-array Type (repeat arity obj-type))))
+
+;; `str` (and, in principle, any other `clojure.core` function -- this
+;; mechanism generalizes, though only `str` is wired up as a fixture-tested
+;; call head this pass) is NOT compiler-special on the real host at all:
+;; confirmed via `javap -c` that `(str a b)` resolves the Var
+;; `clojure.core/str` via `RT.var("clojure.core", "str")`, reads its
+;; `getRawRoot()` (the live function value), casts to `IFn`, and calls
+;; `.invoke(...)` -- the exact same mechanism ordinary user-defined function
+;; calls use. This emitter matches that shape exactly, doing the Var lookup
+;; inline on every call rather than caching it in a static field the way
+;; real host does (a real host `const__N` field) -- a performance
+;; difference only, not a behavior difference, since `Var.getRawRoot()`
+;; returns the same live value either way.
+(defn- emit-core-fn-call
+  [^GeneratorAdapter ga env {:keys [fn-name args]}]
+  (.push ga "clojure.core")
+  (.push ga ^String fn-name)
+  (.invokeStatic ga rt-type rt-var-method)
+  (.invokeVirtual ga var-type var-getrawroot-method)
+  (.checkCast ga ifn-type)
+  (doseq [arg args] (emit-expr ga env arg))
+  (.invokeInterface ga ifn-type (invoke-method (count args))))
+
 (defn- emit-vector
   [^GeneratorAdapter ga env items]
   (emit-object-array ga env items)
@@ -1234,6 +1272,7 @@
     :throw (emit-throw ga env node)
     :interop-call (emit-interop-call ga env node)
     :static-interop-call (emit-static-interop-call ga env node)
+    :core-fn-call (emit-core-fn-call ga env node)
     :loop (emit-loop ga env node)
     :recur (emit-recur ga env (:exprs node))
     :if (let [else-label (Label.)
@@ -1246,12 +1285,6 @@
           (.mark ga else-label)
           (emit-expr ga env (:else node))
           (.mark ga end-label))))
-
-(defn- invoke-method
-  [arity]
-  (Method. "invoke"
-           obj-type
-           (into-array Type (repeat arity obj-type))))
 
 (defn- do-invoke-method
   [arity]
@@ -1763,7 +1796,31 @@
    {:id :tiny-try-catch-finally-unmatched-type-counter
     :source "(fn [a] (do (try (try (throw (IllegalArgumentException. \"boom\")) (catch ArithmeticException e :wrong-type) (finally (.incrementAndGet a))) (catch IllegalArgumentException e2 :outer-caught)) (.get a)))"
     :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
-    :expected 1}])
+    :expected 1}
+   {:id :tiny-str-two-args
+    :source "(fn [a b] (str a b))"
+    :args ["hello" "world"]
+    :expected "helloworld"}
+   {:id :tiny-str-numeric-args
+    :source "(fn [a b] (str a b))"
+    :args [1 2]
+    :expected "12"}
+   {:id :tiny-str-one-arg
+    :source "(fn [a] (str a))"
+    :args ["x"]
+    :expected "x"}
+   {:id :tiny-str-zero-args
+    :source "(fn [] (str))"
+    :args []
+    :expected ""}
+   {:id :tiny-str-nil-arg-is-empty
+    :source "(fn [a b] (str a b))"
+    :args [nil "x"]
+    :expected "x"}
+   {:id :tiny-str-with-string-literal
+    :source "(fn [k] (str \"value: \" k))"
+    :args [42]
+    :expected "value: 42"}])
 
 (defn run
   []

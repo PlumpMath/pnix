@@ -1,9 +1,9 @@
 # Deep-research #2: laziness × PE size (Q1/A7) & stage-polymorphic sacred rewrite (Q2/B)
 
 > 2026-07-03 follow-up multi-agent deep research (106 agents, 6 angles, 23 primary sources, 103
-> claims → 25 verified → **23 confirmed / 2 refuted**, ~2.5M tokens). Targets the two questions
-> the first pass (2026-07-02) left explicitly UNANSWERED. Q1 is answered well; Q2 is **partially**
-> answered (mechanism yes, refactoring-safety no).
+> claims → 25 verified → **23 confirmed / 2 refuted**, ~2.5M tokens). 첫 패스(2026-07-02)가
+> 명시적으로 UNANSWERED로 남긴 두 질문 대상. Q1은 잘 답변됨; Q2는 **부분**
+> 답변 (mechanism yes, refactoring-safety no).
 
 ## Q1 (A7) — does laziness help or hurt PE / generating-extension size? ANSWERED
 
@@ -39,12 +39,12 @@ CBV/CBN/CBNeed. Evidence shows sharing-loss makes residuals SLOWER and that lazy
 NEEDS BTIs, but not a bigger-vs-smaller size figure.
 
 ### pnix action for Q1 (additive, specializer/BTA lane, ~zero mirror risk)
-pnix is **call-by-need (sharing)**, so our specializer must (1) **only unfold where sharing can't
-be lost** (affine/right-linear / specialization-safe reducer — the modern fix, NOT more static
-eval), and (2) apply **BTIs to recover static computation**: auto eta-expansion inserted by
-`tower.binding_time_analysis`, and/or a CPS-written specializer. This would make 0029's residuals
-smaller/stronger. Refuted 1-2: "BTIs can't compensate for a non-Jones-optimal specializer" — so
-BTIs help but don't replace a sound reducer.
+pnix는 **call-by-need (sharing)** 이므로 specializer는 (1) **sharing이 손실될 수 없는 곳에서만
+unfold** (affine/right-linear / specialization-safe reducer — modern fix, NOT more static
+eval), (2) **static computation 회복용 BTI** 적용: `tower.binding_time_analysis`가 삽입하는
+auto eta-expansion, 및/또는 CPS-written specializer. 0029 residuals를 더 작게/강하게.
+Refuted 1-2: "BTIs can't compensate for a non-Jones-optimal specializer" — BTIs help but
+don't replace a sound reducer.
 
 ## Q2 (B) — stage-polymorphic maybe-lift rewrite. PARTIALLY answered
 

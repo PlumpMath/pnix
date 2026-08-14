@@ -1,7 +1,7 @@
 # pnix-cljs
 
-`pnix-cljs` adds a genuine ClojureScript/JavaScript host to PNIX. It is not a
-textual rename of the JVM host.
+`pnix-cljs`는 PNIX에 진짜 ClojureScript/JavaScript 호스트를 추가한다.
+JVM 호스트의 텍스트 rename이 아니다.
 
 ```text
 PNIX source
@@ -19,25 +19,25 @@ ClojureScript source
 cljs-meta (cljs.js self-host substrate)
 ```
 
-### Dual-axis + library (read this)
+### 이중 축 + 라이브러리 (필독)
 
-Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).
+정본: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). 에이전트 노트: [`CLAUDE.md`](CLAUDE.md).
 
-| Axis | Command / surface |
+| 축 | 명령 / 표면 |
 |------|-------------------|
-| **host-main** | bare `clojurescript` → `pnix-cljs`; Node with `NODE_PATH` → `share/pnix-cljs` |
+| **host-main** | bare `clojurescript` → `pnix-cljs`; `NODE_PATH` 있는 Node → `share/pnix-cljs` |
 | **pnix-main** | `nix run .#pnix-cljs-pnix` / `pnix-cljs --repl` |
-| **library** | flake package `$out/share/pnix-cljs` — **host-bound** JS, not portable `.px` |
-| **import `.px` from Node** | `require('@plumpmath/pnix-cljs')` → `evalFile*` — see [HOST_IMPORT.md](HOST_IMPORT.md) |
+| **library** | flake 패키지 `$out/share/pnix-cljs` — **호스트 바인딩** JS, 이식 `.px` 아님 |
+| **Node에서 `.px` 임포트** | `require('@plumpmath/pnix-cljs')` → `evalFile*` — [HOST_IMPORT.md](HOST_IMPORT.md) |
 
-`shadow-cljs` may remain the **build orchestrator**; the default **runtime** host
-is `pnix-cljs`, not a portable multi-host bytecode package.
+`shadow-cljs`는 **빌드 오케스트레이터**로 남을 수 있다. 기본 **런타임** 호스트는
+`pnix-cljs`이며 이식 가능한 멀티호스트 바이트코드 패키지가 아니다.
 
-## Build
+## 빌드
 
-The checked-in `clojurescript-r1.12.145` tree is the development compiler
-source. Maven dependencies are resolved by Clojure CLI during regeneration;
-the Nix product package contains only the resulting JavaScript and Node.
+체크인된 `clojurescript-r1.12.145` 트리는 개발 컴파일러 소스다.
+Maven 의존은 재생성 시 Clojure CLI가 resolve한다.
+Nix 제품 패키지는 결과 JavaScript와 Node만 담는다.
 
 ```sh
 ./bin/build-cljs
@@ -45,7 +45,7 @@ the Nix product package contains only the resulting JavaScript and Node.
 nix flake check path:. --no-write-lock-file
 ```
 
-Generated artifacts:
+생성 아티팩트:
 
 ```text
 cljs-meta/dist/cljs-meta.js
@@ -57,7 +57,7 @@ pnix-cljs/dist/pnix-cljs-module.js
 pnix-cljs/dist/pnix-cljs-self-test.js
 ```
 
-## Run
+## 실행
 
 ```sh
 node pnix-cljs/dist/pnix-cljs.js -e 'let double = x: x * 2; in double 21'
@@ -74,23 +74,22 @@ console.log(pnix.evalSource("20 + 22"));
 console.log(pnix.evalValue("{ answer = 42; }.answer"));
 ```
 
-Nix exposes these applications after the JavaScript artifacts are present:
+JavaScript 아티팩트가 있으면 Nix가 다음 앱을 노출한다:
 
 ```sh
 nix run .#pnix-cljs -- -e '20 + 22'
 nix run .#pnix-cljs-cljs -- -e '(+ 20 22)'
 ```
 
-## Seed surface
+## Seed 표면
 
-The first executable surface supports integers in JavaScript's safe integer
-range, booleans, null, strings, `let`, lambdas/application, `if`, attrsets,
-recursive attrsets, selection, boolean operations, comparison, and checked
-integer arithmetic.
+첫 실행 가능 표면은 JavaScript safe integer 범위 정수, 불리언, null, 문자열,
+`let`, 람다/적용, `if`, attrset, 재귀 attrset, selection, 불리언 연산, 비교,
+checked integer 산술을 지원한다.
 
-Effect execution, retained continuation support, complete Nix numeric
-semantics, and established-host equivalence are explicit future work. No
-fallback evaluator is used when this seed encounters unsupported syntax.
+Effect 실행, retained continuation, 완전한 Nix 수치 의미, established-host
+등가는 명시적 후속 작업이다. 이 seed가 미지원 구문을 만나도 fallback 평가기는 쓰지 않는다.
+
 
 ## 실행 테스트해봄.
 https://teu5us.github.io/nix-lib.html

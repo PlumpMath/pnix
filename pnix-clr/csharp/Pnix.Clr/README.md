@@ -1,43 +1,43 @@
-# Pnix.Clr — C# host library for pnix-clr
+# Pnix.Clr — pnix-clr용 C# 호스트 라이브러리
 
-Host-language import surface so **C#** projects can evaluate pnix (`.px`) and
-wire **CLR guest AOT DLLs** without hand-copying cache paths.
+**C#** 프로젝트가 pnix (`.px`)를 평가하고 캐시 경로를 손으로 복사하지 않고
+**CLR guest AOT DLL**을 연결할 수 있게 하는 호스트 언어 임포트 표면.
 
-**Doctrine (all hosts):** monorepo [`../../../HOST_DEV_ENV.md`](../../../HOST_DEV_ENV.md).  
-This package is the **host-main C#** surface for the clr host only — not a
-portable multi-host `.px` library.
+**교리 (전 호스트):** monorepo [`../../../HOST_DEV_ENV.md`](../../../HOST_DEV_ENV.md).  
+이 패키지는 clr 호스트 전용 **host-main C#** 표면이며 — 이식 가능한 멀티호스트
+`.px` 라이브러리가 아니다.
 
-## What this is / is not
+## 이것이 / 아닌 것
 
-| Surface | Role |
-|---------|------|
-| `Pnix.Clr.Eval.Source` / `File` | **Supported:** process-spawn `pnix-clr`, parse JSON CLI result |
-| `Eval.SourceInProcess` / `FileInProcess` | **Experimental (net10+)** — ALC/substrate embed; gate `bin/pnix-clr-inprocess-eval-gate`; see [`docs/IN_PROCESS_EVAL.md`](../../docs/IN_PROCESS_EVAL.md) |
-| `lib/net10.0/runtime-artifact/*.clj.dll` | Guest AOT (ClojureCLR-bound) |
-| `build/Pnix.Clr.props` + `.targets` (export layout; sources under `msbuild/`) | MSBuild HintPath / Reference wiring |
+| 표면 | 역할 |
+|------|------|
+| `Pnix.Clr.Eval.Source` / `File` | **지원:** 프로세스 스폰 `pnix-clr`, JSON CLI 결과 파싱 |
+| `Eval.SourceInProcess` / `FileInProcess` | **실험 (net10+)** — ALC/substrate 임베드; gate `bin/pnix-clr-inprocess-eval-gate`; [`docs/IN_PROCESS_EVAL.md`](../../docs/IN_PROCESS_EVAL.md) 참고 |
+| `lib/net10.0/runtime-artifact/*.clj.dll` | Guest AOT (ClojureCLR 바인딩) |
+| `build/Pnix.Clr.props` + `.targets` (export 레이아웃; 소스는 `msbuild/`) | MSBuild HintPath / Reference 배선 |
 
-This is **not** a portable multi-host `.px` bytecode package. Artifacts are
-**host-bound** to the CLR limb of pnix.
+이식 가능한 멀티호스트 `.px` 바이트코드 패키지가 **아니다**. 아티팩트는
+pnix의 CLR 림에 **호스트 바인딩**된다.
 
-## Quick start (after `export-pnix-clr-library` or HM `pnix-clr-library`)
+## 빠른 시작 (`export-pnix-clr-library` 또는 HM `pnix-clr-library` 이후)
 
 ```csharp
 using Pnix.Clr;
 
-// Inline
+// 인라인
 var r = Eval.Source("1 + 2").EnsureDone();
 Console.WriteLine(r.Value); // 3
 
-// File import (.px)
+// 파일 임포트 (.px)
 var f = Eval.File("examples/hello.px").EnsureDone();
 ```
 
-Environment (set by `dot-nix` / export):
+환경 (`dot-nix` / export가 설정):
 
-- `PNIX_CLR` — path to `pnix-clr` executable  
-- `PNIX_CLR_ROOT` — checkout or cache tree root  
-- `PNIX_CLR_ARTIFACT` — runtime-artifact directory  
-- `PNIX_CLR_LIBRARY` — exported library root (this layout)
+- `PNIX_CLR` — `pnix-clr` 실행 파일 경로  
+- `PNIX_CLR_ROOT` — 체크아웃 또는 캐시 트리 루트  
+- `PNIX_CLR_ARTIFACT` — runtime-artifact 디렉터리  
+- `PNIX_CLR_LIBRARY` — export된 라이브러리 루트 (이 레이아웃)
 
 ## MSBuild
 
@@ -45,7 +45,7 @@ Environment (set by `dot-nix` / export):
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <!-- optional: also Reference guest AOT DLLs -->
+    <!-- 선택: guest AOT DLL도 Reference -->
     <!-- <PnixClrImportGuestDlls>true</PnixClrImportGuestDlls> -->
   </PropertyGroup>
   <Import Project="$(PNIX_CLR_LIBRARY)/build/Pnix.Clr.props"
@@ -55,24 +55,24 @@ Environment (set by `dot-nix` / export):
 </Project>
 ```
 
-Or run `pnix-clr-refs` / `pnix-clr-library` to print absolute paths.
+또는 `pnix-clr-refs` / `pnix-clr-library`로 절대 경로 출력.
 
-## Build / export (from pnix-clr checkout)
+## 빌드 / export (pnix-clr 체크아웃에서)
 
 ```bash
-./bin/build-pnix-clr-artifact          # guest AOT if missing
+./bin/build-pnix-clr-artifact          # 없으면 guest AOT
 ./bin/export-pnix-clr-library          # → target/pnix-clr-library
-# or: nix run .#pnix-clr-library
-./bin/export-pnix-clr-library          # rebuild dual-TFM DLL + props
-./bin/pnix-clr-library-smoke           # export + API check + nupkg + HelloPnix
-./bin/pack-pnix-clr-nupkg              # local .nupkg only
-# MSBuild sample: ../Directory.Build.props.sample
-# In-process: ../../docs/IN_PROCESS_EVAL.md  ·  HelloPnix --inprocess
-# HelloPnix defaults to ProjectReference (latest APIs); set PnixClrUseExport=true
-# to force PNIX_CLR_LIBRARY DLL Reference.
+# 또는: nix run .#pnix-clr-library
+./bin/export-pnix-clr-library          # dual-TFM DLL + props 재빌드
+./bin/pnix-clr-library-smoke           # export + API 검사 + nupkg + HelloPnix
+./bin/pack-pnix-clr-nupkg              # 로컬 .nupkg만
+# MSBuild 샘플: ../Directory.Build.props.sample
+# 인프로세스: ../../docs/IN_PROCESS_EVAL.md  ·  HelloPnix --inprocess
+# HelloPnix 기본은 ProjectReference (최신 API); PnixClrUseExport=true 로
+# PNIX_CLR_LIBRARY DLL Reference 강제.
 ```
-## Related CLIs
+## 관련 CLI
 
 - `pnix-clr` / `pnix-clr-pnix` — eval / REPL  
-- `clojure-clr` — focused `-e` / single-file facade over clr-meta  
-- `pnix-clr-refs` — print artifact DLL paths (dot-nix helper)
+- `clojure-clr` — clr-meta 위 focused `-e` / 단일 파일 파사드  
+- `pnix-clr-refs` — artifact DLL 경로 출력 (dot-nix 헬퍼)

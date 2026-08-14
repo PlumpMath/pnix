@@ -14,9 +14,10 @@ pnix-hy = the pnix language VM on the Hy/Python host, wrapped by
           gate / witness / explain / action-checkpoint into an AI-coding-agent semantic VM.
 ```
 
-Python/Hy self-hosting is hy-meta's job. pnix-hy owns the pnix runtime/compiler/evaluator +
+Python/Hy self-hosting은 hy-meta의 일. pnix-hy는 pnix runtime/compiler/evaluator +
 safe_eval + purity/effect gate + witness/receipt + mirror/reify/explain + Hy↔pnix projection +
-the (new) **action checkpoint** layer that fixes an LLM/algorithm step as an accepted/held/rejected term.
+(new) **action checkpoint** 레이어를 소유 — LLM/algorithm step을 accepted/held/rejected
+term으로 고정.
 
 ## Role lock (owns / does not own)
 
@@ -30,7 +31,7 @@ control · host introspection core.
 
 ## What is ALREADY done (reuse, do NOT rebuild)
 
-The core VM + wrappers exist and are `--gate`-green: pnix eval + compile with `eval==compile`
+Core VM + wrappers exist and are `--gate`-green: pnix eval + compile with `eval==compile`
 4-lane parity (545×4), stable IR hash (`ir.py`), meaning-preservation roundtrip
 (`hy_to_pnix_value_roundtrip` / `roundtrip_status`), `safe_eval` (+`pure_only`),
 `gate_check`/`static_purity_check`, deterministic `make_witness`, singleton `mirror_run` /
@@ -38,9 +39,10 @@ The core VM + wrappers exist and are `--gate`-green: pnix eval + compile with `e
 
 ## The ONLY new work — `pnix_hy/action.py` (thin)
 
-A layer that wraps the existing pieces to judge one action step. It MUST call — never
-reimplement — `safe_eval`, `static_purity_check`, `gate.gate_check`, `gate.make_witness`,
-`mirror.mirror_run`, `pnix_mirror.explain_pnix`, `roundtrip_status` / `hy_to_pnix_value_roundtrip`.
+기존 조각을 감싸 한 action step을 판정하는 레이어. 반드시 호출 — 재구현 금지 —
+`safe_eval`, `static_purity_check`, `gate.gate_check`, `gate.make_witness`,
+`mirror.mirror_run`, `pnix_mirror.explain_pnix`, `roundtrip_status` /
+`hy_to_pnix_value_roundtrip`.
 
 Sketch (subject to impl):
 ```
@@ -56,7 +58,7 @@ Verdict record (schema `pnix-hy.action.report.v0`):
   "gate": {...}, "explain": {...}, "effects": ["pure"],
   "witness_id": "...", "rollback_ref": "..." }
 ```
-Snapshot/rollback are **hash references** (before/after content hashes), NOT a large file-backup
+Snapshot/rollback은 **hash references** (before/after content hashes), NOT a large file-backup
 system. `held` = needs a capability not granted; `rejected` = impure/limit/gate failure;
 `accepted` = pure (or granted) + within bounds + witness stamped.
 

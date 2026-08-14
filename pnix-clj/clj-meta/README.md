@@ -1,24 +1,23 @@
 # clj-meta
 
-Clean Clojure host-language proof lane for `pnix-clj`.
+`pnix-clj`를 위한 깨끗한 Clojure 호스트 언어 증명 레인입니다.
 
-This directory has two separate lanes:
+이 디렉터리에는 서로 다른 두 레인이 있습니다.
 
-- `stage7-gate.sh` is a reproducible-build lane for stock Clojure 1.12.5.
-  It proves deterministic hosted rebuilds; it is not the meta-circular
-  compiler proof.
-- `src/pnix/clj_meta/compiler.clj` and `selfhost.clj` are the meta lane: a
-  Clojure-written analyzer/ASM bytecode compiler plus deterministic self-host
-  checks.
+- `stage7-gate.sh`는 stock Clojure 1.12.5용 재현 가능 빌드 레인입니다.
+  결정적 호스팅 재빌드를 증명하며, 메타순환 컴파일러 증명이 아닙니다.
+- `src/pnix/clj_meta/compiler.clj`와 `selfhost.clj`는 메타 레인입니다.
+  Clojure로 작성된 analyzer/ASM 바이트코드 컴파일러와 결정적 self-host
+  검사입니다.
 
-The source snapshot lives outside this directory:
+소스 스냅샷은 이 디렉터리 바깥에 있습니다.
 
 ```sh
 clojure-clojure-1.12.5/
 ```
 
-Generated stage trees, logs, and proof receipts stay under `clj-meta/` and are
-ignored by git:
+생성된 stage 트리, 로그, 증명 receipt는 `clj-meta/` 아래에 두고 git에서
+무시합니다.
 
 ```text
 clj-meta/work/
@@ -26,11 +25,12 @@ clj-meta/logs/
 clj-meta/proof/
 ```
 
-## Status / primary gate
+## 상태 / 주 게이트
 
-See [STATUS.md](STATUS.md). Primary gate: `./bin/clj-meta-gate` (practical floor: `./bin/clj-meta-gate selfhost`).
+[STATUS.md](STATUS.md)를 보세요. 주 게이트: `./bin/clj-meta-gate` (실무 하한:
+`./bin/clj-meta-gate selfhost`).
 
-## Commands
+## 명령
 
 ```sh
 clj-meta/stage7-gate.sh status
@@ -43,33 +43,31 @@ clojure -M:audit-self-source
 clojure -M:gate
 ```
 
-`stage7-check` builds the full hosted replay:
+`stage7-check`는 전체 호스팅 리플레이를 빌드합니다.
 
 ```text
 stage1 -> stage2 -> stage3 -> stage4 -> stage5 -> stage6 -> stage7
 ```
 
-Stages 3 through 7 compile the same Clojure 1.12.5 source snapshot with the
-previous stage's Java runtime-only Clojure host jar, then compares the generated
-Clojure jars against the previous stage by stable zip entry names and entry
-content hashes.
+stage 3부터 7까지는 이전 stage의 Java runtime-only Clojure 호스트 jar로 동일한
+Clojure 1.12.5 소스 스냅샷을 컴파일한 뒤, 생성된 Clojure jar를 안정적인 zip
+entry 이름과 entry 내용 해시로 이전 stage와 비교합니다.
 
-The stage snapshot is patched only inside `clj-meta/work/` to make the upstream
-build deterministic across JVM processes: locals clearing is disabled and
-closed-over locals are sorted before emitting fn/reify constructor fields.
+stage 스냅샷은 업스트림 빌드를 JVM 프로세스 간에 결정적으로 만들기 위해
+`clj-meta/work/` 안에서만 패치합니다. locals clearing을 끄고, closed-over
+locals를 정렬한 뒤 fn/reify 생성자 필드를 방출합니다.
 
-The final stage compiles and runs:
+최종 stage는 다음을 컴파일하고 실행합니다.
 
 - `pnix.clj-meta.core`
 - `pnix.clj-meta.stm`
 
-## Boundary
+## 경계
 
-Neither lane claims JVM-free Clojure self-hosting. The JVM, Java runtime
-classes under the Clojure source tree, Maven, and the local JDK are permanent
-substrate. The reproducible-build lane also does not claim a Clojure-written
-compiler; it rebuilds stock Clojure with hosted Java compiler infrastructure.
+어느 레인도 JVM 없는 Clojure self-hosting을 주장하지 않습니다. JVM, Clojure
+소스 트리 아래의 Java 런타임 클래스, Maven, 로컬 JDK는 영구 기판입니다.
+재현 가능 빌드 레인 또한 Clojure로 작성된 컴파일러를 주장하지 않습니다.
+호스팅 Java 컴파일러 인프라로 stock Clojure를 다시 빌드합니다.
 
-This directory also does not own `pnix-clj` semantics, brain codecs, or redb
-ingest. It prepares and validates Clojure host/compiler substrate that
-`pnix-clj` can run on.
+이 디렉터리는 `pnix-clj` 의미론, brain codec, redb ingest도 소유하지 않습니다.
+`pnix-clj`가 올라탈 수 있는 Clojure 호스트/컴파일러 기판을 준비하고 검증합니다.

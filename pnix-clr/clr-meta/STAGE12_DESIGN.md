@@ -1,25 +1,25 @@
 # clr-meta Compiler Stage12 design
 
-Status: **closed (live gate PASS)** 2026-08-12. Parent floor is Stage11.
+상태: **closed (live gate PASS)** 2026-08-12. Parent floor는 Stage11.
 
-## Goal
+## 목표
 
-Compiler changes remain quarantined until replay and gate admission (the
-roadmap's own one-line Stage12 definition): a promotion-policy table
-(`proofs/quarantine-policy.tsv`) and a live replay of its two `DONE` gates.
+Compiler change는 replay와 gate admission까지 quarantine 유지 (roadmap 자체
+one-line Stage12 정의): promotion-policy table
+(`proofs/quarantine-policy.tsv`)과 두 `DONE` 게이트의 live replay.
 
-## Gates (6 rows)
+## 게이트 (6 row)
 
-- `local-verification` (`DONE`) — every accepted slice must pass Stage11's
-  adapter closure. Replayed by running Stage11's gate once.
-- `candidate-intake` (`DONE`) — new work enters as
-  `proofs/stage-manifest.tsv` rows before any promotion. Replayed by running
-  `manifest-check` once.
-- `remote-ci` (`HELD`) — the monorepo workflow cannot promote changes.
+- `local-verification` (`DONE`) — 모든 accepted slice가 Stage11 adapter
+  closure를 통과해야 함. Stage11 게이트를 한 번 실행해 replay.
+- `candidate-intake` (`DONE`) — 새 작업은 어떤 promotion 전에도
+  `proofs/stage-manifest.tsv` row로 진입. `manifest-check`를 한 번 실행해
+  replay.
+- `remote-ci` (`HELD`) — monorepo workflow가 change를 promote할 수 없음.
 - `manual-promotion`, `self-modification`, `external-evidence` (`HELD`) —
-  all require an explicit receipt that doesn't exist yet.
+  아직 존재하지 않는 explicit receipt를 모두 요구.
 
-## Commands
+## 명령
 
 ```sh
 ./clr-meta/scripts/clr-meta-compiler-selfhost-stage12-gate
@@ -27,5 +27,5 @@ roadmap's own one-line Stage12 definition): a promotion-policy table
 
 ## Live receipt
 
-`work/compiler-selfhost-stage12-gate.receipt.json` (gitignored) with
+`work/compiler-selfhost-stage12-gate.receipt.json` (gitignored),
 `claims.stage12 = true`, `claims["promotion/allowed?"] = false`.

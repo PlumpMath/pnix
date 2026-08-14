@@ -17,19 +17,19 @@ Python 언어 생태계(**Hy**, Python)와 **pnix**(순수·지연·Nix 계열 �
 > (`--check` 56/56, `--gate` PASS). 즉 *선언된 범위 기준으로 완성*이지 "전부 완성"이 아니다.
 > `SCOPE_LOCK.md` 참고.
 
-### Dual-axis + library (read this)
+### 이중 축 + 라이브러리 (필독)
 
-Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).
+정본: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). 에이전트 노트: [`CLAUDE.md`](CLAUDE.md).
 
-| Axis | Command / surface |
+| 축 | 명령 / 표면 |
 |------|-------------------|
 | **host-main** | `python` / `hy` with `PYTHONPATH` → `pnix_hy` (`pnix-hy-python` / `pnix-hy-hy`) |
 | **pnix-main** | `nix run .#pnix-hy-pnix` / `pnix-hy-project --repl pnix` |
 | **library** | installable `pnix_hy` package — **host-bound**, not portable `.px` |
 | **import `.px` from Python** | `import pnix_hy as ph; ph.eval_file("x.px")` |
 
-**Name clash:** flake `.#pnix-hy-hy` = `--repl hy` (source tree). HM PATH
-`pnix-hy-hy` = bare Hy with `PYTHONPATH`. See [`../HOST_IMPORT.md`](../HOST_IMPORT.md).
+**이름 충돌:** flake `.#pnix-hy-hy` = `--repl hy` (source tree). HM PATH
+`pnix-hy-hy` = PYTHONPATH 있는 bare Hy `PYTHONPATH`. See [`../HOST_IMPORT.md`](../HOST_IMPORT.md).
 
 ---
 

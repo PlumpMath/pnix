@@ -1,44 +1,44 @@
 # pnix-rs
 
-**rs-meta backed pnix runtime front-end** — the Rust host lane for the pnix
-runtime path, sibling of `pnix-clj` (clj-meta backed) and `pnix-hy` (hy-meta
-backed).
+**rs-meta 기반 pnix 런타임 프론트엔드** — pnix 런타임 경로의 Rust 호스트 레인.
+`pnix-clj`(clj-meta 기반), `pnix-hy`(hy-meta 기반)의 형제.
 
 ```text
-pnix-rs    = Rust bootstrap/front-end for the pnix runtime path (this lane)
-../rs-meta = Rust meta-circular stage15-N compiler/evaluator substrate (dependency)
-runtime/   = repo-owned .px runtime artifacts
+pnix-rs    = pnix 런타임 경로용 Rust bootstrap/프론트엔드 (이 레인)
+../rs-meta = Rust 메타원형 stage15-N 컴파일러/평가기 substrate (의존)
+runtime/   = 저장소 소유 .px 런타임 아티팩트
 ```
 
-The dependency on rs-meta is falsifiable, not nominal: the px engine
-(`src/px.rs`) is written inside the rs-meta evaluated Rust subset, and
-`substrate-check` has the rs-meta bootstrap interpret that exact source, then
-requires its output to match both the rustc-compiled run and this binary's own
-native behavior on the same `.px` probes (3-way equality).
+rs-meta 의존은 명목적이 아니라 반증 가능하다: px 엔진(`src/px.rs`)은
+rs-meta가 평가하는 Rust 부분집합 안에서 작성되고, `substrate-check`는
+rs-meta bootstrap이 그 소스를 해석한 뒤, 출력이 rustc 컴파일 실행 및
+이 바이너리 자체 네이티브 동작과 같은 `.px` 프로브에서 일치(3-way equality)를
+요구한다.
 
-## Commands
+## 명령
 
 ```sh
 export CARGO_TARGET_DIR=/tmp/pnix-rs-target
 cargo build --release
 P=/tmp/pnix-rs-target/release/pnix-rs
 
-$P px-check          # seed .px corpus -> expected canonical output
+$P px-check          # seed .px 코퍼스 -> 기대 정규 출력
 $P substrate-check   # rs-meta interp == rs-meta rustc == pnix-rs native
 $P px-eval -c 'let a = 1; b = a + 2; in a + b'
 $P px-eval -f runtime/corpus/c05_recurse.px
 ```
 
-## Seed .px surface
+## Seed .px 표면
 
-Integers, booleans, `+ - * /`, comparisons, `if/then/else`, lambdas
-`param: body`, application by juxtaposition (`f x y`), **recursive** `let ... in`
-(siblings and self-references resolve — pnix let semantics), attrset literals
-`{ k = v; }` with sorted canonical printing, `#` comments. Everything outside
-the seed (floats, strings, lists, `//` merge, selection, builtins) is refused
-honestly and tracked in `todo.md`.
+정수, 불리언, `+ - * /`, 비교, `if/then/else`, 람다 `param: body`,
+병치 적용 (`f x y`), **재귀** `let ... in` (형제·자기 참조 해석 — pnix let 의미),
+attrset 리터럴 `{ k = v; }` (정렬된 정규 출력), `#` 주석.
+seed 밖 (float, 문자열, 리스트, `//` merge, selection, builtins)은 정직하게
+거부되며 `todo.md`에 추적된다.
 
-Corpus files under `runtime/corpus/` include two cases vendored from the
-pnix-clj `rust_grounded` invariance corpus (`c05_recurse`, `c09_lambda`) for
-later cross-host comparison, plus seed-owned cases (including the recursive-let
-regression guard `seed_let_rec.px`).
+`runtime/corpus/`의 코퍼스 파일은 이후 크로스호스트 비교를 위해 pnix-clj
+`rust_grounded` 불변 코퍼스에서 벤더한 두 케이스(`c05_recurse`, `c09_lambda`)와
+seed 소유 케이스(재귀 let 회귀 가드 `seed_let_rec.px` 포함)를 포함한다.
+
+**이중 축 / Cargo 임포트:** [`../docs/CARGO_HOST_IMPORT.md`](../docs/CARGO_HOST_IMPORT.md),
+[`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md).

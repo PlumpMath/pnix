@@ -1,6 +1,6 @@
 # pnix-clr
 
-`pnix-clr` is the experimental ClojureCLR/.NET host for PNIX.
+`pnix-clr`는 PNIX의 실험적 ClojureCLR/.NET 호스트다.
 
 ```text
 pinned ClojureCLR bootstrap trust root
@@ -12,35 +12,34 @@ pinned ClojureCLR bootstrap trust root
           pnix-clr runtime
 ```
 
-The two layers are deliberately separate. `clr-meta` is PNIX-agnostic host
-machinery. It accepts the product-owned `pnix-clr/runtime-artifact.edn` plan,
-validates its exact source closure, and produces the declared CLR AOT artifact;
-it does not hardcode PNIX product namespaces. `pnix-clr` validates and loads
-that artifact. Direct compiler acceleration and common-compiler wiring remain
-future work. The pinned CLR substrate is the upstream `Clojure` NuGet package
-(`1.12.3-alpha8`), published by `bin/build-clr` from `clr-bootstrap/`; no
-upstream compiler sources are vendored here.
+두 레이어는 의도적으로 분리된다. `clr-meta`는 PNIX 비의존 호스트 기계다.
+제품 소유 `pnix-clr/runtime-artifact.edn` 플랜을 받아 정확한 소스 클로저를 검증하고
+선언된 CLR AOT 아티팩트를 만든다; PNIX 제품 네임스페이스를 하드코딩하지 않는다.
+`pnix-clr`는 그 아티팩트를 검증·로드한다. 직접 컴파일러 가속과 common-compiler 배선은
+후속 작업이다. pin된 CLR substrate는 업스트림 `Clojure` NuGet 패키지
+(`1.12.3-alpha8`)이며 `clr-bootstrap/`에서 `bin/build-clr`가 게시한다.
+업스트림 컴파일러 소스는 여기에 벤더하지 않는다.
 
-### Dual-axis + library (read this)
+### 이중 축 + 라이브러리 (필독)
 
-Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).  
-C# package: [`csharp/Pnix.Clr/README.md`](csharp/Pnix.Clr/README.md).  
-**`clojure-clr` admitted surface (fail-closed):** [`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`](docs/CLOJURE_CLR_ADMITTED_SURFACE.md).  
-**TFM policy:** [`docs/TFM_POLICY.md`](docs/TFM_POLICY.md).  
-**Multi-ns bootstrap template:** [`examples/clojure-clr-project/`](examples/clojure-clr-project/).  
-**Profiles smoke:** `./bin/clojure-clr-profiles-smoke` (tool-eval + multi-ns).
+정본: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). 에이전트 노트: [`CLAUDE.md`](CLAUDE.md).  
+C# 패키지: [`csharp/Pnix.Clr/README.md`](csharp/Pnix.Clr/README.md).  
+**`clojure-clr` 허용 표면 (fail-closed):** [`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`](docs/CLOJURE_CLR_ADMITTED_SURFACE.md).  
+**TFM 정책:** [`docs/TFM_POLICY.md`](docs/TFM_POLICY.md).  
+**멀티-ns bootstrap 템플릿:** [`examples/clojure-clr-project/`](examples/clojure-clr-project/).  
+**프로파일 스모크:** `./bin/clojure-clr-profiles-smoke` (tool-eval + multi-ns).
 
-| Axis | Command / surface |
+| 축 | 명령 / 표면 |
 |------|-------------------|
-| **host-main (C#)** | `Pnix.Clr.Eval` after `export-pnix-clr-library`; MSBuild props |
-| **host-main (CLR)** | `bin/clojure-clr` / flake `clojure-clr` (focused `-e` / single file) |
+| **host-main (C#)** | `export-pnix-clr-library` 이후 `Pnix.Clr.Eval`; MSBuild props |
+| **host-main (CLR)** | `bin/clojure-clr` / flake `clojure-clr` (focused `-e` / 단일 파일) |
 | **pnix-main** | `./bin/pnix-clr --repl` / `nix run .#pnix-clr-pnix` |
 | **library** | `./bin/export-pnix-clr-library` → guest AOT + managed DLL + props |
-| **import `.px` from C#** | `Eval.File("x.px")` / `Eval.Source("1+2")` |
+| **C#에서 `.px` 임포트** | `Eval.File("x.px")` / `Eval.Source("1+2")` |
 
-Env contract: `PNIX_CLR`, `PNIX_CLR_ROOT`, `PNIX_CLR_ARTIFACT` (legacy alias
-`PNIX_CLR_RUNTIME_ARTIFACT`), `PNIX_CLR_LIBRARY`. Guest `*.clj.dll` are
-**ClojureCLR-bound** — not a portable multi-host `.px` package.
+Env 계약: `PNIX_CLR`, `PNIX_CLR_ROOT`, `PNIX_CLR_ARTIFACT` (레거시 별칭
+`PNIX_CLR_RUNTIME_ARTIFACT`), `PNIX_CLR_LIBRARY`. Guest `*.clj.dll`은
+**ClojureCLR 바인딩** — 이식 가능한 멀티호스트 `.px` 패키지 아님.
 
 ```sh
 ./bin/build-pnix-clr-artifact
@@ -52,9 +51,8 @@ nix run .#pnix-clr-refs
 
 ## Bootstrap
 
-Requirements for direct runtime scripts: .NET SDK 10 and `jq`. The aggregate
-gate also consumes the common outcome contracts through `nix eval`. The Nix
-runners supply all three.
+직접 런타임 스크립트 요구사항: .NET SDK 10과 `jq`. aggregate 게이트는
+추가로 common outcome 계약을 `nix eval`로 소비한다. Nix 러너가 셋 모두 제공한다.
 
 ```sh
 ./bin/build-clr
@@ -65,153 +63,131 @@ runners supply all three.
 ./bin/pnix-clr-gate
 ```
 
-The first build restores the centrally pinned NuGet dependencies and publishes
-only the framework-dependent `net10.0` Clojure.Main target with its runtime
-assemblies. The full upstream solution is not the bootstrap gate: it also
-contains .NET Framework, net11, and Unix/Mono build lanes not available on
-every development host.
+첫 빌드는 중앙 pin NuGet 의존을 restore하고 framework-dependent `net10.0`
+Clojure.Main 타겟과 런타임 어셈블리만 게시한다. 전체 업스트림 솔루션은 bootstrap
+게이트가 아니다: .NET Framework, net11, Unix/Mono 빌드 레인도 포함되어 모든
+개발 호스트에서 가능하지 않다.
 
-`clr-meta -e` and file mode now parse exactly one focused Clojure form with
-reader evaluation disabled, inert tagged readers, an EOF check, and a recursive
-portable-value-domain check before executing it through physical evaluator
-generation 2. Maps, sets, regexes, tagged/conditional reader values, trailing
-forms, and values outside the admitted domain fail before evaluation. The tool
-path does not use `load-string`. Evaluator generations 0, 1, and 2 are the small nested
-self-interpretation lane; they are not compiler stages. A live attempt to
-extend that nested interpreter through 15 self-extensions exhausts the CLR
-stack. Consequently neither the generation count nor that experiment is
-evidence for compiler Stage15/N.
+`clr-meta -e`와 파일 모드는 reader evaluation 비활성, 비활성 tagged reader,
+EOF 검사, 재귀 portable-value-domain 검사 후 physical evaluator generation 2로
+정확히 하나의 focused Clojure 폼을 파싱·실행한다. map/set/regex, tagged/conditional
+reader 값, trailing form, 허용 도메인 밖 값은 평가 전 실패한다. 툴 경로는
+`load-string`을 쓰지 않는다. evaluator generation 0, 1, 2는 작은 중첩
+self-interpretation 레인이며 컴파일러 스테이지가 아니다. 그 중첩 인터프리터를
+15회 self-extension으로 늘리려는 시도는 CLR 스택을 소진한다. 따라서 generation
+수나 그 실험은 컴파일러 Stage15/N 증거가 아니다.
 
-Separately, `clr-meta` now closes a first profile-qualified Compiler Stage1:
-exact `System.Int64` literals, dynamic `arg`, and checked binary `+`, `-`, `*`
-are lowered by an AOT-seeded ClojureCLR-written compiler directly to a runnable
-managed PE. This is not Stage2/self-reproduction and does not widen the
-`clojure-clr` compatibility facade.
+별도로 `clr-meta`는 첫 profile-qualified Compiler Stage1을 닫는다: 정확한
+`System.Int64` 리터럴, dynamic `arg`, checked binary `+`, `-`, `*`를 AOT-seeded
+ClojureCLR 작성 컴파일러가 실행 가능 managed PE로 직접 lower한다. Stage2/self-reproduction이
+아니며 `clojure-clr` 호환 파사드를 넓히지 않는다.
 
-The route beyond that frozen expression family begins in a separately
-versioned `clr-meta` selfhost family. Its C0/C1 gate fixes a macro-free compiler
-source language and exact low-level support ABI, then recursively admits the
-canonical compiler source against the same language it is required eventually
-to compile. C2 now uses the explicit pinned-host B0 boundary to produce a
-source-hidden executable Compiler Stage1 PE with 27 prepared methods, a
-stack-verified transactional PE sink, and mandatory C1/toolchain closure.
-That generated compiler executes fresh same-language targets and propagates the
-three frozen mutation anchors. Its C2 manifest remains a historical Stage1
-receipt with `compiler_stage2=false`.
+그 frozen expression family 너머 경로는 별도 버전 `clr-meta` selfhost family에서
+시작한다. C0/C1 게이트는 macro-free 컴파일러 소스 언어와 정확한 low-level support
+ABI를 고정한 뒤, 최종적으로 컴파일해야 할 같은 언어에 대해 정규 컴파일러 소스를
+재귀적으로 허용한다. C2는 명시적 pinned-host B0 경계를 써서 소스-숨김 실행 가능
+Compiler Stage1 PE(27 prepared methods, stack-verified transactional PE sink,
+필수 C1/toolchain closure)를 만든다. 생성된 컴파일러는 신선한 same-language
+타겟을 실행하고 세 frozen mutation anchor를 전파한다. C2 매니페스트는
+`compiler_stage2=false`인 역사적 Stage1 receipt로 남는다.
 
-C3 builds a distinct override-style child: the admitted Stage1 compiles the
-exact same canonical kernel source into a runnable Stage2. The child contains
-only `CompilerStage2.dll`, the support triplet, and its own hash-bound manifest;
-it excludes the Stage1 PE, C2 manifest, compiler source, and ClojureCLR. A
-separate C3 gate then hides the compiler source and parent artifact, creates a
-post-Stage2 random nonce target, compiles it with Stage2, and executes it in a
-second fresh target/support-only directory. Thus `clr-meta` closes
-`compiler_stage2=true` and `stage2_fresh_target_replay=true` at C3. It does not
-close Stage3, compiler self-reproduction, a fixed point, raw reproducibility,
-Stage15/N, ClojureCLR replacement, PNIX product/compiler integration, or
-cross-host canonical equivalence. In particular, the current `pnix-clr`
-product artifact still uses the separately declared `host-clojureclr-aot`
-backend and does not consume the Stage2 compiler.
-The gate accounts for all 2,237 nodes in 37 forms / 36 definitions, binds the
-33-call support ABI and twelve lowering owners, and rejects 23 adversarial
-admission inputs without publishing a C1 receipt; the separate C2 gate adds 16
-structured no-output execution cases and four no-replace publication cases.
+C3는 별도 override-style child를 빌드한다: 허용된 Stage1이 동일 정규 커널 소스를
+실행 가능 Stage2로 컴파일한다. child에는 `CompilerStage2.dll`, support triplet,
+자체 hash-bound 매니페스트만 있고 Stage1 PE, C2 매니페스트, 컴파일러 소스,
+ClojureCLR은 제외한다. 별도 C3 게이트는 컴파일러 소스와 부모 아티팩트를 숨기고
+post-Stage2 랜덤 nonce 타겟을 만들어 Stage2로 컴파일한 뒤 두 번째 신선한
+target/support-only 디렉터리에서 실행한다. 이렇게 `clr-meta`는 C3에서
+`compiler_stage2=true`와 `stage2_fresh_target_replay=true`를 닫는다. Stage3,
+compiler self-reproduction, fixed point, raw reproducibility, Stage15/N,
+ClojureCLR 대체, PNIX product/compiler 통합, 크로스호스트 정규 등가는 닫지 않는다.
+특히 현재 `pnix-clr` 제품 아티팩트는 별도 선언 `host-clojureclr-aot` 백엔드를
+쓰며 Stage2 컴파일러를 소비하지 않는다.
+게이트는 37 forms / 36 definitions의 모든 2,237 노드를 계산하고, 33-call support
+ABI와 12 lowering owner를 묶으며, C1 receipt 없이 23 adversarial admission 입력을
+거부한다; 별도 C2 게이트는 16 structured no-output execution 케이스와 4 no-replace
+publication 케이스를 추가한다.
 
-The artifact build consumes the exact nine-namespace product plan and emits
-nine `.clj.dll` files plus `manifest.json`. The manifest records the
-`host-clojureclr-aot` backend, `net10.0` target, entry namespace, plan digest,
-ordered source/output rows, and both closure digests. On every product launch,
-`bin/pnix-clr` checks those identities against the live plan, source tree, and
-artifact bytes, requires the exact manifest keys and artifact tree, rejects
-product namespace shadows in the pinned runtime lookup roots, changes cwd to
-the verified artifact, and replaces `CLOJURE_LOAD_PATH` with that directory.
-It then loads only the AOT product entry and never builds an absent artifact or
-falls back to product source. The pinned `Clojure.Main.dll` remains the runtime substrate.
-`bin/clojure-clr` is a focused compatibility facade accepting only `-e` and a
-single file through the generation-2 tool; `bin/clojure-clr-bootstrap` names
-the explicit upstream compiler/runtime command. The facade still runs atop
-that substrate and is not a broad replacement claim.
+아티팩트 빌드는 정확한 9-namespace 제품 플랜을 소비하고 9개의 `.clj.dll`과
+`manifest.json`을 낸다. 매니페스트는 `host-clojureclr-aot` 백엔드, `net10.0` 타겟,
+entry namespace, plan digest, ordered source/output rows, 두 closure digests를 기록한다.
+모든 제품 기동에서 `bin/pnix-clr`는 이 정체성을 live plan, source tree, artifact
+bytes에 대해 검사하고, exact manifest keys와 artifact tree를 요구하며, pinned
+runtime lookup roots의 제품 네임스페이스 shadow를 거부하고, cwd를 검증된 아티팩트로
+바꾼 뒤 `CLOJURE_LOAD_PATH`를 그 디렉터리로 교체한다. 그다음 AOT 제품 entry만
+로드하며 없는 아티팩트를 빌드하거나 제품 소스로 fallback하지 않는다. pin된
+`Clojure.Main.dll`이 런타임 substrate로 남는다.
+`bin/clojure-clr`는 generation-2 툴을 통해 `-e`와 단일 파일만 받는 focused 호환
+파사드다; `bin/clojure-clr-bootstrap`는 명시적 업스트림 컴파일러/런타임 명령을 이름 붙인다.
+파사드는 여전히 그 substrate 위에서 돌며 광범위 대체 주장이 아니다.
 
-The flake supplies the pinned .NET SDK and source-closure runners. From this
-directory they reuse the live checkout; elsewhere they materialize a writable,
-content-keyed cache of the checked-in CLR source plus the three canonical
-`bool-01` seed files, two focused case/expected pairs for dead imports and
-hasAttr/application precedence, the checked-I64 case/expected pair, two error
-case/expected pairs, and the two common basic-outcome contract files before
-building. NuGet restore is centrally version-pinned but does not yet have a
-lock-file-backed, fully hermetic Nix package.
+flake는 pin된 .NET SDK와 source-closure 러너를 공급한다. 이 디렉터리에서는 live
+checkout을 재사용하고, 다른 곳에서는 체크인 CLR 소스와 정규 seed 파일들의 쓰기 가능
+content-keyed 캐시를 materialize한 뒤 빌드한다. NuGet restore는 중앙 버전 pin이지만
+아직 lock-file 기반 완전 hermetic Nix 패키지는 아니다.
 
 ```sh
-# Before newly created files are tracked:
+# 새로 만든 파일이 추적되기 전:
 ./bin/pnix-clr-gate
 
-# From a tracked monorepo Git tree:
+# 추적된 monorepo Git 트리에서:
 nix flake check --no-build .
 nix run .#gate
 ```
 
-Expected fixtures are JSON text records. The CLR runner removes at most one
-terminal LF or CRLF record delimiter before comparing the canonical JSON;
-every other leading or trailing byte remains significant.
+기대 fixture는 JSON 텍스트 레코드다. CLR 러너는 정규 JSON 비교 전 말단 LF/CRLF
+레코드 구분자 최대 하나를 제거한다; 그 외 leading/trailing 바이트는 모두 유의미하다.
 
-## Honest boundary
+## 정직한 경계
 
-This lane proves that code executes through ClojureCLR on .NET, that missing
-imports in a dead `if` branch, unused argument, or unselected attr field are
-never resolved, that application binds tighter than static attr-path `?`, and
-that checked signed-I64 arithmetic reproduces with lazy overflow avoidance. It
-additionally proves an operational artifact dependency: the generic `clr-meta`
-builder produces the plan-bound eight-DLL artifact, and the product runner
-rejects
-missing, stale, malformed, or extra source/output state instead of using a
-source/bootstrap build fallback.
+이 레인은 코드가 .NET 위 ClojureCLR로 실행되고, dead `if` 분기·미사용 인자·미선택
+attr 필드의 missing import가 resolve되지 않으며, application이 static attr-path `?`보다
+강하게 묶이고, checked signed-I64 산술이 lazy overflow 회피와 함께 재현됨을 증명한다.
+추가로 운영 아티팩트 의존을 증명한다: generic `clr-meta` 빌더가 plan-bound eight-DLL
+아티팩트를 만들고, 제품 러너는 missing/stale/malformed/extra source/output 상태를
+source/bootstrap 빌드 fallback 없이 거부한다.
 
-The checked arithmetic boundary is deliberately narrower than a host numeric
-API: operands originate in the admitted PNIX source lexer/evaluator path and
-remain `System.Int64`. This evidence does not establish an ABI boundary for
-arbitrary ClojureCLR integers. It does not yet claim:
+checked 산술 경계는 호스트 수치 API보다 의도적으로 좁다: operand는 허용된 PNIX
+소스 lexer/evaluator 경로에서 나와 `System.Int64`로 남는다. 이 증거는 임의
+ClojureCLR 정수용 ABI 경계를 세우지 않는다. 아직 주장하지 않는 것:
 
-- the complete mature JVM-host language or research surface;
-- compiler Stage3--15/N, ClojureCLR compiler self-reproduction, or an IL fixed
-  point (the checked-Int64 Stage1 and the separate selfhost-family C2 Stage1/C3
-  Stage2 are closed, but `pnix-clr` does not consume the latter as its product
-  compiler);
-- byte-identical raw AOT reproduction across independent builds;
-- broad ClojureCLR command, language, runtime, or ecosystem compatibility, or
-  replacement of ClojureCLR;
-- a standalone source-free distribution (launch validation currently binds the
-  live plan and source closure, and execution retains the pinned runtime);
-- PNIX common compiler/PIR integration;
-- the full common conformance corpus;
+- 완전한 mature JVM-host 언어 또는 연구 표면;
+- 컴파일러 Stage3--15/N, ClojureCLR 컴파일러 self-reproduction, 또는 IL fixed
+  point (checked-Int64 Stage1과 별도 selfhost-family C2 Stage1/C3 Stage2는 닫혔으나
+  `pnix-clr`는 후자를 제품 컴파일러로 소비하지 않음);
+- 독립 빌드 간 byte-identical raw AOT 재현;
+- 광범위 ClojureCLR 명령/언어/런타임/생태계 호환 또는 ClojureCLR 대체;
+- 단독 source-free 배포 (기동 검증이 현재 live plan과 source closure에 묶이고
+  실행은 pin된 런타임을 유지);
+- PNIX common compiler/PIR 통합;
+- 전체 common conformance corpus;
 - dynamic (`${...}`) attr paths;
-- BigInt arithmetic or general numeric promotion;
-- routing through or enforcement of the `pnix.primitive-abi.v1` manifest;
-- production-evaluator or full-builtin primitive-manifest enforcement;
-- production `Requested` / `Suspended` evaluator integration;
-- completion of the future canonical-result/JCS wire;
-- any claim of behavioural parity with the other pnix hosts.
+- BigInt 산술 또는 일반 수치 promotion;
+- `pnix.primitive-abi.v1` 매니페스트 경유 라우팅/강제;
+- production-evaluator 또는 full-builtin primitive-manifest 강제;
+- production `Requested` / `Suspended` 평가기 통합;
+- 미래 canonical-result/JCS wire 완성;
+- 다른 pnix 호스트와의 행동 패리티 주장.
 
-Unsupported PNIX constructs fail closed with a structured `Failed` result.
-`Done`, `Failed`, `Requested`, and `Suspended` are nominal ClojureCLR
-types implementing the common host-outcome schema; only `Done` and `Failed`
-are integrated into this evaluator slice. A guest attrset cannot forge one.
-There is no JVM evaluator fallback.
+미지원 PNIX 구성은 structured `Failed`로 fail-closed.
+`Done`, `Failed`, `Requested`, `Suspended`는 common host-outcome 스키마를 구현하는
+명목 ClojureCLR 타입이며, 이 평가기 슬라이스에 통합된 것은 `Done`과 `Failed`뿐이다.
+guest attrset이 이를 위조할 수 없다. JVM 평가기 fallback은 없다.
 
-The ordered route from the current evaluator/artifact/C3 Stage2 boundary to
-Stage3--15/N and an eventual profile-bounded ClojureCLR replacement is recorded
-in `clr-meta/STAGE15_N_ROADMAP.md`. That roadmap is a target, not a receipt.
+현재 evaluator/artifact/C3 Stage2 경계에서 Stage3--15/N 및 최종 profile-bounded
+ClojureCLR 대체까지의 순서는 `clr-meta/STAGE15_N_ROADMAP.md`에 기록된다.
+그 로드맵은 목표이지 receipt가 아니다.
 
-## Layout
+## 레이아웃
 
 ```text
-clojure-clr-clojure-1.12.3-alpha8/  NuGet-restored ClojureCLR publish output
+clojure-clr-clojure-1.12.3-alpha8/  NuGet-restored ClojureCLR publish 출력
 clr-meta/                            PNIX-agnostic CLR meta bootstrap
 pnix-clr/                            CLR-native PNIX host + artifact plan
-bin/                                 build, runners, and focused gate
+bin/                                 build, runners, focused gate
 ```
 
-The cloned JVM/domain trees were pruned rather than textually relabelled as a
-CLR port. Only CLR-owned mechanism belongs here.
+복제된 JVM/domain 트리는 CLR 포트로 텍스트 재라벨하지 않고 가지치기했다.
+여기에는 CLR 소유 메커니즘만 속한다.
 
 
 ## 실행 테스트해봄.

@@ -1,44 +1,44 @@
 # Deep-research: efficient cogen (A) & stage-polymorphic sacred rewrite (B)
 
 > 2026-07-02 multi-agent deep research (109 agents, 6 angles, 26 primary sources, 119 claims →
-> 25 adversarially verified → **24 confirmed / 1 refuted**, ~2.4M tokens). Answers the two
-> hard frontiers left after 0026/0028: (A) how to build an EFFICIENT cogen (3rd Futamura
-> projection done right), (B) whether to make the sacred stage7 evaluator stage-polymorphic.
+> 25 adversarially verified → **24 confirmed / 1 refuted**, ~2.4M tokens). 0026/0028 이후
+> 남은 두 hard frontier 답변: (A) EFFICIENT cogen 구축법 (3rd Futamura projection 올바르게),
+> (B) sacred stage7 evaluator를 stage-polymorphic으로 만들지 여부.
 
 ## Verdict in one line
-- **(A) SOLVED by the literature, and it maps cleanly onto pnix, additive, ~zero mirror risk.**
-  The fix is NOT a faster runtime — it is to STOP producing cogen by self-application and instead
-  hand-write the compiler generator (or bootstrap it), which the field settled 1994–2011.
-- **(B) NOT supported by verified evidence.** The stage-polymorphic / maybe-lift rewrite of a
-  byte-identical-mirror-pinned evaluator is largely UNanswered; only the laziness constraint
-  survived verification. Needs a dedicated second research pass before any action. High risk.
+- **(A) 문헌이 SOLVED, pnix에 깨끗이 매핑, additive, ~zero mirror risk.**
+  수정은 더 빠른 런타임이 아니라 — self-application으로 cogen을 만드는 것을 STOP하고
+  대신 compiler generator를 hand-write(또는 bootstrap)하는 것. 분야가 1994–2011에 정착.
+- **(B) 검증된 증거가 지지하지 않음.** Stage-polymorphic / maybe-lift rewrite of a
+  byte-identical-mirror-pinned evaluator는 대부분 UNANSWERED; laziness constraint만
+  검증 생존. 어떤 액션 전 전용 second research pass 필요. High risk.
 
 ## (A) Efficient / optimal cogen — confirmed findings
 
-**A1 — WHY naive self-application bloats (this is exactly our >150s finding).** A cogen produced
-by double/triple self-application (`cog = ⟦spec⟧(spec, spec)`) is intrinsically bloated because
-the self-applied specializer drags an **embedded interpreter + a universal value datatype +
-time-consuming environment/binding-time manipulations** into every generating extension, and
-leaves residual **tag/untag** code. The bloat lives in the *artifact*, not the runtime — which
-matches our four experiments (tree-walker / thunk / compiled-closure / scale-sweep all failed).
-*Birkedal & Welinder PLILP'94; Thiemann "Cogen in Six Lines" ICFP'96; Jones-Gomard-Sestoft §4.8
-"tricks under the carpet", §7.3.* (verified 3-0 / merged)
+**A1 — WHY naive self-application bloats (exactly our >150s finding).** Double/triple
+self-application (`cog = ⟦spec⟧(spec, spec)`)으로 만든 cogen은 본질적으로 bloated:
+self-applied specializer가 **embedded interpreter + universal value datatype +
+time-consuming environment/binding-time manipulations**를 모든 generating extension에
+끌고 들어가고 residual **tag/untag** 코드를 남김. Bloat는 *artifact*에 있지 런타임에
+있지 않음 — 네 실험(tree-walker / thunk / compiled-closure / scale-sweep 전부 실패)과
+일치. *Birkedal & Welinder PLILP'94; Thiemann "Cogen in Six Lines" ICFP'96;
+Jones-Gomard-Sestoft §4.8 "tricks under the carpet", §7.3.* (verified 3-0 / merged)
 
-**A2 — The canonical fix: the "cogen approach" (hand-write the compiler generator).** Instead of
-making `mix` self-applicable, write the cogen directly as a **syntax-directed extension of a
-binding-time analysis**: it manipulates only two-level syntax trees, contains **no interpreter**,
-and may use all host features freely. "The cogen turns out to be just a simple extension of a
-binding-time analysis" (Leuschel). Proven practical in SML/Scheme/MetaScheme/Prolog.
-*Birkedal & Welinder; Thiemann; Leuschel et al. (logen); Glück & Jørgensen PLILP'95/HOSC'97.*
-(verified 3-0, 7 merged claims)
+**A2 — The canonical fix: the "cogen approach" (hand-write the compiler generator).**
+`mix`를 self-applicable로 만들지 말고, cogen을 **binding-time analysis의
+syntax-directed extension**으로 직접 작성: two-level syntax trees만 조작, **인터프리터
+없음**, 모든 호스트 feature 자유 사용. "The cogen turns out to be just a simple
+extension of a binding-time analysis" (Leuschel). SML/Scheme/MetaScheme/Prolog에서
+실용 입증. *Birkedal & Welinder; Thiemann; Leuschel et al. (logen); Glück & Jørgensen
+PLILP'95/HOSC'97.* (verified 3-0, 7 merged claims)
 
-**A3 — Minimal recipe = disciplined offline BTA + generating-extension emission.** A
-binding-time-annotated program **is already a generating extension** under a suitable
-interpretation of the annotations — "this effectively removes every second step" (Thiemann);
-JGS §5.8 (Romanenko's `gex`) builds the generating extension syntactically from two-level
-annotations with **no self-application**. Anti-bloat discipline lives in the BTA: **arity
-raising, let-insertion / bounded static variation, "the trick"** for ambiguous annotations.
-*Thiemann; JGS §5.8, §7.3–7.4.* (verified 3-0)
+**A3 — Minimal recipe = disciplined offline BTA + generating-extension emission.**
+Binding-time-annotated program은 적합한 annotation 해석 하에서 **이미 generating
+extension** — "this effectively removes every second step" (Thiemann);
+JGS §5.8 (Romanenko's `gex`) builds the generating extension syntactically from
+two-level annotations with **no self-application**. Anti-bloat discipline lives in
+the BTA: **arity raising, let-insertion / bounded static variation, "the trick"** for
+ambiguous annotations. *Thiemann; JGS §5.8, §7.3–7.4.* (verified 3-0)
 
 **A4 — Empirically far smaller/faster.** Hand-written cogen gives "remarkable reduction of
 generation time and generator size" (Glück & Jørgensen). Self-applicable SAGE: **>10h** to
@@ -69,20 +69,21 @@ alloc/force as dynamic; a maybe-lift "lift" switch must **NOT cross a thunk boun
 pervasive laziness on cogen *size* remains open. (verified 3-0, single-author → medium confidence)
 
 ### pnix action for (A)
-Write a **hand-written pnix cogen** (`cogen.py` lane, additive) = a syntax-directed pass over
-pnix two-level (BTA-annotated) AST that EMITS a generating extension, containing no interpreter —
-reusing our existing offline BTA (`tower.binding_time_analysis`). Alternatively, try Glück
-3-step bootstrapping from `poly_specialize`. Either is **additive, host/pnix specializer lane,
-essentially zero risk to the sacred 545×4 mirror** (new artifact; stage7 untouched). Would turn
-0028 P2 from "research-blocked" into an engineering task with a known blueprint.
+**Hand-written pnix cogen** 작성 (`cogen.py` lane, additive) = pnix two-level
+(BTA-annotated) AST 위 syntax-directed pass가 generating extension EMIT, 인터프리터
+없음 — 기존 offline BTA (`tower.binding_time_analysis`) 재사용. 대안으로
+`poly_specialize`에서 Glück 3-step bootstrapping. 어느 쪽이든 **additive,
+host/pnix specializer lane, sacred 545×4 mirror에 essentially zero risk**
+(새 artifact; stage7 미접촉). 0028 P2를 "research-blocked"에서 known blueprint
+engineering task로 전환.
 
 ## (B) Stage-polymorphic rewrite of the sacred evaluator — NOT supported
 
-The primary source (**Amin & Rompf, "Collapsing Towers of Interpreters", POPL 2018** — one
+Primary source (**Amin & Rompf, "Collapsing Towers of Interpreters", POPL 2018** — one
 `maybe-lift`-parameterized evaluator is an *interpreter* when maybe-lift = identity and a
 *compiler* when maybe-lift = lift; also LMS, Truffle first-Futamura, PyPy meta-tracing) was
 FOUND, but **none of its claims survived into the confirmed set** — only the laziness constraint
-(A7) applies. The verification explicitly warns: **do not read the absence of B findings as
+(A7) applies. Verification explicitly warns: **do not read the absence of B findings as
 "safe."** No verified guidance exists on:
 - how to keep ONE maybe-lift evaluator as interp-vs-compile without two artifacts, and what the
   base language must provide (staging annotations / multi-level types / quasiquotation — pnix,
@@ -93,18 +94,18 @@ FOUND, but **none of its claims survived into the confirmed set** — only the l
   a byte-identical mirror).
 
 ### pnix action for (B)
-**Do NOT refactor the sacred stage7 evaluator on this evidence.** It stays SACRED. If pursued at
-all, it requires a dedicated second deep-research pass on Collapsing Towers / LMS / Truffle /
-PyPy + refactor-equivalence methods, and would most safely be prototyped as a **separate
-stage-polymorphic evaluator kept beside** the sacred one (oracle + differential gate), never an
-in-place rewrite.
+**이 증거로 sacred stage7 evaluator를 refactor하지 말 것.** SACRED 유지. 추구한다면
+Collapsing Towers / LMS / Truffle / PyPy + refactor-equivalence methods에 대한 전용
+second deep-research pass 필요, 가장 안전하게 **sacred 옆에 둔 SEPARATE
+stage-polymorphic evaluator**로 prototype (oracle + differential gate), in-place
+rewrite 절대 금지.
 
 ## Open questions (carried)
-1. Does a hand-written cogen / Glück bootstrapping stay small for a **pure-lazy** language given
-   thunk-as-dynamic (A7) forces much of the evaluator to residualize — does laziness help or hurt?
-2. Minimal BTA discipline pnix needs (arity raising, let-insertion, the trick) — and is
-   hand-written cogen or 3-step bootstrapping the lower-risk path for pnix?
-3. All of (B) — a separate research pass.
+1. Hand-written cogen / Glück bootstrapping이 **pure-lazy** 언어에서 작게 유지되는가 —
+   thunk-as-dynamic (A7)이 evaluator 상당 부분을 residualize 강제 — laziness help or hurt?
+2. pnix가 필요한 minimal BTA discipline (arity raising, let-insertion, the trick) — 그리고
+   hand-written cogen vs 3-step bootstrapping 중 어느 쪽이 낮은 위험?
+3. (B) 전부 — separate research pass.
 
 ## Primary sources
 - Birkedal & Welinder, *Hand-Writing Program Generator Generators*, PLILP 1994.

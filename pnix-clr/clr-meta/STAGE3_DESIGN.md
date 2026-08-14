@@ -1,68 +1,66 @@
 # clr-meta Compiler Stage3 design
 
-Status: **implemented + gated** (2026-08-07). Live gate
-`scripts/clr-meta-compiler-selfhost-stage3-gate` PASS; receipt under
-`work/compiler-selfhost-stage3-gate.receipt.json`. Highest closed compiler
-floor is now **Stage3** (C3 Stage2 remains the parent). Stage4+ still open
-(`STAGE15_N_ROADMAP.md`).
+상태: **implemented + gated** (2026-08-07). Live gate
+`scripts/clr-meta-compiler-selfhost-stage3-gate` PASS; receipt는
+`work/compiler-selfhost-stage3-gate.receipt.json` 아래. 가장 높은 closed
+compiler floor는 이제 **Stage3** (C3 Stage2는 parent로 남음). Stage4+는 여전히
+open (`STAGE15_N_ROADMAP.md`).
 
-## Goal
+## 목표
 
-**Stage3** is the first **same-source recompile convergence** step after C3
-Stage2:
+**Stage3**는 C3 Stage2 이후 첫 **same-source recompile convergence** 단계다:
 
 ```text
 Stage1 (C2 host-seeded) → Stage2 (C3 same-source) → Stage3 (Stage2 recompiles
 same frozen kernel → semantic + structural convergence under fresh load)
 ```
 
-Stage3 is **not**:
+Stage3는 **아님**:
 
-- evaluator generation nesting (gen0–2 stay separate);
+- evaluator generation nesting (gen0–2는 분리 유지);
 - Stage15/N open-world evidence;
 - full ClojureCLR replacement;
-- PE byte-identity fixed point (that is Stage8 policy);
-- automatic host promotion into tri/five-host full corpus.
+- PE byte-identity fixed point (그건 Stage8 policy);
+- tri/five-host full corpus로의 automatic host promotion.
 
-## Preconditions (already closed)
+## 전제조건 (이미 closed)
 
 | Checkpoint | Claim |
 |---|---|
 | C0 | selfhost ABI/attack contract |
-| C1 | recursive source admission of frozen kernel |
+| C1 | frozen kernel의 recursive source admission |
 | C2 | host-seeded executable Compiler Stage1 PE |
 | C3 | Stage1→Stage2 same-source compile + source-hidden fresh-target replay |
 
-Inputs Stage3 must pin by hash:
+Stage3가 hash로 pin해야 하는 입력:
 
 - C3 Stage2 PE + support triplet + Stage2 manifest
-- frozen `pnix.clr-meta.compiler-kernel.v1` source closure (byte-identical to C3)
-- profile / plan / toolchain snapshot digests from C3 lineage
+- frozen `pnix.clr-meta.compiler-kernel.v1` source closure (C3와 byte-identical)
+- C3 lineage의 profile / plan / toolchain snapshot digest
 
 ## Stage3 definition of done
 
-A Stage3 gate receipt (`compiler_stage3=true`) only if **all** hold:
+Stage3 gate receipt (`compiler_stage3=true`)는 **모두** 성립할 때만:
 
-1. **Parent bind** — Stage2 artifact and its parent lineage hashes match the
-   frozen C3 receipt (no silent parent rewrite).
-2. **Same-source recompile** — Stage2 (not Stage1, not host ClojureCLR) compiles
-   the **exact** frozen kernel source into a Stage3 PE bundle.
-3. **Fresh load** — Stage3 PE loads in a directory containing only Stage3 +
-   support; no Stage1/Stage2 PE, no kernel source, no ClojureCLR product load
-   path.
-4. **Semantic agreement** — Stage3 compiles and runs the post-Stage2 nonce
-   target family and the arithmetic/equality/truthiness targets; observations
-   match Stage2 on the same inputs.
-5. **Structural description equality** — method/field inventory and normalized
-   structural description equal Stage2 (same policy as C3: raw PE bytes may
-   differ until Stage8).
-6. **Source-hidden replay** — recompile + target execution succeed with kernel
-   source absent from the compiler directory (same honesty as C3 replay).
-7. **No auto-promotion** — receipt records
+1. **Parent bind** — Stage2 artifact와 parent lineage hash가 frozen C3
+   receipt와 일치 (silent parent rewrite 없음).
+2. **Same-source recompile** — Stage2 (Stage1 아님, host ClojureCLR 아님)가
+   **exact** frozen kernel source를 Stage3 PE bundle로 compile.
+3. **Fresh load** — Stage3 PE가 Stage3 + support만 있는 directory에서 load;
+   Stage1/Stage2 PE, kernel source, ClojureCLR product load path 없음.
+4. **Semantic agreement** — Stage3가 post-Stage2 nonce target family와
+   arithmetic/equality/truthiness target을 compile·run; 같은 input에서
+   Stage2와 observation 일치.
+5. **Structural description equality** — method/field inventory와 normalized
+   structural description이 Stage2와 equal (C3와 같은 policy: raw PE bytes는
+   Stage8까지 다를 수 있음).
+6. **Source-hidden replay** — kernel source가 compiler directory에 없는
+   상태에서 recompile + target execution 성공 (C3 replay와 같은 honesty).
+7. **No auto-promotion** — receipt가 기록:
    `compiler_self_reproduction=false`, `compiler_stage15_n=false`,
    `il_fixed_point=false`, `promotion/allowed?=false`.
 
-## Explicit non-goals for Stage3
+## Stage3 explicit non-goal
 
 ```text
 compiler_stage4_through_7_convergence   # later stages
@@ -75,13 +73,13 @@ pnix_common_compiler_integration
 cross_host_canonical_equivalence
 ```
 
-## Work packages (implementation order)
+## Work package (구현 순서)
 
 ### WP-A — Stage3 plan + receipt schema
 
-- Extend artifact/plan schema with `compiler_stage3` boolean (default false).
-- New receipt schema
-  `pnix.clr-meta.compiler-stage3.receipt.v1` with fields:
+- artifact/plan schema에 `compiler_stage3` boolean 확장 (default false).
+- 새 receipt schema
+  `pnix.clr-meta.compiler-stage3.receipt.v1` 필드:
   - parent Stage2 digests, source closure digests
   - Stage3 output digests, structural description digest
   - semantic target matrix (nonce + arithmetic family)
@@ -90,37 +88,37 @@ cross_host_canonical_equivalence
 
 ### WP-B — Stage3 builder
 
-- Input: verified C3 Stage2 bundle + frozen kernel source.
-- Action: invoke Stage2 as the compiler (not host AOT) on kernel source.
-- Output: Stage3 PE + support copy + Stage3 manifest.
-- Fail closed if Stage2 missing, source hash drift, or host fallback observed
-  for admitted forms.
+- 입력: verified C3 Stage2 bundle + frozen kernel source.
+- 동작: kernel source에 대해 Stage2를 compiler로 호출 (host AOT 아님).
+- 출력: Stage3 PE + support copy + Stage3 manifest.
+- Stage2 누락, source hash drift, 또는 admitted form에 host fallback 관찰 시
+  fail closed.
 
 ### WP-C — Stage3 gate script
 
-- `scripts/selfhost-stage3-gate` (name fixed at implementation time):
-  1. verify parent C3 receipt
-  2. build Stage3 (or `--no-build` consume existing)
-  3. structural compare Stage2↔Stage3
-  4. source-hidden fresh-target replay with Stage3 only
-  5. write receipt; exit 0 only when definition-of-done holds
+- `scripts/selfhost-stage3-gate` (구현 시 이름 고정):
+  1. parent C3 receipt 검증
+  2. Stage3 build (또는 `--no-build`로 기존 소비)
+  3. Stage2↔Stage3 structural compare
+  4. Stage3 only source-hidden fresh-target replay
+  5. receipt 기록; definition-of-done 성립 시에만 exit 0
 
 ### WP-D — Mutation / negative matrix
 
-Carry C2/C3 style no-output failures:
+C2/C3 스타일 no-output failure 유지:
 
-- identity/metadata mutation on Stage3 publication
-- arithmetic lowering mutation on Stage3 control path
+- Stage3 publication의 identity/metadata mutation
+- Stage3 control path의 arithmetic lowering mutation
 - missing support / wrong parent hash / source drift
 
-### WP-E — Documentation honesty
+### WP-E — 문서 honesty
 
-- Update `STATUS.md` only after live green gate.
-- Keep `STAGE15_N_ROADMAP.md` Open claims until WP-C passes.
-- Do not fold Stage3 into `pnix-clr` product artifact plan until a separate
-  product-admission decision.
+- live green 게이트 후에만 `STATUS.md` 갱신.
+- WP-C 통과 전까지 `STAGE15_N_ROADMAP.md` Open claims 유지.
+- 별도 product-admission 결정 전까지 Stage3를 `pnix-clr` product artifact
+  plan에 fold하지 말 것.
 
-## Suggested acceptance command (future)
+## 제안 acceptance 명령 (future)
 
 ```sh
 # From pnix-clr/clr-meta/  (design only — script not landed yet)
@@ -128,20 +126,21 @@ Carry C2/C3 style no-output failures:
 # expects: receipt compiler_stage3=true, promotion/allowed?=false
 ```
 
-## Relationship to product hosts
+## product host와의 관계
 
-Stage3 advances **clr-meta** compiler self-hosting. It does **not** by itself:
+Stage3는 **clr-meta** compiler self-hosting을 진전시킨다. 그 자체로 다음을
+하지 **않는다**:
 
-- widen `pnix-clr` language surface;
-- admit clr into full tri-host corpus (use five-host **common slice** first);
-- claim Trusting-Trust defense.
+- `pnix-clr` language surface 확장;
+- full tri-host corpus에 clr admit (먼저 five-host **common slice** 사용);
+- Trusting-Trust defense claim.
 
-## Exit criteria for “Stage3 closed”
+## “Stage3 closed” exit criteria
 
-Live machine evidence:
+Live machine 증거:
 
-1. stage3 gate exit 0
-2. receipt hash recorded in STATUS
-3. Open claims flip only:
+1. stage3 게이트 exit 0
+2. STATUS에 receipt hash 기록
+3. Open claims flip만:
    - `compiler_stage3` (narrow) → true  
-   - Stage4–7 / self-reproduction / fixed-point remain false until their gates
+   - Stage4–7 / self-reproduction / fixed-point는 각자 게이트까지 false

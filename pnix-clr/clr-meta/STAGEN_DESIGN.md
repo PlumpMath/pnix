@@ -1,31 +1,29 @@
 # clr-meta Compiler StageN design
 
-Status: **closed (live gate PASS)** 2026-08-12. Parent floor is Stage15.
+상태: **closed (live gate PASS)** 2026-08-12. Parent floor는 Stage15.
 
-## Goal
+## 목표
 
-Every newly bound runtime, adapter, proof, or product surface replays the
-complete applicable closure ledger (the roadmap's own one-line StageN
-definition): an extension-policy table (`proofs/extension-policy.tsv`) and a
-live replay of its three `DONE` rows, anchoring the whole Stage10-15/N chain
-back to Stage9.
+새로 바인딩된 모든 runtime, adapter, proof, product surface가 complete
+applicable closure ledger를 replay (roadmap 자체 one-line StageN 정의):
+extension-policy table (`proofs/extension-policy.tsv`)과 세 `DONE` row의
+live replay로, 전체 Stage10-15/N chain을 Stage9로 다시 anchor.
 
-## Extensions (6 rows)
+## Extension (6 row)
 
-- `manifest-index` (`DONE`) — `proofs/stage-manifest.tsv` stays
-  machine-readable and append-only. Replayed by running `manifest-check`
-  once, plus a direct check here that every manifest row carries a numeric
-  `max_seconds` and non-empty `cost_note` (the `timeout-cost` policy this
-  same table declares).
-- `timeout-cost` (`DONE`) — anchored by running Stage15's gate once, which
-  transitively anchors the entire Stage10→15 chain back to Stage9 in one
-  hop per stage (not exponentially, per the Stage11 design note).
-- `stageN-seed` (`DONE`) — checked by this gate's own policy-table
-  validation; there is no stage beyond this one to call.
-- `breaking-change`, `external-law`, `future-stage` (`HELD`) — all require an
-  explicit migration/review receipt that doesn't exist yet.
+- `manifest-index` (`DONE`) — `proofs/stage-manifest.tsv`가 machine-readable
+  및 append-only 유지. `manifest-check`를 한 번 실행해 replay하고, 여기에
+  모든 manifest row가 numeric `max_seconds`와 non-empty `cost_note`를
+  갖는지 직접 검사 (같은 테이블이 선언하는 `timeout-cost` policy).
+- `timeout-cost` (`DONE`) — Stage15 게이트를 한 번 실행해 anchor; 이는
+  Stage10→15 전체 chain을 stage당 one hop으로 Stage9까지 transitively
+  anchor (exponential 아님, Stage11 design note 참조).
+- `stageN-seed` (`DONE`) — 이 게이트 자체 policy-table validation으로 검사;
+  이 너머 호출할 stage 없음.
+- `breaking-change`, `external-law`, `future-stage` (`HELD`) — 아직 존재하지
+  않는 explicit migration/review receipt를 모두 요구.
 
-## Commands
+## 명령
 
 ```sh
 ./clr-meta/scripts/clr-meta-compiler-selfhost-stagen-gate
@@ -33,5 +31,5 @@ back to Stage9.
 
 ## Live receipt
 
-`work/compiler-selfhost-stagen-gate.receipt.json` (gitignored) with
+`work/compiler-selfhost-stagen-gate.receipt.json` (gitignored),
 `claims.stagen = true`, `claims["promotion/allowed?"] = false`.

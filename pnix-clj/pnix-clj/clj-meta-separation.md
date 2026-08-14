@@ -1,36 +1,33 @@
-# pnix-clj / clj-meta Separation Plan
+# pnix-clj / clj-meta 분리 계획
 
-Updated: 2026-07-01 KST
+갱신: 2026-07-01 KST
 
-This document reconciles the requested separation plan ("pure clj-meta
-compiler/evaluator layer + pnix-clj runtime/interop layer") with the **actual
-current branch**. Every "stays / moves / interop" assignment cites a real file on
-this branch.
+이 문서는 요청된 분리 계획("순수 clj-meta 컴파일러/evaluator 계층 + pnix-clj
+런타임/interop 계층")을 **실제 현재 브랜치**와 맞춥니다. 모든 "stays / moves /
+interop" 배정은 이 브랜치의 실제 파일을 인용합니다.
 
-**Branch reality (READ FIRST).** This branch — `feat/clj-meta-metacircular` — is a
-clean parallel rewrite: a Clojure/JVM-hosted pnix runtime on the clj-meta host
-proof floor (parse -> evaluate -> lower -> clj-meta lane -> .px runtime lane ->
-mirror/receipt). It diverged from `origin/main` at merge-base `5a8db4d8` and is
-**0 behind / 407 ahead**. `origin/main` is a DIFFERENT, older design line
+**브랜치 현실 (먼저 읽기).** 이 브랜치 — `feat/clj-meta-metacircular` — 는 깨끗한
+병렬 재작성입니다. clj-meta 호스트 증명 하한 위의 Clojure/JVM 호스팅 pnix
+런타임(parse -> evaluate -> lower -> clj-meta 레인 -> .px 런타임 레인 ->
+mirror/receipt). merge-base `5a8db4d8`에서 `origin/main`과 갈라져
+**0 behind / 407 ahead**. `origin/main`은 다른, 더 오래된 설계 라인
 (content-addressed `cas.clj`, append-only `store.clj`, `stage.clj`, `purity.clj`,
-`term.clj`/`stm.clj`/`resolve.clj`, gate-graph, 67-language emit, Korean modules).
-Those main modules are **REFERENCE ASSETS (MAIN-ONLY)** — useful to port from when
-a roadmap item calls for it, but they must NOT be judged as "already present" on
-this branch, nor as "absent pillars this branch must fill". Classify this branch
-only by its own files: BUILT / PARTIAL / TARGET / MOVED / HELD, and use MAIN-ONLY
-for anything that lives on `origin/main` but not here. Do not pull main modules in
-unless explicitly porting.
+`term.clj`/`stm.clj`/`resolve.clj`, gate-graph, 67-language emit, Korean
+modules). 그 main 모듈은 **참조 자산 (MAIN-ONLY)** — 로드맵 항목이 부를 때
+이식에 유용하지만, 이 브랜치에 "이미 있음"으로 판단해서도, "이 브랜치가 채워야
+할 부재 기둥"으로 판단해서도 안 됩니다. 이 브랜치는 자체 파일만으로 분류:
+BUILT / PARTIAL / TARGET / MOVED / HELD, 그리고 `origin/main`에만 있고 여기
+없는 것은 MAIN-ONLY. 명시적 이식이 아니면 main 모듈을 끌어오지 마세요.
 
-Read this alongside `todo.md` and its `## Completeness Roadmap`. This is the
-architectural map; the roadmap is the feature backlog.
+`todo.md`와 그 `## Completeness Roadmap`과 함께 읽으세요. 이것이 아키텍처 맵이고,
+로드맵이 기능 백로그입니다.
 
 ---
 
-## 0. Core correction: meta-circular is not just "mirror"
+## 0. 핵심 교정: 메타순환은 "mirror"만이 아님
 
-The earlier framing treated meta-circular capability as something that only
-exists when a *mirror* exists. That is too narrow. A mirror is **one observation
-surface**. Meta-circular capability is the whole set:
+이전 프레이밍은 메타순환 능력을 *mirror*가 있을 때만 존재하는 것처럼 다뤘습니다.
+너무 좁습니다. Mirror는 **하나의 관찰 표면**입니다. 메타순환 능력은 전체 집합:
 
 ```
 reader · parser · form-as-data · AST-as-data · canonical form · content hash ·
@@ -39,118 +36,114 @@ compiled-class-artifact proof · roundtrip · drift detection · witness/proof �
 gate/capability · interop · self-hosting ladder
 ```
 
-The mirror's current many-pieces shape (separate `mirror.clj`, `mirror_pair`,
-`mirror_error`, `clojure_projection`, `clojure_form` lanes) was a design result,
-not a requirement. Section 6 corrects it toward a singleton runtime mirror with
-trace facets.
+Mirror의 현재 여러 조각 형태(별도 `mirror.clj`, `mirror_pair`, `mirror_error`,
+`clojure_projection`, `clojure_form` 레인)는 설계 결과이지 요구사항이 아닙니다.
+§6이 이를 트레이스 facet을 가진 singleton 런타임 mirror로 교정합니다.
 
-Three layers, one bridge:
+세 계층, 하나의 브리지:
 
 ```
-clj-meta   = Clojure/JVM meta-circular compiler/evaluator PROOF lane (host floor)
-pnix-clj   = pnix runtime hosted on clj-meta, plus pnix <-> Clojure/JVM interop
-interop    = explicit bidirectional bridge at the boundary (not a mirror)
+clj-meta   = Clojure/JVM 메타순환 컴파일러/evaluator PROOF 레인 (호스트 하한)
+pnix-clj   = clj-meta 위 pnix 런타임 + pnix <-> Clojure/JVM interop
+interop    = 경계의 명시적 양방향 브리지 (mirror 아님)
 ```
 
-Layering & sequencing (the sharper model): **clj-meta is pnix-agnostic.** Its job
-is to *complete* Clojure(JVM) meta-circularity on its own — self-hosting ladder
-(stage1 -> 7 -> ... -> N), kernel, import hook, artifact reproduction, host
-introspection (clj-meta's own todo). It knows nothing about pnix. **pnix-clj is
-purely the pnix layer on top of that finished host, and its "host" *is*
-clj-meta.** So pnix-clj must NOT re-do host proof: any "is host Clojure
-faithful?" work is Clojure <-> Clojure and belongs to clj-meta's domain (reached
-via interop), not to the pnix runtime core.
+계층화 & 시퀀싱 (더 날카로운 모델): **clj-meta는 pnix-agnostic.** 일은 스스로
+Clojure(JVM) 메타순환을 *완성*하는 것 — self-hosting ladder (stage1 -> 7 -> ...
+-> N), kernel, import hook, artifact 재현, 호스트 introspection (clj-meta 자체
+todo). pnix를 모름. **pnix-clj는 그 완성된 호스트 위 순수 pnix 계층이며, 그
+"호스트" *가* clj-meta.** 따라서 pnix-clj는 호스트 증명을 다시 하면 안 됨:
+"호스트 Clojure가 충실한가?" 작업은 모두 Clojure <-> Clojure이며 clj-meta 영역
+(interop를 통해 도달), pnix 런타임 코어가 아님.
 
-Consequence for this branch: `clojure_form.clj` (host Clojure `eval` vs clj-meta
-compile agreement) and the host-reflection half of `clojure_projection.clj` (Var/
-NS/Java/reflection snapshots) are **Clojure-about-Clojure host-domain** work, not
-pnix-runtime core. pnix-clj's actual core is `parser` / `evaluator` / `lowering` /
-`px_runtime` / `mirror` / `receipt` (the pnix language). The host-domain pieces
-move behind interop (Phases B/C) and conceptually belong to clj-meta's lane.
+이 브랜치에 대한 귀결: `clojure_form.clj`(호스트 Clojure `eval` vs clj-meta
+컴파일 동의)와 `clojure_projection.clj`의 호스트-reflection 반쪽
+(Var/NS/Java/reflection 스냅샷)은 **Clojure-about-Clojure 호스트 도메인** 작업이지
+pnix-런타임 코어가 아님. pnix-clj의 실제 코어는 `parser` / `evaluator` /
+`lowering` / `px_runtime` / `mirror` / `receipt` (pnix 언어). 호스트 도메인
+조각은 interop 뒤(Phases B/C)로 이동하며 개념적으로 clj-meta 레인에 속함.
 
 ---
 
-## 1. Current reality (verified — read before refactoring)
+## 1. 현재 현실 (검증됨 — 리팩터 전 읽기)
 
-Git root is `~/pnix-clj`. Siblings:
+Git 루트는 `~/pnix-clj`. 형제:
 
 ```
-clj-meta/                 mature Clojure->JVM-bytecode meta-circular compiler
-pnix-clj/                 this project (the pnix runtime)
-clojure-clojure-1.12.5/   host Clojure source corpus
+clj-meta/                 성숙한 Clojure->JVM-바이트코드 메타순환 컴파일러
+pnix-clj/                 이 프로젝트 (pnix 런타임)
+clojure-clojure-1.12.5/   호스트 Clojure 소스 corpus
 pnix-mirror-runtime/ pnixc-pnix/ stdlib/ corpus/ docs/ ingest/ scripts/
 ```
 
-- `pnix-clj/deps.edn`: `pnix/clj-meta {:local/root "../clj-meta"}` — clj-meta is
-  the one declared backend dependency.
-- **clj-meta already owns the host proof lane.** It is not a stub. Its `src/pnix/
-  clj_meta/` includes: `compiler.clj` (`compile-form`, `compile-form*`,
-  `eval-form`, `compile-form-strict`, `compile-ns`, `load-compiled-ns`,
-  `compile-classes`, `compile-to-dir`), `verified_compile.clj`
-  (`compile-classes-verified`), `bytecode_verifier.clj`, `bytecode_witness.clj`,
-  `determinism_policy.clj`, `translation_validation.clj`, `conformance.clj`,
-  `fuzz_conformance.clj`, `kernel.clj`, `selfhost.clj`, `runtime_selfhost.clj`,
-  `frontend_selfhost.clj`, `crosshost.clj`, `cross_host_ddc.clj`, `mirror.clj`,
-  `stm.clj`, `gate.clj`, `language_surface.clj`, and more.
-  > Consequence: **"move to clj-meta" almost always means "consume clj-meta's
-  > existing API" or "relocate a thin host-reflection helper behind a clj-meta
-  > interop API" — not build something new.** Do not reinvent what clj-meta has.
-- **Host machinery in pnix-clj is confined to exactly three files** (verified by
-  grepping `requiring-resolve` / host `(eval ...)` / reflection across
-  `src/pnix_clj/*.clj`): `clj_meta.clj`, `clojure_form.clj`,
-  `clojure_projection.clj`. Everything else is pnix-native.
-- **Not on this branch** (these are MAIN-ONLY reference assets — they live on
-  `origin/main`'s different design line, not here, so do not treat them as either
-  "already present" or "absent pillars to fill" on this branch): `cas.clj`
+- `pnix-clj/deps.edn`: `pnix/clj-meta {:local/root "../clj-meta"}` — clj-meta가
+  선언된 유일한 백엔드 의존성.
+- **clj-meta가 이미 호스트 증명 레인을 소유.** 스텁이 아님. `src/pnix/clj_meta/`
+  포함: `compiler.clj` (`compile-form`, `compile-form*`, `eval-form`,
+  `compile-form-strict`, `compile-ns`, `load-compiled-ns`, `compile-classes`,
+  `compile-to-dir`), `verified_compile.clj` (`compile-classes-verified`),
+  `bytecode_verifier.clj`, `bytecode_witness.clj`, `determinism_policy.clj`,
+  `translation_validation.clj`, `conformance.clj`, `fuzz_conformance.clj`,
+  `kernel.clj`, `selfhost.clj`, `runtime_selfhost.clj`, `frontend_selfhost.clj`,
+  `crosshost.clj`, `cross_host_ddc.clj`, `mirror.clj`, `stm.clj`, `gate.clj`,
+  `language_surface.clj` 등.
+  > 귀결: **"clj-meta로 이동"은 거의 항상 "clj-meta의 기존 API를 소비" 또는
+  > "얇은 호스트-reflection 헬퍼를 clj-meta interop API 뒤로 재배치"를 뜻함 —
+  > 새로 짓는 것이 아님.** clj-meta가 가진 것을 재발명하지 마세요.
+- **pnix-clj의 호스트 기계는 정확히 세 파일에 국한** (`requiring-resolve` /
+  호스트 `(eval ...)` / reflection을 `src/pnix_clj/*.clj` 전역 grep으로 검증):
+  `clj_meta.clj`, `clojure_form.clj`, `clojure_projection.clj`. 나머지는 전부
+  pnix-native.
+- **이 브랜치에 없음** (MAIN-ONLY 참조 자산 — `origin/main`의 다른 설계 라인에
+  살며, 여기 "이미 있음" 또는 "채울 부재 기둥"으로 다루지 말 것): `cas.clj`
   (content-addressing: `normalize-term`/`canonical-form`/`term-hash`/`term-key`),
   `store.clj` (append-only event log), `term.clj`, `stm.clj`, `resolve.clj`,
-  `purity.clj`, `stage.clj`, `evidence.clj`, `verifier.clj`, `search.clj`, plus a
-  `README`. This branch is the parse -> evaluate -> lower -> (clj-meta lane) ->
-  (.px runtime lane) -> mirror/receipt design, with the cross-lane
-  `receipt/verdict` as the acceptance gate. If a roadmap item later needs
-  content-addressed terms or an event store, PORT from `origin/main`'s `cas.clj` /
-  `store.clj` (explicit branch comparison) rather than inventing from scratch.
+  `purity.clj`, `stage.clj`, `evidence.clj`, `verifier.clj`, `search.clj`, 및
+  `README`. 이 브랜치는 parse -> evaluate -> lower -> (clj-meta 레인) ->
+  (.px 런타임 레인) -> mirror/receipt 설계이며, cross-lane `receipt/verdict`가
+  수락 게이트. 이후 로드맵이 content-addressed term이나 event store를 필요로
+  하면 `origin/main`의 `cas.clj` / `store.clj`에서 PORT (명시적 브랜치 비교),
+  처음부터 발명하지 말 것.
 
 ---
 
-## 2. Per-file ownership map (the heart, grounded in real files)
+## 2. 파일별 소유권 맵 (핵심, 실제 파일 근거)
 
-Legend: **PNIX** = pnix-runtime, stays; **HOST** = Clojure/JVM host machinery,
-belongs to clj-meta (move or consume); **INTEROP** = the boundary bridge;
-**CHECK** = a report/verification harness over the runtime, not a separate
-runtime mirror.
+범례: **PNIX** = pnix-런타임, 유지; **HOST** = Clojure/JVM 호스트 기계,
+clj-meta에 속함(이동 또는 소비); **INTEROP** = 경계 브리지; **CHECK** =
+런타임 위 리포트/검증 harness, 별도 런타임 mirror 아님.
 
 | file | bucket | notes |
 |---|---|---|
-| `parser.clj` | PNIX | pnix tokenizer/parser/AST; the pnix language surface. |
-| `evaluator.clj` | PNIX | pnix semantics, value model, builtins, env (now lazy `let` + call-by-need args + `with`/`assert`/`a.b or d`/`@`-patterns). |
-| `lowering.clj` | PNIX (output crosses INTEROP) | the pnix->Clojure lowering *policy* is pnix-clj's; the *compile/eval* of the emitted forms is clj-meta's. Keep here; treat the emitted form as crossing the boundary. |
-| `clj_meta.clj` | **INTEROP** | already the seam to clj-meta's compiler. Formalize as the clj-meta interop client (Section 5). It currently *re-derives* determinism/strict/bytecode/verified evidence that clj-meta already owns — delegate instead (Section 3.4). |
-| `clojure_form.clj` | **HOST-DOMAIN (Clojure<->Clojure)** | NOT pnix: it checks host Clojure `eval` vs clj-meta compile agreement — a Clojure self-host proof that conceptually belongs to clj-meta. Host eval already routed through `interop`; the agreement is a host CHECK, not pnix "projection". |
-| `clojure_projection.clj` | **HOST reflection (Clojure<->Clojure)** + PNIX term-mapping | the largest misplacement: raw Clojure/JVM introspection (host domain). Split: host snapshots move behind interop; only the pnix-term mapping (`project-reader-value`) + `.px` validation (`validate-term`) stay in pnix-clj (Section 3.1). |
-| `px_runtime.clj` | PNIX | internal `.px` runtime: pnix-in-pnix parse/eval, import graph/cache/cycle. |
-| `mirror.clj` | PNIX | runtime mirror rows + cross-mirror verdict; consolidate to singleton (Section 6). |
-| `receipt.clj` | PNIX | verdict / lane-summary / summarize (the acceptance gate). |
-| `core.clj` | PNIX | `run-source` / `report` orchestration; the natural home of the singleton `run-mirror`. |
-| `error.clj` | PNIX | pnix structured error envelope (`:pnix-clj.error.v0`). |
-| `version.clj` `math.clj` `json.clj` | PNIX | pnix builtin helpers. |
+| `parser.clj` | PNIX | pnix tokenizer/parser/AST; pnix 언어 표면. |
+| `evaluator.clj` | PNIX | pnix 의미론, 값 모델, builtins, env (이제 lazy `let` + call-by-need args + `with`/`assert`/`a.b or d`/`@`-patterns). |
+| `lowering.clj` | PNIX (출력이 INTEROP 교차) | pnix->Clojure lowering *정책*은 pnix-clj; 방출 form의 *compile/eval*은 clj-meta. 여기 유지; 방출 form을 경계 교차로 취급. |
+| `clj_meta.clj` | **INTEROP** | 이미 clj-meta 컴파일러 seam. §5에서 clj-meta interop 클라이언트로 공식화. 현재 clj-meta가 이미 소유한 determinism/strict/bytecode/verified 증거를 *재유도* — 대신 위임 (§3.4). |
+| `clojure_form.clj` | **HOST-DOMAIN (Clojure<->Clojure)** | NOT pnix: 호스트 Clojure `eval` vs clj-meta 컴파일 동의 검사 — 개념적으로 clj-meta에 속하는 Clojure self-host 증명. 호스트 eval은 이미 `interop` 경유; 동의는 호스트 CHECK, pnix "projection" 아님. |
+| `clojure_projection.clj` | **HOST reflection (Clojure<->Clojure)** + PNIX term-mapping | 가장 큰 오배치: raw Clojure/JVM introspection (호스트 도메인). 분리: 호스트 스냅샷은 interop 뒤; pnix-term 매핑(`project-reader-value`) + `.px` 검증(`validate-term`)만 pnix-clj에 유지 (§3.1). |
+| `px_runtime.clj` | PNIX | 내부 `.px` 런타임: pnix-in-pnix parse/eval, import graph/cache/cycle. |
+| `mirror.clj` | PNIX | 런타임 mirror 행 + cross-mirror verdict; singleton으로 통합 (§6). |
+| `receipt.clj` | PNIX | verdict / lane-summary / summarize (수락 게이트). |
+| `core.clj` | PNIX | `run-source` / `report` 오케스트레이션; singleton `run-mirror`의 자연 거처. |
+| `error.clj` | PNIX | pnix 구조화 오류 envelope (`:pnix-clj.error.v0`). |
+| `version.clj` `math.clj` `json.clj` | PNIX | pnix builtin 헬퍼. |
 | `oracle.clj` `rust_batch.clj` `stage7_core.clj` | PNIX | pnix corpus/fixtures. |
-| `mirror_pair.clj` `mirror_error.clj` | CHECK | report harnesses over the runtime; reframe as check categories, not separate mirrors. |
-| `report_artifact.clj` `runtime_plan.clj` `smoke.clj` `benchmark.clj` | PNIX tooling | stay. |
-| `stage15.clj` `stage15_plan.clj` | **HOST stage control** | a clj-meta backend gate plan, currently a NOT-executed control plan (`:stage15-gates-not-executed`). Conceptually clj-meta's gate/stage lane; pnix-clj should *consume* a clj-meta-provided stage proof, not own the plan. |
+| `mirror_pair.clj` `mirror_error.clj` | CHECK | 런타임 위 리포트 harness; 별도 mirror가 아니라 check 범주로 재프레이밍. |
+| `report_artifact.clj` `runtime_plan.clj` `smoke.clj` `benchmark.clj` | PNIX tooling | 유지. |
+| `stage15.clj` `stage15_plan.clj` | **HOST stage control** | clj-meta 백엔드 게이트 계획, 현재 NOT-executed 제어 계획 (`:stage15-gates-not-executed`). 개념적으로 clj-meta의 gate/stage 레인; pnix-clj는 계획을 소유하지 말고 clj-meta가 제공한 stage 증명을 *소비*. |
 
 ---
 
-## 3. What moves to (or is delegated to) clj-meta
+## 3. clj-meta로 이동(또는 위임)할 것
 
-All of this lives in the three host-touching files today.
+오늘은 세 호스트-접촉 파일에 모두 산다.
 
-### 3.1 Host reflection/introspection in `clojure_projection.clj` (the big one)
+### 3.1 `clojure_projection.clj`의 호스트 reflection/introspection (큰 것)
 
-These functions are pure Clojure/JVM host introspection and belong to the host
-proof/interop lane, surfaced to pnix-clj as **host snapshots through an interop
-API** (clj-meta can host them; minimally they move behind a clearly-marked
-`pnix-clj.interop` host-side namespace):
+이 함수들은 순수 Clojure/JVM 호스트 introspection이며 호스트 증명/interop 레인에
+속하고, pnix-clj에는 **interop API를 통한 호스트 스냅샷**으로 표면화
+(clj-meta가 호스팅 가능; 최소 `pnix-clj.interop` 호스트 측 네임스페이스 뒤로
+이동):
 
 ```
 project-var-value · project-namespace-value · project-throwable-value ·
@@ -162,76 +155,71 @@ metadata-source-term · state-effect-source-term · lazy-evaluation-source-term 
 concurrency-source-term · coordination-source-term · control-flow-source-term
 ```
 
-What **stays** in pnix-clj from this file: `project-reader-value` (host value ->
-pnix projection term mapping) and `validate-term` / `projection-runtime` (validate
-a pnix term through the internal `.px` projection artifact). That is the
-pnix-side of the bridge.
+이 파일에서 pnix-clj에 **남는 것**: `project-reader-value` (호스트 값 -> pnix
+투영 term 매핑)와 `validate-term` / `projection-runtime` (내부 `.px` 투영
+아티팩트로 pnix term 검증). 그것이 브리지의 pnix 측.
 
-Enforce the **opaque-ref rule** here: `java-object-term` currently embeds a
-`JavaObject` envelope directly. JVM/Clojure objects must not enter pnix canonical
-terms as themselves; they cross as opaque refs unless explicitly converted to
-pure pnix values (Section 5).
+여기서 **opaque-ref 규칙** 강제: `java-object-term`은 현재 `JavaObject` envelope를
+직접 임베드. JVM/Clojure 객체는 그 자체로 pnix 정규 term에 들어가면 안 됨;
+순수 pnix 값으로 명시 변환하지 않는 한 opaque ref로 교차 (§5).
 
-### 3.2 Host `eval` / `macroexpand` / fresh-ns in `clojure_form.clj`
+### 3.2 `clojure_form.clj`의 호스트 `eval` / `macroexpand` / fresh-ns
 
-The `(eval form)` in a freshly created namespace is host-eval machinery. Route it
-through the clj-meta host-eval interop API (clj-meta `compiler/eval-form` already
-exists; add a host-oracle eval if a true host-Clojure oracle is wanted distinct
-from clj-meta). Keep the **host-vs-clj-meta agreement** as a CHECK in pnix-clj.
+새로 만든 네임스페이스의 `(eval form)`은 호스트-eval 기계. clj-meta 호스트-eval
+interop API를 경유 (clj-meta `compiler/eval-form` 이미 존재; clj-meta와 구별되는
+진짜 호스트-Clojure oracle이 필요하면 host-oracle eval 추가). **호스트-vs-clj-meta
+동의**는 pnix-clj의 CHECK로 유지.
 
-### 3.3 stage15 control plan
+### 3.3 stage15 제어 계획
 
-`stage15.clj` / `stage15_plan.clj` describe clj-meta backend gate commands and
-are not executed. This is a clj-meta gate/stage concern; pnix-clj should consume
-a clj-meta-provided, *executed* stage proof rather than carry the plan. (See the
-roadmap Axis-3 item "execute stage15 rather than plan it".)
+`stage15.clj` / `stage15_plan.clj`는 clj-meta 백엔드 게이트 명령을 서술하며
+실행되지 않음. clj-meta gate/stage 관심사; pnix-clj는 계획을 들고 다니지 말고
+*실행된* stage 증명을 소비. (로드맵 Axis-3 항목 "execute stage15 rather than
+plan it" 참고.)
 
-### 3.4 Compile-proof re-derivation in `clj_meta.clj`
+### 3.4 `clj_meta.clj`의 compile-proof 재유도
 
-`clj_meta.clj` rebuilds determinism / strict / bytecode-artifact / verified-
-compile evidence around clj-meta's `compile-form*`. clj-meta already owns
-`determinism_policy`, `verified_compile`, `bytecode_witness`, `bytecode_verifier`.
-Delegate to those instead of re-deriving, so the host proof has a single owner.
+`clj_meta.clj`가 clj-meta의 `compile-form*` 주변에서 determinism / strict /
+bytecode-artifact / verified-compile 증거를 재구축. clj-meta가 이미
+`determinism_policy`, `verified_compile`, `bytecode_witness`, `bytecode_verifier`
+를 소유. 재유도 대신 그것들에 위임해 호스트 증명에 단일 소유자를.
 
 ---
 
-## 4. What stays in pnix-clj (pnix-runtime meta-circular)
+## 4. pnix-clj에 남는 것 (pnix-런타임 메타순환)
 
-Because pnix-clj *is* the pnix runtime, it owns the pnix-native meta-circular
-surface:
+pnix-clj *가* pnix 런타임이므로 pnix-native 메타순환 표면을 소유:
 
 - pnix tokenizer/parser/AST (`parser.clj`).
-- pnix evaluator / apply / value model / builtins / env (`evaluator.clj`),
-  including the laziness work (memoized-thunk `let`, call-by-need args) and the
-  grammar (`with`, `assert`, `a.b or d`, `@`-patterns).
-- pnix lowering *policy* (`lowering.clj`) — the pnix->Clojure mapping; its output
-  crosses the interop boundary into clj-meta.
-- internal `.px` runtime (`px_runtime.clj`) — pnix-in-pnix evaluator + import
-  graph/cache/cycle. This is itself a pnix-side meta-circular artifact.
-- pnix runtime mirror (`mirror.clj`, to become singleton), receipt/verdict
-  (`receipt.clj`), orchestration (`core.clj`).
-- pnix error model (`error.clj`), pnix helpers (`version`/`math`/`json`), pnix
+- pnix evaluator / apply / 값 모델 / builtins / env (`evaluator.clj`),
+  laziness 작업(메모이즈-thunk `let`, call-by-need args)과 문법
+  (`with`, `assert`, `a.b or d`, `@`-patterns) 포함.
+- pnix lowering *정책* (`lowering.clj`) — pnix->Clojure 매핑; 출력이 interop
+  경계를 건너 clj-meta로.
+- 내부 `.px` 런타임 (`px_runtime.clj`) — pnix-in-pnix evaluator + import
+  graph/cache/cycle. 자체로 pnix 측 메타순환 아티팩트.
+- pnix 런타임 mirror (`mirror.clj`, singleton이 될 것), receipt/verdict
+  (`receipt.clj`), 오케스트레이션 (`core.clj`).
+- pnix 오류 모델 (`error.clj`), pnix 헬퍼 (`version`/`math`/`json`), pnix
   corpus/fixtures/reports.
 
-TARGET (future, do not claim as present): a pnix CAS / canonical-term store /
-event log / snapshot-resolve / stage tower. If adopted, these are pnix-runtime
-and stay in pnix-clj — but they do not exist today.
+TARGET (미래, 현재라고 주장하지 말 것): pnix CAS / canonical-term store /
+event log / snapshot-resolve / stage tower. 채택되면 이것들은 pnix-런타임이며
+pnix-clj에 남음 — 그러나 오늘은 존재하지 않음.
 
 ---
 
-## 5. The interop boundary (Clojure/JVM <-> pnix)
+## 5. Interop 경계 (Clojure/JVM <-> pnix)
 
-**Interop is not mirror.** Interop converts values/functions/modules/effects and
-must work even with mirror disabled. Mirror may *observe* interop; it does not
-define it.
+**Interop는 mirror가 아님.** Interop는 값/함수/모듈/effect를 변환하며 mirror가
+꺼져 있어도 동작해야 함. Mirror는 interop를 *관찰*할 수 있지만 정의하지 않음.
 
-- Host side (clj-meta): object inspection, IFn invocation, namespace load, Var
-  resolution, macroexpand, exception capture, JVM reflection, classpath/
-  classloader control.
-- pnix side (pnix-clj): pnix value/function/module/error representation, opaque
-  host refs, the interop call form, the interop witness.
+- 호스트 측 (clj-meta): 객체 검사, IFn 호출, 네임스페이스 로드, Var 해석,
+  macroexpand, 예외 캡처, JVM reflection, classpath/classloader 제어.
+- pnix 측 (pnix-clj): pnix 값/함수/모듈/오류 표현, opaque 호스트 ref, interop
+  호출 form, interop 증인.
 
-Shared protocol fields (attach to every crossing):
+공유 프로토콜 필드 (모든 교차에 부착):
 
 ```
 interop/id · direction · source-language · target-language ·
@@ -244,7 +232,7 @@ effect-class     = pure | host-call | require | resolve-var | file-read |
 capability-required · host-object-policy · witness-id
 ```
 
-Value mapping (pnix <-> Clojure/JVM):
+값 매핑 (pnix <-> Clojure/JVM):
 
 ```
 null<->nil  bool<->Boolean  int<->integer  float<->floating  string<->String
@@ -253,24 +241,24 @@ function<->IFn wrapper  module<->namespace/module wrapper  error<->ExceptionInfo
 opaque JVM object<->pnix opaque ref
 ```
 
-**Rule:** Clojure/JVM objects must not enter pnix canonical terms directly — wrap
-as opaque refs unless explicitly converted to pure pnix values. (Directly fixes
-the `java-object-term` embedding noted in 3.1.)
+**규칙:** Clojure/JVM 객체는 pnix 정규 term에 직접 들어가면 안 됨 — 순수 pnix
+값으로 명시 변환하지 않는 한 opaque ref로 래핑. (§3.1의 `java-object-term`
+임베딩을 직접 수정.)
 
-pnix-clj already has the seeds of this: `clj_meta.clj` (host compile/eval seam)
-and `error.clj` (structured envelope). The work is to make the protocol explicit
-and bidirectional, not to invent it from zero.
+pnix-clj는 이미 그 씨앗을 가짐: `clj_meta.clj` (호스트 compile/eval seam)과
+`error.clj` (구조화 envelope). 작업은 프로토콜을 명시적이고 양방향으로 만드는
+것이며, 제로에서 발명하는 것이 아님.
 
 ---
 
-## 6. Mirror correction: one runtime mirror, many trace facets
+## 6. Mirror 교정: 하나의 런타임 mirror, 많은 트레이스 facet
 
-Current (fragmented): `mirror.clj` rows are assembled in `core/run-source`, while
-`mirror_pair`, `mirror_error`, `clojure_projection`, `clojure_form` are separate
-report lanes, and clj-meta has its own `mirror.clj`. No single canonical runtime
-mirror route, result hash, or trace id.
+현재 (파편화): `mirror.clj` 행이 `core/run-source`에서 조립되고,
+`mirror_pair`, `mirror_error`, `clojure_projection`, `clojure_form`은 별도
+리포트 레인이며, clj-meta에 자체 `mirror.clj`가 있음. 단일 정본 런타임 mirror
+경로, 결과 해시, 트레이스 id 없음.
 
-Target:
+목표:
 
 ```
 pnix-clj.mirror/run-mirror(source, opts)
@@ -278,176 +266,174 @@ pnix-clj.mirror/run-mirror(source, opts)
   one result hash, one trace id, one witness
 ```
 
-Allowed trace facets (NOT separate mirrors):
+허용 트레이스 facet (별도 mirror 아님):
 
 ```
 :host/parse :host/term :host/resolve :inner/eval-step :inner/value
 :inner/effect :inner/error :interop/call :witness/event
 ```
 
-clj-meta keeps multiple host **CHECK categories** (compiler / macroexpand /
-namespace / Var / class-artifact / host-eval checks) — that is correct; they are
-host proof checks organized as categories, not competing pnix runtime mirrors.
+clj-meta는 여러 호스트 **CHECK 범주** (compiler / macroexpand / namespace /
+Var / class-artifact / host-eval 검사)를 유지 — 올바름; 경쟁 pnix 런타임
+mirror가 아니라 범주로 조직된 호스트 증명 검사.
 
-Why singleton: one canonical route, one result hash, one trace id, one
-convergence target; less duplicate parse/eval; better performance, analysis,
-debugging; less drift.
+Singleton 이유: 하나의 정본 경로, 하나의 결과 해시, 하나의 트레이스 id, 하나의
+수렴 목표; 중복 parse/eval 감소; 성능·분석·디버깅 개선; drift 감소.
 
 ---
 
-## 7. Current vs target (honesty ledger)
+## 7. 현재 vs 목표 (정직 장부)
 
-| concept | status |
+| 개념 | 상태 |
 |---|---|
-| clj-meta as host proof lane | **present** (mature) |
+| clj-meta as host proof lane | **present** (성숙) |
 | pnix parser/evaluator/lowering/.px-runtime/mirror/receipt | **present** |
-| host machinery isolated to 3 files | **present** (the misplacement to fix) |
-| explicit interop protocol (loss/effect/capability/witness) | **target** (seeds in `clj_meta.clj`/`error.clj`) |
-| singleton `run-mirror` | **target** (today: `mirror.clj` + report lanes) |
-| opaque-ref discipline for JVM objects | **target** (today: embedded envelopes) |
-| CAS / event store / term store / snapshot-resolve | **MAIN-ONLY** (origin/main `cas.clj`/`store.clj`/`term.clj`/`resolve.clj`; not on this branch — port if a roadmap item needs it) |
-| README | **MAIN-ONLY** (origin/main has one; this branch does not) |
+| host machinery isolated to 3 files | **present** (고칠 오배치) |
+| explicit interop protocol (loss/effect/capability/witness) | **target** (`clj_meta.clj`/`error.clj`에 씨앗) |
+| singleton `run-mirror` | **target** (오늘: `mirror.clj` + 리포트 레인) |
+| opaque-ref discipline for JVM objects | **target** (오늘: 임베드 envelope) |
+| CAS / event store / term store / snapshot-resolve | **MAIN-ONLY** (origin/main `cas.clj`/`store.clj`/`term.clj`/`resolve.clj`; 이 브랜치에 없음 — 로드맵 필요 시 port) |
+| README | **MAIN-ONLY** (origin/main에 있음; 이 브랜치에 없음) |
 
-The current acceptance discipline is the cross-lane `receipt/verdict`
-(evaluator / clj-meta / `.px` runtime / pnix-mirror) — an N-version **heuristic**
-differential check, not a formal proof (see the roadmap's framing invariant).
-
----
-
-## 8. Phased refactor (incremental, gate-green per step)
-
-- **Phase A — formalize the interop seam.** Make `clj_meta.clj` the explicit
-  clj-meta interop client; attach an interop receipt carrying
-  loss/effect/capability/witness. Low risk (rename + metadata).
-- **Phase B — extract host reflection from `clojure_projection.clj`.** Move the
-  host-snapshot functions (3.1) behind a host-side interop API; leave pnix-clj
-  owning `project-reader-value` + `validate-term`. Enforce the opaque-ref rule.
-- **Phase C — route host eval/macroexpand** from `clojure_form.clj` through the
-  clj-meta interop API; keep the agreement as a CHECK.
-- **Phase D — consolidate the runtime mirror** into a singleton `run-mirror` with
-  trace facets; reframe `mirror_pair`/`mirror_error`/`clojure_projection`/
-  `clojure_form` as CHECK categories over the one mirror.
-- **Phase E — delegate compile proof** (determinism/verified/bytecode) in
-  `clj_meta.clj` to clj-meta's `determinism_policy`/`verified_compile`/
-  `bytecode_witness` instead of re-deriving.
-- **Phase F (only if a roadmap item needs it)** — PORT content-addressed terms /
-  event store / snapshot-resolve from `origin/main` (`cas.clj`/`store.clj`/
-  `term.clj`/`resolve.clj`) as an explicit branch comparison, adapting to this
-  branch's value model. Not a standing scope; pulled in per concrete need.
-
-Each phase keeps `bin/pnix-clj-gate`, `clojure -M:test`, and the report lanes
-green, and is committed/pushed as its own slice.
+현재 수락 규율은 cross-lane `receipt/verdict`
+(evaluator / clj-meta / `.px` 런타임 / pnix-mirror) — N-version **휴리스틱**
+차등 검사이며 형식 증명 아님 (로드맵의 framing invariant 참고).
 
 ---
 
-## 9. Final architecture (corrected statement)
+## 8. 단계적 리팩터 (점진적, 단계마다 게이트 녹색)
+
+- **Phase A — interop seam 공식화.** `clj_meta.clj`를 명시적 clj-meta interop
+  클라이언트로; loss/effect/capability/witness를 운반하는 interop receipt 부착.
+  낮은 위험 (이름 변경 + 메타데이터).
+- **Phase B — `clojure_projection.clj`에서 호스트 reflection 추출.** 호스트
+  스냅샷 함수(§3.1)를 호스트 측 interop API 뒤로; pnix-clj는
+  `project-reader-value` + `validate-term` 소유. opaque-ref 규칙 강제.
+- **Phase C — `clojure_form.clj`의 호스트 eval/macroexpand**를 clj-meta interop
+  API 경유로; 동의는 CHECK로 유지.
+- **Phase D — 런타임 mirror를** 트레이스 facet이 있는 singleton `run-mirror`로
+  통합; `mirror_pair`/`mirror_error`/`clojure_projection`/`clojure_form`을
+  하나의 mirror 위 CHECK 범주로 재프레이밍.
+- **Phase E — compile proof 위임** (`clj_meta.clj`의 determinism/verified/
+  bytecode)을 clj-meta의 `determinism_policy`/`verified_compile`/
+  `bytecode_witness`에, 재유도하지 말고.
+- **Phase F (로드맵 항목이 필요로 할 때만)** — `origin/main`에서
+  content-addressed terms / event store / snapshot-resolve PORT (`cas.clj`/
+  `store.clj`/`term.clj`/`resolve.clj`), 이 브랜치 값 모델에 맞게 명시적 브랜치
+  비교. 상시 범위 아님; 구체 필요마다 끌어옴.
+
+각 단계는 `bin/pnix-clj-gate`, `clojure -M:test`, 리포트 레인을 녹색으로 유지하고
+자체 슬라이스로 commit/push.
+
+---
+
+## 9. 최종 아키텍처 (교정된 선언)
 
 ```
-clj-meta = Clojure/JVM meta-circular compiler/evaluator PROOF lane
+clj-meta = Clojure/JVM 메타순환 컴파일러/evaluator PROOF 레인
   owns: Clojure forms, macroexpand, eval/compile oracle, namespace/Var/metadata
   reflection, JVM/classpath/class artifacts, dynamic loading, host introspection,
-  host-side interop, host witnesses and gates. (Already mature; consume it.)
+  host-side interop, host witnesses and gates. (이미 성숙; 소비.)
 
-pnix-clj = pnix runtime on top of clj-meta
-  owns: pnix tokenizer/parser/AST/eval/value/builtins/env, lowering policy, the
-  internal .px runtime, the pnix mirror, receipt/verdict, pnix error model,
-  corpus/reports. (TARGET additions: CAS/term-store/stage tower.)
+pnix-clj = clj-meta 위 pnix 런타임
+  owns: pnix tokenizer/parser/AST/eval/value/builtins/env, lowering 정책,
+  내부 .px 런타임, pnix mirror, receipt/verdict, pnix 오류 모델,
+  corpus/reports. (TARGET 추가: CAS/term-store/stage tower.)
 
-interop = explicit bidirectional bridge
-  Clojure/JVM host objects and pnix values/functions/modules convert only through
-  loss-marked, effect-classified, capability-checked adapters. JVM objects cross
-  as opaque refs unless converted to pure pnix values.
+interop = 명시적 양방향 브리지
+  Clojure/JVM 호스트 객체와 pnix 값/함수/모듈은 loss-marked, effect-classified,
+  capability-checked 어댑터를 통해서만 변환. JVM 객체는 순수 pnix 값으로
+  변환되지 않는 한 opaque ref로 교차.
 
-mirror = not the source of meta-circularity
-  one observation/proof entrypoint on the pnix runtime side; many trace facets,
-  one canonical run. clj-meta keeps separate host CHECK categories.
+mirror = 메타순환의 원천이 아님
+  pnix 런타임 측의 하나의 관찰/증명 진입점; 많은 트레이스 facet,
+  하나의 정본 실행. clj-meta는 별도 호스트 CHECK 범주 유지.
 ```
 
-Core principle: **do not make pnix-clj a pile of fragmented mirrors.** Make
-clj-meta the Clojure/JVM host meta-circular proof layer, make pnix-clj the pnix
-runtime layer, make interop explicit, keep the pnix runtime mirror singleton, and
-make every conversion, effect, replay, drift, and stage result produce a witness.
+핵심 원칙: **pnix-clj를 파편화된 mirror 더미로 만들지 말 것.** clj-meta를
+Clojure/JVM 호스트 메타순환 증명 계층으로, pnix-clj를 pnix 런타임 계층으로,
+interop를 명시적으로, pnix 런타임 mirror를 singleton으로, 모든 변환·effect·
+재연·drift·stage 결과가 증인을 만들게.
 
 ---
 
-## 10. Research-grounded interop boundary + capability distribution (2026-07-01)
+## 10. 연구 근거 interop 경계 + capability 분배 (2026-07-01)
 
-A `/deep-research` pass (94 agents, adversarially verified) on hosting a guest
-language on a host language confirms the layer split and sharpens the interop
-boundary. Cited reference systems: **GraalVM Truffle** (deny-by-default
-`@HostAccess.Export` allowlist; orthogonal per-effect switches: host-access /
-reflection (`allowHostClassLookup`) / native / IO), **object-capability theory**
-(unforgeable handles bundling designation+authority; "only connectivity begets
-connectivity"; least authority), **static/algebraic effect systems** (CallE
-`restrict[ε]`; Wyvern lifts a single `system.FFI` into domain effects),
-**opaque-handle FFI** (Kernel-FFI stores the host object under a UUID and passes
-only a reference), and **content-addressed code** (Unison: hash-of-normalized-AST
-identity, names kept as separate metadata).
+호스트 언어 위 guest 언어 호스팅에 대한 `/deep-research` 패스 (94 agents,
+adversarially verified)가 계층 분리를 확인하고 interop 경계를 날카롭게 함.
+인용 참조 시스템: **GraalVM Truffle** (deny-by-default `@HostAccess.Export`
+allowlist; effect별 직교 스위치: host-access / reflection
+(`allowHostClassLookup`) / native / IO), **object-capability 이론**
+(designation+authority를 묶는 위조 불가 handle; "only connectivity begets
+connectivity"; least authority), **정적/대수적 effect 시스템** (CallE
+`restrict[ε]`; Wyvern이 단일 `system.FFI`를 도메인 effect로 승격),
+**opaque-handle FFI** (Kernel-FFI가 호스트 객체를 UUID 아래 저장하고 참조만
+전달), **content-addressed 코드** (Unison: hash-of-normalized-AST 정체성,
+이름은 별도 메타데이터).
 
-### Interop boundary design principles (host <-> pnix)
-1. **Deny-by-default.** Nothing from the host floor is reachable from the pnix
-   runtime until explicitly exported. The host (clj-meta side) owns the allowlist;
-   pnix-clj receives only granted capabilities and never reaches host machinery
-   ambiently. Build the boundary as an allowlist, add one capability at a time.
-2. **Classify every crossing by effect class** (pure / host-call / reflection /
-   require / file / network / mutation / time / random / thread). The interop
-   layer is the single place that tags and gates them; the pnix core sees only
-   already-classified, already-gated capabilities.
-3. **Opaque handles, never value-serialization.** A host (Clojure/JVM) object
-   crosses as an opaque ref (designation + authority), NOT serialized into a pnix
-   value, and MUST NOT enter a pnix canonical / content-addressed term. (Directly
-   fixes today's `java-object-term`, which embeds a host-object envelope.)
-4. **Object-capability discipline.** Authority travels only by passing a handle;
-   no ambient/global naming confers it; least authority per crossing.
-5. **Content-addressed cross-layer trust.** Bind the host floor to guest evidence
-   via a content-addressed host version id; identify pnix terms by hash of the
-   *normalized* AST, with human names kept as separate metadata (Unison model).
+### Interop 경계 설계 원칙 (host <-> pnix)
+1. **Deny-by-default.** 호스트 하한에서 명시 export되기 전 아무것도 pnix
+   런타임에서 도달 불가. 호스트(clj-meta 측)가 allowlist 소유; pnix-clj는
+   부여된 capability만 받고 호스트 기계에 ambient 도달하지 않음. 경계를
+   allowlist로 짓고, capability를 하나씩 추가.
+2. **모든 교차를 effect class로 분류** (pure / host-call / reflection /
+   require / file / network / mutation / time / random / thread). Interop
+   계층이 태깅·게이팅의 단일 장소; pnix 코어는 이미 분류·게이팅된 capability만
+   봄.
+3. **Opaque handle, 값 직렬화 금지.** 호스트 (Clojure/JVM) 객체는 opaque ref
+   (designation + authority)로 교차, pnix 값으로 직렬화하지 않음, pnix
+   정규 / content-addressed term에 들어가면 안 됨. (오늘의 `java-object-term`
+   호스트 객체 envelope 임베딩을 직접 수정.)
+4. **Object-capability 규율.** Authority는 handle 전달로만 이동; ambient/global
+   이름이 부여하지 않음; 교차마다 least authority.
+5. **Content-addressed cross-layer trust.** 호스트 하한을 content-addressed
+   호스트 버전 id로 guest 증거에 바인딩; pnix term을 *정규화* AST 해시로
+   식별, 사람 이름은 별도 메타데이터 (Unison 모델).
 
-### Honest caveats (do not overclaim)
-- Cross-layer agreement (the receipt/verdict N-version check) is **heuristic, not
-  sound** — a host "floor proof" does not hand pnix its semantics or soundness.
-  Confirmed by the research: **a lazy Nix-like guest on an eager Clojure host MUST
-  implement laziness as explicit guest-layer thunks** — which is exactly the lazy
-  `let` + call-by-need-args work already landed.
-- Effect-system soundness rests on **honest foreign annotations**; controlling
-  which references cross is necessary but NOT sufficient — pair reference control
-  with effect typing + membranes. (`HostAccess.SCOPED`-style handle-escape
-  prevention was refuted as unreliable; do not lean on it.)
-- Coarse host grants (class loading, native, IO) "effectively grant all access" —
-  keep grants fine-grained or the boundary proof collapses to a heuristic.
-- The **singleton-mirror** preference is OUR design choice (less duplication, one
-  convergence target), NOT an externally proven law — the research did not back
-  the "one canonical run with trace facets" pattern either way. Keep it as a
-  rationale, not a proof.
+### 정직한 주의 (과대 주장 금지)
+- Cross-layer 동의 (receipt/verdict N-version 검사)는 **휴리스틱, 형식 증명
+  아님** — 호스트 "하한 증명"이 pnix에 의미론이나 건전성을 넘겨주지 않음.
+  연구 확인: **eager Clojure 호스트 위 lazy Nix-like guest는 laziness를 명시적
+  guest-계층 thunk로 구현해야 함** — 이미 착륙한 lazy `let` + call-by-need-args
+  작업과 정확히 일치.
+- Effect-system 건전성은 **정직한 foreign annotation**에 달림; 어떤 참조가
+  교차하는지를 통제하는 것은 필요하나 충분하지 않음 — 참조 통제 + effect typing
+  + membrane. (`HostAccess.SCOPED` 스타일 handle-escape 방지는 신뢰 불가로
+  반박됨; 기대지 말 것.)
+- 거친 호스트 grant (class loading, native, IO)는 "사실상 모든 접근 부여" —
+  grant를 세밀하게 유지하지 않으면 경계 증명이 휴리스틱으로 붕괴.
+- **Singleton-mirror** 선호는 OUR 설계 선택 (중복 감소, 하나의 수렴 목표),
+  외부 증명된 법칙 아님 — 연구도 "트레이스 facet이 있는 하나의 정본 실행"
+  패턴을 어느 쪽으로도 지지하지 않음. 근거로 유지, 증명으로 두지 말 것.
 
-### Capability distribution table (host / guest / interop; feat-branch status)
+### Capability 분배 표 (host / guest / interop; feat-branch 상태)
 
 | capability | layer | feat-branch status |
 |---|---|---|
-| Clojure form read/normalize/macroexpand/eval/compile oracle | **clj-meta (host)** | clj-meta mature; pnix-clj `clojure_form` host-eval routed via `interop` (Phase C done) |
-| namespace/Var/metadata/classpath/class-artifact reflection; dynamic require/resolve | **clj-meta (host)** | clj-meta domain; pnix-clj `clojure_projection` host reflection = MOVE (Phase B) |
-| host mutation/pollution detection; host introspection | **clj-meta (host)** | clj-meta domain |
-| deny-by-default allowlist + effect-class gating + capability grants | **interop** | TARGET (build incrementally) |
-| value/function/module marshalling; opaque host refs | **interop** | seam started (`pnix-clj.interop`, `clj_meta.clj`); opaque-ref rule TARGET |
+| Clojure form read/normalize/macroexpand/eval/compile oracle | **clj-meta (host)** | clj-meta 성숙; pnix-clj `clojure_form` 호스트-eval이 `interop` 경유 (Phase C 완료) |
+| namespace/Var/metadata/classpath/class-artifact reflection; dynamic require/resolve | **clj-meta (host)** | clj-meta 도메인; pnix-clj `clojure_projection` 호스트 reflection = MOVE (Phase B) |
+| host mutation/pollution detection; host introspection | **clj-meta (host)** | clj-meta 도메인 |
+| deny-by-default allowlist + effect-class gating + capability grants | **interop** | TARGET (점진 구축) |
+| value/function/module marshalling; opaque host refs | **interop** | seam 시작 (`pnix-clj.interop`, `clj_meta.clj`); opaque-ref 규칙 TARGET |
 | pnix tokenizer/parser/AST | **pnix-clj (guest)** | BUILT |
 | pnix evaluator/value/builtins/env; **laziness (thunks)** | **pnix-clj (guest)** | BUILT (lazy let + cbn args; lazy attrset/list TARGET) |
-| pnix lowering policy (pnix -> Clojure) | **pnix-clj (guest)** | BUILT (output crosses interop) |
-| canonical term / CAS / content hash (names as separate metadata) | **pnix-clj (guest)** | TARGET — PORT from origin/main `cas.clj` |
-| append-only event/evidence store; event hash/index; pointer-as-event | **pnix-clj (guest)** | TARGET — PORT from origin/main `store.clj` |
-| stage tower (stage1..7); snapshot/resolve; purity/determinism | **pnix-clj (guest)** | TARGET — PORT from origin/main `stage.clj`/`stm.clj`/`resolve.clj`/`purity.clj` |
-| singleton `run-mirror` + trace facets | **pnix-clj (guest)** | NOT YET (today: `mirror.clj` + report lanes; Phase D) |
-| witness / gate / loss schema | **pnix-clj (guest)** + interop fields | seed in `error.clj` + `interop-meta`; TARGET |
+| pnix lowering policy (pnix -> Clojure) | **pnix-clj (guest)** | BUILT (출력이 interop 교차) |
+| canonical term / CAS / content hash (names as separate metadata) | **pnix-clj (guest)** | TARGET — origin/main `cas.clj`에서 PORT |
+| append-only event/evidence store; event hash/index; pointer-as-event | **pnix-clj (guest)** | TARGET — origin/main `store.clj`에서 PORT |
+| stage tower (stage1..7); snapshot/resolve; purity/determinism | **pnix-clj (guest)** | TARGET — origin/main `stage.clj`/`stm.clj`/`resolve.clj`/`purity.clj`에서 PORT |
+| singleton `run-mirror` + trace facets | **pnix-clj (guest)** | NOT YET (오늘: `mirror.clj` + 리포트 레인; Phase D) |
+| witness / gate / loss schema | **pnix-clj (guest)** + interop fields | `error.clj` + `interop-meta`에 씨앗; TARGET |
 
-### Distribution sequencing (guest side, feat-branch)
-1. **Interop hardening**: opaque-ref rule for host objects (fix `java-object-term`),
-   effect-class on every crossing, deny-by-default grants.
-2. **Separation Phase B/C/E**: move host reflection/eval behind interop; delegate
-   compile proof to clj-meta.
+### 분배 시퀀싱 (guest 측, feat-branch)
+1. **Interop 강화**: 호스트 객체 opaque-ref 규칙 (`java-object-term` 수정),
+   모든 교차에 effect-class, deny-by-default grant.
+2. **분리 Phase B/C/E**: 호스트 reflection/eval을 interop 뒤로; compile proof를
+   clj-meta에 위임.
 3. **PORT CAS** (`cas.clj`) + **event store** (`store.clj`) from origin/main,
-   adapted to this branch's value model and the names-as-metadata rule.
-4. **Singleton `run-mirror`** (Phase D) once CAS/store land.
-5. **Stage tower + snapshot/purity** (PORT `stage`/`stm`/`resolve`/`purity`), each
-   a stage with an explicit witness.
+   이 브랜치 값 모델과 names-as-metadata 규칙에 맞게.
+4. CAS/store 착륙 후 **Singleton `run-mirror`** (Phase D).
+5. **Stage tower + snapshot/purity** (PORT `stage`/`stm`/`resolve`/`purity`),
+   각각 명시적 증인이 있는 stage.
 
-Each step stays gate-green and is committed as its own slice. Heavy lexer / large
-refactor / PORT steps are best done supervised, not unattended.
+각 단계는 게이트 녹색을 유지하고 자체 슬라이스로 commit. 무거운 lexer / 큰
+리팩터 / PORT 단계는 무인보다 감독하에 하는 것이 좋음.

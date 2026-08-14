@@ -1,12 +1,12 @@
-# pnix-clj / clj-meta Scope Lock
+# pnix-clj / clj-meta 스코프 잠금
 
-pnix-clj is the Clojure-hosted pnix runtime and meta-circular witness substrate.
+pnix-clj는 Clojure 호스팅 pnix 런타임 및 메타원형 증인 substrate다.
 
-clj-meta is the host-language proof lane.
+clj-meta는 호스트 언어 증명 레인이다.
 
-## In scope
+## 범위 안
 
-- pnix source
+- pnix 소스
 - tokenizer / parser
 - pnix AST
 - canonical form / lowering
@@ -19,9 +19,9 @@ clj-meta is the host-language proof lane.
 - witness / receipt / replay
 - clj-meta host reflection / compiler proof lane
 
-## Out of scope
+## 범위 밖
 
-The following lanes must not enter pnix-clj core:
+다음 레인은 pnix-clj 코어에 들어오면 안 된다:
 
 - Hangul codec
 - MSV / meaning sentence variants
@@ -35,26 +35,25 @@ The following lanes must not enter pnix-clj core:
 - redb ingest brain
 - NL corpus / meaning graph / answer composer
 
-## Rule
+## 규칙
 
-If a feature is not part of meta-circular Clojure-hosted pnix proof, it must not be added to the core gate.
+기능이 메타원형 Clojure 호스팅 pnix 증명에 속하지 않으면 코어 게이트에 추가하면 안 된다.
 
 
 ---
 
-## OWNER AMENDMENT 2026-07-08 — shared common-.px core loading is IN scope (B6)
+## 소유자 수정 2026-07-08 — 공유 common-.px 코어 로딩은 범위 안 (B6)
 
-Clarification (this lock never fenced the shared core out — its "Out of scope"
-list is the `clj-msv` cram: MSV / gate-graph / coding-agent / NL). The
-**shared common-`.px` core** is IN scope here as a direct extension of the
-existing in-scope `eval-source` / `import` / `tower` / `mirror` lanes:
+명확화 (이 잠금은 공유 코어를 막아 둔 적이 없다 — "범위 밖" 목록은
+`clj-msv` 크램: MSV / gate-graph / coding-agent / NL). **공유 common-`.px`
+코어**는 기존 범위 안 `eval-source` / `import` / `tower` / `mirror` 레인의
+직접 확장으로서 여기 범위 안이다:
 
-- loading common `.px` from an external `../pnix-meta` root (the sanctioned
-  external-root loader, `../project-wiki/maps/shared-blockers-map.md` B2);
-- emitting the shared canonical result + held reason (B1);
-- the effect/capability bridge to real host IO (B3).
+- 외부 `../pnix-meta` 루트에서 common `.px` 로딩 (승인된 external-root
+  loader, `../project-wiki/maps/shared-blockers-map.md` B2);
+- 공유 정규 결과 + held reason 방출 (B1);
+- 실제 호스트 IO로의 effect/capability 브리지 (B3).
 
-The Out-of-scope fences above (Hangul/MSV/gate-graph/coding-agent/…) are
-UNCHANGED — those remain the cram this lock exists to prevent. Bound by the
-constitution: meta-first, non-regression (the `bin/pnix-clj-gate` stays green),
-no auto-promotion.
+위 범위 밖 울타리 (Hangul/MSV/gate-graph/coding-agent/…)는 **변경 없음** —
+이 잠금이 막으려는 크램 그대로다. 헌법 구속: meta-first, 비회귀
+(`bin/pnix-clj-gate` green 유지), 자동 승격 없음.

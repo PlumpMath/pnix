@@ -1,199 +1,199 @@
-# Host env P2 / P3 + next product tracks (planning)
+# 호스트 env P2 / P3 + 다음 제품 트랙 (계획)
 
-**Status:** dual-axis + library import **closed enough** (2026-08-14).  
-**Doctrine / Day-1:** [HOST_DEV_ENV.md](HOST_DEV_ENV.md) · [HOST_IMPORT.md](HOST_IMPORT.md)  
-**Local regression:** `./bin/host-env-residual-smoke` (or PATH `./bin/host-import-smoke` after HM)
+**상태:** 이중 축 + 라이브러리 import **충분히 닫힘** (2026-08-14).  
+**교리 / 1일차:** [HOST_DEV_ENV.md](HOST_DEV_ENV.md) · [HOST_IMPORT.md](HOST_IMPORT.md)  
+**로컬 회귀:** `./bin/host-env-residual-smoke` (또는 HM 후 PATH `./bin/host-import-smoke`)
 
-This file is the **owner-facing plan** for optional follow-ups. Hard items stay
-planned until explicitly pulled. Easy items may land as small examples/CI.
-
----
-
-## P2 — quality / convenience (host-import track)
-
-### P2.1 Periodic smoke (ops)
-
-| Field | Content |
-|-------|---------|
-| Goal | After every `dot-nix` rebuild that bumps pnix inputs, re-run import smoke |
-| How | `~/pnix/bin/host-import-smoke` |
-| Done when | Documented habit + optional CI (P2.3) |
-| Effort | trivial |
-| **State** | **landed** as script + docs; habit is operator-side |
-
-### P2.2 Real mini projects (host-main demos)
-
-| Host | Skeleton | Done when |
-|------|----------|-----------|
-| clj | `examples/host-import/clj/` + `deps.edn` local/root | `clojure -M -m smoke` prints 3 |
-| cljs | `examples/host-import/cljs/smoke.mjs` | `node smoke.mjs` prints 3 (needs NODE_PATH / HM) |
-| hy | `examples/host-import/hy/smoke.py` | `python smoke.py` prints 3 |
-| rs | `examples/host-import/rs/README.md` path-dep or link flags | documented; optional tiny crate later |
-| clr | point at `pnix-clr/csharp/examples/HelloPnix` + props sample | already exists |
-
-| Field | Content |
-|-------|---------|
-| Effort | small |
-| **State** | **landed** skeletons + **rs path-dep crate** `examples/host-import/rs/pnix-rs-smoke` |
-
-### P2.3 CI for import regression
-
-| Field | Content |
-|-------|---------|
-| Goal | PR cannot delete smoke/examples without notice |
-| Phase A (easy) | layout + `bash -n` + **clj example** + **rs cargo path-dep** |
-| Phase B (medium) | per-host flake jobs that print `pnix-*-library` / `*-refs` env |
-| Phase C (hard) | full 5-host eval like local smoke (needs multi-toolchain matrix; do **not** start until A/B are green for weeks) |
-| **State** | **Phase A+B landed** in `.github/workflows/hosts.yml` (B = clj/hy/rs; cljs/clr covered by host gates). ShellCheck SC2012 fixed for library printers. |
-
-### P2.4 Public API polish (docs only unless churn)
-
-| Host | Work | Priority | State |
-|------|------|----------|-------|
-| clj | Keep `docs/HOST_IMPORT.md` as source of truth; expand only when API grows | low | docs landed |
-| hy | Freeze `__all__`; optional py.typed | low | **py.typed landed** (PEP 561 marker) |
-| cljs | Scoped require verified; local export landed; npm publish **dropped** | — | **export+smoke** |
-| rs | CARGO_HOST_IMPORT.md done; C ABI semver policy note in header | low | **ABI comment + version pin note landed**; full semver process still P3 |
-| clr | pack local nupkg done; nuget.org **dropped** (local feed only) | — | — |
-
-### P2.5 Dedicated host-import workflow on push
-
-| Field | Content |
-|-------|---------|
-| Goal | Main-branch pushes that touch host-env files get import CI without full gate matrix |
-| How | `.github/workflows/host-import.yml` (path-filtered push + PR) |
-| **State** | **landed** — layout/examples + library-print (clj/hy/rs); hy example via flake package |
+이 파일은 선택 후속 작업에 대한 **소유자용 계획**이다. 어려운 항목은
+명시적으로 끌어올 때까지 계획 상태로 둔다. 쉬운 항목은 작은 예제/CI로 착지 가능.
 
 ---
 
-## P3 — distribution / large product (plan only)
+## P2 — 품질 / 편의 (host-import 트랙)
 
-Do **not** start without an explicit product decision.
+### P2.1 주기 스모크 (ops)
 
-### P3.1 Registry publish
+| 필드 | 내용 |
+|------|------|
+| 목표 | pnix 입력을 올리는 모든 `dot-nix` rebuild 후 import 스모크 재실행 |
+| 방법 | `~/pnix/bin/host-import-smoke` |
+| 완료 기준 | 문서화된 습관 + 선택 CI (P2.3) |
+| 노력 | 사소 |
+| **상태** | 스크립트 + 문서로 **착지**; 습관은 운영자 측 |
 
-| Registry | Package | Blockers |
-|----------|---------|----------|
-| Maven | `pnix-clj` jar | versioning, source jar, which namespaces public |
-| npm | `@plumpmath/pnix-cljs` | already scoped name in store; need CI publish secrets |
-| crates.io | `pnix-rs` | currently `publish = false`; zero-deps story must stay |
-| nuget.org | `Pnix.Clr` | **won't do (owner 2026-08-14)** — personal/local feed only; pack+smoke stay |
+### P2.2 실제 미니 프로젝트 (host-main 데모)
 
-### P3.2 Full ClojureCLR project story
+| 호스트 | 스켈레톤 | 완료 기준 |
+|--------|----------|-----------|
+| clj | `examples/host-import/clj/` + `deps.edn` local/root | `clojure -M -m smoke` → 3 출력 |
+| cljs | `examples/host-import/cljs/smoke.mjs` | `node smoke.mjs` → 3 (NODE_PATH / HM 필요) |
+| hy | `examples/host-import/hy/smoke.py` | `python smoke.py` → 3 |
+| rs | `examples/host-import/rs/README.md` path-dep 또는 link flags | 문서화; 선택 tiny crate 이후 |
+| clr | `pnix-clr/csharp/examples/HelloPnix` + props sample 가리킴 | 이미 존재 |
 
-| Goal | Drop-in `deps.edn` / project.clj style CLR host beyond `-e` / single file |
-| Acceptance | Documented REPL + multi-file load + Reference assemblies without pnix-only CLI |
-| Depends on | clr-meta substrate stability, not just pnix-clr guest AOT |
-| **Plan detail** | see `pnix-clr/clr-meta/todo.md` § “P3 full ClojureCLR project” |
-| **Step 1 inventory** | **landed** — `pnix-clr/docs/CLOJURE_CLR_ADMITTED_SURFACE.md` |
-| **Step 2 TFM** | **landed** — `pnix-clr/docs/TFM_POLICY.md` |
-| **Step 3 template+smoke** | **landed** — `pnix-clr/examples/clojure-clr-project/` (bootstrap multi-ns → 42) |
-| **Profiles smoke** | **landed** — `bin/clojure-clr-profiles-smoke` (also in `pnix-clr-gate`) |
-| **tool-eval-multi** | **landed** — `--multi-form FILE\|-`, `--multi-e FORM` + named gate |
-| **Local nupkg smoke** | **landed** — `bin/pnix-clr-nupkg-smoke` (local feed only) |
-| **nuget.org publish** | **dropped** — owner uses local feed only; no nuget.org track |
-| **In-process C# eval** | **experimental** — net10 + parity gate; aggregate when substrate present |
-| **clj local export** | **landed** — `export-pnix-clj-library` + library-smoke (local only) |
-| **rs local export** | **landed** — `export-pnix-rs-library` + library-smoke (local only) |
-| **hy local export** | **landed** — `export-pnix-hy-library` + library-smoke (local only) |
-| **cljs local export** | **landed** — `export-pnix-cljs-library` + library-smoke (local only) |
-| **tool-eval stdin** | **landed** — single-form `-` + multi-form `--multi-form -` |
-| **clr host-import smoke** | **landed** — `examples/host-import/clr/smoke` (HelloPnix) |
-| **clr library smoke** | **landed** — `pnix-clr-library-smoke` (export API + nupkg + HelloPnix) |
-| **host-env residual cut** | **closed enough (2026-08-14)** — local feeds, examples, tool-eval surfaces, CI layout |
-| **tool-eval surface gate** | **landed** — `clr-meta-tool-surface-gate` freezes admitted CLI |
-| **Still open (product pillars, not host-env)** | machine/F-series if pillar; in-process ALC (blocked); new tool-eval only with named gate |
+| 필드 | 내용 |
+|------|------|
+| 노력 | 작음 |
+| **상태** | 스켈레톤 + **rs path-dep crate** `examples/host-import/rs/pnix-rs-smoke` **착지** |
 
-### P3.3 Common portable `.px` library (historical pnix-meta)
+### P2.3 import 회귀 CI
 
-| Goal | One portable library corpus loadable by all five hosts with equal semantics |
-| Status | **deferred** — do not block host-local import |
-| Acceptance | packaging contract + five-host gate slice + no host-leak builtins |
-| **Plan** | reopen only after host gates admit a shared corpus again |
+| 필드 | 내용 |
+|------|------|
+| 목표 | PR이 스모크/예제를 모르게 삭제하지 못하게 |
+| Phase A (쉬움) | 레이아웃 + `bash -n` + **clj 예제** + **rs cargo path-dep** |
+| Phase B (중간) | `pnix-*-library` / `*-refs` env를 출력하는 호스트별 flake 잡 |
+| Phase C (어려움) | 로컬 스모크처럼 5호스트 full eval (멀티 툴체인 매트릭스 필요; A/B가 수주 green 전까지 **시작 금지**) |
+| **상태** | `.github/workflows/hosts.yml`에 **Phase A+B 착지** (B = clj/hy/rs; cljs/clr는 호스트 게이트). library printer용 ShellCheck SC2012 수정됨. |
 
-### P3.4 ABI / typing contracts
+### P2.4 공개 API 다듬기 (문서 위주, churn 없으면)
 
-| Item | Host | Plan |
-|------|------|------|
-| C ABI semver for `pnix_rs.h` | rs | version macro + changelog; bump on any struct/export change |
-| `py.typed` + stub | hy | empty py.typed + export only `__all__` |
-| MSBuild multi-TFM NuGet | clr | net8+net10 already multi-target managed DLL |
+| 호스트 | 작업 | 우선순위 | 상태 |
+|--------|------|----------|------|
+| clj | `docs/HOST_IMPORT.md`를 정본으로 유지; API 성장 시에만 확장 | low | 문서 착지 |
+| hy | `__all__` 고정; 선택 py.typed | low | **py.typed 착지** (PEP 561 마커) |
+| cljs | scoped require 검증; 로컬 export 착지; npm 게시 **폐기** | — | **export+smoke** |
+| rs | CARGO_HOST_IMPORT.md 완료; 헤더 C ABI semver 정책 주석 | low | **ABI 주석 + version pin 노트 착지**; full semver 프로세스는 아직 P3 |
+| clr | 로컬 nupkg pack 완료; nuget.org **폐기** (로컬 피드만) | — | — |
+
+### P2.5 push 시 전용 host-import 워크플로
+
+| 필드 | 내용 |
+|------|------|
+| 목표 | host-env 파일을 건드리는 main 브랜치 push가 full gate 매트릭스 없이 import CI를 받음 |
+| 방법 | `.github/workflows/host-import.yml` (path-filtered push + PR) |
+| **상태** | **착지** — 레이아웃/예제 + library-print (clj/hy/rs); hy 예제는 flake 패키지 경유 |
 
 ---
 
-## Adjacent product tracks (plan only — not host-env)
+## P3 — 배포 / 대형 제품 (계획만)
 
-These were listed as “next after host-env”. **No implementation in this cut.**
+명시적 제품 결정 없이 **시작하지 말 것**.
 
-### A. clj residual / product residual
+### P3.1 레지스트리 게시
 
-| Source of truth | `pnix-clj/pnix-clj/todo.md` § REMAINING WORK + `docs/REMAINING_DECISION.md` |
-| Rule | Do not invent a new residual menu; pillar-driven (M-series) or oracle divergence only |
-| Next candidates (owner picks) | machine fragment growth (if pillar); Phase D **deferred** |
-| Host-import interaction | none required — `eval-file` / classpath inject already green |
-| **Detail** | `pnix-clj/pnix-clj/todo.md` § “Post host-env plan (2026-08-14)” |
+| 레지스트리 | 패키지 | 블로커 |
+|------------|--------|--------|
+| Maven | `pnix-clj` jar | 버저닝, source jar, 공개 네임스페이스 범위 |
+| npm | `@plumpmath/pnix-cljs` | 스토어에 scoped 이름 있음; CI publish 시크릿 필요 |
+| crates.io | `pnix-rs` | 현재 `publish = false`; zero-deps 스토리 유지 필수 |
+| nuget.org | `Pnix.Clr` | **안 함 (소유자 2026-08-14)** — 개인/로컬 피드만; pack+smoke 유지 |
 
-#### Oracle D-type surface (2026-08-14) — closed enough
+### P3.2 완전한 ClojureCLR 프로젝트 스토리
 
-Repeated `nix-instantiate` sweeps (wrong-VALUE, over-strict, both-ok) on real
-Nix builtins/operators are **green enough** for day-to-day. Landed this day
-includes: `++`/`//` operands, attr/list null guards, string/version types,
+| 목표 | `-e` / 단일 파일을 넘는 드롭인 `deps.edn` / project.clj 스타일 CLR 호스트 |
+| 수락 | pnix 전용 CLI 없이 문서화된 REPL + 멀티파일 로드 + Reference 어셈블리 |
+| 의존 | clr-meta substrate 안정성, pnix-clr guest AOT만이 아님 |
+| **계획 상세** | `pnix-clr/clr-meta/todo.md` § “P3 full ClojureCLR project” |
+| **Step 1 inventory** | **착지** — `pnix-clr/docs/CLOJURE_CLR_ADMITTED_SURFACE.md` |
+| **Step 2 TFM** | **착지** — `pnix-clr/docs/TFM_POLICY.md` |
+| **Step 3 template+smoke** | **착지** — `pnix-clr/examples/clojure-clr-project/` (bootstrap multi-ns → 42) |
+| **Profiles smoke** | **착지** — `bin/clojure-clr-profiles-smoke` (`pnix-clr-gate`에도 포함) |
+| **tool-eval-multi** | **착지** — `--multi-form FILE\|-`, `--multi-e FORM` + named gate |
+| **Local nupkg smoke** | **착지** — `bin/pnix-clr-nupkg-smoke` (로컬 피드만) |
+| **nuget.org publish** | **폐기** — 소유자는 로컬 피드만; nuget.org 트랙 없음 |
+| **In-process C# eval** | **실험** — net10 + parity gate; substrate 있을 때 aggregate |
+| **clj local export** | **착지** — `export-pnix-clj-library` + library-smoke (로컬만) |
+| **rs local export** | **착지** — `export-pnix-rs-library` + library-smoke (로컬만) |
+| **hy local export** | **착지** — `export-pnix-hy-library` + library-smoke (로컬만) |
+| **cljs local export** | **착지** — `export-pnix-cljs-library` + library-smoke (로컬만) |
+| **tool-eval stdin** | **착지** — single-form `-` + multi-form `--multi-form -` |
+| **clr host-import smoke** | **착지** — `examples/host-import/clr/smoke` (HelloPnix) |
+| **clr library smoke** | **착지** — `pnix-clr-library-smoke` (export API + nupkg + HelloPnix) |
+| **host-env residual cut** | **충분히 닫힘 (2026-08-14)** — 로컬 피드, 예제, tool-eval 표면, CI 레이아웃 |
+| **tool-eval surface gate** | **착지** — `clr-meta-tool-surface-gate`가 허용 CLI 고정 |
+| **아직 열림 (제품 필라, host-env 아님)** | machine/F-series if pillar; in-process ALC (blocked); new tool-eval은 named gate와 함께만 |
+
+### P3.3 공통 이식 가능 `.px` 라이브러리 (역사적 pnix-meta)
+
+| 목표 | 동일 의미로 다섯 호스트 모두 로드 가능한 하나의 이식 가능 라이브러리 코퍼스 |
+| 상태 | **연기** — 호스트 로컬 import를 막지 말 것 |
+| 수락 | 패키징 계약 + 5호스트 게이트 슬라이스 + host-leak builtin 없음 |
+| **계획** | 호스트 게이트가 다시 공유 코퍼스를 허용한 뒤에만 재개 |
+
+### P3.4 ABI / 타이핑 계약
+
+| 항목 | 호스트 | 계획 |
+|------|--------|------|
+| `pnix_rs.h` C ABI semver | rs | version macro + changelog; struct/export 변경 시 bump |
+| `py.typed` + stub | hy | 빈 py.typed + `__all__`만 export |
+| MSBuild multi-TFM NuGet | clr | net8+net10 이미 multi-target managed DLL |
+
+---
+
+## 인접 제품 트랙 (계획만 — host-env 아님)
+
+“host-env 다음”으로 나열됐던 항목. **이번 컷에서 구현 없음.**
+
+### A. clj residual / 제품 residual
+
+| 정본 | `pnix-clj/pnix-clj/todo.md` § REMAINING WORK + `docs/REMAINING_DECISION.md` |
+| 규칙 | 새 residual 메뉴 발명 금지; pillar-driven (M-series) 또는 oracle 분기만 |
+| 다음 후보 (소유자 선택) | machine fragment 성장 (pillar일 때); Phase D **연기** |
+| Host-import 상호작용 | 불필요 — `eval-file` / classpath inject 이미 green |
+| **상세** | `pnix-clj/pnix-clj/todo.md` § “Post host-env plan (2026-08-14)” |
+
+#### Oracle D-type 표면 (2026-08-14) — 충분히 닫힘
+
+실제 Nix builtins/operators에 대한 반복 `nix-instantiate` 스윕
+(wrong-VALUE, over-strict, both-ok)은 일상용으로 **충분히 green**. 당일 착지:
+`++`/`//` operands, attr/list null guards, string/version types,
 `toJSON` functions, `with` non-attrset no-op, select-`or` continuous
-attrPath (or catches any segment miss; parenthesized intermediate still
-hard-fails), empty regex, path `+` and path `<`, `elemAt` OOB,
-`baseNameOf "/"`, etc.
-Machine differential tracks the same value algebra (**~220 rows, 0 diverge**).
+attrPath (or는 어떤 세그먼트 miss도 catch; 괄호 중간은 여전히 hard-fail),
+empty regex, path `+` and path `<`, `elemAt` OOB,
+`baseNameOf "/"`, 등.
+Machine differential은 같은 값 대수를 추적 (**~220 rows, 0 diverge**).
 
-**Intentional / non-bugs (do not “fix” without a product decision):**
+**의도적 / 비버그 (제품 결정 없이 “고치지” 말 것):**
 
-| Topic | Stance |
-|-------|--------|
-| Path absolute vs relative | Pure relative path text (`./a`); Nix resolves to abs via FS |
-| `toString ./a` | Relative text, not abs path |
-| Host-only builtins (`mod`, `hasPrefix`, `take`, …) | May exist in pnix; absent on stock Nix builtins |
-| `tryEval` type errors | Propagate (only throw/assert false caught) — Nix-aligned |
-| String interp of int/bool | Error without `toString` — Nix-aligned (2.34) |
-| `builtins.fromTOML` | Not admitted (`builtins ? fromTOML` is false); add only with a pure TOML slice |
+| 주제 | 입장 |
+|------|------|
+| Path absolute vs relative | 순수 relative path 텍스트 (`./a`); Nix는 FS로 abs resolve |
+| `toString ./a` | relative 텍스트, abs path 아님 |
+| Host-only builtins (`mod`, `hasPrefix`, `take`, …) | pnix에 있을 수 있음; stock Nix builtins에는 없을 수 있음 |
+| `tryEval` type errors | 전파 (throw/assert false만 catch) — Nix 정렬 |
+| int/bool 문자열 보간 | `toString` 없이 에러 — Nix 정렬 (2.34) |
+| `builtins.fromTOML` | 미허용 (`builtins ? fromTOML` is false); pure TOML 슬라이스와 함께만 추가 |
 
-**Next oracle work** only on a new nix-instantiate divergence or pillar need —
-not checklist grinding.
+**다음 oracle 작업**은 새 nix-instantiate 분기 또는 pillar 필요 시에만 —
+체크리스트 갈아 없애기 아님.
 
 ### B. clr-meta residual
 
-| Source of truth | `pnix-clr/clr-meta/todo.md` + `STATUS.md` + stage design docs |
-| Rule | meta first; no Stage15/N promotion claims without receipts |
-| Next candidates | widen admitted eval surface carefully; compiler stage ladder honesty; full CLR project story (P3.2) |
-| Host-import interaction | export library already depends on artifact builder |
-| **Detail** | `pnix-clr/clr-meta/todo.md` § “Post host-env plan (2026-08-14)” |
+| 정본 | `pnix-clr/clr-meta/todo.md` + `STATUS.md` + stage design docs |
+| 규칙 | meta 우선; receipt 없이 Stage15/N promotion 주장 금지 |
+| 다음 후보 | admitted eval 표면 신중 확대; compiler stage ladder 정직성; full CLR project story (P3.2) |
+| Host-import 상호작용 | export library가 이미 artifact builder에 의존 |
+| **상세** | `pnix-clr/clr-meta/todo.md` § “Post host-env plan (2026-08-14)” |
 
-### C. Other hosts residual
+### C. 기타 호스트 residual
 
-| hy | `pnix-hy/pnix-hy/todo.md` — gate green; projection polish only |
+| hy | `pnix-hy/pnix-hy/todo.md` — gate green; projection polish만 |
 | rs | `pnix-rs/pnix-rs/todo.md` — substrate-check / stage ladder in rs-meta |
-| cljs | corpus admission still open per monorepo README |
+| cljs | monorepo README 기준 corpus admission 아직 열림 |
 
 ---
 
-## Decision log
+## 결정 로그
 
-| Date | Decision |
-|------|----------|
-| 2026-08-14 | Host dual-axis + library import declared **closed** for day-to-day dev env |
-| 2026-08-14 | P2.2 skeletons + P2.3 Phase A CI **started**; P3 registry/full CLR/common-.px **plan only** |
-| 2026-08-14 | clj residual / clr-meta / full examples / heavy CI = **todo detail only** until owner pull |
-| 2026-08-14 | P2.2 rs mini crate + P2.3 Phase B library-print matrix **started** |
-| 2026-08-14 | P2.4 py.typed + rs ABI header note; P2.5 `host-import.yml` on push |
+| 날짜 | 결정 |
+|------|------|
+| 2026-08-14 | Host dual-axis + library import를 일상 dev env에 **닫힘**으로 선언 |
+| 2026-08-14 | P2.2 스켈레톤 + P2.3 Phase A CI **시작**; P3 registry/full CLR/common-.px **계획만** |
+| 2026-08-14 | clj residual / clr-meta / full examples / heavy CI = 소유자 pull 전까지 **todo 상세만** |
+| 2026-08-14 | P2.2 rs mini crate + P2.3 Phase B library-print matrix **시작** |
+| 2026-08-14 | P2.4 py.typed + rs ABI header note; P2.5 push 시 `host-import.yml` |
 | 2026-08-14 | P3.2 step1 clojure-clr inventory; clj multi-module import example |
 | 2026-08-14 | P3.2 step2 TFM + step3 bootstrap multi-ns project smoke |
 | 2026-08-14 | P3.2 named profiles + clojure-clr-profiles-smoke (4/4) |
 | 2026-08-14 | tool-eval-multi --multi-form + clr-meta-tool-eval-multi-gate |
-| 2026-08-14 | profiles-smoke wired into pnix-clr-gate (~17s) |
-| 2026-08-14 | local nupkg pack smoke (`pnix-clr-nupkg-smoke`); nuget.org still owner-gated |
+| 2026-08-14 | profiles-smoke를 pnix-clr-gate에 연결 (~17s) |
+| 2026-08-14 | local nupkg pack smoke (`pnix-clr-nupkg-smoke`); nuget.org는 여전히 owner-gated |
 | 2026-08-14 | M1 per-call `:fold-fuel`; nuget publish fail-closed; in-process eval design |
 | 2026-08-14 | in-process eval spike (net10 ALC) + parity gate (opt-in, not aggregate) |
 | 2026-08-14 | in-process corpus 17-pass; isolated ALC held (CLR Default load); host-artifact API |
 | 2026-08-14 | host-artifact report rows; nupkg-smoke in gate if export; INPROCESS opt-in gate |
-| 2026-08-14 | nuget.org publish **dropped** (local-only); inprocess gate auto when substrate+artifact |
+| 2026-08-14 | nuget.org publish **폐기** (local-only); inprocess gate auto when substrate+artifact |
 | 2026-08-14 | clj local library export + smoke; inprocess reentrancy = serialized lock |
 | 2026-08-14 | tool-eval-multi: --multi-e + --multi-form - (stdin); default -e stays single-form |
 | 2026-08-14 | rs/hy local library export + smoke (personal feed; not crates.io/PyPI) |

@@ -1,27 +1,27 @@
-# clr-meta status (peer host-meta floor)
+# clr-meta 상태 (peer host-meta floor)
 
-Last verified: 2026-08-12.
+마지막 검증: 2026-08-12.
 
-## Peer-floor statement
+## Peer-floor 선언
 
-**clr-meta** is the PNIX-agnostic ClojureCLR host bootstrap beneath `pnix-clr`.
-Practical peer floor matches other host metas for **product substrate**, with
-an honest Stage3–15/N ladder still open:
+**clr-meta**는 `pnix-clr` 아래의 PNIX-agnostic ClojureCLR host bootstrap이다.
+practical peer floor는 **product substrate**에 대해 다른 host meta와 맞으며,
+정직한 Stage3–15/N ladder는 여전히 open:
 
-| Peer | Peer floor | clr-meta counterpart |
+| Peer | Peer floor | clr-meta 대응 |
 |---|---|---|
 | JVM Clojure host | bytecode selfhost | eval gen0–2 + C0–C3 Stage1/2 |
 | Hy host | stage ladder / fixed-point | C3 Stage2 + source-hidden fresh-target replay |
 | Rust host | TV + stage chain | checked-I64 Stage1 + selfhost PE emit |
-| ClojureScript host | fixed-point compiler | Stage2 same-source recompile (not full IL fixed point) |
+| ClojureScript host | fixed-point compiler | Stage2 same-source recompile (full IL fixed point 아님) |
 
-Meta-first order: `clr-meta` before `pnix-clr`. Artifact builder + hash-bound
-load path closed. Stage3–15/N remains roadmap (`STAGE15_N_ROADMAP.md`), same
-honesty as not claiming Stage15 replacement on clj/rs/cljs.
+Meta-first 순서: `pnix-clr` 전에 `clr-meta`. Artifact builder + hash-bound
+load path closed. Stage3–15/N은 roadmap (`STAGE15_N_ROADMAP.md`)으로 남으며,
+clj/rs/cljs에서 Stage15 replacement를 주장하지 않는 것과 같은 honesty.
 
 ## Closed claims
 
-Live-verified this session (2026-08-07) via `./bin/clr-meta-gate eval-only`:
+이 세션 live-verified (2026-08-07), `./bin/clr-meta-gate eval-only`:
 
 ```text
 bootstrap-test (gen0→1→2 self-interpretation)  ready=true
@@ -32,7 +32,7 @@ tool-gate (-e / file gen2 + strict reader)     PASS
   reader-eval / tagged / trailing / map rejected
 ```
 
-Documented closed (heavy C1–C3 gates; not re-run full chain this session):
+문서화된 closed (heavy C1–C3 게이트; 이 세션 full chain 재실행 아님):
 
 ```text
 checked-I64 Compiler Stage1 family
@@ -42,7 +42,7 @@ selfhost C3 Stage2 + source-hidden fresh-target replay
 host-clojureclr-aot runtime artifact builder
 ```
 
-## Closed this wave (2026-08-07) — Compiler Stage3–7 + path fix
+## 이 wave에서 closed (2026-08-07) — Compiler Stage3–7 + path fix
 
 ```text
 ./scripts/clr-meta-compiler-selfhost-stage3-gate   PASS
@@ -68,7 +68,7 @@ pnix-clr common-slice: live five-host floor (URI, JSON, dynamic attrs, exact int
   promotion/allowed? = false
 ```
 
-## Closed this wave (2026-08-12) — Compiler Stage8 reproducible assembly artifacts
+## 이 wave에서 closed (2026-08-12) — Compiler Stage8 reproducible assembly artifacts
 
 ```text
 ./scripts/clr-meta-compiler-selfhost-stage8-gate   PASS
@@ -95,7 +95,7 @@ design: STAGE8_DESIGN.md
 gate chain: scripts/clr-meta-gate → …stage7 → stage8
 ```
 
-## Closed this wave (2026-08-12, same day) — Compiler Stage9 clean-process replay
+## 이 wave에서 closed (2026-08-12, 같은 날) — Compiler Stage9 clean-process replay
 
 ```text
 ./scripts/clr-meta-compiler-selfhost-stage9-gate   PASS
@@ -120,7 +120,7 @@ design: STAGE9_DESIGN.md
 gate chain: scripts/clr-meta-gate → …stage8 → stage9
 ```
 
-## Closed this wave (2026-08-12, same day) — Compiler Stage10–15/N + StageN
+## 이 wave에서 closed (2026-08-12, 같은 날) — Compiler Stage10–15/N + StageN
 
 ```text
 ./scripts/clr-meta-compiler-selfhost-stage10-gate   PASS
@@ -197,7 +197,7 @@ designs: STAGE{10-15,N}_DESIGN.md
 gate chain: scripts/clr-meta-gate → …stage9 → stage10 → … → stagen
 ```
 
-## Closed this wave (2026-08-12, same day) — compiler self-reproduction / B==C fixed point
+## 이 wave에서 closed (2026-08-12, 같은 날) — compiler self-reproduction / B==C fixed point
 
 ```text
 ./scripts/clr-meta-compiler-self-reproduction-check   PASS
@@ -224,7 +224,7 @@ design: SELF_REPRODUCTION_DESIGN.md
 gate chain: scripts/clr-meta-gate → …stage7 → self-reproduction-check → stage8
 ```
 
-## Open claims (do not claim)
+## Open claims (주장하지 말 것)
 
 ```text
 clr_il_fixed_point = false
@@ -233,91 +233,90 @@ pnix_common_compiler_integration = false
 cross_host_canonical_equivalence / clr_host_promotion = false
 ```
 
-Stage1 through StageN, and compiler self-reproduction, are now ALL closed
-(see the "Closed this wave" sections above) — `promotion/allowed?` stays
-`false` on every one of them regardless, since none of this closes a general
-CLR IL fixed point (this is scoped to the Compiler Stage1-7
-`PersistedAssemblyBuilder` output specifically, not every artifact kind this
-repo could ever produce) or broad ClojureCLR replacement, which remain the
-actual promotion gates.
+Stage1부터 StageN, 그리고 compiler self-reproduction은 이제 모두 closed
+(위 "이 wave에서 closed" 섹션 참조) — `promotion/allowed?`는 각각에서
+`false`로 유지된다. 이 중 어느 것도 general CLR IL fixed point를 닫지
+않기 때문이다 (Compiler Stage1-7 `PersistedAssemblyBuilder` output에
+scoped이며, 이 repo가 만들 수 있는 모든 artifact kind가 아님) 또는 broad
+ClojureCLR replacement — 그것이 실제 promotion 게이트로 남는다.
 
-`raw_aot_rebuild_determinism` moved out of this block (2026-08-12): Stage8
-closes it for the Compiler Stage1-7 `PersistedAssemblyBuilder` artifact family
-specifically. It is not a general claim about every artifact this repo could
-ever produce — a future codegen path that writes debug info would need its
-own determinism check, per `stage8-contract.edn`'s explicit non-claims.
+`raw_aot_rebuild_determinism`은 이 블록에서 이동됨 (2026-08-12): Stage8이
+Compiler Stage1-7 `PersistedAssemblyBuilder` artifact family에 대해 특별히
+닫는다. 이 repo가 만들 수 있는 모든 artifact에 대한 general claim이 아니다
+— debug info를 쓰는 미래 codegen path는 자체 determinism check가 필요하며,
+`stage8-contract.edn`의 explicit non-claim을 따른다.
 
 ## Trusting-Trust defense roadmap (Diverse Double-Compiling)
 
-Unlike Rust (`mrustc`), there is no independently-authored third-party
-ClojureCLR compiler in the wild to lean on — a second, independent backend
-has to be built in-house, the same constraint the reference JVM host
-(the `frontend_selfhost.clj`/`diverse_double_compile.clj` pair) already
-worked through for its own DDC witness, and the same pattern followed here.
+Rust (`mrustc`)와 달리 wild에 lean할 independently-authored third-party
+ClojureCLR compiler가 없다 — 두 번째 independent backend를 in-house로 만들어야
+하며, reference JVM host (`frontend_selfhost.clj`/`diverse_double_compile.clj`
+pair)가 자체 DDC witness에 이미 적용한 것과 같은 제약, 여기서 따른 것과
+같은 패턴이다.
 
-**Independent mini backend added this session (2026-08-11):**
-`independent_mini_backend.clj` is a new, from-scratch Int64
+**이 세션에 independent mini backend 추가 (2026-08-11):**
+`independent_mini_backend.clj`는 새 from-scratch Int64
 tokenizer/reader + analyzer + `System.Reflection.Emit.DynamicMethod` IL
-emitter, sharing zero code with the Compiler Stage1-7 family
-(`compiler_stage1.clj`, `compiler_selfhost_*.clj`), which uses
-`System.Reflection.Emit.PersistedAssemblyBuilder` to produce full PE
-executables. `DynamicMethod` JITs a method in memory and hands back an
-invokable handle directly — it never touches the assembly/PE-writing path
-the Stage1-7 family shares. The pinned ClojureCLR runtime and the CLR itself
-remain trusted host substrate, the same honest role the JVM classfile format
-plays for the reference host's tiny frontend witness.
+emitter로, Compiler Stage1-7 family
+(`compiler_stage1.clj`, `compiler_selfhost_*.clj`)와 코드를 공유하지 않는다.
+그 family는 full PE executable를 만들기 위해
+`System.Reflection.Emit.PersistedAssemblyBuilder`를 쓴다. `DynamicMethod`는
+method를 memory에서 JIT하고 invokable handle을 직접 반환한다 — Stage1-7
+family가 공유하는 assembly/PE-writing path를 건드리지 않는다. pinned
+ClojureCLR runtime과 CLR 자체는 trusted host substrate로 남으며, reference
+host의 tiny frontend witness에서 JVM classfile format이 하는 것과 같은
+honest role이다.
 
-Covers 15 value-returning fixtures (`+`/`-`/`*` checked arithmetic,
-`<`/`>`/`<=`/`>=`/`=` comparisons, `if` including nested `if`, 0/1/2/3/4-arg
-functions) plus 4 checked-overflow negative fixtures (both the real host and
-the mini backend must reject `Int64.MaxValue + 1`, `Int64.MinValue - 1`,
-`Int64.MaxValue * 2`, and `Int64.MaxValue + Int64.MaxValue`). Cross-validated
-against real host ClojureCLR `eval` — both agree on all 19. Wired into
-`independent-mini-backend-test` (`clr-meta/test/pnix/clr_meta/`), which now
-runs as part of the aggregate `bootstrap-test` entry point invoked by
-`scripts/clr-meta-gate`. Verified live this session (2026-08-11, later
-widening pass): the namespace's own test run shows `{:test 2, :pass 38,
-:fail 0, :error 0}`; full `bin/clr-meta-gate --no-build` re-run shows
-`{:test 20, :pass 209, :fail 0, :error 0}, :ready true` with no regressions.
+15 value-returning fixture (`+`/`-`/`*` checked arithmetic,
+`<`/`>`/`<=`/`>=`/`=` comparison, nested `if` 포함 `if`, 0/1/2/3/4-arg
+function)와 4 checked-overflow negative fixture (real host와 mini backend
+모두 `Int64.MaxValue + 1`, `Int64.MinValue - 1`, `Int64.MaxValue * 2`,
+`Int64.MaxValue + Int64.MaxValue`를 거부해야 함)를 다룬다. real host
+ClojureCLR `eval`에 대해 cross-validate — 19 모두 합의. aggregate
+`bootstrap-test` entry point의 일부로 `scripts/clr-meta-gate`가 호출하는
+`independent-mini-backend-test` (`clr-meta/test/pnix/clr_meta/`)에 연결.
+이 세션 live 검증 (2026-08-11, later widening pass): namespace 자체 test
+run이 `{:test 2, :pass 38, :fail 0, :error 0}`; full
+`bin/clr-meta-gate --no-build` re-run이
+`{:test 20, :pass 209, :fail 0, :error 0}, :ready true`, regression 없음.
 
-**What this closes and what it still doesn't:** a genuine 2-way behavioral
-comparison (real host `eval` ≡ from-scratch `DynamicMethod`-based mini
-backend) now exists and passes on both the success surface and the
-checked-overflow negative surface, not just a documented plan. Nested `if`
-and more function arities close the "not the full Stage1 profile shape" gap
-noted here previously; the checked-overflow fixtures close the "negative
-cases not exercised" gap — the mini backend's `Add_Ovf`/`Sub_Ovf`/`Mul_Ovf`
-IL opcodes were always checked (matching the Compiler Stage1 profile's
-`:overflow :system-overflow-exception`), they just weren't tested until now.
-It is still a bounded fixture set, not the full conformance corpus, and (same
-honest bar settled on for every host this session) behavior equivalence, not
-byte-identical IL, since a `DynamicMethod`-JITted method and a
-`PersistedAssemblyBuilder`-written PE are different CLR artifact kinds by
-construction.
+**닫는 것과 여전히 닫지 않는 것:** genuine 2-way behavioral comparison
+(real host `eval` ≡ from-scratch `DynamicMethod`-based mini backend)가
+이제 존재하며 success surface와 checked-overflow negative surface 모두
+통과한다 — documented plan만이 아님. Nested `if`와 더 많은 function arity가
+이전에 여기 적힌 "not the full Stage1 profile shape" gap을 닫고;
+checked-overflow fixture가 "negative cases not exercised" gap을 닫는다 —
+mini backend의 `Add_Ovf`/`Sub_Ovf`/`Mul_Ovf` IL opcode는 항상 checked였고
+(Compiler Stage1 profile의 `:overflow :system-overflow-exception`과 일치),
+지금껏 테스트되지 않았을 뿐이다. 여전히 bounded fixture set이지 full
+conformance corpus가 아니며, (이 세션 모든 host에 대해 정착한 같은 honest
+bar) byte-identical IL이 아니라 behavior equivalence다. `DynamicMethod`-JITted
+method와 `PersistedAssemblyBuilder`-written PE는 construction상 다른 CLR
+artifact kind이기 때문이다.
 
-**Independent-interpreter DDC track closed, same day (2026-08-12):** this
-was flagged above as "a separate, not-yet-started track" — building an
-independent *interpreter* (as opposed to the second *compiler* the mini
-backend already is) to cross-check the gen0-2 evaluator lane.
-`src/pnix/clr_meta/independent_mini_interpreter.clj` is a from-scratch
-tokenizer/reader + tree-walking interpreter for the small, environment-driven
-Lisp subset `bootstrap.clj`'s own 9-case `conformance-cases` corpus proves
-(`quote`/`if`/`let`/`fn` including named recursion and `&` variadic rest),
-sharing zero code with `pnix.clr-meta.main`'s reader or
-`pnix.clr-meta.bootstrap/evaluate`. Cross-validated against the real,
-textual `bin/clr-meta -e` evaluator-generation-2 tool-eval path (not
-pre-parsed data, confirming an independently-authored *reader* too) via
-`scripts/clr-meta-independent-mini-interpreter-gate`. Verified live: 9/9
-fixtures accepted on the first run, full aggregate gate still green.
-See `INDEPENDENT_MINI_INTERPRETER_DESIGN.md`. An interpreter alone still
-does not clear the full Wheeler bar by itself (same honest bar as the
-mini-backend's own scope note) — it is a necessary, not sufficient, piece.
+**Independent-interpreter DDC track closed, 같은 날 (2026-08-12):** 위에서
+"별도, 아직 시작하지 않은 track"으로 플래그됨 — gen0-2 evaluator lane을
+cross-check하기 위해 independent *interpreter* 구축 (mini backend가 이미
+두 번째 *compiler*인 것과 대비).
+`src/pnix/clr_meta/independent_mini_interpreter.clj`는 `bootstrap.clj` 자체
+9-case `conformance-cases` corpus가 증명하는 small, environment-driven Lisp
+subset용 from-scratch tokenizer/reader + tree-walking interpreter
+(`quote`/`if`/`let`/`fn` including named recursion and `&` variadic rest)로,
+`pnix.clr-meta.main`의 reader나 `pnix.clr-meta.bootstrap/evaluate`와 코드를
+공유하지 않는다. real, textual `bin/clr-meta -e` evaluator-generation-2
+tool-eval path에 대해 cross-validate (pre-parsed data 아님, independently-
+authored *reader*도 확인)
+`scripts/clr-meta-independent-mini-interpreter-gate` 경유. live 검증: 9/9
+fixture 첫 run accept, full aggregate 게이트 여전히 green.
+`INDEPENDENT_MINI_INTERPRETER_DESIGN.md` 참조. interpreter alone은 여전히
+full Wheeler bar를 자체로 넘지 않는다 (mini-backend 자체 scope note와 같은
+honest bar) — necessary, not sufficient piece.
 
-**Next concrete step:** widen either DDC witness's fixture set further, or
-pick up item 6/7 from `todo.md` (broad ClojureCLR compatibility/replacement,
-explicitly deferred by the roadmap's own ordering).
+**다음 구체적 단계:** 어느 DDC witness fixture set이든 더 넓히거나,
+`todo.md` item 6/7을 집어 든다 (broad ClojureCLR compatibility/replacement,
+roadmap 자체 ordering이 명시적으로 연기).
 
-## Primary gate
+## Primary 게이트
 
 ```sh
 # From pnix-clr/clr-meta/  (prefer real rg on PATH)
@@ -332,15 +331,16 @@ selfhost-stage1-gate → selfhost-stage2-gate.
 
 ## Tooling note
 
-Gate scripts expect `rg` (ripgrep). Prefer **`/usr/local/bin/rg`**. Do **not**
-put `pnix-clr/bin` first on `PATH` — that tree may ship an old `rg` shim.
+게이트 스크립트는 `rg` (ripgrep)를 기대한다. **`/usr/local/bin/rg`**를
+선호. `PATH` 앞에 `pnix-clr/bin`을 두지 **말 것** — 그 tree가 old `rg`
+shim을 실을 수 있다.
 
-## Last run (this machine, 2026-08-07)
+## 마지막 run (이 머신, 2026-08-07)
 
-| Gate | Result | Notes |
+| 게이트 | 결과 | 비고 |
 |---|---|---|
 | `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; tool-gate PASS |
-| full C1–C3 chain | not re-run this session | scripts/*-gate; docs claim closed |
+| full C1–C3 chain | 이 세션 재실행 안 함 | scripts/*-gate; docs claim closed |
 | `./scripts/clr-meta-compiler-selfhost-stage3-gate` | **PASS** | Stage2→Stage3 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage4-gate` | **PASS** | Stage3→Stage4 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage5-gate` | **PASS** | Stage4→Stage5 + source-hidden replay |

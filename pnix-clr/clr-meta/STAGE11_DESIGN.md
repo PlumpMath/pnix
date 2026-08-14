@@ -1,51 +1,50 @@
 # clr-meta Compiler Stage11 design
 
-Status: **closed (live gate PASS)** 2026-08-12. Parent floor is Stage10.
+상태: **closed (live gate PASS)** 2026-08-12. Parent floor는 Stage10.
 
-## Goal
+## 목표
 
-One accepted/failed boundary across source, IR, compiler, runtime, and
-compatibility surfaces (the roadmap's own one-line Stage11 definition), read
-here as: every integration surface clr-meta actually has must be declared in
-one adapter policy table (`proofs/adapter-schema.tsv`), and every `DONE`
-adapter's closure must be live-replayable.
+source, IR, compiler, runtime, compatibility surface 전역의 one accepted/failed
+boundary (roadmap 자체 one-line Stage11 정의). 여기서는: clr-meta가 실제로 가진
+모든 integration surface를 하나의 adapter policy table
+(`proofs/adapter-schema.tsv`)에 선언하고, 모든 `DONE` adapter의 closure가
+live-replayable해야 함으로 읽는다.
 
-## Adapters (5 rows)
+## Adapter (5 row)
 
-- `local-clojureclr` (`DONE`) — the `bin/clr-meta` CLI plus the pinned
-  ClojureCLR NuGet package and dotnet toolchain. Replayed by running
-  Stage9's gate **once** (not twice — see "why replay-once" below).
-- `compiler-selfhost-native` (`DONE`) — the `PersistedAssemblyBuilder`-based
-  compiler-selfhost artifact family. Replayed by reading Stage8's own latest
-  checked receipt (`work/compiler-selfhost-stage8-gate.receipt.json`), not
-  by re-running Stage8's gate.
-- `github-actions` (`HELD`) — the monorepo-level `hosts.yml` workflow
-  exercises this host remotely on every PR, but its outcome is external and
-  not fetched or trusted here.
-- `external-nuget-feed` (`HELD`) — fetching packages beyond the pinned/cached
-  ClojureCLR package is outside the local proof boundary.
-- `cross-implementation` (`HELD`) — deferred to Stage14.
+- `local-clojureclr` (`DONE`) — `bin/clr-meta` CLI + pinned ClojureCLR NuGet
+  package + dotnet toolchain. Stage9 게이트를 **한 번** 실행해 replay
+  (두 번 아님 — 아래 "why replay-once" 참조).
+- `compiler-selfhost-native` (`DONE`) — `PersistedAssemblyBuilder`-based
+  compiler-selfhost artifact family. Stage8 자체 latest checked receipt
+  (`work/compiler-selfhost-stage8-gate.receipt.json`)를 읽어 replay — Stage8
+  게이트 재실행 아님.
+- `github-actions` (`HELD`) — monorepo-level `hosts.yml` workflow가 매 PR
+  remote로 이 host를 exercise하지만, outcome은 external이며 여기서
+  fetch하거나 trust하지 않음.
+- `external-nuget-feed` (`HELD`) — pinned/cached ClojureCLR package 너머
+  package fetch는 local proof boundary 밖.
+- `cross-implementation` (`HELD`) — Stage14로 연기.
 
-## Why replay-once, not replay-twice (a correction made while building this)
+## replay-once인 이유, replay-twice가 아닌 이유 (구축 중 수정)
 
-The first draft of this gate re-ran Stage9's *entire* gate twice (mirroring
-Stage8-10's own "run twice, require identical" pattern). That's wrong here:
-Stage9 already proves its own clean-process replay property internally, so
-re-running it a second time from Stage11 doesn't add evidence — it just
-doubles the cost. Worse, if every later stage (`12`, `13`, `14`, `15`, `N`)
-"replayed twice" a predecessor that itself "replayed twice" *its*
-predecessor, cost would double at every hop — quadratic in stage depth, and
-close to unworkable by StageN. Every stage from Stage11 onward instead calls
-its referenced predecessor **once**: enough to confirm the referenced
-property still holds against today's source, without re-proving a property
-that stage already proved about itself.
+이 게이트 초안은 Stage9 *entire* 게이트를 두 번 재실행했다 (Stage8-10의
+"run twice, require identical" 패턴 모방). 여기서는 틀렸다: Stage9가 이미
+자체 clean-process replay property를 내부에서 증명하므로, Stage11에서 두 번째
+재실행은 증거를 더하지 않고 비용만 두 배로 만든다. 더 나쁘게, later stage
+(`12`, `13`, `14`, `15`, `N`)마다 predecessor를 "두 번 replay"하고 그
+predecessor 또한 자신의 predecessor를 "두 번 replay"하면 hop마다 비용이
+두 배 — stage depth에 대해 quadratic이며 StageN에서 거의 작동 불능에 가깝다.
+Stage11부터 모든 stage는 대신 referenced predecessor를 **한 번** 호출한다:
+referenced property가 오늘 source에 대해 여전히 성립함을 확인하기에 충분하고,
+그 stage가 자신에 대해 이미 증명한 property를 재증명하지 않는다.
 
-## Non-claims
+## Non-claim
 
 Stage12-15/N, compiler self-reproduction, IL fixed-point, ClojureCLR
 replacement, promotion.
 
-## Commands
+## 명령
 
 ```sh
 ./clr-meta/scripts/clr-meta-compiler-selfhost-stage11-gate
@@ -53,5 +52,5 @@ replacement, promotion.
 
 ## Live receipt
 
-`work/compiler-selfhost-stage11-gate.receipt.json` (gitignored) with
+`work/compiler-selfhost-stage11-gate.receipt.json` (gitignored),
 `claims.stage11 = true`, `claims["promotion/allowed?"] = false`.

@@ -1,139 +1,139 @@
-# In-process C# evaluator (experimental spike)
+# 프로세스 내 C# 평가기 (실험적 스파이크)
 
-**Status:** experimental spike (2026-08-14) — **not** the product default.  
-**Supported default:** `Pnix.Clr.Eval.Source` / `Eval.File` — **process-spawn** `pnix-clr`, JSON CLI contract.  
-**Opt-in:** `Eval.SourceInProcess` / `FileInProcess` on **net10.0+** only.
+**상태:** 실험적 스파이크 (2026-08-14) — 제품 기본값이 **아님**.  
+**지원 기본값:** `Pnix.Clr.Eval.Source` / `Eval.File` — **프로세스 스폰** `pnix-clr`, JSON CLI 계약.  
+**옵트인:** `Eval.SourceInProcess` / `FileInProcess` — **net10.0+** 전용.
 
-Related: `csharp/Pnix.Clr/InProcessEval.cs` · monorepo `HOST_ENV_P2_P3.md` · `clr-meta/todo.md`.
+관련: `csharp/Pnix.Clr/InProcessEval.cs` · 모노레포 `HOST_ENV_P2_P3.md` · `clr-meta/todo.md`.
 
 ---
 
-## Why process-spawn is the product default
+## 프로세스 스폰이 제품 기본값인 이유
 
-| Concern | Process-spawn (today) | In-process (goal) |
+| 관심사 | 프로세스 스폰 (현재) | 프로세스 내 (목표) |
 |---------|----------------------|-------------------|
-| Isolation | Child process; crash ≠ host crash | Shared AppDomain / ALC |
-| TFM mix | Host C# net8 can call net10 CLI | Must align TFMs / load contexts |
-| Guest AOT | Optional Reference via props | Load `*.clj.dll` + ClojureCLR runtime |
-| Deploy size | Needs `pnix-clr` on PATH/env | Bundle runtime + artifact |
-| Determinism | CLI JSON schema already gated | Same schema + no silent drift |
+| 격리 | 자식 프로세스; 크래시 ≠ 호스트 크래시 | 공유 AppDomain / ALC |
+| TFM 혼합 | 호스트 C# net8이 net10 CLI 호출 가능 | TFM / 로드 컨텍스트 정렬 필요 |
+| Guest AOT | props를 통한 선택적 Reference | `*.clj.dll` + ClojureCLR 런타임 로드 |
+| 배포 크기 | PATH/env에 `pnix-clr` 필요 | 런타임 + artifact 번들 |
+| 결정성 | CLI JSON 스키마 이미 게이트됨 | 동일 스키마 + 조용한 드리프트 없음 |
 
-Process-spawn stays the **default** even after in-process lands (opt-in).
-
----
-
-## Goal
-
-Allow C# host-main code to evaluate `.px` / inline source **without** spawning a process, returning the **same** `EvalResult` shape (`schema`, `outcome-kind`, `value`/`error`) as the CLI path.
-
-Honest scope:
-
-- **In:** pure eval of host-bound pnix on the clr limb (same semantics as `pnix-clr -e` / file).
-- **Out:** full ClojureCLR REPL, arbitrary multi-ns Clojure projects, “replace process spawn for every deploy”.
+프로세스 스폰은 프로세스 내 경로가 도입된 뒤에도 **기본값**으로 유지됩니다 (옵트인).
 
 ---
 
-## Embedding options (ordered by honesty cost)
+## 목표
 
-### A. Managed host API over existing CLI protocol (thin)
+C# host-main 코드가 프로세스를 스폰하지 **않고** `.px` / 인라인 소스를 평가하고, CLI 경로와 **동일한** `EvalResult` 형태(`schema`, `outcome-kind`, `value`/`error`)를 반환하도록 한다.
 
-Keep evaluation in a long-lived helper process / named pipe, not `Process.Start` per call.
+정직한 범위:
 
-- **Pros:** reuses JSON contract; weaker than true in-proc.
-- **Cons:** still a process; not “in-process”.
-- **Verdict:** intermediate; only if spawn cost is the pain, not embedding.
-
-### B. Load guest AOT + ClojureCLR in an AssemblyLoadContext (preferred research path)
-
-1. Ship/export already provides `runtime-artifact/*.clj.dll` + `Pnix.Clr` multi-TFM.
-2. Host loads ClojureCLR substrate (net10 product path — see `TFM_POLICY.md`) in an **isolated** ALC.
-3. Invoke the same entry the CLI uses for `-e` / file (or a dedicated managed entrypoint that emits CLI-shaped JSON / EDN).
-4. Map to `EvalResult` without shelling out.
-
-**Blockers to solve before code:**
-
-1. **Substrate package** — which assemblies must be next to the host (Clojure.Main, deps, version pin 1.12.3-alpha8).
-2. **ALC isolation** — unload, duplicate type identities, no leak into default context.
-3. **TFM** — product guest AOT is net10; net8-only hosts may stay process-spawn only.
-4. **Thread / apartment / statics** — ClojureCLR init once per ALC; document reentrancy.
-5. **Parity gate** — byte-identical or structured-equal JSON for a fixed corpus vs process path.
-
-### C. Pure managed reimplementation of pnix on CLR without ClojureCLR
-
-Rewrite evaluator in C# / F#. **Rejected for now** — second semantic source of truth; violates host-bound product doctrine.
+- **포함:** clr limb에서 host-bound pnix의 pure eval (`pnix-clr -e` / 파일과 동일 의미).
+- **제외:** 전체 ClojureCLR REPL, 임의 multi-ns Clojure 프로젝트, “모든 배포에서 프로세스 스폰 대체”.
 
 ---
 
-## Acceptance sketch (when owner pulls implementation)
+## 임베딩 옵션 (정직성 비용 순)
 
-1. Design note (this file) stays accurate.
-2. Opt-in API, e.g. `Eval.SourceInProcess` / `EvalOptions.Execution = InProcess`, **default remains Process**.
-3. Gate script: N fixtures where process and in-process results agree on `outcome-kind` + value JSON (or documented held diffs only).
-4. Negative: missing substrate fails closed with actionable message (not hang, not silent null).
-5. Docs: README table marks Process = supported, InProcess = experimental until gate green.
-6. **No** Stage15/N or Trusting-Trust claims from embedding alone.
+### A. 기존 CLI 프로토콜 위 managed host API (얇은 계층)
+
+평가를 호출마다 `Process.Start` 하지 않고, 장기 생존 helper 프로세스 / named pipe에서 유지.
+
+- **장점:** JSON 계약을 재사용; 진짜 in-proc보다는 약함.
+- **단점:** 여전히 프로세스; “프로세스 내”가 아님.
+- **판정:** 중간 단계; 스폰 비용이 고통이고 임베딩이 아닐 때만.
+
+### B. AssemblyLoadContext에서 guest AOT + ClojureCLR 로드 (선호 연구 경로)
+
+1. Ship/export가 이미 `runtime-artifact/*.clj.dll` + `Pnix.Clr` multi-TFM을 제공.
+2. 호스트가 ClojureCLR substrate(net10 제품 경로 — `TFM_POLICY.md` 참조)를 **격리된** ALC에 로드.
+3. CLI가 `-e` / 파일에 쓰는 것과 같은 엔트리(또는 CLI 형태 JSON / EDN을 내는 전용 managed entrypoint)를 호출.
+4. 셸 아웃 없이 `EvalResult`로 매핑.
+
+**코드 전에 풀어야 할 블로커:**
+
+1. **Substrate 패키지** — 호스트 옆에 있어야 할 어셈블리(Clojure.Main, deps, 버전 핀 1.12.3-alpha8).
+2. **ALC 격리** — 언로드, 중복 타입 identity, 기본 컨텍스트로 누수 없음.
+3. **TFM** — 제품 guest AOT는 net10; net8 전용 호스트는 프로세스 스폰만 유지 가능.
+4. **스레드 / apartment / statics** — ClojureCLR init은 ALC당 한 번; reentrancy 문서화.
+5. **패리티 게이트** — 고정 코퍼스에 대해 프로세스 경로와 바이트 동일 또는 구조적 동등 JSON.
+
+### C. ClojureCLR 없이 CLR에서 pnix의 pure managed 재구현
+
+C# / F#로 평가기 재작성. **현재 거부** — 두 번째 의미 소스; host-bound 제품 교리에 위배.
 
 ---
 
-## Non-goals
+## 수락 스케치 (소유자가 구현을 끌어올 때)
 
-- nuget.org requirement for first spike (local export layout is enough).
-- Replacing `clojure-clr` facade or bootstrap multi-ns story.
-- Loading arbitrary user Clojure projects in-process.
+1. 설계 노트(이 파일)가 정확을 유지.
+2. 옵트인 API, 예: `Eval.SourceInProcess` / `EvalOptions.Execution = InProcess`, **기본값은 Process**.
+3. 게이트 스크립트: 프로세스와 프로세스 내 결과가 `outcome-kind` + value JSON에서 일치하는 N개 fixture (또는 문서화된 held diff만).
+4. 부정: substrate 누락 시 actionable 메시지로 fail closed (hang 없음, 조용한 null 없음).
+5. 문서: README 표에서 Process = supported, InProcess = 게이트 그린 전까지 experimental.
+6. 임베딩만으로 Stage15/N 또는 Trusting-Trust 주장 **없음**.
 
 ---
 
-## Spike landed (2026-08-14)
+## 비목표
 
-| Piece | Location |
+- 첫 스파이크에 nuget.org 요구 (로컬 export 레이아웃으로 충분).
+- `clojure-clr` facade 또는 bootstrap multi-ns 스토리 교체.
+- 임의 사용자 Clojure 프로젝트를 프로세스 내에 로드.
+
+---
+
+## 착륙한 스파이크 (2026-08-14)
+
+| 조각 | 위치 |
 |-------|----------|
-| Implementation | `csharp/Pnix.Clr/InProcessEval.cs` (net10 `#if`) |
+| 구현 | `csharp/Pnix.Clr/InProcessEval.cs` (net10 `#if`) |
 | API | `Eval.SourceInProcess` / `FileInProcess` |
-| Parity example | `csharp/examples/InProcessParity/` |
-| Gate | `bin/pnix-clr-inprocess-eval-gate` (opt-in; **not** in `pnix-clr-gate` yet) |
+| 패리티 예제 | `csharp/examples/InProcessParity/` |
+| 게이트 | `bin/pnix-clr-inprocess-eval-gate` (옵트인; 아직 `pnix-clr-gate`에 없음) |
 
-### How it works
+### 동작 방식
 
-1. Resolve **substrate** (`PNIX_CLR_SUBSTRATE` or checkout `clojure-clr-…/net10.0/publish`) and **artifact** (`PNIX_CLR_ARTIFACT`).
-2. Hook `AssemblyLoadContext.Default.Resolving` so guest AOT DLLs find `Clojure.dll`.
-3. Preload substrate assemblies; `require` `pnix-clr.evaluator` / `main` / `json`.
-4. Invoke `eval-source` (or `eval-file`) + `projection` + `write-json` via reflection — **no** `Environment.Exit` from `-main`.
-5. Parse into the same `EvalResult` shape as the process path.
+1. **substrate** (`PNIX_CLR_SUBSTRATE` 또는 checkout `clojure-clr-…/net10.0/publish`)와 **artifact** (`PNIX_CLR_ARTIFACT`)를 resolve.
+2. `AssemblyLoadContext.Default.Resolving`을 훅하여 guest AOT DLL이 `Clojure.dll`을 찾도록 함.
+3. substrate 어셈블리 preload; `pnix-clr.evaluator` / `main` / `json`을 `require`.
+4. reflection으로 `eval-source`(또는 `eval-file`) + `projection` + `write-json` 호출 — `-main`의 `Environment.Exit` **없음**.
+5. 프로세스 경로와 같은 `EvalResult` 형태로 파싱.
 
-### Env contract
+### Env 계약
 
-| Variable | Role |
+| 변수 | 역할 |
 |----------|------|
-| `PNIX_CLR_ARTIFACT` | Guest AOT dir (`manifest.json` + `*.clj.dll`) |
-| `PNIX_CLR_SUBSTRATE` | ClojureCLR net10 publish dir (`Clojure.dll`) |
-| `PNIX_CLR_ROOT` | Host root (import confinement) |
-| `PNIX_CLR` | Process path still used by parity comparison |
+| `PNIX_CLR_ARTIFACT` | Guest AOT 디렉터리 (`manifest.json` + `*.clj.dll`) |
+| `PNIX_CLR_SUBSTRATE` | ClojureCLR net10 publish 디렉터리 (`Clojure.dll`) |
+| `PNIX_CLR_ROOT` | 호스트 루트 (import confinement) |
+| `PNIX_CLR` | 패리티 비교에 여전히 쓰이는 프로세스 경로 |
 
-### Verified corpus (gate)
+### 검증된 코퍼스 (게이트)
 
 - `1 + 2` → 3  
 - `true && !false` → true  
 - `if true then 40 + 2 else 0` → 42  
-- `1 / 0` → failed / division-by-zero (parity)  
-- Missing substrate → `NotSupportedException` (fail closed)
+- `1 / 0` → failed / division-by-zero (패리티)  
+- Substrate 누락 → `NotSupportedException` (fail closed)
 
-### Still open before “admitted”
+### “admitted” 전에 여전히 열린 항목
 
-- [x] Broader parity corpus (14 source cases + file + 2 negatives) — gate 2026-08-14
-- [ ] Collectible isolated ALC — **blocked for now**: ClojureCLR guest AOT
-  initializes via `Assembly.Load` into the **default** context; a collectible
-  ALC cannot see substrate types already loaded there without dual Resolving
-  that collapses to Default. Documented tradeoff; revisit only with a
-  substrate that supports ALC-aware load.
-- [x] Wire into `pnix-clr-gate` when substrate+artifact present (`PNIX_CLR_INPROCESS_GATE=0` skips)
-- [x] Reentrancy policy — **serialized**: global lock around eval-source
-  (ClojureCLR RT is process-wide). Concurrent callers queue; `*Async`
-  helpers exist but share the same lock. Not multi-threaded RT.
-- [ ] net8 host story (keep process-spawn)
-- [ ] Unload / collectible ALC (blocked — see above)
-- [ ] No Stage15/N claims from embedding
+- [x] 더 넓은 패리티 코퍼스 (14 source 케이스 + file + 2 negatives) — 게이트 2026-08-14
+- [ ] Collectible isolated ALC — **현재 blocked**: ClojureCLR guest AOT가
+  `Assembly.Load`로 **기본** 컨텍스트에 초기화됨; collectible ALC는 이미
+  로드된 substrate 타입을 dual Resolving 없이 볼 수 없고, dual Resolving은
+  Default로 붕괴. 문서화된 tradeoff; ALC-aware load를 지원하는 substrate에서만
+  재검토.
+- [x] substrate+artifact 있을 때 `pnix-clr-gate`에 연결 (`PNIX_CLR_INPROCESS_GATE=0`이면 스킵)
+- [x] Reentrancy 정책 — **직렬화**: eval-source 주변 global lock
+  (ClojureCLR RT는 process-wide). 동시 호출자는 대기; `*Async`
+  헬퍼는 존재하나 같은 lock을 공유. multi-threaded RT 아님.
+- [ ] net8 호스트 스토리 (프로세스 스폰 유지)
+- [ ] Unload / collectible ALC (blocked — 위 참조)
+- [ ] 임베딩으로 Stage15/N 주장 없음
 
-### Run
+### 실행
 
 ```bash
 export PNIX_CLR_ROOT=$PWD
@@ -152,4 +152,4 @@ dotnet run --project csharp/examples/HelloPnix -c Release -f net10.0 -- --inproc
 
 ### nuget.org
 
-**Not a product goal** — local `pack-pnix-clr-nupkg` / file feed only (owner).
+**제품 목표 아님** — 로컬 `pack-pnix-clr-nupkg` / file feed만 (소유자).

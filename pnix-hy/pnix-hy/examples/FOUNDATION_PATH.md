@@ -1,34 +1,32 @@
-# pnix-hy foundation path
+# pnix-hy 파운데이션 경로
 
-Use this order before the extended proof/research catalog.
+확장 proof/연구 카탈로그 전에 이 순서로 본다.
 
-| Step | Concern | Example | Owner |
-|---|---|---|---|
-| 1 | Basic PNIX evaluation | `00-foundation/basic.py` | `pnix-hy` execution |
-| 2 | Python/PNIX values | `00-foundation/interop.py` | `pnix_hy` interop |
-| 3 | Meta-circular execution | `00-foundation/meta_circular.py` | explicit `pnix_hy.meta` facade |
+| 단계 | 관심사 | 예제 | 소유 |
+|------|--------|------|------|
+| 1 | 기본 PNIX 평가 | `00-foundation/basic.py` | `pnix-hy` 실행 |
+| 2 | Python/PNIX 값 | `00-foundation/interop.py` | `pnix_hy` interop |
+| 3 | meta-circular 실행 | `00-foundation/meta_circular.py` | 명시적 `pnix_hy.meta` 파사드 |
 
-`import pnix_hy` loads the basic runtime. `pnix_hy.load_meta_api()` loads the
-basic meta-circular compiler/evaluator surface. Proof, action, deployment, and
-admission APIs are not imported by either operation; they must be requested
-through their explicit verification surface.
+`import pnix_hy` 는 기본 런타임을 로드한다. `pnix_hy.load_meta_api()` 는
+기본 meta-circular 컴파일러/평가기 표면을 로드한다. proof·action·deployment·
+admission API 는 둘 다 import 하지 않으며, 각자 명시적 검증 표면으로만 요청한다.
 
-## Type rule
+## 타입 규칙
 
-Python strings are data, never PNIX type witnesses. The protocol boundary uses
-closed structural ADT nodes from `pnix.boundary-type.v1`. A label such as
-`"ProbeInput"` may name a table entry, but cannot substitute for its validated
-record/variant/result graph.
+Python 문자열은 데이터일 뿐, PNIX 타입 증인이 아니다. 프로토콜 경계는
+`pnix.boundary-type.v1` 의 닫힌 구조 ADT 노드를 쓴다. `"ProbeInput"` 같은
+라벨은 표 항목 이름일 수 있으나, 검증된 record/variant/result 그래프를
+대신할 수 없다.
 
-## Extended catalog
+## 확장 카탈로그
 
-| Role | Existing examples |
-|---|---|
-| basic evaluation and diagnostics | `01`, `10`, `13`, `28` |
+| 역할 | 기존 예제 |
+|------|-----------|
+| 기본 평가·진단 | `01`, `10`, `13`, `28` |
 | Python/Hy/PNIX interop | `04`, `07`, `08`, `14`, `15` |
-| meta-circular execution | `03`, `11`, `19`, `20`, `24`, `33`, `35` |
-| state and isolation mechanisms | `12`, `22`, `23`, `30`, `31` |
-| independent proof/research | `02`, `05`, `09`, `16`-`18`, `25`-`27`, `29`, `32`, `34` |
+| meta-circular 실행 | `03`, `11`, `19`, `20`, `24`, `33`, `35` |
+| 상태·격리 메커니즘 | `12`, `22`, `23`, `30`, `31` |
+| 독립 proof/연구 | `02`, `05`, `09`, `16`–`18`, `25`–`27`, `29`, `32`, `34` |
 
-Agreement and proof remain important merge evidence, but they do not own basic
-language outcomes.
+합의·증명은 중요한 merge 증거이지만, 기본 언어 결과를 소유하지 않는다.

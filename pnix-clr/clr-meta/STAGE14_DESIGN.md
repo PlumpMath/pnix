@@ -1,32 +1,32 @@
 # clr-meta Compiler Stage14 design
 
-Status: **closed (live gate PASS)** 2026-08-12. Parent floor is Stage13.
+상태: **closed (live gate PASS)** 2026-08-12. Parent floor는 Stage13.
 
-## Goal
+## 목표
 
-Cross-implementation law and differential receipts (the roadmap's own
-one-line Stage14 definition): a comparison-policy table
-(`proofs/cross-impl-schema.tsv`) and a live replay of its three `DONE` rows.
+Cross-implementation law와 differential receipt (roadmap 자체 one-line
+Stage14 정의): comparison-policy table (`proofs/cross-impl-schema.tsv`)과
+세 `DONE` row의 live replay.
 
-## Implementations (6 rows)
+## Implementation (6 row)
 
-- `clr-meta-local` (`DONE`) — the evaluator gen0-2 lane. Replayed by a fresh
-  `bootstrap-test` run.
-- `independent-mini-backend` (`DONE`) — the from-scratch `DynamicMethod`-based
-  mini backend (19 fixtures, already closed earlier this session), cross-
-  validated against real host ClojureCLR `eval`. This is the one row on this
-  table already closed to a genuine Trusting-Trust bar, not just a
-  local-vs-local comparison — called out explicitly so it isn't confused
-  with the other DONE rows, which are local self-consistency checks, not
-  independent-implementation comparisons. Replayed by the same
-  `bootstrap-test` run (its own `clojure.test` namespace runs as part of it).
-- `compiler-selfhost-native` (`DONE`) — replayed via Stage8's latest checked
-  receipt, same pattern as Stage11.
+- `clr-meta-local` (`DONE`) — evaluator gen0-2 lane. fresh `bootstrap-test`
+  run으로 replay.
+- `independent-mini-backend` (`DONE`) — from-scratch `DynamicMethod`-based
+  mini backend (19 fixture, 이 session 앞부분에서 이미 closed), real host
+  ClojureCLR `eval`에 대해 cross-validate. 이 테이블에서 genuine
+  Trusting-Trust bar까지 이미 closed된 유일한 row이며, local-vs-local
+  comparison만이 아님 — 다른 DONE row와 혼동되지 않도록 명시적으로 구별
+  (다른 것은 local self-consistency check이지 independent-implementation
+  comparison이 아님). 같은 `bootstrap-test` run으로 replay (자체
+  `clojure.test` namespace가 그 일부로 실행).
+- `compiler-selfhost-native` (`DONE`) — Stage8 latest checked receipt로
+  replay, Stage11과 같은 패턴.
 - `remote-ci`, `alternate-clojureclr`, `mrustc-style-second-compiler`
-  (`HELD`) — external, unpinned, or requiring a second independent compiler
-  that doesn't exist yet.
+  (`HELD`) — external, unpinned, 또는 아직 존재하지 않는 두 번째
+  independent compiler 필요.
 
-## Commands
+## 명령
 
 ```sh
 ./clr-meta/scripts/clr-meta-compiler-selfhost-stage14-gate
@@ -34,5 +34,5 @@ one-line Stage14 definition): a comparison-policy table
 
 ## Live receipt
 
-`work/compiler-selfhost-stage14-gate.receipt.json` (gitignored) with
+`work/compiler-selfhost-stage14-gate.receipt.json` (gitignored),
 `claims.stage14 = true`, `claims["promotion/allowed?"] = false`.

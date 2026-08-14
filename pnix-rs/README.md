@@ -34,19 +34,19 @@ rlib/a/dylib + `pnix_rs.h`). `apps`: `pnix-rs`, `rs-meta`, `pnix-rs-pnix`,
 `pnix-rs-rust`, `pnix-rs-px-eval`, `rs-meta-check`, `pnix-rs-check`,
 `substrate-check`, `gate`.
 
-### Dual-axis + library (read this)
+### 이중 축 + 라이브러리 (필독)
 
-Canonical: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). Agent notes: [`CLAUDE.md`](CLAUDE.md).
+정본: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). 에이전트 노트: [`CLAUDE.md`](CLAUDE.md).
 
-| Axis | Command / surface |
+| 축 | 명령 / 표면 |
 |------|-------------------|
 | **host-main** | `cargo` / `rustc` with `PNIX_RS_LIB_DIR` / `PNIX_RS_INCLUDE_DIR` |
 | **pnix-main** | `nix run .#pnix-rs-pnix` / `pnix-rs px-eval` |
 | **library** | `nix build .#pnix-rs-library` — **host-bound**, not portable `.px` |
 | **import `.px` from Rust** | `pnix_rs::eval_file` / C `pnix_rs_eval` |
 
-Never install full `pnix-rs` + `pnix-rs-library` into the same `buildEnv`
-(both ship `libpnix_rs.dylib`). Use CLI-only + library package separately.
+전체 설치 금지: `pnix-rs` + `pnix-rs-library` into the same `buildEnv`
+(둘 다 `libpnix_rs.dylib`를 실음). CLI-only와 library 패키지를 분리.
 
 ## 예제 — plain Rust의 한계 vs Rust↔pnix 방식
 

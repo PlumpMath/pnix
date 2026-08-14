@@ -1,93 +1,102 @@
 # pnix-hy / hy-meta — Meta-Circular Implementation Audit
 
-> Produced by a read-only multi-agent audit (23 agents, 11 capability dimensions, ~1.06M
-> tokens) of the codebase vs the §1–§24 "Pure Meta-Circular Capability Checklist", on
-> 2026-07-01. Each capability was audited then ADVERSARIALLY VERIFIED against the actual
-> code; every claim cites `file:symbol`. Goal: find duplication, the real status, missing
-> items, and exact implementation guidance (reuse, don't rebuild).
+> 읽기 전용 multi-agent audit (23 agents, 11 capability dimensions, ~1.06M
+> tokens)로 codebase vs §1–§24 "Pure Meta-Circular Capability Checklist"를
+> 2026-07-01에 산출. 각 capability를 감사한 뒤 실제 코드에 대해
+> ADVERSARIAL VERIFY; 모든 주장이 `file:symbol` 인용. 목표: 중복, 실제 상태,
+> 누락 항목, exact implementation guidance (reuse, don't rebuild).
 
 ## Mistake-hunt verdict (2026-07-01)
 
-A broad adversarial mistake-hunt (15 agents, 7 dimensions, ~1.13M tokens) swept ALL of
-pnix-hy + hy-meta for real defects: idempotency/hidden-state, hollow/always-True reports,
-failure-hiding exception handling, scope/sacred violations, doc↔code drift, flaky gates, and
-interop edge cases. **Verdict: NO sacred-surface or SCOPE_LOCK violations; no hidden global
-state beyond the one already-fixed opaque case; results correct.** 18 real defects were
-demonstrated (3 high, 10 medium, 5 low); **17 fixed this pass, 1 deferred**:
-- **Robustness (high):** `--check`/`--gate` now isolate each report/lane via `cli._safe_report`
-  (a slow/raising report → FAIL row, never a whole-audit crash); `hy_meta_host_api_report`,
-  `_one_shot_hy_script`, and `run_bootstrap` now convert `TimeoutExpired`/`OSError` into a
-  FAIL/`HyMirrorError` (host-api budget raised to env-configurable 300s) — this neutralizes the
-  60s-timeout crash the user hit.
-- **Hollow-report vacuity (medium):** the 4 sacred-mirror batch lanes + `compiler_emit_shape_report`
-  + `fixture_report` now require `len==len(cases)`/`bool(cases)` (no `zip`-truncation / `all([])`
-  vacuous pass).
-- **Interop correctness (medium/low):** `from_host` now aggregates nested effect/capability;
-  `to_host` marks a nested-function container lossy/host-call; nullary host callables handled
-  (`_required_positional_count` returns 0, `host_callable_to_pnix` special-cases it);
-  `hy_macro_over_pnix` uses `.replace` not `.format` (Hy `{}` literals); `classify_drift` guards
-  unparseable source; `try_call_host` guards the reserved-key collision.
-- **Docs:** current-state `--check` counts corrected to 54 (dated-historical snapshots preserved);
-  role-matrix witness miscite + 28→29 row count fixed.
-- **Deferred (1, medium):** `hy_mirror._proj_worker_run`/`_stage7_worker_eval` `readline()` has no
-  deadline — a *wedged* worker could block the gate. Trigger is synthetic (our worker script
-  always responds or exits); a deadline change risks the hot path, so it is a noted candidate,
-  not fixed. All fixes verified: `--check` 54/54, `--gate` PASS; `pnix_runtime.py` change is a
-  single report-only guard (no eval/4-lane semantics touched).
+광범위 adversarial mistake-hunt (15 agents, 7 dimensions, ~1.13M tokens)가
+pnix-hy + hy-meta 전체를 실제 결함 대상으로 스윕: idempotency/hidden-state,
+hollow/always-True reports, failure-hiding exception handling, scope/sacred
+violations, doc↔code drift, flaky gates, interop edge cases. **Verdict: sacred-
+surface 또는 SCOPE_LOCK 위반 없음; 이미 수정된 opaque case 외 hidden global
+state 없음; 결과 정확.** 18 real defects 입증 (3 high, 10 medium, 5 low);
+**17 이 패스 수정, 1 deferred**:
+- **Robustness (high):** `--check`/`--gate`가 이제 각 report/lane을
+  `cli._safe_report`로 격리 (느린/raising report → FAIL 행, whole-audit crash
+  아님); `hy_meta_host_api_report`, `_one_shot_hy_script`, `run_bootstrap`가
+  `TimeoutExpired`/`OSError`를 FAIL/`HyMirrorError`로 변환 (host-api budget
+  env-configurable 300s) — 사용자가 맞은 60s-timeout crash 무력화.
+- **Hollow-report vacuity (medium):** 4 sacred-mirror batch lanes +
+  `compiler_emit_shape_report` + `fixture_report`가 `len==len(cases)`/`bool(cases)`
+  요구 (`zip`-truncation / `all([])` vacuous pass 없음).
+- **Interop correctness (medium/low):** `from_host`가 nested effect/capability
+  집계; `to_host`가 nested-function container를 lossy/host-call로 표시;
+  nullary host callables 처리 (`_required_positional_count` returns 0,
+  `host_callable_to_pnix` special-case); `hy_macro_over_pnix`가 `.format` 대신
+  `.replace` (Hy `{}` literals); `classify_drift`가 unparseable source 가드;
+  `try_call_host`가 reserved-key collision 가드.
+- **Docs:** current-state `--check` counts 54로 교정 (dated-historical
+  snapshots 보존); role-matrix witness miscite + 28→29 row count 수정.
+- **Deferred (1, medium):** `hy_mirror._proj_worker_run`/`_stage7_worker_eval`
+  `readline()`에 deadline 없음 — *wedged* worker가 gate를 블록할 수 있음.
+  Trigger는 합성적(our worker script always responds or exits); deadline 변경은
+  hot path 위험이 있어 메모 후보, 미수정. 모든 수정 검증: `--check` 54/54,
+  `--gate` PASS; `pnix_runtime.py` 변경은 single report-only guard
+  (eval/4-lane semantics 미접촉).
 
 ## Stub-hunt verdict (2026-07-01)
 
-A third, independent multi-agent sweep (15 agents, 6 areas, ~0.79M tokens) hunted the ENTIRE
-codebase for GENUINELY unimplemented code — `NotImplementedError`, hollow `pass`/`...`/
-`return None|{}|[]` bodies, hard-coded `ready=True` reports, non-delegating "facades",
-registered-but-empty builtins, `TODO/FIXME`. **Verdict: NONE genuinely unimplemented.** Every
-candidate resolved to intentional, documented placeholder or real-but-demoted logic; all ~44+
-`*_report` readiness flags compute from concrete probes; both todos have ZERO open `[ ]`.
-Confirmed-intentional placeholders (do NOT implement): derivation `outPath`/`drvPath` store
-addressing (`pnix_runtime.py:2694`; no store hashing by design), `builtins.placeholder` (the
-real Nix builtin), `trace`/`warn` value-identity (pure-mirror side-effect omitted), the §9
-pnix macro/quasiquote/reader-macro absence (`_QUASIQUOTE/_DEFMACRO/_READER_MACRO/_IMPORT_PNIX_NOTE`),
-the `#_pnix-gap[...]` projection markers (always paired with a `gaps.append`), the fail-closed
-stage16 peer-review record, host standalone/optional fallbacks, and runtime "unsupported …"
-ERROR MESSAGES. The codebase is complete w.r.t. its stated meta-circular-projection scope.
+세 번째 독립 multi-agent sweep (15 agents, 6 areas, ~0.79M tokens)이 ENTIRE
+codebase에서 GENUINELY unimplemented code 수색 — `NotImplementedError`, hollow
+`pass`/`...`/`return None|{}|[]` bodies, hard-coded `ready=True` reports,
+non-delegating "facades", registered-but-empty builtins, `TODO/FIXME`.
+**Verdict: 진정 미구현 없음.** 모든 후보가 intentional documented placeholder
+또는 real-but-demoted logic으로 해소; 모든 ~44+ `*_report` readiness flags가
+concrete probes에서 계산; 양쪽 todos에 open `[ ]` ZERO.
+Confirmed-intentional placeholders (do NOT implement): derivation
+`outPath`/`drvPath` store addressing (`pnix_runtime.py:2694`; no store hashing
+by design), `builtins.placeholder` (the real Nix builtin), `trace`/`warn`
+value-identity (pure-mirror side-effect omitted), §9 pnix
+macro/quasiquote/reader-macro absence
+(`_QUASIQUOTE/_DEFMACRO/_READER_MACRO/_IMPORT_PNIX_NOTE`),
+`#_pnix-gap[...]` projection markers (always paired with a `gaps.append`),
+fail-closed stage16 peer-review record, host standalone/optional fallbacks,
+runtime "unsupported …" ERROR MESSAGES. Codebase는 선언된
+meta-circular-projection scope 기준으로 완전.
 
 ## Re-verification update (2026-07-01)
 
-An adversarial multi-agent re-verification (after codex closed every follow-up) confirms:
-**all follow-ups are genuinely implemented and functional** (`--check` 44/44; gate/interop/
-host `*_report` all `ready:True`); the separation holds (pnix mirror still the singleton
-`pnix_mirror.singleton_mirror_run`, 4-lane gate untouched, `pnix_runtime.py` untouched by the
-closing commits). So the items below under "Duplication to reconcile" and "Missing / partial"
-are now RESOLVED except:
-- **By-design residual (not a bug):** `pnix_hy/gate.py:WITNESS_FIELD_SCHEMA` + `_witness_fields`
-  are a byte-identical copy of `hy-meta/witness.py` — the intended pnix STANDALONE fallback
-  (host emitter is preferred via `interop._host_interop`). It lacks a drift-guard; optional
-  follow-up: assert equality against the host schema when present (mirror `gate.py` vocab guard).
-- The "compile/artifact/import witnesses MISSING" notes below are now FALSE — implemented at
-  `hy-meta/host_exec.py:compile_artifact_witness` (report `ready:True`).
-- Inline Lxxxx numbers below are point-in-time and have drifted; symbol names are authoritative.
+Adversarial multi-agent re-verification (codex가 모든 follow-up 닫은 후) 확인:
+**모든 follow-up이 진정 구현·기능** (`--check` 44/44; gate/interop/host
+`*_report` all `ready:True`); separation 유지 (pnix mirror 여전히 singleton
+`pnix_mirror.singleton_mirror_run`, 4-lane gate 미접촉, `pnix_runtime.py`
+closing commits 미접촉). 아래 "Duplication to reconcile" 및 "Missing / partial"
+항목은 이제 RESOLVED 단:
+- **By-design residual (not a bug):** `pnix_hy/gate.py:WITNESS_FIELD_SCHEMA` +
+  `_witness_fields`는 `hy-meta/witness.py`의 byte-identical 사본 — 의도된
+  pnix STANDALONE fallback (host emitter preferred via `interop._host_interop`).
+  Drift-guard 없음; optional follow-up: host schema 존재 시 equality assert
+  (mirror `gate.py` vocab guard).
+- 아래 "compile/artifact/import witnesses MISSING" 노트는 이제 FALSE —
+  `hy-meta/host_exec.py:compile_artifact_witness` 구현 (report `ready:True`).
+- 아래 인라인 Lxxxx 번호는 point-in-time이며 drift; 심볼 이름이 권위.
 
-The original audit (point-in-time map that drove the work) follows unchanged.
+원본 audit (작업을 이끈 point-in-time 맵)은 아래 그대로.
 
 ## Summary
 
-The §1-§24 surface is substantially complete and the host/pnix separation holds. All of
-§1-§8 (stage/bootstrap/kernel, reader/AST/IR, code-artifact, mirror, eval/apply) are
-CONFIRMED present and correctly owned, with the pnix mirror genuinely collapsed to a
-singleton (`pnix_mirror.singleton_mirror_run`) and the 4-lane convergence gate kept separate
-as intended. Real code duplication is small and mostly cosmetic or reconcilable-by-
-delegation; there is no competing second runtime/mirror/introspection implementation. The
-biggest *structural* risks are three: (1) a three-shape witness schema split across
-`gate.py`, `witness.py`, and `interop.InteropRecord`; (2) the import-hook trio
-(finder/context-manager/install) near-duplicated between `bootstrap.py` and `import_hook.py`,
-with `bootstrap` hand-inlining sys.modules transactions instead of reusing the named
-primitives; and (3) hand-maintained effect/purity vocab in two places (`gate.EFFECT_OF` vs
-`interop.EFFECT_CLASSES`, plus `_IMPURE_BUILTINS`). The largest *capability* gaps are
-method-level interop (`apply-host-method`, `opaque_call_method` — genuinely missing) and
-several "named API" surfaces that exist de-facto but lack a single entrypoint (host reify-*,
-host explain-*, host gate/sandbox-run, host roundtrip-*/cache/drift APIs). Many todo markers
-are stale (done work still flagged ⬜, or ◑ that should be ✅). No false-missing or
-false-duplication claims were found in the verified audits.
+§1-§24 표면은 실질적으로 완전하고 host/pnix separation이 유지된다. §1-§8
+(stage/bootstrap/kernel, reader/AST/IR, code-artifact, mirror, eval/apply)
+전부 CONFIRMED present·올바르게 소유, pnix mirror는 진정 singleton
+(`pnix_mirror.singleton_mirror_run`)으로 접혔고 4-lane convergence gate는
+의도대로 분리 유지. Real code duplication은 작고 대부분 cosmetic 또는
+delegation으로 조정 가능; 경쟁 second runtime/mirror/introspection 구현
+없음. 가장 큰 *구조* 리스크 셋: (1) `gate.py`, `witness.py`,
+`interop.InteropRecord`에 걸친 three-shape witness schema 분할; (2)
+import-hook trio (finder/context-manager/install)가 `bootstrap.py`와
+`import_hook.py` 사이 near-duplicated, `bootstrap`이 named primitives 재사용
+대신 sys.modules transactions hand-inline; (3) effect/purity vocab
+hand-maintained 두 곳 (`gate.EFFECT_OF` vs `interop.EFFECT_CLASSES`, plus
+`_IMPURE_BUILTINS`). 가장 큰 *capability* 갭은 method-level interop
+(`apply-host-method`, `opaque_call_method` — 진정 누락)과 de-facto 존재하나
+단일 entrypoint 없는 여러 "named API" 표면 (host reify-*, host explain-*,
+host gate/sandbox-run, host roundtrip-*/cache/drift APIs). 많은 todo markers
+stale (done work still ⬜, or ◑ that should be ✅). Verified audits에서
+false-missing 또는 false-duplication 주장 없음.
 
 ## Duplication to reconcile
 

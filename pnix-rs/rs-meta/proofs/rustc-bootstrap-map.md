@@ -2,9 +2,9 @@
 
 Date: 2026-07-01
 
-This note fixes how rs-meta maps the familiar rustc bootstrap vocabulary onto
-the current Rust-in-Rust evaluator chain. It is a receipt/index document, not a
-correctness proof.
+이 노트는 rs-meta가 익숙한 rustc bootstrap vocabulary를 현재 Rust-in-Rust
+evaluator chain에 어떻게 매핑하는지 고정한다. Receipt/index 문서이며
+correctness proof가 아니다.
 
 ## Mapping
 

@@ -1,9 +1,9 @@
 # cljs-meta fixed point
 
-`cljs-meta` builds a ClojureScript compiler fixed point above an explicit,
-small JavaScript runtime kernel.
+`cljs-meta`는 명시적이고 작은 JavaScript 런타임 커널 위에 ClojureScript
+컴파일러 fixed point를 구축한다.
 
-## Stage sequence
+## Stage 시퀀스
 
 ```text
 JVM-built stage 0 compiler
@@ -12,10 +12,9 @@ JVM-built stage 0 compiler
   -> stage 3 self-recompile
 ```
 
-The builder runs at least 15 compiler generations and then continues until two
-successive artifacts are byte-identical (bounded by
-`PNIX_CLJS_MAX_STAGES`, default 32). The fixed-point gate requires all of the
-following:
+빌더는 최소 15 compiler generation을 실행한 뒤, 연속 두 artifact가
+바이트 동일해질 때까지 계속한다(`PNIX_CLJS_MAX_STAGES` 상한, 기본 32).
+Fixed-point 게이트는 다음을 모두 요구한다:
 
 ```text
 stage 2 artifact bytes == stage 3 artifact bytes
@@ -25,7 +24,7 @@ stage 3 compiler input hash == stage 2 artifact hash
 stage 0 bootstrap-only namespaces are absent from the final artifact
 ```
 
-The explicit trust root is:
+명시적 trust root:
 
 ```text
 Node.js
@@ -37,11 +36,10 @@ fixed-point stage harness
 embedded cljs.core analysis cache
 ```
 
-The analyzer, compiler, source-map implementation, and `cljs.js` are emitted
-as the self-compiled payload. The stage 0 JVM compiler is not packaged in the
-fixed artifact.
+Analyzer, compiler, source-map 구현, 및 `cljs.js`는 self-compiled payload로
+emit된다. Stage 0 JVM 컴파일러는 fixed artifact에 패키징되지 않는다.
 
-## Build and inspect
+## 빌드 및 검사
 
 ```sh
 ./bin/build-cljs
@@ -49,7 +47,7 @@ cat cljs-meta/dist/fixed-point/receipt.json
 node cljs-meta/test/fixed_point_test.js
 ```
 
-## Use the fixed compiler
+## Fixed 컴파일러 사용
 
 ```js
 const cljs = require("./cljs-meta/dist/fixed-point/cljs-meta-fixed.js");
@@ -58,35 +56,32 @@ const evaluated = await cljs.evaluate("(let [x 20] (+ x 22))");
 const compiled = await cljs.compile("(defn answer [] 42)");
 ```
 
-`evaluate` and `compile` return `pnix.cljs-meta.result.v1` projections.
+`evaluate`와 `compile`은 `pnix.cljs-meta.result.v1` 투영을 반환한다.
 
-## Cross-platform closure checklist
+## 크로스 플랫폼 클로저 체크리스트
 
-Current evidence is limited to `x86_64-darwin`. A platform is not considered
-supported merely because it appears in `flake.nix` or evaluates successfully.
+현재 증거는 `x86_64-darwin`에 한정된다. `flake.nix`에 나타나거나 평가에
+성공한다는 이유만으로 지원 플랫폼으로 보지 않는다.
 
 - [x] `x86_64-darwin`
 - [ ] `aarch64-darwin`
 - [ ] `x86_64-linux`
 - [ ] `aarch64-linux`
 
-Each unchecked platform must independently satisfy:
+체크되지 않은 각 플랫폼은 독립적으로 다음을 만족해야 한다:
 
-- [ ] `./bin/build-cljs` succeeds from a clean `target/` and `dist/`.
-- [ ] Stage 2 and stage 3 artifacts are byte-identical.
-- [ ] Stage 2 and stage 3 source closures are identical.
-- [ ] Stage input hashes prove that stage 1 compiled stage 2 and stage 2
-      compiled stage 3.
-- [ ] The final artifact contains no stage 0 bootstrap-only namespace.
-- [ ] `node cljs-meta/test/fixed_point_test.js` passes.
-- [ ] `node cljs-meta/examples/fixed-point.js` passes.
-- [ ] `./bin/pnix-cljs-gate` passes.
-- [ ] `nix flake check path:. --no-write-lock-file` passes natively.
-- [ ] `compile` and `evaluate` produce the same canonical projections as the
-      already-supported platforms.
+- [ ] 깨끗한 `target/`과 `dist/`에서 `./bin/build-cljs` 성공.
+- [ ] Stage 2와 stage 3 artifact가 바이트 동일.
+- [ ] Stage 2와 stage 3 source closure가 동일.
+- [ ] Stage input hash가 stage 1이 stage 2를, stage 2가 stage 3를 컴파일했음을 증명.
+- [ ] 최종 artifact에 stage 0 bootstrap-only namespace 없음.
+- [ ] `node cljs-meta/test/fixed_point_test.js` 통과.
+- [ ] `node cljs-meta/examples/fixed-point.js` 통과.
+- [ ] `./bin/pnix-cljs-gate` 통과.
+- [ ] `nix flake check path:. --no-write-lock-file` 네이티브 통과.
+- [ ] `compile`과 `evaluate`가 이미 지원된 플랫폼과 동일한 정본 투영 생성.
 
-Artifact hashes from different platforms must be compared and explained.
-Platform-specific paths, tool versions, timestamps, or host renderings must be
-normalized before claiming cross-platform byte determinism. Until every item
-above is closed, documentation and receipts must say `platform-pending` rather
-than claiming multi-platform completion.
+다른 플랫폼의 artifact 해시는 비교·설명해야 한다. 플랫폼별 path, tool
+version, timestamp, host rendering은 크로스 플랫폼 바이트 결정성을 주장하기
+전에 정규화해야 한다. 위 항목이 모두 닫히기 전까지 문서와 receipt는
+multi-platform 완료를 주장하지 말고 `platform-pending`이라고 써야 한다.

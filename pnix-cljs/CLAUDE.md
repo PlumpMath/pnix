@@ -1,46 +1,45 @@
-# pnix-cljs agent boundary
+# pnix-cljs 에이전트 경계
 
-`pnix-cljs` is the ClojureScript/JavaScript host projection of PNIX.
+`pnix-cljs`는 PNIX의 ClojureScript/JavaScript 호스트 투영이다.
 
-This tree is **self-contained**: it depends on no sibling repository and shares
-no corpus, gate, or `.px` core with another host.
+이 트리는 **자기완결**이다: 형제 저장소에 의존하지 않으며, 다른 호스트와 corpus,
+gate, `.px` 코어를 공유하지 않는다.
 
-## Identity
+## 정체성
 
 ```text
 cljs-meta
-  = ClojureScript host mechanism and self-host evaluation substrate
+  = ClojureScript 호스트 메커니즘 및 self-host 평가 substrate
 
 pnix-cljs
-  = PNIX parser/evaluator and JavaScript interop surface implemented in CLJS
+  = CLJS로 구현된 PNIX 파서/평가기 및 JavaScript interop 표면
 ```
 
-## Permanent rules
+## 영구 규칙
 
-- Host values and nominal outcome classes are native ClojureScript values.
-- Language types are structural data, never authoritative strings.
-- Basic parse/evaluation errors are `Failed`, never `Held`.
-- `cljs-meta` proof or repeat compilation may verify the implementation, but
-  cannot gate ordinary `pnix-cljs` evaluation.
-- Do not copy JVM, Java reflection, ASM, or Clojure-only implementation code
-  into the active ClojureScript source closure.
-- This seed does not claim full parity with the three established hosts,
-  though the builtin surface was substantially widened in the 2026-08-11
-  maturity pass (math, bitwise, list/attrset helpers ported from the
-  reference host's `evaluator.clj`).
+- 호스트 값과 명목 outcome 클래스는 네이티브 ClojureScript 값이다.
+- 언어 타입은 구조적 데이터이며, 권위 있는 문자열이 아니다.
+- 기본 parse/evaluation 오류는 `Failed`이며, 절대 `Held`가 아니다.
+- `cljs-meta` proof 또는 재컴파일은 구현을 검증할 수 있으나,
+  일상적인 `pnix-cljs` 평가를 gate 할 수 없다.
+- 활성 ClojureScript 소스 클로저에 JVM, Java reflection, ASM, 또는
+  Clojure 전용 구현 코드를 복사하지 않는다.
+- 이 seed는 세 확립 호스트와의 완전 패리티를 주장하지 않는다. 다만
+  2026-08-11 성숙도 패스에서 builtin 표면이 상당히 넓어졌다
+  (math, bitwise, list/attrset 헬퍼를 참조 호스트 `evaluator.clj`에서 이식).
 
-## Dual-axis + host library (do not confuse)
+## 이중 축 + 호스트 라이브러리 (혼동 금지)
 
-Canonical monorepo doc: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md).
+정식 monorepo 문서: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md).
 
-| Axis | Entry | Role |
+| 축 | 진입점 | 역할 |
 |------|-------|------|
-| **host-main** | `clojurescript` → `pnix-cljs`; `node` with `NODE_PATH` | load `share/pnix-cljs` |
-| **pnix-main** | `pnix-cljs-pnix` | pnix REPL / eval of `.px` |
-| **library** | flake package `share/pnix-cljs` | host-bound JS module, not portable `.px` |
-| **meta** | `cljs-meta` / `pnix-cljs-cljs` | fixed-point host mechanism |
+| **host-main** | `clojurescript` → `pnix-cljs`; `NODE_PATH`가 있는 `node` | `share/pnix-cljs` 로드 |
+| **pnix-main** | `pnix-cljs-pnix` | pnix REPL / `.px` 평가 |
+| **library** | flake 패키지 `share/pnix-cljs` | 호스트 바인딩 JS 모듈, 이식 가능 `.px` 아님 |
+| **meta** | `cljs-meta` / `pnix-cljs-cljs` | fixed-point 호스트 메커니즘 |
 
-Host-language `.px` import: `require('@plumpmath/pnix-cljs')` or
-`require('pnix-cljs-module.js')` — see [`HOST_IMPORT.md`](HOST_IMPORT.md).  
-`shadow-cljs` remains a **build orchestrator**; default runtime host is `pnix-cljs`.  
+호스트 언어 `.px` import: `require('@plumpmath/pnix-cljs')` 또는
+`require('pnix-cljs-module.js')` — [`HOST_IMPORT.md`](HOST_IMPORT.md) 참고.  
+`shadow-cljs`는 **빌드 오케스트레이터**로 남고, 기본 런타임 호스트는 `pnix-cljs`이다.  
 HM: `~/dot-nix/dev/cljs` (`pnix-cljs-host`).

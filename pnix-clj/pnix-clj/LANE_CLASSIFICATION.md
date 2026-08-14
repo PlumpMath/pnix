@@ -1,157 +1,160 @@
-# pnix-clj Lane Classification
+# pnix-clj 레인 분류
 
-This document classifies pnix-clj namespaces and feature surfaces after the scope lock.
+이 문서는 범위 잠금 이후 pnix-clj 네임스페이스와 기능 표면을 분류합니다.
 
-`SCOPE_LOCK.md` is authoritative. This file explains how existing lanes should be treated.
+`SCOPE_LOCK.md`가 권위 문서입니다. 이 파일은 기존 레인을 어떻게 다뤄야 하는지
+설명합니다.
 
-## Classification labels
+## 분류 라벨
 
 ### CORE
 
-Allowed in pnix-clj core gate.
+pnix-clj 코어 게이트에 허용됩니다.
 
-These are part of the Clojure-hosted pnix meta-circular proof lane.
+Clojure 호스팅 pnix 메타순환 증명 레인의 일부입니다.
 
 ### PROOF-ONLY
 
-Allowed only when the lane produces bounded proof/equivalence/witness evidence.
+레인이 경계 있는 증명/동등성/증인 증거를 생성할 때만 허용됩니다.
 
-These must not become product behavior, autonomous action, NL routing, or coding-agent execution.
+제품 동작, 자율 행동, NL 라우팅, coding-agent 실행이 되어서는 안 됩니다.
 
 ### EXPERIMENTAL
 
-Allowed only as a bounded research/proof experiment.
+경계 있는 연구/증명 실험으로만 허용됩니다.
 
-These should remain gated, documented, and non-authoritative.
+게이트되고, 문서화되며, 비권위적이어야 합니다.
 
 ### QUARANTINE
 
-Out of pnix-clj core.
+pnix-clj 코어 밖입니다.
 
-These must not enter `src`, test gate, or core runtime unless split into a side repo or explicitly reclassified.
+사이드 저장소로 분리하거나 명시적으로 재분류하지 않는 한 `src`, 테스트 게이트,
+코어 런타임에 들어오면 안 됩니다.
 
 ---
 
-## CORE lanes
+## CORE 레인
 
-| Lane | Classification | Reason |
+| 레인 | 분류 | 이유 |
 |---|---|---|
-| parser | CORE | pnix source to AST |
-| lowering | CORE | AST to canonical/lower form |
+| parser | CORE | pnix 소스 → AST |
+| lowering | CORE | AST → 정규/lower form |
 | core evaluator | CORE | pnix eval-source / eval-from-ast |
-| px-runtime | CORE | runtime lane for pnix evaluation |
-| CAS | CORE | content-addressed identity |
-| store | CORE | append-only evidence / term storage |
-| snapshot | CORE | deterministic pinned state |
-| persist | CORE | durable replay support |
-| mirror | CORE | runtime mirror evidence |
-| mirror-chain | CORE | repeated mirror convergence |
-| mirror-pair | CORE | equivalence comparison between mirror routes |
-| mirror-error | CORE | structured mirror failure evidence |
-| determinism | CORE | repeated-run stability |
-| purity | CORE | effect and determinism discipline |
-| replay | CORE | witness re-verification |
-| witness | CORE | proof/evidence object surface |
-| witnessed-run | CORE | run + witness binding |
+| px-runtime | CORE | pnix 평가용 런타임 레인 |
+| CAS | CORE | content-addressed 정체성 |
+| store | CORE | append-only 증거 / term 저장 |
+| snapshot | CORE | 결정적 핀된 상태 |
+| persist | CORE | 내구성 있는 재연 지원 |
+| mirror | CORE | 런타임 mirror 증거 |
+| mirror-chain | CORE | 반복 mirror 수렴 |
+| mirror-pair | CORE | mirror 경로 간 동등성 비교 |
+| mirror-error | CORE | 구조화된 mirror 실패 증거 |
+| determinism | CORE | 반복 실행 안정성 |
+| purity | CORE | effect와 결정성 규율 |
+| replay | CORE | 증인 재검증 |
+| witness | CORE | 증명/증거 객체 표면 |
+| witnessed-run | CORE | 실행 + 증인 바인딩 |
 | receipt | CORE | content-bound receipt |
-| safe-eval | CORE | bounded eval surface |
-| capabilities | CORE | effect/capability discipline |
-| trust | CORE | trust boundary evidence |
-| classfile-receipt | CORE | JVM/class artifact witness |
-| version | CORE | runtime/compiler version binding |
-| clj-meta host reflection | CORE | host-language proof lane |
+| safe-eval | CORE | 경계 있는 eval 표면 |
+| capabilities | CORE | effect/capability 규율 |
+| trust | CORE | trust 경계 증거 |
+| classfile-receipt | CORE | JVM/class 아티팩트 증인 |
+| version | CORE | 런타임/컴파일러 버전 바인딩 |
+| clj-meta host reflection | CORE | 호스트 언어 증명 레인 |
 
 ---
 
-## PROOF-ONLY lanes
+## PROOF-ONLY 레인
 
-| Lane | Classification | Rule |
+| 레인 | 분류 | 규칙 |
 |---|---|---|
-| Futamura / specialize | PROOF-ONLY | allowed as projection/equivalence evidence only |
-| translation-validation | PROOF-ONLY | allowed as equivalence validation only |
-| stage7-core | PROOF-ONLY | allowed as staged closure proof |
-| stage15 | PROOF-ONLY | allowed as bounded tower/self-hosting proof |
-| oracle / live-oracle | PROOF-ONLY | allowed only as bounded comparison oracle |
-| coverage | PROOF-ONLY | allowed only as proof surface coverage |
-| grammar-fuzzer | PROOF-ONLY | allowed only as parser/runtime robustness evidence |
-| property-fuzzer | PROOF-ONLY | allowed only as bounded property evidence |
-| arith-proof | PROOF-ONLY | allowed only as arithmetic proof fixture |
-| bool-proof | PROOF-ONLY | allowed only as boolean proof fixture |
-| value-roundtrip | PROOF-ONLY | allowed only as value bridge evidence |
-| emit-form-roundtrip | PROOF-ONLY | allowed only for Clojure form roundtrip evidence, not multi-language codegen |
+| Futamura / specialize | PROOF-ONLY | 투영/동등성 증거로만 허용 |
+| translation-validation | PROOF-ONLY | 동등성 검증으로만 허용 |
+| stage7-core | PROOF-ONLY | staged 클로저 증명으로만 허용 |
+| stage15 | PROOF-ONLY | 경계 있는 tower/self-hosting 증명으로만 허용 |
+| oracle / live-oracle | PROOF-ONLY | 경계 있는 비교 oracle로만 허용 |
+| coverage | PROOF-ONLY | 증명 표면 커버리지로만 허용 |
+| grammar-fuzzer | PROOF-ONLY | parser/런타임 견고성 증거로만 허용 |
+| property-fuzzer | PROOF-ONLY | 경계 있는 property 증거로만 허용 |
+| arith-proof | PROOF-ONLY | 산술 증명 fixture로만 허용 |
+| bool-proof | PROOF-ONLY | 불리언 증명 fixture로만 허용 |
+| value-roundtrip | PROOF-ONLY | 값 브리지 증거로만 허용 |
+| emit-form-roundtrip | PROOF-ONLY | Clojure form roundtrip 증거로만 허용, 다언어 codegen 아님 |
 
 ---
 
-## EXPERIMENTAL lanes
+## EXPERIMENTAL 레인
 
-| Lane | Classification | Required restraint |
+| 레인 | 분류 | 필수 절제 |
 |---|---|---|
-| synthesize | EXPERIMENTAL | bounded candidate generation only; no autonomous admission |
-| generate | EXPERIMENTAL | bounded generation only; no NL/coding-agent expansion |
-| self-improve | EXPERIMENTAL | must remain held/candidate/gated; no autonomous mutation |
-| self-mod-gate | EXPERIMENTAL | gate only; no direct mutation admission |
-| rust-batch | EXPERIMENTAL | only if it remains a proof/equivalence batch, not a Rust product lane |
-| clojure-projection | EXPERIMENTAL | only as Clojure-host projection evidence |
-| clojure-form | EXPERIMENTAL | only as host form analysis/roundtrip evidence |
-| form-analysis | EXPERIMENTAL | only as Clojure form proof analysis |
-| benchmark | EXPERIMENTAL | measurement only; not semantic authority |
-| wiki | EXPERIMENTAL | documentation/index only; not runtime truth |
+| synthesize | EXPERIMENTAL | 경계 있는 후보 생성만; 자율 허가 없음 |
+| generate | EXPERIMENTAL | 경계 있는 생성만; NL/coding-agent 확장 없음 |
+| self-improve | EXPERIMENTAL | held/candidate/gated로 유지; 자율 mutation 없음 |
+| self-mod-gate | EXPERIMENTAL | 게이트만; 직접 mutation 허가 없음 |
+| rust-batch | EXPERIMENTAL | 증명/동등성 배치로 남을 때만, Rust 제품 레인 아님 |
+| clojure-projection | EXPERIMENTAL | Clojure 호스트 투영 증거로만 |
+| clojure-form | EXPERIMENTAL | 호스트 form 분석/roundtrip 증거로만 |
+| form-analysis | EXPERIMENTAL | Clojure form 증명 분석으로만 |
+| benchmark | EXPERIMENTAL | 측정만; 의미 권위 아님 |
+| wiki | EXPERIMENTAL | 문서/인덱스만; 런타임 진리 아님 |
 
 ---
 
-## QUARANTINE lanes
+## QUARANTINE 레인
 
-The following are explicitly outside pnix-clj core.
+다음은 명시적으로 pnix-clj 코어 밖입니다.
 
-| Lane | Classification | Reason |
+| 레인 | 분류 | 이유 |
 |---|---|---|
-| Hangul codec | QUARANTINE | NL/meaning lane, not pnix meta-circular proof |
-| MSV / meaning sentence variants | QUARANTINE | NL semantic generation lane |
-| Korean dictionary | QUARANTINE | language knowledge lane |
-| Korean mirror | QUARANTINE | NL mirror lane |
-| domain-token / domain-generic matching | QUARANTINE | semantic routing/matching lane |
-| graph-gate / gate-graph | QUARANTINE | agent graph/emit lane |
-| multi-language emit registry | QUARANTINE | coding-agent/codegen lane |
-| behavior-atom emit | QUARANTINE | coding-agent behavior surface |
-| puck-cli bridge | QUARANTINE | external executor bridge |
-| tick-runner | QUARANTINE | autonomous loop/scheduler |
-| redb ingest brain | QUARANTINE | external knowledge/memory ingestion |
-| NL corpus / meaning graph | QUARANTINE | natural-language semantic memory |
-| answer composer | QUARANTINE | NL response generation lane |
+| Hangul codec | QUARANTINE | NL/의미 레인, pnix 메타순환 증명 아님 |
+| MSV / meaning sentence variants | QUARANTINE | NL 의미 생성 레인 |
+| Korean dictionary | QUARANTINE | 언어 지식 레인 |
+| Korean mirror | QUARANTINE | NL mirror 레인 |
+| domain-token / domain-generic matching | QUARANTINE | 의미 라우팅/매칭 레인 |
+| graph-gate / gate-graph | QUARANTINE | agent graph/emit 레인 |
+| multi-language emit registry | QUARANTINE | coding-agent/codegen 레인 |
+| behavior-atom emit | QUARANTINE | coding-agent 동작 표면 |
+| puck-cli bridge | QUARANTINE | 외부 executor 브리지 |
+| tick-runner | QUARANTINE | 자율 루프/스케줄러 |
+| redb ingest brain | QUARANTINE | 외부 지식/메모리 수집 |
+| NL corpus / meaning graph | QUARANTINE | 자연어 의미 메모리 |
+| answer composer | QUARANTINE | NL 응답 생성 레인 |
 
 ---
 
-## Rule for future work
+## 이후 작업 규칙
 
-Before adding a namespace, test, alias, or app runner, classify it here.
+네임스페이스, 테스트, 별칭, 앱 러너를 추가하기 전에 여기서 분류하세요.
 
-If a lane cannot be classified as CORE, PROOF-ONLY, or EXPERIMENTAL under the scope lock, it must not enter pnix-clj core.
+범위 잠금 아래 CORE, PROOF-ONLY, EXPERIMENTAL으로 분류할 수 없으면
+pnix-clj 코어에 들어오면 안 됩니다.
 
-When uncertain, classify as QUARANTINE.
+불확실하면 QUARANTINE으로 분류하세요.
 
 ---
 
-## Current identity lock addendum
+## 현재 정체성 잠금 부록
 
-The generated source of truth is `docs/LANE_REGISTRY.md`.
+생성된 진실의 원천은 `docs/LANE_REGISTRY.md`입니다.
 
-Current top-level registry counts:
+현재 최상위 레지스트리 개수:
 
 - CORE: 38
 - EXPERIMENTAL: 6
 - PROOF-ONLY: 26
 - TOTAL: 70
 
-The following surfaces are CORE identity surfaces:
+다음 표면은 CORE 정체성 표면입니다.
 
-- interop: Clojure runtime ↔ pnix runtime meta-circular crossing boundary
-- nREPL: meta-circular interactive control surface; eval routes through core only
-- wiki: self-documenting capability and roadmap substrate
-- lane-registry: generated lane classification registry
+- interop: Clojure 런타임 ↔ pnix 런타임 메타순환 교차 경계
+- nREPL: 메타순환 대화형 제어 표면; eval은 코어만 경유
+- wiki: 자기 문서화 능력 및 로드맵 기판
+- lane-registry: 생성된 레인 분류 레지스트리
 
-`nrepl`, `wiki`, and `interop` are not disposable dev-only surfaces.
+`nrepl`, `wiki`, `interop`는 버릴 수 있는 개발 전용 표면이 아닙니다.
 
-The following remain QUARANTINE and must not enter pnix-clj core:
+다음은 QUARANTINE으로 남으며 pnix-clj 코어에 들어오면 안 됩니다.
 
 - Hangul codec
 - MSV / meaning sentence variants

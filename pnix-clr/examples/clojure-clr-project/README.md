@@ -1,47 +1,35 @@
-# clojure-clr-project — multi-ns template (P3.2 step 3 start)
+# ClojureCLR 멀티-ns 프로젝트 예제 (bootstrap 프로파일)
 
-**Honest scope:** runs on the **upstream ClojureCLR substrate** via
-`bin/clojure-clr-bootstrap` (net10.0), **not** the focused
-`bin/clojure-clr` facade (that still only admits `-e` / one file).
+**목적:** `clojure-clr` focused facade(`-e` / 단일 폼)를 넘는 P3.2 step 3
+템플릿 — 업스트림 bootstrap + `CLOJURE_LOAD_PATH`로 멀티 네임스페이스 로드.
 
-See inventory: [`../../docs/CLOJURE_CLR_ADMITTED_SURFACE.md`](../../docs/CLOJURE_CLR_ADMITTED_SURFACE.md).
+**TFM:** net10.0만. Rhino net8과 혼동 금지 — monorepo `docs/TFM_POLICY.md`.
 
-## Layout
+## 레이아웃
 
 ```text
-src/demo/lib.clj    ; (ns demo.lib) …
-src/demo/main.clj   ; (ns demo.main (:require [demo.lib …])) (-main)
-run                 ; CLOJURE_LOAD_PATH=src + require demo.main
-smoke               ; expect stdout 42
+src/user/core.clj      ; user.core — demo.math 사용
+src/demo/math.clj      ; demo.math — answer 42
 ```
 
-## Run
+## 실행
 
 ```bash
-cd pnix-clr/examples/clojure-clr-project
-./run
-# => 42
-
-./smoke
-# => clojure-clr-project smoke: PASS (42)
-
-# All named profiles (facade + this template):
-#   ../../bin/clojure-clr-profiles-smoke
+# monorepo 체크아웃에서 (pnix-clr 루트)
+./examples/clojure-clr-project/run.sh
+# 또는 프로파일 스모크의 일부:
+./bin/clojure-clr-profiles-smoke
 ```
 
-First run may call `bin/build-clr` (NuGet publish of pinned Clojure package).
+기대 출력: `42`.
 
-## What this proves / does not
+`CLOJURE_LOAD_PATH`가 `src`를 가리키고 bootstrap `Clojure.Main`이
+`(require 'user.core)` 후 `(user.core/-main)`를 평가한다.
 
-| Proves | Does not claim |
-|--------|----------------|
-| Two namespaces on disk load via `CLOJURE_LOAD_PATH` | `clojure-clr` facade grew multi-file support |
-| Bootstrap substrate works for small host-language projects | Full `deps.edn` / Maven CLI parity |
-| TFM **net10.0** product path | Rhino **sdk_8** plugin path (separate) |
+## 이것이 / 아닌 것
 
-## Next (not started)
-
-- Wire `./smoke` into `bin/clr-meta-gate` or a thin `pnix-clr` script only if
-  product owners want it on every aggregate (cost vs value).
-- Optional: `-m demo.main` once confirmed stable on this ClojureCLR pin.
-- Still not: nuget.org, full replacement branding.
+| 이것 | 아닌 것 |
+|------|---------|
+| bootstrap + load-path 멀티-ns 샘플 | `deps.edn` / tools.deps 전체 패리티 |
+| `clojure-clr-bootstrap` 프로파일 증거 | Compiler Stage15/N 또는 self-host 주장 |
+| 로컬 스모크/게이트 친화 | nuget.org 또는 공개 배포 스토리 |

@@ -1,6 +1,6 @@
-# pnix-rs foundation
+# pnix-rs 파운데이션
 
-Run from `pnix-rs/pnix-rs`:
+`pnix-rs/pnix-rs` 에서:
 
 ```sh
 bash examples/00-foundation/basic.sh
@@ -8,15 +8,11 @@ bash examples/00-foundation/interop.sh
 bash examples/00-foundation/meta_circular.sh
 ```
 
-Set `PNIX_RS` when the executable is not named `pnix-rs`. 
-The meta-circular example also needs the normal rs-meta bootstrap environment used by `substrate-check`.
+실행 파일 이름이 `pnix-rs` 가 아니면 `PNIX_RS` 를 설정한다.
+meta-circular 예제에는 `substrate-check` 가 쓰는 일반 rs-meta bootstrap
+환경도 필요하다.
 
-실행 파일 이름이 `pnix-rs`가 아닌 경우 `PNIX_RS`를 설정합니다.
-메타 순환 예제에는 'substrate-check'에서 사용하는 일반 rs-meta 부트스트랩 환경도 필요합니다.
+이 예제들은 자동 코드 생성이나 “완성된” in-process 컴포넌트 호출 런타임을
+주장하지 않는다. **지금 있는** 메커니즘과 계약을 드러낸다.
 
-
-These examples do not claim automatic code generation or a finalized in-process component invocation runtime. 
-They expose the mechanisms and contracts that exist now.
-
-이러한 예제는 자동코드 생성이나 최종처리 중인 구성요소 호출 런타임을 주장하지 않습니다.
-그들은 현재 존재하는 메커니즘과 계약을 노출합니다.
+더 넓은 경로: [FOUNDATION_PATH.md](../FOUNDATION_PATH.md).

@@ -2,27 +2,27 @@
 # and the recommended path for pnix (Q2.5) — DECISION
 
 > 2026-07-03 third multi-agent deep research (104 agents, 5 angles, 22 primary sources, 104
-> claims → 25 verified → **23 confirmed / 2 refuted**, ~2.0M tokens). Targets the three Q2
-> sub-questions that returned ZERO verified claims in pass #2, to decide whether to build a
-> SEPARATE stage-polymorphic (maybe-lift) evaluator beside the sacred one. **Outcome: do NOT.**
+> claims → 25 verified → **23 confirmed / 2 refuted**, ~2.0M tokens). Pass #2에서 verified
+> claims ZERO였던 세 Q2 sub-question 대상 — sacred 옆에 SEPARATE stage-polymorphic
+> (maybe-lift) evaluator를 만들지 결정. **Outcome: do NOT.**
 
 ## Decision (Q2.5): DO NOT build a maybe-lift / separate stage-polymorphic evaluator
-The stage-polymorphism goal ("one source is both interpreter and compiler") is **already realized
-for pnix by the DERIVE route we shipped in 0029** — the compiler is *derived from* the pnix
-interpreter by the specializer (`cogen.compiler_from_interpreter` / `tower.poly_mix_in_pnix`),
-not hand-written. Every alternative the research surfaced is worse for our constraints:
+Stage-polymorphism 목표("one source is both interpreter and compiler")는 0029에서 선적한
+**DERIVE route로 이미 pnix에 실현** — 컴파일러가 pnix 인터프리터에서 specializer로
+*파생* (`cogen.compiler_from_interpreter` / `tower.poly_mix_in_pnix`), hand-written 아님.
+연구가 표면화한 모든 대안이 우리 제약에 더 나쁨:
 
-- **(a) in-place rewrite of the sacred evaluator** — RULED OUT already (changes source text → breaks
-  the mirror's `source_parity`/`compiler_source_parity` lanes).
-- **(b) a SEPARATE hand-maintained maybe-lift evaluator** — the practitioner literature **cautions
-  against hand-maintained parallel implementations**: RPython's documented architecture is
-  **single-source auto-regeneration** — the compiler is derived "by construction" and "regenerated
-  anew every time the interpreter is modified, so that they cannot get out of sync." The anti-drift
-  guarantee comes from *mechanized generation*, not hand-maintenance. AND the validation
-  methodology that would gate such an evaluator against the sacred mirror (**Q2.3**) returned
-  **zero verified claims** — we cannot responsibly gate it. So (b) is not warranted.
-- **What we do instead** = the RPython-recommended shape, adapted: **derive, don't hand-maintain.**
-  The sacred interpreter stays the single source of truth; the compiler is derived from it via the
+- **(a) in-place rewrite of the sacred evaluator** — 이미 RULED OUT (source text 변경 →
+  mirror의 `source_parity`/`compiler_source_parity` lanes 파괴).
+- **(b) a SEPARATE hand-maintained maybe-lift evaluator** — practitioner literature가
+  **hand-maintained parallel implementations에 대해 경고**: RPython 문서 아키텍처는
+  **single-source auto-regeneration** — 컴파일러가 "by construction" *파생*되고 "regenerated
+  anew every time the interpreter is modified, so that they cannot get out of sync."
+  Anti-drift 보장은 hand-maintenance가 아니라 *mechanized generation*에서 옴. AND 그런
+  evaluator를 sacred mirror에 대해 gate할 validation methodology (**Q2.3**)가 **zero
+  verified claims** — 책임 있게 gate할 수 없음. 따라서 (b) 정당화 안 됨.
+- **What we do instead** = RPython-recommended shape, adapted: **derive, don't hand-maintain.**
+  Sacred interpreter stays the single source of truth; the compiler is derived from it via the
   cogen approach (0029) and cross-checked by existing differential gates (`cogen_report`,
   `compiled_differential`). This IS the "one interpreter, two roles" unification — via Futamura/
   cogen rather than maybe-lift — with the byte-identical 545×4 mirror untouched.

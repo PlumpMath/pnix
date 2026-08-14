@@ -500,7 +500,15 @@
    {:id :mini-backend-try-catch-finally-caught-path
     :source "(fn [x] (try (quot 10 x) (catch ArithmeticException e :divzero) (finally 99)))"
     :args [0]
-    :expected :divzero}])
+    :expected :divzero}
+   {:id :mini-backend-str-two-args
+    :source "(fn [a b] (str a b))"
+    :args ["hello" "world"]
+    :expected "helloworld"}
+   {:id :mini-backend-str-nil-arg-is-empty
+    :source "(fn [a b] (str a b))"
+    :args [nil "x"]
+    :expected "x"}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

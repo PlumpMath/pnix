@@ -1,68 +1,68 @@
-# Host-language import cookbooks (index)
+# 호스트 언어 임포트 쿡북 (색인)
 
-Dual-axis doctrine: **[HOST_DEV_ENV.md](HOST_DEV_ENV.md)**.
+이중 축 교리: **[HOST_DEV_ENV.md](HOST_DEV_ENV.md)**.
 
-Per-host detail:
+호스트별 상세:
 
-| Host | Cookbook |
-|------|----------|
+| 호스트 | 쿡북 |
+|--------|------|
 | clj | [pnix-clj/pnix-clj/docs/HOST_IMPORT.md](pnix-clj/pnix-clj/docs/HOST_IMPORT.md) |
 | cljs | [pnix-cljs/HOST_IMPORT.md](pnix-cljs/HOST_IMPORT.md) |
-| hy | this file § hy (package is the library) |
-| rs | this file § rs + `pnix-rs/include/pnix_rs.h` |
+| hy | 본 문서 § hy (패키지 자체가 라이브러리) |
+| rs | 본 문서 § rs + `pnix-rs/include/pnix_rs.h` |
 | clr | [pnix-clr/csharp/Pnix.Clr/README.md](pnix-clr/csharp/Pnix.Clr/README.md) |
 
-HM path helpers: `pnix-<host>-library` / `pnix-<host>-refs` (see `~/dot-nix/dev/PNIX-HOSTS.md`).
+HM 경로 헬퍼: `pnix-<host>-library` / `pnix-<host>-refs` (`~/dot-nix/dev/PNIX-HOSTS.md` 참고).
 
-**P2/P3 roadmap:** [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md) (host-env residual **closed enough**)  
-**Day-1 checklist:** [HOST_DEV_ENV.md](HOST_DEV_ENV.md) § Day-1  
-**Mini examples:** [examples/host-import/](examples/host-import/)  
+**P2/P3 로드맵:** [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md) (host-env 잔여 **충분히 닫힘**)  
+**1일차 체크리스트:** [HOST_DEV_ENV.md](HOST_DEV_ENV.md) § Day-1  
+**미니 예제:** [examples/host-import/](examples/host-import/)  
 
-| Smoke | When |
-|-------|------|
-| `./bin/host-import-examples-smoke` | checkout demos (skips missing tools) |
-| `./bin/host-library-smokes` | local export feeds |
-| `./bin/host-env-residual-smoke` | examples + libraries |
-| `./bin/host-import-smoke` | after HM: tools already on PATH |
+| 스모크 | 시기 |
+|--------|------|
+| `./bin/host-import-examples-smoke` | 체크아웃 데모 (도구 없으면 스킵) |
+| `./bin/host-library-smokes` | 로컬 export 피드 |
+| `./bin/host-env-residual-smoke` | 예제 + 라이브러리 |
+| `./bin/host-import-smoke` | HM 이후: PATH에 이미 도구가 있을 때 |
 
 ---
 
-## Personal / local library export (not public registries)
+## 개인 / 로컬 라이브러리 export (공개 레지스트리 아님)
 
-Owner policy: **no** Maven Central / npm / crates.io / nuget.org publish.
-Each host has a **local feed** materializer + smoke:
+소유자 정책: Maven Central / npm / crates.io / nuget.org **게시 안 함**.
+각 호스트에 **로컬 피드** materializer + 스모크가 있음:
 
-| Host | Export | Smoke | Consumer |
-|------|--------|-------|----------|
+| 호스트 | Export | 스모크 | 소비 측 |
+|--------|--------|--------|---------|
 | **clj** | `pnix-clj/pnix-clj/bin/export-pnix-clj-library` | `pnix-clj-library-smoke` | `{:local/root "…/pnix-clj"}` |
 | **cljs** | `pnix-cljs/bin/export-pnix-cljs-library` | `pnix-cljs-library-smoke` | `NODE_PATH=…/lib/node_modules:…/share` |
 | **hy** | `pnix-hy/pnix-hy/bin/export-pnix-hy-library` | `pnix-hy-library-smoke` | `PYTHONPATH=…/site` |
-| **rs** | `pnix-rs/pnix-rs/bin/export-pnix-rs-library` | `pnix-rs-library-smoke` | path-dep or `-L lib -I include` |
-| **clr** | `pnix-clr/bin/export-pnix-clr-library` (+ pack) | `pnix-clr-library-smoke` | `PNIX_CLR_LIBRARY` / local nupkg dir |
+| **rs** | `pnix-rs/pnix-rs/bin/export-pnix-rs-library` | `pnix-rs-library-smoke` | path-dep 또는 `-L lib -I include` |
+| **clr** | `pnix-clr/bin/export-pnix-clr-library` (+ pack) | `pnix-clr-library-smoke` | `PNIX_CLR_LIBRARY` / 로컬 nupkg 디렉터리 |
 
 ```bash
-./bin/host-library-smokes   # clj hy rs cljs (+ clr if already exported)
+./bin/host-library-smokes   # clj hy rs cljs (+ clr는 이미 export된 경우)
 ```
 
 ---
 
-## Library packaging tiers (do not over-claim)
+## 라이브러리 패키징 티어 (과대 주장 금지)
 
-| Host | Flake `*-library` / `*-refs` | Library body | HM helper |
-|------|------------------------------|--------------|-----------|
-| **clj** | app/printer `pnix-clj-library` | `pnix-clj` sources (`-Sdeps` local/root) | `pnix-clj-library` |
+| 호스트 | Flake `*-library` / `*-refs` | 라이브러리 본문 | HM 헬퍼 |
+|--------|------------------------------|-----------------|---------|
+| **clj** | app/printer `pnix-clj-library` | `pnix-clj` 소스 (`-Sdeps` local/root) | `pnix-clj-library` |
 | **cljs** | app/printer `pnix-cljs-library` | share/ + `lib/node_modules/@plumpmath/pnix-cljs` | `pnix-cljs-library` |
 | **hy** | app/printer `pnix-hy-library` | `packages.pnix-hy` site-packages | `pnix-hy-library` |
-| **rs** | **package** `pnix-rs-library` + app `pnix-rs-refs` | rlib/a/dylib + header | `pnix-rs-refs` |
+| **rs** | **package** `pnix-rs-library` + app `pnix-rs-refs` | rlib/a/dylib + 헤더 | `pnix-rs-refs` |
 | **clr** | **export app** `pnix-clr-library` + `pnix-clr-refs` | `Pnix.Clr` + guest AOT + MSBuild props | `pnix-clr-refs` |
 
 ```text
-nix run .#pnix-clj-library    # path contract (sources)
+nix run .#pnix-clj-library    # 경로 계약 (소스)
 nix run .#pnix-hy-library
 nix run .#pnix-cljs-library
-nix run .#pnix-rs-library     # real embeddable artifacts
+nix run .#pnix-rs-library     # 실제 임베드 가능 아티팩트
 nix run .#pnix-rs-refs
-nix run .#pnix-clr-library    # materialize export tree
+nix run .#pnix-clr-library    # export 트리 materialize
 nix run .#pnix-clr-refs
 ```
 
@@ -74,24 +74,24 @@ nix run .#pnix-clr-refs
 import pnix_hy as ph
 
 ph.eval_source("1 + 2")
-ph.eval_file("prog.px")   # alias of run_px
+ph.eval_file("prog.px")   # run_px 별칭
 ```
 
-Public top-level exports: see `pnix_hy.__all__` (`eval_source`, `eval_file`,
-`run_px`, interop helpers, …). Proof/meta loaders: `load_proof_api()`,
+공개 최상위 export: `pnix_hy.__all__` 참고 (`eval_source`, `eval_file`,
+`run_px`, interop 헬퍼, …). 증명/메타 로더: `load_proof_api()`,
 `load_meta_api()`.
 
-Optional host-only import hook (not common-meta):
+선택적 호스트 전용 import 훅 (common-meta 아님):
 
 ```python
 from pnix_hy import install_pnix_import_hook
-# Install roots so Python import can load host-bound .px modules via pnix-hy.
-# See pnix_hy.interop.install_pnix_import_hook docstring.
+# 루트를 설치해 Python import가 호스트 바인딩 .px 모듈을 pnix-hy로 로드하게 함.
+# pnix_hy.interop.install_pnix_import_hook docstring 참고.
 ```
 
-**Name clash:** flake app `.#pnix-hy-hy` is `pnix-hy --repl hy` (needs source
-tree). HM PATH bin `pnix-hy-hy` is the **bare Hy interpreter** with
-`PYTHONPATH` for `pnix_hy`. Do not equate them.
+**이름 충돌:** flake app `.#pnix-hy-hy`는 `pnix-hy --repl hy` (소스 트리 필요).
+HM PATH bin `pnix-hy-hy`는 **순수 Hy 인터프리터**이며 `pnix_hy`용 `PYTHONPATH`를 가짐.
+둘을 동일시하지 말 것.
 
 ```bash
 python -c 'import pnix_hy as ph; print(ph.eval_file("prog.px"))'
@@ -103,11 +103,11 @@ pnix-hy-pnix
 
 ## rs (Rust)
 
-Cargo patterns: [pnix-rs/docs/CARGO_HOST_IMPORT.md](pnix-rs/docs/CARGO_HOST_IMPORT.md).
+Cargo 패턴: [pnix-rs/docs/CARGO_HOST_IMPORT.md](pnix-rs/docs/CARGO_HOST_IMPORT.md).
 
 
 ```rust
-// After linking with -L $PNIX_RS_LIB_DIR and including pnix_rs.h for C ABI
+// -L $PNIX_RS_LIB_DIR 로 링크하고 C ABI용 pnix_rs.h 포함 후
 // Native:
 let s = pnix_rs::eval("1 + 2")?;
 let s = pnix_rs::eval_file("prog.px")?;
@@ -116,7 +116,7 @@ let s = pnix_rs::eval_file("prog.px")?;
 ```c
 #include "pnix_rs.h"
 char *out = NULL;
-if (pnix_rs_eval("1 + 2", &out) == 0) { /* use out */ pnix_rs_string_free(out); }
+if (pnix_rs_eval("1 + 2", &out) == 0) { /* out 사용 */ pnix_rs_string_free(out); }
 ```
 
 ```bash
@@ -124,39 +124,39 @@ pnix-rs-refs
 pnix-rs px-eval -c '1 + 2'
 ```
 
-Never put full `pnix-rs` + `pnix-rs-library` in one `buildEnv` (dylib clash).
+하나의 `buildEnv`에 전체 `pnix-rs` + `pnix-rs-library`를 넣지 말 것 (dylib 충돌).
 
 ---
 
 ## clr (C# / ClojureCLR)
 
-See `pnix-clr/csharp/Pnix.Clr/README.md`.
+`pnix-clr/csharp/Pnix.Clr/README.md` 참고.
 
 ```bash
 ./bin/export-pnix-clr-library
-./bin/pack-pnix-clr-nupkg          # optional local nupkg
+./bin/pack-pnix-clr-nupkg          # 선택: 로컬 nupkg
 # MSBuild: csharp/Directory.Build.props.sample
 ```
 
 ```bash
-pnix-clr-refs          # may export library on first run
+pnix-clr-refs          # 첫 실행 시 library export 가능
 pnix-clr -e '1 + 2'
-# C#: Eval.File / Eval.Source after Import of $PNIX_CLR_LIBRARY/build/Pnix.Clr.props
+# C#: $PNIX_CLR_LIBRARY/build/Pnix.Clr.props Import 후 Eval.File / Eval.Source
 ```
 
 ---
 
-## Verified smoke (2026-08-14)
+## 검증된 스모크 (2026-08-14)
 
-Also: monorepo `./bin/host-import-smoke` (uses PATH).
+또한: monorepo `./bin/host-import-smoke` (PATH 사용).
 
-## Verified smoke log
+## 검증된 스모크 로그
 
-| Host | Command | Result |
-|------|---------|--------|
+| 호스트 | 명령 | 결과 |
+|--------|------|------|
 | clj | `(pnix-clj.core/eval-file …)` → `:value 3` | ok |
 | hy | `pnix_hy.eval_file` → `3` | ok |
 | cljs | `require('@plumpmath/pnix-cljs').evalSourceJson('1+2')` → value 3 | ok (user 2026-08-14) |
 | rs | `pnix-rs px-eval -c '1 + 2'` → `3` | ok |
 | clr | `pnix-clr -e '1 + 2'` → JSON value 3 | ok |
-| helpers | `pnix-*-library` / `pnix-rs-refs` / `pnix-clr-refs` | print paths |
+| helpers | `pnix-*-library` / `pnix-rs-refs` / `pnix-clr-refs` | 경로 출력 |

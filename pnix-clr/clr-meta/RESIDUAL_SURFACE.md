@@ -1,41 +1,41 @@
-# Residual surface (principle map)
+# Residual surface (원칙 맵)
 
-This note states **what remains**, in terms of language/runtime principles —
-not library version tags, not case-count bragging, and not promotion claims.
+이 노트는 language/runtime 원칙 관점에서 **무엇이 남았는지**를 말한다 —
+library version tag도, case-count bragging도, promotion claim도 아니다.
 
-`promotion/allowed?` stays **false**. Closing a residual here means live
-five-host agreement on a pinned corpus observation, nothing more.
+`promotion/allowed?`는 **false**로 유지된다. 여기서 residual을 닫는다는 것은
+pinned corpus observation에 대한 live five-host agreement일 뿐, 그 이상 아니다.
 
-## What the common slice now owns (principles)
+## common slice가 지금 소유하는 것 (원칙)
 
-| Principle | Meaning on this host |
+| 원칙 | 이 호스트에서의 의미 |
 |-----------|----------------------|
-| URI as string | Deprecated URI lexer form evaluates as a plain string value |
-| JSON round-trip | `fromJSON` / `toJSON` over guest values; integers stay exact; finite floats keep a decimal form |
-| Attribute names | Identifiers, quoted strings (incl. empty), keyword-shaped names (`true`/`false`/`null`), and **dynamic** keys from string interpolation |
-| Exact integers | Pure int arithmetic and compare stay on signed 64-bit cells (no silent float collapse past the mantissa boundary) |
-| Mixed numeric ops | Int with float promotes; signed zero is preserved; ceil/floor refuse lossy int→float seams |
-| Non-finite observation | Inf/NaN string forms; NaN is never scalar-equal; **shared value cells** may be equal inside lists/attrsets |
-| POSIX ERE classes | `[[:name:]]` inside a bracket is ASCII (C locale), not Unicode properties; unknown names fail closed |
-| Failed thunk replay | A catchable throw stored in a thunk replays on every force; blackhole is only the in-progress state |
-| Kernel / math guest modules | Portable `.px` parser, numbers, evaluator, and math surfaces that run as ordinary guest programs |
+| URI as string | Deprecated URI lexer form이 plain string value로 평가됨 |
+| JSON round-trip | guest value 위 `fromJSON` / `toJSON`; integer는 exact 유지; finite float는 decimal form 유지 |
+| Attribute names | identifier, quoted string (빈 문자열 포함), keyword-shaped name (`true`/`false`/`null`), string interpolation의 **dynamic** key |
+| Exact integers | pure int arithmetic와 compare가 signed 64-bit cell에 유지 (mantissa boundary 넘어 silent float collapse 없음) |
+| Mixed numeric ops | Int with float promote; signed zero 보존; ceil/floor가 lossy int→float seam 거부 |
+| Non-finite observation | Inf/NaN string form; NaN은 결코 scalar-equal 아님; **shared value cell**은 list/attrset 안에서 equal일 수 있음 |
+| POSIX ERE classes | bracket 안 `[[:name:]]`은 ASCII (C locale), Unicode property 아님; unknown name은 fail closed |
+| Failed thunk replay | thunk에 저장된 catchable throw가 force마다 replay; blackhole은 in-progress state뿐 |
+| Kernel / math guest modules | ordinary guest program으로 실행되는 portable `.px` parser, numbers, evaluator, math surface |
 
-## Still open (principle gaps)
+## 여전히 open (원칙 갭)
 
-| Principle | Why it is still residual |
+| 원칙 | residual인 이유 |
 |-----------|---------------------------|
-| Module compile graph | `compile-module` overflows the host stack under mutual recursion / deep force |
-| Derivation host ABI | Source uses a surface form this parser still rejects (interp / binding shape) |
-| Term-DAG guest payload | Guest path feeds `fromJSON` a non-JSON fragment (`?…`); host JSON reader correctly fails closed |
-| Full self-host fixed point | Meta-circular bootstrap of a **subset** is live; full self-hosting and IL fixed-point are not claimed |
-| Compiler stages beyond the product floor | Stage chain past the closed self-host recompile floor, Trusting-Trust, and host promotion remain open |
+| Module compile graph | mutual recursion / deep force 하에서 `compile-module`이 host stack overflow |
+| Derivation host ABI | source가 이 parser가 여전히 거부하는 surface form 사용 (interp / binding shape) |
+| Term-DAG guest payload | guest path가 `fromJSON`에 non-JSON fragment (`?…`)를 공급; host JSON reader가 올바르게 fail closed |
+| Full self-host fixed point | **subset**의 meta-circular bootstrap은 live; full self-hosting과 IL fixed-point는 주장하지 않음 |
+| Compiler stages beyond the product floor | closed self-host recompile floor 너머 stage chain, Trusting-Trust, host promotion은 open |
 
-## How to grow the slice
+## slice를 키우는 방법
 
-1. Name the **principle** (not a version string).
-2. Implement the minimum host surface that makes the principle observable.
-3. Prove it with the five-host common-slice gate against pinned `expected.json`.
-4. Keep `promotion/allowed? = false` until an explicit promotion receipt exists.
+1. **원칙**을 이름 붙인다 (version string 아님).
+2. 그 원칙을 observable하게 만드는 최소 host surface를 구현한다.
+3. pinned `expected.json`에 대한 five-host common-slice 게이트로 증명한다.
+4. explicit promotion receipt가 있을 때까지 `promotion/allowed? = false`를 유지한다.
 
-Do not renumber “library levels.” Prefer sentences like “dynamic attribute
-keys” or “shared NaN identity” over “slice N” or “lib-foo v3.”
+“library level”을 다시 번호 매기지 말 것. “slice N” 또는 “lib-foo v3”보다
+“dynamic attribute keys” 또는 “shared NaN identity” 같은 문장을 선호한다.
