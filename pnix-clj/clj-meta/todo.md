@@ -145,14 +145,30 @@ top-line claim, but the substance is much closer than "false" implies:
   unaffected, `bin/clj-meta-gate` `metacircular gate: READY`, no
   regressions.
 
+  **Sixth slice landed 2026-08-14: general `.methodName` instance interop**
+  (74→79), via `clojure.lang.Reflector.invokeInstanceMethod` -- confirmed
+  via `javap -c` that this is the EXACT mechanism real host `eval` already
+  uses for every untyped-receiver interop call (type hints don't exist in
+  this tiny language, so this isn't a narrower approximation, it's the same
+  fallback path real Clojure takes here too). Reuses `emit-object-array`
+  verbatim for the args array. Unlike the exception-class allowlist
+  elsewhere in this file, this is genuinely general (any method name,
+  receiver, arg count). Verified against real host `eval`: `.getMessage` on
+  a caught exception (closing the earlier `(nil? e)` workaround),
+  `.length`/`.toUpperCase` on strings (matches real conformance-corpus rows
+  directly), `.equals` both branches. DDC row: 56→58. `-M:conformance`
+  116/116 unaffected, `bin/clj-meta-gate` `metacircular gate: READY`, no
+  regressions.
+
   Remaining large surface still untouched by U6 at all: `finally`,
-  multi-catch, general Java interop (method calls, field access, `set!`,
-  static members, reflection, general class resolution beyond the small
-  exception allowlist), `deftype`/`defrecord`/`reify`, `letfn`, `str`/string
+  multi-catch, static-method interop (`ClassName/methodName`, a DIFFERENT
+  symbol convention from the instance `.methodName` just closed), field
+  access/`set!`, general class construction beyond the small exception
+  allowlist, `deftype`/`defrecord`/`reify`, `letfn`, `str`/string
   concatenation, bignum/ratio/regex reader literals, dynamic vars,
   `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape. Each
-  of those is its own multi-fixture slice, several of them (interop,
-  deftype/reify) genuinely large on their own.
+  of those is its own multi-fixture slice, several of them (deftype/reify)
+  genuinely large on their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

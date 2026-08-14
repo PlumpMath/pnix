@@ -9,7 +9,7 @@
             [clojure.pprint :as pp])
   (:import [clojure.asm ClassWriter Label Opcodes Type]
            [clojure.asm.commons GeneratorAdapter Method]
-           [clojure.lang AFunction DynamicClassLoader IFn Keyword Numbers RestFn RT Symbol Util]
+           [clojure.lang AFunction DynamicClassLoader IFn Keyword Numbers Reflector RestFn RT Symbol Util]
            [java.security MessageDigest]))
 
 (def receipt-path "clj-meta/proof/frontend-selfhost.receipt.edn")
@@ -90,6 +90,9 @@
   (reflect-asm-method RT "get" [Object Object]))
 (def ^:private rt-count-method
   (reflect-asm-method RT "count" [Object]))
+(def ^:private reflector-type (Type/getType Reflector))
+(def ^:private reflector-invoke-instance-method-method
+  (reflect-asm-method Reflector "invokeInstanceMethod" [Object String object-array-class]))
 
 (defn- next-class-name
   []
@@ -534,17 +537,44 @@
   (when (and (symbol? op) (.endsWith (name op) "."))
     (get known-exception-classes (symbol (subs (name op) 0 (dec (count (name op))))))))
 
+;; `.methodName receiver args...` -- the real host's own dot-prefixed
+;; instance-interop syntax. Unlike the constructor allowlist above, this is
+;; NOT restricted to known classes: real Clojure itself falls back to
+;; `clojure.lang.Reflector.invokeInstanceMethod` (dynamic, name+arg-based
+;; dispatch, resolved at runtime) whenever it cannot statically prove the
+;; receiver's type from a type hint -- confirmed live via `javap -c` on a
+;; host-AOT-compiled untyped `(.getMessage e)` and `(.equals a b)`. This
+;; tiny language has no type hints at all, so every interop call here takes
+;; that same fallback path on the real host too -- meaning this is not an
+;; approximation of real host behavior, it is the same mechanism.
+(defn- interop-method-name
+  [op]
+  (when (and (symbol? op) (< 1 (count (name op))) (.startsWith (name op) "."))
+    (subs (name op) 1)))
+
 (defn- analyze-call
   [env form]
   (let [[op & args] form]
-    (if-let [cls (exception-constructor-class op)]
-      (do
+    (cond
+      (exception-constructor-class op)
+      (let [cls (exception-constructor-class op)]
         (when-not (<= 0 (count args) 1)
           (throw (ex-info "tiny analyzer: exception constructor takes 0 or 1 (String message) args"
                           {:form form})))
         {:op :new
          :class cls
          :arg (when (seq args) (analyze-expr env (first args)))})
+
+      (interop-method-name op)
+      (do
+        (when (empty? args)
+          (throw (ex-info "tiny analyzer: interop call needs a receiver" {:form form})))
+        {:op :interop-call
+         :method (interop-method-name op)
+         :receiver (analyze-expr env (first args))
+         :args (mapv #(analyze-expr env %) (rest args))})
+
+      :else
       (case op
       quote (analyze-quote form args)
       do (analyze-body env args)
@@ -956,6 +986,13 @@
     (emit-expr ga env item)
     (.arrayStore ga obj-type)))
 
+(defn- emit-interop-call
+  [^GeneratorAdapter ga env {:keys [receiver method args]}]
+  (emit-expr ga env receiver)
+  (.push ga ^String method)
+  (emit-object-array ga env args)
+  (.invokeStatic ga reflector-type reflector-invoke-instance-method-method))
+
 (defn- emit-vector
   [^GeneratorAdapter ga env items]
   (emit-object-array ga env items)
@@ -1005,6 +1042,7 @@
     :try (emit-try ga env node)
     :new (emit-new ga env node)
     :throw (emit-throw ga env node)
+    :interop-call (emit-interop-call ga env node)
     :loop (emit-loop ga env node)
     :recur (emit-recur ga env (:exprs node))
     :if (let [else-label (Label.)
@@ -1454,7 +1492,27 @@
    {:id :tiny-macro-case-no-default-matches
     :source "(fn [n] (try (case n 1 :one 2 :two) (catch IllegalArgumentException e :no-match)))"
     :args [1]
-    :expected :one}])
+    :expected :one}
+   {:id :tiny-interop-get-message
+    :source "(fn [] (try (throw (IllegalArgumentException. \"boom\")) (catch IllegalArgumentException e (.getMessage e))))"
+    :args []
+    :expected "boom"}
+   {:id :tiny-interop-string-length
+    :source "(fn [s] (.length s))"
+    :args ["hello"]
+    :expected 5}
+   {:id :tiny-interop-string-uppercase
+    :source "(fn [s] (.toUpperCase s))"
+    :args ["hi"]
+    :expected "HI"}
+   {:id :tiny-interop-equals-true
+    :source "(fn [a b] (.equals a b))"
+    :args [1 1]
+    :expected true}
+   {:id :tiny-interop-equals-false
+    :source "(fn [a b] (.equals a b))"
+    :args [1 2]
+    :expected false}])
 
 (defn run
   []

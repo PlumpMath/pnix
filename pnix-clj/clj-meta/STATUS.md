@@ -94,11 +94,12 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    74 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    79 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
-    single-clause `try`/`catch`/`throw`/allowlisted exception construction)
-    with ZERO calls into tools.analyzer.jvm or the host reader.
+    single-clause `try`/`catch`/`throw`/allowlisted exception construction/
+    `.methodName` instance interop via `clojure.lang.Reflector`) with ZERO
+    calls into tools.analyzer.jvm or the host reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
     0 divergences found.
@@ -261,6 +262,34 @@ caught, no-arg-constructor throw caught, a caught exception re-thrown to an
 outer `catch`, and both branches of the newly-unlocked no-default `case`
 (matching clause still works; no-match now throws and is catchable). U6:
 69→74. DDC row: 54→56. Full `-M:conformance` (116/116, unaffected) and full
+`bin/clj-meta-gate` (`metacircular gate: READY`) both still green.
+
+**Widened a sixth time, same day (2026-08-14): general instance interop via
+`.methodName` -- unlocks real Java interop, not a narrow allowlist.**
+`(.methodName receiver args...)`, the real host's own dot-prefixed interop
+syntax, now compiles to exactly what real host `eval` produces for an
+*untyped* receiver: `clojure.lang.Reflector.invokeInstanceMethod(Object,
+String, Object[])`, dynamic name+arg-based dispatch resolved at runtime.
+Confirmed live via `javap -c` on host-AOT-compiled `(.getMessage e)` (0-arg)
+and `(.equals a b)` (1-arg) *before* writing any code -- this is not an
+approximation, it is the exact fallback path every untyped interop call in
+real Clojure already takes (type hints, which would let the real compiler
+emit a direct `invokevirtual` instead, don't exist in this tiny language at
+all, so every interop call here always hits this path on the real host
+too). The implementation is a thin wrapper reusing `emit-object-array`
+verbatim for the args array (the exact same array-construction bytecode
+pattern vector/map/set literals already use). Unlike the exception-class
+allowlist elsewhere in this file, this is genuinely general: any method
+name, any receiver, any arg count -- bounded only by what
+`Reflector.invokeInstanceMethod` itself resolves at runtime, matching real
+host behavior exactly rather than approximating a subset of it. This also
+completes the earlier `.getMessage` gap the `throw`-widening commit's
+fixtures had to route around with `(nil? e)` instead. Verified against real
+host `eval` before adding fixtures: `.getMessage` on a caught exception,
+`.length`/`.toUpperCase` on strings (matching real conformance-corpus rows
+`(fn [^String s] (.length s))` / `(fn [^String s] (.toUpperCase s))`
+directly), and `.equals` both true/false branches. U6: 74→79. DDC row:
+56→58. Full `-M:conformance` (116/116, unaffected) and full
 `bin/clj-meta-gate` (`metacircular gate: READY`) both still green.
 
 **What's still genuinely open:** full Wheeler DDC needs the independent

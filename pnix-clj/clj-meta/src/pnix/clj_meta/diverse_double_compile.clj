@@ -457,7 +457,15 @@
    {:id :mini-backend-macro-case-no-default-throws
     :source "(fn [n] (try (case n 1 :one 2 :two) (catch IllegalArgumentException e :no-match)))"
     :args [99]
-    :expected :no-match}])
+    :expected :no-match}
+   {:id :mini-backend-interop-string-length
+    :source "(fn [s] (.length s))"
+    :args ["hello"]
+    :expected 5}
+   {:id :mini-backend-interop-equals
+    :source "(fn [a b] (.equals a b))"
+    :args [1 2]
+    :expected false}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
