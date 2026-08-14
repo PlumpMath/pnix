@@ -46,14 +46,16 @@
   an admitted/rejected §15 witness. Returns
   {:witness .. :status .. :events [..] :residual-key .. :collapse .. :chain ..}."
   [source & {:keys [runs store snapshot] :or {runs 3}}]
-  (let [run-source (requiring-resolve 'pnix-clj.core/run-source)
+  (let [verify-source (requiring-resolve 'pnix-clj.core/verify-source)
         parse (requiring-resolve 'pnix-clj.parser/parse-source)
         log (or store (store/open-store))
         snap (or snapshot (snapshot/make-snapshot))
         parsed (parse source)
         term-hash (when (= :ok (:status parsed)) (cas/term-hash (:ast parsed)))
-        ;; §6 cross-substrate collapse (tower via the run-source entrypoint)
-        row (run-source source)
+        ;; §6 cross-substrate collapse — must use verify-source (multi-lane
+        ;; receipts + cross-mirror-verdict). run-source is the basic semantic
+        ;; path only and intentionally omits mirror verdicts.
+        row (verify-source source)
         cross (:cross-mirror-verdict row)
         collapsed? (= :agree (:equivalence cross))
         rkey (residual-key term-hash (:snapshot/id snap) (:bytecode-hash row))
