@@ -178,14 +178,39 @@ top-line claim, but the substance is much closer than "false" implies:
   `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate` `metacircular
   gate: READY`, no regressions.
 
-  Remaining large surface still untouched by U6 at all: `finally`,
-  multi-catch, field access/`set!`, general class construction beyond the
-  small exception allowlist, general class-name resolution beyond the small
-  static-interop allowlist, `deftype`/`defrecord`/`reify`, `letfn`,
-  `str`/string concatenation, bignum/ratio/regex reader literals, dynamic
-  vars, `locking`, protocols, and RestFn's mixed-fixed+variadic-arity shape.
-  Each of those is its own multi-fixture slice, several of them
-  (deftype/reify) genuinely large on their own.
+  **Eighth slice landed 2026-08-14: `try`/`finally`** (83→88), matching the
+  real host's exact shape (finally block duplicated on both normal and
+  exceptional exit, confirmed via `javap -c` before writing code). Scope:
+  single body + single `finally`, not combined with `catch` on the same
+  `try` (separate slice). **Found and fixed a real bug in the process, not
+  just added a feature**: nesting `try/finally` inside an outer `try/catch`
+  silently skipped the inner `finally` — root cause was `visitTryCatchBlock`
+  being called *before* emitting the body in both `emit-try` and
+  `emit-try-finally`, so the outer handler's exception-table entry got
+  registered ahead of any nested try's own entry; the JVM uses the first
+  matching entry in registration order, so the outer handler always won,
+  bypassing the inner handler entirely for any overlapping, matching PC
+  range. Caught by testing the nested shape against real host `eval` with a
+  live mutable counter (host: ends at 1, this backend before the fix:
+  stayed 0), confirmed via `javap -c -v` on the actual exception table. Fix:
+  call `visitTryCatchBlock` last in both functions (valid ASM usage — Label
+  positions are fixed by `mark`, independent of when the referencing call
+  happens). Re-verified the full existing try/catch fixture set against
+  real host after the fix; all still agree. DDC row: 60→62 (pure-value
+  fixtures only — a mutable AtomicInteger arg shared across the row's three
+  sequential legs would accumulate cross-leg mutation, so those stay
+  U6-only). `-M:conformance` 116/116 unaffected, `bin/clj-meta-gate`
+  `metacircular gate: READY`, no regressions.
+
+  Remaining large surface still untouched by U6 at all: combined
+  `catch`+`finally` on one `try`, multi-catch, field access/`set!`, general
+  class construction beyond the small exception allowlist, general
+  class-name resolution beyond the small static-interop allowlist,
+  `deftype`/`defrecord`/`reify`, `letfn`, `str`/string concatenation,
+  bignum/ratio/regex reader literals, dynamic vars, `locking`, protocols,
+  and RestFn's mixed-fixed+variadic-arity shape. Each of those is its own
+  multi-fixture slice, several of them (deftype/reify) genuinely large on
+  their own.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

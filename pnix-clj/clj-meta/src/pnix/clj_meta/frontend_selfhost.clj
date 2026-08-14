@@ -620,29 +620,45 @@
       try
       (do
         ;; Deliberately narrow scope: exactly one body expression and one
-        ;; `catch` clause (no `finally`, no multi-catch, no multi-form
-        ;; try/catch bodies) -- a single-expression try/catch is enough to
-        ;; cover the conformance-corpus shape this backend targets
-        ;; (`(try (quot 10 x) (catch ArithmeticException e :divzero))`), and
-        ;; keeps the AST/emitter change small and easy to verify.
+        ;; `catch` OR one `finally` clause (no combined `catch`+`finally`,
+        ;; no multi-catch, no multi-form try/catch/finally bodies) -- this
+        ;; covers the conformance-corpus shapes this backend targets
+        ;; (`(try (quot 10 x) (catch ArithmeticException e :divzero))` and
+        ;; `(try 10 (finally (.incrementAndGet a)))`) while keeping each
+        ;; AST/emitter addition small and easy to verify independently.
+        ;; Combining `catch` and `finally` on the same `try` is a further,
+        ;; separate slice (needs a nested try-catch-block shape), not
+        ;; attempted here.
         (when-not (= 2 (count args))
-          (throw (ex-info "tiny analyzer: try requires exactly one body form and one catch clause"
+          (throw (ex-info "tiny analyzer: try requires exactly one body form and one catch or finally clause"
                           {:form form})))
-        (let [[body-form catch-form] args]
-          (when-not (and (seq? catch-form) (= 'catch (first catch-form)))
-            (throw (ex-info "tiny analyzer: try's second form must be a catch clause"
-                            {:form form})))
-          (let [[_ class-sym name-sym catch-body-form] catch-form]
-            (when-not (and (= 4 (count catch-form))
-                           (contains? known-exception-classes class-sym)
-                           (symbol? name-sym))
-              (throw (ex-info "tiny analyzer: malformed catch clause (supported classes: ArithmeticException, Exception, RuntimeException, Throwable)"
-                              {:form form})))
-            {:op :try
-             :body (analyze-expr env body-form)
-             :catch-class (get known-exception-classes class-sym)
-             :catch-name name-sym
-             :catch-body (analyze-expr (assoc env name-sym true) catch-body-form)})))
+        (let [[body-form clause-form] args]
+          (cond
+            (and (seq? clause-form) (= 'catch (first clause-form)))
+            (let [[_ class-sym name-sym catch-body-form] clause-form]
+              (when-not (and (= 4 (count clause-form))
+                             (contains? known-exception-classes class-sym)
+                             (symbol? name-sym))
+                (throw (ex-info "tiny analyzer: malformed catch clause (supported classes: ArithmeticException, Exception, RuntimeException, Throwable, IllegalArgumentException)"
+                                {:form form})))
+              {:op :try
+               :body (analyze-expr env body-form)
+               :catch-class (get known-exception-classes class-sym)
+               :catch-name name-sym
+               :catch-body (analyze-expr (assoc env name-sym true) catch-body-form)})
+
+            (and (seq? clause-form) (= 'finally (first clause-form)))
+            (do
+              (when-not (= 2 (count clause-form))
+                (throw (ex-info "tiny analyzer: finally takes exactly one body form"
+                                {:form form})))
+              {:op :try-finally
+               :body (analyze-expr env body-form)
+               :finally-body (analyze-expr env (second clause-form))})
+
+            :else
+            (throw (ex-info "tiny analyzer: try's second form must be a catch or finally clause"
+                            {:form form})))))
       if (do
            (when-not (= 3 (count args))
              (throw (ex-info "tiny analyzer: if arity" {:form form})))
@@ -940,13 +956,26 @@
       (emit-expr ga env body))))
 
 (defn- emit-try
+  "`visitTryCatchBlock` is called LAST, after `body` (and any try/catch or
+  try/finally nested inside it) has been fully emitted -- not first. The JVM
+  searches a method's exception table in call order and uses the first
+  matching entry; registering this handler before emitting `body` would put
+  this (outer) entry ahead of any nested handler's own entry in that table,
+  so a nested `try` protecting an overlapping PC range would never be
+  reached for a matching exception type (confirmed as a real, live bug:
+  nesting a `try/finally` inside this construct's `body` silently skipped
+  the inner `finally` before this ordering fix -- caught by testing the
+  nested shape against real host `eval`, which does run the inner finally,
+  not by inspection alone). Calling `visitTryCatchBlock` after emission is
+  valid ASM usage: the call only needs to precede `endMethod`, and Label
+  positions are already fixed by their `mark` calls regardless of when the
+  referencing `visitTryCatchBlock` call happens."
   [^GeneratorAdapter ga env {:keys [body catch-class catch-name catch-body]}]
   (let [start (Label.)
         end (Label.)
         handler (Label.)
         after (Label.)
         catch-slot (.newLocal ga obj-type)]
-    (.visitTryCatchBlock ga start end handler (Type/getInternalName catch-class))
     (.mark ga start)
     (emit-expr ga env body)
     (.mark ga end)
@@ -954,7 +983,48 @@
     (.mark ga handler)
     (.storeLocal ga catch-slot)
     (emit-expr ga (assoc env catch-name {:kind :let :slot catch-slot}) catch-body)
-    (.mark ga after)))
+    (.mark ga after)
+    (.visitTryCatchBlock ga start end handler (Type/getInternalName catch-class))))
+
+(defn- emit-try-finally
+  "The real host duplicates the finally block on both exit paths (confirmed
+  via `javap -c` on a host-AOT-compiled `(try a (finally (.incrementAndGet
+  side)))`) rather than using a single shared subroutine -- this matches
+  that exact shape, not an approximation: normal completion runs the body,
+  stores its result, then runs `finally` and discards its value (`finally`
+  never contributes to the `try`'s own result, confirmed live: `(try 42
+  (finally 99))` -> `42`); a catch-all handler (`visitTryCatchBlock` with a
+  `nil` type, matching real host's own `type=any` exception-table entry)
+  runs `finally` again then re-throws the original exception unchanged.
+  `visitTryCatchBlock` is called LAST for the same reason `emit-try` now
+  does: the JVM exception table is search-order-sensitive, so an outer
+  handler registered before a nested one would shadow it for any
+  overlapping, matching PC range -- see `emit-try`'s docstring for the full
+  explanation (this was a real bug, found by testing a `try/catch` nested
+  around this construct against real host `eval`)."
+  [^GeneratorAdapter ga env {:keys [body finally-body]}]
+  (let [start (Label.)
+        end (Label.)
+        handler (Label.)
+        after (Label.)
+        result-slot (.newLocal ga obj-type)
+        exception-slot (.newLocal ga obj-type)]
+    (.mark ga start)
+    (emit-expr ga env body)
+    (.storeLocal ga result-slot)
+    (.mark ga end)
+    (emit-expr ga env finally-body)
+    (.pop ga)
+    (.goTo ga after)
+    (.mark ga handler)
+    (.storeLocal ga exception-slot)
+    (emit-expr ga env finally-body)
+    (.pop ga)
+    (.loadLocal ga exception-slot)
+    (.throwException ga)
+    (.mark ga after)
+    (.loadLocal ga result-slot)
+    (.visitTryCatchBlock ga start end handler nil)))
 
 (defn- emit-new
   [^GeneratorAdapter ga env {:keys [class arg]}]
@@ -1083,6 +1153,7 @@
     :do (emit-do ga env (:exprs node))
     :let (emit-let ga env node)
     :try (emit-try ga env node)
+    :try-finally (emit-try-finally ga env node)
     :new (emit-new ga env node)
     :throw (emit-throw ga env node)
     :interop-call (emit-interop-call ga env node)
@@ -1572,7 +1643,27 @@
    {:id :tiny-static-interop-ambiguous-overload-rejected
     :source "(fn [a b] (try (Math/max a b) (catch IllegalArgumentException e :ambiguous)))"
     :args [1 2.0]
-    :expected :ambiguous}])
+    :expected :ambiguous}
+   {:id :tiny-try-finally-normal-path-value
+    :source "(fn [a] (try a (finally 99)))"
+    :args [42]
+    :expected 42}
+   {:id :tiny-try-finally-side-effect-after-normal-path
+    :source "(fn [a] (do (try a (finally (.incrementAndGet a))) (.get a)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
+    :expected 1}
+   {:id :tiny-try-finally-nested-in-try-catch-normal
+    :source "(fn [x] (try (try (quot 10 x) (finally :ignored)) (catch ArithmeticException e :caught)))"
+    :args [2]
+    :expected 5}
+   {:id :tiny-try-finally-nested-in-try-catch-exceptional
+    :source "(fn [x] (try (try (quot 10 x) (finally :ignored)) (catch ArithmeticException e :caught)))"
+    :args [0]
+    :expected :caught}
+   {:id :tiny-try-finally-runs-on-exceptional-path-nested
+    :source "(fn [a x] (do (try (try (quot 10 x) (finally (.incrementAndGet a))) (catch ArithmeticException e :caught)) (.get a)))"
+    :args [(java.util.concurrent.atomic.AtomicInteger. 0) 0]
+    :expected 1}])
 
 (defn run
   []

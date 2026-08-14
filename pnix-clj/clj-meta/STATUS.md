@@ -94,13 +94,13 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    83 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    88 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
-    single-clause `try`/`catch`/`throw`/allowlisted exception construction/
-    `.methodName` instance interop and `ClassName/methodName` static interop,
-    both via `clojure.lang.Reflector`) with ZERO calls into
-    tools.analyzer.jvm or the host reader.
+    single-clause `try`/`catch`, single-clause `try`/`finally`/`throw`/
+    allowlisted exception construction/`.methodName` instance interop and
+    `ClassName/methodName` static interop, both via `clojure.lang.Reflector`)
+    with ZERO calls into tools.analyzer.jvm or the host reader.
 U8  fuzz-conformance
     10,000 random-program comparisons (250 programs x 40 inputs), host≡compiler,
     0 divergences found.
@@ -318,6 +318,55 @@ silently-accepted result, confirming the runtime-dispatch substitution is
 behaviorally faithful even on the rejection path, not just the happy path.
 U6: 79→83. DDC row: 58→60. Full `-M:conformance` (116/116, unaffected) and
 full `bin/clj-meta-gate` (`metacircular gate: READY`) both still green.
+
+**Widened an eighth time, same day (2026-08-14): `try`/`finally`, and a
+real ordering bug this widening caught in `try`/`catch` too.** Real host
+duplicates the `finally` block on both exit paths (normal and exceptional)
+rather than using a shared subroutine — confirmed via `javap -c` on a
+host-AOT-compiled `(try a (finally (.incrementAndGet side)))` before writing
+any code. `emit-try-finally` matches that exact shape: normal completion
+stores the body's result, runs `finally` once (discarding its value —
+`finally` never contributes to the `try`'s own result, confirmed live:
+`(try 42 (finally 99))` -> `42`), then returns the stored result; a
+catch-all handler (`visitTryCatchBlock` with a `nil` type, matching real
+host's own `type=any` exception-table entry) runs `finally` again then
+re-throws the original exception unchanged. Scope: single body expression,
+single `finally` clause, no combining `catch` and `finally` on the same
+`try` (that needs a further, nested try-catch-block shape, a separate slice
+not attempted here) — `try` now accepts either a `catch` clause or a
+`finally` clause as its second form, not both together.
+
+**Real bug found and fixed, not just a new feature added cleanly:** the
+very first working version of `try`/`finally` passed every fixture in
+isolation, but nesting it inside an outer `try`/`catch` (`(try (try (quot 10
+x) (finally (.incrementAndGet a))) (catch ArithmeticException e :caught))`)
+silently skipped the inner `finally`'s side effect — confirmed by comparing
+against real host `eval` with a live mutable counter (host: counter ends at
+`1`, this backend: counter stayed `0`), not caught by inspection alone.
+Root cause, found via `javap -c -v` on the actual emitted class's exception
+table: `emit-try` (and the first draft of `emit-try-finally`) called
+`visitTryCatchBlock` *before* emitting `body`, so the OUTER handler's
+exception-table entry was registered before any NESTED try's own entry. The
+JVM searches a method's exception table in registration order and uses the
+first matching entry — with the outer entry listed first, a matching
+exception thrown inside the nested try's protected region jumped straight
+to the outer handler, bypassing the inner `finally` (and would equally have
+bypassed an inner `catch`) entirely. Fixed by moving `visitTryCatchBlock` to
+the END of both `emit-try` and `emit-try-finally` (after the body, and
+therefore after any nested try's own now-earlier registration) — valid ASM
+usage, since the call only needs to precede `endMethod` and Label positions
+are already fixed by their `mark` calls regardless of when the referencing
+`visitTryCatchBlock` call happens. Re-verified the full existing try/catch
+fixture set plus the new nested case against real host after the fix; all
+agree. U6: 83→88 (includes the nested-regression case as a permanent
+fixture, both the normal and exceptional branches, plus a version that
+observes the finally side effect on the exceptional path through a nested
+`try`). DDC row: 60→62 (only the pure-value fixtures — a mutable
+AtomicInteger arg shared across the row's three sequential legs
+(host/compiler/mini) would accumulate cross-leg mutation and make the
+comparison meaningless, so those stay U6-only). Full `-M:conformance`
+(116/116, unaffected) and full `bin/clj-meta-gate` (`metacircular gate:
+READY`) both still green.
 
 **What's still genuinely open:** full Wheeler DDC needs the independent
 backend's coverage to match the *production* corpus, not a 43-fixture subset,

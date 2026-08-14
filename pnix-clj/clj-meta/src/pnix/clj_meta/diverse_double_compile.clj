@@ -473,7 +473,21 @@
    {:id :mini-backend-static-interop-ambiguous-rejected
     :source "(fn [a b] (try (Math/max a b) (catch IllegalArgumentException e :ambiguous)))"
     :args [1 2.0]
-    :expected :ambiguous}])
+    :expected :ambiguous}
+   ;; Only the pure-value try/finally fixtures are wired here, not the
+   ;; AtomicInteger-mutation ones from frontend_selfhost.clj's own fixture
+   ;; set: this row applies the SAME `args` vector to all three legs
+   ;; (host/compiler/mini) in sequence, so a shared mutable arg would
+   ;; accumulate cross-leg mutation and make the comparison meaningless
+   ;; rather than a real check.
+   {:id :mini-backend-try-finally-normal-path-value
+    :source "(fn [a] (try a (finally 99)))"
+    :args [42]
+    :expected 42}
+   {:id :mini-backend-try-finally-nested-in-try-catch-exceptional
+    :source "(fn [x] (try (try (quot 10 x) (finally :ignored)) (catch ArithmeticException e :caught)))"
+    :args [0]
+    :expected :caught}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
