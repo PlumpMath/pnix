@@ -102,7 +102,7 @@ Do **not** start without an explicit product decision.
 | **clr library smoke** | **landed** — `pnix-clr-library-smoke` (export API + nupkg + HelloPnix) |
 | **host-env residual cut** | **closed enough (2026-08-14)** — local feeds, examples, tool-eval surfaces, CI layout |
 | **tool-eval surface gate** | **landed** — `clr-meta-tool-surface-gate` freezes admitted CLI |
-| **Still open (product pillars)** | further facade only with new gates; machine tail if pillar; in-process ALC |
+| **Still open (product pillars, not host-env)** | machine/F-series if pillar; in-process ALC (blocked); new tool-eval only with named gate |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
 

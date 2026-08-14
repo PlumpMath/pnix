@@ -75,6 +75,10 @@ jobs:
           bash -n bin/host-import-smoke
           test -x bin/host-library-smokes
           bash -n bin/host-library-smokes
+          test -x bin/host-import-examples-smoke
+          bash -n bin/host-import-examples-smoke
+          test -x bin/host-env-residual-smoke
+          bash -n bin/host-env-residual-smoke
           test -f HOST_ENV_P2_P3.md
           test -f HOST_IMPORT.md
           test -f examples/host-import/hello.px
@@ -177,6 +181,13 @@ jobs:
           else
             echo "SKIP cljs library smoke (no dist/; offline build or nix build)"
           fi
+      - name: host-import examples smoke (available toolchains)
+        run: |
+          # Runs demos when tools exist; skips others. Full residual:
+          # ./bin/host-env-residual-smoke (local, may build libraries).
+          nix shell nixpkgs#clojure nixpkgs#python311 nixpkgs#nodejs \
+            nixpkgs#cargo nixpkgs#rustc nixpkgs#stdenv.cc -c \
+            bash -lc './bin/host-import-examples-smoke'
 
   library-print:
     name: library-print-${{ matrix.host }}

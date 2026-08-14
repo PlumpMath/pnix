@@ -2103,11 +2103,10 @@ moving oracle rather than a bespoke dialect.
          abort held on ALL lanes. +3 mirror-pair cases (182; corpus
          228/221/261); capabilities regenerated (throw-value/abort-value).
          Verified by `cross-lane-try-eval-catchability`.
-   - [ ] DISCOVERED (2026-07-03): `(builtins.tryEval ...).success` —
-         SELECT directly on a tryEval application holds at clj-meta
-         (preexisting, also before the catchability fix; likely the
-         emitted `try` in expression position inside `get`). Let-bound
-         access (`let r = ...; in r.success`) works — recorded frontier.
+   - [x] DISCOVERED (2026-07-03) / closed: `(builtins.tryEval ...).success`
+         SELECT on tryEval application works for catchable errors (throw);
+         tower + host tests cover it. Uncatchable (e.g. `1 / 0`) still
+         propagates — Nix parity, not a select/try hoisting bug.
    - [ ] px error taxonomy follow-up: px mk_error carries only a message
          (+ new catchable flag). Cross-lane REASON comparison (why held)
          is not yet possible for px-internal errors — grow kinds per

@@ -5327,7 +5327,15 @@
                "builtins.length [ 1 2 3 ]" {} [])
           r (specialize/invoke-host-artifact art {})]
       (is (= :ok (:status art)))
-      (is (= 3 (:value r))))))
+      (is (= 3 (:value r))))
+    (let [art (specialize/specialize-to-host-artifact "x + y" {"x" 40} ["y"])]
+      (is (= :ok (:status art)))
+      (is (= :missing-dynamic
+             (:reason (specialize/invoke-host-artifact art {}))))
+      (is (= :dynamics-not-data
+             (:reason (specialize/invoke-host-artifact art {"y" (fn [])}))))
+      (is (= :ok (:status (specialize/invoke-host-artifact art {"y" 0}))))
+      (is (= 40 (:value (specialize/invoke-host-artifact art {"y" 0})))))))
 
 (deftest evaluator-string-context-core
   ;; Pure simulation of Nix string context (Completeness Roadmap item 3, first
