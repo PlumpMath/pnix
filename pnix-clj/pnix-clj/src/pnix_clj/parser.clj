@@ -1292,6 +1292,49 @@
 
 (declare parse-select-default-postfix)
 
+(defn- select-node
+  "Build AST for `target . seg1.seg2…segN (or default)?`.
+
+  Nix's ExprSelect carries a multi-segment attrPath: missing *any* segment of
+  a continuous path is caught by `or`. Parentheses break the path into
+  separate selects (`({}.a).b or 9` errors on `.a`; `{}.a.b or 9` yields 9).
+  A one-segment path keeps the historical `:attr` key; longer paths use
+  `:attrs` so the evaluator can walk the path as a single select."
+  [source target path spans default]
+  (let [end-span (if default
+                   (second (ast-span default))
+                   (second (last spans)))
+        span [(first (ast-span target)) end-span]
+        base (if (= 1 (count path))
+               {:target target
+                :attr (first path)
+                :attr-span (first spans)
+                :span span}
+               {:target target
+                :attrs (vec path)
+                :attr-spans (vec spans)
+                :span span})]
+    (ast source :select nil
+         (cond-> base
+           default (assoc :default default)))))
+
+(defn- parse-select-attr-path
+  "Parse a continuous attr path starting at the first segment token index
+  (caller has already consumed the leading `.`). Returns [path spans end-idx]."
+  [source tokens idx]
+  (let [[attr0 end0 span0]
+        (parse-attr-segment source tokens idx "attr path segment")]
+    (loop [path [attr0]
+           spans [span0]
+           i end0]
+      (let [tok (nth tokens i nil)]
+        (if (and (= :punct (:kind tok))
+                 (= "." (:text tok)))
+          (let [[attr seg-end span]
+                (parse-attr-segment source tokens (inc i) "attr path segment")]
+            (recur (conj path attr) (conj spans span) seg-end))
+          [path spans i])))))
+
 (defn- parse-select-default-primary
   "Parse the tight `or` fallback in an attr selection. Nix does not parse this
   as a full expression: calls and infix operators bind outside the select, and
@@ -1363,28 +1406,17 @@
       (cond
         (and (= :punct (:kind tok))
              (= "." (:text tok)))
-        (let [[attr select-end attr-span]
-              (parse-attr-segment source tokens (inc i) "attr path segment")
-              or-tok (nth tokens select-end nil)]
+        ;; Continuous attrPath (same as parse-postfix): `or a.b.c` keeps one
+        ;; select so intermediate misses stay on that path.
+        (let [[path spans path-end]
+              (parse-select-attr-path source tokens (inc i))
+              or-tok (nth tokens path-end nil)]
           (if (and (= :ident (:kind or-tok))
                    (= "or" (:text or-tok)))
             (let [[default-expr i']
-                  (parse-select-default-postfix source tokens (inc select-end))]
-              (recur [(ast source :select nil
-                           {:target expr
-                            :attr attr
-                            :default default-expr
-                            :attr-span attr-span
-                            :span [(first (ast-span expr))
-                                   (second (ast-span default-expr))]})
-                      i']))
-            (recur [(ast source :select nil
-                         {:target expr
-                          :attr attr
-                          :attr-span attr-span
-                          :span [(first (ast-span expr))
-                                 (second attr-span)]})
-                    select-end])))
+                  (parse-select-default-postfix source tokens (inc path-end))]
+              (recur [(select-node source expr path spans default-expr) i']))
+            (recur [(select-node source expr path spans nil) path-end])))
 
         ;; NB: no `?` here — Nix's select-or default is expr_select, and `?`
         ;; is an operator level above (D6): `a.b or c ? d` = `(a.b or c) ? d`.
@@ -1399,30 +1431,18 @@
       (cond
         (and (= :punct (:kind tok))
              (= "." (:text tok)))
-        (let [[attr select-end attr-span]
-              (parse-attr-segment source tokens (inc i) "attr path segment")
-              or-tok (nth tokens select-end nil)]
-            ;; `a.b or default`: an `or` keyword right after the attr supplies a
-            ;; fallback used when the attribute is missing.
-            (if (and (= :ident (:kind or-tok))
-                     (= "or" (:text or-tok)))
-              (let [[default-expr i']
-                    (parse-select-default-postfix source tokens (inc select-end))]
-                (recur [(ast source :select nil
-                             {:target expr
-                              :attr attr
-                              :default default-expr
-                              :attr-span attr-span
-                              :span [(first (ast-span expr))
-                                     (second (ast-span default-expr))]})
-                        i']))
-              (recur [(ast source :select nil
-                           {:target expr
-                            :attr attr
-                            :attr-span attr-span
-                            :span [(first (ast-span expr))
-                                   (second attr-span)]})
-                      select-end])))
+        ;; Nix ExprSelect attrPath: continuous `.a.b.c or d` is ONE select
+        ;; (or catches any segment miss). A parenthesized intermediate is a
+        ;; separate primary, so `({}.a).b or 9` hard-fails on `.a`.
+        (let [[path spans path-end]
+              (parse-select-attr-path source tokens (inc i))
+              or-tok (nth tokens path-end nil)]
+          (if (and (= :ident (:kind or-tok))
+                   (= "or" (:text or-tok)))
+            (let [[default-expr i']
+                  (parse-select-default-postfix source tokens (inc path-end))]
+              (recur [(select-node source expr path spans default-expr) i']))
+            (recur [(select-node source expr path spans nil) path-end])))
 
         ;; NB: `?` (has-attr) is NOT postfix — it is a precedence-level
         ;; OPERATOR in Nix, looser than application (oracle-confirmed, D6:

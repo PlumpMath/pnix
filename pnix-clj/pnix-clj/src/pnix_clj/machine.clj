@@ -21,7 +21,8 @@
     :force  — enter a thunk (memoizing store protocol; :update frame)
     :unwind — propagate a held result outward, memoizing pending :update
               frames; `or` default is applied in select-transition after a
-              WHNF target (nested intermediate missing-attr propagates)
+              WHNF target (continuous multi-segment attrPath walks in-frame;
+              parenthesized intermediate selects hard-fail as separate targets)
 
   Fragment (v3, honest): literals, var (incl. __curPos), list, let
   (recursive, lazy, incl. plain inherit), attrset (rec included; static keys
@@ -95,6 +96,9 @@
                    (:attrs node))
     :select (cond-> [(:target node)]
               (dynamic-key? (:attr node)) (conj (:expr (:attr node)))
+              (:attrs node) (into (comp (filter dynamic-key?)
+                                        (map :expr))
+                                  (:attrs node))
               (:default node) (conj (:default node)))
     :has-attr (cond-> [(:target node)]
                 (dynamic-key? (:attr node)) (conj (:expr (:attr node))))
@@ -180,28 +184,34 @@
 (defn- select-transition
   "eval-select's decision on a WHNF target and a RESOLVED string key, as a
   transition map for the machine loop (shared by the static-key and
-  dynamic-key frame arms so the two cannot drift)."
-  [targetv k default fenv env kont]
-  (cond
-    (and (map? targetv) (contains? targetv k))
-    (let [slot (get targetv k)]
-      {:mode (if (thunk? slot) :force :value)
-       :x slot :env env :kont (conj kont [:select-finish])})
+  dynamic-key frame arms so the two cannot drift). `remaining` is the rest
+  of a multi-segment attrPath after this key (empty → finish the select)."
+  ([targetv k default fenv env kont]
+   (select-transition targetv k default fenv env kont nil))
+  ([targetv k default fenv env kont remaining]
+   (cond
+     (and (map? targetv) (contains? targetv k))
+     (let [slot (get targetv k)
+           kont' (if (seq remaining)
+                   (conj kont [:select-attr remaining default fenv nil])
+                   (conj kont [:select-finish]))]
+       {:mode (if (thunk? slot) :force :value)
+        :x slot :env env :kont kont'})
 
-    default
-    {:mode :eval :x default :env fenv :kont kont}
+     default
+     {:mode :eval :x default :env fenv :kont kont}
 
-    (not (map? targetv))
-    {:mode :unwind
-     :x (err/failed :eval :select-target-not-attrset
-                  {:attr k :target-value targetv})
-     :env env :kont kont}
+     (not (map? targetv))
+     {:mode :unwind
+      :x (err/failed :eval :select-target-not-attrset
+                   {:attr k :target-value targetv})
+      :env env :kont kont}
 
-    :else
-    {:mode :unwind
-     :x (err/failed :eval :missing-attr
-                  {:attr k :available-attrs (vec (sort (keys targetv)))})
-     :env env :kont kont}))
+     :else
+     {:mode :unwind
+      :x (err/failed :eval :missing-attr
+                   {:attr k :available-attrs (vec (sort (keys targetv)))})
+      :env env :kont kont})))
 
 (declare attrs-path-transition)
 
@@ -447,8 +457,13 @@
                (conj kont [:with (:body x) env]))
 
         :select
-        (recur :eval (:target x) env
-               (conj kont [:select-attr (:attr x) (:default x) env (:span x)]))
+        ;; Single-segment keeps :attr; multi-segment continuous attrPath uses
+        ;; :attrs (parser). Both share select-transition so `or` catches any
+        ;; segment miss of ONE select — parenthesized intermediates are a
+        ;; separate :select target and hard-fail before this frame.
+        (let [segments (or (:attrs x) (when-let [a (:attr x)] [a]))]
+          (recur :eval (:target x) env
+                 (conj kont [:select-attr segments (:default x) env (:span x)])))
 
         :has-attr
         (recur :eval (:target x) env
@@ -560,27 +575,32 @@
 
             :select-attr
             ;; eval-select parity, including the map?/contains? shape (not
-            ;; attrset-value?) and the miss-vs-default arbitration. The forced
-            ;; slot value flows through a [:select-finish] frame so a selected
+            ;; attrset-value?) and the miss-vs-default arbitration. `attr` is
+            ;; either one key or a remaining path vector. The forced slot
+            ;; value flows through a [:select-finish] frame so a selected
             ;; NULLARY builtin finishes exactly like eval-select's. A dynamic
             ;; key evaluates under a [:select-key] frame (M7e) — its D20
             ;; string-check held is NOT caught by an `or` default.
-            (let [[_ attr default fenv span] f]
-              (if (dynamic-key? attr)
-                (recur :eval (:expr attr) fenv
-                       (conj kont [:select-key x default fenv span]))
-                (let [t (select-transition x attr default fenv env kont)]
+            (let [[_ attr default fenv span] f
+                  segments (if (vector? attr) attr [attr])
+                  head (first segments)
+                  remaining (vec (rest segments))]
+              (if (dynamic-key? head)
+                (recur :eval (:expr head) fenv
+                       (conj kont [:select-key x default fenv span remaining]))
+                (let [t (select-transition x head default fenv env kont remaining)]
                   (recur (:mode t) (:x t) (:env t) (:kont t)))))
 
             :select-key
             ;; x is the evaluated dynamic key — D20 string check, then the
             ;; same select decision as the static arm (shared transition).
-            (let [[_ targetv default fenv _span] f
+            (let [[_ targetv default fenv _span remaining] f
+                  remaining (or remaining [])
                   kr (ev/attr-key-value-result x)]
               (if (not= :ok (:status kr))
                 (recur :unwind kr env kont)
                 (let [t (select-transition targetv (:value kr) default fenv
-                                           env kont)]
+                                           env kont remaining)]
                   (recur (:mode t) (:x t) (:env t) (:kont t)))))
 
             :attrs-path
@@ -832,8 +852,9 @@
       ;; ── propagate a held outward ─────────────────────────────────────
       ;; Pending :update frames memoize the held (exactly force-value's
       ;; memoize-the-held behavior). select-attr does NOT catch held targets:
-      ;; `or` applies only after a WHNF target (select-transition), matching
-      ;; eval-select / nix-instantiate (nested missing intermediate propagates).
+      ;; `or` applies only after a WHNF target (select-transition). Continuous
+      ;; multi-segment attrPaths walk inside one select; a parenthesized
+      ;; intermediate is a separate target eval and hard-fails before `or`.
       :unwind
       (if (empty? kont)
         x
@@ -1004,6 +1025,9 @@
    "builtins.toJSON (x: x)" "with null; 1"
    "builtins.catAttrs \"a\" null" "builtins.listToAttrs [ 1 ]"
    "({ a = 1; }.b).c or 9" "{ a = {}; }.a.b or 7" "{ a = 1; }.b or 9"
+   ;; Continuous attrPath: or catches intermediate miss (Nix ExprSelect).
+   "{ a = 1; }.b.c or 7" "{}.a.b or 9" "let s = {}; in s.a.b or 9"
+   "({}.a).b or 9"
    "builtins.hasAttr \"a\" null" "builtins.intersectAttrs null { a = 1; }"
    "builtins.mapAttrs (n: v: v) null" "builtins.groupBy (x: x) null"
    "null ? a"

@@ -3117,9 +3117,9 @@
       (is (= 7 (:value elem-result))))))
 
 (deftest evaluator-select-or-default
-  ;; `a.b or default`: fallback when the *final* select's target is WHNF and
-  ;; lacks the attr / is non-attrset. Does NOT catch a failed intermediate
-  ;; select (oracle: `{a=1;}.b.c or 7` and `({a=1;}.b).c or 9` error on `.b`).
+  ;; Nix ExprSelect attrPath: continuous `.a.b.c or d` is ONE select — `or`
+  ;; catches a miss at ANY path segment. Parenthesized intermediates are
+  ;; separate selects (`({a=1;}.b).c or 9` hard-fails on `.b`).
   (testing "returns the attribute when present"
     (let [r (pnix/eval-source "{ a = 1; }.a or 99")]
       (is (= :ok (:status r)))
@@ -3132,11 +3132,21 @@
     (let [r (pnix/eval-source "{ a = {}; }.a.b or 7")]
       (is (= :ok (:status r)))
       (is (= 7 (:value r)))))
-  (testing "missing intermediate select is NOT caught by outer or (oracle)"
+  (testing "missing intermediate on continuous path is caught by or (oracle)"
     (let [r (pnix/eval-source "{ a = 1; }.b.c or 7")]
+      (is (= :ok (:status r)))
+      (is (= 7 (:value r))))
+    (let [r (pnix/eval-source "{}.a.b or 9")]
+      (is (= :ok (:status r)))
+      (is (= 9 (:value r))))
+    (let [r (pnix/eval-source "let s = {}; in s.a.b or 9")]
+      (is (= :ok (:status r)))
+      (is (= 9 (:value r)))))
+  (testing "parenthesized intermediate select is NOT caught by outer or (oracle)"
+    (let [r (pnix/eval-source "({ a = 1; }.b).c or 9")]
       (is (= :failed (:status r)))
       (is (= :missing-attr (:reason r))))
-    (let [r (pnix/eval-source "({ a = 1; }.b).c or 9")]
+    (let [r (pnix/eval-source "({}.a).b or 9")]
       (is (= :failed (:status r)))
       (is (= :missing-attr (:reason r)))))
   (testing "null target with or uses default (oracle)"
@@ -3147,6 +3157,9 @@
       (is (= :unbound-var (:reason r)))))
   (testing "a plain missing select without or is still held"
     (let [r (pnix/eval-source "{ a = 1; }.b")]
+      (is (= :failed (:status r)))
+      (is (= :missing-attr (:reason r))))
+    (let [r (pnix/eval-source "{ a = 1; }.b.c")]
       (is (= :failed (:status r)))
       (is (= :missing-attr (:reason r)))))
   (testing "builtins.or still resolves as a normal select"

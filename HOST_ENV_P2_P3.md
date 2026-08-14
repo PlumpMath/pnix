@@ -138,9 +138,11 @@ These were listed as “next after host-env”. **No implementation in this cut.
 Repeated `nix-instantiate` sweeps (wrong-VALUE, over-strict, both-ok) on real
 Nix builtins/operators are **green enough** for day-to-day. Landed this day
 includes: `++`/`//` operands, attr/list null guards, string/version types,
-`toJSON` functions, `with` non-attrset no-op, select-`or` intermediate miss,
-empty regex, path `+` and path `<`, `elemAt` OOB, `baseNameOf "/"`, etc.
-Machine differential tracks the same value algebra (**~216 rows, 0 diverge**).
+`toJSON` functions, `with` non-attrset no-op, select-`or` continuous
+attrPath (or catches any segment miss; parenthesized intermediate still
+hard-fails), empty regex, path `+` and path `<`, `elemAt` OOB,
+`baseNameOf "/"`, etc.
+Machine differential tracks the same value algebra (**~220 rows, 0 diverge**).
 
 **Intentional / non-bugs (do not “fix” without a product decision):**
 
@@ -151,6 +153,7 @@ Machine differential tracks the same value algebra (**~216 rows, 0 diverge**).
 | Host-only builtins (`mod`, `hasPrefix`, `take`, …) | May exist in pnix; absent on stock Nix builtins |
 | `tryEval` type errors | Propagate (only throw/assert false caught) — Nix-aligned |
 | String interp of int/bool | Error without `toString` — Nix-aligned (2.34) |
+| `builtins.fromTOML` | Not admitted (`builtins ? fromTOML` is false); add only with a pure TOML slice |
 
 **Next oracle work** only on a new nix-instantiate divergence or pillar need —
 not checklist grinding.

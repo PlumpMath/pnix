@@ -2627,29 +2627,46 @@
                              (:form right-result))))))))
 
     :select
+    ;; Single-segment (`:attr`) or continuous multi-segment attrPath (`:attrs`).
+    ;; Multi-path + `or` must catch a miss at any segment (Nix ExprSelect).
     (if-let [constant-form (builtin-constant-form ast)]
       (ok-form constant-form)
-      (let [target-result (lower-ast (:target ast))]
+      (let [target-result (lower-ast (:target ast))
+            segments (or (:attrs ast) (when-let [a (:attr ast)] [a]))]
         (if (not= :ok (:status target-result))
           target-result
-          (let [attr-result (lower-attr-key (:attr ast))]
-            (if (not= :ok (:status attr-result))
-              attr-result
-              (if-let [default (:default ast)]
-                (let [default-result (lower-ast default)]
-                  (if (= :ok (:status default-result))
-                    (ok-form (list 'let ['target (force-slot-form (:form target-result))
-                                         'attr (:form attr-result)]
-                                    (list 'if
-                                          (list 'and
-                                                (list 'map? 'target)
-                                                (list 'contains? 'target 'attr))
-                                          (force-slot-form
-                                           (list 'get 'target 'attr))
-                                          (:form default-result))))
-                    default-result))
-                (ok-form (force-slot-form
-                          (list 'get (:form target-result) (:form attr-result))))))))))
+          (let [attr-results (mapv lower-attr-key segments)
+                bad (first (remove #(= :ok (:status %)) attr-results))]
+            (cond
+              bad
+              bad
+
+              (:default ast)
+              (let [default-result (lower-ast (:default ast))]
+                (if (not= :ok (:status default-result))
+                  default-result
+                  (ok-form
+                   (list 'let ['target (force-slot-form (:form target-result))
+                               'attrs (mapv :form attr-results)
+                               'default (:form default-result)]
+                         (list 'loop ['v 'target 'as 'attrs]
+                               (list 'if (list 'empty? 'as)
+                                     'v
+                                     (list 'let ['a (list 'first 'as)]
+                                           (list 'if (list 'and (list 'map? 'v)
+                                                           (list 'contains? 'v 'a))
+                                                 (list 'recur
+                                                       (force-slot-form
+                                                        (list 'get 'v 'a))
+                                                       (list 'rest 'as))
+                                                 'default))))))))
+
+              :else
+              (ok-form
+               (reduce (fn [form a]
+                         (force-slot-form (list 'get form (:form a))))
+                       (:form target-result)
+                       attr-results)))))))
 
     :has-attr
     ;; Nix `?` on a non-attrset is FALSE, not an error (D6) — mirror the

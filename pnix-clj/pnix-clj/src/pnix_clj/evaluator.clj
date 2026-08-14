@@ -1863,42 +1863,46 @@
                                  (:value right-result))))))))
 
 (defn- eval-select
-  [env {:keys [target attr default]}]
-  (let [target-result (force-result-value (eval-ast* env target))
-        attr-result (eval-attr-key env attr)]
-    (cond
-      ;; Target evaluation failures always propagate. `or` does NOT catch a
-      ;; missing *intermediate* select (oracle: `({a=1;}.b).c or 9` errors on
-      ;; `.b`). Defaults apply only when the target evaluates to a WHNF value
-      ;; that is a non-attrset or lacks the attr (`null.x or 5`, `{}.a or 1`).
-      (not= :ok (:status target-result))
+  "Nix ExprSelect: walk a continuous attrPath; `or` catches a miss or
+  non-attrset at ANY segment of that path. Target evaluation failures always
+  propagate — so a *parenthesized* intermediate (`({a=1;}.b).c or 9`) hard-
+  fails on `.b`, while `{a=1;}.b.c or 7` yields 7 (one select, path [b c])."
+  [env {:keys [target attr attrs default]}]
+  (let [segments (or attrs (when attr [attr]))
+        target-result (force-result-value (eval-ast* env target))]
+    (if (not= :ok (:status target-result))
       target-result
+      (loop [val (:value target-result)
+             remaining segments]
+        (if (empty? remaining)
+          (nullary-builtin-result val)
+          (let [attr-result (eval-attr-key env (first remaining))]
+            (cond
+              (not= :ok (:status attr-result))
+              attr-result
 
-      (not= :ok (:status attr-result))
-      attr-result
+              (and (map? val)
+                   (contains? val (:value attr-result)))
+              (let [selected-result (force-value (get val (:value attr-result)))]
+                (if (= :ok (:status selected-result))
+                  (recur (:value selected-result) (rest remaining))
+                  ;; Slot force failure (throw/assert/…): not a select miss.
+                  selected-result))
 
-      (and (map? (:value target-result))
-           (contains? (:value target-result) (:value attr-result)))
-      (let [selected-result (force-value (get (:value target-result)
-                                              (:value attr-result)))]
-        (if (= :ok (:status selected-result))
-          (nullary-builtin-result (:value selected-result))
-          selected-result))
+              default
+              (eval-ast* env default)
 
-      default
-      (eval-ast* env default)
+              (not (map? val))
+              (err/failed :eval
+                        :select-target-not-attrset
+                        {:attr (:value attr-result)
+                         :target-value val})
 
-      (not (map? (:value target-result)))
-      (err/failed :eval
-                :select-target-not-attrset
-                {:attr (:value attr-result)
-                 :target-value (:value target-result)})
-
-      :else
-      (err/failed :eval
-                :missing-attr
-                {:attr (:value attr-result)
-                 :available-attrs (vec (sort (keys (:value target-result))))}))))
+              :else
+              (err/failed :eval
+                        :missing-attr
+                        {:attr (:value attr-result)
+                         :available-attrs (vec (sort (keys val)))}))))))))
 
 (defn- eval-has-attr
   [env {:keys [target attr]}]
