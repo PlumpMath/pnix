@@ -1579,7 +1579,8 @@
   [operator left right]
   (try
     (case operator
-      "+" (if (or (raw-bytes? left) (raw-bytes? right))
+      "+" (cond
+            (or (raw-bytes? left) (raw-bytes? right))
             ;; RAW-BYTE concat: bytes join, revalidate (may return to String).
             ;; Contextful operands cannot mix with raw bytes — held.
             (if (or (ctx-string? left) (ctx-string? right))
@@ -1589,7 +1590,25 @@
                 (if (and xa xb)
                   {:status :ok :value (bytes-val (into xa xb))}
                   (err/failed :eval :raw-bytes-concat-non-string {:construct :+}))))
-          (if (or (string-like? left) (string-like? right))
+
+            ;; Path concatenation (oracle): path + string|path → path;
+            ;; string + path → string (Nix resolves path via FS; we join the
+            ;; stored path text for purity). Was over-strict string-coercion /
+            ;; arithmetic-non-number.
+            (and (path-value? left) (path-value? right))
+            {:status :ok
+             :value (path-value (str (get left "path") (get right "path")))}
+
+            (and (path-value? left) (string-like? right))
+            {:status :ok
+             :value (path-value (str (get left "path") (string-content right)))}
+
+            (and (string-like? left) (path-value? right))
+            {:status :ok
+             :value (ctx-string (str (string-content left) (get right "path"))
+                                (string-ctx left))}
+
+            (or (string-like? left) (string-like? right))
             ;; String concatenation carries context: contents join,
             ;; contexts union (plain String when both are empty).
             (if (and (string-like? left) (string-like? right))
@@ -1609,12 +1628,14 @@
                                            (string-content right))
                                       (concat (string-ctx left)
                                               (string-ctx right)))}))
+
+            :else
             (arithmetic-result :eval
                                {:construct :binary}
                                "+"
                                left
                                right
-                               +)))
+                               +))
       "-" (arithmetic-result :eval
                              {:construct :binary}
                              "-"

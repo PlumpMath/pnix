@@ -5881,7 +5881,20 @@
            (:reason (pnix/eval-source "builtins.match \"\" \"\""))))
     (is (= ["a" "b"] (:value (pnix/eval-source "builtins.match \"(a)(b)\" \"ab\""))))
     (is (= ["" [] "" [] "" [] "" [] "" [] ""]
-           (:value (pnix/eval-source "builtins.split \".\" \"a.b.c\""))))))
+           (:value (pnix/eval-source "builtins.split \".\" \"a.b.c\"")))))
+  (testing "path + string/path concatenation (oracle: result is path)"
+    ;; Was held :string-coercion / :arithmetic-non-number.
+    (let [r (pnix/eval-source "./a + \"/b\"")]
+      (is (= :ok (:status r)))
+      (is (= "path" (:value (pnix/eval-source "builtins.typeOf (./a + \"/b\")"))))
+      (is (= "./a/b" (get (:value r) "path"))))
+    (let [r (pnix/eval-source "./a + \"b\"")]
+      (is (= :ok (:status r)))
+      (is (= "./ab" (get (:value r) "path"))))
+    (let [r (pnix/eval-source "./a + ./b")]
+      (is (= :ok (:status r)))
+      (is (= "./a./b" (get (:value r) "path"))))
+    (is (= "x./a" (:value (pnix/eval-source "\"x\" + ./a"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by
