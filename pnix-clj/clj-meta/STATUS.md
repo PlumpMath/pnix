@@ -93,9 +93,13 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    161 fixtures (fn/if/do/let/loop-recur/variadic `+`/`-`/`*` (0/1/2/N
-    args, left-folded exactly as real host does)/unary `-`/arithmetic/
-    compare/data-literals
+    171 fixtures (fn/if/do/let/loop-recur/variadic `+`/`-`/`*` (0/1/2/N
+    args, left-folded exactly as real host does)/unary `-`/chained `<`/
+    `=`/`>`/`>=`/`<=` for arities other than 2 (falls back to the same
+    general Var-call mechanism real host itself uses there, confirmed
+    via `javap -c` -- not a folded/desugared chain)/3-arg `get` with a
+    default value (`RT.get(Object,Object,Object)`)/arithmetic/compare/
+    data-literals
     incl. `N`/`M` bignum literals (real `clojure.lang.BigInt`/
     `java.math.BigDecimal`, composing with the existing `+`/`-`/`*`/`=`
     ops), regex literals (`#"..."` -> `java.util.regex.Pattern`), and
@@ -636,6 +640,20 @@ host는 `Numbers.add(Numbers.add(a,b),c)`처럼 **왼쪽부터 fold**해서
 `ArityException`으로 거부하는 것 확인, 그대로 재현. U6: 152→161. DDC 행:
 93→97. 전체 `-M:conformance`(116/116)와 `bin/clj-meta-gate`
 (`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 스물네 번째 확장 (2026-08-14, 배치 진행): 연쇄 비교(`<`/`=`/
+`>`/`>=`/`<=` 2-인자 외 arity) + `get` 3-인자 기본값.** `+`와 달리
+`<`는 3개 인자에서 fold를 안 한다는 걸 `javap -c`로 확인 —
+`(< a b c)`도 `(< a)`도 그냥 `RT.var("clojure.core","<").getRawRoot()`
++ `IFn.invoke`(기존 `core-fn-call` 메커니즘과 정확히 동일)였다. 그래서
+정확히 2-인자일 때만 기존 `Numbers.lt` 직접 호출 fast path를 쓰고, 그
+외 arity(0/1/3+)는 `core-fn-call`로 폴백 — 이건 "동작만 같은" 게
+아니라 real host가 실제로 쓰는 바로 그 메커니즘. `get`의 3-인자
+기본값 형태(`(get m k d)`)는 다른 패턴: `javap -c` 확인 결과 별개의
+`RT.get(Object,Object,Object)` 오버로드 직접 호출이라 새 `:get3` 노드로
+추가. 전부 실제 host 대비 대조 검증(참/거짓 양쪽, key 있음/없음 양쪽).
+U6: 161→171. DDC 행: 97→100. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

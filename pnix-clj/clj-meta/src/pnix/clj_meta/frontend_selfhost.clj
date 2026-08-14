@@ -103,6 +103,8 @@
   (reflect-asm-method RT "next" [Object]))
 (def ^:private rt-get-method
   (reflect-asm-method RT "get" [Object Object]))
+(def ^:private rt-get3-method
+  (reflect-asm-method RT "get" [Object Object Object]))
 (def ^:private rt-count-method
   (reflect-asm-method RT "count" [Object]))
 (def ^:private reflector-type (Type/getType Reflector))
@@ -883,7 +885,7 @@
             :test (analyze-expr env (nth args 0))
             :then (analyze-expr env (nth args 1))
             :else (analyze-expr env (nth args 2))})
-      (< = > >= <= quot rem get)
+      (quot rem)
       (do
         (when-not (= 2 (count args))
           (throw (ex-info "tiny analyzer: binary op arity"
@@ -892,6 +894,46 @@
          :fn op
          :lhs (analyze-expr env (first args))
          :rhs (analyze-expr env (second args))})
+      ;; Unlike `+`/`-`/`*`, real host does NOT inline-fold `<`/`=`/`>`/
+      ;; `>=`/`<=` for arities other than exactly 2 -- confirmed via
+      ;; `javap -c` on `(< a b c)` AND `(< a)`: both compile to a plain
+      ;; `RT.var("clojure.core","<").getRawRoot()` + `IFn.invoke(...)`
+      ;; call, the SAME general Var-call mechanism `core-fn-call` already
+      ;; uses, not a chained/folded `Numbers.lt` sequence. So the 2-arg
+      ;; case keeps the existing direct `Numbers.lt`-style `:binary` fast
+      ;; path (matching real host's own 2-arg inliner), and any OTHER
+      ;; arity falls back to `core-fn-call` -- which is not merely
+      ;; behaviorally equivalent here, it is the exact same bytecode
+      ;; mechanism real host itself falls back to.
+      (< = > >= <=)
+      (if (= 2 (count args))
+        {:op :binary
+         :fn op
+         :lhs (analyze-expr env (first args))
+         :rhs (analyze-expr env (second args))}
+        {:op :core-fn-call
+         :fn-name (name op)
+         :args (mapv #(analyze-expr env %) args)})
+      ;; `get` has a real 2-arg AND 3-arg (default value) form on real
+      ;; host, each a DIFFERENT direct `RT.get` overload -- confirmed via
+      ;; `javap -c` on `(get m k d)`: `RT.get(Object,Object,Object)`, not a
+      ;; Var-call fallback like the comparison ops above.
+      get
+      (cond
+        (= 2 (count args))
+        {:op :binary
+         :fn op
+         :lhs (analyze-expr env (first args))
+         :rhs (analyze-expr env (second args))}
+
+        (= 3 (count args))
+        {:op :get3
+         :map (analyze-expr env (first args))
+         :key (analyze-expr env (second args))
+         :default (analyze-expr env (nth args 2))}
+
+        :else
+        (throw (ex-info "tiny analyzer: get arity" {:form form})))
       ;; `+`/`-`/`*` are variadic on real host, unlike the strictly-binary
       ;; comparison ops above -- confirmed via `javap -c` that `(+ a b c)`
       ;; compiles to LEFT-FOLDED nested `Numbers.add` calls
@@ -1330,6 +1372,13 @@
     = (do
         (.invokeStatic ga util-type util-equiv-method)
         (.box ga Type/BOOLEAN_TYPE))))
+
+(defn- emit-get3
+  [^GeneratorAdapter ga env {:keys [map key default]}]
+  (emit-expr ga env map)
+  (emit-expr ga env key)
+  (emit-expr ga env default)
+  (.invokeStatic ga rt-type rt-get3-method))
 
 (defn- emit-unary
   [^GeneratorAdapter ga env {:keys [fn arg]}]
@@ -1940,6 +1989,7 @@
     :const (emit-const ga (:value node))
     :local (emit-local ga env (:name node))
     :binary (emit-binary ga env node)
+    :get3 (emit-get3 ga env node)
     :unary (emit-unary ga env node)
     :vector (emit-vector ga env (:items node))
     :map (emit-map ga env (:entries node))
@@ -2615,6 +2665,46 @@
     :source "(fn [a] (* a))"
     :args [7]
     :expected 7}
+   {:id :tiny-chained-lt-three-args-true
+    :source "(fn [a b c] (< a b c))"
+    :args [1 2 3]
+    :expected true}
+   {:id :tiny-chained-lt-three-args-false
+    :source "(fn [a b c] (< a b c))"
+    :args [1 3 2]
+    :expected false}
+   {:id :tiny-chained-lt-one-arg
+    :source "(fn [a] (< a))"
+    :args [5]
+    :expected true}
+   {:id :tiny-chained-eq-three-args-true
+    :source "(fn [a b c] (= a b c))"
+    :args [1 1 1]
+    :expected true}
+   {:id :tiny-chained-eq-three-args-false
+    :source "(fn [a b c] (= a b c))"
+    :args [1 1 2]
+    :expected false}
+   {:id :tiny-chained-gt-three-args
+    :source "(fn [a b c] (> a b c))"
+    :args [3 2 1]
+    :expected true}
+   {:id :tiny-chained-lte-three-args
+    :source "(fn [a b c] (<= a b c))"
+    :args [1 1 2]
+    :expected true}
+   {:id :tiny-chained-gte-three-args
+    :source "(fn [a b c] (>= a b c))"
+    :args [3 3 2]
+    :expected true}
+   {:id :tiny-get3-key-present
+    :source "(fn [m k d] (get m k d))"
+    :args [{:a 1} :a 99]
+    :expected 1}
+   {:id :tiny-get3-key-missing
+    :source "(fn [m k d] (get m k d))"
+    :args [{:a 1} :b 99]
+    :expected 99}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

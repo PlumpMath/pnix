@@ -439,6 +439,17 @@ top-line claim, but the substance is much closer than "false" implies:
   별도 클래스가 필요, `javap` 확인은 아직 안 함). 각각 자체 multi-fixture
   슬라이스이며, 그중 몇몇(deftype/reify/letfn/중첩 closure)은 그 자체로
   진짜 크다(다중 클래스 생성이 필요).
+
+  **24번째 슬라이스, 2026-08-14 (배치 진행): 연쇄 비교 + `get` 3-인자**
+  (161→171). `+`와 달리 `<`는 3개 인자에서 fold 안 함 — `javap -c`
+  확인: `(< a b c)`도 `(< a)`도 그냥 기존 `core-fn-call`과 똑같은
+  Var-call(`RT.var`+`IFn.invoke`). 정확히 2-인자만 기존 `Numbers.lt`
+  fast path, 나머지 arity는 `core-fn-call` 폴백 — behavior-equivalence가
+  아니라 real host가 실제로 쓰는 바로 그 메커니즘. `get` 3-인자
+  기본값(`(get m k d)`)은 별개 패턴 — `RT.get(Object,Object,Object)`
+  직접 호출이라 새 `:get3` 노드 추가. DDC 행: 97→100. `-M:conformance`
+  116/116 영향 없음, `bin/clj-meta-gate` `metacircular gate: READY`,
+  회귀 없음.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

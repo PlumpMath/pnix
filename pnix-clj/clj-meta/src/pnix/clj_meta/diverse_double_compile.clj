@@ -644,7 +644,19 @@
    {:id :mini-backend-variadic-times-three-args
     :source "(fn [a b c] (* a b c))"
     :args [2 3 4]
-    :expected 24}])
+    :expected 24}
+   {:id :mini-backend-chained-lt-three-args
+    :source "(fn [a b c] (< a b c))"
+    :args [1 2 3]
+    :expected true}
+   {:id :mini-backend-chained-eq-three-args
+    :source "(fn [a b c] (= a b c))"
+    :args [1 1 1]
+    :expected true}
+   {:id :mini-backend-get3-key-missing
+    :source "(fn [m k d] (get m k d))"
+    :args [{:a 1} :b 99]
+    :expected 99}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
