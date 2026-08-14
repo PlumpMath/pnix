@@ -64,12 +64,23 @@ Surface matrix gate (fail-closed inventory):
 Delegated to `pnix.clr-meta.main` (tool profile), **not** full Clojure:
 
 - Exactly **one** form (reader evaluation disabled; tagged/conditional readers
-  rejected).
+  rejected) unless `--multi-form` / `--multi-e` (tool-eval-multi profile).
 - Value domain restricted to the **admitted portable form domain** (outside →
   fail closed before eval).
 - Evaluation via **physical evaluator generation 2** (nested interpreter lane;
   **not** Compiler Stage1–15/N).
 - No `load-string` path on this tool surface.
+
+**Result map (tests / Stage gates):** successful and failed tool-eval results
+include at least:
+
+| Key | Meaning |
+|-----|---------|
+| `:profile` | e.g. `:tool-eval` or multi-form profile |
+| `:form-count` | number of top-level forms evaluated (1 for single `-e`) |
+
+Do not assert exact EDN/map equality against pre-multi-form shapes; pin the
+admitted keys + value (or use the named surface/multi gates).
 
 So `clojure-clr` is a **name-compatible sliver**, not “Clojure on CLR for
 arbitrary projects.”

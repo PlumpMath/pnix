@@ -1,8 +1,8 @@
 # Host env P2 / P3 + next product tracks (planning)
 
-**Status:** dual-axis + library import **closed** (smoke 10/10, 2026-08-14).  
-**Doctrine:** [HOST_DEV_ENV.md](HOST_DEV_ENV.md) · [HOST_IMPORT.md](HOST_IMPORT.md)  
-**Local regression:** `./bin/host-import-smoke`
+**Status:** dual-axis + library import **closed enough** (2026-08-14).  
+**Doctrine / Day-1:** [HOST_DEV_ENV.md](HOST_DEV_ENV.md) · [HOST_IMPORT.md](HOST_IMPORT.md)  
+**Local regression:** `./bin/host-env-residual-smoke` (or PATH `./bin/host-import-smoke` after HM)
 
 This file is the **owner-facing plan** for optional follow-ups. Hard items stay
 planned until explicitly pulled. Easy items may land as small examples/CI.
@@ -185,3 +185,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | host-import CI: clr examples smoke SKIPs without substrate (not FAIL) |
 | 2026-08-14 | oracle D: attrNames/attrValues/elem/genList reject null/bad length (wrong VALUE) |
 | 2026-08-14 | oracle D: fromJSON/compareVersions/dirOf/baseNameOf/toJSON-fn; with non-attrset no-op |
+| 2026-08-14 | Day-1 checklist in HOST_DEV_ENV; host-import-smoke python3; tool-eval result keys doc |

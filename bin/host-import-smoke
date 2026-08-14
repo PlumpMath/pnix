@@ -33,14 +33,20 @@ else
 fi
 
 # --- hy ---
-if command -v python >/dev/null 2>&1; then
-  if out=$(python -c "import pnix_hy as ph; print(ph.eval_file('$TMP'))" 2>/dev/null); then
+hy_py=""
+if command -v python3 >/dev/null 2>&1; then
+  hy_py=python3
+elif command -v python >/dev/null 2>&1; then
+  hy_py=python
+fi
+if [[ -n "$hy_py" ]]; then
+  if out=$("$hy_py" -c "import pnix_hy as ph; print(ph.eval_file('$TMP'))" 2>/dev/null); then
     [[ "$out" == *3* ]] && ok "hy eval_file → $out" || bad "hy eval_file unexpected: $out"
   else
     bad "hy eval_file (is pnix_hy on PYTHONPATH?)"
   fi
 else
-  skp "python not on PATH"
+  skp "python/python3 not on PATH"
 fi
 
 # --- cljs ---

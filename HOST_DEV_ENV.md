@@ -3,8 +3,34 @@
 **Audience:** humans, Claude/Codex sessions, and anyone wiring `~/dot-nix` or
 a host flake. Read this before inventing a third naming scheme.
 
-**Last updated:** 2026-08-14 (import smoke + local library exports)  
-**HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md` (PATH packages, ShellCheck rules)
+**Last updated:** 2026-08-14 (day-1 checklist + residual cut closed)  
+**HM mirror:** `~/dot-nix/dev/PNIX-HOSTS.md` (PATH packages, ShellCheck rules)  
+**Status:** dual-axis + host-import + **local** library feeds are **closed enough** for
+day-to-day use. Optional product tracks: [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md).
+
+---
+
+## Day-1 checklist (developers / agents)
+
+Do these in order. Prefer **local/personal feeds** — no Maven/npm/crates.io/nuget.org.
+
+| Step | Command / action | Expect |
+|------|------------------|--------|
+| 0 | Read this file + [HOST_IMPORT.md](HOST_IMPORT.md) | dual-axis clear |
+| 1 | HM or host flake: library env on PATH (`pnix-*-library` / `*-refs`) | `PNIX_*` / `PYTHONPATH` / `NODE_PATH` set |
+| 2 | Checkout smokes (no full product gates): | |
+| 2a | `./bin/host-import-examples-smoke` | demos → `3` (skips missing tools) |
+| 2b | `./bin/host-library-smokes` | local export → `3` where tools exist |
+| 2c | `./bin/host-env-residual-smoke` | 2a+2b aggregate |
+| 3 | PATH inject smoke (after HM rebuild): `./bin/host-import-smoke` | eval `1+2` per host on PATH |
+| 4 | Per-host product gate only when changing that host: `cd pnix-<h> && nix run .#gate` | host-local |
+
+Mini demos live under [examples/host-import/](examples/host-import/).  
+CI: `.github/workflows/host-import.yml` (layout + clj/hy/rs examples + library print).
+
+**Closed for day-to-day** means: import API, local export scripts, examples, and CI
+guards exist. It does **not** mean Stage15/N, public registries, or a common `.px`
+package across five hosts.
 
 ---
 
@@ -193,20 +219,31 @@ They share a name but are **not** the same program. Prefer docs that say
 
 ## Smoke (orientation)
 
+Monorepo aggregators (preferred):
+
 ```bash
-# host-main library inject
+./bin/host-import-examples-smoke   # mini demos under examples/host-import/*
+./bin/host-library-smokes          # local export feeds
+./bin/host-env-residual-smoke      # both of the above
+./bin/host-import-smoke            # PATH tools after HM (skip if not on PATH)
+```
+
+Ad-hoc host-main / pnix-main:
+
+```bash
+# host-main library inject (needs HM/library env)
 clojure -e '(+ 1 2)'                    # clj
-python -c 'import pnix_hy'              # hy (with PYTHONPATH)
+python3 -c 'import pnix_hy'             # hy (with PYTHONPATH)
 # cargo/rustc have PNIX_RS_* when pnix-rs-rs is on PATH
 # node has NODE_PATH when pnix-cljs-host is on PATH
 
-# pnix-main
-# nix run .#pnix-clj-pnix   (from pnix-clj/)
+# pnix-main (from that host's flake root)
+# nix run .#pnix-clj-pnix
 # nix run .#pnix-hy-pnix
 # nix run .#pnix-rs-pnix
 # nix run .#pnix-cljs-pnix
 # nix run .#pnix-clr-pnix
 
-# clr library
+# clr local library
 cd pnix-clr && ./bin/export-pnix-clr-library && cat pnix-clr/target/pnix-clr-library/share/pnix-clr/refs.env
 ```

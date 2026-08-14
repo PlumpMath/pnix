@@ -14,12 +14,16 @@ Per-host detail:
 
 HM path helpers: `pnix-<host>-library` / `pnix-<host>-refs` (see `~/dot-nix/dev/PNIX-HOSTS.md`).
 
-**P2/P3 roadmap:** [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md)  
+**P2/P3 roadmap:** [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md) (host-env residual **closed enough**)  
+**Day-1 checklist:** [HOST_DEV_ENV.md](HOST_DEV_ENV.md) § Day-1  
 **Mini examples:** [examples/host-import/](examples/host-import/)  
-**Regression:** `./bin/host-import-smoke`  
-**Local library smokes:** `./bin/host-library-smokes`  
-**Example demos:** `./bin/host-import-examples-smoke`  
-**Both (host-env residual):** `./bin/host-env-residual-smoke`
+
+| Smoke | When |
+|-------|------|
+| `./bin/host-import-examples-smoke` | checkout demos (skips missing tools) |
+| `./bin/host-library-smokes` | local export feeds |
+| `./bin/host-env-residual-smoke` | examples + libraries |
+| `./bin/host-import-smoke` | after HM: tools already on PATH |
 
 ---
 
