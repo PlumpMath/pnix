@@ -2850,9 +2850,21 @@
                   {:builtin name :arg (first args)}))
 
     :catAttrs
-    ;; Second arg must be a list. Clojure (seq nil) is empty → wrong VALUE [].
-    (when-not (vector? (second args))
+    ;; First arg is a string attr name; second is a list of attrsets.
+    ;; Non-string names used to miss every key → wrong VALUE [].
+    (cond
+      (not (string-like? (first args)))
+      (err/failed :builtin :cat-attrs-name-not-string
+                  {:builtin name :arg (first args)})
+      (not (vector? (second args)))
       (err/failed :builtin :cat-attrs-arg-not-list
+                  {:builtin name :arg (second args)})
+      :else nil)
+
+    :getAttr
+    ;; Second arg must be an attrset (unlike `?` / select-or).
+    (when-not (attrset-value? (second args))
+      (err/failed :builtin :get-attr-arg-not-attrset
                   {:builtin name :arg (second args)}))
 
     :listToAttrs

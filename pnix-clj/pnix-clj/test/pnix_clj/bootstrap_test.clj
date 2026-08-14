@@ -5854,7 +5854,17 @@
            (:reason (pnix/eval-source
                      "builtins.replaceStrings [\"a\"] [\"b\" \"c\"] \"a\""))))
     (is (= "b" (:value (pnix/eval-source
-                        "builtins.replaceStrings [\"a\"] [\"b\"] \"a\""))))))
+                        "builtins.replaceStrings [\"a\"] [\"b\"] \"a\"")))))
+  (testing "catAttrs name must be string; getAttr set must be attrset"
+    (is (= :cat-attrs-name-not-string
+           (:reason (pnix/eval-source "builtins.catAttrs 1 [ { \"1\" = 2; } ]"))))
+    (is (= :cat-attrs-name-not-string
+           (:reason (pnix/eval-source "builtins.catAttrs null [ ]"))))
+    (is (= [1 2] (:value (pnix/eval-source
+                          "builtins.catAttrs \"a\" [ { a = 1; } { a = 2; } ]"))))
+    (is (= :get-attr-arg-not-attrset
+           (:reason (pnix/eval-source "builtins.getAttr \"a\" null"))))
+    (is (= 1 (:value (pnix/eval-source "builtins.getAttr \"a\" { a = 1; }"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by

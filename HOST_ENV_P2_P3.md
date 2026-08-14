@@ -189,3 +189,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | oracle D: select-or no longer swallows intermediate missing-attr; catAttrs/listToAttrs types |
 | 2026-08-14 | oracle D: hasAttr/intersectAttrs/mapAttrs/groupBy reject null (was false/{}) |
 | 2026-08-14 | oracle D: zipAttrsWith null, genericClosure non-set, elemAt float, replaceStrings len |
+| 2026-08-14 | oracle D: catAttrs name must be string; getAttr requires attrset |
