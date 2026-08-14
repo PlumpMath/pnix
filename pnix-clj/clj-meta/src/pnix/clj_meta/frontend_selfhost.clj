@@ -101,6 +101,10 @@
   (reflect-asm-method RT "var" [String String]))
 (def ^:private var-getrawroot-method
   (reflect-asm-method Var "getRawRoot" []))
+(def ^:private reflector-invoke-noarg-instance-member-method
+  (reflect-asm-method Reflector "invokeNoArgInstanceMember" [Object String Boolean/TYPE]))
+(def ^:private reflector-set-instance-field-method
+  (reflect-asm-method Reflector "setInstanceField" [Object String Object]))
 
 (defn- next-class-name
   []
@@ -555,9 +559,22 @@
 ;; tiny language has no type hints at all, so every interop call here takes
 ;; that same fallback path on the real host too -- meaning this is not an
 ;; approximation of real host behavior, it is the same mechanism.
+;; `.-fieldName receiver` -- the real host's own dot-dash-prefixed field
+;; access syntax. Checked and dispatched BEFORE `interop-method-name` below:
+;; `.-x` also satisfies a naive "starts with `.`" test, so `field-access-name`
+;; must win first, and `interop-method-name` explicitly excludes `.-`-prefixed
+;; names as a second, redundant safeguard against that exact collision.
+(defn- field-access-name
+  [op]
+  (when (and (symbol? op) (< 2 (count (name op))) (.startsWith (name op) ".-"))
+    (subs (name op) 2)))
+
 (defn- interop-method-name
   [op]
-  (when (and (symbol? op) (< 1 (count (name op))) (.startsWith (name op) "."))
+  (when (and (symbol? op)
+             (< 1 (count (name op)))
+             (.startsWith (name op) ".")
+             (not (.startsWith (name op) ".-")))
     (subs (name op) 1)))
 
 ;; `ClassName/methodName args...` -- static interop. Real host resolves the
@@ -599,6 +616,14 @@
         {:op :new
          :class cls
          :arg (when (seq args) (analyze-expr env (first args)))})
+
+      (field-access-name op)
+      (do
+        (when-not (= 1 (count args))
+          (throw (ex-info "tiny analyzer: field access takes exactly one receiver" {:form form})))
+        {:op :field-get
+         :field (field-access-name op)
+         :receiver (analyze-expr env (first args))})
 
       (interop-method-name op)
       (do
@@ -712,6 +737,20 @@
       {:op :core-fn-call
        :fn-name "str"
        :args (mapv #(analyze-expr env %) args)}
+      set!
+      (do
+        (when-not (= 2 (count args))
+          (throw (ex-info "tiny analyzer: set! arity" {:form form})))
+        (let [[target-form value-form] args]
+          (when-not (and (seq? target-form)
+                         (= 2 (count target-form))
+                         (field-access-name (first target-form)))
+            (throw (ex-info "tiny analyzer: set! target must be a field access, (set! (.-field expr) value)"
+                            {:form form})))
+          {:op :field-set
+           :field (field-access-name (first target-form))
+           :receiver (analyze-expr env (second target-form))
+           :value (analyze-expr env value-form)}))
       (throw (ex-info "tiny analyzer: unsupported call"
                       {:form form :op op}))))))
 
@@ -1219,6 +1258,29 @@
   (doseq [arg args] (emit-expr ga env arg))
   (.invokeInterface ga ifn-type (invoke-method (count args))))
 
+;; `.-fieldName`/`set!` -- confirmed via `javap -c` on host-AOT-compiled
+;; `(.-x p)` and `(set! (.-x p) v)` for an untyped `p`: field GET goes
+;; through `Reflector.invokeNoArgInstanceMember(Object, String, boolean)`
+;; with the boolean literal `true` (distinguishing "field access" from the
+;; `false` a bare `.methodName` no-arg call uses, which also tries a
+;; zero-arg method), and `set!` goes through
+;; `Reflector.setInstanceField(Object, String, Object)`, which itself
+;; returns the assigned value -- matching Clojure's own `set!` semantics of
+;; evaluating to the value that was set.
+(defn- emit-field-get
+  [^GeneratorAdapter ga env {:keys [receiver field]}]
+  (emit-expr ga env receiver)
+  (.push ga ^String field)
+  (.push ga true)
+  (.invokeStatic ga reflector-type reflector-invoke-noarg-instance-member-method))
+
+(defn- emit-field-set
+  [^GeneratorAdapter ga env {:keys [receiver field value]}]
+  (emit-expr ga env receiver)
+  (.push ga ^String field)
+  (emit-expr ga env value)
+  (.invokeStatic ga reflector-type reflector-set-instance-field-method))
+
 (defn- emit-vector
   [^GeneratorAdapter ga env items]
   (emit-object-array ga env items)
@@ -1273,6 +1335,8 @@
     :interop-call (emit-interop-call ga env node)
     :static-interop-call (emit-static-interop-call ga env node)
     :core-fn-call (emit-core-fn-call ga env node)
+    :field-get (emit-field-get ga env node)
+    :field-set (emit-field-set ga env node)
     :loop (emit-loop ga env node)
     :recur (emit-recur ga env (:exprs node))
     :if (let [else-label (Label.)
@@ -1820,7 +1884,19 @@
    {:id :tiny-str-with-string-literal
     :source "(fn [k] (str \"value: \" k))"
     :args [42]
-    :expected "value: 42"}])
+    :expected "value: 42"}
+   {:id :tiny-field-get
+    :source "(fn [p] (.-x p))"
+    :args [(java.awt.Point. 7 9)]
+    :expected 7}
+   {:id :tiny-field-set-returns-assigned-value
+    :source "(fn [p v] (set! (.-x p) v))"
+    :args [(java.awt.Point.) 8]
+    :expected 8}
+   {:id :tiny-field-set-mutates-then-readback
+    :source "(fn [p] (do (set! (.-x p) 7) (.-x p)))"
+    :args [(java.awt.Point.)]
+    :expected 7}])
 
 (defn run
   []

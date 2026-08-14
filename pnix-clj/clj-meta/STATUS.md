@@ -93,12 +93,13 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    100 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
+    103 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
     quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
     `try` with `catch`, `finally`, or both combined/`throw`/allowlisted
     exception construction/`.methodName` instance interop/
-    `ClassName/methodName` static interop (via `clojure.lang.Reflector`)/
+    `ClassName/methodName` static interop/`.-fieldName` field access and
+    `set!` (all via `clojure.lang.Reflector`)/
     `str` (via `clojure.lang.Var` + `IFn.invoke`, the same mechanism real
     host uses for any ordinary function call))
     with ZERO calls into tools.analyzer.jvm or the host reader.
@@ -355,6 +356,26 @@ fixture로 검증해 연결함. 실제 host `eval` 대비 검증(추가 전): 2-
 아니라 빈 문자열로 처리되는 Clojure 고유 동작(`(str nil "x")` → `"x"`),
 문자열 리터럴과 섞어 쓰기. U6: 94→100. DDC 행: 64→66(2개 — mutable arg
 공유 문제와 무관한 순수 값 fixture). 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 열한 번째 확장 (2026-08-14): field access(`.-fieldName`)와
+`set!`.** host-AOT `(.-x p)`/`(set! (.-x p) v)`를 `javap -c`로 확인해
+얻은 형태: field GET은 `Reflector.invokeNoArgInstanceMember(Object,
+String, boolean)`을 `boolean=true`로 호출(`.methodName` 무인자 호출이
+쓰는 `false`와 구분 — false는 필드/무인자 메서드 둘 다 시도, true는
+필드로 확정). `set!`은 `Reflector.setInstanceField(Object, String,
+Object)`로 가는데, 이 메서드 자체가 대입된 값을 반환해 Clojure의 `set!`
+자체 의미(대입값으로 평가됨)와 정확히 일치. `.-fieldName`은 naive하게
+"`.`으로 시작"만 검사하면 기존 `.methodName` 판정과 충돌하므로(예:
+`.-x`가 `interop-method-name`에도 걸림), cond 분기 순서상
+`field-access-name`을 먼저 검사하고, `interop-method-name` 쪽에도
+`.-`로 시작하는 이름을 명시적으로 제외하는 이중 방어 추가. `set!`은
+`(set! (.-field expr) value)` 형태만 허용(다른 대입 대상 — dynamic var
+등 — 은 범위 밖, 별도 슬라이스). 실제 host `eval` 대비 검증(추가 전):
+`java.awt.Point`에서 필드 읽기, `set!`이 대입값을 반환하는지, `set!`이
+실제로 객체를 mutate하는지(대입 후 다시 읽어서 확인) 셋 다 host와 일치.
+U6: 100→103. DDC 행: 66→67(읽기 전용 fixture만 — mutation 관찰 fixture는
+공유 mutable arg 문제로 U6 전용). 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture

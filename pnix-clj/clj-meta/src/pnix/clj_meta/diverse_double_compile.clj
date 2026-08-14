@@ -508,7 +508,14 @@
    {:id :mini-backend-str-nil-arg-is-empty
     :source "(fn [a b] (str a b))"
     :args [nil "x"]
-    :expected "x"}])
+    :expected "x"}
+   ;; Read-only field access, not the set!/mutation fixture from
+   ;; frontend_selfhost.clj's own set -- same shared-mutable-arg-across-legs
+   ;; reason as the try/finally rows above.
+   {:id :mini-backend-field-get
+    :source "(fn [p] (.-x p))"
+    :args [(java.awt.Point. 7 9)]
+    :expected 7}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

@@ -232,12 +232,29 @@ top-line claim, but the substance is much closer than "false" implies:
   섞어 쓰기. DDC 행: 64→66. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
-  U6에 아직 전혀 없는 큰 표면: multi-catch, field access/`set!`, 작은 예외
-  허용목록을 넘는 일반 클래스 생성, 작은 static-interop 허용목록을 넘는
-  일반 클래스명 해석, `deftype`/`defrecord`/`reify`, `letfn`,
-  bignum/ratio/regex reader 리터럴, dynamic var, `locking`, protocol,
-  RestFn의 fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture
-  슬라이스이며, 그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
+  **11번째 슬라이스, 2026-08-14: field access(`.-fieldName`)와 `set!`**
+  (100→103). host-AOT `(.-x p)`/`(set! (.-x p) v)`를 `javap -c`로 확인:
+  field GET은 `Reflector.invokeNoArgInstanceMember(Object, String,
+  boolean)`을 `true`로 호출(`.methodName` 무인자 호출이 쓰는 `false`와
+  구분), `set!`은 `Reflector.setInstanceField(Object, String, Object)`로
+  가는데 이 메서드 자체가 대입값을 반환해 Clojure `set!`의 "대입값으로
+  평가됨" 의미와 정확히 일치. `.-x`가 naive한 "`.`으로 시작" 검사로는
+  기존 `.methodName` 판정과 충돌하므로, cond 순서상
+  `field-access-name`을 먼저 검사하고 `interop-method-name` 쪽에도
+  `.-` 제외를 명시적으로 추가하는 이중 방어. `set!`은 `(set! (.-field
+  expr) value)` 형태만 허용(dynamic var 등 다른 대입 대상은 범위 밖).
+  실제 host `eval` 대비 검증(추가 전): `java.awt.Point` 필드 읽기, `set!`
+  반환값, `set!`이 실제로 mutate하는지(대입 후 재조회) 전부 일치. DDC 행:
+  66→67(읽기 전용만 — mutation 관찰은 공유 mutable arg 문제로 U6 전용).
+  `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate` `metacircular
+  gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: multi-catch, 작은 예외 허용목록을 넘는
+  일반 클래스 생성, 작은 static-interop 허용목록을 넘는 일반 클래스명
+  해석, `deftype`/`defrecord`/`reify`, `letfn`, bignum/ratio/regex
+  reader 리터럴, dynamic var, `locking`, protocol, RestFn의
+  fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture 슬라이스이며,
+  그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
