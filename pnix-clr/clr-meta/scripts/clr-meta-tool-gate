@@ -40,8 +40,10 @@ set -e
 [[ "$tagged_rejected" == *":class :tagged-reader-disabled"* ]]
 [[ "$trailing_status" -eq 1 ]]
 [[ "$trailing_rejected" == *":class :trailing-tool-form"* ]]
+[[ "$trailing_rejected" == *":profile :tool-eval"* ]]
 [[ "$map_status" -eq 1 ]]
 [[ "$map_rejected" == *":class :non-portable-reader-value"* ]]
+[[ "$map_rejected" == *":profile :tool-eval"* ]]
 
 set +e
 rejected="$($root/bin/clojure-clr -m example.main 2>&1)"

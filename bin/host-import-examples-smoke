@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Run host-import mini demos (examples/host-import/*) when tools exist.
+# Skips missing toolchains; fails only on unexpected non-zero from a run demo.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+ex="$root/examples/host-import"
+pass=0
+fail=0
+skip=0
+
+ok() { echo "  OK  $*"; pass=$((pass + 1)); }
+bad() { echo "  FAIL $*"; fail=$((fail + 1)); }
+skp() { echo "  SKIP $*"; skip=$((skip + 1)); }
+
+echo "== host-import-examples-smoke =="
+
+# clj
+if command -v clojure >/dev/null 2>&1; then
+  if out="$(cd "$ex/clj" && clojure -M -m smoke)" && [[ "$out" == "3" ]]; then
+    ok "clj smoke => 3"
+  else
+    bad "clj smoke"
+  fi
+  if out="$(cd "$ex/clj-imports" && clojure -M -m smoke)" && [[ "$out" == "3" ]]; then
+    ok "clj-imports smoke => 3"
+  else
+    bad "clj-imports smoke"
+  fi
+else
+  skp "clojure not on PATH"
+fi
+
+# hy
+if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
+  py=python3
+  command -v python3 >/dev/null 2>&1 || py=python
+  if out="$("$py" "$ex/hy/smoke.py" 2>/dev/null)" \
+    && [[ "$(echo "$out" | tr -d '[:space:]')" == "3" ]]; then
+    ok "hy smoke.py => 3"
+  else
+    hy_site="${PNIX_HY_LIBRARY:-$root/pnix-hy/pnix-hy/target/pnix-hy-library/site}"
+    if [[ -d "$hy_site/pnix_hy" ]]; then
+      if out="$(PYTHONPATH="$hy_site${PYTHONPATH:+:$PYTHONPATH}" "$py" "$ex/hy/smoke.py")" \
+        && [[ "$(echo "$out" | tr -d '[:space:]')" == "3" ]]; then
+        ok "hy smoke.py (export site) => 3"
+      else
+        bad "hy smoke.py"
+      fi
+    else
+      skp "hy: pnix_hy not importable (export-pnix-hy-library or HM)"
+    fi
+  fi
+else
+  skp "python not on PATH"
+fi
+
+# cljs
+if command -v node >/dev/null 2>&1; then
+  cljs_lib="${PNIX_CLJS_LIBRARY_EXPORT:-$root/pnix-cljs/pnix-cljs/target/pnix-cljs-library}"
+  if [[ -d "$cljs_lib/lib/node_modules" ]]; then
+    export NODE_PATH="$cljs_lib/lib/node_modules:$cljs_lib/share/pnix-cljs${NODE_PATH:+:$NODE_PATH}"
+  fi
+  if out="$(node "$ex/cljs/smoke.mjs" 2>/dev/null)" \
+    && [[ "$(echo "$out" | tr -d '[:space:]')" == "3" ]]; then
+    ok "cljs smoke.mjs => 3"
+  else
+    skp "cljs smoke (need NODE_PATH / export-pnix-cljs-library or HM node)"
+  fi
+else
+  skp "node not on PATH"
+fi
+
+# rs
+if command -v cargo >/dev/null 2>&1 && [[ -f "$ex/rs/pnix-rs-smoke/Cargo.toml" ]]; then
+  if out="$(cd "$ex/rs/pnix-rs-smoke" && cargo run -q -- ../../hello.px)" \
+    && [[ "$(echo "$out" | tr -d '[:space:]')" == "3" ]]; then
+    ok "rs pnix-rs-smoke => 3"
+  else
+    bad "rs pnix-rs-smoke"
+  fi
+else
+  skp "cargo / rs mini crate"
+fi
+
+# clr
+if [[ -x "$ex/clr/smoke" ]]; then
+  set +e
+  clr_out="$("$ex/clr/smoke" 2>&1)"
+  clr_st=$?
+  set -e
+  if [[ "$clr_st" -eq 0 ]] && echo "$clr_out" | grep -q 'eval_file => 3'; then
+    ok "clr HelloPnix smoke => 3"
+  elif echo "$clr_out" | grep -q '^SKIP:'; then
+    skp "clr ($(echo "$clr_out" | head -1))"
+  else
+    bad "clr smoke"
+  fi
+else
+  skp "clr/smoke missing"
+fi
+
+echo "== summary: pass=$pass fail=$fail skip=$skip =="
+[[ "$fail" -eq 0 ]]

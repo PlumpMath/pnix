@@ -147,19 +147,26 @@
                        {:cause-type (str (type cause))})))))
 
 (defn- failed-result
-  [cause]
-  (if (instance? clojure.lang.ExceptionInfo cause)
-    (let [data (ex-data cause)]
-      {:schema :pnix.clr-meta.tool-eval.v1
-       :outcome-kind :failed
-       :error {:phase (or (:phase data) :tool-eval)
-               :class (or (:class data) :clr-meta-evaluation-error)
-               :message (.Message ^clojure.lang.ExceptionInfo cause)}})
-    {:schema :pnix.clr-meta.tool-eval.v1
-     :outcome-kind :failed
-     :error {:phase :tool-eval
-             :class :clr-meta-evaluation-error
-             :message (.Message ^System.Exception cause)}}))
+  "Structured failure for tool-eval family. `profile` is :tool-eval or
+  :tool-eval-multi so callers can tell which surface rejected the input."
+  [cause profile]
+  (let [base (if (instance? clojure.lang.ExceptionInfo cause)
+               (let [data (ex-data cause)]
+                 {:schema :pnix.clr-meta.tool-eval.v1
+                  :outcome-kind :failed
+                  :execution :evaluator-generation-2
+                  :profile profile
+                  :error {:phase (or (:phase data) :tool-eval)
+                          :class (or (:class data) :clr-meta-evaluation-error)
+                          :message (.Message ^clojure.lang.ExceptionInfo cause)}})
+               {:schema :pnix.clr-meta.tool-eval.v1
+                :outcome-kind :failed
+                :execution :evaluator-generation-2
+                :profile profile
+                :error {:phase :tool-eval
+                        :class :clr-meta-evaluation-error
+                        :message (.Message ^System.Exception cause)}})]
+    base))
 
 (defn evaluate-source
   "Default tool-eval: exactly one form (trailing forms fail)."
@@ -172,9 +179,9 @@
      :form-count 1
      :value ((force tool-evaluator) (read-tool-form source) tool-environment)}
     (catch clojure.lang.ExceptionInfo cause
-      (failed-result cause))
+      (failed-result cause :tool-eval))
     (catch System.Exception cause
-      (failed-result cause))))
+      (failed-result cause :tool-eval))))
 
 (defn evaluate-source-multi
   "tool-eval-multi: evaluate top-level forms left-to-right; return last value.
@@ -194,9 +201,9 @@
        :form-count (count forms)
        :value value})
     (catch clojure.lang.ExceptionInfo cause
-      (failed-result cause))
+      (failed-result cause :tool-eval-multi))
     (catch System.Exception cause
-      (failed-result cause))))
+      (failed-result cause :tool-eval-multi))))
 
 (defn -main [& args]
   (let [args (vec args)]

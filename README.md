@@ -69,7 +69,7 @@ import APIs:
 → **[HOST_IMPORT.md](HOST_IMPORT.md)** (per-host import cookbooks + packaging tiers)  
 → **[HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md)** (optional P2/P3 + residual plans)  
 → **[examples/host-import/](examples/host-import/)** (mini host-main demos)  
-→ **`./bin/host-import-smoke`** · **`./bin/host-library-smokes`** (local import / library feeds)
+→ **`./bin/host-import-smoke`** · **`./bin/host-library-smokes`** · **`./bin/host-env-residual-smoke`**
 
 | Orientation | Name pattern | Intent |
 |-------------|--------------|--------|

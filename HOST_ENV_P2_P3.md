@@ -100,7 +100,8 @@ Do **not** start without an explicit product decision.
 | **tool-eval stdin** | **landed** — single-form `-` + multi-form `--multi-form -` |
 | **clr host-import smoke** | **landed** — `examples/host-import/clr/smoke` (HelloPnix) |
 | **clr library smoke** | **landed** — `pnix-clr-library-smoke` (export API + nupkg + HelloPnix) |
-| **Still open** | further facade only with new gates; machine tail if pillar |
+| **host-env residual cut** | **closed enough (2026-08-14)** — local feeds, examples, tool-eval surfaces, CI layout |
+| **Still open (product pillars)** | further facade only with new gates; machine tail if pillar; in-process ALC |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
 
@@ -175,3 +176,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | CI: local export script layout + clj/hy(/cljs) library smokes on host-import |
 | 2026-08-14 | clr host-import ./smoke (HelloPnix); machine unsupported-node docstring honesty |
 | 2026-08-14 | export-pnix-clr-library per-TFM build fix; pnix-clr-library-smoke; HelloPnix project-ref first |
+| 2026-08-14 | host-env residual cut closed enough; tool-eval failures carry :profile; examples smoke aggregator |

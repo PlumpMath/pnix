@@ -315,8 +315,9 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 8. ~~nuget.org~~ → **dropped** (owner: personal/local feed only, 2026-08-14).
 9. ~~tool-eval-multi-e / stdin~~ → `--multi-e FORM`, `--multi-form -`
    in multi-gate (2026-08-14); default `-e` still single-form.
-10. **Next:** further tool-eval surfaces only with new named gates;
-    isolated ALC still held.
+10. ~~tool-eval fail results carry :profile~~ (2026-08-14).
+11. **Next (product, not packaging):** further tool-eval only with new named
+    gates; isolated ALC still held; Stage ladder honesty via STATUS.md.
 
 ### clr-meta residual (product, not packaging)
 - Continue stage ladder honesty via STATUS.md + design docs.

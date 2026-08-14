@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Aggregate personal host-env residual smoke (import examples + local libraries).
+# Not full per-host product gates.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+fail=0
+
+echo "======== host-env residual smoke ========"
+
+if [[ -x "$root/bin/host-import-examples-smoke" ]]; then
+  if "$root/bin/host-import-examples-smoke"; then
+    echo "== examples: PASS =="
+  else
+    echo "== examples: FAIL =="
+    fail=$((fail + 1))
+  fi
+else
+  echo "== examples: SKIP (missing script) =="
+fi
+
+echo ""
+if [[ -x "$root/bin/host-library-smokes" ]]; then
+  if "$root/bin/host-library-smokes"; then
+    echo "== libraries: PASS =="
+  else
+    echo "== libraries: FAIL =="
+    fail=$((fail + 1))
+  fi
+else
+  echo "== libraries: SKIP (missing script) =="
+fi
+
+echo ""
+if [[ "$fail" -eq 0 ]]; then
+  echo "======== host-env residual smoke: PASS ========"
+  exit 0
+fi
+echo "======== host-env residual smoke: FAIL ($fail) ========"
+exit 1

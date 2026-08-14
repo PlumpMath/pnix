@@ -17,7 +17,9 @@ HM path helpers: `pnix-<host>-library` / `pnix-<host>-refs` (see `~/dot-nix/dev/
 **P2/P3 roadmap:** [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md)  
 **Mini examples:** [examples/host-import/](examples/host-import/)  
 **Regression:** `./bin/host-import-smoke`  
-**Local library smokes (all hosts):** `./bin/host-library-smokes`
+**Local library smokes:** `./bin/host-library-smokes`  
+**Example demos:** `./bin/host-import-examples-smoke`  
+**Both (host-env residual):** `./bin/host-env-residual-smoke`
 
 ---
 
