@@ -93,7 +93,11 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    178 fixtures (fn/if/do/let/loop-recur/computed call heads (`((f x)
+    182 fixtures (fn/if/do/let/loop-recur/`recur` at a `fn` body's own
+    tail position with no enclosing `loop` (real stack-safe tail
+    recursion, distinct from named self-recursion which does a real
+    `IFn.invoke`; targets the method's own argument slots via the same
+    GOTO-loop mechanism `loop`/`recur` already implements)/computed call heads (`((f x)
     99)`, cast-and-invoke whatever the head expression itself produces,
     no Var/local lookup) incl. keyword-as-fn (`(:a m)`) for free/named
     self-recursive `fn`
@@ -689,6 +693,25 @@ keyword(`:a`)도 이미 `:const`로 analyze되고(`emit-const`가 처리)
 `clojure.lang.Keyword`가 `IFn`을 구현하니 `(:a m)`(keyword-as-function
 맵 조회)도 새 코드 없이 그냥 통과 — 라이브로 확인하고 fixture 추가.
 U6: 175→178. DDC 행: 102→104. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 스물일곱 번째 확장 (2026-08-14, 배치 진행): `fn` body 자체
+tail 위치의 `recur` (진짜 stack-safe 꼬리재귀).** 지금까지 `recur`는
+명시적 `loop` 안에서만 됐고, `(fn [n] (if (= n 0) 0 (recur (- n
+1))))`처럼 `loop` 없이 `fn` body 꼬리 위치에서 바로 쓰면 "recur outside
+loop"였다. 이건 25번째 슬라이스의 named self-recursion(진짜
+`IFn.invoke` 재호출이라 스택이 계속 쌓임)과는 **의미적으로 다른**
+기능 — `javap -c` 확인: real host는 `astore`로 인자 슬롯에 재저장하고
+메서드 맨 위로 `goto`, 스택이 안 쌓이는 진짜 루프. 기존 `loop`/`recur`의
+GOTO 메커니즘을 일반화해서(`recur-target-key`의 slot을 `{:kind
+:local}`/`{:kind :arg}`로 태깅) `analyze-fn-clause`가 각 arity 절
+env에 자기 param들을 recur target으로 미리 깔아두고, `emit-class`가
+각 `invoke(N)`/`doInvoke` 메서드 맨 앞에 label을 찍어둠. 중첩 `loop`가
+같은 env key로 자연스럽게 shadow하는 것도 확인(라이브: `recur`가
+`loop`를 타겟해야 하는 경우 실제로 `loop`를 타겟함). `(f 100000)`으로
+스택 안 쌓이는 것 직접 확인(named self-recursion이었다면
+StackOverflow 위험 구간), variadic arity에서도 동작 확인. U6: 178→182.
+DDC 행: 104→106. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture

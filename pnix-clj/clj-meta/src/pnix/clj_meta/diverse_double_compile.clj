@@ -672,7 +672,15 @@
    {:id :mini-backend-keyword-as-fn
     :source "(fn [m] (:a m))"
     :args [{:a 42}]
-    :expected 42}])
+    :expected 42}
+   {:id :mini-backend-fn-tail-recur
+    :source "(fn [n] (if (= n 0) 0 (recur (- n 1))))"
+    :args [100000]
+    :expected 0}
+   {:id :mini-backend-fn-tail-recur-variadic
+    :source "(fn [n & r] (if (= n 0) r (recur (- n 1) (cons n r))))"
+    :args [3]
+    :expected '(1 2 3)}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

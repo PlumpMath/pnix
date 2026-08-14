@@ -469,6 +469,21 @@ top-line claim, but the substance is much closer than "false" implies:
   추가. DDC 행: 102→104. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **27번째 슬라이스, 2026-08-14 (배치 진행): `fn` body 자체 tail 위치의
+  `recur`** (178→182). 지금까지 `loop` 없이 `fn` body 꼬리에서 바로
+  `recur`하면 "recur outside loop"였음 — 25번째 슬라이스의 named
+  self-recursion(진짜 `IFn.invoke` 재호출, 스택 쌓임)과는 의미가 다른
+  기능. `javap -c` 확인: real host는 인자 슬롯에 `astore`하고 메서드
+  맨 위로 `goto`, 스택 안 쌓이는 진짜 루프. 기존 `loop`/`recur`의
+  GOTO 메커니즘을 일반화(`recur-target-key`의 slot을 `{:kind
+  :local}`/`{:kind :arg}`로 태깅)해서 `analyze-fn-clause`가 각 arity
+  절 env에 자기 param을 recur target으로 미리 깔고, `emit-class`가
+  각 메서드 맨 앞에 label을 찍음. 중첩 `loop`가 같은 env key로 자연
+  shadow하는 것도 확인. `(f 100000)`으로 스택 안 쌓이는 것 직접
+  확인(named self-recursion이었으면 StackOverflow 위험 구간), variadic
+  arity도 동작 확인. DDC 행: 104→106. `-M:conformance` 116/116 영향
+  없음, `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
   protocol, 중첩 `fn` 리터럴(진짜 closure — free variable을 캡처하는
   별도 클래스가 필요, `javap` 확인은 아직 안 함). 각각 자체 multi-fixture

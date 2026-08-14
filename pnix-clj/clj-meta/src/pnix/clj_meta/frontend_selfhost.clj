@@ -1205,7 +1205,19 @@
                      (= (count all-names) (count (distinct all-names))))
         (throw (ex-info "tiny analyzer: malformed fn clause" {:clause clause})))
       (let [env (cond-> (zipmap all-names (repeat true))
-                  fn-name (assoc fn-name true))]
+                  fn-name (assoc fn-name true)
+                  ;; `recur` at the fn body's own tail position (no
+                  ;; enclosing `loop`) targets THIS clause's own params --
+                  ;; confirmed via `javap -c` on a host-AOT-compiled
+                  ;; `(fn [n] (if (= n 0) 0 (recur (- n 1))))`: just a plain
+                  ;; `astore`-into-the-arg-slot + `goto` back to the
+                  ;; method's own top, the exact same GOTO-loop shape
+                  ;; `loop`/`recur` already implements here, just targeting
+                  ;; the method's argument slots instead of fresh `loop`
+                  ;; locals. A nested `loop` shadows this via the same env
+                  ;; key, matching real host's own "nearest enclosing
+                  ;; loop/fn" `recur` target rule for free.
+                  true (assoc recur-arity-key (count all-names)))]
         {:params params
          :rest-param rest-param
          :body (analyze-body env body)}))))
@@ -1869,7 +1881,15 @@
                       exprs)]
       (doseq [[temp slot] (map vector temps slots)]
         (.loadLocal ga (int temp))
-        (.storeLocal ga (int slot)))
+        ;; `loop` recur targets are fresh locals; a bare `recur` at a `fn`
+        ;; body's own tail position (no enclosing `loop`) targets the
+        ;; method's own argument slots instead -- confirmed via `javap -c`
+        ;; that real host does exactly the same `astore`-into-arg-slot,
+        ;; `GeneratorAdapter/storeArg` handles the "this" slot offset for
+        ;; instance methods automatically.
+        (case (:kind slot)
+          :local (.storeLocal ga (int (:slot slot)))
+          :arg (.storeArg ga (int (:index slot)))))
       (.goTo ga ^Label label))))
 
 (defn- emit-loop
@@ -1884,7 +1904,7 @@
         (.storeLocal ga slot)
         (recur (rest bindings)
                (assoc env name {:kind :let :slot slot})
-               (conj slots slot)))
+               (conj slots {:kind :local :slot slot})))
       (let [label (Label.)]
         (.mark ga label)
         (emit-expr ga
@@ -2115,12 +2135,18 @@
     (doseq [{:keys [params body]} (remove :rest-param arities)]
         (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
                                     (invoke-method (count params))
-                                    nil nil cw)]
+                                    nil nil cw)
+              recur-label (Label.)
+              arg-env (into (or self-env {})
+                            (map-indexed (fn [i p]
+                                           [p {:kind :arg :index i}]))
+                            params)
+              recur-slots (mapv (fn [i] {:kind :arg :index i})
+                                 (range (count params)))]
+          (.mark ga recur-label)
           (emit-expr ga
-                     (into (or self-env {})
-                           (map-indexed (fn [i p]
-                                          [p {:kind :arg :index i}]))
-                           params)
+                     (assoc arg-env recur-target-key
+                            {:label recur-label :slots recur-slots})
                      body)
           (.returnValue ga)
           (.endMethod ga)))
@@ -2140,12 +2166,18 @@
             all-params (conj params rest-param)
             ga (GeneratorAdapter. Opcodes/ACC_PUBLIC
                                   (do-invoke-method (count all-params))
-                                  nil nil cw)]
+                                  nil nil cw)
+            recur-label (Label.)
+            arg-env (into (or self-env {})
+                          (map-indexed (fn [i p]
+                                         [p {:kind :arg :index i}]))
+                          all-params)
+            recur-slots (mapv (fn [i] {:kind :arg :index i})
+                               (range (count all-params)))]
+        (.mark ga recur-label)
         (emit-expr ga
-                   (into (or self-env {})
-                         (map-indexed (fn [i p]
-                                        [p {:kind :arg :index i}]))
-                         all-params)
+                   (assoc arg-env recur-target-key
+                          {:label recur-label :slots recur-slots})
                    body)
         (.returnValue ga)
         (.endMethod ga)
@@ -2780,6 +2812,22 @@
     :source "(fn [m] (:z m))"
     :args [{:a 42}]
     :expected nil}
+   {:id :tiny-fn-tail-recur
+    :source "(fn [n] (if (= n 0) 0 (recur (- n 1))))"
+    :args [100000]
+    :expected 0}
+   {:id :tiny-fn-tail-recur-variadic
+    :source "(fn [n & r] (if (= n 0) r (recur (- n 1) (cons n r))))"
+    :args [3]
+    :expected '(1 2 3)}
+   {:id :tiny-fn-tail-recur-with-self-name
+    :source "(fn foo [n] (if (= n 0) 0 (recur (- n 1))))"
+    :args [5]
+    :expected 0}
+   {:id :tiny-nested-loop-recur-shadows-fn-recur
+    :source "(fn [n] (+ n (loop [i 0 acc 0] (if (< i 3) (recur (+ i 1) (+ acc 10)) acc))))"
+    :args [1]
+    :expected 31}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]
