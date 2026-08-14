@@ -18,8 +18,10 @@ entry file.
 | hy | `cd examples/host-import/hy && python smoke.py` |
 | cljs | `cd examples/host-import/cljs && node smoke.mjs` |
 | rs | `cd examples/host-import/rs/pnix-rs-smoke && cargo run -q -- ../../hello.px` |
-| clr | see `clr/README.md` → existing HelloPnix |
+| clr | `cd examples/host-import/clr && ./smoke` (HelloPnix + export) |
 
 Shared source: [`hello.px`](hello.px).
 
-Regression: monorepo `../../bin/host-import-smoke` (PATH tools, not these dirs).
+Regression:
+- monorepo `../../bin/host-import-smoke` (PATH tools)
+- monorepo `../../bin/host-library-smokes` (local library feeds)

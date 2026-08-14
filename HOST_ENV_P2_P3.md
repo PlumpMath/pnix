@@ -98,6 +98,7 @@ Do **not** start without an explicit product decision.
 | **hy local export** | **landed** — `export-pnix-hy-library` + library-smoke (local only) |
 | **cljs local export** | **landed** — `export-pnix-cljs-library` + library-smoke (local only) |
 | **tool-eval stdin** | **landed** — single-form `-` + multi-form `--multi-form -` |
+| **clr host-import smoke** | **landed** — `examples/host-import/clr/smoke` (HelloPnix) |
 | **Still open** | further facade only with new gates; machine tail if pillar |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
@@ -171,3 +172,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | cljs local library export + smoke; bin/host-library-smokes aggregator |
 | 2026-08-14 | tool-eval single-form stdin `-`; HOST_IMPORT local-export table for all hosts |
 | 2026-08-14 | CI: local export script layout + clj/hy(/cljs) library smokes on host-import |
+| 2026-08-14 | clr host-import ./smoke (HelloPnix); machine unsupported-node docstring honesty |

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# clr host-import mini smoke: C# Pnix.Clr.Eval.File on hello.px → 3
+#
+# Prefers monorepo checkout layout. Skips cleanly if export/dotnet missing
+# (HM-only installs may still use HelloPnix with env already set).
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+hello="$here/../hello.px"
+# examples/host-import/clr → monorepo root is ../../..
+mono="$(cd "$here/../../.." && pwd)"
+clr_root="$mono/pnix-clr"
+proj="$clr_root/csharp/examples/HelloPnix/HelloPnix.csproj"
+lib="${PNIX_CLR_LIBRARY:-$clr_root/pnix-clr/target/pnix-clr-library}"
+
+if [[ ! -f "$hello" ]]; then
+  echo "smoke: missing $hello" >&2
+  exit 2
+fi
+if [[ ! -f "$proj" ]]; then
+  echo "smoke: missing HelloPnix project at $proj" >&2
+  exit 2
+fi
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "SKIP: dotnet not on PATH"
+  exit 0
+fi
+
+# Materialize library if missing (may take a while first time).
+if [[ ! -f "$lib/manifest.json" ]]; then
+  if [[ -x "$clr_root/bin/export-pnix-clr-library" ]]; then
+    echo "smoke: exporting pnix-clr-library …"
+    (cd "$clr_root" && ./bin/export-pnix-clr-library "$lib")
+  else
+    echo "SKIP: no library at $lib and no export-pnix-clr-library"
+    exit 0
+  fi
+fi
+
+export PNIX_CLR="${PNIX_CLR:-$clr_root/bin/pnix-clr}"
+export PNIX_CLR_ROOT="${PNIX_CLR_ROOT:-$clr_root}"
+if [[ -d "${PNIX_CLR_ARTIFACT:-}" ]]; then
+  :
+elif [[ -d "$clr_root/pnix-clr/target/runtime-artifact" ]]; then
+  export PNIX_CLR_ARTIFACT="$clr_root/pnix-clr/target/runtime-artifact"
+fi
+
+# Prefer in-tree ProjectReference so HelloPnix always sees latest Pnix.Clr
+# APIs. Exported library DLLs can lag behind source; still keep export on
+# disk for props consumers. Point PNIX_CLR_LIBRARY at a missing path to
+# force ProjectReference (HelloPnix.csproj).
+export PNIX_CLR_LIBRARY="${PNIX_CLR_LIBRARY_FORCE:-/nonexistent-pnix-clr-library-for-project-ref}"
+
+# HelloPnix is net10-only in-tree.
+out="$(
+  cd "$clr_root"
+  # Capture only the final stdout line (value), not MSBuild noise.
+  dotnet run --project csharp/examples/HelloPnix -c Release -v q --no-restore 2>/dev/null -- --file "$hello" \
+    || dotnet run --project csharp/examples/HelloPnix -c Release -v q -- --file "$hello"
+)"
+# Last non-empty line is the value.
+out="$(echo "$out" | awk 'NF{line=$0} END{print line}' | tr -d '[:space:]')"
+if [[ "$out" != "3" ]]; then
+  echo "FAIL: HelloPnix --file hello.px => '$out' (want 3)" >&2
+  exit 1
+fi
+echo "3"
+echo "OK  clr host-import HelloPnix eval_file => 3"

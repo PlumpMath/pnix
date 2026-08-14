@@ -117,10 +117,10 @@
   machine's fragment. Since M7c the machine environment IS the default env
   (builtins included), so variables need no static analysis at all — an
   unbound name holds :unbound-var at run time exactly like the evaluator.
-  What still refuses statically: param patterns, dynamic attr keys,
-  dynamic-segment path bindings, non-simple let bindings, and unsupported
-  ops (:path, :import, ...). Iterative walk (an explicit node stack): the
-  probe shapes are exactly the ones a recursive walker would die on."
+  Static refusal is mainly defensive non-simple let bindings (name not a
+  string or value not a map AST) — the parser no longer produces those after
+  D22. :path / :import / dynamic keys / path attrs are in supported-ops.
+  Iterative walk (explicit node stack)."
   [ast]
   (loop [stack [ast]]
     (if (empty? stack)
