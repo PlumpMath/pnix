@@ -595,12 +595,40 @@ top-line claim, but the substance is much closer than "false" implies:
   패턴). DDC 행 변화 없음(114 유지). `-M:conformance` 116/116 영향
   없음, `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
-  U6에 아직 전혀 없는 큰 표면: protocol(defprotocol도 deftype과 같은
-  이유로 top-level 전용, 게다가 인터페이스 생성 + dispatch 함수까지
-  필요해 더 큼), `deftype`/`defrecord`의 protocol/인터페이스 구현
-  버전(지금은 필드만). 남은 gap: 중첩 closure는 1단계/단일 arity로
-  범위 제한, `letfn`은 진짜 상호재귀(생성-후-backpatch) 아직 없음,
-  `reify`는 단일 인터페이스/reference-typed 파라미터만.
+  **33번째 슬라이스, 2026-08-15: `defprotocol` + protocol method
+  dispatch** (206→210). 남은 마지막 큰 항목. `javap -p` 확인:
+  `(defprotocol Greet (greet [this]))`는 public 인터페이스(메서드당
+  abstract 메서드 하나, 전부 Object 타입 — 매칭할 기존 타입이 없어서
+  reflection 불필요) 생성. 프로토콜 메서드 호출은 fast
+  path(`checkcast Interface; invokeinterface`)만 재현 — real host의
+  full `MethodImplCache`/`-cache-protocol-fn` extend-protocol
+  디스패치는 Clojure 프로토콜 런타임 상당 부분 재구현이라 이번엔 안
+  함, `reify`(추후 `deftype`)로 직접 구현한 값에서만 동작. `deftype`과
+  같은 top-level 진입 형태의 세 번째 leading-form으로 추가
+  (`top-level-program-form?`로 일반화해서 혼합 허용). 프로토콜 메서드는
+  `*known-protocol-methods*` dynamic var registry에서 찾아 고정
+  special form으로 컴파일. `reify`의 인터페이스 해석도
+  `*known-protocol-interfaces*`를 `Class/forName`보다 먼저 확인하도록
+  확장. 단일/인자+캡처/2-메서드/deftype 혼합 전부 실제 host 대비
+  검증(U6 전용, DDC 행 미연결 — deftype과 같은 이유). DDC 행 변화
+  없음(114 유지). `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
+  **이 슬라이스 도중 인프라 사고 발견·해결**: 게이트의
+  `reproducible DDC lane`(stock Clojure 1.12.5 자체의 Maven 7단계
+  재현빌드 증거, clj-meta 코드와 무관, `:promotion/allowed? false`로
+  이미 선택적 레인)이 `clj-meta/proof/stage-chain.receipt.edn` 누락으로
+  실패해서 게이트가 `NOT READY`로 떨어짐 — 이 파일을 만드는 코드가
+  clj-meta/pnix-clj 어디에도 없음을 확인 후, `~/pnix-zero`라는 별도
+  리포에서 진짜 `stage7-gate.sh`를 찾아 실제로 재실행(Clojure를 Maven
+  으로 7번 재빌드, jar 내용 비교)해서 새로 계산된 진짜 증거로 복구.
+  가짜로 채우지 않고 실제 빌드를 끝까지 기다림.
+
+  U6에 남은 큰 gap: 중첩 closure는 1단계/단일 arity로 범위 제한,
+  `letfn`은 진짜 상호재귀(생성-후-backpatch) 아직 없음, `reify`는 단일
+  인터페이스/reference-typed 파라미터만, protocol은 fast path만(진짜
+  `extend-protocol` 디스패치 없음), `deftype`/`defrecord`의 protocol/
+  인터페이스 구현 버전은 아직(지금은 필드만).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

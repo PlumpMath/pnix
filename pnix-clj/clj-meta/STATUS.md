@@ -93,7 +93,20 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    206 fixtures (fn/if/do/let/loop-recur/`deftype` (fields only, no
+    210 fixtures (fn/if/do/let/loop-recur/`defprotocol`+protocol method
+    dispatch -- a leading top-level form (alongside `deftype`) that
+    generates a plain abstract interface (one method per protocol
+    method, all Object-typed -- no pre-existing type to reflect
+    against, unlike `reify`); a protocol method call `(methodName
+    instance args...)` compiles as a fixed special form to the exact
+    FAST-PATH shape real host itself uses when it can prove direct
+    interface implementation (`checkcast Interface; invokeinterface`),
+    not a first-class Var-bound dispatch function -- real host's full
+    `MethodImplCache`/`-cache-protocol-fn` extend-type fallback
+    machinery deliberately not reproduced; `reify`'s interface
+    resolution extended to check protocols defined earlier in the same
+    program before falling back to `Class/forName`, so `(reify
+    ProtocolName ...)` implements a protocol directly/`deftype` (fields only, no
     protocol/interface method implementations) via a NEW top-level
     program shape `(do (deftype Name [field...])... (fn ...))` --
     the only way `deftype` can appear at all, since it defines a
@@ -929,6 +942,49 @@ witness의 접근(앞쪽 deftype을 먼저 별도로 emit)이 오히려 그 진�
 전례와 같은 패턴). U6: 202→206. DDC 행 변화 없음(114→114, deftype은
 연결 불가능). 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 서른세 번째 확장 (2026-08-15): `defprotocol` + protocol method
+dispatch.** 남은 마지막 큰 항목. `javap -p`로 `(defprotocol Greet
+(greet [this]))`를 확인하니 real host는 public 인터페이스(메서드
+하나당 abstract 메서드 하나, `this` 제외하고 전부 Object 타입 — 매칭할
+기존 타입이 없어서 `reify`처럼 reflection이 필요 없음)를 생성한다.
+프로토콜 메서드 호출의 **fast path**(`javap -c` 확인: 인자가 생성된
+인터페이스를 직접 구현하면 그냥 `checkcast Interface; invokeinterface`)
+만 재현 — real host의 **full** 메커니즘은
+`AFunction.__methodImplCache`/`clojure.core/-cache-protocol-fn`으로
+`extend-protocol`이 등록한 임의 타입(예: `java.lang.String`)까지
+디스패치하는데, 이건 Clojure 프로토콜 런타임의 상당 부분을 재구현하는
+셈이라 이번엔 시도 안 함 — 이 witness의 프로토콜 메서드 호출은
+`reify`(추후 확장되면 `deftype`)로 직접 구현한 값에서만 동작.
+구현: `defprotocol`을 `deftype`과 같은 top-level 진입 형태(`(do
+(deftype/defprotocol ...)... (fn ...))`)의 세 번째 leading-form
+종류로 추가 — `deftype-program-form?`를 `top-level-program-form?`로
+일반화해서 `deftype`/`defprotocol` 혼합도 허용. 프로토콜 메서드
+이름은 `(methodName instance args...)` 호출 시점에 새 dynamic var
+registry(`*known-protocol-methods*`)에서 찾아 고정된 special form으로
+컴파일. `reify`의 인터페이스 해석도 확장해서 `*known-protocol-interfaces*`
+registry를 `Class/forName`보다 먼저 확인 — `(reify ProtocolName ...)`가
+같은 프로그램에서 먼저 정의된 프로토콜을 구현할 수 있게 함. 단일
+메서드/인자 있는 메서드+캡처/2-메서드 프로토콜/deftype과 혼합 전부
+실제 host 대비 검증(단, `deftype`과 마찬가지로 `do`-wrap 단일 문자열
+eval은 real host에서도 안 되는 케이스가 있어 — 여기선 real host 자체
+eval은 되지만 `compiler.clj`가 실패해서 — U6 전용, DDC 행 미연결).
+U6: 206→210. DDC 행 변화 없음(114 유지). 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**이 슬라이스 도중 인프라 사고 하나 발견·해결**: 전체 게이트의
+`reproducible DDC lane`(clj-meta 자신과 무관한, **stock Clojure
+1.12.5 자체**의 Maven 7단계 재현빌드 증거, `:promotion/allowed?
+false`로 이미 명시된 선택적 레인)이 `clj-meta/proof/stage-chain.receipt.edn`
+누락으로 실패해서 게이트 전체가 `NOT READY`로 떨어졌던 걸 발견. 이
+파일을 만드는 코드는 clj-meta/pnix-clj 어디에도 없음을 git 이력
+전체·삭제 이력까지 확인했고, `~/pnix-zero`라는 완전히 별도 리포에서
+진짜 `stage7-gate.sh`(Maven으로 Clojure 1.12.5를 7번 재빌드하고 jar
+내용을 서로 비교)를 찾아 **실제로 재실행**해서 새로 계산된 진짜
+증거(다이제스트 `258fdb97...`, 이전 값과 다름 — 새로 계산됐다는 뜻)로
+복구. 가짜로 채우는 대신 실제 빌드를 끝까지 기다림 — 이 프로젝트
+자신의 "정직한 부재 증거, Held 금지 fabrication" 원칙을 그대로 적용한
+사례.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

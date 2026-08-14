@@ -825,6 +825,25 @@
   (when (and (symbol? op) (< 1 (count (name op))) (.endsWith (name op) "."))
     (get *known-deftype-classes* (symbol (subs (name op) 0 (dec (count (name op))))))))
 
+;; Bound alongside `*known-deftype-classes*` by the SAME top-level program
+;; path, now generalized to also accept leading `defprotocol` forms (see
+;; `compile-source`). `*known-protocol-methods*` maps a protocol method
+;; NAME symbol to `{:interface Class :method String :arity N}` (`N` =
+;; explicit args, not counting the receiver) so `(methodName instance
+;; args...)` anywhere in the trailing `fn` compiles as a direct protocol
+;; dispatch call; `*known-protocol-interfaces*` maps the PROTOCOL name
+;; itself to its generated interface Class so `(reify ProtocolName ...)`
+;; can implement it (see `analyze-reify`'s interface resolution).
+(def ^:private ^:dynamic *known-protocol-methods* {})
+(def ^:private ^:dynamic *known-protocol-interfaces* {})
+
+(defn- known-protocol-method
+  [op arg-count]
+  (when (symbol? op)
+    (when-let [m (get *known-protocol-methods* op)]
+      (when (= (:arity m) (dec arg-count))
+        m))))
+
 (defn- analyze-call
   [env form]
   (let [[op & args] form]
@@ -833,6 +852,28 @@
       {:op :deftype-new
        :class (known-deftype-constructor-class op)
        :args (mapv #(analyze-expr env %) args)}
+
+      ;; `(methodName instance args...)` -- a protocol method call,
+      ;; confirmed via `javap -c` on real host's FAST PATH (an
+      ;; `instance?`-implements-the-generated-interface check emitted
+      ;; inline by callers, `checkcast Interface; invokeinterface
+      ;; method`): a plain interface dispatch call, nothing more. Real
+      ;; host's FULL mechanism additionally falls back to
+      ;; `clojure.core/-cache-protocol-fn` (backed by
+      ;; `AFunction.__methodImplCache`) for values that DON'T directly
+      ;; implement the generated interface -- e.g. a protocol extended onto
+      ;; `java.lang.String` via `extend-protocol` -- which is a real,
+      ;; separately-sizeable reimplementation of a chunk of Clojure's own
+      ;; protocol runtime, not attempted here: this witness's protocol
+      ;; method calls only work on values that directly `reify` (or, once
+      ;; extended, `deftype`) the protocol.
+      (known-protocol-method op (count args))
+      (let [{:keys [interface method]} (known-protocol-method op (count args))]
+        {:op :protocol-call
+         :interface interface
+         :method method
+         :instance (analyze-expr env (first args))
+         :args (mapv #(analyze-expr env %) (rest args))})
 
       (exception-constructor-class op)
       (let [cls (exception-constructor-class op)]
@@ -1434,9 +1475,10 @@
     (when-not (and (symbol? iface-sym) (not (namespace iface-sym)))
       (throw (ex-info "tiny analyzer: reify requires a single fully-qualified interface name"
                       {:form args})))
-    (let [iface (try (Class/forName (name iface-sym)) (catch Throwable _ nil))]
+    (let [iface (or (get *known-protocol-interfaces* iface-sym)
+                    (try (Class/forName (name iface-sym)) (catch Throwable _ nil)))]
       (when-not (and iface (.isInterface ^Class iface))
-        (throw (ex-info "tiny analyzer: reify interface not found (must be a fully-qualified interface name)"
+        (throw (ex-info "tiny analyzer: reify interface not found (must be a known protocol name or a fully-qualified interface name)"
                         {:interface iface-sym})))
       (let [inner-env (assoc env closure-depth-key true)
             methods (mapv #(analyze-reify-method inner-env iface %) method-forms)
@@ -1479,6 +1521,48 @@
                     {:form form})))
   {:name (second form)
    :fields (vec (nth form 2))})
+
+;; `defprotocol` -- confirmed via `javap -p` on a host-AOT-compiled
+;; `(defprotocol Greet (greet [this]))`: real host generates a public
+;; interface with one abstract method per protocol method (`this`
+;; excluded from the interface signature -- it's the receiver, not an
+;; explicit param), always Object-typed since a protocol has no
+;; pre-existing Java type to reflect against (unlike `reify`'s target
+;; interface). Also real host generates per-method dispatch FUNCTIONS
+;; (Var-bound, so protocol methods work as ordinary first-class functions)
+;; whose FULL mechanism falls back to `clojure.core/-cache-protocol-fn`
+;; for values that don't directly implement the generated interface -- a
+;; real, separately-sizeable reimplementation of a chunk of Clojure's
+;; protocol runtime (`MethodImplCache`, `extend-protocol` registration),
+;; not attempted here. This witness instead treats a protocol method call
+;; as a fixed SPECIAL FORM at each call site (`known-protocol-method`)
+;; compiling to the exact fast-path shape real host itself uses when it
+;; CAN prove the value satisfies the interface directly (`checkcast
+;; Interface; invokeinterface`) -- not a first-class Var-bound function
+;; value. Like `deftype`, this generates a NAMED top-level interface tied
+;; to the whole compile unit, so `defprotocol` can only appear as one of
+;; the leading forms of a top-level `(do (deftype/defprotocol ...)...
+;; (fn ...))` program -- see `compile-source`.
+(defn- analyze-defprotocol-form
+  [form]
+  (when-not (and (seq? form) (= 'defprotocol (first form))
+                 (< 2 (count form))
+                 (symbol? (second form)))
+    (throw (ex-info "tiny analyzer: malformed defprotocol -- expected (defprotocol Name (method [this args...]) ...)"
+                    {:form form})))
+  (let [pname (second form)
+        method-forms (drop 2 form)]
+    (when-not (every? #(and (seq? %) (symbol? (first %))
+                            (vector? (second %)) (seq (second %)))
+                      method-forms)
+      (throw (ex-info "tiny analyzer: malformed defprotocol method signature -- expected (method [this args...])"
+                      {:form form})))
+    (let [method-names (map (comp name first) method-forms)]
+      (when-not (= (count method-names) (count (distinct method-names)))
+        (throw (ex-info "tiny analyzer: duplicate defprotocol method name" {:form form}))))
+    {:name pname
+     :methods (mapv (fn [[mname params]] {:name (name mname) :arity (dec (count params))})
+                    method-forms)}))
 
 (defn- analyze-fn
   [form]
@@ -1546,6 +1630,7 @@
 (declare emit-closure)
 (declare emit-reify)
 (declare emit-deftype-new)
+(declare emit-protocol-call)
 
 (defn- emit-nil
   [^GeneratorAdapter ga]
@@ -2373,6 +2458,7 @@
     :closure (emit-closure ga env node)
     :reify (emit-reify ga env node)
     :deftype-new (emit-deftype-new ga env node)
+    :protocol-call (emit-protocol-call ga env node)
     :computed-fn-call (emit-computed-fn-call ga env node)
     :core-fn-value (emit-core-fn-value ga (:fn-name node))
     :field-get (emit-field-get ga env node)
@@ -2677,39 +2763,113 @@
     (doseq [arg args] (emit-expr ga env arg))
     (.invokeConstructor ga ctype ctor-method)))
 
-;; `(do (deftype Name [field...])... (fn ...))` -- the ONLY shape allowing
-;; `deftype` at all, since it defines a named top-level class rather than
-;; an inline expression (see `analyze-deftype-form`). Every form but the
-;; last must be a `deftype`; the last must be the `fn` this compile unit
-;; still ultimately returns -- deliberately narrow (no other top-level
-;; forms, e.g. no top-level `def`, mixed in) to keep this a small, explicit
-;; addition to `compile-source` rather than a general multi-form program
-;; model.
-(defn- deftype-program-form?
+;; The `defprotocol`-generated interface itself -- a plain abstract public
+;; interface, one abstract method per protocol method, all Object-typed
+;; (no pre-existing type to reflect against here, unlike `reify`'s
+;; target). No method BODIES: `ACC_ABSTRACT` methods only declare a
+;; descriptor, `visitMethod` returns a `MethodVisitor` that's simply ended
+;; immediately with no code emitted.
+(defn- emit-protocol-interface
+  [{:keys [methods]}]
+  (let [class-name (next-class-name)
+        internal (.replace class-name \. \/)
+        cw (ClassWriter. (bit-or ClassWriter/COMPUTE_FRAMES
+                                 ClassWriter/COMPUTE_MAXS))]
+    (.visit cw Opcodes/V1_8
+            (bit-or Opcodes/ACC_PUBLIC Opcodes/ACC_INTERFACE Opcodes/ACC_ABSTRACT)
+            internal nil (.getInternalName obj-type) nil)
+    (doseq [{:keys [name arity]} methods]
+      (let [asm-method (Method. name obj-type (into-array Type (repeat arity obj-type)))]
+        (.visitEnd (.visitMethod cw (bit-or Opcodes/ACC_PUBLIC Opcodes/ACC_ABSTRACT)
+                                 (.getName asm-method) (.getDescriptor asm-method) nil nil))))
+    (.visitEnd cw)
+    (let [bytes (.toByteArray cw)
+          loader (DynamicClassLoader.
+                  (.getContextClassLoader (Thread/currentThread)))
+          klass (.defineClass loader class-name bytes nil)]
+      {:class klass
+       :class-name class-name
+       :bytes bytes
+       :digest (sha256-string (seq bytes))})))
+
+;; `(methodName instance args...)` -- confirmed via `javap -c` on real
+;; host's own FAST PATH for a protocol method call: `checkcast Interface;
+;; invokeinterface method`, exactly this.
+(defn- emit-protocol-call
+  [^GeneratorAdapter ga env {:keys [interface method instance args]}]
+  (let [iface-type (Type/getType ^Class interface)
+        asm-method (Method. method obj-type (into-array Type (repeat (count args) obj-type)))]
+    (emit-expr ga env instance)
+    (.checkCast ga iface-type)
+    (doseq [arg args] (emit-expr ga env arg))
+    (.invokeInterface ga iface-type asm-method)))
+
+;; `(do (deftype/defprotocol ...)... (fn ...))` -- the ONLY shape allowing
+;; `deftype`/`defprotocol` at all, since both define a NAMED top-level
+;; class/interface rather than an inline expression (see
+;; `analyze-deftype-form`/`analyze-defprotocol-form`). Every form but the
+;; last must be one of the two; the last must be the `fn` this compile
+;; unit still ultimately returns -- deliberately narrow (no other
+;; top-level forms, e.g. no top-level `def`, mixed in) to keep this a
+;; small, explicit addition to `compile-source` rather than a general
+;; multi-form program model.
+(defn- top-level-program-form?
   [form]
   (and (seq? form) (= 'do (first form)) (< 1 (count form))
-       (every? #(and (seq? %) (= 'deftype (first %))) (butlast (rest form)))
+       (every? #(and (seq? %) (contains? #{'deftype 'defprotocol} (first %)))
+               (butlast (rest form)))
        (seq? (last form)) (= 'fn (first (last form)))))
+
+;; Emits each leading `deftype`/`defprotocol` form IN ORDER, folding up
+;; the three registries `compile-source` binds around the trailing `fn`'s
+;; own compilation (`*known-deftype-classes*`, `*known-protocol-methods*`,
+;; `*known-protocol-interfaces*`) -- a plain sequential `reduce`, since a
+;; later `deftype`/`defprotocol` in the same program never needs to see an
+;; earlier one (no forward/mutual reference between top-level definitions
+;; attempted here, matching this file's other narrow-scope-on-purpose
+;; boundaries).
+(defn- emit-leading-program-forms
+  [forms]
+  (reduce
+   (fn [acc form]
+     (if (= 'deftype (first form))
+       (let [spec (analyze-deftype-form form)
+             artifact (emit-deftype-class spec)]
+         (-> acc
+             (update :artifacts conj artifact)
+             (update :deftype-classes assoc (:name spec) (:class artifact))))
+       (let [spec (analyze-defprotocol-form form)
+             artifact (emit-protocol-interface spec)
+             iface (:class artifact)]
+         (-> acc
+             (update :artifacts conj artifact)
+             (update :protocol-interfaces assoc (:name spec) iface)
+             (update :protocol-methods into
+                     (map (fn [m] [(symbol (:name m))
+                                   {:interface iface :method (:name m) :arity (:arity m)}])
+                          (:methods spec)))))))
+   {:artifacts [] :deftype-classes {} :protocol-interfaces {} :protocol-methods {}}
+   forms))
 
 (defn compile-source
   [source]
   (let [form (tiny-read source)
         expanded-form (tiny-expand form)]
-    (if (deftype-program-form? expanded-form)
-      (let [deftype-forms (butlast (rest expanded-form))
+    (if (top-level-program-form? expanded-form)
+      (let [leading-forms (butlast (rest expanded-form))
             fn-form (last expanded-form)
-            deftype-specs (mapv analyze-deftype-form deftype-forms)
-            deftype-artifacts (mapv emit-deftype-class deftype-specs)
-            registry (into {} (map (fn [spec artifact] [(:name spec) (:class artifact)])
-                                   deftype-specs deftype-artifacts))]
-        (binding [*known-deftype-classes* registry]
+            {:keys [artifacts deftype-classes protocol-interfaces protocol-methods]}
+            (emit-leading-program-forms leading-forms)]
+        (binding [*known-deftype-classes* deftype-classes
+                  *known-protocol-interfaces* protocol-interfaces
+                  *known-protocol-methods* protocol-methods]
           (let [ast (analyze-fn fn-form)
                 artifact (emit-class ast)
                 f (.newInstance ^Class (:class artifact))]
             {:source source
              :form form
              :expanded-form expanded-form
-             :deftype-artifacts deftype-artifacts
+             :leading-artifacts artifacts
              :ast ast
              :artifact artifact
              :fn f})))
@@ -3448,6 +3608,22 @@
     :source "(do (deftype A [n]) (deftype B [n]) (fn [] (+ (.-n (A. 10)) (.-n (B. 20)))))"
     :args []
     :expected 30}
+   {:id :tiny-protocol-basic-dispatch
+    :source "(do (defprotocol Greet (greet [this])) (fn [] (greet (reify Greet (greet [this] :hello)))))"
+    :args []
+    :expected :hello}
+   {:id :tiny-protocol-method-with-arg-and-capture
+    :source "(do (defprotocol Adder (add-to [this x])) (fn [n] (add-to (reify Adder (add-to [this x] (+ x n))) 10)))"
+    :args [5]
+    :expected 15}
+   {:id :tiny-protocol-two-methods
+    :source "(do (defprotocol Shape (area [this]) (perimeter [this])) (fn [w h] (let [r (reify Shape (area [this] (* w h)) (perimeter [this] (* 2 (+ w h))))] (+ (area r) (perimeter r)))))"
+    :args [3 4]
+    :expected 26}
+   {:id :tiny-protocol-and-deftype-mixed-program
+    :source "(do (defprotocol Greet (greet [this])) (deftype Person [name]) (fn [] (greet (reify Greet (greet [this] :hi)))))"
+    :args []
+    :expected :hi}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]
