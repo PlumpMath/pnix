@@ -3210,10 +3210,11 @@
     (let [r (pnix/eval-source "(with { f = x: x + 1; }; (z: f z)) 41")]
       (is (= :ok (:status r)))
       (is (= 42 (:value r)))))
-  (testing "with on a non-attrset is held"
-    (let [r (pnix/eval-source "with 5; 1")]
-      (is (= :failed (:status r)))
-      (is (= :with-not-attrset (:reason r)))))
+  (testing "with on a non-attrset is a no-op (oracle: with 5; 1 => 1)"
+    ;; Pre-fix over-strict :with-not-attrset; Nix evaluates the body anyway.
+    (is (= 1 (:value (pnix/eval-source "with 5; 1"))))
+    (is (= 1 (:value (pnix/eval-source "with null; 1"))))
+    (is (= 1 (:value (pnix/eval-source "with []; 1")))))
   (testing "a name absent from both lexical and with scope is unbound"
     (let [r (pnix/eval-source "with { a = 1; }; b")]
       (is (= :failed (:status r)))
@@ -5780,7 +5781,24 @@
     (is (= :gen-list-length-not-int (:reason (pnix/eval-source "builtins.genList (x: x) 1.5"))))
     (is (= :gen-list-length-not-int (:reason (pnix/eval-source "builtins.genList (x: x) true"))))
     (is (= [] (:value (pnix/eval-source "builtins.genList (x: x) 0"))))
-    (is (= [0 1 2] (:value (pnix/eval-source "builtins.genList (x: x) 3"))))))
+    (is (= [0 1 2] (:value (pnix/eval-source "builtins.genList (x: x) 3")))))
+  (testing "string/version builtins reject non-strings (oracle wrong-VALUE class)"
+    (is (= :from-json-arg-not-string (:reason (pnix/eval-source "builtins.fromJSON 1"))))
+    (is (= :from-json-arg-not-string (:reason (pnix/eval-source "builtins.fromJSON true"))))
+    (is (= 1 (:value (pnix/eval-source "builtins.fromJSON \"1\""))))
+    (is (= :compare-versions-args-not-string
+           (:reason (pnix/eval-source "builtins.compareVersions 1 2"))))
+    (is (= -1 (:value (pnix/eval-source "builtins.compareVersions \"1\" \"2\""))))
+    (is (= :path-string-arg-not-string (:reason (pnix/eval-source "builtins.dirOf 1"))))
+    (is (= :path-string-arg-not-string (:reason (pnix/eval-source "builtins.baseNameOf 1"))))
+    (is (= :version-string-arg-not-string (:reason (pnix/eval-source "builtins.parseDrvName 1"))))
+    (is (= :version-string-arg-not-string (:reason (pnix/eval-source "builtins.splitVersion 1"))))
+    (is (= "b" (:value (pnix/eval-source "builtins.baseNameOf \"a/b\"")))))
+  (testing "toJSON rejects functions (oracle: cannot convert a function to JSON)"
+    (is (= :to-json-cannot-convert-function
+           (:reason (pnix/eval-source "builtins.toJSON (x: x)"))))
+    (is (= "null" (:value (pnix/eval-source "builtins.toJSON null"))))
+    (is (= "true" (:value (pnix/eval-source "builtins.toJSON true"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by

@@ -555,15 +555,14 @@
                          env kont))))
 
             :with
+            ;; Oracle: non-attrset with is a no-op scope (body still runs).
             (let [[_ body fenv] f]
               (if (ev/attrset-value? x)
                 (recur :eval body
                        (assoc fenv scopes-key
                               (cons x (get fenv scopes-key)))
                        kont)
-                (recur :unwind
-                       (err/failed :eval :with-not-attrset {:value x})
-                       env kont)))
+                (recur :eval body fenv kont)))
 
             :select-attr
             ;; eval-select parity, including the map?/contains? shape (not
@@ -1014,6 +1013,9 @@
    "builtins.attrValues null" "builtins.attrNames null"
    "builtins.elem 1 null" "builtins.genList (x: x) (-1)"
    "builtins.genList (x: x) 0" "builtins.genList (x: x) 3"
+   "builtins.fromJSON 1" "builtins.compareVersions 1 2"
+   "builtins.dirOf 1" "builtins.baseNameOf 1"
+   "builtins.toJSON (x: x)" "with null; 1"
    "[1 [2 [3]]]"
    "let a = 1; b = a + 1; in a + b" "let a = b + 1; b = 1; in a"
    ;; D22 dotted let (parser path->nested + machine follows evaluator)

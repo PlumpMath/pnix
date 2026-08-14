@@ -2392,6 +2392,8 @@
     ;; serialization and collect their contexts onto the result. This branch
     ;; runs unconditionally (nil only when nothing forces), because contextful
     ;; strings can hide anywhere inside the structure.
+    ;; Callables must not serialize as host maps (oracle: cannot convert a
+    ;; function to JSON).
     (let [r (force-deep (first args))]
       (if (not= :ok (:status r))
         r
@@ -2399,6 +2401,11 @@
               bail (fn [held] (throw (ex-info "held" {::held held})))
               strip (fn strip [v]
                       (cond
+                        (callable-value? v)
+                        (bail (err/failed :builtin
+                                        :to-json-cannot-convert-function
+                                        {:builtin :toJSON
+                                         :value-type (strict-type v)}))
                         (ctx-string? v)
                         (do (vswap! collected into (string-ctx v))
                             (string-content v))
@@ -2818,6 +2825,34 @@
         (err/failed :builtin :gen-list-length-negative
                     {:builtin name :arg n})
         :else nil))
+
+    ;; String-typed builtins that used (str v) / path-or-string coerce and
+    ;; produced wrong VALUEs (dirOf 1 => ".", baseNameOf 1 => "1", etc.).
+    (:dirOf :baseNameOf)
+    (let [v (first args)]
+      (when-not (or (string-like? v) (path-value? v))
+        (err/failed :builtin :path-string-arg-not-string
+                    {:builtin name :arg v})))
+
+    (:parseDrvName :splitVersion)
+    (when-not (string-like? (first args))
+      (err/failed :builtin :version-string-arg-not-string
+                  {:builtin name :arg (first args)}))
+
+    :compareVersions
+    (when-not (and (string-like? (first args))
+                   (string-like? (second args)))
+      (err/failed :builtin :compare-versions-args-not-string
+                  {:builtin name
+                   :left (first args)
+                   :right (second args)}))
+
+    :fromJSON
+    ;; Main case may accept non-strings via data.json; require a string
+    ;; (context-free check stays in finish-context-builtin).
+    (when-not (string-like? (first args))
+      (err/failed :builtin :from-json-arg-not-string
+                  {:builtin name :arg (first args)}))
 
     :pathExists
     (if *pure-eval*
@@ -4985,6 +5020,8 @@
     ;; `with attrs; body`: attrs become a fallback scope behind the lexical env
     ;; (lexical bindings still win; an inner `with` shadows an outer one). The
     ;; scope list rides in the env so closures capture it.
+    ;; Oracle (nix-instantiate): a NON-attrset with-env is not an error — the
+    ;; body still evaluates with no added scope (`with 5; 1` => 1).
     (let [env-result (force-result-value (eval-ast* env (:env-expr ast)))]
       (if (not= :ok (:status env-result))
         env-result
@@ -4993,9 +5030,7 @@
                             (cons (:value env-result)
                                   (::with-scopes env)))
                      (:body ast))
-          (err/failed :eval
-                    :with-not-attrset
-                    {:value (:value env-result)}))))
+          (eval-ast* env (:body ast)))))
 
     :lambda
     {:status :ok

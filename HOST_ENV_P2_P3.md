@@ -184,3 +184,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | oracle D: `//` requires attrset operands (was wrong VALUE via Clojure merge nil) |
 | 2026-08-14 | host-import CI: clr examples smoke SKIPs without substrate (not FAIL) |
 | 2026-08-14 | oracle D: attrNames/attrValues/elem/genList reject null/bad length (wrong VALUE) |
+| 2026-08-14 | oracle D: fromJSON/compareVersions/dirOf/baseNameOf/toJSON-fn; with non-attrset no-op |
