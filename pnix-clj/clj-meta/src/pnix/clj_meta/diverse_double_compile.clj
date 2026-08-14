@@ -580,7 +580,19 @@
    {:id :mini-backend-ratio-arithmetic
     :source "(fn [] (+ 1/3 1/3))"
     :args []
-    :expected 2/3}])
+    :expected 2/3}
+   {:id :mini-backend-binding-value-inside
+    :source "(fn [] (binding [pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var* 42] pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var*))"
+    :args []
+    :expected 42}
+   {:id :mini-backend-binding-reverts-after-normal-exit
+    :source "(fn [] (do (binding [pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var* 42] nil) pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var*))"
+    :args []
+    :expected :tiny-dynamic-var-root}
+   {:id :mini-backend-binding-reverts-after-exceptional-exit
+    :source "(fn [] (do (try (binding [pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var* 99] (throw (RuntimeException.))) (catch RuntimeException e nil)) pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var*))"
+    :args []
+    :expected :tiny-dynamic-var-root}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

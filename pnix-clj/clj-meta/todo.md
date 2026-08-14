@@ -366,10 +366,30 @@ top-line claim, but the substance is much closer than "false" implies:
   문자열로 비교. DDC 행: 78→81. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **19번째 슬라이스, 2026-08-14 (배치 진행): `binding` + dynamic var
+  deref** (134→137). `javap -c -v` 확인: real host `(binding [*x* 42]
+  *x*)`는 `push-thread-bindings`/`pop-thread-bindings`(이미 `str`에 쓴
+  `RT.var`+`IFn.invoke` 메커니즘)를 `emit-locking`과 구조적으로 동일한
+  try/finally로 감싸는 shape — 그대로 재현(behavior뿐 아니라 bytecode
+  shape까지 일치, 우회 불필요). 이 tiny 언어엔 `def`가 없어서 `binding`
+  대상 dynamic var 하나를 `frontend_selfhost.clj` 자신에 미리 선언해두고
+  allowlist로 연결. DDC 행 연결을 위해 bare/qualified 심볼 둘 다 같은
+  항목에 매칭되도록 정규화(`dynamic-var-target`) — real host
+  `eval`/`compiler.clj`가 다른 `*ns*`에서 심볼을 풀어야 해서 fixture
+  source는 fully-qualified 심볼 사용. 정상/예외 종료 둘 다 root로
+  복귀하는지 세 다리 전부 대조 검증. DDC 행: 81→84. `-M:conformance`
+  116/116 영향 없음, `bin/clj-meta-gate` `metacircular gate: READY`,
+  회귀 없음.
+
+  `letfn`은 조사 후 보류: real host가 mutual recursion을 위해 binding당
+  별도 클래스 + 상호 참조 필드를 만드는 걸 `javap -c`로 확인했는데, 지금
+  U6는 클래스를 하나만 찍는 구조라 `deftype`/`reify`급 아키텍처 확장이
+  필요함 — 그 둘과 묶어서 나중에.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
-  dynamic var, protocol, RestFn의 fixed+variadic 혼합 arity 형태. 각각
-  자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/reify)은 그 자체로
-  진짜 크다.
+  protocol, RestFn의 fixed+variadic 혼합 arity 형태. 각각 자체
+  multi-fixture 슬라이스이며, 그중 몇몇(deftype/reify/letfn)은 그 자체로
+  진짜 크다(다중 클래스 생성이 필요).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

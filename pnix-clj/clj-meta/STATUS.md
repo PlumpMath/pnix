@@ -93,12 +93,14 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    134 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
+    137 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
     incl. `N`/`M` bignum literals (real `clojure.lang.BigInt`/
     `java.math.BigDecimal`, composing with the existing `+`/`-`/`*`/`=`
     ops), regex literals (`#"..."` -> `java.util.regex.Pattern`), and
     ratio literals (`1/3` -> `clojure.lang.Ratio`, reduced/collapsed via
-    `Numbers/divide` at parse time)/quote/14 macros incl. `case` with a real no-default throw/vector-
+    `Numbers/divide` at parse time)/`binding`+dynamic-var deref (real
+    `push-thread-bindings`/`pop-thread-bindings`, exact host bytecode
+    shape)/quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
     `try` with any combination of (single- or multi-)`catch` and
     `finally`/`throw`/general class construction and general static
@@ -536,6 +538,28 @@ reduce된 numerator/denominator로 `new Ratio(BigInteger,BigInteger)`
 → `false`, 라이브 확인) fixture는 `.pattern` 문자열로 비교. U6: 130→134.
 DDC 행: 78→81. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 열아홉 번째 확장 (2026-08-14, 배치 진행): `binding` + dynamic var
+deref.** `javap -c -v`로 `(binding [*x* 42] *x*)`를 확인하니 real host는
+`push-thread-bindings`/`pop-thread-bindings`를 (이미 `str`에 쓴 것과
+같은 `RT.var`+`IFn.invoke` 메커니즘으로) `emit-locking`과 구조적으로
+동일한 try/finally로 감싸고, lock 획득/해제 자리에 push/pop을 넣는다 —
+이번엔 우회 없이 그대로 재현(behavior뿐 아니라 bytecode shape까지 일치).
+이 tiny 언어엔 `def`가 아예 없어서, `binding`이 참조할 수 있는 dynamic
+var 하나를 `frontend_selfhost.clj` 자신에 `(def ^:dynamic
+*tiny-dynamic-var* :tiny-dynamic-var-root)`로 미리 선언해두고 작은
+allowlist로 연결(`known-exception-classes`와 같은 패턴). DDC 행에
+연결하려면 real host `eval`/`compiler.clj`가 다른 `*ns*`에서도 같은
+심볼을 풀 수 있어야 해서 정규화(`dynamic-var-target`)로 bare/qualified
+심볼 둘 다 같은 항목에 매칭되게 함 — 세 다리 전부 실제로 대조 검증(정상
+종료 후 root로 복귀/예외 종료 후에도 root로 복귀 포함). U6: 134→137.
+DDC 행: 81→84. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+`letfn`은 조사만 하고 미룸: real host가 mutual recursion을 위해 binding당
+별도 클래스 + 상호 참조 필드를 생성하는 걸 확인했는데(`javap -c`), 지금
+U6는 클래스를 하나만 찍는 구조라 `deftype`/`reify`급 아키텍처 확장이
+필요함 — 그 둘과 묶어서 나중에.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

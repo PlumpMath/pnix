@@ -114,6 +114,8 @@
   (reflect-asm-method RT "var" [String String]))
 (def ^:private var-getrawroot-method
   (reflect-asm-method Var "getRawRoot" []))
+(def ^:private var-get-method
+  (reflect-asm-method Var "get" []))
 (def ^:private reflector-invoke-noarg-instance-member-method
   (reflect-asm-method Reflector "invokeNoArgInstanceMember" [Object String Boolean/TYPE]))
 (def ^:private reflector-set-instance-field-method
@@ -571,6 +573,35 @@
     (throw (ex-info "tiny analyzer: quote arity" {:form form})))
   (analyze-quoted (first args)))
 
+;; A single real, host-interned `:dynamic` Var this backend's `binding`
+;; special form (and bare-symbol deref) is allowed to target -- confirmed
+;; via `javap -c` that real host's own `binding` compiles to
+;; `push-thread-bindings`/`pop-thread-bindings` calls (via
+;; `RT.var("clojure.core", ...)` + `IFn.invoke`, the SAME generic Var-call
+;; mechanism `str` already uses) wrapped around the body in a try/finally
+;; structurally identical to `emit-locking`'s lock-acquire/monitor-exit
+;; shape. This tiny language has no `def` at all, so rather than inventing
+;; namespace-init machinery, the var this witness's `binding`/deref support
+;; targets is simply declared here in the host Clojure source and referenced
+;; by bare symbol name -- a small allowlist, same shape as
+;; `known-exception-classes` below.
+(def ^:dynamic *tiny-dynamic-var* :tiny-dynamic-var-root)
+
+(def ^:private known-dynamic-vars
+  {'*tiny-dynamic-var* ["pnix.clj-meta.frontend-selfhost" "*tiny-dynamic-var*"]})
+
+;; Matched by bare NAME regardless of any namespace qualifier on `sym`, so
+;; both `*tiny-dynamic-var*` and the fully-qualified
+;; `pnix.clj-meta.frontend-selfhost/*tiny-dynamic-var*` resolve to the same
+;; allowlist entry -- the DDC row's shared fixture source needs the
+;; qualified form so real host `eval`/`compiler.clj` (running with a
+;; different `*ns*`) can resolve it too, while this tiny reader's own
+;; standalone fixtures use the shorter bare form.
+(defn- dynamic-var-target
+  [sym]
+  (when (symbol? sym)
+    (get known-dynamic-vars (symbol (name sym)))))
+
 ;; Deliberately narrow allowlist, not general Java class resolution: this
 ;; tiny language has no way to name arbitrary host classes, so both `catch`
 ;; targets and constructible exception types (below) are restricted to a
@@ -887,6 +918,28 @@
         {:op :locking
          :lock (analyze-expr env (first args))
          :body (analyze-expr env (second args))})
+      binding
+      (do
+        ;; Deliberately narrow scope, matching `locking`'s: exactly one
+        ;; [var value] binding pair (no multi-binding `binding` vector),
+        ;; and the target var must be in the small `known-dynamic-vars`
+        ;; allowlist (this tiny language has no `def`, see there for why).
+        (when-not (and (= 2 (count args))
+                       (vector? (first args))
+                       (= 2 (count (first args))))
+          (throw (ex-info "tiny analyzer: binding requires exactly one [var value] pair and one body expression"
+                          {:form form})))
+        (let [[var-sym value-form] (first args)
+              body-form (second args)]
+          (when-not (dynamic-var-target var-sym)
+            (throw (ex-info "tiny analyzer: binding target must be a known dynamic var"
+                            {:form form})))
+          (let [[var-ns var-name] (dynamic-var-target var-sym)]
+            {:op :binding
+             :var-ns var-ns
+             :var-name var-name
+             :value (analyze-expr env value-form)
+             :body (analyze-expr env body-form)})))
       (throw (ex-info "tiny analyzer: unsupported call"
                       {:form form :op op}))))))
 
@@ -932,8 +985,15 @@
      :items (mapv #(analyze-expr env %) form)}
 
     (symbol? form)
-    (if (contains? env form)
+    (cond
+      (contains? env form)
       {:op :local :name form}
+
+      (dynamic-var-target form)
+      (let [[var-ns var-name] (dynamic-var-target form)]
+        {:op :var-deref :var-ns var-ns :var-name var-name})
+
+      :else
       (throw (ex-info "tiny analyzer: unknown local" {:symbol form})))
 
     (seq? form)
@@ -1405,6 +1465,87 @@
     (.loadLocal ga result-slot)
     (.visitTryCatchBlock ga start end handler nil)))
 
+(defn- invoke-method
+  [arity]
+  (Method. "invoke"
+           obj-type
+           (into-array Type (repeat arity obj-type))))
+
+;; Pushes `RT.var(ns, name).getRawRoot()` cast to `IFn` -- the same
+;; Var-lookup-then-invoke prelude `emit-core-fn-call` already uses for
+;; `str`, generalized here to an arbitrary ns (not just `clojure.core`) so
+;; `emit-binding` can reuse it for `push-thread-bindings`/
+;; `pop-thread-bindings`/`hash-map` without duplicating `emit-core-fn-call`
+;; itself.
+(defn- emit-var-ifn
+  [^GeneratorAdapter ga ^String var-ns ^String var-name]
+  (.push ga var-ns)
+  (.push ga var-name)
+  (.invokeStatic ga rt-type rt-var-method)
+  (.invokeVirtual ga var-type var-getrawroot-method)
+  (.checkCast ga ifn-type))
+
+(defn- emit-pop-thread-bindings
+  [^GeneratorAdapter ga]
+  (emit-var-ifn ga "clojure.core" "pop-thread-bindings")
+  (.invokeInterface ga ifn-type (invoke-method 0))
+  (.pop ga))
+
+;; `binding` -- confirmed via `javap -c -v` on a host-AOT-compiled
+;; `(binding [*x* 42] *x*)`: real host builds a one-entry map
+;; (`clojure.core/hash-map` called via the same generic Var-call mechanism
+;; as `str`) from the target Var (via `RT.var(ns,name)`, NOT `.getRawRoot`
+;; -- the map key is the Var object itself) and the new value, calls
+;; `clojure.core/push-thread-bindings` on that map, then runs the body in a
+;; try/finally structurally identical to `emit-locking`'s lock-acquire/
+;; monitor-exit shape except the \"lock\"/\"unlock\" pair is
+;; `push-thread-bindings`/`pop-thread-bindings` rather than
+;; MONITORENTER/MONITOREXIT. Reproduced exactly, not just behaviorally --
+;; this one happens to match real host's bytecode shape as well, since
+;; nothing here needed the reflective-fallback substitutions earlier
+;; interop slices required.
+(defn- emit-binding
+  [^GeneratorAdapter ga env {:keys [var-ns var-name value body]}]
+  (let [start (Label.)
+        end (Label.)
+        handler (Label.)
+        after (Label.)
+        result-slot (.newLocal ga obj-type)
+        exception-slot (.newLocal ga obj-type)]
+    (emit-var-ifn ga "clojure.core" "push-thread-bindings")
+    (emit-var-ifn ga "clojure.core" "hash-map")
+    (.push ga ^String var-ns)
+    (.push ga ^String var-name)
+    (.invokeStatic ga rt-type rt-var-method)
+    (emit-expr ga env value)
+    (.invokeInterface ga ifn-type (invoke-method 2))
+    (.invokeInterface ga ifn-type (invoke-method 1))
+    (.pop ga)
+
+    (.mark ga start)
+    (emit-expr ga env body)
+    (.storeLocal ga result-slot)
+    (.mark ga end)
+    (emit-pop-thread-bindings ga)
+    (.goTo ga after)
+
+    (.mark ga handler)
+    (.storeLocal ga exception-slot)
+    (emit-pop-thread-bindings ga)
+    (.loadLocal ga exception-slot)
+    (.throwException ga)
+
+    (.mark ga after)
+    (.loadLocal ga result-slot)
+    (.visitTryCatchBlock ga start end handler nil)))
+
+(defn- emit-var-deref
+  [^GeneratorAdapter ga {:keys [var-ns var-name]}]
+  (.push ga ^String var-ns)
+  (.push ga ^String var-name)
+  (.invokeStatic ga rt-type rt-var-method)
+  (.invokeVirtual ga var-type var-get-method))
+
 (defn- emit-try-multi-catch
   "N catch clauses, no `finally` (combining multi-catch with `finally` is a
   separate, further slice). Reverse-engineered via `javap -c -v` on a
@@ -1594,12 +1735,6 @@
   (emit-object-array ga env args)
   (.invokeStatic ga reflector-type reflector-invoke-constructor-method))
 
-(defn- invoke-method
-  [arity]
-  (Method. "invoke"
-           obj-type
-           (into-array Type (repeat arity obj-type))))
-
 ;; `str` (and, in principle, any other `clojure.core` function -- this
 ;; mechanism generalizes, though only `str` is wired up as a fixture-tested
 ;; call head this pass) is NOT compiler-special on the real host at all:
@@ -1695,6 +1830,8 @@
     :try-finally (emit-try-finally ga env node)
     :try-catch-finally (emit-try-catch-finally ga env node)
     :locking (emit-locking ga env node)
+    :binding (emit-binding ga env node)
+    :var-deref (emit-var-deref ga node)
     :try-multi-catch (emit-try-multi-catch ga env node)
     :try-multi-catch-finally (emit-try-multi-catch-finally ga env node)
     :new (emit-new ga env node)
@@ -2390,7 +2527,19 @@
    {:id :tiny-ratio-arithmetic
     :source "(fn [] (+ 1/3 1/3))"
     :args []
-    :expected 2/3}])
+    :expected 2/3}
+   {:id :tiny-binding-value-inside
+    :source "(fn [] (binding [*tiny-dynamic-var* 42] *tiny-dynamic-var*))"
+    :args []
+    :expected 42}
+   {:id :tiny-binding-reverts-after-normal-exit
+    :source "(fn [] (do (binding [*tiny-dynamic-var* 42] nil) *tiny-dynamic-var*))"
+    :args []
+    :expected :tiny-dynamic-var-root}
+   {:id :tiny-binding-reverts-after-exceptional-exit
+    :source "(fn [] (do (try (binding [*tiny-dynamic-var* 99] (throw (RuntimeException.))) (catch RuntimeException e nil)) *tiny-dynamic-var*))"
+    :args []
+    :expected :tiny-dynamic-var-root}])
 
 (defn run
   []
