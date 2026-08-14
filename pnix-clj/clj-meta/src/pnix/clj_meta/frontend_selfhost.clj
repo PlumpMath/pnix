@@ -602,6 +602,21 @@
   (when (symbol? sym)
     (get known-dynamic-vars (symbol (name sym)))))
 
+;; Real host resolves ANY non-special-form call head at compile time via its
+;; own namespace/Var machinery, throwing immediately if the symbol doesn't
+;; resolve (`Unable to resolve symbol` -- a compile-time error, confirmed
+;; live). `clojure.lang.RT.var(ns,name)` itself has no such check -- it
+;; happily interns a fresh, unbound Var for a name that doesn't exist yet,
+;; which is fine for real host since IT only ever emits that bytecode call
+;; after its own compile-time resolution already succeeded. This tiny
+;; analyzer replicates that same fail-fast discipline by checking here, at
+;; analyze time, before accepting a bare symbol as a general `clojure.core`
+;; fn reference (call head or value) -- so a genuine typo still fails
+;; loudly instead of silently compiling to a call on a bogus unbound Var.
+(defn- core-var-exists?
+  [name]
+  (some? (ns-resolve (find-ns 'clojure.core) (symbol name))))
+
 ;; Deliberately narrow allowlist, not general Java class resolution: this
 ;; tiny language has no way to name arbitrary host classes, so both `catch`
 ;; targets and constructible exception types (below) are restricted to a
@@ -889,10 +904,6 @@
           (throw (ex-info "tiny analyzer: throw arity" {:form form})))
         {:op :throw
          :expr (analyze-expr env (first args))})
-      str
-      {:op :core-fn-call
-       :fn-name "str"
-       :args (mapv #(analyze-expr env %) args)}
       set!
       (do
         (when-not (= 2 (count args))
@@ -940,8 +951,24 @@
              :var-name var-name
              :value (analyze-expr env value-form)
              :body (analyze-expr env body-form)})))
-      (throw (ex-info "tiny analyzer: unsupported call"
-                      {:form form :op op}))))))
+      (if (and (symbol? op) (core-var-exists? (name op)))
+        ;; General fallback for any `clojure.core` function not otherwise
+        ;; special-cased above (`str` was the first fixture-tested case;
+        ;; this generalizes that same mechanism to the rest of
+        ;; `clojure.core`'s public surface -- `map`/`filter`/`reduce`/
+        ;; `apply`/`conj`/`assoc`/... all resolve identically on real host,
+        ;; confirmed via `javap -c`: no special form is compiler-special
+        ;; here, every one of them is Var-lookup-then-invoke). Gated on
+        ;; `core-var-exists?` so a genuine typo/unknown symbol still fails
+        ;; at analyze time with a clear error, matching real host's own
+        ;; compile-time resolution failure, rather than silently compiling
+        ;; to a call on a freshly auto-interned unbound Var (what
+        ;; `RT.var(ns,name)` alone would do with no such check).
+        {:op :core-fn-call
+         :fn-name (name op)
+         :args (mapv #(analyze-expr env %) args)}
+        (throw (ex-info "tiny analyzer: unsupported call"
+                        {:form form :op op})))))))
 
 (defn- analyze-expr
   [env form]
@@ -992,6 +1019,9 @@
       (dynamic-var-target form)
       (let [[var-ns var-name] (dynamic-var-target form)]
         {:op :var-deref :var-ns var-ns :var-name var-name})
+
+      (core-var-exists? (name form))
+      {:op :core-fn-value :fn-name (name form)}
 
       :else
       (throw (ex-info "tiny analyzer: unknown local" {:symbol form})))
@@ -1513,6 +1543,14 @@
   (.invokeInterface ga ifn-type (invoke-method 0))
   (.pop ga))
 
+;; A bare `clojure.core` fn symbol used as a VALUE (not called), e.g. `inc`
+;; in `(map inc coll)` -- confirmed via `javap -c` that real host resolves
+;; this identically to a call head, `RT.var(ns,name).getRawRoot()` cast to
+;; `IFn`, just WITHOUT the trailing `.invoke(...)` a call site adds.
+(defn- emit-core-fn-value
+  [^GeneratorAdapter ga fn-name]
+  (emit-var-ifn ga "clojure.core" fn-name))
+
 ;; `binding` -- confirmed via `javap -c -v` on a host-AOT-compiled
 ;; `(binding [*x* 42] *x*)`: real host builds a one-entry map
 ;; (`clojure.core/hash-map` called via the same generic Var-call mechanism
@@ -1863,6 +1901,7 @@
     :static-interop-call (emit-static-interop-call ga env node)
     :general-static-interop-call (emit-general-static-interop-call ga env node)
     :core-fn-call (emit-core-fn-call ga env node)
+    :core-fn-value (emit-core-fn-value ga (:fn-name node))
     :field-get (emit-field-get ga env node)
     :field-set (emit-field-set ga env node)
     :loop (emit-loop ga env node)
@@ -2434,6 +2473,38 @@
     :source "(fn [k] (str \"value: \" k))"
     :args [42]
     :expected "value: 42"}
+   {:id :tiny-general-core-fn-call-map-with-value-arg
+    :source "(fn [coll] (map inc coll))"
+    :args [[1 2 3]]
+    :expected '(2 3 4)}
+   {:id :tiny-general-core-fn-call-filter-with-value-arg
+    :source "(fn [coll] (filter pos? coll))"
+    :args [[-1 2 -3 4]]
+    :expected '(2 4)}
+   {:id :tiny-general-core-fn-call-reduce-with-value-arg
+    :source "(fn [coll] (reduce + coll))"
+    :args [[1 2 3 4]]
+    :expected 10}
+   {:id :tiny-general-core-fn-call-apply
+    :source "(fn [coll] (apply + coll))"
+    :args [[1 2 3 4]]
+    :expected 10}
+   {:id :tiny-general-core-fn-call-conj
+    :source "(fn [coll x] (conj coll x))"
+    :args [[1 2] 3]
+    :expected [1 2 3]}
+   {:id :tiny-general-core-fn-call-assoc
+    :source "(fn [m k v] (assoc m k v))"
+    :args [{} :a 1]
+    :expected {:a 1}}
+   {:id :tiny-general-core-fn-call-vec
+    :source "(fn [coll] (vec coll))"
+    :args [(list 1 2 3)]
+    :expected [1 2 3]}
+   {:id :tiny-general-core-fn-call-into
+    :source "(fn [a b] (into a b))"
+    :args [[] [1 2 3]]
+    :expected [1 2 3]}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

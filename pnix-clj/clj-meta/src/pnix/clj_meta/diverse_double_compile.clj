@@ -600,7 +600,27 @@
    {:id :mini-backend-mixed-arity-variadic-clause
     :source "(fn ([a] a) ([a b] (+ a b)) ([a b & r] (+ (+ a b) (count r))))"
     :args [1 2 3 4]
-    :expected 5}])
+    :expected 5}
+   {:id :mini-backend-general-core-fn-call-map
+    :source "(fn [coll] (map inc coll))"
+    :args [[1 2 3]]
+    :expected '(2 3 4)}
+   {:id :mini-backend-general-core-fn-call-reduce
+    :source "(fn [coll] (reduce + coll))"
+    :args [[1 2 3 4]]
+    :expected 10}
+   {:id :mini-backend-general-core-fn-call-apply
+    :source "(fn [coll] (apply + coll))"
+    :args [[1 2 3 4]]
+    :expected 10}
+   {:id :mini-backend-general-core-fn-call-conj
+    :source "(fn [coll x] (conj coll x))"
+    :args [[1 2] 3]
+    :expected [1 2 3]}
+   {:id :mini-backend-general-core-fn-call-assoc
+    :source "(fn [m k v] (assoc m k v))"
+    :args [{} :a 1]
+    :expected {:a 1}}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

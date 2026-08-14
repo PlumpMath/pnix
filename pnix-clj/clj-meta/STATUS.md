@@ -93,7 +93,7 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    141 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
+    149 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
     incl. `N`/`M` bignum literals (real `clojure.lang.BigInt`/
     `java.math.BigDecimal`, composing with the existing `+`/`-`/`*`/`=`
     ops), regex literals (`#"..."` -> `java.util.regex.Pattern`), and
@@ -103,7 +103,11 @@ U6  frontend-selfhost
     shape)/quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn mixed with one variadic `&`
     rest-args ceiling (real `RestFn` `invoke(N)`+`doInvoke`+
-    `getRequiredArity` overrides, exact host bytecode shape)/count/
+    `getRequiredArity` overrides, exact host bytecode shape)/any
+    `clojure.core` fn as a general call head or first-class value (`map`/
+    `filter`/`reduce`/`apply`/`conj`/`assoc`/`vec`/`into`/... -- the `str`
+    mechanism generalized, gated by a real `ns-resolve` existence check so
+    an unknown symbol still fails at analyze time like real host)/count/
     `try` with any combination of (single- or multi-)`catch` and
     `finally`/`throw`/general class construction and general static
     interop (allowlisted classes via direct bytecode, any other
@@ -577,6 +581,26 @@ U6는 클래스를 하나만 찍는 구조라 `deftype`/`reify`급 아키텍처 
 그대로 성립. real host의 "고정 arity가 variadic보다 param이 많으면
 거부"(`Can't have fixed arity function with more params than variadic
 function`) 검증도 그대로 재현. U6: 137→141. DDC 행: 84→86. 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
+READY`) 녹색, 회귀 없음.
+
+**같은 날 스물한 번째 확장 (2026-08-14, 배치 진행): 임의 `clojure.core`
+함수를 일반 call head/first-class 값으로.** `str`은 처음부터 compiler
+special이 아니라 `RT.var("clojure.core","str").getRawRoot()`를 `IFn`으로
+캐스트해 호출하는 평범한 Var 룩업이었다(이전 슬라이스에서 확인) —
+이번엔 `(map inc coll)`을 `javap -c`로 확인해서 `map`(call head)과
+`inc`(그냥 값으로 전달, `.invoke` 없이 `getRawRoot()`만)가 **정확히 같은
+메커니즘**임을 재확인하고, `str` 하나만 하드코딩했던 걸 일반화 —
+`analyze-call`의 마지막 fallback과 `analyze-expr`의 심볼 fallback 둘 다
+`clojure.core`에 실제로 존재하는 아무 함수 이름이면 받아들이게 함.
+단순 allowlist가 아니라 `(ns-resolve (find-ns 'clojure.core) (symbol
+name))`로 **진짜 존재 여부**를 analyze 시점에 검증 — real host가 컴파일
+시점에 "Unable to resolve symbol"로 즉시 거부하는 것과 같은 fail-fast를
+재현(안 그러면 `RT.var`가 존재하지 않는 이름도 그냥 새 unbound Var를
+인턴해버려서, 오타가 컴파일은 통과하고 런타임에야 터짐). `map`/
+`filter`/`reduce`/`apply`/`conj`/`assoc`/`vec`/`into` 등 클로저 표준
+라이브러리 표면 전체가 새 바이트코드 하나 안 늘려도 열림. 실제 host
+대비 전부 대조 검증. U6: 141→149. DDC 행: 86→91. 전체
 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
 READY`) 녹색, 회귀 없음.
 

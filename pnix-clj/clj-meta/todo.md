@@ -397,6 +397,20 @@ top-line claim, but the substance is much closer than "false" implies:
   재현. DDC 행: 84→86. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **21번째 슬라이스, 2026-08-14 (배치 진행): 임의 `clojure.core` 함수를
+  일반 call head/값으로** (141→149). `str`이 애초에 compiler special이
+  아니라 평범한 `RT.var`+`IFn` Var 룩업이었던 걸 이전 슬라이스에서 이미
+  확인했는데, 이번엔 `(map inc coll)`을 `javap -c`로 확인해서 call
+  head(`map`)와 값으로 전달되는 인자(`inc`, `.invoke` 없이 `getRawRoot()`
+  만)가 똑같은 메커니즘임을 재확인 — `str` 하드코딩을 일반화해서
+  `analyze-call`/`analyze-expr` 둘 다 `clojure.core`에 실제 존재하는
+  아무 함수 이름이나 받아들이게 함. allowlist 아니라 `ns-resolve`로 진짜
+  존재 검증(오타는 analyze 시점에 real host처럼 즉시 거부, `RT.var`가
+  없는 이름도 그냥 인턴해버리는 함정을 막음). `map`/`filter`/`reduce`/
+  `apply`/`conj`/`assoc`/`vec`/`into` 등 표준 라이브러리 표면 전체가
+  바이트코드 추가 없이 열림. DDC 행: 86→91. `-M:conformance` 116/116
+  영향 없음, `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
   protocol. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/
   reify/letfn)은 그 자체로 진짜 크다(다중 클래스 생성이 필요).
