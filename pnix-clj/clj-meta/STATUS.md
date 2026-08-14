@@ -93,7 +93,7 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    149 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
+    152 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
     incl. `N`/`M` bignum literals (real `clojure.lang.BigInt`/
     `java.math.BigDecimal`, composing with the existing `+`/`-`/`*`/`=`
     ops), regex literals (`#"..."` -> `java.util.regex.Pattern`), and
@@ -107,7 +107,9 @@ U6  frontend-selfhost
     `clojure.core` fn as a general call head or first-class value (`map`/
     `filter`/`reduce`/`apply`/`conj`/`assoc`/`vec`/`into`/... -- the `str`
     mechanism generalized, gated by a real `ns-resolve` existence check so
-    an unknown symbol still fails at analyze time like real host)/count/
+    an unknown symbol still fails at analyze time like real host)/a local
+    (fn param or `let` binding) called as a fn, e.g. higher-order params
+    passed into `map`/count/
     `try` with any combination of (single- or multi-)`catch` and
     `finally`/`throw`/general class construction and general static
     interop (allowlisted classes via direct bytecode, any other
@@ -603,6 +605,21 @@ name))`로 **진짜 존재 여부**를 analyze 시점에 검증 — real host가
 대비 전부 대조 검증. U6: 141→149. DDC 행: 86→91. 전체
 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
 READY`) 녹색, 회귀 없음.
+
+**같은 날 스물두 번째 확장 (2026-08-14, 배치 진행): local을 함수로 호출
+(고차 함수 파라미터).** `(fn [f x] (f x))`처럼 파라미터 자체가 함수인
+경우가 이전까지 전부 "unsupported call"이었다 — `analyze-call`의
+fallback이 `clojure.core` Var 존재 여부만 체크했지 local(env에 이미
+있는 이름)은 아예 고려하지 않았기 때문. `javap -c`로 확인하니 real
+host는 이 경우 Var 룩업이 전혀 없이 그냥 local 값을 `IFn`으로
+`checkcast`해서 바로 `invokeinterface`— 이미 있던 `emit-local`을
+재사용해서 새 바이트코드 메커니즘 추가 없이 구현. env에 있는 이름이
+`core-var-exists?` 체크보다 먼저 매칭되게 해서 real host처럼 local이
+같은 이름의 `clojure.core` 함수를 shadow하는 순서도 재현. 이전
+슬라이스의 core-fn-value와 합쳐져서 `(map f coll)`처럼 local 함수를
+`map`/`filter`/`reduce`에 넘기는 것도 가능해짐. 실제 host 대비 대조
+검증. U6: 149→152. DDC 행: 91→93. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

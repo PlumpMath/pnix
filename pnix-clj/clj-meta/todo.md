@@ -411,6 +411,18 @@ top-line claim, but the substance is much closer than "false" implies:
   바이트코드 추가 없이 열림. DDC 행: 86→91. `-M:conformance` 116/116
   영향 없음, `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **22번째 슬라이스, 2026-08-14 (배치 진행): local을 함수로 호출** (고차
+  함수 파라미터, 149→152). `(fn [f x] (f x))`가 이전까지 전부
+  "unsupported call"이었음 — `analyze-call`의 fallback이 local(env)은
+  고려 안 하고 `clojure.core` Var 존재만 체크했기 때문. `javap -c`
+  확인: real host는 Var 룩업 없이 local 값을 바로 `IFn`으로 `checkcast`
+  후 `invokeinterface` — 기존 `emit-local` 재사용, 새 바이트코드 메커니즘
+  불필요. env 매칭을 `core-var-exists?`보다 먼저 둬서 local이 동명의
+  `clojure.core` 함수를 shadow하는 순서도 재현. 21번째 슬라이스의
+  core-fn-value와 합쳐져 `(map f coll)`처럼 local 함수를 `map`에 넘기는
+  것도 가능. DDC 행: 91→93. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
   protocol. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/
   reify/letfn)은 그 자체로 진짜 크다(다중 클래스 생성이 필요).

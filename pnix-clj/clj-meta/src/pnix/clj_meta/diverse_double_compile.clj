@@ -620,7 +620,15 @@
    {:id :mini-backend-general-core-fn-call-assoc
     :source "(fn [m k v] (assoc m k v))"
     :args [{} :a 1]
-    :expected {:a 1}}])
+    :expected {:a 1}}
+   {:id :mini-backend-local-fn-call-param
+    :source "(fn [f x] (f x))"
+    :args [inc 5]
+    :expected 6}
+   {:id :mini-backend-local-fn-call-passed-to-core-fn
+    :source "(fn [coll f] (map f coll))"
+    :args [[1 2 3] inc]
+    :expected '(2 3 4)}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

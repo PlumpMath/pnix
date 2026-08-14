@@ -951,7 +951,22 @@
              :var-name var-name
              :value (analyze-expr env value-form)
              :body (analyze-expr env body-form)})))
-      (if (and (symbol? op) (core-var-exists? (name op)))
+      (cond
+        ;; A local (a fn parameter, or a `let` binding) used as a call
+        ;; head, e.g. `(f x)` where `f` is itself a parameter -- confirmed
+        ;; via `javap -c` on a host-AOT-compiled `(fn [f x] (f x))`: real
+        ;; host emits exactly `aload f; checkcast IFn; aload x;
+        ;; invokeinterface IFn.invoke`, the local's already-loaded value
+        ;; cast straight to `IFn` and invoked, no Var lookup at all (it
+        ;; isn't a Var reference to begin with). Checked BEFORE the
+        ;; `core-var-exists?` fallback below since a local binding always
+        ;; shadows any same-named `clojure.core` fn, matching real host's
+        ;; own lexical-scope-first resolution order.
+        (and (symbol? op) (contains? env op))
+        {:op :local-fn-call
+         :name op
+         :args (mapv #(analyze-expr env %) args)}
+
         ;; General fallback for any `clojure.core` function not otherwise
         ;; special-cased above (`str` was the first fixture-tested case;
         ;; this generalizes that same mechanism to the rest of
@@ -964,9 +979,12 @@
         ;; compile-time resolution failure, rather than silently compiling
         ;; to a call on a freshly auto-interned unbound Var (what
         ;; `RT.var(ns,name)` alone would do with no such check).
+        (and (symbol? op) (core-var-exists? (name op)))
         {:op :core-fn-call
          :fn-name (name op)
          :args (mapv #(analyze-expr env %) args)}
+
+        :else
         (throw (ex-info "tiny analyzer: unsupported call"
                         {:form form :op op})))))))
 
@@ -1817,6 +1835,16 @@
   (doseq [arg args] (emit-expr ga env arg))
   (.invokeInterface ga ifn-type (invoke-method (count args))))
 
+;; A local (fn parameter/`let` binding) called as a fn, e.g. `(f x)` where
+;; `f` is itself a parameter -- confirmed via `javap -c`: just the local's
+;; value cast straight to `IFn` and invoked, no Var lookup at all.
+(defn- emit-local-fn-call
+  [^GeneratorAdapter ga env {:keys [name args]}]
+  (emit-local ga env name)
+  (.checkCast ga ifn-type)
+  (doseq [arg args] (emit-expr ga env arg))
+  (.invokeInterface ga ifn-type (invoke-method (count args))))
+
 ;; `.-fieldName`/`set!` -- confirmed via `javap -c` on host-AOT-compiled
 ;; `(.-x p)` and `(set! (.-x p) v)` for an untyped `p`: field GET goes
 ;; through `Reflector.invokeNoArgInstanceMember(Object, String, boolean)`
@@ -1901,6 +1929,7 @@
     :static-interop-call (emit-static-interop-call ga env node)
     :general-static-interop-call (emit-general-static-interop-call ga env node)
     :core-fn-call (emit-core-fn-call ga env node)
+    :local-fn-call (emit-local-fn-call ga env node)
     :core-fn-value (emit-core-fn-value ga (:fn-name node))
     :field-get (emit-field-get ga env node)
     :field-set (emit-field-set ga env node)
@@ -2505,6 +2534,18 @@
     :source "(fn [a b] (into a b))"
     :args [[] [1 2 3]]
     :expected [1 2 3]}
+   {:id :tiny-local-fn-call-param
+    :source "(fn [f x] (f x))"
+    :args [inc 5]
+    :expected 6}
+   {:id :tiny-local-fn-call-passed-to-core-fn
+    :source "(fn [coll f] (map f coll))"
+    :args [[1 2 3] inc]
+    :expected '(2 3 4)}
+   {:id :tiny-local-fn-call-let-bound
+    :source "(fn [x] (let [f inc] (f x)))"
+    :args [5]
+    :expected 6}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]
