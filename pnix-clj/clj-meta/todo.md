@@ -457,6 +457,18 @@ top-line claim, but the substance is much closer than "false" implies:
   경우도 검증. DDC 행: 100→102. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **26번째 슬라이스, 2026-08-14 (배치 진행): 계산된 call head +
+  keyword-as-fn** (175→178). `((constantly x) 99)`처럼 head가 심볼이
+  아니라 표현식인 경우가 전부 "unsupported call"이었음 — `javap -c`
+  확인: real host는 head가 만든 값을 그냥 `IFn`으로 checkcast해서
+  invoke, Var/local 룩업 전혀 없음 — `local-fn-call`/`core-fn-call`의
+  "cast하고 invoke" 꼬리와 같은 모양이라 `(not (symbol? op))`를 잡는
+  새 `:computed-fn-call` 노드 하나로 처리. 구현 후 발견한 덤: keyword가
+  이미 `:const`로 analyze되고 `Keyword`가 `IFn`을 구현해서
+  `(:a m)`(keyword-as-fn)도 새 코드 없이 통과 — 라이브 확인 후 fixture
+  추가. DDC 행: 102→104. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
   protocol, 중첩 `fn` 리터럴(진짜 closure — free variable을 캡처하는
   별도 클래스가 필요, `javap` 확인은 아직 안 함). 각각 자체 multi-fixture

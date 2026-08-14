@@ -664,7 +664,15 @@
    {:id :mini-backend-named-fn-mixed-arity-self-recur
     :source "(fn count-down ([n] (count-down n 0)) ([n acc] (if (= n 0) acc (count-down (- n 1) (+ acc 1)))))"
     :args [5]
-    :expected 5}])
+    :expected 5}
+   {:id :mini-backend-computed-fn-call-head
+    :source "(fn [x] ((constantly x) 99))"
+    :args [7]
+    :expected 7}
+   {:id :mini-backend-keyword-as-fn
+    :source "(fn [m] (:a m))"
+    :args [{:a 42}]
+    :expected 42}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

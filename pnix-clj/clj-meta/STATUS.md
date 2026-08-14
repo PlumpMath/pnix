@@ -93,7 +93,10 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    175 fixtures (fn/if/do/let/loop-recur/named self-recursive `fn`
+    178 fixtures (fn/if/do/let/loop-recur/computed call heads (`((f x)
+    99)`, cast-and-invoke whatever the head expression itself produces,
+    no Var/local lookup) incl. keyword-as-fn (`(:a m)`) for free/named
+    self-recursive `fn`
     (`(fn name [x] ...)`, a same-shape `this`-load self-reference, real
     host bytecode exactly)/variadic `+`/`-`/`*` (0/1/2/N
     args, left-folded exactly as real host does)/unary `-`/chained `<`/
@@ -671,6 +674,21 @@ U6: 161→171. DDC 행: 97→100. 전체 `-M:conformance`(116/116)와
 동일(라이브 확인: `(fn foo [foo] foo)` → 파라미터 값 그대로 반환).
 고정+variadic 혼합 arity와 named self-recursion을 같이 쓰는 경우도 검증.
 U6: 171→175. DDC 행: 100→102. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 스물여섯 번째 확장 (2026-08-14, 배치 진행): 계산된 call head
++ 덤으로 딸려온 keyword-as-fn.** `((constantly x) 99)`처럼 call head
+자체가 심볼이 아니라 계산되는 표현식인 경우가 전부 "unsupported
+call"이었음 — `analyze-call`의 fallback들이 죄다 `(symbol? op)`를
+전제하고 있었기 때문. `javap -c` 확인: real host는 head 표현식이 만든
+값을 그냥 `IFn`으로 checkcast해서 invoke — Var 룩업도 local 슬롯도
+없음, 기존 `local-fn-call`/`core-fn-call`의 "cast하고 invoke"하는
+꼬리 부분과 완전히 같은 모양이라 새 `:computed-fn-call` 노드 하나로
+`(not (symbol? op))`일 때를 잡아냄. 구현하고 나서 발견한 덤:
+keyword(`:a`)도 이미 `:const`로 analyze되고(`emit-const`가 처리)
+`clojure.lang.Keyword`가 `IFn`을 구현하니 `(:a m)`(keyword-as-function
+맵 조회)도 새 코드 없이 그냥 통과 — 라이브로 확인하고 fixture 추가.
+U6: 175→178. DDC 행: 102→104. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture

@@ -1026,6 +1026,19 @@
              :value (analyze-expr env value-form)
              :body (analyze-expr env body-form)})))
       (cond
+        ;; A CALL HEAD that is itself an expression, not a bare symbol,
+        ;; e.g. `((constantly x) 99)` -- confirmed via `javap -c`: real
+        ;; host just emits whatever bytecode the head expression itself
+        ;; produces, `checkcast`s the result straight to `IFn`, and
+        ;; invokes it with the args -- no Var lookup, no local slot,
+        ;; exactly the same "cast and invoke" tail `local-fn-call`/
+        ;; `core-fn-call` below already share, just with a general
+        ;; expression (not a symbol lookup) supplying the callee.
+        (not (symbol? op))
+        {:op :computed-fn-call
+         :fn-expr (analyze-expr env op)
+         :args (mapv #(analyze-expr env %) args)}
+
         ;; A local (a fn parameter, or a `let` binding) used as a call
         ;; head, e.g. `(f x)` where `f` is itself a parameter -- confirmed
         ;; via `javap -c` on a host-AOT-compiled `(fn [f x] (f x))`: real
@@ -1949,6 +1962,16 @@
   (doseq [arg args] (emit-expr ga env arg))
   (.invokeInterface ga ifn-type (invoke-method (count args))))
 
+;; A call head that is itself an expression, not a bare symbol, e.g.
+;; `((constantly x) 99)` -- confirmed via `javap -c`: whatever bytecode the
+;; head expression produces, cast straight to `IFn` and invoked.
+(defn- emit-computed-fn-call
+  [^GeneratorAdapter ga env {:keys [fn-expr args]}]
+  (emit-expr ga env fn-expr)
+  (.checkCast ga ifn-type)
+  (doseq [arg args] (emit-expr ga env arg))
+  (.invokeInterface ga ifn-type (invoke-method (count args))))
+
 ;; `.-fieldName`/`set!` -- confirmed via `javap -c` on host-AOT-compiled
 ;; `(.-x p)` and `(set! (.-x p) v)` for an untyped `p`: field GET goes
 ;; through `Reflector.invokeNoArgInstanceMember(Object, String, boolean)`
@@ -2035,6 +2058,7 @@
     :general-static-interop-call (emit-general-static-interop-call ga env node)
     :core-fn-call (emit-core-fn-call ga env node)
     :local-fn-call (emit-local-fn-call ga env node)
+    :computed-fn-call (emit-computed-fn-call ga env node)
     :core-fn-value (emit-core-fn-value ga (:fn-name node))
     :field-get (emit-field-get ga env node)
     :field-set (emit-field-set ga env node)
@@ -2744,6 +2768,18 @@
     :source "(fn count-down ([n] (count-down n 0)) ([n acc] (if (= n 0) acc (count-down (- n 1) (+ acc 1)))))"
     :args [5]
     :expected 5}
+   {:id :tiny-computed-fn-call-head
+    :source "(fn [x] ((constantly x) 99))"
+    :args [7]
+    :expected 7}
+   {:id :tiny-keyword-as-fn-key-present
+    :source "(fn [m] (:a m))"
+    :args [{:a 42}]
+    :expected 42}
+   {:id :tiny-keyword-as-fn-key-missing
+    :source "(fn [m] (:z m))"
+    :args [{:a 42}]
+    :expected nil}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]
