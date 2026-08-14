@@ -497,11 +497,52 @@ top-line claim, but the substance is much closer than "false" implies:
   대비 검증. DDC 행: 106→108. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **29번째 슬라이스, 2026-08-15: 진짜 중첩 closure + boolean identity
+  버그 수정** (185→194). 사용자가 "왜 진짜 컴파일러 코드를 재사용
+  안 하냐"고 물어서 Trusting-Trust/DDC 독립성 원칙 설명 — 공유 코드로는
+  백도어/버그를 못 걸러낸다는 게 요지, 사용자 동의로 U6 독립 확장
+  방향 재확인. 남은 4개 큰 항목 중 사용자가 "중첩 fn 리터럴"을 직접
+  선택.
+
+  `javap -c`로 `(fn [x] (fn [y] (+ x y)))` 확인: real host는 내부 fn마다
+  별도 클래스 + 캡처 변수를 인스턴스 필드로 + 생성자가 그 값들을 받아
+  저장. 자유변수는 **analysis 이후** AST를 재귀적으로 훑어
+  `:local`/`:local-fn-call` 참조를 모으고 이 closure 자신의 파라미터/
+  self-name을 빼서 계산(analyze 시점 env엔 `:kind` 구분이 없어서 그
+  자리에서 "내 것/바깥 것" 구분 불가). `emit-class`를 일반화해서
+  `:captures`가 있으면 필드+다중인자 생성자, `emit-closure`가 정의
+  지점에서 재귀적으로 `emit-class` 호출 후 `NEW; DUP; <캡처값>;
+  INVOKESPECIAL` 방출. 일부러 좁힌 범위: 중첩 1단계까지만, closure는
+  단일 arity 절만 — 둘 다 명확한 에러로 거부되는 것 확인.
+
+  **구현 후 `filter`로 검증하다가 진짜 버그 발견**: `(filter (fn [x]
+  (> x threshold)) coll)`이 아무것도 안 걸러냄 — `map`/직접호출/
+  `apply`는 정확했는데 `filter`만 틀림. 원인: `GeneratorAdapter/box`가
+  boolean에 대해 `new Boolean(z)`(deprecated 생성자)를 쓰지
+  `Boolean.valueOf(z)`를 안 씀 — `<`/`>`/`=`/`zero?`/`pos?`/`neg?`/
+  literal `true`/`false` 전부 매번 새 non-singleton Boolean 인스턴스를
+  만들고 있었음. 이 witness 자신의 `if`는 `RT.booleanCast`(진짜
+  변환)라 문제없이 삼켰지만, `javap -c`로 까본 real host의 `if`는
+  `RT.booleanCast` 호출이 전혀 없고 `Boolean.FALSE`와의 순수 레퍼런스
+  identity 비교(`if_acmpeq`) — non-singleton false는 real host
+  입장에서 **항상 truthy**. `clojure.core/filter`의 실제 컴파일된
+  `(if (pred f) ..)`가 정확히 이 경로. `map`은 술어 결과를 `if`로
+  검사 안 해서 증상이 안 보였을 뿐. 라이브로 `(if (Boolean. false)
+  :truthy :falsy)` → `:truthy` 재현·확인. 수정: `.box` 9곳 전부
+  `GeneratorAdapter/valueOf`로 교체(raw ASM 프로브로
+  `Boolean.valueOf` 방출 확인). **이 버그는 독립 witness가 real host와
+  실제로 상호작용할 때만 드러났다** — U6를 독립적으로 키우는 이유
+  자체를 증명하는 사례. compiler.clj(production backend)는 closure와
+  boolean identity 둘 다 문제없음 확인 후 DDC 행에도 연결. DDC 행:
+  108→112. `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate`
+  `metacircular gate: READY`, 회귀 없음(기존 185개 fixture는 자기
+  `if`가 애초에 관대해서 fix 전후 모두 통과).
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
-  protocol, 중첩 `fn` 리터럴(진짜 closure — free variable을 캡처하는
-  별도 클래스가 필요, `javap` 확인은 아직 안 함). 각각 자체 multi-fixture
-  슬라이스이며, 그중 몇몇(deftype/reify/letfn/중첩 closure)은 그 자체로
-  진짜 크다(다중 클래스 생성이 필요).
+  protocol. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/
+  reify/letfn)은 그 자체로 진짜 크다(다중 클래스 생성이 필요). 중첩
+  closure는 이제 지원되지만 1단계/단일 arity로 범위 제한 — 더 깊은
+  중첩이나 multi-arity 중첩 closure는 남은 gap.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

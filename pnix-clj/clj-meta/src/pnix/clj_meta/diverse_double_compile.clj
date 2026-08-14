@@ -688,7 +688,23 @@
    {:id :mini-backend-general-catch-class-npe
     :source "(fn [x] (try (.length x) (catch java.lang.NullPointerException e :caught-npe)))"
     :args [nil]
-    :expected :caught-npe}])
+    :expected :caught-npe}
+   {:id :mini-backend-boolean-identity-comparison-result
+    :source "(fn [a b] (identical? (> a b) true))"
+    :args [5 3]
+    :expected true}
+   {:id :mini-backend-closure-filter-with-capture
+    :source "(fn [coll threshold] (filter (fn [x] (> x threshold)) coll))"
+    :args [[1 5 10] 3]
+    :expected '(5 10)}
+   {:id :mini-backend-closure-map-with-capture
+    :source "(fn [coll y] (map (fn [x] (+ x y)) coll))"
+    :args [[1 2 3] 10]
+    :expected '(11 12 13)}
+   {:id :mini-backend-closure-multiple-captures
+    :source "(fn [x y] ((fn [z] (+ x (+ y z))) 3))"
+    :args [1 2]
+    :expected 6}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

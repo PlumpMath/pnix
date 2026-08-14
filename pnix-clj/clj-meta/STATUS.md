@@ -93,7 +93,18 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    185 fixtures (fn/if/do/let/loop-recur/`catch` of any fully-qualified
+    194 fixtures (fn/if/do/let/loop-recur/true nested closures -- a `fn`
+    literal appearing inside another `fn`'s body, capturing free
+    variables from the enclosing scope as instance fields on a
+    recursively-emitted inner class (one nesting level, single arity
+    clause; both scoped narrower on purpose) -- plus, found while
+    testing closures against real `clojure.core/filter`, a real
+    pre-existing bug FIXED across every boolean-producing op in this
+    file: `GeneratorAdapter/box` on a boolean built a non-singleton
+    `new Boolean(z)`, invisible to this witness's own lenient `if`
+    (`RT.booleanCast`) but silently always-truthy to real host's own
+    identity-based compiled `if`, now `GeneratorAdapter/valueOf`
+    everywhere/`catch` of any fully-qualified
     Throwable subclass, not just the small original allowlist (resolved
     via `Class/forName` at analyze time -- no runtime bytecode call
     needed, only the internal-name string), incl. `clojure.lang.ExceptionInfo`
@@ -736,6 +747,68 @@ NullPointerException`은 됨 — 기존 general-static-interop과 같은
 읽기, `NullPointerException` 잡기 전부 실제 host 대비 검증. U6:
 182→185. DDC 행: 106→108. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 스물아홉 번째 확장 (2026-08-15): 진짜 중첩 closure — 그리고
+그 과정에서 진짜 버그 하나를 잡았다.** 사용자가 "왜 진짜 컴파일러
+코드를 재사용하지 않느냐"고 물어서 Trusting-Trust/DDC 독립성 원칙을
+설명했고, 사용자가 동의하며 "그래야 백도어 같은 코드를 제대로
+걸러낼 수 있다"고 확인 — U6를 계속 독립적으로 넓혀가는 방향을 재확인한
+뒤, 남은 4개 큰 항목 중 사용자가 직접 "중첩 fn 리터럴(진짜 closure)"을
+선택.
+
+`javap -c`로 `(fn [x] (fn [y] (+ x y)))`를 확인하니 real host는 내부
+`fn`마다 별도 클래스를 만들고, 캡처된 자유변수를 인스턴스 필드로,
+생성자가 그 값들을 받아 필드에 저장(`NEW; DUP; <captured-values>;
+INVOKESPECIAL`)하는 표준 closure 패턴이었다. 구현: (1) `fn`을
+`analyze-call`의 진짜 special form으로 추가(`analyze-nested-fn`),
+(2) 자유변수는 **analysis 이후에** 이미 분석된 AST를 재귀적으로 훑어서
+`:local`/`:local-fn-call` 참조를 전부 모으고 이 closure 자신의
+파라미터/self-name을 빼는 방식으로 계산(analyze 시점 env는 `:kind`
+구분이 없어서 "이게 내 것인지 바깥 것인지"를 그 자리에서 구분 못 하기
+때문), (3) `emit-class`를 일반화해서 `:captures`가 있으면 필드 +
+다중인자 생성자를 만들고 각 clause env에 `:capture` kind를 심음,
+(4) `emit-closure`가 정의 지점에서 재귀적으로 `emit-class`를 호출해
+내부 클래스를 즉시 정의/로드하고 `NEW; DUP; <바깥 env에서
+emit-local로 캡처값 읽기>; INVOKESPECIAL`을 방출. 일부러 좁힌 범위:
+**중첩 1단계까지만**(closure 안의 closure는 거부), **closure는 단일
+arity 절만**(multi-arity 중첩 closure 거부) — 둘 다 자유변수 계산을
+단순하게 유지하기 위한 의도적 제한, 명확한 에러로 거부되는 것까지
+확인.
+
+**구현 후 filter로 검증하다가 진짜 버그를 하나 발견했다.**
+`(filter (fn [x] (> x threshold)) coll)`이 아무것도 걸러내지 않고
+전부 통과시켰다 — `map`/직접 호출/`apply`로는 같은 술어가 정확한
+값을 냈는데 `filter`만 틀렸다. 추적해보니: `GeneratorAdapter/box`가
+boolean에 대해 `new Boolean(z)`(deprecated 생성자)를 방출하지
+`Boolean.valueOf(z)`를 안 씀 — 그래서 이 witness가 만드는 `<`/`>`/
+`=`/`zero?`/`pos?`/`neg?`/literal `true`/`false` 전부 **매번 새
+Boolean 인스턴스**를 만들었다. 이 witness 자신의 `if`는
+`RT.booleanCast`(진짜 `instanceof`+`.booleanValue()` 변환)를 써서
+non-singleton Boolean도 문제없이 처리하지만, `javap -c`로 real
+host의 `(if x ..)`를 까보니 `RT.booleanCast` 호출이 **전혀 없고**
+`dup; ifnull ..; getstatic Boolean.FALSE; if_acmpeq ..`처럼 캐시된
+싱글턴에 대한 **순수 레퍼런스 identity 비교**였다. 그래서
+non-singleton `false`는 `nil`도 아니고 `Boolean.FALSE`와
+`identical?`도 아니니 real host 코드 입장에선 **항상 truthy** —
+`clojure.core/filter`의 실제 컴파일된 `(if (pred f) ..)`가 정확히
+이 경로를 타서 뭘 넣어도 다 통과시켰던 것. `map`은 술어의 진위를
+`if`로 검사하지 않아서 증상이 안 보였을 뿐. 라이브로
+`(identical? (Boolean/valueOf false) Boolean/FALSE)` → `true`,
+`(identical? (Boolean. false) Boolean/FALSE)` → `false`,
+`(if (Boolean. false) :truthy :falsy)` → `:truthy`로 재현·확인.
+수정: `.box`를 쓰던 9곳 전부 `GeneratorAdapter/valueOf`로 교체(raw
+ASM 프로브로 `invokestatic Boolean.valueOf:(Z)Ljava/lang/Boolean;`
+방출 확인, real host와 동일 메커니즘) — 이 witness 자신의 fixture는
+전부(자기 `if`가 관대해서) 이미 통과하고 있었기 때문에 이 버그는
+**독립 witness가 real host와 실제로 상호작용할 때만** 드러났다는
+점이 특히 중요 — U6를 계속 독립적으로 키우는 이유 그 자체를
+증명하는 사례. 재발 방지 fixture(`identical?` 직접 대조)와 원인이 된
+`filter`+closure fixture 둘 다 추가. compiler.clj(production
+backend)는 closure와 boolean identity 둘 다 문제없음을 확인 후 DDC
+행에도 연결. U6: 185→194. DDC 행: 108→112. 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
+READY`) 녹색, 회귀 없음(기존 185개 fixture 전부 이 fix 이후에도
+그대로 통과 — 자기 `if`가 애초에 관대했으므로 예상대로).
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

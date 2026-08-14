@@ -501,6 +501,7 @@
 
 (declare analyze-expr)
 (declare analyze-quoted)
+(declare analyze-nested-fn)
 
 (def ^:private recur-arity-key ::recur-arity)
 (def ^:private recur-target-key ::recur-target)
@@ -1047,6 +1048,8 @@
              :var-name var-name
              :value (analyze-expr env value-form)
              :body (analyze-expr env body-form)})))
+      fn
+      (analyze-nested-fn env args)
       (cond
         ;; A CALL HEAD that is itself an expression, not a bare symbol,
         ;; e.g. `((constantly x) 99)` -- confirmed via `javap -c`: real
@@ -1215,8 +1218,12 @@
   when non-nil (an optional self-reference name, `(fn name [x] ...)`), is
   added to the clause's own env so calls to it inside the body analyze as an
   ordinary local-fn-call -- a param of the same name shadows it, matching
-  real host (params are bound after/inside the name's own scope)."
-  [clause fn-name]
+  real host (params are bound after/inside the name's own scope). `base-env`
+  is `{}` for a top-level `(compile-source ...)` fn, or the ENCLOSING fn's
+  own env for a nested closure literal -- letting names free in the nested
+  body still resolve as bound (`analyze-nested-fn` computes which of them
+  were actually reached afterward, to decide what the closure must capture)."
+  [clause fn-name base-env]
   (let [raw-params (first clause)
         body (rest clause)]
     (when-not (and (vector? raw-params) (seq body))
@@ -1226,7 +1233,7 @@
       (when-not (and (every? symbol? all-names)
                      (= (count all-names) (count (distinct all-names))))
         (throw (ex-info "tiny analyzer: malformed fn clause" {:clause clause})))
-      (let [env (cond-> (zipmap all-names (repeat true))
+      (let [env (cond-> (into base-env (zipmap all-names (repeat true)))
                   fn-name (assoc fn-name true)
                   ;; `recur` at the fn body's own tail position (no
                   ;; enclosing `loop`) targets THIS clause's own params --
@@ -1243,6 +1250,63 @@
         {:params params
          :rest-param rest-param
          :body (analyze-body env body)}))))
+
+(def ^:private closure-depth-key ::closure-depth)
+
+;; Generic AST walk collecting every `:name` referenced via a `:local` or
+;; `:local-fn-call` node anywhere in `node` -- used by `analyze-nested-fn` to
+;; find a closure's free variables AFTER analysis, since the analyze-time
+;; env carries no `:kind` distinction between "this fn's own binding" and
+;; "resolved from an enclosing scope" (see `analyze-fn-clause`). Walks any
+;; map/vector shape generically (no per-op knowledge needed): a `core-fn-value`/
+;; `var-deref`/etc. node is correctly NOT collected, since those resolve via
+;; a Var lookup at emit time regardless of lexical scope -- only genuine
+;; lexical references need capturing.
+(defn- ast-referenced-names
+  [node]
+  (cond
+    (and (map? node) (contains? #{:local :local-fn-call} (:op node)))
+    (into #{(:name node)} (mapcat ast-referenced-names (vals (dissoc node :op :name))))
+
+    (map? node)
+    (into #{} (mapcat ast-referenced-names (vals node)))
+
+    (sequential? node)
+    (into #{} (mapcat ast-referenced-names node))
+
+    :else
+    #{}))
+
+(defn- analyze-nested-fn
+  "A `fn` literal appearing WITHIN another fn's body (not the top-level form
+  `compile-source` itself compiles) -- a genuine closure, unlike the
+  top-level case. Deliberately narrow scope: a single arity clause only (no
+  `([x] ..) ([x y] ..)` multi-arity nested closures) and exactly one level
+  of nesting (a closure inside a closure is rejected) -- both real,
+  separately-sizeable extensions, not attempted here."
+  [env args]
+  (when (contains? env closure-depth-key)
+    (throw (ex-info "tiny analyzer: closures nested more than one level deep are not yet supported"
+                    {:form args})))
+  (let [fn-name (when (symbol? (first args)) (first args))
+        rest-args (if fn-name (rest args) args)]
+    (when (and (seq rest-args) (seq? (first rest-args)))
+      (throw (ex-info "tiny analyzer: a nested (non-top-level) fn literal supports a single arity clause only"
+                      {:form args})))
+    (let [{:keys [params rest-param body]}
+          (analyze-fn-clause rest-args fn-name (assoc env closure-depth-key true))
+          own-names (cond-> (set params)
+                      rest-param (conj rest-param)
+                      fn-name (conj fn-name))
+          referenced (ast-referenced-names body)
+          outer-names (disj (set (keys env)) closure-depth-key)
+          captures (vec (filter #(and (outer-names %) (not (own-names %))) referenced))]
+      {:op :closure
+       :fn-name fn-name
+       :params params
+       :rest-param rest-param
+       :body body
+       :captures captures})))
 
 (defn- analyze-fn
   [form]
@@ -1265,7 +1329,7 @@
         ;; a vector, not a list), so it is wrapped as the sole clause below.
         multi-arity? (and (seq rest-form) (seq? (first rest-form)))
         clauses (if multi-arity? rest-form [rest-form])
-        arities (mapv #(analyze-fn-clause % fn-name) clauses)
+        arities (mapv #(analyze-fn-clause % fn-name {}) clauses)
         ;; Only compared among FIXED clauses: a fixed clause sharing its
         ;; param count with the (separately checked, at-most-one) variadic
         ;; clause is not a duplicate at all -- confirmed live, `(fn ([a b]
@@ -1307,6 +1371,7 @@
      :arities arities}))
 
 (declare emit-expr)
+(declare emit-closure)
 
 (defn- emit-nil
   [^GeneratorAdapter ga]
@@ -1390,9 +1455,31 @@
       (.box ga Type/LONG_TYPE))
 
     (boolean? value)
+    ;; `GeneratorAdapter/box` for a boolean emits `new Boolean(z)` (the
+    ;; deprecated constructor), NOT `Boolean.valueOf(z)` -- confirmed by
+    ;; disassembling this witness's own output before this fix: `new
+    ;; java/lang/Boolean; ...; invokespecial <init>:(Z)V`. That produces a
+    ;; FRESH, non-singleton Boolean instance every time, which is NOT
+    ;; `identical?` to `Boolean.FALSE`/`Boolean.TRUE`. This witness's own
+    ;; `if` (`RT.booleanCast`, a real `instanceof`+`.booleanValue()`
+    ;; conversion) tolerates that fine -- but real host's OWN compiled
+    ;; `if` (confirmed via `javap -c` on a host-AOT-compiled `(if x ..)`)
+    ;; does NOT call `RT.booleanCast` at all: it's `dup; ifnull ...;
+    ;; getstatic Boolean.FALSE; if_acmpeq ...` -- a raw REFERENCE-IDENTITY
+    ;; check against the singleton, for speed. A boolean built via `new
+    ;; Boolean(false)` is therefore silently TRUTHY to any real-host code
+    ;; that consumes it (found via `clojure.core/filter`, whose own
+    ;; compiled `(if (pred f) ..)` kept every element regardless of what
+    ;; a witness-emitted `<`/`>`/`=`/`zero?`/etc. predicate actually
+    ;; returned -- `map`/direct calls never surfaced it, since neither
+    ;; does an identity-based truthiness check). Fixed everywhere this
+    ;; witness produces a boolean by using `GeneratorAdapter/valueOf`
+    ;; instead of `box`, confirmed via a raw ASM probe to emit
+    ;; `invokestatic Boolean.valueOf:(Z)Ljava/lang/Boolean;` -- the exact
+    ;; singleton-returning call real host itself uses.
     (do
       (.push ga (boolean value))
-      (.box ga Type/BOOLEAN_TYPE))
+      (.valueOf ga Type/BOOLEAN_TYPE))
 
     (string? value)
     (.push ga ^String value)
@@ -1423,19 +1510,19 @@
     get (.invokeStatic ga rt-type rt-get-method)
     < (do
         (.invokeStatic ga numbers-type numbers-lt-method)
-        (.box ga Type/BOOLEAN_TYPE))
+        (.valueOf ga Type/BOOLEAN_TYPE))
     > (do
         (.invokeStatic ga numbers-type numbers-gt-method)
-        (.box ga Type/BOOLEAN_TYPE))
+        (.valueOf ga Type/BOOLEAN_TYPE))
     >= (do
          (.invokeStatic ga numbers-type numbers-gte-method)
-         (.box ga Type/BOOLEAN_TYPE))
+         (.valueOf ga Type/BOOLEAN_TYPE))
     <= (do
          (.invokeStatic ga numbers-type numbers-lte-method)
-         (.box ga Type/BOOLEAN_TYPE))
+         (.valueOf ga Type/BOOLEAN_TYPE))
     = (do
         (.invokeStatic ga util-type util-equiv-method)
-        (.box ga Type/BOOLEAN_TYPE))))
+        (.valueOf ga Type/BOOLEAN_TYPE))))
 
 (defn- emit-get3
   [^GeneratorAdapter ga env {:keys [map key default]}]
@@ -1455,13 +1542,13 @@
     next (.invokeStatic ga rt-type rt-next-method)
     zero? (do
             (.invokeStatic ga numbers-type numbers-iszero-method)
-            (.box ga Type/BOOLEAN_TYPE))
+            (.valueOf ga Type/BOOLEAN_TYPE))
     pos? (do
            (.invokeStatic ga numbers-type numbers-ispos-method)
-           (.box ga Type/BOOLEAN_TYPE))
+           (.valueOf ga Type/BOOLEAN_TYPE))
     neg? (do
            (.invokeStatic ga numbers-type numbers-isneg-method)
-           (.box ga Type/BOOLEAN_TYPE))
+           (.valueOf ga Type/BOOLEAN_TYPE))
     ;; RT.count returns primitive int; real host boxes this via
     ;; Integer/valueOf (confirmed by disassembling a real host-compiled
     ;; `(count coll)` -- Clojure's `count` returns a boxed Integer, not
@@ -1483,6 +1570,15 @@
       ;; compiled class already implements `IFn` via `AFunction`/`RestFn`
       ;; regardless of naming.
       :self (.loadThis ga)
+      ;; A closure's captured free variable -- confirmed via `javap -c` on
+      ;; a host-AOT-compiled `(fn [x] (fn [y] (+ x y)))`: the inner class
+      ;; stores each captured name as an instance field, read via a plain
+      ;; `this`-load + `getfield` (no different from any other field
+      ;; access this witness already does for `.-fieldName`, just always
+      ;; targeting the compiled class's OWN field rather than an arbitrary
+      ;; receiver expression's).
+      :capture (do (.loadThis ga)
+                   (.getField ga ^Type (:owner entry) ^String (:field-name entry) obj-type))
       (throw (ex-info "tiny emitter: unknown local" {:name name})))))
 
 (defn- emit-do
@@ -2100,6 +2196,7 @@
     :general-static-interop-call (emit-general-static-interop-call ga env node)
     :core-fn-call (emit-core-fn-call ga env node)
     :local-fn-call (emit-local-fn-call ga env node)
+    :closure (emit-closure ga env node)
     :computed-fn-call (emit-computed-fn-call ga env node)
     :core-fn-value (emit-core-fn-value ga (:fn-name node))
     :field-get (emit-field-get ga env node)
@@ -2127,22 +2224,47 @@
   (Method. "getRequiredArity" Type/INT_TYPE (into-array Type [])))
 
 (defn- emit-class
-  [{:keys [arities fn-name]}]
+  "`captures` (empty for a top-level `compile-source` fn) names a closure's
+  free variables -- confirmed via `javap -c` on a host-AOT-compiled
+  `(fn [x] (fn [y] (+ x y)))`: the inner class gets one instance field per
+  captured name, a constructor taking their values (in `captures` order)
+  instead of the usual no-arg one, and every reference to a captured name
+  inside the class's own methods reads the field instead of an arg/local
+  slot -- see `emit-local`'s `:capture` case."
+  [{:keys [arities fn-name captures]}]
   (let [variadic? (boolean (some :rest-param arities))
-        self-env (when fn-name {fn-name {:kind :self}})
         class-name (next-class-name)
         internal (.replace class-name \. \/)
         ctype (Type/getObjectType internal)
         base-type (if variadic? restfn-type afn-type)
         cw (ClassWriter. (bit-or ClassWriter/COMPUTE_FRAMES
-                                 ClassWriter/COMPUTE_MAXS))]
+                                 ClassWriter/COMPUTE_MAXS))
+        capture-env (into {}
+                          (map (fn [cap]
+                                 [cap {:kind :capture :owner ctype :field-name (name cap)}]))
+                          captures)
+        self-env (cond-> capture-env
+                   fn-name (assoc fn-name {:kind :self}))]
     (.visit cw Opcodes/V1_8 Opcodes/ACC_PUBLIC internal nil
             (.getInternalName base-type) nil)
-    (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC init-method nil nil cw)]
-      (.loadThis ga)
-      (.invokeConstructor ga base-type init-method)
-      (.returnValue ga)
-      (.endMethod ga))
+    (doseq [cap captures]
+      (.visitEnd (.visitField cw Opcodes/ACC_FINAL (name cap) (.getDescriptor obj-type) nil nil)))
+    (if (seq captures)
+      (let [ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count captures) obj-type)))
+            ga (GeneratorAdapter. Opcodes/ACC_PUBLIC ctor-method nil nil cw)]
+        (.loadThis ga)
+        (.invokeConstructor ga base-type init-method)
+        (doseq [[i cap] (map-indexed vector captures)]
+          (.loadThis ga)
+          (.loadArg ga (int i))
+          (.putField ga ctype (name cap) obj-type))
+        (.returnValue ga)
+        (.endMethod ga))
+      (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC init-method nil nil cw)]
+        (.loadThis ga)
+        (.invokeConstructor ga base-type init-method)
+        (.returnValue ga)
+        (.endMethod ga)))
     ;; One `invoke` method per FIXED (non-variadic) arity clause, same
     ;; class -- exactly how real host compiler emits fixed multi-arity
     ;; `fn`, whether or not a variadic clause is ALSO present in the same
@@ -2218,6 +2340,32 @@
        :class-name class-name
        :bytes bytes
        :digest (sha256-string (seq bytes))})))
+
+;; A nested closure literal at its DEFINITION site, e.g. the `(fn [y] ...)`
+;; inside `(fn [x] (fn [y] (+ x y)))` -- confirmed via `javap -c`: real host
+;; just does `NEW innerClass; DUP; <push each captured var's CURRENT value>;
+;; INVOKESPECIAL <init>`. The inner class itself is built by recursively
+;; calling `emit-class` (a genuinely separate class, defined/loaded eagerly
+;; here, before the outer method's own bytecode finishes -- the JVM has no
+;; ordering requirement stronger than "loadable by the time it's actually
+;; `NEW`-ed at runtime", which eager definition trivially satisfies).
+;; Each captured value is pushed via the OUTER method's own `emit-local`
+;; (its env already carries the right `:arg`/`:let`/`:self`/`:capture` kind
+;; for each captured name, since captures are by construction names already
+;; bound in the outer scope) -- reusing existing local-resolution machinery
+;; rather than inventing a parallel one.
+(defn- emit-closure
+  [^GeneratorAdapter ga env {:keys [fn-name params rest-param body captures]}]
+  (let [artifact (emit-class {:arities [{:params params :rest-param rest-param :body body}]
+                              :fn-name fn-name
+                              :captures captures})
+        inner-type (Type/getObjectType (.replace ^String (:class-name artifact) \. \/))
+        ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count captures) obj-type)))]
+    (.newInstance ga inner-type)
+    (.dup ga)
+    (doseq [cap captures]
+      (emit-local ga env cap))
+    (.invokeConstructor ga inner-type ctor-method)))
 
 (defn compile-source
   [source]
@@ -2862,6 +3010,54 @@
     :source "(fn [x] (try (.length x) (catch java.lang.NullPointerException e :caught-npe)))"
     :args [nil]
     :expected :caught-npe}
+   ;; Regression fixtures for a real bug this slice found and fixed:
+   ;; `GeneratorAdapter/box` on a boolean built `new Boolean(z)` (a
+   ;; non-singleton instance), not `Boolean.valueOf(z)` -- invisible to
+   ;; every fixture using this witness's OWN `if` (`RT.booleanCast`
+   ;; tolerates non-singleton Booleans fine), but real host's OWN compiled
+   ;; `if` (confirmed via `javap -c`) does raw REFERENCE-IDENTITY
+   ;; comparison against `Boolean.FALSE`, so a witness-emitted `<`/`>`/`=`/
+   ;; `zero?`/etc. result (or a literal `true`/`false` constant) crossing
+   ;; into real host code doing that check -- `clojure.core/filter` is
+   ;; exactly such code -- was silently always truthy. `identical?`
+   ;; against the real singleton is the direct regression check;
+   ;; `filter` below is the real-world case that surfaced it.
+   {:id :tiny-boolean-identity-comparison-result
+    :source "(fn [a b] (identical? (> a b) true))"
+    :args [5 3]
+    :expected true}
+   {:id :tiny-boolean-identity-literal-constant
+    :source "(fn [] (identical? true true))"
+    :args []
+    :expected true}
+   {:id :tiny-closure-filter-with-capture
+    :source "(fn [coll threshold] (filter (fn [x] (> x threshold)) coll))"
+    :args [[1 5 10] 3]
+    :expected '(5 10)}
+   {:id :tiny-closure-map-with-capture
+    :source "(fn [coll y] (map (fn [x] (+ x y)) coll))"
+    :args [[1 2 3] 10]
+    :expected '(11 12 13)}
+   {:id :tiny-closure-no-capture
+    :source "(fn [coll] (map (fn [x] (* x x)) coll))"
+    :args [[1 2 3]]
+    :expected '(1 4 9)}
+   {:id :tiny-closure-immediate-invoke
+    :source "(fn [x] ((fn [y] (+ x y)) 4))"
+    :args [3]
+    :expected 7}
+   {:id :tiny-closure-multiple-captures
+    :source "(fn [x y] ((fn [z] (+ x (+ y z))) 3))"
+    :args [1 2]
+    :expected 6}
+   {:id :tiny-closure-self-recur
+    :source "(fn [n] ((fn count-down [i] (if (= i 0) 0 (count-down (- i 1)))) n))"
+    :args [5]
+    :expected 0}
+   {:id :tiny-closure-variadic
+    :source "(fn [x] ((fn [& r] (cons x r)) 2 3))"
+    :args [1]
+    :expected '(1 2 3)}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]
