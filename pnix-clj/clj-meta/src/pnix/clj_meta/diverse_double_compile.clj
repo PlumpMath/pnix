@@ -712,7 +712,15 @@
    {:id :mini-backend-letfn-self-recursive
     :source "(fn [n] (letfn [(fact [i] (if (= i 0) 1 (* i (fact (- i 1)))))] (fact n)))"
     :args [5]
-    :expected 120}])
+    :expected 120}
+   {:id :mini-backend-reify-function-apply
+    :source "(fn [x a] (.apply (reify java.util.function.Function (apply [this y] (+ x y))) a))"
+    :args [10 5]
+    :expected 15}
+   {:id :mini-backend-reify-comparator-used-by-sort
+    :source "(fn [coll] (sort (reify java.util.Comparator (compare [this a b] (- a b))) coll))"
+    :args [[5 1 9 3]]
+    :expected '(1 3 5 9)}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

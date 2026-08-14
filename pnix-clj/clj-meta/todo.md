@@ -553,11 +553,33 @@ top-line claim, but the substance is much closer than "false" implies:
   `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate`
   `metacircular gate: READY`, 회귀 없음.
 
-  U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, protocol.
-  각각 자체 multi-fixture 슬라이스이며 다중 클래스 생성이 필요해
-  진짜 크다. 남은 gap: 중첩 closure는 1단계/단일 arity로 범위 제한(더
-  깊은 중첩이나 multi-arity 중첩 closure는 아직), `letfn`은 진짜 상호
-  재귀(생성-후-backpatch)는 아직 없음.
+  **31번째 슬라이스, 2026-08-15: `reify`** (197→202). `deftype`(하니스
+  아키텍처 변경 필요) vs `reify`(인터페이스 reflection + primitive
+  반환타입) 트레이드오프를 사용자에게 설명, `reify` 선택받음.
+
+  `javap -c` 확인: real host는 지정 인터페이스를 직접 `implements`(IFn
+  상속 아님), closure와 같은 방식으로 자유변수 캡처, 항상
+  `clojure.lang.IObj` 보일러플레이트 추가. `IObj`는 일부러 재현 안
+  함(리파이된 인터페이스 동작과 무관, 어떤 fixture도 `.meta` 호출
+  안 함). `InterfaceName`을 analyze 시점 `Class/forName`으로 풀고(하나만,
+  다중 인터페이스는 범위 밖) 각 메서드를 이름+arity로 reflected
+  method와 매칭. 파라미터 primitive면 거부(진입 시 auto-boxing 필요,
+  이 witness의 균일 `Object` local 처리와 안 맞음), 반환타입
+  primitive는 지원(return 지점에서 unbox만 하면 됨, 훨씬 흔한 경우).
+  closure의 캡처(필드+생성자) 메커니즘 재사용, `this`는 named `fn`의
+  self-reference와 같은 방식(`:kind :self`). `Function`(전부 Object),
+  `Comparator`(primitive int 반환, 진짜 real `sort`에 넘겨서 동작 확인),
+  `Runnable`(void 반환, side-effect로 검증) 전부 실제 host 대비 검증.
+  compiler.clj도 `reify` 지원 확인 후 DDC 행 연결. DDC 행: 114→116.
+  `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate`
+  `metacircular gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`, protocol(둘 다
+  하니스가 "fn 하나만 컴파일"하는 구조라 top-level multi-form 지원으로
+  아키텍처 변경이 필요해 `reify`보다 훨씬 큼). 남은 gap: 중첩 closure는
+  1단계/단일 arity로 범위 제한, `letfn`은 진짜 상호재귀(생성-후-
+  backpatch) 아직 없음, `reify`는 단일 인터페이스/reference-typed
+  파라미터만.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

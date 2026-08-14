@@ -547,6 +547,7 @@
 (declare analyze-expr)
 (declare analyze-quoted)
 (declare analyze-nested-fn)
+(declare analyze-reify)
 
 (def ^:private recur-arity-key ::recur-arity)
 (def ^:private recur-target-key ::recur-target)
@@ -1095,6 +1096,8 @@
              :body (analyze-expr env body-form)})))
       fn
       (analyze-nested-fn env args)
+      reify
+      (analyze-reify env args)
       (cond
         ;; A CALL HEAD that is itself an expression, not a bare symbol,
         ;; e.g. `((constantly x) 99)` -- confirmed via `javap -c`: real
@@ -1353,6 +1356,81 @@
        :body body
        :captures captures})))
 
+;; `reify` -- confirmed via `javap -c` on a host-AOT-compiled `(reify
+;; Comparator (compare [this a b] ...))`: a fresh class `implements` the
+;; named interface(s) directly (NOT extending `AFunction`/`RestFn` --
+;; `reify` doesn't make the result callable as a plain fn, only as the
+;; reified interface(s)), captures free variables as instance fields
+;; exactly like a closure, and always ALSO implements `clojure.lang.IObj`
+;; (`meta`/`withMeta`) for metadata support. That `IObj` boilerplate is
+;; deliberately NOT reproduced here -- it's orthogonal to the reified
+;; interface's own observable behavior (nothing this witness's own fixtures
+;; exercise ever calls `.meta` on a reified instance), matching the
+;; established "behavior equivalence, not bytecode-shape equivalence" bar
+;; used throughout this file. Deliberately narrow scope beyond that:
+;; exactly ONE fully-qualified interface (no multi-interface `reify`, no
+;; protocols specifically), and every implemented method's parameters must
+;; be reference types (a primitive parameter, e.g. `int`, would need
+;; auto-boxing on method entry before this witness's uniformly-`Object`
+;; local-resolution machinery could use it -- not attempted here; a
+;; PRIMITIVE RETURN type, e.g. `Comparator/compare`'s `int`, IS supported,
+;; since coercing this witness's always-boxed body result down to a
+;; primitive at the `return` site is the much more common/needed case and
+;; doesn't touch the local-resolution machinery at all).
+(defn- reflect-interface-method
+  ^java.lang.reflect.Method [^Class iface method-name arg-count]
+  (first (filter (fn [^java.lang.reflect.Method m]
+                    (and (= method-name (.getName m))
+                         (= arg-count (.getParameterCount m))))
+                  (.getMethods iface))))
+
+(defn- analyze-reify-method
+  [env ^Class iface method-form]
+  (when-not (and (seq? method-form) (symbol? (first method-form))
+                 (vector? (second method-form)) (seq (second method-form)))
+    (throw (ex-info "tiny analyzer: malformed reify method (name [this args...] body...)"
+                    {:form method-form})))
+  (let [[mname params & body] method-form
+        this-sym (first params)
+        arg-syms (vec (rest params))
+        rmethod (reflect-interface-method iface (name mname) (count arg-syms))]
+    (when-not rmethod
+      (throw (ex-info "tiny analyzer: reify method does not match any method on the reified interface"
+                      {:method mname :arg-count (count arg-syms) :interface iface})))
+    (when (some #(.isPrimitive ^Class %) (.getParameterTypes rmethod))
+      (throw (ex-info "tiny analyzer: reify methods with primitive parameters are not yet supported"
+                      {:method mname})))
+    (let [method-env (into (assoc env this-sym true) (zipmap arg-syms (repeat true)))]
+      {:name (name mname)
+       :this-sym this-sym
+       :arg-syms arg-syms
+       :reflected rmethod
+       :body (analyze-body method-env body)})))
+
+(defn- analyze-reify
+  [env args]
+  (when (contains? env closure-depth-key)
+    (throw (ex-info "tiny analyzer: reify nested inside a closure is not yet supported" {:form args})))
+  (let [[iface-sym & method-forms] args]
+    (when-not (and (symbol? iface-sym) (not (namespace iface-sym)))
+      (throw (ex-info "tiny analyzer: reify requires a single fully-qualified interface name"
+                      {:form args})))
+    (let [iface (try (Class/forName (name iface-sym)) (catch Throwable _ nil))]
+      (when-not (and iface (.isInterface ^Class iface))
+        (throw (ex-info "tiny analyzer: reify interface not found (must be a fully-qualified interface name)"
+                        {:interface iface-sym})))
+      (let [inner-env (assoc env closure-depth-key true)
+            methods (mapv #(analyze-reify-method inner-env iface %) method-forms)
+            own-names (fn [{:keys [this-sym arg-syms]}] (conj (set arg-syms) this-sym))
+            referenced (reduce into #{} (map (comp ast-referenced-names :body) methods))
+            all-own (reduce into #{} (map own-names methods))
+            outer-names (disj (set (keys env)) closure-depth-key)
+            captures (vec (filter #(and (outer-names %) (not (all-own %))) referenced))]
+        {:op :reify
+         :interface iface
+         :methods methods
+         :captures captures}))))
+
 (defn- analyze-fn
   [form]
   (when-not (and (seq? form) (= 'fn (first form)))
@@ -1417,6 +1495,7 @@
 
 (declare emit-expr)
 (declare emit-closure)
+(declare emit-reify)
 
 (defn- emit-nil
   [^GeneratorAdapter ga]
@@ -2242,6 +2321,7 @@
     :core-fn-call (emit-core-fn-call ga env node)
     :local-fn-call (emit-local-fn-call ga env node)
     :closure (emit-closure ga env node)
+    :reify (emit-reify ga env node)
     :computed-fn-call (emit-computed-fn-call ga env node)
     :core-fn-value (emit-core-fn-value ga (:fn-name node))
     :field-get (emit-field-get ga env node)
@@ -2404,6 +2484,89 @@
   (let [artifact (emit-class {:arities [{:params params :rest-param rest-param :body body}]
                               :fn-name fn-name
                               :captures captures})
+        inner-type (Type/getObjectType (.replace ^String (:class-name artifact) \. \/))
+        ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count captures) obj-type)))]
+    (.newInstance ga inner-type)
+    (.dup ga)
+    (doseq [cap captures]
+      (emit-local ga env cap))
+    (.invokeConstructor ga inner-type ctor-method)))
+
+;; After emitting a reify method body (which always produces a boxed
+;; Object, exactly like every other emitted expression in this file), coerce
+;; it to match the reified interface method's OWN declared return type --
+;; `void` pops the unused value, a primitive return type unboxes it (safe:
+;; params with primitive types are already rejected at analyze time, so
+;; only the return side ever needs this), and a reference return type
+;; (including plain `Object`) needs no coercion at all.
+(defn- coerce-reify-return!
+  [^GeneratorAdapter ga ^Class return-type]
+  (cond
+    (= Void/TYPE return-type) (.pop ga)
+    (.isPrimitive return-type) (.unbox ga (Type/getType return-type))
+    :else nil))
+
+(defn- emit-reify-class
+  [^Class interface methods captures]
+  (let [class-name (next-class-name)
+        internal (.replace class-name \. \/)
+        ctype (Type/getObjectType internal)
+        iface-type (Type/getType interface)
+        cw (ClassWriter. (bit-or ClassWriter/COMPUTE_FRAMES
+                                 ClassWriter/COMPUTE_MAXS))
+        capture-env (into {}
+                          (map (fn [cap]
+                                 [cap {:kind :capture :owner ctype :field-name (name cap)}]))
+                          captures)]
+    (.visit cw Opcodes/V1_8 Opcodes/ACC_PUBLIC internal nil
+            (.getInternalName obj-type) (into-array String [(.getInternalName iface-type)]))
+    (doseq [cap captures]
+      (.visitEnd (.visitField cw Opcodes/ACC_FINAL (name cap) (.getDescriptor obj-type) nil nil)))
+    (if (seq captures)
+      (let [ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count captures) obj-type)))
+            ga (GeneratorAdapter. Opcodes/ACC_PUBLIC ctor-method nil nil cw)]
+        (.loadThis ga)
+        (.invokeConstructor ga obj-type init-method)
+        (doseq [[i cap] (map-indexed vector captures)]
+          (.loadThis ga)
+          (.loadArg ga (int i))
+          (.putField ga ctype (name cap) obj-type))
+        (.returnValue ga)
+        (.endMethod ga))
+      (let [ga (GeneratorAdapter. Opcodes/ACC_PUBLIC init-method nil nil cw)]
+        (.loadThis ga)
+        (.invokeConstructor ga obj-type init-method)
+        (.returnValue ga)
+        (.endMethod ga)))
+    (doseq [{:keys [this-sym arg-syms reflected body]} methods]
+      (let [^java.lang.reflect.Method rmethod reflected
+            ret-type (Type/getType (.getReturnType rmethod))
+            param-types (into-array Type (map #(Type/getType ^Class %) (.getParameterTypes rmethod)))
+            asm-method (Method. (.getName rmethod) ret-type param-types)
+            ga (GeneratorAdapter. Opcodes/ACC_PUBLIC asm-method nil nil cw)
+            arg-env (into (assoc capture-env this-sym {:kind :self})
+                          (map-indexed (fn [i p] [p {:kind :arg :index i}]))
+                          arg-syms)]
+        (emit-expr ga arg-env body)
+        (coerce-reify-return! ga (.getReturnType rmethod))
+        (.returnValue ga)
+        (.endMethod ga)))
+    (.visitEnd cw)
+    (let [bytes (.toByteArray cw)
+          loader (DynamicClassLoader.
+                  (.getContextClassLoader (Thread/currentThread)))
+          klass (.defineClass loader class-name bytes nil)]
+      {:class klass
+       :class-name class-name
+       :bytes bytes
+       :digest (sha256-string (seq bytes))})))
+
+;; A `reify` expression at its DEFINITION site -- structurally identical to
+;; `emit-closure`'s NEW/DUP/<captures>/INVOKESPECIAL, just building the
+;; class via `emit-reify-class` instead of `emit-class`.
+(defn- emit-reify
+  [^GeneratorAdapter ga env {:keys [interface methods captures]}]
+  (let [artifact (emit-reify-class interface methods captures)
         inner-type (Type/getObjectType (.replace ^String (:class-name artifact) \. \/))
         ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count captures) obj-type)))]
     (.newInstance ga inner-type)
@@ -3115,6 +3278,26 @@
     :source "(fn [x] (letfn [(add-x [y] (+ x y)) (double-x [] (* x 2))] (+ (add-x 10) (double-x))))"
     :args [3]
     :expected 19}
+   {:id :tiny-reify-function-apply
+    :source "(fn [x a] (.apply (reify java.util.function.Function (apply [this y] (+ x y))) a))"
+    :args [10 5]
+    :expected 15}
+   {:id :tiny-reify-comparator-primitive-return
+    :source "(fn [x a b] (.compare (reify java.util.Comparator (compare [this p q] (- p (+ q x)))) a b))"
+    :args [0 10 3]
+    :expected 7}
+   {:id :tiny-reify-comparator-used-by-sort
+    :source "(fn [coll] (sort (reify java.util.Comparator (compare [this a b] (- a b))) coll))"
+    :args [[5 1 9 3]]
+    :expected '(1 3 5 9)}
+   {:id :tiny-reify-runnable-void-return-side-effect
+    :source "(fn [] (let [counter (java.util.concurrent.atomic.AtomicInteger. 0)] (.run (reify java.lang.Runnable (run [this] (.set counter 99)))) (.get counter)))"
+    :args []
+    :expected 99}
+   {:id :tiny-reify-supplier-no-capture
+    :source "(fn [] (.get (reify java.util.function.Supplier (get [this] 42))))"
+    :args []
+    :expected 42}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

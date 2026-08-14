@@ -93,7 +93,18 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    197 fixtures (fn/if/do/let/loop-recur/`letfn` (non-mutually-recursive
+    202 fixtures (fn/if/do/let/loop-recur/`reify` -- one fully-qualified
+    interface, resolved via `Class/forName` at analyze time to reflect
+    its methods and match each `reify` method form by name+arity;
+    reference-typed params only (a primitive param would need
+    auto-boxing on entry, not attempted), but a primitive RETURN type
+    (e.g. `Comparator/compare`'s `int`) IS coerced via unbox-at-return
+    (deliberately not reproducing real host's always-added
+    `clojure.lang.IObj` meta boilerplate, orthogonal to the reified
+    interface's own behavior); reuses the closure capture mechanism
+    (fields+constructor) built for nested closures, `this` bound the
+    same way a named `fn`'s self-reference already is/`letfn`
+    (non-mutually-recursive
     bindings only -- desugars entirely to nested `let`+self-named-`fn`,
     confirmed via `javap -c` to be real host's own shape for this case,
     reusing existing closure/self-recursion machinery with zero new
@@ -839,6 +850,39 @@ real host가 각 바인딩 생성자를 (아직 null일 수도 있는) 다른
 정상 지원 확인 후 DDC 행에 연결. U6: 194→197. DDC 행: 112→114. 전체
 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
 READY`) 녹색, 회귀 없음.
+
+**같은 날 서른한 번째 확장 (2026-08-15): `reify`.** 남은 4개 큰 항목
+중 사용자에게 `deftype`(하니스가 "fn 하나만 컴파일"하는 구조라
+top-level multi-form 지원으로 아키텍처 변경 필요) vs `reify`(인터페이스
+reflection + primitive 반환타입 매칭 필요)를 놓고 트레이드오프를
+설명, 사용자가 `reify` 선택.
+
+`javap -c`로 `(reify Comparator (compare [this a b] ...))` 확인: real
+host는 새 클래스가 지정한 인터페이스를 직접 `implements`하고(`IFn`
+상속 아님 — reify 결과는 일반 fn으로 호출 불가, 그 인터페이스로만
+호출 가능), 자유변수는 closure와 완전히 같은 방식(인스턴스 필드)으로
+캡처하며, 항상 `clojure.lang.IObj`(`meta`/`withMeta`) 보일러플레이트도
+추가함. `IObj`는 일부러 재현 안 함 — 리파이된 인터페이스 자신의
+동작과 무관하고(이 witness의 어떤 fixture도 `.meta`를 호출 안 함),
+"바이트코드 모양이 아니라 동작 동등성" 기준 그대로 적용. 구현:
+`InterfaceName`을 analyze 시점에 `Class/forName`으로 풀고(fully-qualified
+하나만, 다중 인터페이스는 범위 밖), 각 `(method [this args...] body)`를
+이름+arity로 real 인터페이스의 reflected method와 매칭. **파라미터가
+primitive면 거부**(진입 시 auto-boxing이 필요해 이 witness의 균일한
+`Object` local 처리와 안 맞음, 시도 안 함) — 하지만 **반환타입이
+primitive인 건 지원**(`Comparator/compare`의 `int`처럼, body가 항상
+만드는 boxed 값을 return 지점에서 unbox — 훨씬 흔하고 필요한 경우라
+로컬 처리 메커니즘을 안 건드리고 return 지점 하나만 다루면 됨).
+클로저 캡처(필드+생성자) 메커니즘을 그대로 재사용, `this`는 named
+`fn`의 self-reference와 같은 방식(`:kind :self`, `this` 로드)으로
+바인딩. `java.util.function.Function`(전부 Object, capture 있음/
+없음), `java.util.Comparator`(primitive int 반환, 진짜 real
+`sort`한테 넘겨서 정상 작동하는 것까지 확인), `java.lang.Runnable`
+(void 반환, side-effect로 검증) 전부 실제 host 대비 대조 검증.
+primitive 파라미터 거부, 다중 인터페이스 거부 둘 다 명확한 에러로
+확인. compiler.clj도 `reify` 지원 확인 후 DDC 행에 연결. U6: 197→202.
+DDC 행: 114→116. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)
