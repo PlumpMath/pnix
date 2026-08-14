@@ -1011,6 +1011,9 @@
    "[] ++ null" "[1] ++ 2" "null ++ []"
    "null // { a = 1; }" "{ a = 1; } // null" "null // null"
    "[] // { a = 1; }" "{ a = 1; } // { b = 2; }"
+   "builtins.attrValues null" "builtins.attrNames null"
+   "builtins.elem 1 null" "builtins.genList (x: x) (-1)"
+   "builtins.genList (x: x) 0" "builtins.genList (x: x) 3"
    "[1 [2 [3]]]"
    "let a = 1; b = a + 1; in a + b" "let a = b + 1; b = 1; in a"
    ;; D22 dotted let (parser path->nested + machine follows evaluator)

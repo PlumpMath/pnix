@@ -2785,6 +2785,40 @@
   main case to stay under the JVM method-size limit. Returns nil when unhandled."
   [name args]
   (case name
+    ;; Type guards for builtins whose main-case arms use Clojure host ops that
+    ;; silently accept null/bad lengths (wrong VALUE vs nix-instantiate). On
+    ;; success return nil so finish-builtin's case runs the happy path.
+    (:attrNames :keys)
+    (when-not (attrset-value? (first args))
+      (err/failed :builtin :attr-names-arg-not-attrset
+                  {:builtin name :arg (first args)}))
+
+    :values
+    (when-not (attrset-value? (first args))
+      (err/failed :builtin :attr-values-arg-not-attrset
+                  {:builtin name :arg (first args)}))
+
+    :elem
+    (when-not (vector? (second args))
+      (err/failed :builtin :elem-arg-not-list
+                  {:builtin name :arg (second args)}))
+
+    :find
+    (when-not (vector? (second args))
+      (err/failed :builtin :find-arg-not-list
+                  {:builtin name :arg (second args)}))
+
+    :genList
+    (let [n (second args)]
+      (cond
+        (not (integer? n))
+        (err/failed :builtin :gen-list-length-not-int
+                    {:builtin name :arg n})
+        (neg? (long n))
+        (err/failed :builtin :gen-list-length-negative
+                    {:builtin name :arg n})
+        :else nil))
+
     :pathExists
     (if *pure-eval*
       (err/failed :builtin

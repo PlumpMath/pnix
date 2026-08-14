@@ -5762,7 +5762,25 @@
     (is (= :update-operand-not-attrset (:reason (pnix/eval-source "true // { a = 1; }"))))
     (is (= :update-operand-not-attrset (:reason (pnix/eval-source "\"x\" // { a = 1; }"))))
     (is (= {"a" 1 "b" 2} (:value (pnix/eval-source "{ a = 1; } // { b = 2; }"))))
-    (is (= {"a" 2} (:value (pnix/eval-source "{ a = 1; } // { a = 2; }"))))))
+    (is (= {"a" 2} (:value (pnix/eval-source "{ a = 1; } // { a = 2; }")))))
+  (testing "attrNames/attrValues require attrsets (oracle: null was wrong VALUE [])"
+    (is (= :attr-names-arg-not-attrset (:reason (pnix/eval-source "builtins.attrNames null"))))
+    (is (= :attr-names-arg-not-attrset (:reason (pnix/eval-source "builtins.attrNames 1"))))
+    (is (= :attr-values-arg-not-attrset (:reason (pnix/eval-source "builtins.attrValues null"))))
+    (is (= :attr-values-arg-not-attrset (:reason (pnix/eval-source "builtins.attrValues 1"))))
+    (is (= ["a" "b"] (:value (pnix/eval-source "builtins.attrNames { b = 2; a = 1; }"))))
+    (is (= [1 2] (:value (pnix/eval-source "builtins.attrValues { b = 2; a = 1; }")))))
+  (testing "elem requires a list (oracle: null was wrong VALUE false)"
+    (is (= :elem-arg-not-list (:reason (pnix/eval-source "builtins.elem 1 null"))))
+    (is (= :elem-arg-not-list (:reason (pnix/eval-source "builtins.elem 1 \"ab\""))))
+    (is (= true (:value (pnix/eval-source "builtins.elem 2 [1 2 3]"))))
+    (is (= false (:value (pnix/eval-source "builtins.elem 9 [1 2 3]")))))
+  (testing "genList length is a non-negative int (oracle: -1/float were wrong VALUE)"
+    (is (= :gen-list-length-negative (:reason (pnix/eval-source "builtins.genList (x: x) (-1)"))))
+    (is (= :gen-list-length-not-int (:reason (pnix/eval-source "builtins.genList (x: x) 1.5"))))
+    (is (= :gen-list-length-not-int (:reason (pnix/eval-source "builtins.genList (x: x) true"))))
+    (is (= [] (:value (pnix/eval-source "builtins.genList (x: x) 0"))))
+    (is (= [0 1 2] (:value (pnix/eval-source "builtins.genList (x: x) 3"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by
