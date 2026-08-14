@@ -45,11 +45,18 @@ Source of truth: `bin/clojure-clr` (fail-closed).
 | Yes | `--multi-e FORM` / `--multi-eval FORM` | `tool-eval-multi` from inline string |
 | No | REPL, `-i`, `-M`, deps.edn, clojure CLI parity | stderr + exit 2 |
 
-Error text (verbatim intent):
+Error text (facade exit 2, non-admitted argv):
 
 ```text
-clojure-clr compatibility: admitted surface is -e FORM or one FORM file;
-use clojure-clr-bootstrap for the upstream trust root
+clojure-clr compatibility: admitted surface is -e FORM, one FORM file, '-',
+--multi-form FILE|-, or --multi-e FORM; use clojure-clr-bootstrap …
+```
+
+Surface matrix gate (fail-closed inventory):
+
+```bash
+./clr-meta/scripts/clr-meta-tool-surface-gate
+# also wired into clr-meta-gate after tool-eval-multi
 ```
 
 ### What “FORM / file” means under clr-meta tool-eval

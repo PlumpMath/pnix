@@ -316,7 +316,9 @@ local nupkg pack) is **closed enough** for C# day-to-day. See monorepo
 9. ~~tool-eval-multi-e / stdin~~ → `--multi-e FORM`, `--multi-form -`
    in multi-gate (2026-08-14); default `-e` still single-form.
 10. ~~tool-eval fail results carry :profile~~ (2026-08-14).
-11. **Next (product, not packaging):** further tool-eval only with new named
+11. ~~tool-eval surface inventory gate~~ → `clr-meta-tool-surface-gate`
+    (full CLI matrix; in clr-meta-gate, 2026-08-14).
+12. **Next (product, not packaging):** further tool-eval only with new named
     gates; isolated ALC still held; Stage ladder honesty via STATUS.md.
 
 ### clr-meta residual (product, not packaging)

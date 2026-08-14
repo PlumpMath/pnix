@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Named gate: complete tool-eval admitted surface inventory (fail-closed).
+# Positive matrix for every admitted argv shape; negatives exit 2 (facade)
+# or non-zero with structured tool-eval failure.
+#
+# Does not replace tool-gate / tool-eval-multi-gate (deeper reader/domain
+# checks). This gate freezes the *CLI surface* so silent expansions fail.
+set -euo pipefail
+
+clr_meta_root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$clr_meta_root/.." && pwd)"
+cc="$root/bin/clojure-clr"
+temp="$(mktemp -d "${TMPDIR:-/tmp}/clr-meta-tool-surface.XXXXXX")"
+trap 'rm -rf "$temp"' EXIT
+
+pass=0
+ok() { echo "  OK  $*"; pass=$((pass + 1)); }
+
+echo "== clr-meta-tool-surface-gate =="
+
+# --- help lists every admitted form ---
+help_out="$("$cc" --help)"
+for needle in \
+  '-e FORM' \
+  'FILE' \
+  '--multi-form FILE' \
+  '--multi-form -' \
+  '--multi-e FORM' \
+  'clojure-clr -'
+do
+  echo "$help_out" | grep -qF -- "$needle" || {
+    echo "FAIL: --help missing: $needle" >&2
+    exit 1
+  }
+done
+ok "help lists admitted surfaces"
+
+# --- positives ---
+single="$("$cc" -e '(+ 20 22)')"
+[[ "$single" == *":profile :tool-eval"* ]]
+[[ "$single" == *":value 42"* ]]
+ok "-e single-form => 42"
+
+printf '%s\n' '(+ 20 22)' >"$temp/one.clj"
+file_out="$("$cc" "$temp/one.clj")"
+[[ "$file_out" == *":value 42"* ]]
+ok "FILE single-form => 42"
+
+stdin_one="$(printf '%s\n' '(+ 20 22)' | "$cc" -)"
+[[ "$stdin_one" == *":value 42"* ]]
+ok "- (stdin) single-form => 42"
+
+printf '%s\n' '(+ 1 2)' '(+ 20 22)' >"$temp/multi.clj"
+multi_f="$("$cc" --multi-form "$temp/multi.clj")"
+[[ "$multi_f" == *":profile :tool-eval-multi"* ]]
+[[ "$multi_f" == *":value 42"* ]]
+ok "--multi-form FILE => 42"
+
+multi_e="$("$cc" --multi-e $'(+ 1 2)\n(+ 20 22)')"
+[[ "$multi_e" == *":value 42"* ]]
+ok "--multi-e FORM => 42"
+
+multi_in="$(printf '%s\n' '(+ 1 2)' '(+ 20 22)' | "$cc" --multi-form -)"
+[[ "$multi_in" == *":value 42"* ]]
+ok "--multi-form - (stdin) => 42"
+
+# --- negatives: facade exit 2 ---
+set +e
+rej_m="$("$cc" -m example.main 2>&1)"; st_m=$?
+rej_i="$("$cc" -i 2>&1)"; st_i=$?
+rej_extra="$("$cc" -e 1 2 3 2>&1)"; st_extra=$?
+set -e
+[[ "$st_m" -eq 2 ]]
+[[ "$rej_m" == clojure-clr\ compatibility:* ]]
+ok "reject -m (exit 2)"
+[[ "$st_i" -eq 2 ]]
+ok "reject -i (exit 2)"
+[[ "$st_extra" -eq 2 ]]
+ok "reject multi-arg -e (exit 2)"
+
+# --- negatives: single-form trailing stays tool-eval fail ---
+set +e
+trail="$("$cc" -e $'42\n43' 2>&1)"; st_t=$?
+set -e
+[[ "$st_t" -eq 1 ]]
+[[ "$trail" == *":profile :tool-eval"* ]]
+[[ "$trail" == *":class :trailing-tool-form"* ]]
+ok "default -e trailing fails as tool-eval"
+
+echo "== summary: pass=$pass =="
+echo "clr-meta tool-surface gate: PASS (admitted CLI matrix + fail-closed rejects)"

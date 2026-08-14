@@ -101,6 +101,7 @@ Do **not** start without an explicit product decision.
 | **clr host-import smoke** | **landed** — `examples/host-import/clr/smoke` (HelloPnix) |
 | **clr library smoke** | **landed** — `pnix-clr-library-smoke` (export API + nupkg + HelloPnix) |
 | **host-env residual cut** | **closed enough (2026-08-14)** — local feeds, examples, tool-eval surfaces, CI layout |
+| **tool-eval surface gate** | **landed** — `clr-meta-tool-surface-gate` freezes admitted CLI |
 | **Still open (product pillars)** | further facade only with new gates; machine tail if pillar; in-process ALC |
 
 ### P3.3 Common portable `.px` library (historical pnix-meta)
@@ -177,3 +178,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | clr host-import ./smoke (HelloPnix); machine unsupported-node docstring honesty |
 | 2026-08-14 | export-pnix-clr-library per-TFM build fix; pnix-clr-library-smoke; HelloPnix project-ref first |
 | 2026-08-14 | host-env residual cut closed enough; tool-eval failures carry :profile; examples smoke aggregator |
+| 2026-08-14 | clr-meta-tool-surface-gate: full admitted CLI matrix in clr-meta-gate |
