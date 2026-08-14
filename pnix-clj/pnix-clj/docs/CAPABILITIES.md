@@ -67,56 +67,61 @@ check whether something already exists before implementing it.
   determinism emit-form-roundtrip form-analysis forward-reference futamura generate
   grammar-fuzzer io-probe lane-registry lane-registry-check live-oracle machine
   machine-outcome-check mirror-chain mirror-error mirror-pair nrepl nrepl-pnix
-  persist pnix-meta-conformance property-fuzzer purity reflect repl-pnix
-  repl-pnix-server replay report-arith-proof report-batch report-bool-proof report-cached-eval
-  report-cas report-cegis report-classfile-receipt report-clojure-form report-clojure-projection report-coverage
-  report-determinism report-emit-form-roundtrip report-form-analysis report-forward-reference report-futamura report-generate
-  report-grammar-fuzzer report-live-oracle report-machine report-mirror-chain report-mirror-error report-mirror-pair
-  report-persist report-property-fuzzer report-purity report-reflect report-replay report-rust-batch
-  report-safe-eval report-search report-self-improve report-self-mod-gate report-smoke report-snapshot
-  report-specialize report-stage15-exec report-stage7-core report-store report-strict-audit report-synthesize
-  report-tower report-translation-validation report-trust report-value-roundtrip report-weval report-witness
-  report-witnessed-run runtime-plan rust-batch safe-eval search self-improve
-  self-mod-gate smoke snapshot specialize stage15-exec stage15-plan
-  stage7-core store strict-audit strict-gate synthesize test
-  tower translation-validation trust value-roundtrip weval wiki
-  wiki-check witness witnessed-run
+  persist property-fuzzer purity reflect repl-pnix repl-pnix-server
+  replay report-arith-proof report-batch report-bool-proof report-cached-eval report-cas
+  report-cegis report-classfile-receipt report-clojure-form report-clojure-projection report-coverage report-determinism
+  report-emit-form-roundtrip report-form-analysis report-forward-reference report-futamura report-generate report-grammar-fuzzer
+  report-live-oracle report-machine report-mirror-chain report-mirror-error report-mirror-pair report-persist
+  report-property-fuzzer report-purity report-reflect report-replay report-rust-batch report-safe-eval
+  report-search report-self-improve report-self-mod-gate report-smoke report-snapshot report-specialize
+  report-stage15-exec report-stage7-core report-store report-strict-audit report-synthesize report-tower
+  report-translation-validation report-trust report-value-roundtrip report-weval report-witness report-witnessed-run
+  runtime-plan rust-batch safe-eval search self-improve self-mod-gate
+  smoke snapshot specialize stage15-exec stage15-plan stage7-core
+  store strict-audit strict-gate synthesize test tower
+  translation-validation trust value-roundtrip weval wiki wiki-check
+  witness witnessed-run
 
-## Builtins (168)
+## Builtins (194)
 
   abort abs add addErrorContext all and
-  any append appendContext atan2 attrByPath attrNames
-  attrValues baseNameOf bitAnd bitOr bitXor boolToString
-  break builtins catAttrs ceil compareVersions concatLists
-  concatMap concatMapStrings concatMapStringsSep concatStrings concatStringsSep cons
-  cos count currentSystem deepSeq derivation derivationStrict
-  dirOf div drop elem elemAt eq
-  exp false filter filterAttrs find findFirst
-  flatten flip floor foldl foldl' foldlAttrs
-  foldr fromJSON functionArgs ge genAttrs genList
-  genericClosure get getAttr getContext getEnv groupBy
-  gt hasAttr hasContext hasInfix hasPrefix hasSuffix
-  hashString head id imap0 imap1 init
-  intersectAttrs isAttrs isBool isFloat isFunction isInt
-  isList isNull isPath isString keys langVersion
-  last le length lessThan listToAttrs ln
-  lt map mapAttrs mapAttrs' mapAttrsToList match
-  max merge min mod mul nameValuePair
-  neg nixVersion not null optional optionalString
-  optionals or parseDrvName partition pathExists pipe
-  placeholder pnixMounts pow range readDir readFile
-  recursiveUpdate removeAttrs removePrefix removeSuffix replaceStrings replicate
-  reverseList seq set sin sort split
-  splitString splitVersion sqrt storeDir storePath stringLength
-  stringToCharacters sub substring tail take throw
-  toInt toJSON toLower toPath toString toUpper
-  trace true tryEval typeOf unique unsafeDiscardOutputDependency
-  unsafeDiscardStringContext unsafeGetAttrPos values zip zipAttrsWith zipListsWith
+  any append appendContext assertMsg atan2 attrByPath
+  attrNames attrValues baseNameOf bitAnd bitOr bitXor
+  boolToString break builtins catAttrs ceil compareVersions
+  concatLists concatMap concatMapStrings concatMapStringsSep concatStrings concatStringsSep
+  cons const cos count currentSystem deepSeq
+  derivation derivationStrict dirOf div drop elem
+  elemAt eq exp false fetchGit fetchTarball
+  fetchurl filter filterAttrs filterAttrsRecursive find findFirst
+  fix flatten flip floor foldl foldl'
+  foldlAttrs foldr fromJSON functionArgs ge genAttrs
+  genList genericClosure get getAttr getAttrFromPath getAttrFromPathOr
+  getContext getEnv getName getVersion groupBy gt
+  hasAttr hasAttrByPath hasContext hasInfix hasPrefix hasSuffix
+  hashString head id imap0 imap1 implies
+  init intersectAttrs intersectLists isAttrs isBool isFloat
+  isFunction isInt isList isNull isPath isString
+  keys langVersion last le length lessThan
+  listToAttrs ln lt map mapAttrs mapAttrs'
+  mapAttrsRecursive mapAttrsToList match max merge min
+  mod mul nameValuePair neg nixVersion not
+  null optional optionalAttrs optionalString optionals or
+  parseDrvName partition pathExists pipe placeholder pnixMounts
+  pow product range readDir readFile recursiveUpdate
+  removeAttrs removePrefix removeSuffix replaceStrings replicate reverseList
+  seq set sin sort split splitString
+  splitVersion sqrt storeDir storePath stringLength stringToCharacters
+  sub substring subtractLists sum tail take
+  throw toFile toInt toJSON toLower toPath
+  toString toUpper toXML trace true tryEval
+  typeOf unique unsafeDiscardOutputDependency unsafeDiscardStringContext unsafeGetAttrPos updateManyAttrs
+  values warn when zip zipAttrs zipAttrsWith
+  zipLists zipListsWith
 
 ## Unprefixed default scope
 
-  abort baseNameOf dirOf import isNull map removeAttrs scopedImport
-  throw toString
+  abort baseNameOf dirOf import isNull lib map removeAttrs
+  scopedImport throw toString
 
 ## Public API
 
@@ -148,22 +153,22 @@ check whether something already exists before implementing it.
 
 ### pnix-clj.core
 
-  compile-source eval-source eval-source-strict eval-source-strict-audit eval-source-with-imports
-  lane-classification lower-source parse-source report run-source
-  verify-source
+  compile-source eval-file eval-source eval-source-strict eval-source-strict-audit
+  eval-source-with-imports lane-classification lower-source parse-source report
+  run-source verify-source
 
 ### pnix-clj.evaluator
 
   *coverage* *fuel* *import-context* *import-modules* *import-origin*
-  *import-resolver* *strict* *strict-audit* ->PxBytes apply-callable
-  assert-condition-violation attr-key-value-result attrset-value? binary-value-result contextual-import-target
-  ctx-string ctx-string? default-env default-env-names eval-ast
-  eval-ast* eval-ast-whnf eval-ast-with-fuel force-normal force-whnf
-  if-condition-violation import-context-key import-resolver-context impure-builtins interpolation-value-result
-  lane-classification lazy-host-fn logical-operand-result make-value-thunk merge-attr-path
-  neg-value-result nix-float-str nix-regex-pattern not-value-result nullary-builtin-result
-  path-value path-value? source-position strict-type string-content
-  string-ctx value-thunk?
+  *import-resolver* *pure-eval* *strict* *strict-audit* ->PxBytes
+  apply-callable assert-condition-violation attr-key-value-result attrset-value? binary-value-result
+  contextual-import-target ctx-string ctx-string? default-env default-env-names
+  eval-ast eval-ast* eval-ast-whnf eval-ast-with-fuel force-normal
+  force-whnf if-condition-violation import-context-key import-resolver-context impure-builtins
+  interpolation-value-result lane-classification lazy-host-fn logical-operand-result make-value-thunk
+  merge-attr-path neg-value-result nix-float-str nix-regex-pattern not-value-result
+  nullary-builtin-result path-value path-value? source-position strict-type
+  string-content string-ctx value-thunk?
 
 ### pnix-clj.form-analysis
 
@@ -278,9 +283,10 @@ check whether something already exists before implementing it.
 
 ### pnix-clj.specialize
 
-  -main cases clear-specialize-cache! futamura-cases lane-classification
-  report specialize specialize-cache-epoch specialize-cache-stats specialize-cached
-  specialize-to-host
+  *fold-fuel* -main cases clear-specialize-cache! default-fold-fuel
+  futamura-cases host-artifact-cases invoke-host-artifact lane-classification report
+  specialize specialize-cache-epoch specialize-cache-stats specialize-cached specialize-to-host
+  specialize-to-host-artifact
 
 ### pnix-clj.store
 

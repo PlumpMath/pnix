@@ -237,6 +237,9 @@
                                              :determinism :status])}))
 
 (defn- run-held-case
+  "Negative cases: either a static non-projectable refusal (err/failed envelope
+  → :status :failed + reason) or a form that projects but must not tower-
+  collapse (e.g. println as an unbound 1-arg call)."
   [{:keys [id form reason]}]
   (let [projected (form->pnix form)
         honest?
@@ -247,7 +250,9 @@
                  (not= :collapsed
                        (get-in (run-tower (:source projected))
                                [:collapse :status]))))
-          (and (= :held (:status projected))
+          ;; Static refusal uses err/failed (:status :failed). Older pins said
+          ;; :held; accept either non-ok envelope with the expected reason.
+          (and (not= :ok (:status projected))
                (= reason (:reason projected))))]
     {:id id
      :form (pr-str form)
