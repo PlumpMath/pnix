@@ -1013,6 +1013,8 @@
    "builtins.catAttrs null [ ]" "builtins.getAttr \"a\" null"
    "builtins.baseNameOf \"/\"" "builtins.baseNameOf \"a/b/c\""
    "builtins.dirOf \"/\""
+   "builtins.split \"\" \"ab\"" "builtins.match \"\" \"a\""
+   "builtins.split \".\" \"a.b.c\""
    "[1 [2 [3]]]"
    "let a = 1; b = a + 1; in a + b" "let a = b + 1; b = 1; in a"
    ;; D22 dotted let (parser path->nested + machine follows evaluator)

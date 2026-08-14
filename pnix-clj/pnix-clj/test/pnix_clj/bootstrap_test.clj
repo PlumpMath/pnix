@@ -5871,7 +5871,17 @@
     (is (= "a" (:value (pnix/eval-source "builtins.baseNameOf \"/a/\""))))
     (is (= "a" (:value (pnix/eval-source "builtins.baseNameOf \"a/\""))))
     (is (= "c" (:value (pnix/eval-source "builtins.baseNameOf \"a/b/c\""))))
-    (is (= "/" (:value (pnix/eval-source "builtins.dirOf \"/\""))))))
+    (is (= "/" (:value (pnix/eval-source "builtins.dirOf \"/\"")))))
+  (testing "match/split reject empty regex (oracle: invalid regular expression '')"
+    (is (= :invalid-regular-expression
+           (:reason (pnix/eval-source "builtins.split \"\" \"ab\""))))
+    (is (= :invalid-regular-expression
+           (:reason (pnix/eval-source "builtins.match \"\" \"a\""))))
+    (is (= :invalid-regular-expression
+           (:reason (pnix/eval-source "builtins.match \"\" \"\""))))
+    (is (= ["a" "b"] (:value (pnix/eval-source "builtins.match \"(a)(b)\" \"ab\""))))
+    (is (= ["" [] "" [] "" [] "" [] "" [] ""]
+           (:value (pnix/eval-source "builtins.split \".\" \"a.b.c\""))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by

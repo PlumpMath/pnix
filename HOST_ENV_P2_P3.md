@@ -191,3 +191,4 @@ These were listed as “next after host-env”. **No implementation in this cut.
 | 2026-08-14 | oracle D: zipAttrsWith null, genericClosure non-set, elemAt float, replaceStrings len |
 | 2026-08-14 | oracle D: catAttrs name must be string; getAttr requires attrset |
 | 2026-08-14 | oracle D: baseNameOf \"/\" is \"\" not null (Clojure split edge) |
+| 2026-08-14 | oracle D: match/split reject empty regex (Java would match every pos) |

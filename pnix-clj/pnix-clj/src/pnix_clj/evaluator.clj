@@ -2937,6 +2937,14 @@
       (err/failed :builtin :elem-at-index-not-int
                   {:builtin name :arg (second args)}))
 
+    (:match :split)
+    ;; Oracle: empty regex is invalid (`invalid regular expression ''`).
+    ;; Java Pattern allows "" and matches every position — wrong VALUE.
+    (let [pat (first args)]
+      (when (and (string-like? pat) (zero? (count (string-content pat))))
+        (err/failed :builtin :invalid-regular-expression
+                    {:builtin name :pattern ""})))
+
     :pathExists
     (if *pure-eval*
       (err/failed :builtin
