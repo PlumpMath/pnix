@@ -383,11 +383,11 @@ tracked here so nothing is re-developed:
   never emits an interpreter dispatch loop → gen(p) carries no residual
   interpreter), flagged as structural argument not mechanized proof. Verified by
   `futamura-second-projection`; report `:futamura`, alias `-M:futamura`.
-- [ ] **F2 · Jones-optimality as a measured quality target** — beyond the
-  structural note: specialize the `.px` SELF-interpreter to a program and show
-  the residual removes the interpretation layer (Brown-Palsberg POPL'18
-  affine-variable specialization-safe normalization as the buildable blueprint).
-  Genuine metric, higher effort (needs specializing evaluator.px).
+- [x] **F2 · Jones-optimality as a measured quality target** — **landed as
+  measurement** (`futamura/jones-optimality-witness`, report `:futamura`,
+  gate pin). Graded `gen(p)` compiled-size/AST ratio stays bounded (no
+  interpreter floor). Honest: structural measurement, **not** specializing a
+  `.px` self-interpreter (that remains higher-effort F7b-adjacent work).
 - [x] **F5 · translation validation** — ALREADY EXISTS
   (`pnix-clj.translation-validation`); per-compilation source-form↔bytecode
   semantic-preservation. Extend per Necula PLDI'00 if needed.
@@ -3373,12 +3373,14 @@ Follow `docs/REMAINING_DECISION.md` and § REMAINING WORK above. No new
 owner-gated residual list from host-env work.
 
 ### Optional product pulls (priority order when free)
-1. **Machine fragment growth** (M-series) — only if a pillar needs it.
+1. **Machine fragment growth** (M-series) — only if a pillar needs it;
+   differential corpus now includes D22 dotted-let rows (159 sources).
 2. ~~Specialize residual fuel / fold options~~ — **per-call `:fold-fuel` +
    reusable host artifact** landed 2026-08-14.
 3. ~~Local library export~~ — `bin/export-pnix-clj-library` +
    `pnix-clj-library-smoke` (personal feed; **not** Maven Central, 2026-08-14).
-4. **Conformance Phase D** — still DEFERRED (see backlog status at top).
+4. ~~F2 Jones measured witness~~ — landed (see roadmap.edn / futamura).
+5. **Conformance Phase D** — still DEFERRED (see backlog status at top).
 
 ### Host-import follow-ups (easy already done)
 - [x] `eval-file` public helper

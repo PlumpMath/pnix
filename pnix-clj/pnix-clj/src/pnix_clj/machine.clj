@@ -1010,6 +1010,9 @@
    "[1 2] == [1 2]" "\"a\" + \"b\"" "\"a\" < \"b\"" "[1 2] ++ [3]"
    "[1 [2 [3]]]"
    "let a = 1; b = a + 1; in a + b" "let a = b + 1; b = 1; in a"
+   ;; D22 dotted let (parser path->nested + machine follows evaluator)
+   "let a.b = 1; in a.b" "let a.b = 1; a.c = 2; in a.b + a.c"
+   "let a.b.c = 7; in a.b.c" "let a = { b = 1; }; a.c = 2; in a.b + a.c"
    "let a = 1 / 0; in 1" "let f = x: x + 1; in f 41"
    "let f = x: y: x + y; in f 1 2" "(x: x x) (x: 1)" "(x: 1) (1 / 0)"
    "let a = a; in a" "let x = 1; in let x = 2; in x"

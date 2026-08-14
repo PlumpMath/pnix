@@ -4654,7 +4654,7 @@
     (is specializer-proven-arith-pass?
         "specializer PROVEN meaning-preserving for arithmetic (all values)")
     ;; M7h: the machine agrees with the evaluator on RANDOM sources too —
-    ;; the fixed 155-row corpus lives in machine/differential-corpus; the
+    ;; the shared machine differential corpus lives in machine/differential-corpus; the
     ;; fifth property sweeps the space generatively (exact ok-and-held
     ;; agreement, stronger than value collapse) with shrinking.
     (is machine-pass?

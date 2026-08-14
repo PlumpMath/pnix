@@ -246,7 +246,7 @@
   "True iff the derived abstract machine (pnix-clj.machine) and the
   definitional evaluator agree EXACTLY on source — ok and held alike, a
   STRONGER check than lanes-collapse? (which only compares accepted values).
-  The machine's fixed 155-row corpus lives in machine/differential-corpus;
+  The machine's shared differential corpus lives in machine/differential-corpus;
   this property sweeps the rest of the expression space randomly, so a frame
   bug the corpus misses shrinks to a minimal source here."
   [source]
