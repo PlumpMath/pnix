@@ -434,12 +434,6 @@ top-line claim, but the substance is much closer than "false" implies:
   `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate`
   `metacircular gate: READY`, 회귀 없음.
 
-  U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
-  protocol, 중첩 `fn` 리터럴(진짜 closure — free variable을 캡처하는
-  별도 클래스가 필요, `javap` 확인은 아직 안 함). 각각 자체 multi-fixture
-  슬라이스이며, 그중 몇몇(deftype/reify/letfn/중첩 closure)은 그 자체로
-  진짜 크다(다중 클래스 생성이 필요).
-
   **24번째 슬라이스, 2026-08-14 (배치 진행): 연쇄 비교 + `get` 3-인자**
   (161→171). `+`와 달리 `<`는 3개 인자에서 fold 안 함 — `javap -c`
   확인: `(< a b c)`도 `(< a)`도 그냥 기존 `core-fn-call`과 똑같은
@@ -450,6 +444,24 @@ top-line claim, but the substance is much closer than "false" implies:
   직접 호출이라 새 `:get3` 노드 추가. DDC 행: 97→100. `-M:conformance`
   116/116 영향 없음, `bin/clj-meta-gate` `metacircular gate: READY`,
   회귀 없음.
+
+  **25번째 슬라이스, 2026-08-14 (배치 진행): named 자기재귀 `fn`**
+  (171→175). `(fn foo [n] ... (foo ...))`가 전부 "malformed fn
+  clause"였음 — `analyze-fn`이 이름 있는 형태를 파싱 못 함. `javap -c`
+  확인: real host는 self-reference를 그냥 `this` 로드+`IFn`
+  checkcast+invoke로 컴파일 — 22번째 슬라이스의 `emit-local-fn-call`과
+  완전히 같은 모양. `emit-local`에 `:self` kind(`this` 로드) 하나만
+  추가, `analyze-fn`이 이름을 파싱해 각 arity 절 env에 미리 넣음.
+  파라미터가 같은 이름이면 shadow하는 것도 real host와 동일(라이브
+  확인). 고정+variadic 혼합 arity와 named self-recursion을 같이 쓰는
+  경우도 검증. DDC 행: 100→102. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
+  protocol, 중첩 `fn` 리터럴(진짜 closure — free variable을 캡처하는
+  별도 클래스가 필요, `javap` 확인은 아직 안 함). 각각 자체 multi-fixture
+  슬라이스이며, 그중 몇몇(deftype/reify/letfn/중첩 closure)은 그 자체로
+  진짜 크다(다중 클래스 생성이 필요).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

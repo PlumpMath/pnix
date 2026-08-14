@@ -1176,8 +1176,12 @@
   "A single arity clause `(params-vector body-form...)`, shared by both the
   single-arity `(fn [x] ...)` shape (where the whole tail IS one clause) and
   each `([x] ...)` entry of a multi-arity `(fn ([x] ...) ([x y] ...))` form.
-  `params-vector` may end in `& rest-name` for a variadic clause."
-  [clause]
+  `params-vector` may end in `& rest-name` for a variadic clause. `fn-name`,
+  when non-nil (an optional self-reference name, `(fn name [x] ...)`), is
+  added to the clause's own env so calls to it inside the body analyze as an
+  ordinary local-fn-call -- a param of the same name shadows it, matching
+  real host (params are bound after/inside the name's own scope)."
+  [clause fn-name]
   (let [raw-params (first clause)
         body (rest clause)]
     (when-not (and (vector? raw-params) (seq body))
@@ -1187,7 +1191,8 @@
       (when-not (and (every? symbol? all-names)
                      (= (count all-names) (count (distinct all-names))))
         (throw (ex-info "tiny analyzer: malformed fn clause" {:clause clause})))
-      (let [env (zipmap all-names (repeat true))]
+      (let [env (cond-> (zipmap all-names (repeat true))
+                  fn-name (assoc fn-name true))]
         {:params params
          :rest-param rest-param
          :body (analyze-body env body)}))))
@@ -1197,12 +1202,23 @@
   (when-not (and (seq? form) (= 'fn (first form)))
     (throw (ex-info "tiny analyzer: expected fn form" {:form form})))
   (let [rest-form (rest form)
+        ;; Optional self-reference name: `(fn name [x] ...)` or
+        ;; `(fn name ([x] ..) ([x y] ..))` -- confirmed via `javap -c` that
+        ;; real host compiles a reference to this name WITHIN the body as a
+        ;; plain `this` load (`aload_0`) checkCast to `IFn` and invoked,
+        ;; the exact same shape `emit-local-fn-call` already uses for a
+        ;; fn-valued local (unsurprising: the compiled class always
+        ;; implements `IFn` via `AFunction`/`RestFn` regardless of naming).
+        ;; So this only needs a new `:self` local-env kind, no new
+        ;; bytecode mechanism.
+        fn-name (when (symbol? (first rest-form)) (first rest-form))
+        rest-form (if fn-name (rest rest-form) rest-form)
         ;; `(fn ([x] ..) ([x y] ..))`: every clause after `fn` is itself a
         ;; list. `(fn [x] ..)`: the single clause IS `rest-form` (its head is
         ;; a vector, not a list), so it is wrapped as the sole clause below.
         multi-arity? (and (seq rest-form) (seq? (first rest-form)))
         clauses (if multi-arity? rest-form [rest-form])
-        arities (mapv analyze-fn-clause clauses)
+        arities (mapv #(analyze-fn-clause % fn-name) clauses)
         ;; Only compared among FIXED clauses: a fixed clause sharing its
         ;; param count with the (separately checked, at-most-one) variadic
         ;; clause is not a duplicate at all -- confirmed live, `(fn ([a b]
@@ -1240,6 +1256,7 @@
           (throw (ex-info "tiny analyzer: fixed arity cannot have more params than the variadic arity"
                           {:form form})))))
     {:op :fn
+     :fn-name fn-name
      :arities arities}))
 
 (declare emit-expr)
@@ -1414,6 +1431,11 @@
     (case (:kind entry)
       :arg (.loadArg ga (int (:index entry)))
       :let (.loadLocal ga (int (:slot entry)))
+      ;; A `(fn name [...] ...)` self-reference -- confirmed via `javap -c`
+      ;; that real host compiles this as a plain `this` load, since the
+      ;; compiled class already implements `IFn` via `AFunction`/`RestFn`
+      ;; regardless of naming.
+      :self (.loadThis ga)
       (throw (ex-info "tiny emitter: unknown local" {:name name})))))
 
 (defn- emit-do
@@ -2039,8 +2061,9 @@
   (Method. "getRequiredArity" Type/INT_TYPE (into-array Type [])))
 
 (defn- emit-class
-  [{:keys [arities]}]
+  [{:keys [arities fn-name]}]
   (let [variadic? (boolean (some :rest-param arities))
+        self-env (when fn-name {fn-name {:kind :self}})
         class-name (next-class-name)
         internal (.replace class-name \. \/)
         ctype (Type/getObjectType internal)
@@ -2070,7 +2093,7 @@
                                     (invoke-method (count params))
                                     nil nil cw)]
           (emit-expr ga
-                     (into {}
+                     (into (or self-env {})
                            (map-indexed (fn [i p]
                                           [p {:kind :arg :index i}]))
                            params)
@@ -2095,7 +2118,7 @@
                                   (do-invoke-method (count all-params))
                                   nil nil cw)]
         (emit-expr ga
-                   (into {}
+                   (into (or self-env {})
                          (map-indexed (fn [i p]
                                         [p {:kind :arg :index i}]))
                          all-params)
@@ -2705,6 +2728,22 @@
     :source "(fn [m k d] (get m k d))"
     :args [{:a 1} :b 99]
     :expected 99}
+   {:id :tiny-named-fn-self-recur
+    :source "(fn foo [n] (if (= n 0) 0 (foo (- n 1))))"
+    :args [5]
+    :expected 0}
+   {:id :tiny-named-fn-self-recur-return-value
+    :source "(fn foo [n] (if (= n 0) :done (foo (- n 1))))"
+    :args [3]
+    :expected :done}
+   {:id :tiny-named-fn-param-shadows-self-name
+    :source "(fn foo [foo] foo)"
+    :args [42]
+    :expected 42}
+   {:id :tiny-named-fn-mixed-arity-self-recur
+    :source "(fn count-down ([n] (count-down n 0)) ([n acc] (if (= n 0) acc (count-down (- n 1) (+ acc 1)))))"
+    :args [5]
+    :expected 5}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

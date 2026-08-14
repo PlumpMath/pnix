@@ -93,7 +93,9 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    171 fixtures (fn/if/do/let/loop-recur/variadic `+`/`-`/`*` (0/1/2/N
+    175 fixtures (fn/if/do/let/loop-recur/named self-recursive `fn`
+    (`(fn name [x] ...)`, a same-shape `this`-load self-reference, real
+    host bytecode exactly)/variadic `+`/`-`/`*` (0/1/2/N
     args, left-folded exactly as real host does)/unary `-`/chained `<`/
     `=`/`>`/`>=`/`<=` for arities other than 2 (falls back to the same
     general Var-call mechanism real host itself uses there, confirmed
@@ -653,6 +655,22 @@ host는 `Numbers.add(Numbers.add(a,b),c)`처럼 **왼쪽부터 fold**해서
 `RT.get(Object,Object,Object)` 오버로드 직접 호출이라 새 `:get3` 노드로
 추가. 전부 실제 host 대비 대조 검증(참/거짓 양쪽, key 있음/없음 양쪽).
 U6: 161→171. DDC 행: 97→100. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 스물다섯 번째 확장 (2026-08-14, 배치 진행): named 자기재귀
+`fn`.** `(fn foo [n] ... (foo ...))`가 이전까지 "malformed fn clause"로
+전부 거부됐다 — `analyze-fn`이 이름 있는 형태 자체를 파싱 못 했음.
+`javap -c`로 real host의 named `(def f (fn foo [n] ...))`를 확인하니
+`foo`라는 이름의 self-reference는 그냥 `this`를 로드(`aload_0`)해서
+`IFn`으로 checkcast 후 invoke — 이전 슬라이스의 `emit-local-fn-call`과
+완전히 같은 모양(당연함: 컴파일된 클래스가 이름과 무관하게 항상
+`AFunction`/`RestFn`을 통해 `IFn`을 구현하므로). 새 바이트코드
+메커니즘 없이 `emit-local`에 `:self` kind 하나(`this` 로드)만 추가하고,
+`analyze-fn`이 이름을 파싱해서 각 arity 절의 env에 미리 넣어줌 — 파라미터가
+같은 이름이면 그 파라미터가 self-reference를 shadow하는 것도 real host와
+동일(라이브 확인: `(fn foo [foo] foo)` → 파라미터 값 그대로 반환).
+고정+variadic 혼합 arity와 named self-recursion을 같이 쓰는 경우도 검증.
+U6: 171→175. DDC 행: 100→102. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
