@@ -337,6 +337,50 @@
                   (list 'let [b temp] then)
                   else)))))
 
+(defn- raw-form-contains-symbol?
+  [form syms]
+  (cond
+    (symbol? form) (contains? syms form)
+    (coll? form) (boolean (some #(raw-form-contains-symbol? % syms) form))
+    :else false))
+
+;; `letfn` desugars into nested `let`s of self-named `fn`s -- confirmed via
+;; `javap -c` on a host-AOT-compiled single-binding, non-mutually-recursive
+;; `(letfn [(add-x [y] (+ x y))] (add-x 10))`: it is exactly the same shape
+;; as `(let [add-x (fn add-x [y] (+ x y))] (add-x 10))` -- capturing `x` as
+;; a real closure field, storing the constructed instance in an ordinary
+;; local slot, calling it via the same `local-fn-call` mechanism -- ALL
+;; already-built machinery, needing zero new bytecode here. Real host's
+;; MUTUALLY recursive shape (`even?` calling `odd?` and vice versa) is
+;; structurally different (each binding's constructor is called with the
+;; OTHER, still-under-construction bindings' current -- possibly still-null
+;; -- values, then every field referencing a not-yet-constructed sibling is
+;; backpatched via a direct `putfield` once all bindings exist) -- a real,
+;; separately-sizeable extension (needs non-final capture fields and a
+;; two-phase construct-then-backpatch emission), not attempted here.
+;; Detected and rejected with a clear error at macro-expansion time (a
+;; simple raw-form symbol-membership scan, cheaper than deferring to
+;; analysis's own "unknown local" for a forward-referenced sibling), rather
+;; than a confusing downstream failure.
+(defn- expand-letfn
+  [args]
+  (let [[bindings & body] args]
+    (when-not (and (vector? bindings)
+                   (seq bindings)
+                   (every? #(and (seq? %) (symbol? (first %)) (vector? (second %)))
+                           bindings))
+      (throw (ex-info "tiny macroexpander: letfn requires a vector of (name [params] body...) bindings"
+                      {:bindings bindings})))
+    (let [fnames (set (map first bindings))]
+      (doseq [[fname _params & fbody] bindings]
+        (when (raw-form-contains-symbol? fbody (disj fnames fname))
+          (throw (ex-info "tiny macroexpander: letfn bindings mutually referencing OTHER letfn siblings are not yet supported -- only self-recursion and references to the enclosing scope are"
+                          {:binding-name fname :bindings bindings}))))
+      (reduce (fn [inner-body [fname params & fbody]]
+                (list 'let [fname (list* 'fn fname params fbody)] inner-body))
+              (cons 'do body)
+              (reverse bindings)))))
+
 (defn- expand-as->
   [args]
   (let [[expr name & forms] args]
@@ -438,6 +482,7 @@
       cond (expand-form counter (expand-cond args))
       case (expand-form counter (expand-case counter args))
       if-let (expand-form counter (expand-if-let counter args))
+      letfn (expand-form counter (expand-letfn args))
       when-let (do
                  (when (empty? args)
                    (throw (ex-info "tiny macroexpander: when-let arity"
@@ -3058,6 +3103,18 @@
     :source "(fn [x] ((fn [& r] (cons x r)) 2 3))"
     :args [1]
     :expected '(1 2 3)}
+   {:id :tiny-letfn-single-binding-captures-outer
+    :source "(fn [x] (letfn [(add-x [y] (+ x y))] (add-x 10)))"
+    :args [3]
+    :expected 13}
+   {:id :tiny-letfn-self-recursive-binding
+    :source "(fn [n] (letfn [(fact [i] (if (= i 0) 1 (* i (fact (- i 1)))))] (fact n)))"
+    :args [5]
+    :expected 120}
+   {:id :tiny-letfn-two-independent-bindings
+    :source "(fn [x] (letfn [(add-x [y] (+ x y)) (double-x [] (* x 2))] (+ (add-x 10) (double-x))))"
+    :args [3]
+    :expected 19}
    {:id :tiny-field-get
     :source "(fn [p] (.-x p))"
     :args [(java.awt.Point. 7 9)]

@@ -538,11 +538,26 @@ top-line claim, but the substance is much closer than "false" implies:
   `metacircular gate: READY`, 회귀 없음(기존 185개 fixture는 자기
   `if`가 애초에 관대해서 fix 전후 모두 통과).
 
-  U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
-  protocol. 각각 자체 multi-fixture 슬라이스이며, 그중 몇몇(deftype/
-  reify/letfn)은 그 자체로 진짜 크다(다중 클래스 생성이 필요). 중첩
-  closure는 이제 지원되지만 1단계/단일 arity로 범위 제한 — 더 깊은
-  중첩이나 multi-arity 중첩 closure는 남은 gap.
+  **30번째 슬라이스, 2026-08-15: `letfn`(비-상호재귀만)** (194→197).
+  `javap -c`로 single-binding 비상호재귀 `letfn`이 real host에서
+  `let`+named-`fn`+closure와 완전히 같은 바이트코드임을 확인 —
+  `expand-letfn`으로 매크로 확장 레이어에서만 `(name [params] body)`를
+  안쪽부터 `(let [name (fn name [params] body)] ...)`로 감싸는 nested
+  `let`로 변환, 새 바이트코드 전혀 불필요. 진짜 상호재귀(`even?`/
+  `odd?`)는 real host가 null-초기화 후 생성, 전부 만들고 나서
+  `putfield`로 되짚어 채우는 2단계 메커니즘이 필요해 이번엔 시도 안
+  함 — 매크로 확장 시점에 raw-form 심볼 스캔으로 형제 참조를 감지해
+  명확한 에러로 거부(자기재귀는 정상 허용). 단일 바인딩/자기재귀/
+  독립된 두 바인딩/상호재귀 거부 전부 실제 host 대비 검증.
+  compiler.clj도 `letfn` 지원 확인 후 DDC 행 연결. DDC 행: 112→114.
+  `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate`
+  `metacircular gate: READY`, 회귀 없음.
+
+  U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, protocol.
+  각각 자체 multi-fixture 슬라이스이며 다중 클래스 생성이 필요해
+  진짜 크다. 남은 gap: 중첩 closure는 1단계/단일 arity로 범위 제한(더
+  깊은 중첩이나 multi-arity 중첩 closure는 아직), `letfn`은 진짜 상호
+  재귀(생성-후-backpatch)는 아직 없음.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

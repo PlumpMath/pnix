@@ -704,7 +704,15 @@
    {:id :mini-backend-closure-multiple-captures
     :source "(fn [x y] ((fn [z] (+ x (+ y z))) 3))"
     :args [1 2]
-    :expected 6}])
+    :expected 6}
+   {:id :mini-backend-letfn-single-binding
+    :source "(fn [x] (letfn [(add-x [y] (+ x y))] (add-x 10)))"
+    :args [3]
+    :expected 13}
+   {:id :mini-backend-letfn-self-recursive
+    :source "(fn [n] (letfn [(fact [i] (if (= i 0) 1 (* i (fact (- i 1)))))] (fact n)))"
+    :args [5]
+    :expected 120}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

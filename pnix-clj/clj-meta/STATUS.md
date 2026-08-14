@@ -93,7 +93,12 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    194 fixtures (fn/if/do/let/loop-recur/true nested closures -- a `fn`
+    197 fixtures (fn/if/do/let/loop-recur/`letfn` (non-mutually-recursive
+    bindings only -- desugars entirely to nested `let`+self-named-`fn`,
+    confirmed via `javap -c` to be real host's own shape for this case,
+    reusing existing closure/self-recursion machinery with zero new
+    bytecode; sibling mutual recursion rejected with a clear
+    macro-expansion-time error, not attempted here)/true nested closures -- a `fn`
     literal appearing inside another `fn`'s body, capturing free
     variables from the enclosing scope as instance fields on a
     recursively-emitted inner class (one nesting level, single arity
@@ -809,6 +814,31 @@ backend)는 closure와 boolean identity 둘 다 문제없음을 확인 후 DDC
 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
 READY`) 녹색, 회귀 없음(기존 185개 fixture 전부 이 fix 이후에도
 그대로 통과 — 자기 `if`가 애초에 관대했으므로 예상대로).
+
+**같은 날 서른 번째 확장 (2026-08-15): `letfn`(비-상호재귀만).**
+`javap -c`로 single-binding, 상호재귀 아닌 `(letfn [(add-x [y] (+ x
+y))] (add-x 10))`를 확인하니 real host의 바이트코드가 `(let [add-x
+(fn add-x [y] (+ x y))] (add-x 10))`와 **완전히 같은 모양** — `x`를
+진짜 closure 필드로 캡처, 생성된 인스턴스를 평범한 local slot에
+저장, `local-fn-call`로 호출. 즉 non-mutual `letfn`은 이미 있는
+`let`+named-`fn`+closure 기능의 순수한 desugar였다. 그래서
+`letfn`을 매크로 확장 레이어에만 추가(`expand-letfn`) — 각
+`(name [params] body)` 바인딩을 `(let [name (fn name [params]
+body)] ...)`로 안쪽부터 감싸 nested `let`으로 변환, 새 바이트코드
+전혀 불필요. 진짜 상호재귀(`even?`가 `odd?`를 부르고 그 반대도)는
+real host가 각 바인딩 생성자를 (아직 null일 수도 있는) 다른
+바인딩들의 현재 값으로 호출한 뒤, 전부 만들어지고 나서 아직 null이던
+필드들을 `putfield`로 되짚어 채우는 2단계 생성-후-backpatch 메커니즘이
+필요 — 이건 별도로 크게 다뤄야 할 확장이라 이번엔 시도하지 않고,
+매크로 확장 시점에 각 바인딩의 원본 body에서 **다른** 형제 이름이
+등장하는지 raw-form 심볼 스캔으로 검사해서 명확한 에러로 거부(분석
+단계까지 미뤄서 애매한 "unknown local"이 나오는 것보다 나음) — 자기
+자신 재귀는 named self-recursion으로 이미 잘 되므로 정상 허용. 단일
+바인딩(외부 변수 캡처), 자기재귀 바인딩, 서로 독립된 두 바인딩,
+상호재귀 거부까지 전부 실제 host 대비 검증. compiler.clj도 `letfn`
+정상 지원 확인 후 DDC 행에 연결. U6: 194→197. DDC 행: 112→114. 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
+READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)
