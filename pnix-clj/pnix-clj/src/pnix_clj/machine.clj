@@ -1009,6 +1009,8 @@
    "true && false || true" "!(1 < 2)" "1 < 2 && 2 <= 2" "1 == 1.0"
    "[1 2] == [1 2]" "\"a\" + \"b\"" "\"a\" < \"b\"" "[1 2] ++ [3]"
    "[] ++ null" "[1] ++ 2" "null ++ []"
+   "null // { a = 1; }" "{ a = 1; } // null" "null // null"
+   "[] // { a = 1; }" "{ a = 1; } // { b = 2; }"
    "[1 [2 [3]]]"
    "let a = 1; b = a + 1; in a + b" "let a = b + 1; b = 1; in a"
    ;; D22 dotted let (parser path->nested + machine follows evaluator)

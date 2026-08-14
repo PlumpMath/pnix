@@ -1637,8 +1637,24 @@
                       {:construct :binary}
                       left
                       right)
-      "//" {:status :ok
-            :value (merge left right)}
+      ;; Attrset update: BOTH operands must be attrsets. Clojure's
+      ;; (merge nil m) / (merge m nil) treat nil as empty map — that is NOT
+      ;; Nix (oracle: "expected a set but found null"). Lists/ints/bools
+      ;; similarly must not leak a wrong VALUE.
+      "//" (cond
+             (not (attrset-value? left))
+             (err/failed :eval :update-operand-not-attrset
+                         {:operator "//"
+                          :side :left
+                          :value-type (strict-type left)})
+             (not (attrset-value? right))
+             (err/failed :eval :update-operand-not-attrset
+                         {:operator "//"
+                          :side :right
+                          :value-type (strict-type right)})
+             :else
+             {:status :ok
+              :value (merge left right)})
       ;; List concatenation: BOTH operands must be lists. Clojure's
       ;; (concat xs nil) treats nil as empty — that is NOT Nix (oracle:
       ;; "expected a list but found null"). Same for string/int right.

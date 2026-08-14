@@ -5749,7 +5749,20 @@
     (is (= :concat-operand-not-list (:reason (pnix/eval-source "[1] ++ 2"))))
     (is (= :concat-operand-not-list (:reason (pnix/eval-source "[] ++ \"x\""))))
     (is (= [1 2 3] (:value (pnix/eval-source "[1] ++ [2 3]"))))
-    (is (= [] (:value (pnix/eval-source "[] ++ []"))))))
+    (is (= [] (:value (pnix/eval-source "[] ++ []")))))
+  (testing "// requires attrset operands (oracle: expected a set but found null/list)"
+    ;; Pre-fix: Clojure (merge nil m)/(merge m nil) treated null as empty →
+    ;; wrong VALUE; (merge [] m) also leaked a list-shaped result.
+    (is (= :update-operand-not-attrset (:reason (pnix/eval-source "null // { a = 1; }"))))
+    (is (= :update-operand-not-attrset (:reason (pnix/eval-source "{ a = 1; } // null"))))
+    (is (= :update-operand-not-attrset (:reason (pnix/eval-source "null // null"))))
+    (is (= :update-operand-not-attrset (:reason (pnix/eval-source "1 // { a = 1; }"))))
+    (is (= :update-operand-not-attrset (:reason (pnix/eval-source "{ a = 1; } // 2"))))
+    (is (= :update-operand-not-attrset (:reason (pnix/eval-source "[] // { a = 1; }"))))
+    (is (= :update-operand-not-attrset (:reason (pnix/eval-source "true // { a = 1; }"))))
+    (is (= :update-operand-not-attrset (:reason (pnix/eval-source "\"x\" // { a = 1; }"))))
+    (is (= {"a" 1 "b" 2} (:value (pnix/eval-source "{ a = 1; } // { b = 2; }"))))
+    (is (= {"a" 2} (:value (pnix/eval-source "{ a = 1; } // { a = 2; }"))))))
 
 (deftest evaluator-tryeval-only-catches-throw-assert
   ;; Nix tryEval catches only throw and assert; abort, type errors, division by
