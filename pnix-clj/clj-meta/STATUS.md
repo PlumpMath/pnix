@@ -93,8 +93,10 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    124 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals/
-    quote/14 macros incl. `case` with a real no-default throw/vector-
+    130 fixtures (fn/if/do/let/loop-recur/arithmetic/compare/data-literals
+    incl. `N`/`M` bignum literals (real `clojure.lang.BigInt`/
+    `java.math.BigDecimal`, composing with the existing `+`/`-`/`*`/`=`
+    ops)/quote/14 macros incl. `case` with a real no-default throw/vector-
     destructuring/fixed multi-arity fn/variadic `&` rest-args/count/
     `try` with any combination of (single- or multi-)`catch` and
     `finally`/`throw`/general class construction and general static
@@ -484,6 +486,42 @@ tiny 언어엔 자체 import 표가 없어서 real host와 달리 **완전히 �
 호출(`Collections/emptyList`) — 전부 host와 일치. U6: 121→124. DDC 행:
 74→75. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 열일곱 번째 확장 (2026-08-14): bignum 리터럴(`N`/`M` 접미사) —
+그리고 이번에도 진짜 버그 하나를 값만이 아니라 **클래스까지** 대조해서
+잡았다.** `5N`/`1.5M`을 `javap -c`로 확인했더니 뜻밖의 결과: real host는
+이걸 `BigInteger.valueOf` 같은 걸로 직접 만드는 게 아니라, 리터럴의
+소스 텍스트 자체를 문자열 상수로 저장해뒀다가 클래스 초기화 시점
+(`<clinit>`)에 `clojure.lang.RT.readString`을 **한 번** 호출해서 만든
+값을 static field에 캐싱한다. 이 메커니즘은 일부러 재현하지 않았다 —
+그대로 따라하면 이 witness 자신의 상수 생성이 real reader를 거치게
+되어, 독립 DDC witness라는 존재 이유 자체가 무너진다. 대신 표준
+라이브러리 API로 직접 값을 만든다(같은 값, 완전히 다른 생성 경로).
+
+**첫 시도에서 진짜 버그**: `N` 접미사 값을 `java.math.BigInteger`로 바로
+만들었더니 `(= tiny host)`는 `true`였지만(Clojure `=`가 숫자 타입 간
+교차 비교를 하므로) `(class tiny)` ≠ `(class host)`였다 — `(class 5N)`은
+사실 `clojure.lang.BigInt`(Clojure 자체 wrapper 타입)이지 raw
+`BigInteger`가 아니었다. **값만 비교하고 넘어갔으면 안 잡았을 버그** —
+클래스까지 명시적으로 대조해서 발견하고, `BigInt.fromBigInteger(new
+BigInteger(String))`로 고쳤다. `M` 접미사는 처음부터 진짜
+`java.math.BigDecimal`이라 별도 wrapper 불필요(라이브 확인).
+
+또 하나 실제로 고친 것: `analyze-expr`의 기존 `(integer? form)` 분기가
+`(long form)`으로 캐스팅하는데, `BigInt`도 `integer?`를 만족해서 그
+분기를 먼저 타면 `Long/MAX_VALUE`를 넘는 값이 조용히 잘렸을 것 —
+`emit-const`/`analyze-expr` 둘 다에서 BigInt/BigDecimal 분기를 generic
+`integer?` 분기보다 **먼저** 검사하도록 함.
+
+이 리터럴들은 기존 `+`/`-`/`*`/`=` 연산자와 자연스럽게 합성된다(이미
+있는 `Numbers.add` 등이 애초에 모든 숫자 타입에 다형적으로 동작하므로) —
+그래서 그냥 리터럴 하나 추가한 게 아니라 임의 정밀도 산술이라는 진짜
+새 능력이 기존 연산자를 통해 열림. 실제 host `eval` 대비 검증(추가
+전): 단순 리터럴 값+클래스, `Long/MAX_VALUE`를 넘는 `+`(오버플로 없이
+정확히 계산), `BigDecimal` 곱셈, `BigInt`와 `Long`의 `=` 비교 — 전부
+host와 일치(값·클래스 둘 다). U6: 124→130. DDC 행: 75→78. 전체
+`-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular gate:
+READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

@@ -9,7 +9,8 @@
             [clojure.pprint :as pp])
   (:import [clojure.asm ClassWriter Label Opcodes Type]
            [clojure.asm.commons GeneratorAdapter Method]
-           [clojure.lang AFunction DynamicClassLoader IFn Keyword Numbers Reflector RestFn RT Symbol Util Var]
+           [clojure.lang AFunction BigInt DynamicClassLoader IFn Keyword Numbers Reflector RestFn RT Symbol Util Var]
+           [java.math BigDecimal BigInteger]
            [java.security MessageDigest]))
 
 (def receipt-path "clj-meta/proof/frontend-selfhost.receipt.edn")
@@ -24,9 +25,14 @@
 (def ^:private symbol-type (Type/getType Symbol))
 (def ^:private throwable-type (Type/getType Throwable))
 (def ^:private string-type (Type/getType String))
+(def ^:private java-biginteger-type (Type/getType BigInteger))
+(def ^:private clj-bigint-type (Type/getType BigInt))
+(def ^:private bigdec-type (Type/getType BigDecimal))
 (def ^:private object-array-class (Class/forName "[Ljava.lang.Object;"))
 (def ^:private init-method
   (Method. "<init>" Type/VOID_TYPE (into-array Type [])))
+(def ^:private string-arg-ctor-method
+  (Method. "<init>" Type/VOID_TYPE (into-array Type [string-type])))
 (def ^:private class-counter (atom -1))
 
 (defn- sha256-string
@@ -109,6 +115,8 @@
   (reflect-asm-method RT "classForName" [String]))
 (def ^:private reflector-invoke-constructor-method
   (reflect-asm-method Reflector "invokeConstructor" [Class object-array-class]))
+(def ^:private bigint-frombiginteger-method
+  (reflect-asm-method BigInt "fromBigInteger" [BigInteger]))
 
 (defn- next-class-name
   []
@@ -156,6 +164,18 @@
       (and (.startsWith ^String token ":")
            (< 1 (count token)))
       (keyword (subs token 1))
+
+      ;; `N`-suffixed literals are `clojure.lang.BigInt`, NOT a raw
+      ;; `java.math.BigInteger` -- confirmed live: `(class 5N)` is
+      ;; `clojure.lang.BigInt`, and a first draft that built a plain
+      ;; `BigInteger` here matched by value (Clojure's `=` compares across
+      ;; numeric types) but NOT by class, a real gap caught by explicitly
+      ;; checking classes, not just values, before trusting this fixture.
+      (re-matches #"-?\d+N" token)
+      (BigInt/fromBigInteger (BigInteger. ^String (subs token 0 (dec (count token)))))
+
+      (re-matches #"-?\d+\.\d+M" token)
+      (BigDecimal. ^String (subs token 0 (dec (count token))))
 
       (re-matches #"-?\d+" token)
       (Long/parseLong token)
@@ -863,6 +883,13 @@
     (keyword? form)
     {:op :const :value form}
 
+    ;; Checked before the generic `integer?` branch below: `(long form)`
+    ;; there would silently truncate a `BigInt` past Long/MAX_VALUE.
+    ;; `BigDecimal` isn't `integer?` at all, so it needs its own branch
+    ;; regardless.
+    (or (instance? BigInt form) (instance? BigDecimal form))
+    {:op :const :value form}
+
     (integer? form)
     {:op :const :value (long form)}
 
@@ -999,6 +1026,41 @@
   (cond
     (nil? value)
     (emit-nil ga)
+
+    ;; Checked BEFORE the generic `integer?` branch below: `BigInt`
+    ;; satisfies `integer?` too, and truncating one through that branch's
+    ;; `(long value)` would silently lose precision for anything past
+    ;; Long/MAX_VALUE. Real host does NOT construct these via
+    ;; `BigInt.fromBigInteger(new BigInteger(String))` at all -- confirmed
+    ;; via `javap -c` that it instead stores the literal's own source text
+    ;; as a string constant and calls `clojure.lang.RT.readString` on it
+    ;; once, at class-init time, caching the result in a static field. That
+    ;; mechanism is deliberately NOT reproduced here: it would route this
+    ;; witness's own constant construction through the real reader,
+    ;; undermining the entire point of an independent DDC witness. Building
+    ;; the value directly via the standard-library APIs (same VALUE,
+    ;; genuinely different construction path) is the right choice for what
+    ;; this backend is for, even though it diverges from real host's own
+    ;; bytecode shape here. Also worth recording: a first draft built a
+    ;; plain `java.math.BigInteger` instead of `clojure.lang.BigInt` --
+    ;; matched by VALUE (Clojure's `=` compares across numeric types) but
+    ;; NOT by class (`(class 5N)` is `clojure.lang.BigInt`, confirmed
+    ;; live), a real gap caught by explicitly comparing classes, not just
+    ;; values, before trusting the fixture.
+    (instance? BigInt value)
+    (do
+      (.newInstance ga java-biginteger-type)
+      (.dup ga)
+      (.push ga (.toString (.toBigInteger ^BigInt value)))
+      (.invokeConstructor ga java-biginteger-type string-arg-ctor-method)
+      (.invokeStatic ga clj-bigint-type bigint-frombiginteger-method))
+
+    (instance? BigDecimal value)
+    (do
+      (.newInstance ga bigdec-type)
+      (.dup ga)
+      (.push ga (.toString ^BigDecimal value))
+      (.invokeConstructor ga bigdec-type string-arg-ctor-method))
 
     (integer? value)
     (do
@@ -2229,7 +2291,31 @@
    {:id :tiny-general-static-interop-no-arg
     :source "(fn [] (java.util.Collections/emptyList))"
     :args []
-    :expected []}])
+    :expected []}
+   {:id :tiny-bigint-literal
+    :source "(fn [] 5N)"
+    :args []
+    :expected 5N}
+   {:id :tiny-bigint-literal-beyond-long-range
+    :source "(fn [] 10000000000000000000N)"
+    :args []
+    :expected 10000000000000000000N}
+   {:id :tiny-bigdec-literal
+    :source "(fn [] 1.5M)"
+    :args []
+    :expected 1.5M}
+   {:id :tiny-bigint-arithmetic-beyond-long-overflow
+    :source "(fn [] (+ 9223372036854775807N 1N))"
+    :args []
+    :expected 9223372036854775808N}
+   {:id :tiny-bigdec-arithmetic
+    :source "(fn [] (* 1.5M 2))"
+    :args []
+    :expected 3.0M}
+   {:id :tiny-bigint-equals-long
+    :source "(fn [] (= 5N 5))"
+    :args []
+    :expected true}])
 
 (defn run
   []

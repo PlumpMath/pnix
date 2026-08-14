@@ -556,7 +556,19 @@
    {:id :mini-backend-general-static-interop-digit
     :source "(fn [c] (java.lang.Character/isDigit c))"
     :args [\5]
-    :expected true}])
+    :expected true}
+   {:id :mini-backend-bigint-literal-beyond-long-range
+    :source "(fn [] 10000000000000000000N)"
+    :args []
+    :expected 10000000000000000000N}
+   {:id :mini-backend-bigint-arithmetic-beyond-long-overflow
+    :source "(fn [] (+ 9223372036854775807N 1N))"
+    :args []
+    :expected 9223372036854775808N}
+   {:id :mini-backend-bigdec-arithmetic
+    :source "(fn [] (* 1.5M 2))"
+    :args []
+    :expected 3.0M}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

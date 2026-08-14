@@ -326,8 +326,37 @@ top-line claim, but the substance is much closer than "false" implies:
   일치. DDC 행: 74→75. `-M:conformance` 116/116 영향 없음,
   `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **17번째 슬라이스, 2026-08-14: bignum 리터럴**(`N`/`M` 접미사,
+  124→130) — **진짜 버그를 값만이 아니라 클래스까지 대조해서 잡음.**
+  `5N`/`1.5M`을 `javap -c`로 확인하니 real host는 리터럴 소스 텍스트를
+  문자열 상수로 저장했다가 `<clinit>`에서 `RT.readString`을 한 번
+  호출해 static field에 캐싱 — 이 메커니즘은 일부러 재현 안 함(그대로
+  하면 이 witness의 상수 생성이 real reader를 거쳐 독립 witness라는
+  존재 이유가 무너짐). 대신 표준 라이브러리로 직접 값을 만듦(같은 값,
+  다른 생성 경로).
+
+  첫 시도에서 `N` 값을 `java.math.BigInteger`로 바로 만들었더니
+  `(= tiny host)`는 `true`(Clojure `=`가 숫자 타입 교차 비교)였지만
+  `(class tiny)` ≠ `(class host)` — `(class 5N)`은 실제로
+  `clojure.lang.BigInt`이지 raw `BigInteger`가 아니었다. **값만 비교했으면
+  놓쳤을 버그**를 클래스까지 명시 대조해서 잡고 `BigInt.fromBigInteger(new
+  BigInteger(String))`로 고침. `M`은 처음부터 진짜 `BigDecimal`이라
+  문제없었음(라이브 확인). 추가로 `analyze-expr`의 기존 `(integer? form)`
+  분기가 `(long form)`으로 캐스팅하는데 `BigInt`도 `integer?`라 그 분기를
+  먼저 타면 `Long/MAX_VALUE` 넘는 값이 조용히 잘렸을 것 — `emit-const`/
+  `analyze-expr` 둘 다 BigInt/BigDecimal 분기를 generic `integer?`보다
+  먼저 검사하도록 함.
+
+  기존 `+`/`-`/`*`/`=`가 이미 모든 숫자 타입에 다형적이라 이 리터럴들과
+  자연스럽게 합성 — 리터럴 하나 추가가 아니라 임의 정밀도 산술이라는 진짜
+  새 능력이 열림. 실제 host `eval` 대비 검증(추가 전): 리터럴 값+클래스,
+  `Long/MAX_VALUE` 넘는 `+`(오버플로 없이 정확), `BigDecimal` 곱셈,
+  `BigInt`/`Long` `=` 비교 — 전부 host와 일치. DDC 행: 75→78.
+  `-M:conformance` 116/116 영향 없음, `bin/clj-meta-gate` `metacircular
+  gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
-  bignum/ratio/regex reader 리터럴, dynamic var, protocol, RestFn의
+  ratio/regex reader 리터럴, dynamic var, protocol, RestFn의
   fixed+variadic 혼합 arity 형태. 각각 자체 multi-fixture 슬라이스이며,
   그중 몇몇(deftype/reify)은 그 자체로 진짜 크다.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
