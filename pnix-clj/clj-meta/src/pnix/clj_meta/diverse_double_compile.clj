@@ -680,7 +680,15 @@
    {:id :mini-backend-fn-tail-recur-variadic
     :source "(fn [n & r] (if (= n 0) r (recur (- n 1) (cons n r))))"
     :args [3]
-    :expected '(1 2 3)}])
+    :expected '(1 2 3)}
+   {:id :mini-backend-general-catch-class-ex-info-data
+    :source "(fn [] (try (throw (ex-info \"boom\" {:a 1})) (catch clojure.lang.ExceptionInfo e (ex-data e))))"
+    :args []
+    :expected {:a 1}}
+   {:id :mini-backend-general-catch-class-npe
+    :source "(fn [x] (try (.length x) (catch java.lang.NullPointerException e :caught-npe)))"
+    :args [nil]
+    :expected :caught-npe}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

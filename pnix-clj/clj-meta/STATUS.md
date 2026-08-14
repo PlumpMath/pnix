@@ -93,7 +93,11 @@ U5  independent-kernel-evaluator-supported-corpus
 U6  frontend-selfhost
     a self-authored tiny reader + tiny analyzer + direct ASM emitter, sharing
     no recognizer/range-engine/emit-helper code with compiler.clj. Compiles
-    182 fixtures (fn/if/do/let/loop-recur/`recur` at a `fn` body's own
+    185 fixtures (fn/if/do/let/loop-recur/`catch` of any fully-qualified
+    Throwable subclass, not just the small original allowlist (resolved
+    via `Class/forName` at analyze time -- no runtime bytecode call
+    needed, only the internal-name string), incl. `clojure.lang.ExceptionInfo`
+    (what `ex-info` actually throws)/`recur` at a `fn` body's own
     tail position with no enclosing `loop` (real stack-safe tail
     recursion, distinct from named self-recursion which does a real
     `IFn.invoke`; targets the method's own argument slots via the same
@@ -712,6 +716,25 @@ env에 자기 param들을 recur target으로 미리 깔아두고, `emit-class`�
 스택 안 쌓이는 것 직접 확인(named self-recursion이었다면
 StackOverflow 위험 구간), variadic arity에서도 동작 확인. U6: 178→182.
 DDC 행: 104→106. 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
+
+**같은 날 스물여덟 번째 확장 (2026-08-14, 배치 진행): 임의
+fully-qualified 예외 타입 `catch`.** 지금까지 `catch`는 5개짜리 작은
+allowlist(`ArithmeticException`/`Exception`/`RuntimeException`/
+`Throwable`/`IllegalArgumentException`)만 가능했음 —
+`clojure.lang.ExceptionInfo`(`ex-info`가 실제로 던지는 타입!)조차
+못 잡았다. 확인해보니 `:catch-class`를 쓰는 곳은 전부
+`Type/getInternalName`만 호출 — JVM 예외 테이블(`visitTryCatchBlock`)은
+컴파일타임 문자열 상수만 필요하고, general-static-interop/
+general-constructor처럼 런타임 `RT.classForName` 바이트코드 호출이
+전혀 필요없다는 뜻. 그래서 host 쪽에서 analyze 시점에 그냥
+`Class/forName`으로 풀면 끝 — 새 바이트코드 메커니즘 자체가 없음.
+fully-qualified 이름만 허용(이 tiny 언어엔 import 표가 없어서
+`NullPointerException`처럼 짧은 이름은 여전히 안 됨, `java.lang.
+NullPointerException`은 됨 — 기존 general-static-interop과 같은
+정직한 범위 제한). `ExceptionInfo` 잡아서 `ex-data`/`.getMessage`
+읽기, `NullPointerException` 잡기 전부 실제 host 대비 검증. U6:
+182→185. DDC 행: 106→108. 전체 `-M:conformance`(116/116)와
 `bin/clj-meta-gate`(`metacircular gate: READY`) 녹색, 회귀 없음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture

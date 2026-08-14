@@ -484,6 +484,19 @@ top-line claim, but the substance is much closer than "false" implies:
   arity도 동작 확인. DDC 행: 104→106. `-M:conformance` 116/116 영향
   없음, `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
 
+  **28번째 슬라이스, 2026-08-14 (배치 진행): 임의 fully-qualified 예외
+  타입 `catch`** (182→185). 5개짜리 작은 allowlist만 가능했음 —
+  `clojure.lang.ExceptionInfo`(`ex-info`가 실제로 던지는 타입!)조차
+  못 잡았다. `:catch-class`를 쓰는 곳은 전부 `Type/getInternalName`만
+  호출 — JVM 예외 테이블은 컴파일타임 문자열 상수만 필요, 런타임
+  `RT.classForName` 바이트코드 호출 불필요. host 쪽 analyze 시점에
+  `Class/forName`으로 풀면 끝, 새 바이트코드 메커니즘 없음.
+  fully-qualified 이름만 허용(import 표 없어서 짧은 이름 불가 —
+  general-static-interop과 같은 범위 제한). `ExceptionInfo`
+  `ex-data`/`.getMessage`, `NullPointerException` 잡기 전부 실제 host
+  대비 검증. DDC 행: 106→108. `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY`, 회귀 없음.
+
   U6에 아직 전혀 없는 큰 표면: `deftype`/`defrecord`/`reify`, `letfn`,
   protocol, 중첩 `fn` 리터럴(진짜 closure — free variable을 캡처하는
   별도 클래스가 필요, `javap` 확인은 아직 안 함). 각각 자체 multi-fixture
