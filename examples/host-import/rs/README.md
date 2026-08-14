@@ -1,8 +1,8 @@
-# rs host-import example
+# rs host-import 예제
 
-Cookbook: [`../../pnix-rs/docs/CARGO_HOST_IMPORT.md`](../../pnix-rs/docs/CARGO_HOST_IMPORT.md)
+요리책: [`../../pnix-rs/docs/CARGO_HOST_IMPORT.md`](../../pnix-rs/docs/CARGO_HOST_IMPORT.md)
 
-## Mini crate (path dep) — started
+## 미니 crate (path dep) — 시작점
 
 ```bash
 cd pnix-rs-smoke
@@ -11,7 +11,7 @@ cargo run -q -- ../../hello.px
 ```
 
 ```toml
-# Cargo.toml (excerpt)
+# Cargo.toml (발췌)
 pnix-rs = { path = "../../../../pnix-rs/pnix-rs", package = "pnix-rs" }
 ```
 
@@ -19,17 +19,18 @@ pnix-rs = { path = "../../../../pnix-rs/pnix-rs", package = "pnix-rs" }
 pnix_rs::eval_file("../../hello.px")
 ```
 
-## Fastest smoke without a crate
+## crate 없이 가장 빠른 스모크
 
 ```bash
 pnix-rs px-eval -f ../hello.px
-# or
+# 또는
 pnix-rs px-eval -c '1 + 2'
 ```
 
-## System library (HM / nix build)
+## 시스템 라이브러리 (HM / nix build)
 
 ```bash
-pnix-rs-refs   # or: nix run ./pnix-rs#pnix-rs-refs
-# then link with -L $PNIX_RS_LIB_DIR (C / embed); pure Rust prefers path dep above
+pnix-rs-refs   # 또는: nix run ./pnix-rs#pnix-rs-refs
+# 그다음 -L $PNIX_RS_LIB_DIR 로 링크 (C / embed);
+# 순수 Rust 는 위 path dep 를 선호
 ```

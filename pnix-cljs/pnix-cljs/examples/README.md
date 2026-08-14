@@ -10,7 +10,7 @@
 |--------|----------------------|
 | clj / hy | 연구용 dense 카탈로그 |
 | rs | 중간 pillar 카탈로그 |
-| **cljs** | **코어 00–06** (이 트리) — 실표면이 있을 때만 확장 |
+| **cljs** | **코어 00–10** (이 트리) — 실표면이 있을 때만 확장 |
 
 공유 테마 표: 모노레포 [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
 
@@ -32,6 +32,10 @@
 | [`04-js-embed-pnix`](04-js-embed-pnix/) | host-main: JS가 `.px` 를 돌림 |
 | [`05-experimental-honesty`](05-experimental-honesty/) | 이 호스트가 **주장하지 않는 것** |
 | [`06-meta-pair-boundary`](06-meta-pair-boundary/) | pnix-cljs vs cljs-meta 역할 |
+| [`07-builtins-surface`](07-builtins-surface/) | typeOf / attrNames / getAttr seed |
+| [`08-file-eval`](08-file-eval/) | `evalFile` 로 디스크 `.px` |
+| [`09-rec-let-select`](09-rec-let-select/) | rec · let · select 문법 |
+| [`10-value-json-projection`](10-value-json-projection/) | 관측용 JSON 투영 (타입 권위 아님) |
 
 ## 실행 (대표)
 

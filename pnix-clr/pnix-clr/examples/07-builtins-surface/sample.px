@@ -1,0 +1,7 @@
+let
+  s = { foo.bar = 42; xs = [1 2 3 4]; };
+in {
+  t = builtins.typeOf s.foo.bar;
+  path = builtins.getAttrFromPath [ "foo" "bar" ] s;
+  sum = lib.sum s.xs;
+}

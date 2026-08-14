@@ -10,7 +10,7 @@
 |--------|----------------------|
 | clj / hy | 연구용 dense 카탈로그 |
 | rs | 중간 pillar 카탈로그 |
-| **clr** | **코어 00–06** (이 트리) — 실표면이 있을 때만 확장 |
+| **clr** | **코어 00–10** (이 트리) — 실표면이 있을 때만 확장 |
 
 공유 테마 표: 모노레포 [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
 
@@ -32,6 +32,10 @@
 | [`04-csharp-embed-pnix`](04-csharp-embed-pnix/) | host-main HelloPnix |
 | [`05-inprocess-opt-in`](05-inprocess-opt-in/) | experimental in-process (net10); 기본은 process-spawn |
 | [`06-meta-pair-boundary`](06-meta-pair-boundary/) | pnix-clr vs clr-meta 역할 |
+| [`07-builtins-surface`](07-builtins-surface/) | typeOf · getAttrFromPath · lib.sum |
+| [`08-pnix-meta-smoke`](08-pnix-meta-smoke/) | 형제 pnix-meta 정규 케이스 |
+| [`09-artifact-gate`](09-artifact-gate/) | AOT artifact fail-closed |
+| [`10-clojure-clr-multi-ns`](10-clojure-clr-multi-ns/) | bootstrap 다중 ns (호스트 Clojure) |
 
 ## 실행 (대표)
 

@@ -13,8 +13,8 @@
 | clj | `pnix-clj/pnix-clj/examples/` | 조밀 (~90) |
 | hy | `pnix-hy/pnix-hy/examples/` | 조밀 (~35) |
 | rs | `pnix-rs/pnix-rs/examples/` | 중간 (~15) |
-| cljs | `pnix-cljs/pnix-cljs/examples/` | 코어 00–06 |
-| clr | `pnix-clr/pnix-clr/examples/` | 코어 00–06 |
+| cljs | `pnix-cljs/pnix-cljs/examples/` | 코어 00–10 |
+| clr | `pnix-clr/pnix-clr/examples/` | 코어 00–10 |
 
 ## host-import (이 트리)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal host-main import: import pnix_hy + eval_file."""
+"""최소 host-main import: pnix_hy 를 import 하고 eval_file 호출."""
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,6 +1,6 @@
 (ns smoke
-  "Minimal host-main import: classpath inject of pnix-clj + eval-file.
-  Run from this directory: clojure -M -m smoke"
+  "최소 host-main import: pnix-clj classpath 주입 + eval-file.
+  이 디렉터리에서: clojure -M -m smoke"
   (:require [clojure.java.io :as io]
             [pnix-clj.core :as c]))
 
@@ -10,6 +10,6 @@
         result (c/eval-file px)]
     (when-not (= :ok (:status result))
       (binding [*out* *err*]
-        (println "eval-file failed:" (pr-str result)))
+        (println "eval-file 실패:" (pr-str result)))
       (System/exit 1))
     (println (:value result))))

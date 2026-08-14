@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Minimal host-main import: require pnix-cljs library + evalFileValueJson.
-// Needs NODE_PATH from HM `node` wrapper or:
+// 최소 host-main import: pnix-cljs 라이브러리 require + evalFileValueJson.
+// HM `node` 래퍼의 NODE_PATH, 또는:
 //   export NODE_PATH="$(pnix-cljs-library | sed -n 's/^PNIX_CLJS_SHARE=//p'):$NODE_PATH"
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
