@@ -12,8 +12,8 @@
 | **clj** | `pnix-clj/pnix-clj/examples/` | ~90개 슬라이스 | 가장  densest: spine, machine, oracle, AI gate |
 | **hy** | `pnix-hy/pnix-hy/examples/` | ~35 | specialize, cogen, compartment, Jones 등 |
 | **rs** | `pnix-rs/pnix-rs/examples/` | ~15 | 중간: gate, mirror, BTA, embed |
-| **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–10 | experimental seed; Node 라이브러리 import |
-| **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–10 | experimental seed; C# 라이브러리 + in-process opt-in |
+| **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–15 | experimental seed; Node 라이브러리 import |
+| **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–15 | experimental seed; C# 라이브러리 + in-process opt-in |
 
 모노레포 host-import 스모크(제품 카탈로그 아님): `examples/host-import/`.
 
@@ -36,7 +36,7 @@
 | Cache / incremental | 12, 30 | 12, 22, 30 | 07 | — | — |
 | Machine / abstract CEK | 61, 78–92 | 35 | — | — | — |
 | In-process 호스트 eval | — | — | — | — | **05** (opt-in) |
-| builtins / 문법 seed | 다수 | 다수 | gate·eval | **07–09** | **07–08** |
+| builtins / 문법 seed | 다수 | 다수 | gate·eval | **07–09, 11–15** | **07–08, 11–15** |
 | 파일·artifact 게이트 | eval-file 등 | import hook | embed | **08** | **09–10** |
 
 ## 균형 규칙
@@ -59,4 +59,4 @@
 | cljs | `pnix-cljs/pnix-cljs/examples/README.md` + `FOUNDATION_PATH.md` |
 | clr | `pnix-clr/pnix-clr/examples/README.md` + `FOUNDATION_PATH.md` |
 
-최종 갱신: 2026-08-14 (cljs/clr 코어 00–10, host-import 한글, 매트릭스).
+최종 갱신: 2026-08-14 (cljs/clr 코어 00–15, 실측 폼 기준 확장).

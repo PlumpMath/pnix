@@ -1,0 +1,5 @@
+let
+  need = ({ a }: a) { a = 7; };
+  def = ({ a ? 2 }: a) {};
+  curried = let f = x: y: x + y; in f 1 2;
+in { need = need; def = def; curried = curried; }

@@ -10,6 +10,7 @@
 6. **`05-experimental-honesty`** — 비주장 목록.
 7. **`06-meta-pair-boundary`** — 제품 절반 vs meta 절반.
 8. **`07`–`10`** — builtins · 파일 평가 · rec/let · JSON 관측 투영.
+9. **`11`–`15`** — 리스트 고차 · with/merge · 패턴 람다 · tryEval · 문자열/버전.
 
 더 깊은 specialize / machine / oracle 예제는 **pnix-clj** / **pnix-hy** 에 있다.
 이 호스트는 표면이 실재할 때만 슬라이스를 추가한다.
