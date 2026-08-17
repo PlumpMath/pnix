@@ -1508,9 +1508,14 @@
 ;; interface's own observable behavior (nothing this witness's own fixtures
 ;; exercise ever calls `.meta` on a reified instance), matching the
 ;; established "behavior equivalence, not bytecode-shape equivalence" bar
-;; used throughout this file. Deliberately narrow scope beyond that:
-;; exactly ONE fully-qualified interface (no multi-interface `reify`, no
-;; protocols specifically). A PRIMITIVE parameter (e.g. `int
+;; used throughout this file. MULTIPLE interfaces at once (`(reify Runnable
+;; (run [this] ...) Callable (call [this] ...))`) ARE supported --
+;; confirmed via `javap -p -c` that real host just adds each one to the
+;; class's own `implements` clause, no different in kind from `deftype`
+;; implementing several protocols/interfaces already: `parse-deftype-impl-groups`
+;; is reused as-is (same alternating symbol/method-forms shape), and
+;; `resolve-reify-interface` (used by both `reify` and `deftype`) resolves
+;; each group's interface independently. A PRIMITIVE parameter (e.g. `int
 ;; applyAsInt(int)` on `java.util.function.IntUnaryOperator`) IS supported:
 ;; `emit-reified-methods!` boxes it into a fresh local right at method
 ;; entry (`GeneratorAdapter/box`, the exact mirror of `coerce-reify-return!`'s
@@ -1525,6 +1530,38 @@
                     (and (= method-name (.getName m))
                          (= arg-count (.getParameterCount m))))
                   (.getMethods iface))))
+
+;; Splits a flat list of forms into interface/protocol groups: every SYMBOL
+;; starts a new group, and every LIST immediately following it (until the
+;; next symbol) is one of its method implementations -- the same
+;; alternating shape real host's own `deftype`/multi-interface `reify`
+;; syntax uses for both. Shared by `analyze-reify` (the forms right after
+;; `reify` itself) and `analyze-deftype-form` (the forms after `deftype`'s
+;; field vector).
+(defn- parse-deftype-impl-groups
+  [forms]
+  (loop [forms forms acc []]
+    (if (empty? forms)
+      acc
+      (let [iface-sym (first forms)]
+        (when-not (symbol? iface-sym)
+          (throw (ex-info "tiny analyzer: expected an interface/protocol name in deftype/reify"
+                          {:form iface-sym})))
+        (let [[methods rest-forms] (split-with seq? (rest forms))]
+          (recur rest-forms (conj acc {:interface-sym iface-sym :method-forms (vec methods)})))))))
+
+;; Shared by `analyze-reify` and `analyze-deftype-form`: an interface/protocol
+;; group's leading symbol resolves either to a `defprotocol`-generated
+;; interface (`*known-protocol-interfaces*`) or a fully-qualified Java
+;; interface name (`Class/forName`).
+(defn- resolve-reify-interface
+  ^Class [interface-sym]
+  (let [iface (or (get *known-protocol-interfaces* interface-sym)
+                  (try (Class/forName (name interface-sym)) (catch Throwable _ nil)))]
+    (when-not (and iface (.isInterface ^Class iface))
+      (throw (ex-info "tiny analyzer: reify/deftype interface not found (must be a known protocol name or a fully-qualified interface name)"
+                      {:interface interface-sym})))
+    iface))
 
 (defn- analyze-reify-method
   [env ^Class iface method-form]
@@ -1550,26 +1587,24 @@
   [env args]
   (when (contains? env closure-depth-key)
     (throw (ex-info "tiny analyzer: reify nested inside a closure is not yet supported" {:form args})))
-  (let [[iface-sym & method-forms] args]
-    (when-not (and (symbol? iface-sym) (not (namespace iface-sym)))
-      (throw (ex-info "tiny analyzer: reify requires a single fully-qualified interface name"
-                      {:form args})))
-    (let [iface (or (get *known-protocol-interfaces* iface-sym)
-                    (try (Class/forName (name iface-sym)) (catch Throwable _ nil)))]
-      (when-not (and iface (.isInterface ^Class iface))
-        (throw (ex-info "tiny analyzer: reify interface not found (must be a known protocol name or a fully-qualified interface name)"
-                        {:interface iface-sym})))
-      (let [inner-env (assoc env closure-depth-key true)
-            methods (mapv #(analyze-reify-method inner-env iface %) method-forms)
-            own-names (fn [{:keys [this-sym arg-syms]}] (conj (set arg-syms) this-sym))
-            referenced (reduce into #{} (map (comp ast-referenced-names :body) methods))
-            all-own (reduce into #{} (map own-names methods))
-            outer-names (disj (set (keys env)) closure-depth-key)
-            captures (vec (filter #(and (outer-names %) (not (all-own %))) referenced))]
-        {:op :reify
-         :interface iface
-         :methods methods
-         :captures captures}))))
+  (let [impl-groups (parse-deftype-impl-groups args)]
+    (when (empty? impl-groups)
+      (throw (ex-info "tiny analyzer: reify requires at least one interface" {:form args})))
+    (let [inner-env (assoc env closure-depth-key true)
+          impls (mapv (fn [{:keys [interface-sym method-forms]}]
+                        (let [iface (resolve-reify-interface interface-sym)]
+                          {:interface iface
+                           :methods (mapv #(analyze-reify-method inner-env iface %) method-forms)}))
+                      impl-groups)
+          all-methods (into [] (mapcat :methods) impls)
+          own-names (fn [{:keys [this-sym arg-syms]}] (conj (set arg-syms) this-sym))
+          referenced (reduce into #{} (map (comp ast-referenced-names :body) all-methods))
+          all-own (reduce into #{} (map own-names all-methods))
+          outer-names (disj (set (keys env)) closure-depth-key)
+          captures (vec (filter #(and (outer-names %) (not (all-own %))) referenced))]
+      {:op :reify
+       :impls impls
+       :captures captures})))
 
 ;; `deftype` -- confirmed via `javap -p -c` on a host-AOT-compiled
 ;; `(deftype Point [x y])` with NO protocol/interface implementations: a
@@ -1586,24 +1621,9 @@
 ;; NAMED top-level class tied to a compilation unit rather than an
 ;; expression usable inline, it can only appear as one of the leading forms
 ;; of a top-level `(do (deftype ...)... (fn ...))` program -- see
-;; `compile-source` -- never nested inside a `fn` body.
-;; Splits the forms AFTER `deftype`'s field vector into interface/protocol
-;; groups: every SYMBOL starts a new group, and every LIST immediately
-;; following it (until the next symbol) is one of its method
-;; implementations -- the same alternating shape real host's own `deftype`
-;; syntax uses.
-(defn- parse-deftype-impl-groups
-  [forms]
-  (loop [forms forms acc []]
-    (if (empty? forms)
-      acc
-      (let [iface-sym (first forms)]
-        (when-not (symbol? iface-sym)
-          (throw (ex-info "tiny analyzer: expected an interface/protocol name in deftype"
-                          {:form iface-sym})))
-        (let [[methods rest-forms] (split-with seq? (rest forms))]
-          (recur rest-forms (conj acc {:interface-sym iface-sym :method-forms (vec methods)})))))))
-
+;; `compile-source` -- never nested inside a `fn` body. Reuses
+;; `parse-deftype-impl-groups`/`resolve-reify-interface` (see `reify`
+;; above, which shares this exact alternating-groups shape).
 ;; `deftype` may ALSO implement interfaces/protocols with method bodies --
 ;; confirmed via `javap -p -c` on a host-AOT-compiled `(deftype Rect [w h]
 ;; Shape (area [this] (* w h)))`: `Rect implements Shape, IType`, and
@@ -1635,12 +1655,7 @@
         field-env (zipmap fields (repeat true))
         impl-groups (parse-deftype-impl-groups (drop 3 form))
         impls (mapv (fn [{:keys [interface-sym method-forms]}]
-                      (let [iface (or (get *known-protocol-interfaces* interface-sym)
-                                      (when (not (namespace interface-sym))
-                                        (try (Class/forName (name interface-sym)) (catch Throwable _ nil))))]
-                        (when-not (and iface (.isInterface ^Class iface))
-                          (throw (ex-info "tiny analyzer: deftype interface not found (must be a known protocol name or a fully-qualified interface name)"
-                                          {:interface interface-sym})))
+                      (let [iface (resolve-reify-interface interface-sym)]
                         {:interface iface
                          :methods (mapv #(analyze-reify-method field-env iface %) method-forms)}))
                     impl-groups)]
@@ -2875,11 +2890,11 @@
       (.endMethod ga))))
 
 (defn- emit-reify-class
-  [^Class interface methods captures]
+  [impls captures]
   (let [class-name (next-class-name)
         internal (.replace class-name \. \/)
         ctype (Type/getObjectType internal)
-        iface-type (Type/getType interface)
+        interfaces (into-array String (map #(.getInternalName (Type/getType ^Class (:interface %))) impls))
         cw (ClassWriter. (bit-or ClassWriter/COMPUTE_FRAMES
                                  ClassWriter/COMPUTE_MAXS))
         capture-env (into {}
@@ -2887,7 +2902,7 @@
                                  [cap {:kind :capture :owner ctype :field-name (name cap)}]))
                           captures)]
     (.visit cw Opcodes/V1_8 Opcodes/ACC_PUBLIC internal nil
-            (.getInternalName obj-type) (into-array String [(.getInternalName iface-type)]))
+            (.getInternalName obj-type) interfaces)
     (doseq [cap captures]
       (.visitEnd (.visitField cw Opcodes/ACC_FINAL (name cap) (.getDescriptor obj-type) nil nil)))
     (if (seq captures)
@@ -2906,7 +2921,8 @@
         (.invokeConstructor ga obj-type init-method)
         (.returnValue ga)
         (.endMethod ga)))
-    (emit-reified-methods! cw capture-env methods)
+    (doseq [{:keys [methods]} impls]
+      (emit-reified-methods! cw capture-env methods))
     (.visitEnd cw)
     (let [bytes (.toByteArray cw)
           loader (DynamicClassLoader.
@@ -2921,8 +2937,8 @@
 ;; `emit-closure`'s NEW/DUP/<captures>/INVOKESPECIAL, just building the
 ;; class via `emit-reify-class` instead of `emit-class`.
 (defn- emit-reify
-  [^GeneratorAdapter ga env {:keys [interface methods captures]}]
-  (let [artifact (emit-reify-class interface methods captures)
+  [^GeneratorAdapter ga env {:keys [impls captures]}]
+  (let [artifact (emit-reify-class impls captures)
         inner-type (Type/getObjectType (.replace ^String (:class-name artifact) \. \/))
         ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count captures) obj-type)))]
     (.newInstance ga inner-type)
@@ -3871,6 +3887,18 @@
     :source "(fn [] (.applyAsInt (reify java.util.function.IntBinaryOperator (applyAsInt [this a b] (* a b))) 6 7))"
     :args []
     :expected 42}
+   {:id :tiny-reify-two-interfaces
+    :source "(fn [n] (.call (reify java.lang.Runnable (run [this] nil) java.util.concurrent.Callable (call [this] n))))"
+    :args [42]
+    :expected 42}
+   {:id :tiny-reify-two-interfaces-both-methods-independent
+    :source "(fn [] (let [counter (java.util.concurrent.atomic.AtomicInteger. 0) r (reify java.lang.Runnable (run [this] (.set counter 7)) java.util.concurrent.Callable (call [this] 99))] (.run r) (.get counter)))"
+    :args []
+    :expected 7}
+   {:id :tiny-reify-two-interfaces-with-primitive-param
+    :source "(fn [n] (let [r (reify java.lang.Runnable (run [this] nil) java.util.function.IntUnaryOperator (applyAsInt [this x] (+ x n)))] (.applyAsInt r 5)))"
+    :args [100]
+    :expected 105}
    {:id :tiny-deftype-construct-and-access
     :source "(do (deftype Point [x y]) (fn [a b] (let [p (Point. a b)] (+ (.-x p) (.-y p)))))"
     :args [3 4]

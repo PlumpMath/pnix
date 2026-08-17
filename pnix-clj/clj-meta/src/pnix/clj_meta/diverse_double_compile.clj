@@ -732,7 +732,11 @@
    {:id :mini-backend-reify-primitive-int-param
     :source "(fn [n] (.applyAsInt (reify java.util.function.IntUnaryOperator (applyAsInt [this x] (+ x n))) 5))"
     :args [10]
-    :expected 15}])
+    :expected 15}
+   {:id :mini-backend-reify-two-interfaces
+    :source "(fn [n] (.call (reify java.lang.Runnable (run [this] nil) java.util.concurrent.Callable (call [this] n))))"
+    :args [42]
+    :expected 42}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]

@@ -1118,9 +1118,37 @@ REFERENCE 타입 파라미터는 기존 `{:kind :arg ...}` 그대로 유지하�
 `bin/clj-meta-gate`(`metacircular gate: READY ✅`, `reproducible
 DDC lane: OK`) 녹색, 회귀 없음.
 
-U6에 남은 큰 gap: `reify`/`deftype`은 단일 인터페이스만(multi-interface
-`reify` 없음), protocol은 fast path만(진짜 `extend-protocol`
-디스패치 없음).
+**같은 날 서른여덟 번째 확장 (2026-08-15): multi-interface `reify`.**
+남은 4개 갭 중 마지막으로 다룬 것(protocol의 진짜
+`extend-protocol` 디스패치는 여전히 별도 대형 프로젝트로 held —
+아래 참고). `javap -p -c`로 host-AOT-컴파일된 `(reify Runnable
+(run [this] ...) Callable (call [this] ...))`를 확인: 클래스가
+`implements Callable, Runnable, IObj`로 두 인터페이스를 그냥
+나란히 선언 — `deftype`이 여러 protocol/interface를 구현할 때
+이미 하고 있던 것과 완전히 같은 모양. 그래서 `deftype`의
+`parse-deftype-impl-groups`(교대로 나오는 심볼/메서드-폼 그룹
+파싱)를 그대로 재사용해서 `reify`도 `(reify Iface1 (m1 ...)
+Iface2 (m2 ...) ...)` 형태를 받도록 확장 — `analyze-reify`가
+단일 `iface-sym`+평평한 method-forms 대신 그룹 목록을 분석하고,
+모든 그룹의 메서드를 합쳐서 캡처 계산(자유변수 분석)을 한 번에
+수행. 인터페이스 해석 로직이 `reify`/`deftype` 양쪽에 거의
+동일하게 중복돼 있던 것도 `resolve-reify-interface`로 통합.
+`emit-reify-class`는 `:interface`+`methods` 대신 `:impls`를 받아
+`implements` 절에 여러 인터페이스를 나열(`emit-deftype-class`와
+같은 패턴). 2개 인터페이스, 각 인터페이스 메서드가 서로 독립적으로
+동작하는지, 그리고 multi-interface + primitive 파라미터 조합까지
+전부 실제 host 대비 검증. U6: 219→222(`:tiny-reify-two-interfaces`,
+`:tiny-reify-two-interfaces-both-methods-independent`,
+`:tiny-reify-two-interfaces-with-primitive-param`). `compiler.clj`도
+지원 확인 후 DDC 행 연결(`mini-backend-ddc-fixtures` 122→123,
+실측 확인). 전체 `-M:conformance`(116/116)와
+`bin/clj-meta-gate`(`metacircular gate: READY ✅`, `reproducible
+DDC lane: OK`) 녹색, 회귀 없음.
+
+U6에 남은 큰 gap: protocol은 fast path만(진짜 `extend-protocol`
+디스패치 없음 — `clojure.core/-cache-protocol-fn`/
+`MethodImplCache` 재구현이 필요한, 별도로 큰 프로젝트급 항목으로
+계속 held).
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

@@ -694,11 +694,26 @@ top-line claim, but the substance is much closer than "false" implies:
   `metacircular gate: READY ✅` + `reproducible DDC lane: OK`, 회귀
   없음.
 
+  **38번째 슬라이스, 2026-08-15: multi-interface `reify`** (219→222,
+  실측 확인). `javap -p -c` 확인: `(reify Runnable (run [this]
+  ...) Callable (call [this] ...))`는 그냥 `implements Callable,
+  Runnable, IObj`로 나란히 선언 — `deftype`이 여러 protocol/interface
+  구현할 때 쓰는 것과 완전히 같은 모양이라, `deftype`의
+  `parse-deftype-impl-groups`를 `reify`에도 그대로 재사용.
+  `analyze-reify`가 그룹 목록을 분석해 모든 그룹의 메서드를 합쳐
+  캡처(자유변수) 계산. `reify`/`deftype` 양쪽에 중복돼 있던 인터페이스
+  해석 로직은 `resolve-reify-interface`로 통합. `emit-reify-class`는
+  `:impls` 목록을 받아 여러 인터페이스를 `implements` 절에 나열.
+  2개 인터페이스 조합, 각 메서드 독립 동작, multi-interface+primitive
+  파라미터 조합까지 실제 host 대비 검증. `compiler.clj`도 지원 확인
+  후 DDC 행 연결(122→123, 실측 확인). `-M:conformance` 116/116
+  영향 없음, `bin/clj-meta-gate` `metacircular gate: READY ✅` +
+  `reproducible DDC lane: OK`, 회귀 없음.
+
   U6에 남은 큰 gap: 중첩 closure는 단일 arity로만 범위 제한(깊이
   제한은 해제됨),
-  `reify`/`deftype`은 단일 인터페이스만(multi-interface `reify`
-  없음), protocol은 fast
-  path만(진짜 `extend-protocol` 디스패치 없음).
+  protocol은 fast path만(진짜 `extend-protocol` 디스패치 없음 —
+  별도 대형 프로젝트급으로 계속 held).
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
