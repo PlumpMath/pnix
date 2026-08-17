@@ -13,10 +13,11 @@
 //!
 //! It is a frontier witness, not a replacement for rs-meta's own
 //! interpreter: it covers a bounded `fn`/`if`/`let`/`while`/assignment/
-//! arithmetic/comparison/call fixture set, not the Rust language
+//! closure/arithmetic/comparison/call fixture set, not the Rust language
 //! `interp.rs` targets.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]
 enum MiniTok {
@@ -101,6 +102,7 @@ fn tokenize(src: &str) -> Result<Vec<MiniTok>, String> {
             '>' => ">",
             '!' => "!",
             '=' => "=",
+            '|' => "|",
             _ => return Err(format!("tiny lexer: unexpected char {:?}", c)),
         };
         out.push(MiniTok::Punct(one));
@@ -127,7 +129,51 @@ enum MiniExpr {
     Var(String),
     Bin(MiniBinOp, Box<MiniExpr>, Box<MiniExpr>),
     If(Box<MiniExpr>, Box<MiniBlock>, Box<MiniBlock>),
+    // The callee is always a bare name, never an arbitrary expression --
+    // real Rust also allows calling e.g. a parenthesized closure literal
+    // directly, but no fixture needs that, and supporting it would mean
+    // widening `Call` to hold a boxed callee expression instead of a
+    // `String`. Resolved at eval time: a name bound to a closure value in
+    // `env` calls the closure (real Rust shadowing rules: a local
+    // shadows a same-named top-level `fn`), otherwise it's a top-level
+    // `fn` lookup, matching this node's original (pre-closure) meaning.
     Call(String, Vec<MiniExpr>),
+    // `[move] |params| EXPR` -- single-expression body only (no `{ ... }`
+    // block form), matching this backend's other closures precedents
+    // (single-arity, narrow scope). Real Rust's `move` keyword forces
+    // by-value capture instead of by-reference, needed whenever the
+    // closure can outlive its creating call (e.g. returned, or otherwise
+    // escaping) -- since this interpreter always captures by cloning the
+    // whole `env` snapshot at creation time regardless, `move` is parsed
+    // and simply ignored; the resulting behavior matches real Rust's
+    // `move` semantics for the Copy-like values (`i64`, `Rc`-shared
+    // closures) this backend supports.
+    Closure(Vec<String>, Box<MiniExpr>),
+}
+
+// A runtime value: either a plain `i64`, or a closure -- captured
+// parameters, its (single-expression) body, and a snapshot clone of the
+// defining `env` at creation time (lexical/creation-time scoping, not
+// dynamic scoping: a closure's free variables always resolve against the
+// env it closed over, never the caller's env at the point it's invoked).
+#[derive(Debug, Clone)]
+enum MiniVal {
+    Int(i64),
+    Closure(Rc<ClosureVal>),
+}
+
+#[derive(Debug, Clone)]
+struct ClosureVal {
+    params: Vec<String>,
+    body: MiniExpr,
+    env: HashMap<String, MiniVal>,
+}
+
+fn expect_int(v: MiniVal, what: &str) -> Result<i64, String> {
+    match v {
+        MiniVal::Int(n) => Ok(n),
+        MiniVal::Closure(_) => Err(format!("tiny interp: expected i64, got a closure ({})", what)),
+    }
 }
 
 // A `{ let a = ...; let b = ...; TAIL }` block: zero or more `let` statements
@@ -369,6 +415,24 @@ impl MiniParser {
             let else_b = self.parse_block()?;
             return Ok(MiniExpr::If(Box::new(cond), Box::new(then_b), Box::new(else_b)));
         }
+        if self.is_ident("move") {
+            self.next()?; // parsed and ignored, see MiniExpr::Closure's doc comment
+        }
+        if self.is_punct("|") {
+            self.next()?;
+            let mut params = Vec::new();
+            while !self.is_punct("|") {
+                let p = self.expect_ident()?;
+                self.skip_type_annotation()?;
+                params.push(p);
+                if self.is_punct(",") {
+                    self.next()?;
+                }
+            }
+            self.expect_punct("|")?;
+            let body = self.parse_expr()?;
+            return Ok(MiniExpr::Closure(params, Box::new(body)));
+        }
         match self.next()? {
             MiniTok::Int(n) => Ok(MiniExpr::Int(n)),
             MiniTok::Ident(name) => {
@@ -433,7 +497,7 @@ fn parse_mini_program(src: &str) -> Result<(Vec<FnDef>, MiniExpr), String> {
 
 fn exec_stmts(
     stmts: &[MiniStmt],
-    env: &mut HashMap<String, i64>,
+    env: &mut HashMap<String, MiniVal>,
     fns: &HashMap<String, FnDef>,
 ) -> Result<(), String> {
     for stmt in stmts {
@@ -450,7 +514,7 @@ fn exec_stmts(
                 env.insert(name.clone(), v);
             }
             MiniStmt::While(cond, body) => {
-                while eval_expr(cond, env, fns)? != 0 {
+                while expect_int(eval_expr(cond, env, fns)?, "while condition")? != 0 {
                     exec_stmts(body, env, fns)?;
                 }
             }
@@ -461,28 +525,28 @@ fn exec_stmts(
 
 fn eval_block(
     block: &MiniBlock,
-    env: &mut HashMap<String, i64>,
+    env: &mut HashMap<String, MiniVal>,
     fns: &HashMap<String, FnDef>,
-) -> Result<i64, String> {
+) -> Result<MiniVal, String> {
     exec_stmts(&block.stmts, env, fns)?;
     eval_expr(&block.tail, env, fns)
 }
 
 fn eval_expr(
     e: &MiniExpr,
-    env: &mut HashMap<String, i64>,
+    env: &mut HashMap<String, MiniVal>,
     fns: &HashMap<String, FnDef>,
-) -> Result<i64, String> {
+) -> Result<MiniVal, String> {
     match e {
-        MiniExpr::Int(n) => Ok(*n),
+        MiniExpr::Int(n) => Ok(MiniVal::Int(*n)),
         MiniExpr::Var(name) => env
             .get(name)
-            .copied()
+            .cloned()
             .ok_or_else(|| format!("tiny interp: unknown local {}", name)),
         MiniExpr::Bin(op, l, r) => {
-            let lv = eval_expr(l, env, fns)?;
-            let rv = eval_expr(r, env, fns)?;
-            Ok(match op {
+            let lv = expect_int(eval_expr(l, env, fns)?, "binary op lhs")?;
+            let rv = expect_int(eval_expr(r, env, fns)?, "binary op rhs")?;
+            Ok(MiniVal::Int(match op {
                 MiniBinOp::Add => lv
                     .checked_add(rv)
                     .ok_or("tiny interp: overflow in +")?,
@@ -497,16 +561,36 @@ fn eval_expr(
                 MiniBinOp::Le => (lv <= rv) as i64,
                 MiniBinOp::Ge => (lv >= rv) as i64,
                 MiniBinOp::Eq => (lv == rv) as i64,
-            })
+            }))
         }
         MiniExpr::If(cond, then_b, else_b) => {
-            if eval_expr(cond, env, fns)? != 0 {
+            if expect_int(eval_expr(cond, env, fns)?, "if condition")? != 0 {
                 eval_block(then_b, env, fns)
             } else {
                 eval_block(else_b, env, fns)
             }
         }
+        MiniExpr::Closure(params, body) => Ok(MiniVal::Closure(Rc::new(ClosureVal {
+            params: params.clone(),
+            body: (**body).clone(),
+            env: env.clone(),
+        }))),
         MiniExpr::Call(name, args) => {
+            if let Some(MiniVal::Closure(closure)) = env.get(name) {
+                let closure = closure.clone();
+                if closure.params.len() != args.len() {
+                    return Err(format!("tiny interp: arity mismatch calling closure {}", name));
+                }
+                let mut call_env = closure.env.clone();
+                for (p, a) in closure.params.iter().zip(args.iter()) {
+                    let v = eval_expr(a, env, fns)?;
+                    call_env.insert(p.clone(), v);
+                }
+                return eval_expr(&closure.body, &mut call_env, fns);
+            }
+            if env.contains_key(name) {
+                return Err(format!("tiny interp: {} is not callable", name));
+            }
             let f = fns
                 .get(name.as_str())
                 .ok_or_else(|| format!("tiny interp: unknown fn {}", name))?;
@@ -523,10 +607,10 @@ fn eval_expr(
     }
 }
 
-/// Parse and evaluate a small `fn`/`if`/arithmetic Rust program whose `main`
-/// is exactly `println!("{}", EXPR);`, and return the printed value as a
-/// string (matching how `native::native_run` returns captured stdout, so the
-/// two can be compared directly).
+/// Parse and evaluate a small `fn`/`if`/`let`/`while`/closure/arithmetic
+/// Rust program whose `main` is exactly `println!("{}", EXPR);`, and return
+/// the printed value as a string (matching how `native::native_run` returns
+/// captured stdout, so the two can be compared directly).
 pub fn compile_and_run(src: &str) -> Result<String, String> {
     let (fn_defs, main_expr) = parse_mini_program(src)?;
     let mut fn_map: HashMap<String, FnDef> = HashMap::new();
@@ -534,6 +618,6 @@ pub fn compile_and_run(src: &str) -> Result<String, String> {
         fn_map.insert(f.name.clone(), f);
     }
     let mut env = HashMap::new();
-    let value = eval_expr(&main_expr, &mut env, &fn_map)?;
+    let value = expect_int(eval_expr(&main_expr, &mut env, &fn_map)?, "println! argument")?;
     Ok(format!("{}\n", value))
 }

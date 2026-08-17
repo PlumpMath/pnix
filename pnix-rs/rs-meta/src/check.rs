@@ -2891,6 +2891,36 @@ fn independent_mini_backend_fixtures() -> Vec<(&'static str, &'static str, &'sta
             "fn f(n: i64) -> i64 { let mut total = 0; let mut i = 0; while i < n { let mut j = 0; while j < n { total = total + 1; j = j + 1; } i = i + 1; } total } fn main() { println!(\"{}\", f(3)); }",
             "9",
         ),
+        (
+            "mini-closure-multi-call",
+            "fn f(n: i64) -> i64 { let square = |x: i64| x * x; square(n) + square(n + 1) } fn main() { println!(\"{}\", f(3)); }",
+            "25",
+        ),
+        (
+            "mini-closure-capture-non-tail",
+            "fn f(a: i64, b: i64) -> i64 { let add_a = move |x: i64| x + a; add_a(b) - add_a(1) } fn main() { println!(\"{}\", f(5, 10)); }",
+            "9",
+        ),
+        (
+            "mini-closure-capture-let-bound",
+            "fn f(n: i64) -> i64 { let k = n * 2; let g = |x: i64| x + k; g(1) + g(k) } fn main() { println!(\"{}\", f(5)); }",
+            "31",
+        ),
+        (
+            "mini-closure-two-params",
+            "fn f(n: i64) -> i64 { let add = |a: i64, b: i64| a + b; add(n, add(n, n)) } fn main() { println!(\"{}\", f(14)); }",
+            "42",
+        ),
+        (
+            "mini-closure-shadows-fn",
+            "fn sq(x: i64) -> i64 { x * x } fn f(n: i64) -> i64 { let sq = |x: i64| x + 1; sq(n) } fn main() { println!(\"{}\", f(41)); }",
+            "42",
+        ),
+        (
+            "mini-closure-captures-closure",
+            "fn f(n: i64) -> i64 { let base = move |x: i64| x + n; let scaled = move |y: i64| base(y) * 2; scaled(1) + scaled(2) } fn main() { println!(\"{}\", f(3)); }",
+            "18",
+        ),
     ]
 }
 

@@ -338,9 +338,40 @@ rs-meta 자기호스팅 corpus의 일부라 self-check가 이 파일도 rs-meta 
 프론트엔드로 파싱/타입체크됨을 의미 있게 검증. `independent-mini-backend-check`
 9→13(이전 패스)→17(`let`)→21(`while`/대입), 매 fixture 전부 `rustc`와 직접 비교.
 
-**다음 후보:** 클로저(`|x| ...`)는 아직 미지원 — clj-meta/clr-meta가 거친
-`nested fn` 단계의 대응물, 다음 자연스러운 확장. `!=`, 문자열/불리언 처리는
-todo.md item 2가 이미 후보로 적어둔 대로 여전히 열려 있음.
+**3단계 (진짜 클로저), 같은 날:** clj-meta/clr-meta가 nested-fn 다음으로 거친
+"진짜 first-class 클로저" 단계의 대응물. `MiniVal` enum(`Int(i64)` |
+`Closure(Rc<ClosureVal>)`)을 도입해 env 값 타입을 `i64`에서 `MiniVal`로
+일반화, `ClosureVal { params, body, env }`(정의 시점 env를 그대로 clone —
+lexical/creation-time scoping, dynamic scoping 아님)를 추가. 새
+`MiniExpr::Closure(Vec<String>, Box<MiniExpr>)`가 `[move] |params| EXPR`
+리터럴(단일 식 본문만, `{ }` block 본문은 미지원 — 실제 Rust도 두 형태 다
+허용하지만 어떤 fixture도 block 본문이 필요 없어서 안 함). `move` 키워드는
+파싱만 하고 무시 — 이 interpreter는 항상 env 전체를 clone해서 캡처하므로,
+`move`가 강제하는 by-value capture와 이미 정확히 같은 동작.
+
+`Call(name, args)`는 **콜리가 항상 bare 이름**(임의 식 아님 — 실제 Rust는
+`(|x| x)(1)` 같은 즉시호출도 허용하지만 어떤 fixture도 필요 없어서 미지원,
+필요해지면 `Call`을 `Box<MiniExpr>` 콜리로 넓혀야 함)이라는 기존 모양을 그대로
+재사용: eval 시점에 그 이름이 env 안에서 클로저 값에 묶여 있으면 클로저
+호출(실제 Rust의 shadowing 규칙대로 — 지역 클로저가 같은 이름의 top-level
+`fn`을 가림), 아니면 기존 top-level `fn` 조회로 fallback.
+
+**clr-meta 대비 흥미로운 차이점**: clr-meta의 진짜 클로저는 .NET
+`DynamicMethod`가 `TypeBuilder` 멤버를 참조 못 하는 실제 플랫폼 제약 때문에
+완전히 새 TypeBuilder-hosted codegen 경로가 필요했고, 그래서 단일 파라미터·
+클로저-캡처-클로저 불가 같은 인위적 경계를 명시적으로 그어야 했음. rs-meta는
+단순 tree-walking interpreter라 그런 codegen 제약이 아예 없음 — 여러 파라미터
+클로저(`mini-closure-two-params`)도, 클로저를 캡처하는 클로저
+(`mini-closure-captures-closure`)도 어떤 인위적 제한 없이 자연스럽게 동작함을
+fixture로 실제 검증(다른 host들의 "의도적으로 좁힌 경계"와 달리, 여기선 진짜
+구현 제약이 없어서 좁힐 이유도 없었음). 여러 번 호출, non-tail 호출,
+let-바인딩/파라미터 캡처, 2-파라미터 클로저, top-level fn을 가리는 클로저,
+클로저를 캡처하는 클로저까지 6개 fixture 추가(21→27), 전부 실제 `rustc` 대비
+검증. 회귀 없음: `self-check` 408/408, `tv-check` 408/408.
+
+**다음 후보:** `!=`, 문자열/불리언 처리는 여전히 열려 있음(todo.md item 2).
+클로저를 `let` 아닌 top-level `fn` 인자로 넘기는 형태(고차 함수)는 아직
+미시도 — 다음 자연스러운 확장 후보.
 
 ## Primary gate
 
@@ -357,5 +388,5 @@ todo.md item 2가 이미 후보로 적어둔 대로 여전히 열려 있음.
 |---|---|---|
 | `self-check` | **PASS** 408/408 | cargo 1.97.1 / rustc 1.97.1 |
 | `tv-check` | **PASS** 408/408 | |
-| `independent-mini-backend-check` | **PASS** 21/21 | 13→17 (`let`) →21 (`while`/assignment), this session |
+| `independent-mini-backend-check` | **PASS** 27/27 | 13→17 (`let`) →21 (`while`/assignment) →27 (closures), this session |
 | full `bootstrap check` | not default primary | longer; includes stage matrix |

@@ -125,15 +125,31 @@ non-goal) remain open, and neither is actionable from this machine.
     동일). 파서는 `IDENT =`(`==`와 별개 토큰, 충돌 없음) 2-token lookahead로
     대입문 인식. 새 fixture: 합산 loop, factorial loop, mut 파라미터 loop,
     중첩 while.
-  - 검증: 두 단계 각각 `self-check` 408/408, `tv-check` 408/408 재실행(
+  - **클로저 지원 (21→27), 같은 날:** env 값 타입을 `i64`에서 `MiniVal`(
+    `Int(i64)` | `Closure(Rc<ClosureVal>)`)로 일반화, `ClosureVal { params,
+    body, env }`가 정의 시점 env를 clone해서 캡처(lexical scoping). 새
+    `MiniExpr::Closure`가 `[move] |params| EXPR`(단일 식 본문만) 파싱,
+    `move`는 파싱만 하고 무시(이 interpreter는 항상 env 전체를 clone해서
+    캡처하므로 이미 정확히 같은 동작). `Call(name, args)`는 콜리가 항상
+    bare 이름이라는 기존 모양 그대로: eval 시점에 env 안에서 클로저 값이면
+    클로저 호출(지역이 같은 이름 top-level `fn`을 가림), 아니면 기존
+    top-level fn 조회로 fallback. **clr-meta와 대비**: clr-meta는 .NET
+    플랫폼 제약(`DynamicMethod`가 `TypeBuilder` 멤버 참조 불가) 때문에 완전히
+    새 codegen 경로 + 단일 파라미터/클로저-캡처-클로저 불가 같은 인위적
+    경계가 필요했지만, rs-meta는 단순 tree-walking interpreter라 그런 제약이
+    없음 — 여러 파라미터 클로저와 클로저를 캡처하는 클로저 둘 다 인위적 제한
+    없이 fixture로 실증. 여러 번 호출, non-tail 호출, let-바인딩/파라미터
+    캡처, 2-파라미터, fn을 가리는 클로저, 클로저-캡처-클로저까지 6개 fixture
+    추가.
+  - 검증: 세 단계 각각 `self-check` 408/408, `tv-check` 408/408 재실행(
     `independent_mini_backend.rs` 자체가 rs-meta 자기호스팅 corpus 일부라
     self-check가 이 파일의 파싱/타입체크도 검증), `independent-mini-backend-
-    check` 21/21 전부 실제 `rustc` 대비. 회귀 없음. 상세는 `STATUS.md`
+    check` 27/27 전부 실제 `rustc` 대비. 회귀 없음. 상세는 `STATUS.md`
     "Trusting-Trust defense roadmap" 참조.
 - **What "done" looks like (여전히 aspirational, hard bar 아님):** widen
-  toward (not necessarily matching 1:1) the 407-case main corpus. 다음 자연스러운
-  후보는 클로저(`|x| ...`) — clj-meta/clr-meta가 거친 nested-fn 단계의 대응물.
-  `!=`, 문자열/불리언 처리도 여전히 후보.
+  toward (not necessarily matching 1:1) the 407-case main corpus. `!=`,
+  문자열/불리언 처리, 클로저를 top-level fn 인자로 넘기는 고차 함수 형태가
+  여전히 후보.
 - **Size:** small-to-medium, incremental, purely additive, no known blockers —
   each new fixture (or small feature slice) is its own self-contained step.
 
