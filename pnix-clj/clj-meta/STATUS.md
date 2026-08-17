@@ -1271,6 +1271,76 @@ fallback하는 경우까지 전부 실제 host 대비 검증(수정 후 전부
 DDC lane: OK`) 녹색, 회귀 없음. 이걸로 이번 세션에서 찾은
 좁은/실제-액션-가능 gap 전부 닫힘.
 
+**같은 날 마흔두 번째 확장 (2026-08-15): U6를 전체 conformance
+corpus(116개)와 처음으로 교차 검증 — 진짜 pre-existing 버그
+하나 발견·수정.** 사용자가 "그래 잘 적어놓고 해야할일들해봐"로
+지시. U6(`frontend_selfhost.clj`)는 지금까지 자기 자신의
+hand-maintained `specs`(243개)만으로 검증돼 왔고, `conformance.clj`의
+116-case corpus(host/compiler.clj/kernel.clj 3-way)에는 **한
+번도 연결된 적이 없었다** — 이번에 처음으로 U6의 `compile-source`를
+그 116개 케이스 전체에 직접 돌려서 교차 검증(스크래치 스크립트,
+아직 영구 게이트로 연결 안 함). 결과: 85/116 일치, 나머지는
+대부분 정직하게 스코프 밖인 기능(`def`/top-level 부작용, `instance?`,
+`var`, `defrecord`, `StringBuilder` 등 미등록 클래스,
+`clojure.core.protocols/coll-reduce`, `(set! (. p x) v)` 형태의
+interop set!, 콤마 있는 map 리터럴 등) — 그런데 **그 중 정확히
+2개는 기능 부재가 아니라 진짜 `VerifyError` 크래시**였다.
+
+**근본 원인**: JVM 예외 핸들러는 항상 "빈 operand stack + 잡힌
+예외" 하나로만 시작한다(JVM 스펙 자체의 불변조건) — 그런데 이
+witness의 여러 emit 함수가 "값 하나를 스택에 남겨둔 채로 또 다른
+`emit-expr`를 중첩 호출"하는 패턴을 쓰고 있었다(`emit-object-array`가
+배열 참조+인덱스를 스택에 남긴 채 각 원소를 emit, `emit-binary`가
+lhs를 스택에 남긴 채 rhs를 emit, 등). 그 중첩된 서브식이 `try`를
+포함하면: 정상 경로는 "먼저 남겨둔 값 + try 결과"가 스택에 같이
+있지만, 예외 경로(핸들러 진입)는 JVM이 스택을 통째로 비워버려서
+"먼저 남겨둔 값"이 사라진 채로 합류 — 두 경로의 스택 모양이
+실제로 달라져서 verifier가 정당하게 거부(`(fn [] [(try 1 (catch
+Exception e 2)) 99])`로 최소 재현, 실제 host는 `[1 99]`를 정상
+반환). 이번 세션에서 새로 만든 코드가 원인이 아니라, 원래부터
+있던 잠재 버그 — `try`가 비-tail 위치의 raw 서브식으로 쓰이는
+조합을 그동안 어떤 fixture도 우연히 안 건드렸을 뿐. **일반적이고
+견고한 수정**: 어떤 값도 중첩 `emit-expr` 호출을 가로질러 raw
+operand stack에 남겨두지 않는다 — 계산 직후 즉시 local에 저장하고,
+그룹의 모든 값이 안전하게 계산된 뒤에만 local에서 다시 로드.
+`stack-safe!`/`emit-exprs-stack-safe!` 공용 헬퍼를 추가하고
+아래 14개 emit 함수 전부에 이 원칙을 기계적으로 적용:
+`emit-binary`, `emit-get3`, `emit-object-array`(vector/map/set
+리터럴이 전부 이걸 통해 나감), `emit-interop-call`,
+`emit-static-interop-call`, `emit-general-static-interop-call`,
+`emit-general-new`, `emit-new`, `emit-core-fn-call`,
+`emit-local-fn-call`, `emit-computed-fn-call`, `emit-field-set`,
+`emit-list`, `emit-binding`, `emit-deftype-new`. (`emit-let`/
+`emit-loop`/`emit-recur`/`emit-do`/`emit-locking`/`emit-try`
+계열/`emit-protocol-call`은 감사 결과 이미 안전한 패턴이었음 —
+값을 계산 직후 바로 local에 저장하거나, 여러 서브식이 겹치지
+않게 순차 소비.) `try`를 vector/list/binary-op-rhs/interop-call
+인자/core-fn-call 인자/local-fn-call 인자/deftype 생성자 인자
+안에 raw로 넣는 9가지 조합 전부 실제 host 대비로 검증(수정 전
+2개는 크래시 재현, 9개 전부 수정 후 host와 정확히 일치).
+회귀 없음(기존 243개 fixture 전부 그대로 통과 — 대부분 이
+14개 함수를 거치는데도 관찰 가능한 동작은 100% 동일, 순수
+안전성 리팩터). U6:
+234→243(`:tiny-try-inside-vector-literal`,
+`:tiny-try-inside-vector-literal-no-finally`,
+`:tiny-try-inside-vector-literal-exceptional-path-with-finally-counter`,
+`:tiny-try-inside-binary-op-rhs`, `:tiny-try-inside-list-literal`,
+`:tiny-try-inside-interop-call-arg`,
+`:tiny-try-inside-core-fn-call-arg`,
+`:tiny-try-inside-local-fn-call-arg`,
+`:tiny-try-inside-deftype-new-arg`). `compiler.clj`는 애초에
+이 버그가 없었음(진짜 tools.analyzer.jvm/ASM 경로라 서브식
+평가 순서/스택 관리가 다름) — 대표 fixture 하나를 DDC 행에
+연결(125→126, 실측 확인). 전체 `-M:conformance`(116/116),
+`-M:diverse-double-compile`과 `bin/clj-meta-gate`(`metacircular
+gate: READY ✅`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
+
+**진짜로 남은 것**: U6-vs-conformance-corpus 교차검증은 아직
+스크래치 스크립트일 뿐, 영구 게이트로 연결 안 됨 — `via-u6`를
+`conformance.clj`에 정식으로 추가할지, 아니면 별도 파일로 둘지는
+다음 결정 사항. 나머지 29개 미매치 케이스는 개별적으로 스코프
+판단(기능 추가 대상 vs 의도적 held)이 필요하며 아직 안 함.
+
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)
 behavior-identical이 아니라 bit-identical 출력이 필요합니다 — 우연히 같은

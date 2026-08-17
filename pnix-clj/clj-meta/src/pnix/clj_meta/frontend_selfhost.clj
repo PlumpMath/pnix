@@ -2024,10 +2024,53 @@
     :else
     (throw (ex-info "tiny emitter: unsupported const" {:value value}))))
 
+;; A JVM exception handler ALWAYS begins with an empty operand stack --
+;; just the caught exception, nothing else, regardless of what was already
+;; on the stack when the protected region began (JVM spec, not a bug in
+;; this witness's own reasoning). So any value left sitting on the raw
+;; operand stack WHILE a nested `emit-expr` call runs is UNSAFE if that
+;; nested expression contains (or is itself) a `try`/`catch`/`finally`,
+;; `locking`, or `binding` -- anything that installs a handler: the normal
+;; path leaves the earlier value(s) still on the stack underneath the new
+;; result, but the exceptional path (handler taken) starts fresh with just
+;; the exception, so the stack shapes at whatever point the two paths
+;; merge genuinely differ -- a real divergence the bytecode verifier
+;; correctly rejects (confirmed live: `(fn [] [(try 1 (catch Exception e
+;; 2)) 99])` -- a `try` used as a raw, non-tail vector element -- threw a
+;; `VerifyError`, a PRE-EXISTING bug unrelated to any of this session's own
+;; additions, only surfaced by testing against the full conformance
+;; corpus). The general, robust fix used throughout this file's multi-
+;; subexpression emitters: never let a value span a nested `emit-expr`
+;; call on the raw stack -- store it into a local immediately after
+;; computing it instead, and only reload from locals once every value in
+;; the group has been safely computed this way.
+(defn- stack-safe!
+  "Runs `emit-thunk!` (a 0-arg fn that leaves exactly one value on the
+  operand stack via whatever it closes over) then immediately stores that
+  value into a fresh local, returning the slot. Lower-level than
+  `emit-exprs-stack-safe!` below -- for a single value produced by
+  arbitrary bytecode (a Var lookup, a class resolution, ...), not
+  necessarily a plain `emit-expr` call on an AST node."
+  [^GeneratorAdapter ga emit-thunk!]
+  (emit-thunk!)
+  (let [slot (.newLocal ga obj-type)]
+    (.storeLocal ga slot)
+    slot))
+
+;; The common case: a list of AST expressions that all need to end up on
+;; the stack, in order (e.g. a vector literal's items, a binary op's two
+;; operands). Each is emitted and stored to its own local BEFORE the next
+;; one is emitted, so an earlier expression's result is never exposed to
+;; whatever exception-handling machinery a LATER expression might install.
+(defn- emit-exprs-stack-safe!
+  [^GeneratorAdapter ga env exprs]
+  (let [slots (mapv #(stack-safe! ga (fn [] (emit-expr ga env %))) exprs)]
+    (doseq [slot slots]
+      (.loadLocal ga slot))))
+
 (defn- emit-binary
   [^GeneratorAdapter ga env {:keys [fn lhs rhs]}]
-  (emit-expr ga env lhs)
-  (emit-expr ga env rhs)
+  (emit-exprs-stack-safe! ga env [lhs rhs])
   (case fn
     + (.invokeStatic ga numbers-type numbers-add-method)
     - (.invokeStatic ga numbers-type numbers-minus-method)
@@ -2053,9 +2096,7 @@
 
 (defn- emit-get3
   [^GeneratorAdapter ga env {:keys [map key default]}]
-  (emit-expr ga env map)
-  (emit-expr ga env key)
-  (emit-expr ga env default)
+  (emit-exprs-stack-safe! ga env [map key default])
   (.invokeStatic ga rt-type rt-get3-method))
 
 (defn- emit-unary
@@ -2363,13 +2404,14 @@
         handler (Label.)
         after (Label.)
         result-slot (.newLocal ga obj-type)
-        exception-slot (.newLocal ga obj-type)]
+        exception-slot (.newLocal ga obj-type)
+        value-slot (stack-safe! ga (fn [] (emit-expr ga env value)))]
     (emit-var-ifn ga "clojure.core" "push-thread-bindings")
     (emit-var-ifn ga "clojure.core" "hash-map")
     (.push ga ^String var-ns)
     (.push ga ^String var-name)
     (.invokeStatic ga rt-type rt-var-method)
-    (emit-expr ga env value)
+    (.loadLocal ga value-slot)
     (.invokeInterface ga ifn-type (invoke-method 2))
     (.invokeInterface ga ifn-type (invoke-method 1))
     (.pop ga)
@@ -2495,14 +2537,17 @@
 (defn- emit-new
   [^GeneratorAdapter ga env {:keys [class arg]}]
   (let [ctype (Type/getType ^Class class)]
-    (.newInstance ga ctype)
-    (.dup ga)
     (if arg
-      (do
-        (emit-expr ga env arg)
+      (let [arg-slot (stack-safe! ga (fn [] (emit-expr ga env arg)))]
+        (.newInstance ga ctype)
+        (.dup ga)
+        (.loadLocal ga arg-slot)
         (.checkCast ga string-type)
         (.invokeConstructor ga ctype (Method. "<init>" Type/VOID_TYPE (into-array Type [string-type]))))
-      (.invokeConstructor ga ctype init-method))))
+      (do
+        (.newInstance ga ctype)
+        (.dup ga)
+        (.invokeConstructor ga ctype init-method)))))
 
 (defn- emit-throw
   [^GeneratorAdapter ga env {:keys [expr]}]
@@ -2558,42 +2603,48 @@
 
 (defn- emit-object-array
   [^GeneratorAdapter ga env items]
-  (.push ga (int (count items)))
-  (.newArray ga obj-type)
-  (doseq [[i item] (map-indexed vector items)]
-    (.dup ga)
-    (.push ga (int i))
-    (emit-expr ga env item)
-    (.arrayStore ga obj-type)))
+  (let [slots (mapv #(stack-safe! ga (fn [] (emit-expr ga env %))) items)]
+    (.push ga (int (count items)))
+    (.newArray ga obj-type)
+    (doseq [[i slot] (map-indexed vector slots)]
+      (.dup ga)
+      (.push ga (int i))
+      (.loadLocal ga slot)
+      (.arrayStore ga obj-type))))
 
 (defn- emit-interop-call
   [^GeneratorAdapter ga env {:keys [receiver method args]}]
-  (emit-expr ga env receiver)
-  (.push ga ^String method)
-  (emit-object-array ga env args)
-  (.invokeStatic ga reflector-type reflector-invoke-instance-method-method))
+  (let [receiver-slot (stack-safe! ga (fn [] (emit-expr ga env receiver)))
+        args-slot (stack-safe! ga (fn [] (emit-object-array ga env args)))]
+    (.loadLocal ga receiver-slot)
+    (.push ga ^String method)
+    (.loadLocal ga args-slot)
+    (.invokeStatic ga reflector-type reflector-invoke-instance-method-method)))
 
 (defn- emit-static-interop-call
   [^GeneratorAdapter ga env {:keys [class method args]}]
-  (.push ga (Type/getType ^Class class))
-  (.push ga ^String method)
-  (emit-object-array ga env args)
-  (.invokeStatic ga reflector-type reflector-invoke-static-method-method))
+  (let [args-slot (stack-safe! ga (fn [] (emit-object-array ga env args)))]
+    (.push ga (Type/getType ^Class class))
+    (.push ga ^String method)
+    (.loadLocal ga args-slot)
+    (.invokeStatic ga reflector-type reflector-invoke-static-method-method)))
 
 (defn- emit-general-static-interop-call
   [^GeneratorAdapter ga env {:keys [class-name method args]}]
-  (.push ga ^String class-name)
-  (.invokeStatic ga rt-type rt-classfor-name-method)
-  (.push ga ^String method)
-  (emit-object-array ga env args)
-  (.invokeStatic ga reflector-type reflector-invoke-static-method-method))
+  (let [args-slot (stack-safe! ga (fn [] (emit-object-array ga env args)))]
+    (.push ga ^String class-name)
+    (.invokeStatic ga rt-type rt-classfor-name-method)
+    (.push ga ^String method)
+    (.loadLocal ga args-slot)
+    (.invokeStatic ga reflector-type reflector-invoke-static-method-method)))
 
 (defn- emit-general-new
   [^GeneratorAdapter ga env {:keys [class-name args]}]
-  (.push ga ^String class-name)
-  (.invokeStatic ga rt-type rt-classfor-name-method)
-  (emit-object-array ga env args)
-  (.invokeStatic ga reflector-type reflector-invoke-constructor-method))
+  (let [args-slot (stack-safe! ga (fn [] (emit-object-array ga env args)))]
+    (.push ga ^String class-name)
+    (.invokeStatic ga rt-type rt-classfor-name-method)
+    (.loadLocal ga args-slot)
+    (.invokeStatic ga reflector-type reflector-invoke-constructor-method)))
 
 ;; `str` (and, in principle, any other `clojure.core` function -- this
 ;; mechanism generalizes, though only `str` is wired up as a fixture-tested
@@ -2609,33 +2660,42 @@
 ;; returns the same live value either way.
 (defn- emit-core-fn-call
   [^GeneratorAdapter ga env {:keys [fn-name args]}]
-  (.push ga "clojure.core")
-  (.push ga ^String fn-name)
-  (.invokeStatic ga rt-type rt-var-method)
-  (.invokeVirtual ga var-type var-getrawroot-method)
-  (.checkCast ga ifn-type)
-  (doseq [arg args] (emit-expr ga env arg))
-  (.invokeInterface ga ifn-type (invoke-method (count args))))
+  (let [fn-slot (stack-safe! ga (fn []
+                                   (.push ga "clojure.core")
+                                   (.push ga ^String fn-name)
+                                   (.invokeStatic ga rt-type rt-var-method)
+                                   (.invokeVirtual ga var-type var-getrawroot-method)
+                                   (.checkCast ga ifn-type)))
+        arg-slots (mapv #(stack-safe! ga (fn [] (emit-expr ga env %))) args)]
+    (.loadLocal ga fn-slot)
+    (doseq [slot arg-slots] (.loadLocal ga slot))
+    (.invokeInterface ga ifn-type (invoke-method (count args)))))
 
 ;; A local (fn parameter/`let` binding) called as a fn, e.g. `(f x)` where
 ;; `f` is itself a parameter -- confirmed via `javap -c`: just the local's
 ;; value cast straight to `IFn` and invoked, no Var lookup at all.
 (defn- emit-local-fn-call
   [^GeneratorAdapter ga env {:keys [name args]}]
-  (emit-local ga env name)
-  (.checkCast ga ifn-type)
-  (doseq [arg args] (emit-expr ga env arg))
-  (.invokeInterface ga ifn-type (invoke-method (count args))))
+  (let [fn-slot (stack-safe! ga (fn []
+                                   (emit-local ga env name)
+                                   (.checkCast ga ifn-type)))
+        arg-slots (mapv #(stack-safe! ga (fn [] (emit-expr ga env %))) args)]
+    (.loadLocal ga fn-slot)
+    (doseq [slot arg-slots] (.loadLocal ga slot))
+    (.invokeInterface ga ifn-type (invoke-method (count args)))))
 
 ;; A call head that is itself an expression, not a bare symbol, e.g.
 ;; `((constantly x) 99)` -- confirmed via `javap -c`: whatever bytecode the
 ;; head expression produces, cast straight to `IFn` and invoked.
 (defn- emit-computed-fn-call
   [^GeneratorAdapter ga env {:keys [fn-expr args]}]
-  (emit-expr ga env fn-expr)
-  (.checkCast ga ifn-type)
-  (doseq [arg args] (emit-expr ga env arg))
-  (.invokeInterface ga ifn-type (invoke-method (count args))))
+  (let [fn-slot (stack-safe! ga (fn []
+                                   (emit-expr ga env fn-expr)
+                                   (.checkCast ga ifn-type)))
+        arg-slots (mapv #(stack-safe! ga (fn [] (emit-expr ga env %))) args)]
+    (.loadLocal ga fn-slot)
+    (doseq [slot arg-slots] (.loadLocal ga slot))
+    (.invokeInterface ga ifn-type (invoke-method (count args)))))
 
 ;; `.-fieldName`/`set!` -- confirmed via `javap -c` on host-AOT-compiled
 ;; `(.-x p)` and `(set! (.-x p) v)` for an untyped `p`: field GET goes
@@ -2655,10 +2715,12 @@
 
 (defn- emit-field-set
   [^GeneratorAdapter ga env {:keys [receiver field value]}]
-  (emit-expr ga env receiver)
-  (.push ga ^String field)
-  (emit-expr ga env value)
-  (.invokeStatic ga reflector-type reflector-set-instance-field-method))
+  (let [receiver-slot (stack-safe! ga (fn [] (emit-expr ga env receiver)))
+        value-slot (stack-safe! ga (fn [] (emit-expr ga env value)))]
+    (.loadLocal ga receiver-slot)
+    (.push ga ^String field)
+    (.loadLocal ga value-slot)
+    (.invokeStatic ga reflector-type reflector-set-instance-field-method)))
 
 (defn- emit-vector
   [^GeneratorAdapter ga env items]
@@ -2688,8 +2750,7 @@
     (throw (ex-info "tiny emitter: quoted list arity"
                     {:arity (count items)
                      :max-arity 5})))
-  (doseq [item items]
-    (emit-expr ga env item))
+  (emit-exprs-stack-safe! ga env items)
   (.invokeStatic ga rt-type (rt-list-method (count items))))
 
 (defn- emit-expr
@@ -3138,10 +3199,11 @@
 (defn- emit-deftype-new
   [^GeneratorAdapter ga env {:keys [class args]}]
   (let [ctype (Type/getType ^Class class)
-        ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count args) obj-type)))]
+        ctor-method (Method. "<init>" Type/VOID_TYPE (into-array Type (repeat (count args) obj-type)))
+        arg-slots (mapv #(stack-safe! ga (fn [] (emit-expr ga env %))) args)]
     (.newInstance ga ctype)
     (.dup ga)
-    (doseq [arg args] (emit-expr ga env arg))
+    (doseq [slot arg-slots] (.loadLocal ga slot))
     (.invokeConstructor ga ctype ctor-method)))
 
 ;; The `defprotocol`-generated interface itself -- a plain abstract public
@@ -4255,6 +4317,53 @@
    {:id :tiny-try-multi-catch-finally-exception-in-catch-body-counter
     :source "(fn [a] (do (try (try (throw (IllegalArgumentException. \"bad\")) (catch ArithmeticException e :divzero) (catch IllegalArgumentException e (throw (RuntimeException. \"from-catch\"))) (finally (.incrementAndGet a))) (catch RuntimeException e2 :outer-caught)) (.get a)))"
     :args [(java.util.concurrent.atomic.AtomicInteger. 0)]
+    :expected 1}
+   ;; A `try` used as a raw, non-tail subexpression -- where the JVM
+   ;; operand stack already has OTHER values pending (an array being
+   ;; built, a lhs waiting for a rhs, a receiver waiting for args...) when
+   ;; the try's own handler is installed -- crashed with a VerifyError
+   ;; before `stack-safe!`/`emit-exprs-stack-safe!` were introduced: JVM
+   ;; exception handlers always begin with an EMPTY operand stack (just
+   ;; the caught exception), so any value already on the stack before the
+   ;; try began is wiped on the exceptional path, producing a stack-shape
+   ;; mismatch the verifier correctly rejects. A pre-existing bug, not
+   ;; introduced by this session's other work -- found by cross-checking
+   ;; U6 against the full conformance corpus.
+   {:id :tiny-try-inside-vector-literal
+    :source "(fn [] [(try 1 (catch Exception e 2) (finally nil)) 99])"
+    :args []
+    :expected [1 99]}
+   {:id :tiny-try-inside-vector-literal-no-finally
+    :source "(fn [] [(try 1 (catch Exception e 2)) 99])"
+    :args []
+    :expected [1 99]}
+   {:id :tiny-try-inside-vector-literal-exceptional-path-with-finally-counter
+    :source "(fn [] (let [a (java.util.concurrent.atomic.AtomicInteger. 0)] [(try (throw (ex-info \"boom\" {})) (catch Exception e :caught) (finally (.incrementAndGet a))) (.get a)]))"
+    :args []
+    :expected [:caught 1]}
+   {:id :tiny-try-inside-binary-op-rhs
+    :source "(fn [] (+ 1 (try 2 (catch Exception e 3))))"
+    :args []
+    :expected 3}
+   {:id :tiny-try-inside-list-literal
+    :source "(fn [] (list 1 (try 2 (catch Exception e 3))))"
+    :args []
+    :expected '(1 2)}
+   {:id :tiny-try-inside-interop-call-arg
+    :source "(fn [] (.length (try \"ab\" (catch Exception e \"cd\"))))"
+    :args []
+    :expected 2}
+   {:id :tiny-try-inside-core-fn-call-arg
+    :source "(fn [] (str \"a\" (try \"b\" (catch Exception e \"c\"))))"
+    :args []
+    :expected "ab"}
+   {:id :tiny-try-inside-local-fn-call-arg
+    :source "(fn [f] (f (try 1 (catch Exception e 2))))"
+    :args [(fn [x] (* x 10))]
+    :expected 10}
+   {:id :tiny-try-inside-deftype-new-arg
+    :source "(do (deftype Point [x y]) (fn [] (let [p (Point. (try 1 (catch Exception e 2)) 3)] (.-x p))))"
+    :args []
     :expected 1}
    {:id :tiny-general-new-unique-arity
     :source "(fn [x y] (.-x (java.awt.Point. x y)))"

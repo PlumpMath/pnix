@@ -790,6 +790,55 @@ top-line claim, but the substance is much closer than "false" implies:
   Work" 섹션의 대형/의도적 held 항목들(full Wheeler DDC
   bit-identical, R7f 형식증명, R5f/R6f 완전 self-host 등)뿐 —
   전부 이 파일 자체가 영구 경계/연구급 프로젝트로 명시.
+
+  **42번째 슬라이스, 2026-08-15: U6를 116-case conformance corpus와
+  처음 교차검증 → 진짜 pre-existing VerifyError 버그 발견·수정**
+  (234→243). U6는 지금까지 자기 fixture(243개)로만 검증돼 왔고
+  `conformance.clj`의 116-case corpus에는 한 번도 연결된 적
+  없었음 — 처음 교차 실행해서 85/116 일치 확인, 그 중 정확히
+  2개는 기능 부재가 아니라 진짜 `VerifyError` 크래시였음.
+
+  **근본 원인**: JVM 예외 핸들러는 항상 빈 스택+예외 하나로만
+  시작(JVM 스펙 불변조건) — 그런데 여러 emit 함수가 "값을 스택에
+  남긴 채 또 다른 emit-expr를 중첩 호출"하는 패턴이었음
+  (`emit-object-array`가 배열+인덱스를 남긴 채 각 원소를 emit,
+  `emit-binary`가 lhs를 남긴 채 rhs를 emit 등). 중첩 서브식이
+  `try`를 포함하면 정상/예외 경로의 스택 모양이 실제로 달라져
+  verifier가 정당히 거부(`(fn [] [(try 1 (catch Exception e 2))
+  99])`로 최소 재현 — real host는 `[1 99]` 정상). 이번 세션
+  신규 코드가 원인 아님, 원래부터 있던 잠재 버그 — `try`가
+  비-tail raw 서브식으로 쓰이는 조합을 그동안 어떤 fixture도
+  우연히 안 건드림.
+
+  **수정**: 어떤 값도 중첩 emit-expr 호출을 가로질러 raw stack에
+  남기지 않음 — 계산 직후 즉시 local에 저장, 그룹 전체가 안전히
+  계산된 뒤에만 재로드. `stack-safe!`/`emit-exprs-stack-safe!`
+  공용 헬퍼 추가 후 14개 emit 함수(`emit-binary`, `emit-get3`,
+  `emit-object-array`, `emit-interop-call`,
+  `emit-static-interop-call`, `emit-general-static-interop-call`,
+  `emit-general-new`, `emit-new`, `emit-core-fn-call`,
+  `emit-local-fn-call`, `emit-computed-fn-call`, `emit-field-set`,
+  `emit-list`, `emit-binding`, `emit-deftype-new`)에 기계적으로
+  적용 — `emit-let`/`emit-loop`/`emit-recur`/`emit-do`/
+  `emit-locking`/`emit-try`계열/`emit-protocol-call`은 감사 결과
+  이미 안전했음. `try`를 vector/list/binary-rhs/interop-call
+  인자/core-fn-call 인자/local-fn-call 인자/deftype 생성자 인자에
+  raw로 넣는 9가지 조합 전부 실제 host 대비 검증(수정 전 재현,
+  수정 후 전부 일치). 회귀 없음(기존 234개 fixture 전부 그대로
+  통과 — 순수 안전성 리팩터, 관찰 가능한 동작 불변). U6:
+  234→243. `compiler.clj`는 애초에 이 버그가 없어서(진짜
+  tools.analyzer.jvm/ASM 경로) 대표 fixture 하나만 DDC 행에
+  연결(125→126, 실측 확인). `-M:conformance` 116/116·
+  `-M:diverse-double-compile` 영향 없음, `bin/clj-meta-gate`
+  `metacircular gate: READY ✅` + `reproducible DDC lane: OK`,
+  회귀 없음.
+
+  **진짜로 남은 것**: U6-vs-conformance-corpus 교차검증은 아직
+  스크래치 스크립트일 뿐, `conformance.clj`에 `via-u6`로 정식
+  연결할지 결정 안 됨. 나머지 29개 미매치 케이스(대부분 `def`/
+  `instance?`/`var`/`defrecord`/`StringBuilder` 등 의도적
+  스코프-밖 기능)는 개별 스코프 판단이 아직 안 됨 — 다음 세션
+  후보.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by

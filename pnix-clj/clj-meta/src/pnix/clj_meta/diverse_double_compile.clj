@@ -744,7 +744,11 @@
    {:id :mini-backend-reify-bare-java-lang-interface-name
     :source "(fn [] (let [counter (java.util.concurrent.atomic.AtomicInteger. 0)] (.run (reify Runnable (run [this] (.set counter 42)))) (.get counter)))"
     :args []
-    :expected 42}])
+    :expected 42}
+   {:id :mini-backend-try-inside-vector-literal
+    :source "(fn [] [(try 1 (catch Exception e 2) (finally nil)) 99])"
+    :args []
+    :expected [1 99]}])
 
 (defn- mini-backend-case-row
   [{:keys [id source args expected]}]
