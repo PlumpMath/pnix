@@ -21,7 +21,14 @@
   set, not the checked-Int64 expression profile those stages formally close.")
 
 (import System.Reflection.Emit.DynamicMethod
-        System.Reflection.Emit.OpCodes)
+        System.Reflection.Emit.OpCodes
+        System.Reflection.Emit.AssemblyBuilder
+        System.Reflection.Emit.AssemblyBuilderAccess
+        System.Reflection.AssemblyName
+        System.Reflection.TypeAttributes
+        System.Reflection.FieldAttributes
+        System.Reflection.MethodAttributes
+        System.Reflection.CallingConventions)
 
 ;; ---- tiny tokenizer / reader (no clojure.core/read-string) ----
 
@@ -169,6 +176,11 @@
 ;; instead, since .NET's `ILGenerator/DeclareLocal` (the `Ldloc`/`Stloc`
 ;; target) needs a live `ILGenerator` to call, unlike a param's fixed
 ;; `Ldarg` index which is already known from its position in `params`.
+;; The ONE exception: a `let` binding whose init is a `fn` literal that
+;; `desugar` couldn't eliminate (see below) is CLOSURE-typed, not
+;; Int64-typed -- `env` marks those with `{:closure-arity N}` instead of
+;; plain `true`, since a closure-valued name can only ever be CALLED
+;; (`:op :closure-call`), never used as an ordinary Int64 expression.
 ;;
 ;; `recur` at a `loop`'s own tail position targets that loop's bindings; a
 ;; bare `recur` with no enclosing `loop` targets the fn's own params
@@ -179,39 +191,96 @@
 
 (def ^:private recur-arity-key ::recur-arity)
 
-(declare analyze-let analyze-loop analyze-recur)
+(declare analyze-let analyze-loop analyze-recur analyze-closure-fn ast-contains-closure?)
+
+(defn- closure-literal? [form]
+  (and (seq? form) (= 'fn (first form))))
 
 (defn- analyze-expr [env form]
   (cond
     (integer? form) {:op :const :value (long form)}
 
     (symbol? form)
-    (if (contains? env form)
-      {:op :local :name form}
-      (throw (Exception. (str "tiny analyzer: unknown local " form))))
+    (let [entry (get env form ::not-found)]
+      (cond
+        (= entry ::not-found)
+        (throw (Exception. (str "tiny analyzer: unknown local " form)))
+
+        (map? entry)
+        (throw (Exception. (str "tiny analyzer: closure value " form " used without being called")))
+
+        :else {:op :local :name form}))
 
     (seq? form)
     (let [op (first form) args (rest form)]
-      (case op
-        if (do (when-not (= 3 (count args))
-                 (throw (Exception. "tiny analyzer: if arity")))
-               {:op :if
-                :test (analyze-expr env (nth args 0))
-                :then (analyze-expr env (nth args 1))
-                :else (analyze-expr env (nth args 2))})
-        let (analyze-let env args)
-        loop (analyze-loop env args)
-        recur (analyze-recur env args)
-        (+ - * < > <= >= =)
-        (do (when-not (= 2 (count args))
-              (throw (Exception. "tiny analyzer: binary op arity")))
-            {:op :binary :fn op
-             :lhs (analyze-expr env (first args))
-             :rhs (analyze-expr env (second args))})
-        (throw (Exception. (str "tiny analyzer: unsupported op " op)))))
+      (if (and (symbol? op) (map? (get env op)))
+        (let [arity (:closure-arity (get env op))]
+          (when-not (= arity (count args))
+            (throw (Exception. "tiny analyzer: closure call arity mismatch")))
+          {:op :closure-call :name op :args (mapv #(analyze-expr env %) args)})
+        (case op
+          if (do (when-not (= 3 (count args))
+                   (throw (Exception. "tiny analyzer: if arity")))
+                 {:op :if
+                  :test (analyze-expr env (nth args 0))
+                  :then (analyze-expr env (nth args 1))
+                  :else (analyze-expr env (nth args 2))})
+          let (analyze-let env args)
+          loop (analyze-loop env args)
+          recur (analyze-recur env args)
+          (+ - * < > <= >= =)
+          (do (when-not (= 2 (count args))
+                (throw (Exception. "tiny analyzer: binary op arity")))
+              {:op :binary :fn op
+               :lhs (analyze-expr env (first args))
+               :rhs (analyze-expr env (second args))})
+          (throw (Exception. (str "tiny analyzer: unsupported op " op))))))
 
     :else
     (throw (Exception. (str "tiny analyzer: unsupported form " form)))))
+
+;; A raw `:op :local` AST-node walk (mirroring the reference JVM host's
+;; `ast-referenced-names`) -- used to find a closure's free variables
+;; AFTER analyzing its body, since `env` carries no distinction between
+;; "this closure's own param" and "resolved from the enclosing scope" (see
+;; `analyze-fn-clause`'s JVM-host analogue for the same reasoning).
+(defn- ast-referenced-names [node]
+  (cond
+    (and (map? node) (= :local (:op node))) #{(:name node)}
+    (map? node) (reduce into #{} (map ast-referenced-names (vals node)))
+    (sequential? node) (reduce into #{} (map ast-referenced-names node))
+    :else #{}))
+
+;; A nested `fn` literal `desugar` couldn't eliminate (called more than
+;; once, called from a non-tail position, or otherwise escaping) -- a
+;; GENUINE closure, needing a real runtime value (see the emitter section
+;; below for how). Deliberately narrow: exactly ONE param (no multi-arity,
+;; no variadic), and every captured free variable must itself be an
+;; ordinary Int64 binding -- capturing ANOTHER closure is not supported
+;; (this backend never needed transitive closure-of-closure capture for
+;; any actual fixture, and it would need the base closure type itself to
+;; be capturable, a real further extension). Also deliberately rejected: a
+;; nested closure literal INSIDE this closure's own body -- `ast-referenced-
+;; names` cannot distinguish "an inner closure's own param" from "a name
+;; free in the outer closure" by AST shape alone (both are plain `:op
+;; :local` nodes), so allowing it would risk silently mis-capturing the
+;; inner closure's param as an outer free variable. No fixture needs
+;; closures nested this way; a real fix would need `ast-referenced-names`
+;; to stop descending at nested `:closure` boundaries.
+(defn- analyze-closure-fn [env form]
+  (let [[_ params & body] form]
+    (when-not (and (vector? params) (= 1 (count params)) (symbol? (first params))
+                   (= 1 (count body)))
+      (throw (Exception. "tiny analyzer: nested fn literal must have exactly one param (multi-arity/variadic closures not supported)")))
+    (let [param (first params)
+          body-ast (analyze-expr (assoc env param true) (first body))]
+      (when (ast-contains-closure? body-ast)
+        (throw (Exception. "tiny analyzer: a closure literal nested inside another closure's body is not supported")))
+      (let [captures (vec (disj (ast-referenced-names body-ast) param))]
+        (doseq [cap captures]
+          (when (map? (get env cap))
+            (throw (Exception. (str "tiny analyzer: capturing a closure value (" cap ") is not supported")))))
+        {:op :closure :param param :body body-ast :captures captures}))))
 
 (defn- analyze-let [env args]
   (let [[bindings & body] args]
@@ -223,9 +292,14 @@
         (let [[name init] (first pairs)]
           (when-not (symbol? name)
             (throw (Exception. "tiny analyzer: let binding name")))
-          (recur (rest pairs)
-                 (assoc env name true)
-                 (conj acc {:name name :init (analyze-expr env init)})))
+          (if (closure-literal? init)
+            (let [closure-ast (analyze-closure-fn env init)]
+              (recur (rest pairs)
+                     (assoc env name {:closure-arity 1})
+                     (conj acc {:name name :kind :closure :closure closure-ast})))
+            (recur (rest pairs)
+                   (assoc env name true)
+                   (conj acc {:name name :kind :int64 :init (analyze-expr env init)}))))
         {:op :let :bindings acc :body (analyze-expr env (first body))}))))
 
 (defn- analyze-loop [env args]
@@ -263,12 +337,97 @@
       {:params params
        :body (analyze-expr env (first body))})))
 
-;; ---- direct IL emission via DynamicMethod (no PersistedAssemblyBuilder) ----
+;; Whether `ast` contains any genuine closure (a `let`-bound `fn` literal
+;; `desugar` could not beta-reduce away) -- `compile-source` uses this to
+;; decide between the cheap, unconditionally-kept `DynamicMethod` path (no
+;; closures: every existing fixture keeps working through the exact same
+;; code as before) and the TypeBuilder-hosted static-method path a real
+;; closure value requires (see the emitter section below for why).
+(defn- ast-contains-closure? [node]
+  (cond
+    (and (map? node) (contains? #{:closure :closure-call} (:op node))) true
+    (map? node) (boolean (some ast-contains-closure? (vals node)))
+    (sequential? node) (boolean (some ast-contains-closure? node))
+    :else false))
+
+;; ---- direct IL emission via DynamicMethod / TypeBuilder ----
+;;
+;; Closures need a real runtime value (a heap object holding its captured
+;; Int64s plus an `Invoke` method), which forces a SECOND, TypeBuilder-based
+;; emission path alongside the original DynamicMethod one:
+;; `System.Reflection.Emit.DynamicMethod`'s IL generator cannot reference
+;; `TypeBuilder`-created constructors/methods on this platform ("MethodInfo/
+;; ConstructorInfo must be a runtime ... object"), even though the identical
+;; IL sequence works when the CALLING method is itself TypeBuilder-hosted --
+;; verified end-to-end during this feature's development. So: a program
+;; with no closures anywhere keeps compiling through the original,
+;; unmodified `DynamicMethod` path (zero regression risk on all pre-existing
+;; fixtures); a program containing a closure compiles its whole top-level fn
+;; as a TypeBuilder-hosted static method instead, so its IL generator can
+;; freely reference the closure classes' constructors/`Invoke` methods
+;; defined alongside it in the same dynamic module. Both paths share
+;; `emit-top-level-body!` for the actual body emission.
 
 (def ^:private CMP-BRANCH
   {'< OpCodes/Blt '> OpCodes/Bgt '<= OpCodes/Ble '>= OpCodes/Bge '= OpCodes/Beq})
 
 (declare emit-expr)
+
+;; Bound once per `compile-source` call that contains a closure, to the
+;; shared `ModuleBuilder` every closure class (and the top-level container
+;; type) gets defined into -- unbound (and unused) on the plain
+;; `DynamicMethod` path, since no closure class is ever created there.
+(def ^:dynamic *closure-module* nil)
+
+(def ^:private public-static-method-attrs
+  (System.Enum/ToObject MethodAttributes (bit-or (long MethodAttributes/Public) (long MethodAttributes/Static))))
+
+;; A name's current value can live in an arg slot, a declared local, or (for
+;; code inside a closure's own `Invoke` body) a capture field read off `this`
+;; -- this is the one place that distinction is resolved, shared by both the
+;; plain `:local` AST case and closure construction's "push each capture's
+;; current value" step.
+(defn- emit-local-value! [^System.Reflection.Emit.ILGenerator il env name]
+  (let [{:keys [kind index local field]} (get env name)]
+    (case kind
+      :arg (.Emit il OpCodes/Ldarg (short index))
+      :local (.Emit il OpCodes/Ldloc ^System.Reflection.Emit.LocalBuilder local)
+      :field (do (.Emit il OpCodes/Ldarg_0)
+                 (.Emit il OpCodes/Ldfld field)))))
+
+;; Defines ONE new TypeBuilder class per closure literal into
+;; `*closure-module*`: one public Int64 field per capture, a public
+;; constructor storing each capture param into its field, and a public
+;; (non-virtual -- there is never more than one concrete type behind any
+;; given closure-local, so no vtable dispatch is needed) `Invoke(long):long`
+;; implementing the body, with the param at arg index 1 (index 0 is `this`)
+;; and captures read via `emit-local-value!`'s `:field` case. `.CreateType`
+;; is called immediately, before returning -- the type is always fully
+;; finished before anything else can reference it.
+(defn- emit-closure! [{:keys [param body captures]} env]
+  (let [mod *closure-module*
+        closure-type (.DefineType mod (str "IndependentMiniBackendClosure_" (gensym)) TypeAttributes/Public)
+        capture-fields (mapv (fn [cap] [cap (.DefineField closure-type (str cap) Int64 FieldAttributes/Public)])
+                              captures)
+        ctor (.DefineConstructor closure-type MethodAttributes/Public CallingConventions/Standard
+                                  (into-array System.Type (repeat (count captures) Int64)))
+        ctor-il (.GetILGenerator ctor)]
+    (.Emit ctor-il OpCodes/Ldarg_0)
+    (.Emit ctor-il OpCodes/Call (.GetConstructor System.Object (into-array System.Type [])))
+    (doseq [[i [_ field]] (map-indexed vector capture-fields)]
+      (.Emit ctor-il OpCodes/Ldarg_0)
+      (.Emit ctor-il OpCodes/Ldarg (short (inc i)))
+      (.Emit ctor-il OpCodes/Stfld field))
+    (.Emit ctor-il OpCodes/Ret)
+    (let [invoke (.DefineMethod closure-type "Invoke" MethodAttributes/Public
+                                 Int64 (into-array System.Type [Int64]))
+          inv-il (.GetILGenerator invoke)
+          field-env (into {} (map (fn [[cap field]] [cap {:kind :field :field field}])) capture-fields)
+          body-env (assoc field-env param {:kind :arg :index 1})]
+      (emit-expr inv-il body-env body)
+      (.Emit inv-il OpCodes/Ret)
+      (.CreateType closure-type)
+      {:type closure-type :ctor ctor :invoke invoke :captures (mapv first capture-fields)})))
 
 (defn- emit-binary [^System.Reflection.Emit.ILGenerator il env {:keys [fn lhs rhs]}]
   (cond
@@ -301,11 +460,21 @@
 (defn- emit-let [^System.Reflection.Emit.ILGenerator il env {:keys [bindings body]}]
   (loop [bindings bindings env env]
     (if (seq bindings)
-      (let [{:keys [name init]} (first bindings)
-            local (.DeclareLocal il Int64)]
-        (emit-expr il env init)
-        (.Emit il OpCodes/Stloc local)
-        (recur (rest bindings) (assoc env name {:kind :local :local local})))
+      (let [{:keys [name kind init closure]} (first bindings)]
+        (case kind
+          :int64
+          (let [local (.DeclareLocal il Int64)]
+            (emit-expr il env init)
+            (.Emit il OpCodes/Stloc local)
+            (recur (rest bindings) (assoc env name {:kind :local :local local})))
+
+          :closure
+          (let [{:keys [type ctor invoke captures]} (emit-closure! closure env)
+                local (.DeclareLocal il type)]
+            (doseq [cap captures] (emit-local-value! il env cap))
+            (.Emit il OpCodes/Newobj ctor)
+            (.Emit il OpCodes/Stloc local)
+            (recur (rest bindings) (assoc env name {:kind :closure-local :local local :invoke invoke})))))
       (emit-expr il env body))))
 
 ;; `loop` is `let` plus a `MarkLabel` right where the bindings finish and
@@ -363,14 +532,16 @@
 (defn- emit-expr [^System.Reflection.Emit.ILGenerator il env node]
   (case (:op node)
     :const (.Emit il OpCodes/Ldc_I8 (long (:value node)))
-    :local (let [{:keys [kind index local]} (get env (:name node))]
-             (case kind
-               :arg (.Emit il OpCodes/Ldarg (short index))
-               :local (.Emit il OpCodes/Ldloc ^System.Reflection.Emit.LocalBuilder local)))
+    :local (emit-local-value! il env (:name node))
     :binary (emit-binary il env node)
     :let (emit-let il env node)
     :loop (emit-loop il env node)
     :recur (emit-recur il env (:exprs node))
+    :closure-call
+    (let [{:keys [local invoke]} (get env (:name node))]
+      (.Emit il OpCodes/Ldloc ^System.Reflection.Emit.LocalBuilder local)
+      (doseq [arg (:args node)] (emit-expr il env arg))
+      (.Emit il OpCodes/Call invoke))
     :if (let [else-label (.DefineLabel il)
               end-label (.DefineLabel il)]
           (emit-expr il env (:test node))
@@ -382,12 +553,16 @@
           (emit-expr il env (:else node))
           (.MarkLabel il end-label))))
 
-(defn compile-source
-  "Compile `(fn [params...] body)` source text to an invokable DynamicMethod."
-  [source]
-  (let [form (desugar (tiny-read source))
-        ast (analyze-fn form)
-        arity (count (:params ast))
+;; Shared by both the `DynamicMethod` path and the TypeBuilder-hosted
+;; closure path: mark the recur-back label, emit the body against an env
+;; that already carries the arg bindings plus the recur target, and return.
+(defn- emit-top-level-body! [^System.Reflection.Emit.ILGenerator il arg-env recur-label recur-locals body]
+  (.MarkLabel il recur-label)
+  (emit-expr il (assoc arg-env recur-target-key {:label recur-label :locals recur-locals}) body)
+  (.Emit il OpCodes/Ret))
+
+(defn- compile-source-dynamic-method [ast]
+  (let [arity (count (:params ast))
         param-types (into-array System.Type (repeat arity Int64))
         dm (DynamicMethod. "IndependentMiniBackendFn" Int64 param-types)
         il (.GetILGenerator dm)
@@ -396,12 +571,47 @@
                       (:params ast))
         recur-label (.DefineLabel il)
         recur-locals (mapv (fn [i] {:kind :arg :index i}) (range arity))]
-    (.MarkLabel il recur-label)
-    (emit-expr il
-               (assoc arg-env recur-target-key {:label recur-label :locals recur-locals})
-               (:body ast))
-    (.Emit il OpCodes/Ret)
+    (emit-top-level-body! il arg-env recur-label recur-locals (:body ast))
     dm))
+
+;; The closure-carrying path: the whole top-level fn becomes a public
+;; static method on a fresh TypeBuilder-hosted container type in a fresh
+;; Run-only dynamic assembly/module, so its IL generator can freely
+;; reference the closure classes `emit-closure!` defines alongside it (see
+;; the emitter section's opening note for why `DynamicMethod` can't do
+;; this). `.Invoke(null, args)` on the resulting static `MethodInfo` behaves
+;; identically to `.Invoke(null, args)` on a `DynamicMethod` from
+;; `compile-and-invoke`'s point of view -- both are plain `MethodInfo`.
+(defn- compile-source-with-closures [ast]
+  (let [arity (count (:params ast))
+        asm (AssemblyBuilder/DefineDynamicAssembly
+             (AssemblyName. "IndependentMiniBackendClosureAsm") AssemblyBuilderAccess/Run)
+        mod (.DefineDynamicModule asm "IndependentMiniBackendClosureMod")
+        container (.DefineType mod "IndependentMiniBackendContainer" TypeAttributes/Public)
+        invoke-mb (.DefineMethod container "TopLevelInvoke" public-static-method-attrs
+                                  Int64 (into-array System.Type (repeat arity Int64)))
+        il (.GetILGenerator invoke-mb)
+        arg-env (into {}
+                      (map-indexed (fn [i p] [p {:kind :arg :index i}]))
+                      (:params ast))
+        recur-label (.DefineLabel il)
+        recur-locals (mapv (fn [i] {:kind :arg :index i}) (range arity))]
+    (binding [*closure-module* mod]
+      (emit-top-level-body! il arg-env recur-label recur-locals (:body ast)))
+    (let [created (.CreateType container)]
+      (.GetMethod created "TopLevelInvoke"))))
+
+(defn compile-source
+  "Compile `(fn [params...] body)` source text to an invokable MethodInfo:
+  a plain `DynamicMethod` when the program has no closures (unchanged from
+  before this feature existed), or a TypeBuilder-hosted static method when
+  it does (see `compile-source-with-closures`)."
+  [source]
+  (let [form (desugar (tiny-read source))
+        ast (analyze-fn form)]
+    (if (ast-contains-closure? ast)
+      (compile-source-with-closures ast)
+      (compile-source-dynamic-method ast))))
 
 (defn compile-and-invoke
   "Compile `source` and invoke it with `args` (a seq of longs)."

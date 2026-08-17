@@ -112,10 +112,30 @@ widening, Stage8, Stage9, Stage10–15/N 각각) — 각 item 자체 항목에�
    이걸로 clj-meta U6가 이번 세션 초반에 거친 것과 같은 순서(`let` →
    `loop`/`recur` → nested fn)를 clr-meta의 mini-backend도 따라잡음.
 
-   **다음 후보:** 여러 번 호출되는 named-local-fn까지 desugar 일반화
-   (지금은 tail 위치 단일 호출만), `independent_mini_interpreter.clj`
-   witness 쪽 fixture 확장(이번 세션엔 mini-backend만 건드림, 9개
-   그대로), 또는 item 6/7.
+   **추가 확장, 2026-08-17: 진짜 first-class 클로저.** desugar가 지울 수
+   없는 형태(여러 번 호출, non-tail 호출)를 실제로 채움. `.NET
+   Reflection.Emit` 조사로 이 .NET 10.0.10 환경의 플랫폼 특성 확인:
+   `DynamicMethod`의 IL generator는 `TypeBuilder`가 만든 생성자/메서드를
+   참조 못 함("MethodInfo/ConstructorInfo must be a runtime ... object"),
+   반대로 호출하는 쪽 메서드 자체가 TypeBuilder-hosted면 정상 동작(결과
+   43로 end-to-end 확인). 그래서 `compile-source`가 AST에 클로저가
+   있는지 먼저 검사해서 없으면 기존 `DynamicMethod` 경로 그대로(회귀
+   위험 0), 있으면 전체 fn을 새 Run-only dynamic assembly 위
+   TypeBuilder-hosted `public static` 메서드로 컴파일 — 그 안에서
+   클로저 클래스(캡처마다 필드, 캡처를 저장하는 생성자, non-virtual
+   `Invoke(long):long`)를 자유롭게 참조. **의도적으로 좁힌 경계**:
+   단일 파라미터만, 캡처는 평범한 Int64만(클로저를 캡처하는 클로저
+   불가), 클로저 본문 안에 또 다른 클로저 리터럴 중첩 불가(자유변수
+   역산이 안쪽 파라미터를 바깥 캡처로 잘못 묶을 위험) — 셋 다 명확한
+   구조적 에러로 거부 확인. 여러 번 호출 + non-tail 호출 + let-바인딩
+   캡처까지 포함해 fixture 3개 추가(30→33), 실제 host 대비 검증. 검증:
+   `bootstrap-test` 20 tests/245 assertions(기존 239에서 +6) 0 fail/0
+   error, 회귀 없음. 상세는 `STATUS.md` 참조.
+
+   **다음 후보:** `independent_mini_interpreter.clj` witness 쪽 fixture
+   확장(이번 세션엔 mini-backend만 건드림, 9개 그대로), 사용자의 원래
+   "나머지 host들도 clojure만큼" 지시대로 hy-meta/rs-meta/cljs-meta 중
+   하나로 넘어가는 것, 또는 item 6/7.
 
 2. **Stage8 — reproducible assembly artifact closure — DONE (2026-08-12).**
    였음: 시작 안 됨 (design doc 없음, gate/builder script 없음, 어디에나

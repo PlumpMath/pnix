@@ -1,6 +1,6 @@
 # clr-meta 상태 (peer host-meta floor)
 
-마지막 검증: 2026-08-15.
+마지막 검증: 2026-08-17.
 
 ## Peer-floor 선언
 
@@ -420,14 +420,65 @@ named-local-fn을 let으로 만들었지만 나중에 부른 경우)가 조용�
 error, `./bin/clr-meta-gate eval-only` 여전히 PASS. Stage1-N family와
 코드 공유 없어 전체 체인 재실행 안 함.
 
+**Mini-backend에 진짜 first-class 클로저 추가, 같은 날 (2026-08-17):**
+바로 위 슬라이스가 명시적으로 미지원으로 남겨둔 경계 — 여러 번 호출되거나
+tail이 아닌 위치에서 쓰이는 클로저(desugar의 beta-reduction으로 지울 수
+없는 형태) — 를 사용자의 반복된 "clr-meta pnix-clr 수준을 clojure 만큼
+높여봐" 재확인을 받아 실제로 채움. `.NET Reflection.Emit` API 조사 결과
+핵심 발견: **`System.Reflection.Emit.DynamicMethod`의 IL generator는 이
+.NET 10.0.10 환경에서 `TypeBuilder`가 만든 생성자/메서드를 참조할 수
+없다**("MethodInfo/ConstructorInfo must be a runtime ... object" 에러,
+제네릭 delegate 기반과 비제네릭 abstract base class 기반 둘 다 동일하게
+실패) — 반면 **호출하는 쪽 메서드 자체가 TypeBuilder-hosted면 완전히
+동작**함을 end-to-end로 확인(결과 43, 정확). 이 플랫폼 특성이 아키텍처를
+결정: `compile-source`가 이제 AST에 클로저가 있는지 먼저 분석하고 —
+없으면 기존 `DynamicMethod` 경로를 **완전히 그대로**(회귀 위험 0) 타고,
+있으면 전체 top-level fn을 새 Run-only dynamic assembly/module 위
+TypeBuilder-hosted `public static` 메서드로 컴파일해서 그 안에서 자유롭게
+클로저 클래스들의 생성자/`Invoke`를 참조하게 함. 두 경로 모두
+`emit-top-level-body!`를 공유(기존 코드에서 인라인이던 걸 뽑아냄).
+
+클로저 하나당 새 `TypeBuilder` 클래스 하나(캡처마다 `public Int64`
+필드, 캡처를 필드에 저장하는 생성자, 파라미터 하나짜리 non-virtual
+`Invoke(long):long`)를 `emit-closure!`가 즉석에서 정의하고 그 자리에서
+바로 `.CreateType`까지 마침(다른 무엇이 참조하기 전에 항상 완성된
+상태). `let` 바인딩 시점에 캡처 값들을 바깥 env에서 읽어 생성자를 호출한
+결과를 로컬에 저장(`{:kind :closure-local}`); 호출부는 그 로컬을 읽고
+인자를 밀어넣은 뒤 `Call`(비virtual이라 vtable 필요 없음). 분석기 쪽은
+`env`가 이제 이름당 `true`(평범한 Int64) 또는 `{:closure-arity 1}`(클로저
+값, 호출만 가능) 두 종류를 구분해서 담고, `analyze-closure-fn`이 클로저
+본문을 분석한 뒤 `ast-referenced-names`(참조 JVM host의 동명 함수와 같은
+발상)로 자유변수를 역산해서 캡처 목록을 만듦.
+
+**의도적으로 좁힌 경계, 명시적으로 문서화**: (a) 단일 파라미터 클로저만
+지원(multi-arity/variadic 클로저 없음); (b) 캡처값은 평범한 Int64만
+지원 — 클로저를 캡처하는 클로저(transitive capture)는 명확한 에러로
+거부; (c) 클로저 본문 안에 또 다른 클로저 리터럴이 중첩되는 경우도 거부
+— `ast-referenced-names`가 AST 모양만으로는 "안쪽 클로저 자신의
+파라미터"와 "바깥에서 자유로운 이름"을 구분 못 해서, 허용하면 안쪽
+파라미터를 바깥 캡처로 잘못 묶을 위험이 있음(어떤 fixture도 이 모양이
+필요하지 않아 지금은 그냥 막아둠). 세 경계 모두 조용히 틀린 값이 아니라
+명확한 구조적 에러로 실패하는 것으로 확인.
+
+여러 번 호출(non-tail, 즉 `(+ (f n) (f (+ n 1)))` 모양)과 `let`으로 묶인
+평범한 Int64 값을 캡처하는 경우까지 포함해 fixture 3개 추가(30→33 value
+fixture) — 전부 실제 host ClojureCLR `eval` 대비 검증. 회귀 없음:
+`bootstrap-test` 20 tests/245 assertions(기존 239에서 +6, fixture 3개 ×
+2 assertion) 0 fail/0 error, `./bin/clr-meta-gate eval-only` PASS. Stage1-N
+family와 코드 공유 없어 이번에도 전체 체인 재실행은 하지 않음(이전 슬라이스와
+같은 근거) — 다만 이번엔 추가로 `./scripts/clr-meta-gate --no-build` 전체를
+background에서 별도로 돌려 Stage1-N 체인 자체의 회귀 여부도 확인 중(결과 나오는
+대로 이 섹션에 추가 기록).
+
 **다음 구체적 단계:** 이걸로 clj-meta U6가 이번 세션 초반에 거쳤던 것과
-같은 순서(`let` → `loop`/`recur` → nested fn)를 clr-meta의
-mini-backend도 따라잡음. 남은 자연스러운 다음 단계는 (a) 여러 번 호출되는
-named-local-fn까지 desugar 일반화(지금은 tail 위치 단일 호출만), (b)
+같은 순서(`let` → `loop`/`recur` → nested fn → 진짜 클로저)를 clr-meta의
+mini-backend가 대부분 따라잡음. 남은 자연스러운 다음 단계는 (a)
 `independent_mini_interpreter.clj` witness 쪽 fixture도 같이 넓히기(9개
-그대로 — 이번 세션엔 mini-backend만 확장), (c) `todo.md` item 6/7 (broad
-ClojureCLR compatibility/replacement, roadmap 자체 ordering이 명시적으로
-연기).
+그대로 — 이번 세션엔 mini-backend만 확장), (b) 사용자가 처음 지시한
+"나머지 host들도 clojure만큼" 균형 지시대로, clr-meta가 어느 정도
+따라잡았으니 hy-meta/rs-meta/cljs-meta 중 하나로 넘어가는 것, (c)
+`todo.md` item 6/7 (broad ClojureCLR compatibility/replacement, roadmap
+자체 ordering이 명시적으로 연기).
 
 ## Primary 게이트
 
@@ -448,11 +499,11 @@ selfhost-stage1-gate → selfhost-stage2-gate.
 선호. `PATH` 앞에 `pnix-clr/bin`을 두지 **말 것** — 그 tree가 old `rg`
 shim을 실을 수 있다.
 
-## 마지막 run (이 머신, 2026-08-15)
+## 마지막 run (이 머신, 2026-08-17)
 
 | 게이트 | 결과 | 비고 |
 |---|---|---|
-| `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/239 assertions; tool-gate PASS |
+| `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/245 assertions; tool-gate PASS |
 | full C1–C3/Stage1-N chain | 이 세션 재실행 안 함 | `independent_mini_backend.clj`와 코드 공유 없음; docs claim closed |
 | `./scripts/clr-meta-compiler-selfhost-stage3-gate` | **PASS** | Stage2→Stage3 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage4-gate` | **PASS** | Stage3→Stage4 + source-hidden replay |
