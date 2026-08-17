@@ -1236,6 +1236,41 @@ y)))] ...)`를 확인: 클래스 하나, 캡처 필드 하나(`x`, 양쪽 arity�
 전체 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular
 gate: READY ✅`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
 
+**같은 날 마흔한 번째 확장 (2026-08-15): `extend-protocol`/`reify`의
+남은 좁은 제약 두 가지 해결.** 사용자가 "남은것빨리 해결해봐"로
+지시 — 직전 슬라이스에서 "narrow, 문서화된 채로 유지"라고 적어둔
+바로 그 두 항목. **(1) 축약 클래스명**: `resolve-class-name`을
+새로 만들어 `Class/forName`이 실패하고 이름에 점이 없으면
+`java.lang.` 접두어를 붙여 재시도(real host의 `java.lang.*`
+기본 import를 흉내 — 다른 패키지까지 일반화한 게 아니라
+`general-static-interop-target`이 이미 쓰던 것과 같은 좁은
+스코프). `resolve-reify-interface`와 `analyze-extend-protocol-form`
+양쪽의 클래스 해석을 이걸로 통합. **(2) 클래스 계층 우선순위**:
+실제 host 대비로 먼저 버그를 재현 확인 — `(extend-protocol Shape
+Number (area [this] :number) Long (area [this] :long))`에서 real
+host는 `Long` 값에 대해 선언 순서와 무관하게 `:long`(더
+구체적인 클래스)을 고르는데, 이 witness는 선언 순서 그대로
+`:number`를 골라 실제로 값이 달랐음(수정 전 재현: `:number`,
+버그 확정). `sort-extensions-by-specificity`를 추가해서
+`known-protocol-method`가 `:extensions`를 반환할 때
+`.isAssignableFrom` 기반으로 서브타입을 슈퍼타입보다 먼저
+오도록 정렬(Clojure `sort`는 안정 정렬이라 무관한 클래스끼리는
+원래 선언 순서 유지). 슈퍼클래스 먼저/서브클래스 먼저 두 선언
+순서 모두, 그리고 확장 안 된 타입이 여전히 슈퍼클래스로 올바르게
+fallback하는 경우까지 전부 실제 host 대비 검증(수정 후 전부
+일치). U6: 229→234(`:tiny-extend-protocol-bare-java-lang-names`,
+`:tiny-reify-bare-java-lang-interface-name`,
+`:tiny-extend-protocol-hierarchy-most-specific-wins`,
+`:tiny-extend-protocol-hierarchy-declaration-order-independent`,
+`:tiny-extend-protocol-hierarchy-falls-to-superclass`). `reify`
+축약명 fixture는 단일 폼이라(do-wrap 불필요) `compiler.clj`도
+지원 확인 후 DDC 행에 연결(124→125, 실측 확인) — extend-protocol
+쪽은 여전히 do-wrapped 멀티폼이라 U6 전용 유지. 전체
+`-M:conformance`(116/116), `-M:diverse-double-compile`과
+`bin/clj-meta-gate`(`metacircular gate: READY ✅`, `reproducible
+DDC lane: OK`) 녹색, 회귀 없음. 이걸로 이번 세션에서 찾은
+좁은/실제-액션-가능 gap 전부 닫힘.
+
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)
 behavior-identical이 아니라 bit-identical 출력이 필요합니다 — 우연히 같은

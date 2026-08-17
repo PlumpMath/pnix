@@ -856,12 +856,34 @@
 (def ^:private ^:dynamic *known-protocol-interfaces* {})
 (def ^:private ^:dynamic *known-protocol-extensions* {})
 
+;; `emit-protocol-call` checks extended classes via a compile-time
+;; `instanceof` chain in WHATEVER order this returns -- so that order must
+;; put more-specific classes before less-specific ones, matching real
+;; host's own dispatch (confirmed live: `(extend-protocol Shape Number
+;; (area [this] :number) Long (area [this] :long))` picks `:long` for a
+;; `Long` value even though `Number` was declared FIRST -- real host's
+;; `MethodImplCache` picks the closest match by class hierarchy, not
+;; declaration order). `sort` is STABLE (`java.util.Collections/sort`,
+;; TimSort under the hood), so two unrelated classes keep their original
+;; declaration order -- only an actual subtype/supertype PAIR gets
+;; reordered.
+(defn- sort-extensions-by-specificity
+  [extensions]
+  (sort (fn [a b]
+          (let [ca ^Class (:class a) cb ^Class (:class b)]
+            (cond
+              (= ca cb) 0
+              (.isAssignableFrom cb ca) -1
+              (.isAssignableFrom ca cb) 1
+              :else 0)))
+        extensions))
+
 (defn- known-protocol-method
   [op arg-count]
   (when (symbol? op)
     (when-let [m (get *known-protocol-methods* op)]
       (when (= (:arity m) (dec arg-count))
-        (assoc m :extensions (get *known-protocol-extensions* op []))))))
+        (assoc m :extensions (sort-extensions-by-specificity (get *known-protocol-extensions* op [])))))))
 
 (defn- analyze-call
   [env form]
@@ -1603,14 +1625,31 @@
         (let [[methods rest-forms] (split-with seq? (rest forms))]
           (recur rest-forms (conj acc {:interface-sym iface-sym :method-forms (vec methods)})))))))
 
+;; Resolves a class name symbol via `Class/forName`, with ONE fallback: a
+;; bare (no-dot) name also tries a `java.lang.` prefix -- e.g. `Long`
+;; resolves to `java.lang.Long` without needing the fully-qualified form.
+;; This mirrors real host's own default-imports table, but ONLY for
+;; `java.lang.*` (the one package every Java/Clojure namespace gets for
+;; free regardless of any explicit `:import`) -- still an honestly
+;; narrower scope than real host's FULL import-table resolution (which
+;; also covers whatever a namespace's own `:import`/`ns` form pulled in),
+;; not a claim of matching it, matching this file's `general-static-interop-target`
+;; precedent for the exact same reasoning.
+(defn- resolve-class-name
+  ^Class [class-sym]
+  (let [n (name class-sym)]
+    (or (try (Class/forName n) (catch Throwable _ nil))
+        (when-not (.contains n ".")
+          (try (Class/forName (str "java.lang." n)) (catch Throwable _ nil))))))
+
 ;; Shared by `analyze-reify` and `analyze-deftype-form`: an interface/protocol
 ;; group's leading symbol resolves either to a `defprotocol`-generated
-;; interface (`*known-protocol-interfaces*`) or a fully-qualified Java
-;; interface name (`Class/forName`).
+;; interface (`*known-protocol-interfaces*`) or a Java interface name (see
+;; `resolve-class-name`).
 (defn- resolve-reify-interface
   ^Class [interface-sym]
   (let [iface (or (get *known-protocol-interfaces* interface-sym)
-                  (try (Class/forName (name interface-sym)) (catch Throwable _ nil)))]
+                  (resolve-class-name interface-sym))]
     (when-not (and iface (.isInterface ^Class iface))
       (throw (ex-info "tiny analyzer: reify/deftype interface not found (must be a known protocol name or a fully-qualified interface name)"
                       {:interface interface-sym})))
@@ -1818,9 +1857,9 @@
                       {:protocol proto-sym})))
     (let [impl-groups (parse-deftype-impl-groups (drop 2 form))
           impls (mapv (fn [{:keys [interface-sym method-forms]}]
-                        (let [^Class target (try (Class/forName (name interface-sym)) (catch Throwable _ nil))]
+                        (let [^Class target (resolve-class-name interface-sym)]
                           (when-not target
-                            (throw (ex-info "tiny analyzer: extend-protocol target class not found (must be a fully-qualified class name)"
+                            (throw (ex-info "tiny analyzer: extend-protocol target class not found"
                                             {:class interface-sym})))
                           {:class target
                            :methods (mapv #(analyze-extend-protocol-method proto-iface %) method-forms)}))
@@ -4129,6 +4168,26 @@
     :source "(do (defprotocol Shape (area [this])) (extend-protocol Shape java.lang.Long (area [this] (* this this))) (fn [n] (+ (area n) (area (reify Shape (area [this] 999))))))"
     :args [5]
     :expected 1024}
+   {:id :tiny-extend-protocol-bare-java-lang-names
+    :source "(do (defprotocol Shape (area [this])) (extend-protocol Shape Long (area [this] (* this this)) String (area [this] (.length this))) (fn [n s] (+ (area n) (area s))))"
+    :args [5 "hello"]
+    :expected 30}
+   {:id :tiny-reify-bare-java-lang-interface-name
+    :source "(fn [] (let [counter (java.util.concurrent.atomic.AtomicInteger. 0)] (.run (reify Runnable (run [this] (.set counter 42)))) (.get counter)))"
+    :args []
+    :expected 42}
+   {:id :tiny-extend-protocol-hierarchy-most-specific-wins
+    :source "(do (defprotocol Shape (area [this])) (extend-protocol Shape java.lang.Number (area [this] :number) java.lang.Long (area [this] :long)) (fn [n] (area n)))"
+    :args [5]
+    :expected :long}
+   {:id :tiny-extend-protocol-hierarchy-declaration-order-independent
+    :source "(do (defprotocol Shape (area [this])) (extend-protocol Shape java.lang.Long (area [this] :long) java.lang.Number (area [this] :number)) (fn [n] (area n)))"
+    :args [5]
+    :expected :long}
+   {:id :tiny-extend-protocol-hierarchy-falls-to-superclass
+    :source "(do (defprotocol Shape (area [this])) (extend-protocol Shape java.lang.Number (area [this] :number) java.lang.Long (area [this] :long)) (fn [n] (area n)))"
+    :args [5.0]
+    :expected :number}
    {:id :tiny-deftype-implements-java-interface-primitive-param
     :source "(do (deftype Adder [base] java.util.function.IntUnaryOperator (applyAsInt [this x] (+ x base))) (fn [n] (.applyAsInt (Adder. n) 5)))"
     :args [100]

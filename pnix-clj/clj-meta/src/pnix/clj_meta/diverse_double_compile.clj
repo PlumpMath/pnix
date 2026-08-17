@@ -740,6 +740,10 @@
    {:id :mini-backend-reify-two-interfaces
     :source "(fn [n] (.call (reify java.lang.Runnable (run [this] nil) java.util.concurrent.Callable (call [this] n))))"
     :args [42]
+    :expected 42}
+   {:id :mini-backend-reify-bare-java-lang-interface-name
+    :source "(fn [] (let [counter (java.util.concurrent.atomic.AtomicInteger. 0)] (.run (reify Runnable (run [this] (.set counter 42)))) (.get counter)))"
+    :args []
     :expected 42}])
 
 (defn- mini-backend-case-row

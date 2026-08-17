@@ -760,13 +760,36 @@ top-line claim, but the substance is much closer than "false" implies:
   `bin/clj-meta-gate` `metacircular gate: READY ✅` +
   `reproducible DDC lane: OK`, 회귀 없음.
 
-  U6에 남은 큰 gap: 이번 세션 시작 시점에 있던 4개 갭(closure 깊이,
-  letfn 상호재귀, reify/deftype primitive/multi-interface, protocol
-  진짜 디스패치) + 이후 추가로 찾은 것(closure multi-arity) 전부
-  닫힘. 남은 건 `extend-protocol`의 좁은 문서화된 제약(완전정규명
-  필요, 클래스 계층 우선순위 단순 first-match)뿐 — 별도 슬라이스로
-  닫기보다는 이 파일 전체의 "정직하게 더 좁은 범위" 원칙과 일관된
-  경계로 유지.
+  **41번째 슬라이스, 2026-08-15: `extend-protocol`/`reify` 축약
+  클래스명 + 클래스 계층 우선순위** (229→234). 직전 슬라이스에서
+  "narrow, 문서화된 채로 유지"라던 두 항목을 실제로 해결.
+  (1) `resolve-class-name` 추가 — `Class/forName` 실패 + 점 없는
+  이름이면 `java.lang.` 접두어로 재시도(real host의 `java.lang.*`
+  기본 import 흉내, 다른 패키지로 일반화 안 함 —
+  `general-static-interop-target`과 같은 좁은 스코프).
+  `resolve-reify-interface`/`analyze-extend-protocol-form` 둘 다
+  통합. (2) 클래스 계층 우선순위 — 먼저 실제 host 대비로 버그
+  재현 확인: `(extend-protocol Shape Number (area ...) Long
+  (area ...))`에서 real host는 Long 값에 대해 선언 순서 무관하게
+  `:long`을 고르는데 이 witness는 선언 순서 그대로 `:number`를
+  골라 실제로 값이 틀렸음(수정 전 버그 확정). `sort-extensions-by-specificity`
+  추가해서 `.isAssignableFrom` 기반으로 서브타입을 슈퍼타입보다
+  먼저 정렬(Clojure `sort`는 안정 정렬이라 무관 클래스는 원래
+  순서 유지). 두 선언 순서 + 미확장 타입의 슈퍼클래스 fallback까지
+  전부 실제 host 대비 검증(수정 후 일치). `reify` 축약명 fixture는
+  단일 폼이라 `compiler.clj`도 지원 확인 후 DDC 행 연결(124→125,
+  실측 확인) — extend-protocol 쪽은 여전히 do-wrapped 멀티폼이라
+  U6 전용 유지. `-M:conformance` 116/116·`-M:diverse-double-compile`
+  영향 없음, `bin/clj-meta-gate` `metacircular gate: READY ✅` +
+  `reproducible DDC lane: OK`, 회귀 없음.
+
+  U6에 남은 큰 gap: 이번 세션에서 찾은 좁은/실제-액션-가능 gap
+  전부 닫힘(closure 깊이+arity, letfn 상호재귀, reify/deftype
+  primitive/multi-interface, protocol 진짜 디스패치, extend-protocol
+  축약명+클래스 계층). 남은 건 `todo.md` 상단 "Current Remaining
+  Work" 섹션의 대형/의도적 held 항목들(full Wheeler DDC
+  bit-identical, R7f 형식증명, R5f/R6f 완전 self-host 등)뿐 —
+  전부 이 파일 자체가 영구 경계/연구급 프로젝트로 명시.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
