@@ -345,11 +345,41 @@ PASS. Stage1-7 compiler-selfhost family(`compiler_stage1.clj`/
 stage1-N 체인은 이번엔 재실행 안 함(이 STATUS.md 자체가 이미 "heavy
 C1-C3 게이트는 매 세션 재실행 아님" 관행을 명시).
 
-**다음 구체적 단계:** mini-backend에 nested `fn`/closure 캡처 추가(JVM
-host U6이 이미 거친 것과 같은 다음 단계 — 지금 mini-backend는 top-level
-단일 `fn`만 지원, closure는 오직 interpreter witness에만 있음), 또는
-`todo.md` item 6/7을 집어 든다 (broad ClojureCLR compatibility/replacement,
-roadmap 자체 ordering이 명시적으로 연기).
+**Mini-backend에 `loop`/`recur` 추가, 같은 날 (2026-08-15):** 원래 다음
+후보로 적어뒀던 "nested `fn`/closure 캡처"를 다시 들여다보니, 이
+`DynamicMethod` 기반 backend에는 클래스가 없어서(메서드 하나뿐) 클로저를
+표현하려면 (a) `Int64`가 아닌 새 값 종류(클로저 값)를 도입하고 (b) 임의
+값을 함수처럼 호출하는 일반 apply 메커니즘을 새로 추가해야 함을 확인 —
+`let` 추가보다 몇 단계 더 큰 아키텍처 변경(지금은 `+`/`-`/`if`/`let`처럼
+고정된 연산자만 있고 일반 적용 형태 자체가 없음). 그래서 지금
+아키텍처(전체 `Int64`, 새 값 종류 없음) 안에서 자연스럽게 이어지는
+`loop`/`recur`로 대신 진행 — clj-meta 쪽에서도 실제로 `let` 다음에 왔던
+항목.
+
+`analyze-loop`는 `analyze-let`과 구조가 같지만 body를 `recur-arity-key`
+env 항목(바인딩 개수)과 함께 분석. `analyze-fn`도 자기 params 개수로
+같은 키를 심어서, `loop`가 전혀 없는 **bare `recur`가 fn 자신의 params를
+타깃**으로 삼는 걸 자동으로 지원(JVM host의 "가장 가까운 loop/fn" 규칙과
+동일 — named self-recursion을 별도 메커니즘 없이 공짜로 얻음). Emit
+쪽은 `emit-let`처럼 각 바인딩을 `DeclareLocal`+`Stloc`한 뒤, 바인딩이
+끝나는 바로 그 지점에 `MarkLabel`(recur의 `Br` 타깃). `emit-recur`가
+핵심: **모든 새 값을 OLD 값들로부터 먼저 임시 local에 계산해 넣은
+뒤에야** 실제 타깃(local이면 `Stloc`, fn arg면 .NET에서 재대입 가능한
+`Starg`)에 저장 — Clojure의 "recur는 동시 재바인딩이지 순차 아님" 의미를
+지키기 위함. 이게 실제로 필요한지 `(loop [i n a a b b] (if (= i 0) a
+(recur (- i 1) b a)))` 같은 swap 케이스로 실제 host 대비 검증(양쪽 다
+2 — 순차 구현이었다면 다른 값이 나왔을 것). 합산 loop, factorial loop,
+bare recur, swap 4가지 조합 전부 실제 host `eval`과 일치. fixture 4개
+추가(20→24 value fixture). 회귀 없음: `bootstrap-test` 20 tests/227
+assertions(기존 219에서 +8) 0 fail/0 error, `./bin/clr-meta-gate
+eval-only` 여전히 PASS. Stage1-N family와 코드 공유 없어 전체 체인
+재실행 안 함.
+
+**다음 구체적 단계:** named self-recursion은 이미 bare recur로 커버되므로,
+남은 자연스러운 다음 단계는 여전히 nested `fn`/closure(단, 이번에 확인한
+대로 값 표현+일반 apply를 새로 설계해야 하는 진짜 큰 작업 — 착수 전에
+설계를 먼저 정리할 것), 또는 `todo.md` item 6/7 (broad ClojureCLR
+compatibility/replacement, roadmap 자체 ordering이 명시적으로 연기).
 
 ## Primary 게이트
 
@@ -374,7 +404,7 @@ shim을 실을 수 있다.
 
 | 게이트 | 결과 | 비고 |
 |---|---|---|
-| `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/219 assertions; tool-gate PASS |
+| `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/227 assertions; tool-gate PASS |
 | full C1–C3/Stage1-N chain | 이 세션 재실행 안 함 | `independent_mini_backend.clj`와 코드 공유 없음; docs claim closed |
 | `./scripts/clr-meta-compiler-selfhost-stage3-gate` | **PASS** | Stage2→Stage3 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage4-gate` | **PASS** | Stage3→Stage4 + source-hidden replay |

@@ -69,6 +69,7 @@
 ;; ---- tiny analyzer ----
 ;; (fn [params...] body) -> {:params [...] :body <expr>}
 ;; expr := int | sym | (if t then else) | (let [name val ...] body)
+;;       | (loop [name val ...] body) | (recur val ...)
 ;;       | (+ a b) | (- a b) | (* a b)
 ;;       | (< a b) | (> a b) | (<= a b) | (>= a b) | (= a b)
 ;;
@@ -79,8 +80,17 @@
 ;; instead, since .NET's `ILGenerator/DeclareLocal` (the `Ldloc`/`Stloc`
 ;; target) needs a live `ILGenerator` to call, unlike a param's fixed
 ;; `Ldarg` index which is already known from its position in `params`.
+;;
+;; `recur` at a `loop`'s own tail position targets that loop's bindings; a
+;; bare `recur` with no enclosing `loop` targets the fn's own params
+;; instead (`analyze-fn` seeds the same `recur-arity-key` env entry a
+;; `loop` would) -- matching the reference JVM host's own "nearest
+;; enclosing loop/fn" rule, and giving self-recursion on the top-level fn
+;; for free without a separate named-fn mechanism.
 
-(declare analyze-let)
+(def ^:private recur-arity-key ::recur-arity)
+
+(declare analyze-let analyze-loop analyze-recur)
 
 (defn- analyze-expr [env form]
   (cond
@@ -101,6 +111,8 @@
                 :then (analyze-expr env (nth args 1))
                 :else (analyze-expr env (nth args 2))})
         let (analyze-let env args)
+        loop (analyze-loop env args)
+        recur (analyze-recur env args)
         (+ - * < > <= >= =)
         (do (when-not (= 2 (count args))
               (throw (Exception. "tiny analyzer: binary op arity")))
@@ -127,13 +139,38 @@
                  (conj acc {:name name :init (analyze-expr env init)})))
         {:op :let :bindings acc :body (analyze-expr env (first body))}))))
 
+(defn- analyze-loop [env args]
+  (let [[bindings & body] args]
+    (when-not (and (vector? bindings) (even? (count bindings)) (seq bindings)
+                   (= 1 (count body)))
+      (throw (Exception. "tiny analyzer: malformed loop")))
+    (loop [pairs (partition 2 bindings) env env acc []]
+      (if (seq pairs)
+        (let [[name init] (first pairs)]
+          (when-not (symbol? name)
+            (throw (Exception. "tiny analyzer: loop binding name")))
+          (recur (rest pairs)
+                 (assoc env name true)
+                 (conj acc {:name name :init (analyze-expr env init)})))
+        {:op :loop
+         :bindings acc
+         :body (analyze-expr (assoc env recur-arity-key (count acc)) (first body))}))))
+
+(defn- analyze-recur [env args]
+  (let [arity (get env recur-arity-key)]
+    (when-not arity
+      (throw (Exception. "tiny analyzer: recur outside loop")))
+    (when-not (= arity (count args))
+      (throw (Exception. "tiny analyzer: recur arity")))
+    {:op :recur :exprs (mapv #(analyze-expr env %) args)}))
+
 (defn- analyze-fn [form]
   (when-not (and (seq? form) (= 'fn (first form)))
     (throw (Exception. "tiny analyzer: expected fn form")))
   (let [[_ params & body] form]
     (when-not (and (vector? params) (every? symbol? params) (= 1 (count body)))
       (throw (Exception. "tiny analyzer: malformed fn")))
-    (let [env (zipmap params (repeat true))]
+    (let [env (assoc (zipmap params (repeat true)) recur-arity-key (count params))]
       {:params params
        :body (analyze-expr env (first body))})))
 
@@ -182,6 +219,58 @@
         (recur (rest bindings) (assoc env name {:kind :local :local local})))
       (emit-expr il env body))))
 
+;; `loop` is `let` plus a `MarkLabel` right where the bindings finish and
+;; the body begins, so `recur` can `Br` straight back to it. `recur-target-key`
+;; carries that label plus the ordered storage targets (`loop` locals, or --
+;; for a bare `recur` with no enclosing `loop` -- the fn's own arg slots,
+;; set up once in `compile-source`) for `emit-recur` to reassign.
+(def ^:private recur-target-key ::recur-target)
+
+(defn- emit-loop [^System.Reflection.Emit.ILGenerator il env {:keys [bindings body]}]
+  (let [[env locals]
+        (loop [bindings bindings env env locals []]
+          (if (seq bindings)
+            (let [{:keys [name init]} (first bindings)
+                  local (.DeclareLocal il Int64)]
+              (emit-expr il env init)
+              (.Emit il OpCodes/Stloc local)
+              (recur (rest bindings)
+                     (assoc env name {:kind :local :local local})
+                     (conj locals {:kind :local :local local})))
+            [env locals]))
+        label (.DefineLabel il)]
+    (.MarkLabel il label)
+    (emit-expr il (assoc env recur-target-key {:label label :locals locals}) body)))
+
+;; `recur` computes ALL new values from the OLD binding/arg values FIRST,
+;; into fresh temp locals, before reassigning any of them -- matching
+;; Clojure's own "recur rebinds simultaneously, not sequentially" semantics
+;; (confirmed live against real host: `(loop [a 1 b 2] (if done (+ a b)
+;; (recur b a)))`-style swaps must see the PRE-recur values of both, not a
+;; partially-updated mix). Only after every new value is safely in a temp
+;; local does it get stored into its real target (a `loop` local via
+;; `Stloc`, or a fn arg slot via `Starg` -- .NET arguments are directly
+;; reassignable, the same honest mechanism the reference JVM host's own
+;; bare-recur-targets-the-fn's-own-arg-slots case uses).
+(defn- emit-recur [^System.Reflection.Emit.ILGenerator il env exprs]
+  (let [{:keys [label locals]} (get env recur-target-key)]
+    (when-not label
+      (throw (Exception. "tiny emitter: recur outside loop")))
+    (when-not (= (count locals) (count exprs))
+      (throw (Exception. "tiny emitter: recur arity")))
+    (let [temps (mapv (fn [expr]
+                         (let [t (.DeclareLocal il Int64)]
+                           (emit-expr il env expr)
+                           (.Emit il OpCodes/Stloc t)
+                           t))
+                       exprs)]
+      (doseq [[^System.Reflection.Emit.LocalBuilder temp target] (map vector temps locals)]
+        (.Emit il OpCodes/Ldloc temp)
+        (case (:kind target)
+          :local (.Emit il OpCodes/Stloc ^System.Reflection.Emit.LocalBuilder (:local target))
+          :arg (.Emit il OpCodes/Starg (short (:index target)))))
+      (.Emit il OpCodes/Br ^System.Reflection.Emit.Label label))))
+
 (defn- emit-expr [^System.Reflection.Emit.ILGenerator il env node]
   (case (:op node)
     :const (.Emit il OpCodes/Ldc_I8 (long (:value node)))
@@ -191,6 +280,8 @@
                :local (.Emit il OpCodes/Ldloc ^System.Reflection.Emit.LocalBuilder local)))
     :binary (emit-binary il env node)
     :let (emit-let il env node)
+    :loop (emit-loop il env node)
+    :recur (emit-recur il env (:exprs node))
     :if (let [else-label (.DefineLabel il)
               end-label (.DefineLabel il)]
           (emit-expr il env (:test node))
@@ -213,8 +304,13 @@
         il (.GetILGenerator dm)
         arg-env (into {}
                       (map-indexed (fn [i p] [p {:kind :arg :index i}]))
-                      (:params ast))]
-    (emit-expr il arg-env (:body ast))
+                      (:params ast))
+        recur-label (.DefineLabel il)
+        recur-locals (mapv (fn [i] {:kind :arg :index i}) (range arity))]
+    (.MarkLabel il recur-label)
+    (emit-expr il
+               (assoc arg-env recur-target-key {:label recur-label :locals recur-locals})
+               (:body ast))
     (.Emit il OpCodes/Ret)
     dm))
 

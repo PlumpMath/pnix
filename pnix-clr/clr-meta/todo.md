@@ -72,9 +72,26 @@ widening, Stage8, Stage9, Stage10–15/N 각각) — 각 item 자체 항목에�
    회귀 없음. Stage1-N compiler-selfhost family는 이 파일과 코드 공유
    없어 전체 chain 재실행 안 함.
 
-   **다음 후보:** mini-backend에 nested `fn`/closure 캡처 추가(지금은
-   top-level 단일 `fn`만 지원 — JVM host U6가 이미 거친 다음 단계와 같은
-   모양).
+   **추가 확장, 같은 날: `loop`/`recur`.** nested `fn`/closure를 다시
+   검토하니 `DynamicMethod` 기반(클래스 없음)이라 새 값 종류 +
+   일반 apply 메커니즘까지 새로 설계해야 하는 큰 작업임을 확인 —
+   대신 지금 아키텍처(전체 Int64) 안에서 자연스러운 `loop`/`recur`로
+   진행(clj-meta 쪽도 `let` 다음이 이 순서였음). `analyze-loop`는
+   `analyze-let`과 구조 같음 + `recur-arity-key`. `analyze-fn`도 같은
+   키를 자기 params 개수로 심어서 **bare recur가 fn 자신을 타깃**하는
+   것도 공짜로 지원(named self-recursion 별도 메커니즘 불필요).
+   `emit-recur`의 핵심: 모든 새 값을 OLD 값으로부터 임시 local에 먼저
+   계산한 뒤에야 실제 타깃(local `Stloc` / fn arg `Starg`)에 저장 —
+   Clojure의 "동시 재바인딩" 의미 보존. swap 케이스
+   (`(loop [i n a a b b] (recur (- i 1) b a))`)로 이게 실제로 필요함을
+   실제 host 대비 검증(양쪽 2 — 순차 구현이면 다른 값). 합산/factorial
+   loop, bare recur, swap 4가지 실제 host 일치. fixture 4개 추가
+   (20→24). 검증: `bootstrap-test` 20 tests/227 assertions(기존
+   219에서 +8) 0 fail/0 error, `./bin/clr-meta-gate eval-only` PASS,
+   회귀 없음.
+
+   **다음 후보:** nested `fn`/closure(새 값 표현 + 일반 apply 설계
+   필요 — 착수 전 설계부터), 또는 item 6/7.
 
 2. **Stage8 — reproducible assembly artifact closure — DONE (2026-08-12).**
    였음: 시작 안 됨 (design doc 없음, gate/builder script 없음, 어디에나

@@ -29,7 +29,11 @@
    ["(fn [x y] (let [a (+ x y) b (* a 2)] (- b 1)))" [3 4] 13]
    ["(fn [x] (let [y (if (> x 0) x (- 0 x))] (* y y)))" [-5] 25]
    ["(fn [x] (let [x (+ x 1)] (* x 2)))" [10] 22]
-   ["(fn [x] (let [a (+ x 1)] (let [b (* a 2)] (+ a b))))" [5] 18]])
+   ["(fn [x] (let [a (+ x 1)] (let [b (* a 2)] (+ a b))))" [5] 18]
+   ["(fn [n] (loop [i 0 acc 0] (if (> i n) acc (recur (+ i 1) (+ acc i)))))" [10] 55]
+   ["(fn [n] (loop [i n acc 1] (if (<= i 1) acc (recur (- i 1) (* acc i)))))" [5] 120]
+   ["(fn [n acc] (if (= n 0) acc (recur (- n 1) (+ acc n))))" [5 0] 15]
+   ["(fn [n a b] (loop [i n a a b b] (if (= i 0) a (recur (- i 1) b a))))" [3 1 2] 2]])
 
 (deftest independent-mini-backend-agrees-with-host-eval
   (testing "real host ClojureCLR eval and the independent mini backend agree"
