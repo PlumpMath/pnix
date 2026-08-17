@@ -1335,10 +1335,13 @@ operand stack에 남겨두지 않는다 — 계산 직후 즉시 local에 저장
 `-M:diverse-double-compile`과 `bin/clj-meta-gate`(`metacircular
 gate: READY ✅`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
 
-**진짜로 남은 것**: U6-vs-conformance-corpus 교차검증은 아직
-스크래치 스크립트일 뿐, 영구 게이트로 연결 안 됨 — `via-u6`를
-`conformance.clj`에 정식으로 추가할지, 아니면 별도 파일로 둘지는
-다음 결정 사항. 나머지 29개 미매치 케이스는 개별적으로 스코프
+**진짜로 남은 것**: U6-vs-conformance-corpus 교차검증은
+`scratch/u6_vs_conformance_corpus.clj`로 리포에 보관(수동으로
+`clojure -M -e '(load-file "scratch/u6_vs_conformance_corpus.clj")'`
+실행 — `bin/clj-meta-gate`/`-M:conformance`/`-M:diverse-double-compile`
+어느 것도 이 파일을 안 건드림, 의도적으로 영구 게이트 아님). `via-u6`를
+`conformance.clj`에 정식으로 추가할지, 아니면 이대로 수동 도구로
+둘지는 다음 결정 사항. 나머지 29개 미매치 케이스는 개별적으로 스코프
 판단(기능 추가 대상 vs 의도적 held)이 필요하며 아직 안 함.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture

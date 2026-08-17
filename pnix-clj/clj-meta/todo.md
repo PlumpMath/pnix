@@ -833,12 +833,14 @@ top-line claim, but the substance is much closer than "false" implies:
   `metacircular gate: READY ✅` + `reproducible DDC lane: OK`,
   회귀 없음.
 
-  **진짜로 남은 것**: U6-vs-conformance-corpus 교차검증은 아직
-  스크래치 스크립트일 뿐, `conformance.clj`에 `via-u6`로 정식
-  연결할지 결정 안 됨. 나머지 29개 미매치 케이스(대부분 `def`/
-  `instance?`/`var`/`defrecord`/`StringBuilder` 등 의도적
-  스코프-밖 기능)는 개별 스코프 판단이 아직 안 됨 — 다음 세션
-  후보.
+  **진짜로 남은 것**: U6-vs-conformance-corpus 교차검증은
+  `scratch/u6_vs_conformance_corpus.clj`로 리포에 보관된 수동
+  도구(의도적으로 게이트 아님 — `clojure -M -e '(load-file
+  "scratch/u6_vs_conformance_corpus.clj")'`로 직접 실행).
+  `conformance.clj`에 `via-u6`로 정식 연결할지 결정 안 됨. 나머지
+  29개 미매치 케이스(대부분 `def`/`instance?`/`var`/`defrecord`/
+  `StringBuilder` 등 의도적 스코프-밖 기능)는 개별 스코프 판단이
+  아직 안 됨 — 다음 세션 후보.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
