@@ -848,15 +848,20 @@
 ;; dispatch call; `*known-protocol-interfaces*` maps the PROTOCOL name
 ;; itself to its generated interface Class so `(reify ProtocolName ...)`
 ;; can implement it (see `analyze-reify`'s interface resolution).
+;; `*known-protocol-extensions*` maps a protocol method NAME symbol to a
+;; vector of `{:class :this-sym :arg-syms :body}` -- one entry per class an
+;; `extend-protocol` leading form attached an implementation to for that
+;; method (see `analyze-extend-protocol-form`/`emit-protocol-call`).
 (def ^:private ^:dynamic *known-protocol-methods* {})
 (def ^:private ^:dynamic *known-protocol-interfaces* {})
+(def ^:private ^:dynamic *known-protocol-extensions* {})
 
 (defn- known-protocol-method
   [op arg-count]
   (when (symbol? op)
     (when-let [m (get *known-protocol-methods* op)]
       (when (= (:arity m) (dec arg-count))
-        m))))
+        (assoc m :extensions (get *known-protocol-extensions* op []))))))
 
 (defn- analyze-call
   [env form]
@@ -870,22 +875,27 @@
       ;; `(methodName instance args...)` -- a protocol method call,
       ;; confirmed via `javap -c` on real host's FAST PATH (an
       ;; `instance?`-implements-the-generated-interface check emitted
-      ;; inline by callers, `checkcast Interface; invokeinterface
-      ;; method`): a plain interface dispatch call, nothing more. Real
-      ;; host's FULL mechanism additionally falls back to
-      ;; `clojure.core/-cache-protocol-fn` (backed by
-      ;; `AFunction.__methodImplCache`) for values that DON'T directly
-      ;; implement the generated interface -- e.g. a protocol extended onto
-      ;; `java.lang.String` via `extend-protocol` -- which is a real,
-      ;; separately-sizeable reimplementation of a chunk of Clojure's own
-      ;; protocol runtime, not attempted here: this witness's protocol
-      ;; method calls only work on values that directly `reify` (or, once
-      ;; extended, `deftype`) the protocol.
+      ;; inline by callers, `checkcast Interface; invokeinterface method`):
+      ;; a plain interface dispatch call, nothing more. Real host's FULL
+      ;; mechanism additionally falls back to `clojure.core/-cache-protocol-fn`
+      ;; (backed by `AFunction.__methodImplCache`) for values that DON'T
+      ;; directly implement the generated interface -- e.g. a protocol
+      ;; extended onto `java.lang.Long` via `extend-protocol`. Replicating
+      ;; that CACHE mechanism itself is a real, separately-sizeable
+      ;; reimplementation of a chunk of Clojure's own protocol runtime, not
+      ;; attempted here -- but the OBSERVABLE dispatch behavior it produces
+      ;; is reproduced behaviorally: since `extend-protocol`'s target
+      ;; classes are symbols known at COMPILE time (unlike an arbitrary
+      ;; runtime value), `emit-protocol-call` emits a compile-time-resolved
+      ;; `instanceof` chain (interface fast path, then each extended class
+      ;; in turn, then a clear failure) instead of a runtime class->impl
+      ;; cache -- see there and `analyze-extend-protocol-form`.
       (known-protocol-method op (count args))
-      (let [{:keys [interface method]} (known-protocol-method op (count args))]
+      (let [{:keys [interface method extensions]} (known-protocol-method op (count args))]
         {:op :protocol-call
          :interface interface
          :method method
+         :extensions extensions
          :instance (analyze-expr env (first args))
          :args (mapv #(analyze-expr env %) (rest args))})
 
@@ -1674,16 +1684,16 @@
 ;; whose FULL mechanism falls back to `clojure.core/-cache-protocol-fn`
 ;; for values that don't directly implement the generated interface -- a
 ;; real, separately-sizeable reimplementation of a chunk of Clojure's
-;; protocol runtime (`MethodImplCache`, `extend-protocol` registration),
-;; not attempted here. This witness instead treats a protocol method call
-;; as a fixed SPECIAL FORM at each call site (`known-protocol-method`)
-;; compiling to the exact fast-path shape real host itself uses when it
-;; CAN prove the value satisfies the interface directly (`checkcast
-;; Interface; invokeinterface`) -- not a first-class Var-bound function
-;; value. Like `deftype`, this generates a NAMED top-level interface tied
-;; to the whole compile unit, so `defprotocol` can only appear as one of
-;; the leading forms of a top-level `(do (deftype/defprotocol ...)...
-;; (fn ...))` program -- see `compile-source`.
+;; protocol runtime (`MethodImplCache` itself, and the Var-bound
+;; first-class dispatch FUNCTION real host generates), not attempted here.
+;; This witness instead treats a protocol method call as a fixed SPECIAL
+;; FORM at each call site (`known-protocol-method`), inlining a
+;; compile-time-resolved dispatch chain there -- see `emit-protocol-call`
+;; -- rather than a first-class Var-bound function value. Like `deftype`,
+;; this generates a NAMED top-level interface tied to the whole compile
+;; unit, so `defprotocol` can only appear as one of the leading forms of a
+;; top-level `(do (deftype/defprotocol/extend-protocol ...)... (fn ...))`
+;; program -- see `compile-source`.
 (defn- analyze-defprotocol-form
   [form]
   (when-not (and (seq? form) (= 'defprotocol (first form))
@@ -1704,6 +1714,75 @@
     {:name pname
      :methods (mapv (fn [[mname params]] {:name (name mname) :arity (dec (count params))})
                     method-forms)}))
+
+;; `extend-protocol` -- the piece that makes protocol dispatch WORK on a
+;; value that does NOT directly `reify`/`deftype` the protocol's generated
+;; interface (a stock class like `java.lang.Long`, which obviously can't be
+;; retrofitted to `implements` anything). Real host's call site
+;; (confirmed via `javap -c` on `(extend-protocol Shape Long (area [this]
+;; ...)) ... (area n)`) is actually TWO parts: a simple inlined fast path
+;; (`instanceof Interface; checkcast; invokeinterface`, identical to the
+;; no-extension case) that falls through, when the value ISN'T a direct
+;; interface implementer, to invoking the protocol method's own Var as a
+;; plain `IFn` -- and THAT Var's root function is where real host's actual
+;; `MethodImplCache`/`extend`-registration lookup happens, entirely
+;; separate from the call site itself. This witness reproduces the
+;; observable BEHAVIOR of that fallback without the Var+cache machinery:
+;; since every `extend-protocol` target class is a symbol known at COMPILE
+;; time (found via the SAME alternating-groups shape `deftype` already
+;; parses -- `parse-deftype-impl-groups` is reused as-is), `emit-protocol-call`
+;; can inline a compile-time-resolved `instanceof` chain (interface fast
+;; path, then each extended class in declaration order, then a clear
+;; failure) directly at the call site instead. Deliberately narrow scope:
+;; each extend-protocol method's params must all be reference types (same
+;; bar as `reify`/`deftype` before primitive-param support was added --
+;; not revisited here since `extend-protocol`'s target is a Java class,
+;; not a reflected interface method, so there's no natural place to learn
+;; a primitive parameter TYPE from in the first place), and a method has NO
+;; enclosing lexical scope to capture from at all (same reasoning as
+;; `deftype`: `extend-protocol` is a top-level leading form, entirely
+;; separate from the trailing `fn`).
+(defn- analyze-extend-protocol-method
+  [^Class protocol-iface method-form]
+  (when-not (and (seq? method-form) (symbol? (first method-form))
+                 (vector? (second method-form)) (seq (second method-form)))
+    (throw (ex-info "tiny analyzer: malformed extend-protocol method (name [this args...] body...)"
+                    {:form method-form})))
+  (let [[mname params & body] method-form
+        this-sym (first params)
+        arg-syms (vec (rest params))
+        pmethod (get *known-protocol-methods* mname)]
+    (when-not (and pmethod (= protocol-iface (:interface pmethod)) (= (:arity pmethod) (count arg-syms)))
+      (throw (ex-info "tiny analyzer: extend-protocol method is not declared on this protocol, or its arity does not match"
+                      {:method mname :arg-count (count arg-syms)})))
+    (let [method-env (into (assoc {} this-sym true) (zipmap arg-syms (repeat true)))]
+      {:name mname
+       :this-sym this-sym
+       :arg-syms arg-syms
+       :body (analyze-body method-env body)})))
+
+(defn- analyze-extend-protocol-form
+  [form]
+  (when-not (and (seq? form) (< 1 (count form))
+                 (= 'extend-protocol (first form))
+                 (symbol? (second form)))
+    (throw (ex-info "tiny analyzer: malformed extend-protocol -- expected (extend-protocol ProtoName Class (method [this args...] body...)...)"
+                    {:form form})))
+  (let [proto-sym (second form)
+        proto-iface (get *known-protocol-interfaces* proto-sym)]
+    (when-not proto-iface
+      (throw (ex-info "tiny analyzer: extend-protocol target protocol not found (must be declared by an earlier defprotocol)"
+                      {:protocol proto-sym})))
+    (let [impl-groups (parse-deftype-impl-groups (drop 2 form))
+          impls (mapv (fn [{:keys [interface-sym method-forms]}]
+                        (let [^Class target (try (Class/forName (name interface-sym)) (catch Throwable _ nil))]
+                          (when-not target
+                            (throw (ex-info "tiny analyzer: extend-protocol target class not found (must be a fully-qualified class name)"
+                                            {:class interface-sym})))
+                          {:class target
+                           :methods (mapv #(analyze-extend-protocol-method proto-iface %) method-forms)}))
+                      impl-groups)]
+      {:impls impls})))
 
 (defn- analyze-fn
   [form]
@@ -3043,40 +3122,92 @@
 
 ;; `(methodName instance args...)` -- confirmed via `javap -c` on real
 ;; host's own FAST PATH for a protocol method call: `checkcast Interface;
-;; invokeinterface method`, exactly this.
+;; invokeinterface method`, exactly this, guarded by an `instanceof`
+;; check (see `analyze-extend-protocol-form` for the fuller picture). When
+;; `extensions` is non-empty (an `extend-protocol` registered
+;; implementations for one or more classes), `instance`/each `arg` is
+;; evaluated exactly ONCE into a fresh local (their expressions might have
+;; side effects, and each is read multiple times below -- once per
+;; `instanceof` check, plus once more in whichever branch actually fires),
+;; then: `instanceof Interface` -> fast path if true; else each extended
+;; class in DECLARATION order -> that class's compiled method body (using
+;; `emit-expr` with `this-sym`/`arg-syms` resolving as ordinary already-
+;; evaluated `:let` locals, exactly the same mechanism `emit-let` itself
+;; uses) if `instanceof` that class; else a clear failure, matching real
+;; host's own `IllegalArgumentException` for an unimplemented protocol
+;; method on that class. With no `extensions` (the common case), this
+;; degenerates to exactly the old unconditional fast path, just reached via
+;; one `instanceof` check first instead of a bare `checkcast` -- a
+;; genuinely NEW outcome only for a value that ISN'T an interface
+;; implementer: a clear thrown error instead of a raw `ClassCastException`.
 (defn- emit-protocol-call
-  [^GeneratorAdapter ga env {:keys [interface method instance args]}]
+  [^GeneratorAdapter ga env {:keys [interface method instance args extensions]}]
   (let [iface-type (Type/getType ^Class interface)
-        asm-method (Method. method obj-type (into-array Type (repeat (count args) obj-type)))]
+        asm-method (Method. method obj-type (into-array Type (repeat (count args) obj-type)))
+        instance-slot (.newLocal ga obj-type)
+        arg-slots (mapv (fn [_] (.newLocal ga obj-type)) args)]
     (emit-expr ga env instance)
-    (.checkCast ga iface-type)
-    (doseq [arg args] (emit-expr ga env arg))
-    (.invokeInterface ga iface-type asm-method)))
+    (.storeLocal ga instance-slot)
+    (doseq [[arg slot] (map vector args arg-slots)]
+      (emit-expr ga env arg)
+      (.storeLocal ga slot))
+    (if (empty? extensions)
+      (do (.loadLocal ga instance-slot)
+          (.checkCast ga iface-type)
+          (doseq [slot arg-slots] (.loadLocal ga slot))
+          (.invokeInterface ga iface-type asm-method))
+      (let [end-label (Label.)
+            fast-label (Label.)]
+        (.loadLocal ga instance-slot)
+        (.instanceOf ga iface-type)
+        (.ifZCmp ga GeneratorAdapter/NE fast-label)
+        (doseq [{:keys [class this-sym arg-syms body]} extensions]
+          (let [next-label (Label.)
+                branch-env (into (assoc env this-sym {:kind :let :slot instance-slot})
+                                  (map (fn [s slot] [s {:kind :let :slot slot}]) arg-syms arg-slots))]
+            (.loadLocal ga instance-slot)
+            (.instanceOf ga (Type/getType ^Class class))
+            (.ifZCmp ga GeneratorAdapter/EQ next-label)
+            (emit-expr ga branch-env body)
+            (.goTo ga end-label)
+            (.mark ga next-label)))
+        (.throwException ga (Type/getType IllegalArgumentException)
+                          (str "tiny emitter: no protocol implementation of method " method " for this class"))
+        (.mark ga fast-label)
+        (.loadLocal ga instance-slot)
+        (.checkCast ga iface-type)
+        (doseq [slot arg-slots] (.loadLocal ga slot))
+        (.invokeInterface ga iface-type asm-method)
+        (.mark ga end-label)))))
 
-;; `(do (deftype/defprotocol ...)... (fn ...))` -- the ONLY shape allowing
-;; `deftype`/`defprotocol` at all, since both define a NAMED top-level
-;; class/interface rather than an inline expression (see
-;; `analyze-deftype-form`/`analyze-defprotocol-form`). Every form but the
-;; last must be one of the two; the last must be the `fn` this compile
-;; unit still ultimately returns -- deliberately narrow (no other
-;; top-level forms, e.g. no top-level `def`, mixed in) to keep this a
-;; small, explicit addition to `compile-source` rather than a general
-;; multi-form program model.
+;; `(do (deftype/defprotocol/extend-protocol ...)... (fn ...))` -- the ONLY
+;; shape allowing these at all, since each defines/registers something tied
+;; to the whole compile unit rather than an inline expression (see
+;; `analyze-deftype-form`/`analyze-defprotocol-form`/
+;; `analyze-extend-protocol-form`). Every form but the last must be one of
+;; the three; the last must be the `fn` this compile unit still ultimately
+;; returns -- deliberately narrow (no other top-level forms, e.g. no
+;; top-level `def`, mixed in) to keep this a small, explicit addition to
+;; `compile-source` rather than a general multi-form program model.
 (defn- top-level-program-form?
   [form]
   (and (seq? form) (= 'do (first form)) (< 1 (count form))
-       (every? #(and (seq? %) (contains? #{'deftype 'defprotocol} (first %)))
+       (every? #(and (seq? %) (contains? #{'deftype 'defprotocol 'extend-protocol} (first %)))
                (butlast (rest form)))
        (seq? (last form)) (= 'fn (first (last form)))))
 
-;; Emits each leading `deftype`/`defprotocol` form IN ORDER, folding up
-;; the three registries `compile-source` binds around the trailing `fn`'s
-;; own compilation (`*known-deftype-classes*`, `*known-protocol-methods*`,
-;; `*known-protocol-interfaces*`) -- a plain sequential `reduce`, since a
-;; later `deftype`/`defprotocol` in the same program never needs to see an
-;; earlier one (no forward/mutual reference between top-level definitions
-;; attempted here, matching this file's other narrow-scope-on-purpose
-;; boundaries).
+;; Emits each leading `deftype`/`defprotocol`/`extend-protocol` form IN
+;; ORDER, folding up the four registries `compile-source` binds around the
+;; trailing `fn`'s own compilation (`*known-deftype-classes*`,
+;; `*known-protocol-methods*`, `*known-protocol-interfaces*`,
+;; `*known-protocol-extensions*`) -- a plain sequential `reduce`, since a
+;; later leading form never needs to see a LATER one, only earlier ones (no
+;; forward/mutual reference between top-level definitions attempted here,
+;; matching this file's other narrow-scope-on-purpose boundaries).
+;; `extend-protocol` emits NO class/artifact of its own -- unlike
+;; `deftype`/`defprotocol`, it doesn't define a new type, only registers
+;; per-class method implementations for `emit-protocol-call` to inline
+;; later at each call site (see `analyze-extend-protocol-form`).
 ;; Plain (non-tail) recursion, NOT `reduce`/`loop`+`recur`: each leading
 ;; form is analyzed/emitted with the registries built from every form
 ;; BEFORE it already bound (so `(deftype Rect [w h] Shape ...)` can see a
@@ -3089,15 +3220,17 @@
   ([forms]
    (emit-leading-program-forms
     forms
-    {:artifacts [] :deftype-classes {} :protocol-interfaces {} :protocol-methods {}}))
+    {:artifacts [] :deftype-classes {} :protocol-interfaces {} :protocol-methods {} :protocol-extensions {}}))
   ([forms acc]
    (if (empty? forms)
      acc
      (binding [*known-deftype-classes* (:deftype-classes acc)
                *known-protocol-interfaces* (:protocol-interfaces acc)
-               *known-protocol-methods* (:protocol-methods acc)]
+               *known-protocol-methods* (:protocol-methods acc)
+               *known-protocol-extensions* (:protocol-extensions acc)]
        (let [form (first forms)]
-         (if (= 'deftype (first form))
+         (case (first form)
+           deftype
            (let [spec (analyze-deftype-form form)
                  artifact (emit-deftype-class spec)]
              (emit-leading-program-forms
@@ -3105,6 +3238,7 @@
               (-> acc
                   (update :artifacts conj artifact)
                   (update :deftype-classes assoc (:name spec) (:class artifact)))))
+           defprotocol
            (let [spec (analyze-defprotocol-form form)
                  artifact (emit-protocol-interface spec)
                  iface (:class artifact)]
@@ -3116,7 +3250,20 @@
                   (update :protocol-methods into
                           (map (fn [m] [(symbol (:name m))
                                         {:interface iface :method (:name m) :arity (:arity m)}])
-                               (:methods spec))))))))))))
+                               (:methods spec))))))
+           extend-protocol
+           (let [spec (analyze-extend-protocol-form form)]
+             (emit-leading-program-forms
+              (rest forms)
+              (update acc :protocol-extensions
+                      (fn [exts]
+                        (reduce (fn [exts {:keys [class methods]}]
+                                  (reduce (fn [exts {:keys [name this-sym arg-syms body]}]
+                                            (update exts name (fnil conj [])
+                                                    {:class class :this-sym this-sym
+                                                     :arg-syms arg-syms :body body}))
+                                          exts methods))
+                                exts (:impls spec))))))))))))
 
 (defn compile-source
   [source]
@@ -3125,11 +3272,12 @@
     (if (top-level-program-form? expanded-form)
       (let [leading-forms (butlast (rest expanded-form))
             fn-form (last expanded-form)
-            {:keys [artifacts deftype-classes protocol-interfaces protocol-methods]}
+            {:keys [artifacts deftype-classes protocol-interfaces protocol-methods protocol-extensions]}
             (emit-leading-program-forms leading-forms)]
         (binding [*known-deftype-classes* deftype-classes
                   *known-protocol-interfaces* protocol-interfaces
-                  *known-protocol-methods* protocol-methods]
+                  *known-protocol-methods* protocol-methods
+                  *known-protocol-extensions* protocol-extensions]
           (let [ast (analyze-fn fn-form)
                 artifact (emit-class ast)
                 f (.newInstance ^Class (:class artifact))]
@@ -3939,6 +4087,18 @@
     :source "(do (defprotocol Shape (area [this]) (perimeter [this])) (deftype Rect [w h] Shape (area [this] (* w h)) (perimeter [this] (* 2 (+ w h)))) (fn [a b] (+ (area (Rect. a b)) (perimeter (Rect. a b)))))"
     :args [3 4]
     :expected 26}
+   {:id :tiny-extend-protocol-single-class
+    :source "(do (defprotocol Shape (area [this])) (extend-protocol Shape java.lang.Long (area [this] (* this this))) (fn [n] (area n)))"
+    :args [5]
+    :expected 25}
+   {:id :tiny-extend-protocol-two-classes
+    :source "(do (defprotocol Shape (area [this])) (extend-protocol Shape java.lang.Long (area [this] (* this this)) java.lang.String (area [this] (.length this))) (fn [n s] (+ (area n) (area s))))"
+    :args [5 "hello"]
+    :expected 30}
+   {:id :tiny-extend-protocol-and-reify-mixed-dispatch
+    :source "(do (defprotocol Shape (area [this])) (extend-protocol Shape java.lang.Long (area [this] (* this this))) (fn [n] (+ (area n) (area (reify Shape (area [this] 999))))))"
+    :args [5]
+    :expected 1024}
    {:id :tiny-deftype-implements-java-interface-primitive-param
     :source "(do (deftype Adder [base] java.util.function.IntUnaryOperator (applyAsInt [this x] (+ x base))) (fn [n] (.applyAsInt (Adder. n) 5)))"
     :args [100]

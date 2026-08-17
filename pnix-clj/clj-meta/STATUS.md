@@ -1145,10 +1145,59 @@ Iface2 (m2 ...) ...)` 형태를 받도록 확장 — `analyze-reify`가
 `bin/clj-meta-gate`(`metacircular gate: READY ✅`, `reproducible
 DDC lane: OK`) 녹색, 회귀 없음.
 
-U6에 남은 큰 gap: protocol은 fast path만(진짜 `extend-protocol`
-디스패치 없음 — `clojure.core/-cache-protocol-fn`/
-`MethodImplCache` 재구현이 필요한, 별도로 큰 프로젝트급 항목으로
-계속 held).
+**같은 날 서른아홉 번째 확장 (2026-08-15): `extend-protocol`(진짜
+protocol 디스패치).** 사용자가 "그래~ 계속 해결해봐"로 명시적으로
+지시. 이전까지 held로 분류하던 마지막 큰 항목. `javap -c`로
+host-AOT-컴파일된 `(extend-protocol Shape Long (area [this] ...))
+... (area n)` 호출부를 확인: 실제로는 두 부분 — (1) call-site
+자체는 단순 fast-path(`instanceof Interface; checkcast;
+invokeinterface`)가 fall-through로 그친 뒤, interface를 직접
+구현하지 않는 값이면 protocol method의 Var 자체를 평범한 IFn처럼
+호출, (2) 그 Var의 root function 안에서 진짜
+`MethodImplCache`/`extend`-등록 룩업이 일어남 — call site 자체는
+간단하지만 (2)는 정말 Clojure protocol runtime의 상당 부분 재구현이
+필요함을 재확인. **다만 `extend-protocol`의 대상 클래스들은 소스
+안에 심볼로 나열돼 COMPILE TIME에 이미 다 알려져 있다**는 점을
+이용해서, 런타임 캐시 대신 컴파일타임에 확정된 `instanceof`
+체인(인터페이스 fast path → 각 확장 클래스를 선언 순서대로 검사 →
+실패 시 명확한 에러)으로 **관찰 가능한 동작을 그대로** 재현 —
+이 파일 전체에서 일관되게 써온 "행동 동등성, 바이트코드-모양
+동등성 아님" 기준을 여기에도 그대로 적용한 것. `deftype`이 이미
+가진 `parse-deftype-impl-groups`(교대 심볼/메서드-폼 그룹 파싱)를
+`extend-protocol`에도 재사용. `analyze-extend-protocol-form`이
+새 leading top-level form으로 추가(`deftype`/`defprotocol`과
+같은 자리, 새 클래스는 전혀 만들지 않고 `*known-protocol-extensions*`
+레지스트리만 채움). `emit-protocol-call`을 재작성: `instance`/각
+`arg`를 딱 한 번만 평가해 local에 저장(여러 `instanceof` 검사와
+실제 실행 양쪽에서 재사용해야 하므로) → interface fast path 검사
+→ 확장된 각 클래스 검사(맞으면 그 클래스의 컴파일된 메서드
+본문을 `emit-expr`로 그 자리에서 직접 실행, `this`/인자는
+`emit-let`이 이미 쓰는 것과 같은 평범한 `:let` local로 해석) →
+전부 실패하면 `IllegalArgumentException`을 명확한 메시지로 throw
+(예전엔 무조건 `checkcast`라서 미확장 타입에 대해 그냥
+`ClassCastException`이 났음 — 이것도 관찰 가능한 동작의 진짜
+개선). 단일 확장 클래스, 두 확장 클래스, 확장된 클래스와 `reify`
+fast path가 같은 프로그램에서 섞여 쓰이는 경우, 미확장 타입에
+대한 에러(타입까지 실제 host와 정확히 `IllegalArgumentException`
+일치)까지 전부 실제 host 대비 검증. `compiler.clj`는 do-wrapped
+멀티폼 프로그램 모양 자체를 못 받아들임을 재확인(`deftype`/
+`defprotocol` 조합 때와 정확히 같은 이유) — 그래서 U6 전용,
+DDC 행 미연결. U6: 222→225(`:tiny-extend-protocol-single-class`,
+`:tiny-extend-protocol-two-classes`,
+`:tiny-extend-protocol-and-reify-mixed-dispatch`). 전체
+`-M:conformance`(116/116), `-M:diverse-double-compile`(영향
+없음, `extend-protocol`은 DDC 행에 없으므로 당연)과
+`bin/clj-meta-gate`(`metacircular gate: READY ✅`, `reproducible
+DDC lane: OK`) 녹색, 회귀 없음.
+
+**진짜로 남은 것(narrow, 문서화된 채로):** `extend-protocol` 대상
+클래스는 `java.lang.Long`처럼 완전정규명이어야 함(real host처럼
+`Long` 같은 `java.lang.*` 축약명 자동 해석은 없음 — 이 파일
+전체에서 이미 일관된 "정직하게 더 좁은 범위" 원칙). 여러
+`extend-protocol` 확장이 서로 겹치는 클래스 계층(부모/자식
+클래스 둘 다 확장)일 때의 우선순위는 선언 순서 first-match일 뿐,
+real host의 더 정교한 최적-매치 규칙과 다를 수 있음 — 현재
+fixture들은 이 애매한 경우를 만들지 않음.
 
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)

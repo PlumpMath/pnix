@@ -710,10 +710,39 @@ top-line claim, but the substance is much closer than "false" implies:
   영향 없음, `bin/clj-meta-gate` `metacircular gate: READY ✅` +
   `reproducible DDC lane: OK`, 회귀 없음.
 
+  **39번째 슬라이스, 2026-08-15: `extend-protocol`** (222→225).
+  이전까지 held였던 마지막 큰 항목. `javap -c` 확인: call site 자체는
+  단순 fast-path(`instanceof`+`invokeinterface`) fall-through 뒤
+  protocol method의 Var를 IFn처럼 호출하고, 진짜 `MethodImplCache`
+  룩업은 그 Var의 root function 안(런타임)에서 일어남. 하지만
+  `extend-protocol`의 대상 클래스는 소스에 심볼로 나열돼 COMPILE
+  TIME에 이미 알려져 있으므로, 런타임 캐시 대신 컴파일타임
+  `instanceof` 체인(interface fast path → 확장 클래스들을 선언
+  순서로 → 실패시 명확한 에러)으로 관찰 가능한 동작을 재현 —
+  "행동 동등성, 바이트코드 동등성 아님" 기준 그대로 적용.
+  `deftype`의 `parse-deftype-impl-groups` 재사용. `extend-protocol`은
+  새 leading top-level form(새 클래스는 안 만들고
+  `*known-protocol-extensions*` 레지스트리만 채움). `emit-protocol-call`
+  재작성: instance/각 arg를 한 번만 평가해 local에 저장 →
+  interface fast path → 확장 클래스별 instanceof 검사(맞으면 그
+  자리에서 메서드 본문 실행) → 전부 실패시
+  `IllegalArgumentException`(예전엔 무조건 checkcast라 미확장
+  타입엔 그냥 ClassCastException — 진짜 개선). 단일/2개 확장
+  클래스, reify와 섞어 쓰기, 미확장 타입 에러(타입까지 실제 host와
+  일치)까지 검증. `compiler.clj`는 do-wrapped 멀티폼을 여전히 못
+  받음(`deftype`/`defprotocol`과 같은 이유)이라 U6 전용, DDC 행
+  미연결. `-M:conformance` 116/116·`-M:diverse-double-compile`
+  영향 없음, `bin/clj-meta-gate` `metacircular gate: READY ✅` +
+  `reproducible DDC lane: OK`, 회귀 없음.
+
+  남은 좁은 제약: extend-protocol 대상 클래스는 완전정규명 필요
+  (java.lang.* 축약명 자동 해석 없음), 여러 확장이 겹치는 클래스
+  계층일 때 우선순위는 선언 순서 first-match뿐(현재 fixture들은
+  이 애매한 경우를 만들지 않음).
+
   U6에 남은 큰 gap: 중첩 closure는 단일 arity로만 범위 제한(깊이
-  제한은 해제됨),
-  protocol은 fast path만(진짜 `extend-protocol` 디스패치 없음 —
-  별도 대형 프로젝트급으로 계속 held).
+  제한은 해제됨). protocol 디스패치도 이제 real host 대비 검증됨
+  (extend-protocol 포함) — 이 slice 이후 남은 4개 갭 전부 닫힘.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
