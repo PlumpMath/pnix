@@ -13,15 +13,19 @@ Audit pass over this entire file + `STATUS.md` + source (`compiler.clj`,
 `diverse_double_compile.clj`, `frontend_selfhost.clj`, `language_surface.clj`,
 `kernel.clj`) to separate genuinely-open work from stale/superseded TODO
 placeholders. **Headline: almost everything "fixable" is closed.** Of 3223
-lines and hundreds of `- [x]` entries, only 3 raw `- [ ]` checkboxes exist in
-the whole file (§18.1-18.3, "perf/bug/production-API agent triage") — and
-those are stale: the "★★ codex 구현 인계" note near the top of this file
-(same 2026-06-29 date) already reports that exact triage done and closed
-("현재 todo 큐 남은 구현 항목 없음"). Treat §18.1-18.3's empty checkboxes as
-dead placeholders, not open work. No `SCOPE_LOCK.md` exists inside
-`clj-meta/` itself (the sibling `pnix-clj/SCOPE_LOCK.md` governs the pnix
-*runtime* layer, not this host-proof lane, and doesn't add constraints beyond
-what's already reflected below).
+lines and hundreds of `- [x]` entries, only 3 raw `- [ ]` checkboxes existed in
+the whole file (§18.1-18.3, "perf/bug/production-API agent triage") — those
+were stale: the "★★ codex 구현 인계" note near the top of this file
+(same 2026-06-29 date) already reported that exact triage done and closed
+("현재 todo 큐 남은 구현 항목 없음"). **2026-08-18: those three placeholders
+were finally filled in** (`- [x]` with a summary + pointer to the "★★" section)
+instead of just being left empty-with-a-note — no code changes were needed,
+only doc hygiene, since the actual production-hardening work was genuinely
+already done and re-verified live (`./bin/clj-meta-gate` → `metacircular gate:
+READY ✅`, same day). No `SCOPE_LOCK.md` exists inside `clj-meta/` itself (the
+sibling `pnix-clj/SCOPE_LOCK.md` governs the pnix *runtime* layer, not this
+host-proof lane, and doesn't add constraints beyond what's already reflected
+below).
 
 What's actually left, by axis (map into the detailed sections below for
 receipts/digests — this is a pointer, not a duplicate):
@@ -4102,7 +4106,7 @@ T7 이 (3)(4)(5)를 "별도 research"가 아니라 not-claimed 경계로만 처�
 Finding A/B/2). 남은 것은 본질적 research-frontier 이며 gate 가 정직하게 not-claimed.
 gate READY ✅, smoke 141/141, conformance 112/112 + negative 20/20, 고정점 무회귀.
 
-## 18. 프로덕션 하드닝 — 성능·버그·API (2026-06-29, 진행중)
+## 18. 프로덕션 하드닝 — 성능·버그·API (2026-06-29, **DONE — 아래 18.1-18.3 참조**)
 
 목표: clj-meta 컴파일러를 ../pnix-clj 가 붙여 쓸 **프로덕션 제품**으로. fallback/held 가
 아니라 **실제 성능·속도 최적화 + 버그 수정**. (../pnix-clj 연결 자체는 다른 세션 담당; 여기선
@@ -4129,10 +4133,33 @@ clj-meta 본체 compiler 만.) 3-에이전트 감사(성능/버그/프로덕션-
 - [x] compile-time: gate full ~4–5분(self-source stage chain). perf 감사로 hotspot 확인 중.
 
 ### 18.1 성능/속도 (perf 감사 결과 → 채움)
-- [ ] (대기) perf 에이전트 발견 triage
+- [x] **DONE (2026-06-29, codex 구현 + claude 독립 재검증).** 이 세 섹션(18.1-18.3)의
+  "(대기)" placeholder는 실제로는 채워진 적이 없고, 그 대신 아래 "★★ codex 구현 인계"
+  섹션(1032번째 줄 근처)에 결과가 직접 기록됨 — 이 문서에 남아있던 유일한 stale
+  placeholder였다(2026-08-11 감사 패스에서 이미 지적됨, 이번에 실제로 정리).
+  perf 감사가 찾은 것: typed-long `let`(1.27x 느림), multi-arity(1.28x),
+  variadic(1.20x), map/closure(1.11x) — 4개 런타임 hotspot(18.0 베이스라인 참조).
+  구현은 "★★" 섹션의 1·2차 라운드(A-B/A-I/A-D/B-F 계열 항목들)에 포함되어 처리됨.
 
 ### 18.2 버그 (bug 감사 결과 → 채움)
-- [ ] (대기) bug 에이전트 발견 triage
+- [x] **DONE (2026-06-29, codex 구현 + claude 독립 재검증).** bug 감사가 찾은 핵심
+  2건 — **C-BUG1**(★CRITICAL: 비표준 Boolean boxing으로 host가 우리 `false`를
+  truthy로 오인 — `filterv`/`remove`/`every?`/`take-while` 등 기본 HOF 전부 깨짐,
+  `.box`를 `GeneratorAdapter.valueOf`로 교체하는 `box-value` 헬퍼로 수정, 소스에
+  실제 반영 확인: `compiler.clj:601`)와 **C-BUG2**(HIGH: overload resolution이
+  `long→double`을 과도하게 widening해서 `(= 1 1.0)`이 `true`로 오답 — host는
+  `false`) — 둘 다 회귀 픽스처를 conformance corpus에 고정. 상세는 아래 "★★" 섹션의
+  C-BUG1/C-BUG2 항목(1340번째 줄 근처) 참조.
 
 ### 18.3 프로덕션 API/동시성/수명주기 (production 감사 결과 → 채움)
-- [ ] (대기) production-API 에이전트 발견 triage
+- [x] **DONE (2026-06-29, codex 구현 + claude 독립 재검증).** 공개 API 10개
+  (`compile-form`/`eval-form`/`run-ns-form-strict`/`compile-ns`/`load-compiled-ns`/
+  `compile-classes` 등) + 동시성 안전성(24-thread × 30 동시 compile 스트레스,
+  deadlock 0) + `compile-form-strict`의 no-fallback 계약(genuine unsupported
+  literal에 대해 강제 throw, 전역 fallback 진단 0). 최종 독립 재검증(claude,
+  2026-06-29): gate READY, M6aj digest `6eb83dc…` 불변(raw 승격 무회귀),
+  conformance 116/116 + negative 22/22, compiler-smoke 159/159,
+  concurrency-smoke 1/1. **2026-08-18 재확인**: `./bin/clj-meta-gate` 재실행,
+  `metacircular gate: READY ✅` — 이 triage 이후 어떤 회귀도 없음. 상세는 아래
+  "★★ codex 구현 인계" 섹션 전체(1032-1065번째 줄) 참조 — 그 섹션이 이 세
+  placeholder의 실제 내용이다.
