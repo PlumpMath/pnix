@@ -234,13 +234,45 @@ fixture 3개 추가(19→22): `mini-get-subscript`, `mini-dot-method-mutation`,
 `mini-keyword-dict-literal`. 회귀 없음: `self-check`, `stage7-check` 둘 다
 PASS.
 
-**macro/`require`는 이번 패스에서도 미시도**: `kernel.hy` 자체
-`compile-fn-expr`처럼 새 reader/emitter case 몇 개로 되는 수준이 아니라,
-진짜 컴파일타임 매크로 확장 인프라(매크로 테이블, quasiquote/unquote 파싱,
-매크로 본문을 코드로 실행해서 폼을 폼으로 돌려받는 메커니즘, 최소한의
-hygiene)가 통째로 필요 — 지금까지의 "작은 증분, 각자 완전히 검증" 패턴과
-규모가 다름. 정직하게 열린 상태로 남김(과대주장 안 함) — 언젠가 착수한다면
-별도의, 그 자체로 크게 스코프된 슬라이스가 되어야 함.
+**`defmacro`/quasiquote/unquote 추가, 같은 날 (2026-08-17):** 사용자가
+"macro/require는 아직 열려 있는데, 이걸 진행"으로 명시적으로 지목. 실제로
+쓸모 있는 매크로는 quasiquote(`` ` ``)/unquote(`~`) 없이는 사실상 못 쓴다고
+판단해서 함께 구현.
+
+**설계 (의도적으로 좁힌 경계, 코드 주석에도 정직하게 문서화)**: `(defmacro
+name [params] `TEMPLATE)` — 몸체는 정확히 **하나의 quasiquote 템플릿**이어야
+함(임의 코드가 아님 — `fn`을 단일 식 본문으로 좁힌 것과 같은 이유: 매크로
+본문을 위한 별도의 완전한 컴파일타임 평가기를 새로 만들지 않고도 자연스러운
+"구멍 뚫린 템플릿" 매크로 스타일을 커버). unquote(`~x`)는 **bare 매크로
+파라미터 심볼만** 지원(`~(+ x 1)`처럼 계산식은 미지원 — 매크로-확장-시점
+코드를 평가하는 두 번째 평가기가 또 필요해짐). 중첩 quasiquote와 `~@`
+(unquote-splice)도 미지원 — 둘 다 조용히 틀리지 않고 명확한 SyntaxError로
+거부.
+
+**구현**: 토크나이저가 `` ` ``/`~`를 별개 토큰으로 인식(이전엔 일반 심볼
+문자 클래스에 먹혔음), reader가 `("__quasiquote__", inner)`/
+`("__unquote__", inner)` 마커 폼으로 파싱. `compile_and_eval`이 이제
+2단계: (1) 소스 전체를 먼저 스캔해 모든 `defmacro`를 매크로 테이블에
+등록(코드로는 아무것도 안 냄, 컴파일타임에만 존재), (2) 나머지 모든
+폼(defn 본문 안쪽 포함, `_expand_macros`가 폼 트리 전체를 재귀적으로
+걷기 때문에 자동으로 됨)에서 매크로 호출을 찾아 **인자를 평가하지 않고
+원본 폼 그대로** 파라미터에 묶어 quasiquote 템플릿에 대입, 그 결과를
+원래 호출 자리에 다시 끼워넣고(확장 결과 자체가 또 매크로 호출로
+시작할 수도 있으니 재귀적으로 다시 확장) 그 다음에야 `_emit_expr`로
+컴파일 — "매크로 인자는 평가되지 않은 채로 전달된다"는 진짜 매크로의
+핵심 성질을 정확히 구현.
+
+단순 템플릿 치환, unquote가 `if`의 분기 안에 들어가는 경우, 3-파라미터
+매크로, 여러 번+non-tail 호출까지 4개 fixture 추가(22→26), 전부 세
+다리(host/kernel_direct/mini) 각각 fixture 추가 전 수동 실행으로 확인
+후 정식 fixture로 전환(가정 아님). 회귀 없음: `self-check`/`stage7-check`
+둘 다 PASS.
+
+**`require`는 이 backend의 모델에 애초에 적용 안 됨**: 실제 Hy의 `require`는
+**다른 모듈**에서 매크로를 가져오는 것인데, 이 mini backend는 항상 하나의
+소스 문자열을 한 번에 컴파일하는 모델이라 `defmacro`와 그 사용처가 항상
+같은 컴파일 단위 안에 있음 — cross-module import 자체가 필요한 상황이
+구조적으로 생기지 않음. 회피가 아니라 이 backend의 범위상 자연스러운 결론.
 
 **이 세션 수정: 누락 native-corpus 의존성.** fresh checkout/venv는 예전에
 `diverse-double-compile-check` 및 기타 native-corpus 의존 체크를
@@ -287,5 +319,5 @@ export HY_META_PYTHON=/tmp/pnix-hy-py311-venv/bin/python
 | Gate | Result | Notes |
 |---|---|---|
 | `hy-meta-gate primary` (self-check + stage7-check) | **PASS** | Python 3.11.16 + hy 1.3.1 + funcparserlib (pip venv) |
-| `independent-mini-backend-check` | **PASS** 22/22 | 8→12→14 (이전 세션) →19 (클로저) →22 (`get`/dot-메서드/keyword dict), 이번 세션 |
+| `independent-mini-backend-check` | **PASS** 26/26 | 8→12→14 (이전 세션) →19 (클로저) →22 (`get`/dot-메서드/keyword dict) →26 (`defmacro`+quasiquote/unquote), 이번 세션 |
 | full ladder stage8–stagen | not default-run | available via bootstrap.py |

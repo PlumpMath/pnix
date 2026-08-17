@@ -13,9 +13,13 @@ It is a frontier witness, not a replacement for the production frontend: it
 covers a bounded fixture set (arithmetic, comparisons, `if`, `defn`,
 recursion, calling between top-level `defn`s, boolean/`None` literals,
 string/list/dict/keyword literals, `get` subscript access, dot-prefixed
-method calls (`(.method target args...)`), `setv`/`while` mutation, and
-genuine closures via `fn` (single-expression body only)), not the Hy
-language.
+method calls (`(.method target args...)`), `setv`/`while` mutation, genuine
+closures via `fn` (single-expression body only), and `defmacro` with a
+quasiquote/unquote template body (single-body-form templates, bare-symbol
+unquotes only)), not the Hy language. `require` (cross-module macro import)
+does not apply to this backend's single-source-string compilation model --
+a `defmacro` and its use always live in the same compilation unit, so no
+cross-module import step is ever needed here.
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ from typing import Any
 # 3-way check are meaningful for keyword-keyed fixtures.
 from hy.models import Keyword
 
-TOKEN_RE = re.compile(r'\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|\{|\}|-?\d+|[^\s()\[\]{}]+)')
+TOKEN_RE = re.compile(r'\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|\{|\}|`|~|-?\d+|[^\s()\[\]{}~`]+)')
 
 
 def _tokenize(source: str) -> list[str]:
@@ -81,6 +85,12 @@ def _parse_one(tokens: list[str], i: int) -> tuple[Any, int]:
         return ("__dict__", pairs), i + 1
     if tok in (")", "]", "}"):
         raise SyntaxError(f"tiny reader: unexpected closing delimiter {tok!r}")
+    if tok == "`":
+        inner, i = _parse_one(tokens, i + 1)
+        return ("__quasiquote__", inner), i
+    if tok == "~":
+        inner, i = _parse_one(tokens, i + 1)
+        return ("__unquote__", inner), i
     if tok == "True":
         return True, i + 1
     if tok == "False":
@@ -141,6 +151,107 @@ def _is_kw(form: Any) -> bool:
 
 
 _KEYWORD_NAME = "__mini_backend_Keyword__"
+
+
+def _is_quasiquote(form: Any) -> bool:
+    return isinstance(form, tuple) and len(form) == 2 and form[0] == "__quasiquote__"
+
+
+def _is_unquote(form: Any) -> bool:
+    return isinstance(form, tuple) and len(form) == 2 and form[0] == "__unquote__"
+
+
+class _MacroDef:
+    __slots__ = ("params", "template")
+
+    def __init__(self, params: list[str], template: Any) -> None:
+        self.params = params
+        self.template = template
+
+
+def _register_macro(form: tuple, macros: dict[str, _MacroDef]) -> None:
+    # `(defmacro name [params...] \`TEMPLATE)` -- exactly one body form,
+    # required to be a quasiquote template (see `_expand_quasiquote_body`'s
+    # doc comment for why this narrow shape, rather than an arbitrary
+    # macro body, was chosen).
+    if len(form) != 4:
+        raise SyntaxError(
+            "tiny analyzer: defmacro needs a name, a parameter vector, and exactly one "
+            "quasiquote-template body form"
+        )
+    _, name_f, params_f, body_f = form
+    name = _sym_name(name_f)
+    if not isinstance(params_f, list):
+        raise SyntaxError("tiny analyzer: defmacro params must be a vector")
+    if not _is_quasiquote(body_f):
+        raise SyntaxError("tiny analyzer: defmacro body must be a single quasiquote template `(...)")
+    params = [_sym_name(p) for p in params_f]
+    macros[name] = _MacroDef(params, body_f[1])
+
+
+def _expand_quasiquote_body(template: Any, param_env: dict[str, Any]) -> Any:
+    """Walk a macro's quasiquote template, substituting `~param` (a bare
+    unquoted reference to one of the macro's own parameters) with the RAW,
+    UNEVALUATED argument form the macro was invoked with -- everything else
+    in the template is reconstructed literally (quoted), exactly matching
+    real Hy's quasiquote/unquote semantics for the common "template with
+    holes" macro shape (`` `(if ~c ~t ~e) ``).
+
+    Deliberately narrower than real Hy's quasiquote: only a BARE parameter
+    symbol may be unquoted (`~x`), not an arbitrary computed expression
+    (`~(+ x 1)`) -- covers the natural, idiomatic macro-writing style this
+    backend's fixtures use, without needing a second evaluator for
+    macro-expansion-time code. Nested quasiquote and `~@` (unquote-splice)
+    are also not supported (no fixture needs them); both fail with a clear
+    SyntaxError rather than being silently mishandled.
+    """
+    if _is_unquote(template):
+        _, inner = template
+        if not _is_sym(inner):
+            raise SyntaxError(
+                "tiny analyzer: unquote only supports a bare macro-parameter symbol, "
+                f"got {inner!r}"
+            )
+        name = _sym_name(inner)
+        if name not in param_env:
+            raise SyntaxError(f"tiny analyzer: unquote references unknown macro parameter {name}")
+        return param_env[name]
+    if _is_quasiquote(template):
+        raise SyntaxError("tiny analyzer: nested quasiquote is not supported")
+    if isinstance(template, tuple):
+        return tuple(_expand_quasiquote_body(item, param_env) for item in template)
+    if isinstance(template, list):
+        return [_expand_quasiquote_body(item, param_env) for item in template]
+    return template
+
+
+def _is_macro_call(form: Any, macros: dict[str, _MacroDef]) -> bool:
+    return isinstance(form, tuple) and bool(form) and _is_sym(form[0]) and _sym_name(form[0]) in macros
+
+
+def _expand_macros(form: Any, macros: dict[str, _MacroDef]) -> Any:
+    """Recursively expand every macro call anywhere in `form` (not just at
+    the top level -- macros can appear as sub-expressions too). A macro
+    call's argument forms are bound UNEVALUATED to the macro's own
+    parameters and substituted into its quasiquote template; the result is
+    re-expanded (in case the expansion itself starts with a macro call, or
+    a macro call remains nested inside it) before being returned."""
+    if not macros:
+        return form
+    if _is_macro_call(form, macros):
+        name = _sym_name(form[0])
+        macro = macros[name]
+        call_args = form[1:]
+        if len(call_args) != len(macro.params):
+            raise SyntaxError(f"tiny analyzer: macro {name} arity")
+        param_env = dict(zip(macro.params, call_args))
+        expanded = _expand_quasiquote_body(macro.template, param_env)
+        return _expand_macros(expanded, macros)
+    if isinstance(form, tuple):
+        return tuple(_expand_macros(item, macros) for item in form)
+    if isinstance(form, list):
+        return [_expand_macros(item, macros) for item in form]
+    return form
 
 
 def _emit_expr(form: Any) -> ast.expr:
@@ -345,11 +456,26 @@ _RESULT_NAME = "__mini_backend_result__"
 
 
 def compile_and_eval(source: str) -> Any:
-    """Read every top-level form; `defn` forms become real functions in the
-    module namespace, and the value of the final form is returned."""
+    """Read every top-level form; `defmacro` forms are registered (and
+    removed from the compiled output -- they exist only at compile time),
+    `defn` forms become real functions in the module namespace, and the
+    value of the final form is returned. Every remaining form (including
+    inside `defn` bodies) has macro calls expanded first."""
     forms = tiny_read_all(source)
     if not forms:
         raise SyntaxError("tiny reader: empty source")
+    macros: dict[str, _MacroDef] = {}
+    for form in forms:
+        if isinstance(form, tuple) and form and _is_sym(form[0], "defmacro"):
+            _register_macro(form, macros)
+    forms = [
+        form
+        for form in forms
+        if not (isinstance(form, tuple) and form and _is_sym(form[0], "defmacro"))
+    ]
+    if not forms:
+        raise SyntaxError("tiny reader: source has only defmacro forms, nothing to run")
+    forms = [_expand_macros(form, macros) for form in forms]
     stmts: list[ast.stmt] = []
     for form in forms[:-1]:
         if isinstance(form, tuple) and form and _is_sym(form[0], "defn"):

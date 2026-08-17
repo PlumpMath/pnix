@@ -151,11 +151,21 @@ listed here; see the detailed sections below for the full history.
    자체 주입). 세 다리 각각 fixture 추가 전 직접 실행해 확인. fixture 3개
    추가(19→22), 전부 3-way 일치. 회귀 없음: `self-check`/`stage7-check` PASS.
 
-   **macro/`require`는 이번 패스도 미시도**: 진짜 컴파일타임 매크로 확장
-   인프라(매크로 테이블, quasiquote/unquote, 매크로 본문을 코드로 실행해서
-   폼을 돌려받는 메커니즘)가 통째로 필요 — 지금까지의 작은 증분 패턴과
-   규모가 다름. 정직하게 열린 채로 남김; 착수하려면 별도의 크게 스코프된
-   슬라이스가 되어야 함.
+   **`defmacro`/quasiquote/unquote 추가, 같은 날 — DONE.** 사용자가 "macro/
+   require는 아직 열려 있는데, 이걸 진행"으로 명시적으로 지목. `(defmacro
+   name [params] `TEMPLATE)` — 몸체는 정확히 하나의 quasiquote 템플릿만
+   지원(임의 코드 아님, `fn`을 단일 식으로 좁힌 것과 같은 이유). unquote는
+   bare 매크로 파라미터 심볼만(`~x`, 계산식 `~(...)` 미지원 — 매크로-확장
+   시점 평가기가 또 필요해짐). 중첩 quasiquote/`~@`도 미지원, 둘 다 명확한
+   에러. `compile_and_eval`이 2단계: 소스 전체에서 `defmacro` 먼저 수집,
+   나머지 모든 폼(defn 본문 안쪽 포함)에서 매크로 호출을 찾아 **인자를
+   평가 안 하고 원본 폼 그대로** 파라미터에 묶어 템플릿에 대입 후 재귀
+   재확장 — 진짜 매크로의 핵심 성질(인자 비평가 전달)을 정확히 구현. 세
+   다리 각각 fixture 추가 전 수동 실행으로 확인. fixture 4개 추가(22→26),
+   전부 3-way 일치. 회귀 없음: `self-check`/`stage7-check` PASS. `require`
+   (cross-module macro import)는 이 backend가 항상 한 소스 문자열을 한
+   컴파일 단위로 처리하는 모델이라 애초에 필요한 상황이 안 생김 — 회피가
+   아니라 구조적 결론. 상세는 `STATUS.md` 참조.
 
 6. **Stage8–StageN proof ladder — closed except 3 cross-repo-blocked Stage14
    items.** Verified: every stage8–stageN checklist item in this file is

@@ -1730,6 +1730,35 @@ def independent_mini_backend_fixtures() -> list[dict[str, Any]]:
             "source": '(defn f [] {:a 1 :b 2}) (f)',
             "expected": {hy.models.Keyword("a"): 1, hy.models.Keyword("b"): 2},
         },
+        {
+            "id": "mini-macro-simple-template",
+            "source": "(defmacro double [x] `(* ~x 2)) (defn f [] (double 21)) (f)",
+            "expected": 42,
+        },
+        {
+            "id": "mini-macro-unquote-into-if",
+            "source": (
+                "(defmacro unless [c e] `(if ~c 0 ~e)) "
+                "(defn f [n] (unless (> n 0) (- 0 n))) (f -5)"
+            ),
+            "expected": 5,
+        },
+        {
+            "id": "mini-macro-three-params",
+            "source": (
+                "(defmacro myIf [c t e] `(if ~c ~t ~e)) "
+                "(defn f [x y] (myIf (< x y) (* x y) (+ x y))) (f 3 4)"
+            ),
+            "expected": 12,
+        },
+        {
+            "id": "mini-macro-multi-call-non-tail",
+            "source": (
+                "(defmacro sq [x] `(* ~x ~x)) "
+                "(defn f [n] (+ (sq n) (sq (+ n 1)))) (f 3)"
+            ),
+            "expected": 25,
+        },
     ]
 
 
