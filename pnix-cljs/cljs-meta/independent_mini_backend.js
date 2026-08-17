@@ -13,11 +13,14 @@
  *
  * It is a frontier witness, not a replacement for the production frontend:
  * it covers a bounded fixture set (arithmetic, comparisons, `if`, `let`
- * (including nested vector destructuring), `do`, named `fn`
- * literals/recursion, strings, vector/map/set literals, booleans/keywords,
- * the seq ops `get`/`nth`/`count`/`conj`/`nil?`, `assoc`/`update` on maps,
- * and the `when`/`cond`/`->` macros), not ClojureScript. The host side of
- * this DDC pair
+ * (including nested vector destructuring), `do`, `loop`/`recur`, named `fn`
+ * literals/recursion, genuine closures (a `let`-bound `fn` called more than
+ * once and/or from a non-tail position -- this falls out for free from
+ * ordinary JS function-expression closure semantics, no separate closure
+ * value representation needed), strings, vector/map/set literals,
+ * booleans/keywords, the seq ops `get`/`nth`/`count`/`conj`/`nil?`,
+ * `assoc`/`update` on maps, and the `when`/`cond`/`->` macros), not
+ * ClojureScript. The host side of this DDC pair
  * (`cljs.js` via `core/evaluate`) runs `eval-str` with `:context :expr`,
  * which only accepts a single top-level expression, so this backend does
  * not implement `defn` or other multi-form/top-level-definition source —
@@ -180,6 +183,99 @@ function emitFn(args, env) {
   return `(function ${jsFnName}(${jsParams.join(", ")}) { return (${returnCode}); })`;
 }
 
+// Emits `form` as the TAIL position of a `loop` body into `stmts` (an
+// array of JS statement-text lines, appended in place -- matching/nesting
+// braces textually is enough since everything is joined back into one JS
+// source string). Returns a JS expression-text string when the tail form
+// is an ordinary value (caller should wrap it in `return (...)`), or
+// `null` when the tail form was a `recur` (or an `if`/`do` whose own tail
+// resolved to one) -- those cases already pushed their own `continue;`/
+// `return` statements into `stmts`, so the caller must NOT also emit a
+// return for them.
+//
+// `recur` is only recognized here, in `loop`'s own tail position (and
+// recursively inside `if`/`do` nested in that tail position) -- unlike
+// real ClojureScript, a bare `recur` inside a plain `fn` (self-recursion
+// without an explicit `loop`) is NOT supported here; ordinary recursive
+// self-calls (already covered by this backend's named-`fn` fixtures) are
+// the way to do that instead. Narrower than real ClojureScript, but no
+// fixture needs the bare-fn case, and it keeps `emitFn` untouched.
+function emitTailForm(form, env, recurCtx, stmts) {
+  if (form.kind === "list" && form.items[0] && form.items[0].kind === "sym") {
+    const headName = form.items[0].name;
+    if (headName === "recur") {
+      const recurArgs = form.items.slice(1);
+      if (recurArgs.length !== recurCtx.jsNames.length) {
+        throw new SyntaxError("tiny analyzer: recur arity");
+      }
+      // Compute every new value from the OLD bindings into fresh temps
+      // FIRST, then reassign all of them -- matching Clojure's own
+      // "recur rebinds simultaneously, not sequentially" semantics (a
+      // `(recur b a)`-style swap must see the pre-recur values of both).
+      const argCodes = recurArgs.map((a) => emitExpr(a, env));
+      const temps = argCodes.map((code) => {
+        const t = freshName("recur_tmp");
+        stmts.push(`let ${t} = ${code};`);
+        return t;
+      });
+      recurCtx.jsNames.forEach((jsName, idx) => stmts.push(`${jsName} = ${temps[idx]};`));
+      stmts.push("continue;");
+      return null;
+    }
+    if (headName === "if") {
+      const ifArgs = form.items.slice(1);
+      if (ifArgs.length !== 3) throw new SyntaxError("tiny analyzer: if arity");
+      const [test, then, els] = ifArgs;
+      const testCode = emitExpr(test, env);
+      stmts.push(`if (${testCode} !== false && ${testCode} !== null) {`);
+      const thenVal = emitTailForm(then, env, recurCtx, stmts);
+      if (thenVal !== null) stmts.push(`return (${thenVal});`);
+      stmts.push(`} else {`);
+      const elseVal = emitTailForm(els, env, recurCtx, stmts);
+      if (elseVal !== null) stmts.push(`return (${elseVal});`);
+      stmts.push(`}`);
+      return null;
+    }
+    if (headName === "do") {
+      const doArgs = form.items.slice(1);
+      if (doArgs.length === 0) throw new SyntaxError("tiny analyzer: do arity");
+      for (const f of doArgs.slice(0, -1)) stmts.push(`${emitExpr(f, env)};`);
+      return emitTailForm(doArgs[doArgs.length - 1], env, recurCtx, stmts);
+    }
+  }
+  return emitExpr(form, env);
+}
+
+function emitLoop(args, env) {
+  if (args.length < 2) throw new SyntaxError("tiny analyzer: loop arity");
+  const [bindingsForm, ...body] = args;
+  if (bindingsForm.kind !== "vector" || bindingsForm.items.length % 2 !== 0) {
+    throw new SyntaxError("tiny analyzer: malformed loop bindings");
+  }
+  const innerEnv = new Map(env);
+  const initDecls = [];
+  const jsNames = [];
+  for (let i = 0; i < bindingsForm.items.length; i += 2) {
+    const nameForm = bindingsForm.items[i];
+    if (nameForm.kind !== "sym") throw new SyntaxError("tiny analyzer: loop binding name must be a symbol");
+    const initForm = bindingsForm.items[i + 1];
+    const initCode = emitExpr(initForm, innerEnv);
+    const jsName = freshName(nameForm.name);
+    initDecls.push(`let ${jsName} = ${initCode};`);
+    innerEnv.set(nameForm.name, jsName);
+    jsNames.push(jsName);
+  }
+  const recurCtx = { jsNames };
+  const stmts = [];
+  for (const f of body.slice(0, -1)) {
+    stmts.push(`${emitExpr(f, innerEnv)};`);
+  }
+  const lastForm = body[body.length - 1];
+  const tailVal = emitTailForm(lastForm, innerEnv, recurCtx, stmts);
+  if (tailVal !== null) stmts.push(`return (${tailVal});`);
+  return `(function(){ ${initDecls.join(" ")} while (true) { ${stmts.join(" ")} } })()`;
+}
+
 function emitExpr(form, env) {
   switch (form.kind) {
     case "num":
@@ -264,6 +360,12 @@ function emitExpr(form, env) {
         const bodyCode = body.map((f) => emitExpr(f, innerEnv));
         const returnCode = bodyCode[bodyCode.length - 1];
         return `(function(){ ${decls.join(" ")} return (${returnCode}); })()`;
+      }
+      if (head.name === "loop") {
+        return emitLoop(args, env);
+      }
+      if (head.name === "recur") {
+        throw new SyntaxError("tiny analyzer: recur outside loop tail position");
       }
       if (Object.prototype.hasOwnProperty.call(BINOPS, head.name)) {
         if (args.length !== 2) throw new SyntaxError("tiny analyzer: binary op arity");

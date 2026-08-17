@@ -97,13 +97,47 @@ JS 배열을 내기 때문이다.
 
 **이것으로 닫히는 것과 아직 아닌 것:** 작은 fixture 세트에 대한 진짜 2-way
 행동 비교(self-hosted cljs.js-backed 컴파일러 ≡ 독립 from-scratch mini
-backend)이며, 계획만 문서화된 것이 아니다. 여전히 34 fixtures일 뿐 conformance
-표면이 아니며 — clj-meta·hy-meta가 이미 합의한 동일 정직한 기준 — behavior
-equivalence이지 bit-identical JS 텍스트가 아니다(동일 언어를 목표로 한 두 독립
-작성 emitter가 동일 소스를 내리라 기대하지 않음). **다음 구체 단계:**
-`when-let`/`if-let`, `str`, 더 많은 seq ops 등 매크로 확대 계속, clj-meta의
-~50-fixture `frontend_selfhost.clj` 범위에 접근 — 작고 선택적·가산적
-increment이며 하드 바가 아니다.
+backend)이며, 계획만 문서화된 것이 아니다. (34→41 fixture, 2026-08-18 —
+`loop`/`recur`와 클로저 추가, 아래 참조.) conformance 표면이 아니며 —
+clj-meta·hy-meta가 이미 합의한 동일 정직한 기준 — behavior equivalence이지
+bit-identical JS 텍스트가 아니다(동일 언어를 목표로 한 두 독립 작성 emitter가
+동일 소스를 내리라 기대하지 않음).
+
+**`loop`/`recur` + 진짜 클로저 추가, 2026-08-18:** clj-meta/clr-meta/rs-meta/
+hy-meta가 이번 세션에 거친 "let → loop/recur → closure" 축의 대응물, 사용자가
+"yes"로 cljs-meta 차례를 확인. 이 backend는 이미 `let`(중첩 벡터
+구조분해까지), `do`, named `fn` 재귀를 갖추고 있어서 다른 host들처럼
+blank slate가 아니었음 — 남은 진짜 격차는 `loop`/`recur`뿐이었고, 클로저는
+**코드 변경 없이 이미 동작함을 먼저 실제로 테스트해서 확인**(가정 아님) —
+JS 함수 표현식이 자기를 둘러싼 스코프를 자연스럽게 참조 캡처하고, 기존
+`env.has(head.name)` 일반 호출 dispatch가 `let`으로 묶인 이름이든 top-level
+바인딩이든 구분 안 해서 그냥 호출됨(hy-meta의 `ast.Lambda` 발견과 같은
+성질).
+
+**`loop`/`recur` 설계**: `cljs.js`의 `eval-str :context :expr` 제약(단일
+top-level 식만) 안에서 표현되어야 하므로 `loop`는 IIFE `while(true){...}`로
+컴파일. 새 `emitTailForm` 헬퍼가 loop 본문의 **tail 위치**만 특별
+취급 — `recur`를 만나면 모든 새 값을 OLD 바인딩으로부터 임시 변수에 먼저
+계산한 뒤(clr-meta/rs-meta에서 확립한 "동시 재바인딩, 순차 아님" 원칙과
+동일) 그제서야 실제 loop 변수에 재대입하고 `continue`; `if`/`do`가 tail
+위치에 나타나면 재귀적으로 그 안쪽까지 tail-aware하게 처리(각 분기가
+독자적으로 `recur` 하거나 값을 `return`). **의도적으로 좁힌 경계**: 문서화된
+tail-position 재귀는 `if`/`do` 안까지만(실제 Clojure는 `let`/`when`/`cond` 등
+더 넓게 허용) — 필요한 fixture가 없어서 미확장. 또한 bare `fn`(명시적
+`loop` 없이) 안의 `recur`도 미지원 — 이미 named-fn 자기재귀로 커버되는
+경로라 별도 메커니즘 불필요 판단.
+
+새 fixture 7개(34→41): 합산 loop, factorial loop, 동시 재바인딩을 검증하는
+swap 케이스(`(loop [a 1 b 2 n 3] (if (= n 0) a (recur b a (- n 1))))`,
+순차 구현이었다면 다른 값이 나왔을 것 — 실제로 2로 검증됨), 여러 번 호출되는
+클로저, non-tail 호출, 2-파라미터, 클로저를 캡처하는 클로저. fixture 추가
+전 mini backend 단독 실행 + 실제 `dist/cljs-meta-module.js`(self-hosted
+컴파일러) 대비 둘 다 확인(가정 아님). 회귀 없음: `cljs-meta-gate` 전체
+41/41 PASS(self-host matrix, fixed-point runtime 포함).
+
+**다음 구체 단계:** `when-let`/`if-let`, `str`, 더 많은 seq ops 등 매크로
+확대 계속, clj-meta의 ~50-fixture `frontend_selfhost.clj` 범위에 접근 —
+작고 선택적·가산적 increment이며 하드 바가 아니다.
 
 Node.js, Google Closure runtime, `cljs.core` 자체는 이 closed 이후에도 공유
 trust-root substrate로 남는다 — 컴파일러 수준 DDC는 그 하위 층을 건드리지

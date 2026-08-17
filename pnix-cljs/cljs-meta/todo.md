@@ -127,6 +127,24 @@ fibonacci). `test/independent_mini_backend_test.js`에 연결
       여전히 열림, 자연스러운 다음 widening 타겟.
 - [ ] 각 widening 패스 후 STATUS.md "Trusting-Trust defense roadmap" 정직
       문구(fixture 수, 범위 주의) 재실행 — 문서가 실제 커버를 앞서지 않게.
+- [x] `loop`/`recur` (2026-08-18) — clj-meta/clr-meta/rs-meta/hy-meta의
+      let→loop/recur→closure 축 대응물. `cljs.js`의 `:context :expr` 제약
+      때문에 `loop`는 IIFE `while(true){}`로 컴파일; 새 `emitTailForm`
+      헬퍼가 loop 본문의 tail 위치(및 그 안의 `if`/`do`)에서만 `recur`를
+      인식 — `recur`는 OLD 바인딩으로부터 모든 새 값을 임시 변수에 먼저
+      계산한 뒤에야 재대입(동시 재바인딩, 순차 아님 — swap fixture로
+      실증). bare `fn`(loop 없이) 안의 `recur`는 미지원(named-fn 자기재귀로
+      이미 커버), tail 재귀는 `if`/`do`까지만(`let`/`when`/`cond` 안 tail
+      위치는 미확장, fixture 불필요).
+- [x] 진짜 클로저 (같은 날) — **코드 변경 없이 이미 동작함을 실제 테스트로
+      확인**(가정 아님): JS 함수 표현식이 자연스럽게 참조 캡처하고, 기존
+      `env.has(head.name)` 호출 dispatch가 이름 출신을 구분 안 해서
+      `let`-바인딩된 `fn`이 여러 번/non-tail 위치에서도 그냥 호출됨.
+      여러 번 호출, non-tail, 2-파라미터, 클로저-캡처-클로저까지 fixture로
+      실증.
+      fixture 7개 추가(34→41), mini backend 단독 + 실제
+      `dist/cljs-meta-module.js` 대비 둘 다 확인. 회귀 없음:
+      `cljs-meta-gate` 전체 41/41 PASS. 상세는 `STATUS.md` 참조.
 
 ---
 

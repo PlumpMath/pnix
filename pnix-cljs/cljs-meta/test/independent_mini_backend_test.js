@@ -44,6 +44,16 @@ const FIXTURES = [
   ["(cond false 1 true 2 :else 3)", 2],
   ["(cond false 1 false 2 :else 99)", 99],
   ["(-> 1 (+ 2) (* 3))", 9],
+  ["(loop [i 0 acc 0] (if (< i 10) (recur (+ i 1) (+ acc i)) acc))", 45],
+  ["(loop [i 5 acc 1] (if (<= i 1) acc (recur (- i 1) (* acc i))))", 120],
+  ["(loop [a 1 b 2 n 3] (if (= n 0) a (recur b a (- n 1))))", 2],
+  ["(let [square (fn [x] (* x x))] (+ (square 3) (square 4)))", 25],
+  ["(let [addA (fn [x] (+ x 5))] (- (addA 10) (addA 1)))", 9],
+  ["(let [addAB (fn [a b] (+ a b))] (addAB 14 (addAB 14 14)))", 42],
+  [
+    "(let [base (fn [x] (+ x 3)) scaled (fn [y] (* (base y) 2))] (+ (scaled 1) (scaled 2)))",
+    18,
+  ],
 ];
 
 (async () => {
