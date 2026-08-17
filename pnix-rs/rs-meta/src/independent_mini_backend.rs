@@ -98,6 +98,7 @@ fn tokenize(src: &str) -> Result<Vec<MiniTok>, String> {
             '+' => "+",
             '-' => "-",
             '*' => "*",
+            '%' => "%",
             '<' => "<",
             '>' => ">",
             '!' => "!",
@@ -116,6 +117,7 @@ enum MiniBinOp {
     Add,
     Sub,
     Mul,
+    Mod,
     Lt,
     Gt,
     Le,
@@ -149,6 +151,14 @@ enum MiniExpr {
     // `move` semantics for the Copy-like values (`i64`, `Rc`-shared
     // closures) this backend supports.
     Closure(Vec<String>, Box<MiniExpr>),
+    // `loop { ... break EXPR; ... }` -- an unconditional loop that only
+    // ever produces a value via `break`, matching real Rust's `loop`
+    // exactly (as opposed to `while`/`MiniStmt::While`, which is always
+    // unit-typed and never produces a value this backend represents). Body
+    // parsing is handled by the separate `parse_loop_body` (not the
+    // `parse_stmt_list` a regular block/`while` body uses), so `IfStmt`/
+    // `Break` can only ever appear here -- see those variants' doc comments.
+    Loop(Vec<MiniStmt>),
 }
 
 // A runtime value: either a plain `i64`, or a closure -- captured
@@ -201,6 +211,17 @@ enum MiniStmt {
     // backend only ever needs it for its mutation side effects (`Assign`
     // onto names declared outside the loop), never its own value.
     While(MiniExpr, Vec<MiniStmt>),
+    // `if COND { stmts }` with NO `else`, used purely for its `break` side
+    // effect -- ONLY ever parsed inside a `loop` body (see `parse_loop_body`),
+    // never inside a regular block's `parse_stmt_list`, so it can never be
+    // confused with `if`/`else` used as a value-producing tail expression
+    // (which stays exactly as before, parsed by `parse_atom`).
+    IfStmt(MiniExpr, Vec<MiniStmt>),
+    // `break EXPR;` -- only value-carrying form is supported (a bare
+    // `break;` would need a unit value this backend has no representation
+    // for; no fixture needs it, and writing one is a clear parse error, not
+    // a silent wrong answer).
+    Break(MiniExpr),
 }
 
 #[derive(Debug, Clone)]
@@ -313,6 +334,49 @@ impl MiniParser {
         Ok(out)
     }
 
+    // Statement list for a `loop { ... }` body specifically -- a strict
+    // superset of `parse_stmt_list` (also recognizes `if COND { .. }` with
+    // no `else`, and `break EXPR;`). Deliberately kept SEPARATE from
+    // `parse_stmt_list` rather than folding these two cases into it: every
+    // existing `fn` body / `if`-branch block is parsed via `parse_block` ->
+    // `parse_stmt_list` and relies on a bare `if`/`else` with NO following
+    // statement being left for the tail-expression parser to pick up
+    // (`parse_atom`). If `if` were also recognized as a statement-starter
+    // there, a tail-position `if/else` (which every branching fixture in
+    // this backend uses) would get wrongly consumed as a value-discarding
+    // statement first. Scoping the new cases to loop bodies (which never
+    // have a following tail expression to compete with) sidesteps that
+    // ambiguity entirely, at the cost of `if`-without-`else`/`break` not
+    // being usable inside a plain `fn` body or `while` body directly (no
+    // fixture needs that; only inside a `loop`).
+    fn parse_loop_body(&mut self) -> Result<Vec<MiniStmt>, String> {
+        let mut out = Vec::new();
+        loop {
+            if self.is_ident("let") {
+                out.push(self.parse_let_stmt()?);
+            } else if self.is_ident("while") {
+                out.push(self.parse_while_stmt()?);
+            } else if self.is_ident("if") {
+                self.next()?; // "if"
+                let cond = self.parse_expr()?;
+                self.expect_punct("{")?;
+                let body = self.parse_loop_body()?;
+                self.expect_punct("}")?;
+                out.push(MiniStmt::IfStmt(cond, body));
+            } else if self.is_ident("break") {
+                self.next()?; // "break"
+                let value = self.parse_expr()?;
+                self.expect_punct(";")?;
+                out.push(MiniStmt::Break(value));
+            } else if self.is_assign_stmt() {
+                out.push(self.parse_assign_stmt()?);
+            } else {
+                break;
+            }
+        }
+        Ok(out)
+    }
+
     fn parse_let_stmt(&mut self) -> Result<MiniStmt, String> {
         self.next()?; // "let"
         if self.is_ident("mut") {
@@ -387,12 +451,21 @@ impl MiniParser {
 
     fn parse_mul(&mut self) -> Result<MiniExpr, String> {
         let mut lhs = self.parse_atom()?;
-        while self.is_punct("*") {
-            self.next()?;
-            let rhs = self.parse_atom()?;
-            lhs = MiniExpr::Bin(MiniBinOp::Mul, Box::new(lhs), Box::new(rhs));
+        loop {
+            let op = match self.peek() {
+                Some(MiniTok::Punct("*")) => Some(MiniBinOp::Mul),
+                Some(MiniTok::Punct("%")) => Some(MiniBinOp::Mod),
+                _ => None,
+            };
+            match op {
+                Some(op) => {
+                    self.next()?;
+                    let rhs = self.parse_atom()?;
+                    lhs = MiniExpr::Bin(op, Box::new(lhs), Box::new(rhs));
+                }
+                None => return Ok(lhs),
+            }
         }
-        Ok(lhs)
     }
 
     fn parse_atom(&mut self) -> Result<MiniExpr, String> {
@@ -414,6 +487,13 @@ impl MiniParser {
             self.expect_ident()?; // "else"
             let else_b = self.parse_block()?;
             return Ok(MiniExpr::If(Box::new(cond), Box::new(then_b), Box::new(else_b)));
+        }
+        if self.is_ident("loop") {
+            self.next()?;
+            self.expect_punct("{")?;
+            let body = self.parse_loop_body()?;
+            self.expect_punct("}")?;
+            return Ok(MiniExpr::Loop(body));
         }
         if self.is_ident("move") {
             self.next()?; // parsed and ignored, see MiniExpr::Closure's doc comment
@@ -495,11 +575,20 @@ fn parse_mini_program(src: &str) -> Result<(Vec<FnDef>, MiniExpr), String> {
     Ok((fns, main_expr))
 }
 
+// `Ok(None)` = ran every statement to completion normally. `Ok(Some(v))` =
+// a `break v` fired and unwound out of this statement list -- the caller
+// (either an enclosing `IfStmt`/`While`, which both just propagate it
+// further up, or the `MiniExpr::Loop` that owns the innermost loop, which
+// is the one that actually catches it and turns it into a value) decides
+// what to do next. This is this backend's whole non-local-control-flow
+// mechanism -- deliberately just an `Option` riding along the `Result`,
+// not a general exception/signal type, since `break` is the only such
+// construct this backend supports (no `continue`, no `return`).
 fn exec_stmts(
     stmts: &[MiniStmt],
     env: &mut HashMap<String, MiniVal>,
     fns: &HashMap<String, FnDef>,
-) -> Result<(), String> {
+) -> Result<Option<MiniVal>, String> {
     for stmt in stmts {
         match stmt {
             MiniStmt::Let(name, init) => {
@@ -515,12 +604,30 @@ fn exec_stmts(
             }
             MiniStmt::While(cond, body) => {
                 while expect_int(eval_expr(cond, env, fns)?, "while condition")? != 0 {
-                    exec_stmts(body, env, fns)?;
+                    // A `break` inside a `while` body stops that `while`
+                    // (innermost-loop rule) -- `while`'s own body is
+                    // parsed via `parse_stmt_list`, which never emits
+                    // `Break`, so this is unreachable today but kept
+                    // correct rather than silently assuming it can't
+                    // happen.
+                    if exec_stmts(body, env, fns)?.is_some() {
+                        break;
+                    }
                 }
+            }
+            MiniStmt::IfStmt(cond, body) => {
+                if expect_int(eval_expr(cond, env, fns)?, "if-statement condition")? != 0 {
+                    if let Some(v) = exec_stmts(body, env, fns)? {
+                        return Ok(Some(v));
+                    }
+                }
+            }
+            MiniStmt::Break(value) => {
+                return Ok(Some(eval_expr(value, env, fns)?));
             }
         }
     }
-    Ok(())
+    Ok(None)
 }
 
 fn eval_block(
@@ -528,7 +635,13 @@ fn eval_block(
     env: &mut HashMap<String, MiniVal>,
     fns: &HashMap<String, FnDef>,
 ) -> Result<MiniVal, String> {
-    exec_stmts(&block.stmts, env, fns)?;
+    // `block.stmts` is always parsed via `parse_stmt_list`, which never
+    // emits `IfStmt`/`Break`, so `exec_stmts` can never actually return
+    // `Some` here -- a defensive error rather than silently discarding a
+    // break value if that invariant is ever broken.
+    if exec_stmts(&block.stmts, env, fns)?.is_some() {
+        return Err("tiny interp: break outside loop".to_string());
+    }
     eval_expr(&block.tail, env, fns)
 }
 
@@ -556,6 +669,9 @@ fn eval_expr(
                 MiniBinOp::Mul => lv
                     .checked_mul(rv)
                     .ok_or("tiny interp: overflow in *")?,
+                MiniBinOp::Mod => lv
+                    .checked_rem(rv)
+                    .ok_or("tiny interp: overflow or div-by-zero in %")?,
                 MiniBinOp::Lt => (lv < rv) as i64,
                 MiniBinOp::Gt => (lv > rv) as i64,
                 MiniBinOp::Le => (lv <= rv) as i64,
@@ -575,6 +691,13 @@ fn eval_expr(
             body: (**body).clone(),
             env: env.clone(),
         }))),
+        MiniExpr::Loop(body) => loop {
+            if let Some(v) = exec_stmts(body, env, fns)? {
+                return Ok(v);
+            }
+            // Body ran to completion without a `break`: real Rust's `loop`
+            // unconditionally repeats, so run it again.
+        },
         MiniExpr::Call(name, args) => {
             if let Some(MiniVal::Closure(closure)) = env.get(name) {
                 let closure = closure.clone();

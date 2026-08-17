@@ -141,10 +141,27 @@ non-goal) remain open, and neither is actionable from this machine.
     없이 fixture로 실증. 여러 번 호출, non-tail 호출, let-바인딩/파라미터
     캡처, 2-파라미터, fn을 가리는 클로저, 클로저-캡처-클로저까지 6개 fixture
     추가.
-  - 검증: 세 단계 각각 `self-check` 408/408, `tv-check` 408/408 재실행(
+  - **`loop`+`break` 지원 (27→31), 같은 날:** clj-meta/clr-meta의
+    `loop`/`recur` 대응물. `while`은 항상 unit이라 값을 못 만드는 반면 실제
+    Rust의 `loop { ... break EXPR; ... }`는 표현식 — 새 `MiniExpr::
+    Loop(Vec<MiniStmt>)`, `MiniStmt::Break(EXPR)`, else 없는 `if COND { .. }`를
+    statement로 쓰는 `MiniStmt::IfStmt` 추가. **이 둘은 기존 `parse_stmt_list`가
+    아니라 완전히 새 `parse_loop_body`에서만 인식** — `parse_stmt_list`(모든
+    fn 본문/if-분기가 쓰는 것)에 `if`를 statement-starter로 같이 넣으면
+    tail 위치의 `if`/`else`(값 만드는 표현식, 기존 21개+ fixture가 다 씀)와
+    충돌해서 파싱이 깨짐; `loop` 본문은 애초에 tail expression이 필요 없어서
+    새 case를 거기에만 한정하면 충돌이 없음(대신 `if`-무-`else`/`break`는
+    `loop` 본문 안에서만 쓸 수 있음 — 어떤 fixture도 그 이상 필요 없음).
+    `exec_stmts` 반환 타입을 `Result<(), String>`→`Result<Option<MiniVal>,
+    String>`로 바꿔 break 신호 전파(`None`=정상 종료, `Some(v)`=break 중);
+    `IfStmt`/`While`은 전파(또는 while은 자기 반복만 멈춤), `MiniExpr::Loop`가
+    실제로 잡아서 값으로 삼거나 `None`이면 무조건 재반복(진짜 Rust `loop`처럼).
+    부수적으로 `%`(modulo) 추가. 합산 loop, tail 위치 loop, 중첩
+    if-무-else+break, loop 안 while 중첩 4개 fixture 추가.
+  - 검증: 네 단계 각각 `self-check` 408/408, `tv-check` 408/408 재실행(
     `independent_mini_backend.rs` 자체가 rs-meta 자기호스팅 corpus 일부라
     self-check가 이 파일의 파싱/타입체크도 검증), `independent-mini-backend-
-    check` 27/27 전부 실제 `rustc` 대비. 회귀 없음. 상세는 `STATUS.md`
+    check` 31/31 전부 실제 `rustc` 대비. 회귀 없음. 상세는 `STATUS.md`
     "Trusting-Trust defense roadmap" 참조.
 - **What "done" looks like (여전히 aspirational, hard bar 아님):** widen
   toward (not necessarily matching 1:1) the 407-case main corpus. `!=`,

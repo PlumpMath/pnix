@@ -2921,6 +2921,26 @@ fn independent_mini_backend_fixtures() -> Vec<(&'static str, &'static str, &'sta
             "fn f(n: i64) -> i64 { let base = move |x: i64| x + n; let scaled = move |y: i64| base(y) * 2; scaled(1) + scaled(2) } fn main() { println!(\"{}\", f(3)); }",
             "18",
         ),
+        (
+            "mini-loop-break-sum",
+            "fn sum_via_loop(n: i64) -> i64 { let mut i = 0; let mut acc = 0; let result = loop { if i >= n { break acc; } acc = acc + i; i = i + 1; }; result } fn main() { println!(\"{}\", sum_via_loop(10)); }",
+            "45",
+        ),
+        (
+            "mini-loop-tail-position",
+            "fn first_square_ge(n: i64) -> i64 { let mut i = 0; loop { if i * i >= n { break i; } i = i + 1; } } fn main() { println!(\"{}\", first_square_ge(50)); }",
+            "8",
+        ),
+        (
+            "mini-loop-nested-if",
+            "fn f(n: i64) -> i64 { let mut i = 0; loop { if i > n { if i % 2 == 0 { break i; } } i = i + 1; } } fn main() { println!(\"{}\", f(8)); }",
+            "10",
+        ),
+        (
+            "mini-loop-with-inner-while",
+            "fn f(n: i64) -> i64 { let mut total = 0; let count = loop { let mut j = 0; let mut inner_sum = 0; while j < n { inner_sum = inner_sum + j; j = j + 1; } total = total + inner_sum; if total > 20 { break total; } }; count } fn main() { println!(\"{}\", f(4)); }",
+            "24",
+        ),
     ]
 }
 

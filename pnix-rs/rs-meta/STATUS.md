@@ -373,6 +373,42 @@ let-바인딩/파라미터 캡처, 2-파라미터 클로저, top-level fn을 가
 클로저를 `let` 아닌 top-level `fn` 인자로 넘기는 형태(고차 함수)는 아직
 미시도 — 다음 자연스러운 확장 후보.
 
+**4단계 (`loop`+`break`), 같은 날:** clj-meta/clr-meta의 `loop`/`recur`
+대응물. `while`은 항상 unit이라 값을 못 만드는 반면, 실제 Rust의 `loop { ...
+break EXPR; ... }`는 **표현식**이고 `break`로만 값을 만들어냄 — `MiniExpr::
+Loop(Vec<MiniStmt>)`로 추가. `break`/조건부 종료를 표현하려면 새 `MiniStmt::
+Break(EXPR)`과, else 없는 `if COND { .. }`를 문(statement)으로 쓰는 새
+`MiniStmt::IfStmt` 필요.
+
+**의도적으로 분리한 파서 함수**: 이 둘(`IfStmt`/`Break`)은 기존
+`parse_stmt_list`(모든 `fn` 본문/`if`-분기 block이 쓰는 것)가 아니라 완전히
+새로운 `parse_loop_body`에서만 인식되게 함 — `parse_stmt_list`가 `if`를
+statement-starter로도 인식하게 만들면, 기존 21개 이상 fixture가 전부 쓰는
+"tail 위치의 `if`/`else`"(값을 만드는 표현식)와 충돌함: greedy하게 `if`를
+문으로 먼저 소비해버리면 `else`가 남아서 파싱이 깨짐. `loop`의 본문은 애초에
+tail expression이 필요 없는 순수 문장 시퀀스라서, 새 case를 거기에만 한정하면
+이 충돌이 아예 안 생김 — 대신 `if`-무-`else`/`break`는 `loop` 본문 안에서만
+쓸 수 있고 일반 `fn`/`while` 본문에 직접 못 씀(어떤 fixture도 필요 없음).
+
+**break 신호 전파**: `exec_stmts`의 반환 타입을 `Result<(), String>`에서
+`Result<Option<MiniVal>, String>`로 바꿔 — `None`은 "끝까지 정상 실행",
+`Some(v)`는 "break v가 일어나 unwind 중"이라는 뜻. `IfStmt`/`While`은 안쪽
+`exec_stmts` 호출이 `Some`을 반환하면 그대로 위로 전파(또는 `while`은 자기
+반복을 멈춤 — "innermost loop" 규칙); `MiniExpr::Loop`가 실제로 `Some(v)`를
+잡아서 `v` 자체를 loop 표현식의 값으로 삼고, `None`이면(break 없이 본문이
+끝까지 실행됨) 실제 Rust의 `loop`처럼 무조건 다시 반복. 예외/시그널 타입을
+새로 만들지 않고 `Option`을 `Result` 옆에 태우는 것으로 충분 — `break`가
+유일한 non-local 제어 흐름이라(`continue`/`return` 없음) 이 정도로 충분.
+
+부수적으로 `%`(modulo, `checked_rem`)도 추가 — nested-if fixture에서
+even/odd 판정에 필요해서 겸사겸사 추가한 작은 opcode. 합산 loop, tail 위치
+loop, 중첩 if-무-else+break(짝수일 때만 탈출), loop 안에 while 중첩 4개
+fixture 추가(27→31), 전부 실제 `rustc` 대비 검증. 회귀 없음: `self-check`
+408/408, `tv-check` 408/408.
+
+**다음 후보:** `!=`, 문자열/불리언 처리, 클로저를 top-level fn 인자로 넘기는
+고차 함수 형태는 여전히 열려 있음.
+
 ## Primary gate
 
 ```sh
@@ -388,5 +424,5 @@ let-바인딩/파라미터 캡처, 2-파라미터 클로저, top-level fn을 가
 |---|---|---|
 | `self-check` | **PASS** 408/408 | cargo 1.97.1 / rustc 1.97.1 |
 | `tv-check` | **PASS** 408/408 | |
-| `independent-mini-backend-check` | **PASS** 27/27 | 13→17 (`let`) →21 (`while`/assignment) →27 (closures), this session |
+| `independent-mini-backend-check` | **PASS** 31/31 | 13→17 (`let`) →21 (`while`/assignment) →27 (closures) →31 (`loop`/`break`), this session |
 | full `bootstrap check` | not default primary | longer; includes stage matrix |
