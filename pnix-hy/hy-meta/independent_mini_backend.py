@@ -12,8 +12,9 @@ remain trusted substrate for clj-meta's analogous `frontend_selfhost.clj`.
 It is a frontier witness, not a replacement for the production frontend: it
 covers a bounded fixture set (arithmetic, comparisons, `if`, `defn`,
 recursion, calling between top-level `defn`s, boolean/`None` literals,
-string/list/dict literals (dict keys are string literals only), and
-`setv`/`while` mutation), not the Hy language.
+string/list/dict literals (dict keys are string literals only),
+`setv`/`while` mutation, and genuine closures via `fn` (single-expression
+body only)), not the Hy language.
 """
 
 from __future__ import annotations
@@ -163,6 +164,43 @@ def _emit_expr(form: Any) -> ast.expr:
                 test=_emit_expr(test_f),
                 body=_emit_expr(then_f),
                 orelse=_emit_expr(else_f),
+            )
+        if _is_sym(head, "fn"):
+            # `(fn [params...] EXPR)` -- a genuine closure, single-expression
+            # body only (real Hy's `fn` also accepts multiple body forms
+            # with setv/while like `defn`, but that needs a statement-
+            # capable function value, which Python's `ast.Lambda` can't
+            # express; no fixture needs it, so it's not attempted here).
+            # Compiles straight to `ast.Lambda`, which gets Python's own
+            # closure semantics (capture-by-reference to the enclosing
+            # scope, late-binding) for free -- no env bookkeeping needed on
+            # this backend's side, unlike the clr-meta/rs-meta hosts' mini
+            # backends, which had to build their own closure value
+            # representation from scratch. Calling a closure-bound name is
+            # ALSO already handled by the existing bare `_is_sym(head)` ->
+            # `ast.Call` case below: Python's own name resolution doesn't
+            # care whether a name is bound to a `def`-made function or a
+            # lambda, so no separate dispatch is needed the way the other
+            # hosts' mini backends required.
+            if len(args) != 2:
+                raise SyntaxError(
+                    "tiny analyzer: fn (closure) needs exactly [params] and one body expression"
+                )
+            params_f, body_f = args
+            if not isinstance(params_f, list):
+                raise SyntaxError("tiny analyzer: fn params must be a vector")
+            params = [_sym_name(p) for p in params_f]
+            return ast.Lambda(
+                args=ast.arguments(
+                    posonlyargs=[],
+                    args=[ast.arg(arg=p) for p in params],
+                    vararg=None,
+                    kwonlyargs=[],
+                    kw_defaults=[],
+                    kwarg=None,
+                    defaults=[],
+                ),
+                body=_emit_expr(body_f),
             )
         if _is_sym(head) and _sym_name(head) in _BINOPS:
             if len(args) != 2:

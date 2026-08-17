@@ -1677,6 +1677,44 @@ def independent_mini_backend_fixtures() -> list[dict[str, Any]]:
             "source": "(defn double [x] (* x 2)) (defn quad [x] (double (double x))) (quad 5)",
             "expected": 20,
         },
+        {
+            "id": "mini-closure-multi-call",
+            "source": (
+                "(defn f [n] (setv square (fn [x] (* x x))) "
+                "(+ (square n) (square (+ n 1)))) (f 3)"
+            ),
+            "expected": 25,
+        },
+        {
+            "id": "mini-closure-capture-non-tail",
+            "source": (
+                "(defn f [a b] (setv addA (fn [x] (+ x a))) "
+                "(- (addA b) (addA 1))) (f 5 10)"
+            ),
+            "expected": 9,
+        },
+        {
+            "id": "mini-closure-two-params",
+            "source": "(defn f [n] (setv add (fn [a b] (+ a b))) (add n (add n n))) (f 14)",
+            "expected": 42,
+        },
+        {
+            "id": "mini-closure-captures-closure",
+            "source": (
+                "(defn f [n] (setv base (fn [x] (+ x n))) "
+                "(setv scaled (fn [y] (* (base y) 2))) "
+                "(+ (scaled 1) (scaled 2))) (f 3)"
+            ),
+            "expected": 18,
+        },
+        {
+            "id": "mini-closure-passed-as-arg",
+            "source": (
+                "(defn applyTwice [f x] (f (f x))) "
+                "(defn g [n] (setv addOne (fn [y] (+ y 1))) (applyTwice addOne n)) (g 5)"
+            ),
+            "expected": 7,
+        },
     ]
 
 

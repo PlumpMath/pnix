@@ -121,6 +121,24 @@ listed here; see the detailed sections below for the full history.
    architecture change needed, the 3-way plumbing already exists and each new
    fixture automatically gets checked on all three legs.
 
+   **진짜 클로저 추가, 같은 축의 마지막 단계 (2026-08-17):** clj-meta/
+   clr-meta/rs-meta의 let→loop/recur→closure 진행의 대응물. `(fn [params]
+   EXPR)`를 `ast.Lambda`로 컴파일 — Python 자체 클로저 의미론(참조 캡처,
+   late-binding)을 공짜로 얻어서 다른 host들과 달리 별도 클로저 값 표현이나
+   env 자료구조가 전혀 불필요. 클로저 이름 호출도 기존 `_is_sym(head)` →
+   `ast.Call` fallback이 그대로 처리(Python은 이름이 `def` 함수인지 lambda인지
+   구분 안 함). 클로저를 다른 `defn`의 인자로 넘기는 고차 함수도 코드 변경
+   없이 그냥 동작(rs-meta는 파서만 확장하면 됐는데, hy-meta는 타입 어노테이션
+   자체가 없어서 파서조차 안 건드림). **의도적으로 좁힌 경계**: `fn`은 단일
+   식 본문만(실제 Hy `fn`은 여러 body form도 허용하지만 `ast.Lambda`가
+   statement를 못 담아서 미지원, 어떤 fixture도 필요 없음). 여러 번 호출,
+   non-tail, 2-파라미터, 클로저-캡처-클로저, 고차 함수까지 5개 fixture
+   추가(14→19), 전부 실제 upstream Hy + kernel_direct(`stage2/kernel.hy`가
+   자체 `compile-fn-expr`로 이미 `fn` 지원) + mini backend 3-way 일치 확인.
+   회귀 없음: `self-check`/`stage7-check` 둘 다 PASS. 상세는 `STATUS.md`
+   참조. 이걸로 hy-meta도 다른 host들이 이번 세션에 거친 축을 따라잡음 —
+   남은 후보(macro, keyword dict, 더 많은 seq ops)는 위 "Still open"과 동일.
+
 6. **Stage8–StageN proof ladder — closed except 3 cross-repo-blocked Stage14
    items.** Verified: every stage8–stageN checklist item in this file is
    `[x]` except three `[~]` items under Stage14, all gated on a live Clojure

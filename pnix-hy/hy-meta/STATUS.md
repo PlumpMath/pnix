@@ -1,6 +1,6 @@
 # hy-meta 상태 (peer host-meta floor)
 
-최종 검증: 2026-08-07.
+최종 검증: 2026-08-17.
 
 ## Peer-floor 성명
 
@@ -161,6 +161,50 @@ call-form dispatch 앞 새 `_is_dict` 검사로 emit(`ast.Constant` string 키
 `diverse-double-compile-check` 여전히 `reproduced`, full `hy-meta-gate full`
 ladder 여전히 green — 회귀 없음.
 
+**진짜 클로저 추가, 2026-08-17:** clj-meta/clr-meta/rs-meta가 이 세션에
+거친 "let → loop/recur → closure" 축의 마지막 단계 대응물. 사용자가
+clr-meta·rs-meta를 clj-meta 수준으로 올린 뒤 hy-meta 차례로 명시적으로
+지목. 이 backend는 애초부터 `setv`/`while`로 지역 변수·반복문을 이미
+가지고 있었으므로(다른 host들과 달리 처음부터 blank slate가 아니었음),
+남은 자연스러운 격차는 클로저뿐이었음.
+
+Hy의 `(fn [params] EXPR)`(named `defn`과 별개인 anonymous 함수 리터럴)를
+`ast.Lambda`로 그대로 컴파일 — **다른 host들과 흥미롭게 다른 점**:
+clr-meta는 .NET `DynamicMethod`가 `TypeBuilder` 멤버를 못 봐서 완전히 새
+codegen 경로가 필요했고, rs-meta는 직접 `env: HashMap<String, MiniVal>`과
+클로저 값 타입을 처음부터 설계해야 했던 반면, hy-meta는 **Python 자체의
+클로저 의미론(둘러싼 스코프를 참조로 캡처, late-binding)을 `ast.Lambda`가
+공짜로 제공**해서 새 값 표현이나 별도 env 자료구조가 전혀 필요 없었음.
+클로저 이름 호출조차 기존 `_is_sym(head)` → `ast.Call` fallback이 그대로
+처리 — Python의 이름 해석 자체가 그 이름이 `def`로 만든 함수인지 lambda인지
+구분하지 않기 때문(rs-meta가 파라미터로 넘긴 클로저 호출에서 발견한 것과
+같은 성질 — "환경이 이미 클로저 값을 이름 종류 구분 없이 담고 있어서" 자연히
+동작). 그래서 **클로저를 다른 top-level `defn`의 인자로 넘기는 고차 함수
+형태도 코드 변경 없이 그냥 됐음**(rs-meta의 "고차함수는 파서만 확장하면
+됐다"는 발견보다 한 단계 더 나아가, hy-meta는 파서조차 안 건드려도 됐음 —
+Hy가 타입 어노테이션이 없는 동적 타입 언어라서).
+
+**의도적으로 좁힌 경계**: `fn`은 단일 식 본문만 지원(실제 Hy의 `fn`은
+`defn`처럼 여러 body form도 허용하지만, 그러려면 statement를 담을 수 있는
+함수 값이 필요한데 `ast.Lambda`는 표현식 하나만 담을 수 있어서 미지원 — 어떤
+fixture도 필요 없음).
+
+여러 번 호출, non-tail 호출, 2-파라미터, 클로저를 캡처하는 클로저, 클로저를
+다른 fn의 인자로 넘기는 고차 함수까지 5개 fixture 추가(14→19), 전부 실제
+upstream Hy + kernel_direct(`stage2/kernel.hy`, 자체 `compile-fn-expr`로
+`fn`을 이미 지원 — 컴파일러 소스가 커밋되기 전부터 검증) + mini backend
+3-way 일치 확인. 회귀 없음: `self-check`, `stage7-check` 둘 다 PASS(값 불변,
+kernel_factorial=120 등).
+
+**환경 참고**: 이번 세션엔 이 저장소에 예전 방식 `hy-1.3.0/` vendored
+snapshot이 없어서(레거시 관례, `hy-meta-gate` 스크립트가 기대하던 경로 —
+지금은 flake의 `nix build .#proofPython`으로 대체됨) 직접
+`python3.11 -m venv` + `pip install hy==1.3.1 funcparserlib` 조합으로
+proof Python을 새로 준비함(아래 "기본 게이트" 섹션 명령 그대로). `nix build
+.#proofPython`도 병행 시도해 성공은 했으나(store path
+`fn18gnw83nihv5cy71z08cyw5bkd3shf`) setuptools 자체 테스트까지 소스
+빌드하느라 pip 경로보다 훨씬 오래 걸림 — 급할 때는 pip venv가 더 실용적.
+
 **이 세션 수정: 누락 native-corpus 의존성.** fresh checkout/venv는 예전에
 `diverse-double-compile-check` 및 기타 native-corpus 의존 체크를
 `hy.errors.HyRequireError: No module named 'tests'`로 실패시킴(수정 없는
@@ -201,9 +245,10 @@ export HY_META_PYTHON=/tmp/pnix-hy-py311-venv/bin/python
 /tmp/pnix-hy-py311-venv/bin/python -m pip install pytest   # tests/resources/__init__.py needs it
 ```
 
-## 마지막 실행 (이 머신, 2026-08-07)
+## 마지막 실행 (이 머신, 2026-08-17)
 
 | Gate | Result | Notes |
 |---|---|---|
-| `hy-meta-gate primary` | **PASS** | Python 3.11.15 + hy 1.3.0 + funcparserlib |
+| `hy-meta-gate primary` (self-check + stage7-check) | **PASS** | Python 3.11.16 + hy 1.3.1 + funcparserlib (pip venv) |
+| `independent-mini-backend-check` | **PASS** 19/19 | 8→12→14 (이전 세션) →19 (클로저, 이번 세션) |
 | full ladder stage8–stagen | not default-run | available via bootstrap.py |
