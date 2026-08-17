@@ -1,6 +1,6 @@
 # rs-meta status (peer host-meta floor)
 
-Last verified: 2026-08-07.
+Last verified: 2026-08-17.
 
 ## Peer-floor statement
 
@@ -298,14 +298,49 @@ unaffected (no regressions), full `check` aggregate green.
 
 **What this closes and what it still doesn't:** a genuine 2-way behavioral
 comparison (real `rustc` ≡ from-scratch interpreter) now exists and passes,
-not just a documented plan. It is still only 9 fixtures against a *fresh*
-independent implementation — not the 407-case corpus, and (same honest bar
-every host settled on this session) an *interpreter*, not a second
+not just a documented plan. It is still only a bounded fixture set against a
+*fresh* independent implementation — not the 407-case corpus, and (same
+honest bar every host settled on this session) an *interpreter*, not a second
 *compiler*, so it does not by itself clear the full Wheeler bar the way a
-genuine mrustc-vs-rustc compiler comparison would. **Next concrete step:**
-widen the fixture set (loops, more arg arities, string/bool handling) toward
-the 407-case corpus, and keep the mrustc phased plan on file for whenever
-this runs on Linux.
+genuine mrustc-vs-rustc compiler comparison would. (Widened 9→13 in an
+earlier pass — nested `if`, double-recursive fibonacci, 3-/4-arg fns, no new
+backend features needed; see `todo.md` item 2.)
+
+**`let`/`while`/assignment 확장, 2026-08-17:** clj-meta/clr-meta의 U6/mini-backend
+witness가 이번 세션에 `let` → `loop`/`recur` → closure 순서로 크게 넓어진 것과
+균형을 맞추기 위해, 사용자가 "나머지 host들도 clojure만큼" 지시 후 clr-meta를
+먼저 끝내고 이제 rs-meta 차례로 명시적으로 지목. 지금까지 이 backend는
+`fn`/`if`/arithmetic/comparison/재귀 호출만 있었고 지역 변수(`let`)도, 반복문도
+없었음 — 매 fixture가 순수 재귀로만 루프를 표현해야 했음(예:
+`mini-recursive-factorial`).
+
+**1단계 (`let`):** `fn` 본문과 `if`/`else` 각 분기를 `MiniExpr`(단일 식) 대신
+새 `MiniBlock { stmts: Vec<MiniStmt>, tail: Box<MiniExpr> }`로 재설계 — 0개
+이상의 `let` 문 다음 필수 tail 식이라는, 실제 Rust 블록과 정확히 같은 모양.
+`MiniStmt::Let(name, init)`이 평가 시점에 (호출마다 새로 만드는) 평면
+`HashMap<String,i64>` env에 직접 저장. **의도적으로 얕은 스코프**: 진짜 Rust처럼
+블록이 끝나면 그 안에서 선언된 이름이 스코프 밖으로 나가는 게 아니라, 같은 함수
+호출의 평면 env에 계속 남음 — 이 차이에 의존하는 fixture는 하나도 안 씀(전부
+서로 다른 이름 사용)이라 문제 없지만, 코드 주석으로 정직하게 문서화. `mut`
+파라미터/바인딩 키워드도 파싱만 하고(실제 mutation은 다음 단계) 받아들이게 추가.
+sequential let, shadowing, if-분기 안의 let, mut 파라미터 4개 fixture 추가
+(13→17), 전부 실제 `rustc` 대비 검증.
+
+**2단계 (`while`+대입), 같은 날:** `let`이 만든 블록/문 인프라 위에 `MiniStmt::
+Assign(name, value)`(재대입)와 `MiniStmt::While(cond, Vec<MiniStmt>)`(본문은
+tail 없는 순수 문장 시퀀스 — 실제 Rust의 unit 타입 `while`과 동일하게, 이
+backend에선 mutation 부수효과로만 쓰이므로 자기 값이 필요 없음) 추가. 파서는
+`IDENT =`(2-token lookahead, `==`와는 별개 토큰이라 충돌 없음)로 대입문을 인식.
+합산 loop, factorial loop, mut 파라미터 loop, 중첩 while 4개 fixture 추가
+(17→21), 전부 실제 `rustc` 대비 검증. 회귀 없음: `self-check` 408/408,
+`tv-check` 408/408(두 단계 각각 재실행) — `independent_mini_backend.rs` 자체가
+rs-meta 자기호스팅 corpus의 일부라 self-check가 이 파일도 rs-meta 자신의
+프론트엔드로 파싱/타입체크됨을 의미 있게 검증. `independent-mini-backend-check`
+9→13(이전 패스)→17(`let`)→21(`while`/대입), 매 fixture 전부 `rustc`와 직접 비교.
+
+**다음 후보:** 클로저(`|x| ...`)는 아직 미지원 — clj-meta/clr-meta가 거친
+`nested fn` 단계의 대응물, 다음 자연스러운 확장. `!=`, 문자열/불리언 처리는
+todo.md item 2가 이미 후보로 적어둔 대로 여전히 열려 있음.
 
 ## Primary gate
 
@@ -316,10 +351,11 @@ this runs on Linux.
 ./bin/rs-meta-gate check           # full local check aggregate (long)
 ```
 
-## Last run (this machine, 2026-08-07)
+## Last run (this machine, 2026-08-17)
 
 | Gate | Result | Notes |
 |---|---|---|
-| `self-check` | **PASS** 407/407 | cargo 1.97.1 / rustc 1.97.1 |
-| `tv-check` | **PASS** 407/407 | |
+| `self-check` | **PASS** 408/408 | cargo 1.97.1 / rustc 1.97.1 |
+| `tv-check` | **PASS** 408/408 | |
+| `independent-mini-backend-check` | **PASS** 21/21 | 13→17 (`let`) →21 (`while`/assignment), this session |
 | full `bootstrap check` | not default primary | longer; includes stage matrix |

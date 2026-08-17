@@ -12,8 +12,9 @@
 //! ClojureScript host's `independent_mini_backend.js`.
 //!
 //! It is a frontier witness, not a replacement for rs-meta's own
-//! interpreter: it covers a bounded `fn`/`if`/arithmetic/comparison/call
-//! fixture set, not the Rust language `interp.rs` targets.
+//! interpreter: it covers a bounded `fn`/`if`/`let`/`while`/assignment/
+//! arithmetic/comparison/call fixture set, not the Rust language
+//! `interp.rs` targets.
 
 use std::collections::HashMap;
 
@@ -148,6 +149,12 @@ struct MiniBlock {
 #[derive(Debug, Clone)]
 enum MiniStmt {
     Let(String, MiniExpr),
+    Assign(String, MiniExpr),
+    // A `while` loop's own body is a bare statement sequence with no tail
+    // expression -- real Rust's `while { ... }` is unit-typed, and this
+    // backend only ever needs it for its mutation side effects (`Assign`
+    // onto names declared outside the loop), never its own value.
+    While(MiniExpr, Vec<MiniStmt>),
 }
 
 #[derive(Debug, Clone)]
@@ -192,6 +199,13 @@ impl MiniParser {
     }
     fn is_ident(&self, kw: &str) -> bool {
         matches!(self.peek(), Some(MiniTok::Ident(s)) if s == kw)
+    }
+    // `IDENT =` (not `IDENT ==`, a separate two-char token) starts an
+    // assignment statement -- distinguished from an ordinary `IDENT` var
+    // reference or `IDENT(...)` call by this one-token lookahead.
+    fn is_assign_stmt(&self) -> bool {
+        matches!(self.peek(), Some(MiniTok::Ident(_)))
+            && matches!(self.toks.get(self.pos + 1), Some(MiniTok::Punct(q)) if *q == "=")
     }
 
     // Skip an optional `: i64` type annotation.
@@ -239,8 +253,16 @@ impl MiniParser {
 
     fn parse_stmt_list(&mut self) -> Result<Vec<MiniStmt>, String> {
         let mut out = Vec::new();
-        while self.is_ident("let") {
-            out.push(self.parse_let_stmt()?);
+        loop {
+            if self.is_ident("let") {
+                out.push(self.parse_let_stmt()?);
+            } else if self.is_ident("while") {
+                out.push(self.parse_while_stmt()?);
+            } else if self.is_assign_stmt() {
+                out.push(self.parse_assign_stmt()?);
+            } else {
+                break;
+            }
         }
         Ok(out)
     }
@@ -256,6 +278,23 @@ impl MiniParser {
         let init = self.parse_expr()?;
         self.expect_punct(";")?;
         Ok(MiniStmt::Let(name, init))
+    }
+
+    fn parse_assign_stmt(&mut self) -> Result<MiniStmt, String> {
+        let name = self.expect_ident()?;
+        self.expect_punct("=")?;
+        let value = self.parse_expr()?;
+        self.expect_punct(";")?;
+        Ok(MiniStmt::Assign(name, value))
+    }
+
+    fn parse_while_stmt(&mut self) -> Result<MiniStmt, String> {
+        self.next()?; // "while"
+        let cond = self.parse_expr()?;
+        self.expect_punct("{")?;
+        let body = self.parse_stmt_list()?;
+        self.expect_punct("}")?;
+        Ok(MiniStmt::While(cond, body))
     }
 
     fn parse_expr(&mut self) -> Result<MiniExpr, String> {
@@ -392,19 +431,40 @@ fn parse_mini_program(src: &str) -> Result<(Vec<FnDef>, MiniExpr), String> {
     Ok((fns, main_expr))
 }
 
-fn eval_block(
-    block: &MiniBlock,
+fn exec_stmts(
+    stmts: &[MiniStmt],
     env: &mut HashMap<String, i64>,
     fns: &HashMap<String, FnDef>,
-) -> Result<i64, String> {
-    for stmt in &block.stmts {
+) -> Result<(), String> {
+    for stmt in stmts {
         match stmt {
             MiniStmt::Let(name, init) => {
                 let v = eval_expr(init, env, fns)?;
                 env.insert(name.clone(), v);
             }
+            MiniStmt::Assign(name, value) => {
+                if !env.contains_key(name) {
+                    return Err(format!("tiny interp: assignment to unknown local {}", name));
+                }
+                let v = eval_expr(value, env, fns)?;
+                env.insert(name.clone(), v);
+            }
+            MiniStmt::While(cond, body) => {
+                while eval_expr(cond, env, fns)? != 0 {
+                    exec_stmts(body, env, fns)?;
+                }
+            }
         }
     }
+    Ok(())
+}
+
+fn eval_block(
+    block: &MiniBlock,
+    env: &mut HashMap<String, i64>,
+    fns: &HashMap<String, FnDef>,
+) -> Result<i64, String> {
+    exec_stmts(&block.stmts, env, fns)?;
     eval_expr(&block.tail, env, fns)
 }
 

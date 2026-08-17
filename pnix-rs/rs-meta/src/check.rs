@@ -2871,6 +2871,26 @@ fn independent_mini_backend_fixtures() -> Vec<(&'static str, &'static str, &'sta
             "fn f(mut x: i64) -> i64 { let y = x + 1; y } fn main() { println!(\"{}\", f(41)); }",
             "42",
         ),
+        (
+            "mini-while-sum",
+            "fn sum_to(n: i64) -> i64 { let mut acc = 0; let mut i = 0; while i < n { acc = acc + i; i = i + 1; } acc } fn main() { println!(\"{}\", sum_to(10)); }",
+            "45",
+        ),
+        (
+            "mini-while-factorial",
+            "fn fact(n: i64) -> i64 { let mut acc = 1; let mut i = n; while i > 1 { acc = acc * i; i = i - 1; } acc } fn main() { println!(\"{}\", fact(5)); }",
+            "120",
+        ),
+        (
+            "mini-while-mut-param",
+            "fn countdown_sum(mut n: i64) -> i64 { let mut acc = 0; while n > 0 { acc = acc + n; n = n - 1; } acc } fn main() { println!(\"{}\", countdown_sum(6)); }",
+            "21",
+        ),
+        (
+            "mini-nested-while",
+            "fn f(n: i64) -> i64 { let mut total = 0; let mut i = 0; while i < n { let mut j = 0; while j < n { total = total + 1; j = j + 1; } i = i + 1; } total } fn main() { println!(\"{}\", f(3)); }",
+            "9",
+        ),
     ]
 }
 

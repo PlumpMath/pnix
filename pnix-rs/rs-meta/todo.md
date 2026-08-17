@@ -99,9 +99,9 @@ non-goal) remain open, and neither is actionable from this machine.
   `source-bundle-check` alone but not for the `stage9-*` rows while this bug
   was open); no manifest edit needed now that reality matches the label.
 
-### 2. Widen `independent-mini-backend-check` fixtures (in-house DDC track) — DONE (2026-08-12/13, later pass)
+### 2. Widen `independent-mini-backend-check` fixtures (in-house DDC track) — DONE (2026-08-12/13), 계속 확장 중 (2026-08-17)
 
-- **State: DONE-so-far, widened further.** Now 13/13 fixtures in
+- **State (2026-08-12/13):** 13/13 fixtures in
   `src/independent_mini_backend.rs`: the original 9 (`mini-const-arithmetic`,
   `mini-one-arg`, `mini-branch-two-arg`, `mini-mul`, `mini-sub`,
   `mini-unary-negate-branch`, `mini-equality-branch`, `mini-ge-branch`,
@@ -110,14 +110,32 @@ non-goal) remain open, and neither is actionable from this machine.
   `mini-nested-if`, `mini-recursive-fibonacci` (double recursive call),
   `mini-three-arg`, `mini-four-arg`. All cross-validated live against real
   `rustc`.
-- **What "done" looks like (still aspirational, not a hard bar):** widen
-  toward (not necessarily matching 1:1) the 407-case main corpus — this
-  pass didn't add new backend LANGUAGE FEATURES (no `!=`, no strings), just
-  more fixtures on top of existing arithmetic/comparison/`if`/recursion/
-  multi-arg support. A future pass adding new syntax (e.g. `!=`) would need
-  backend changes too.
+
+- **2026-08-17 업데이트, 진짜 새 backend 기능 2개 추가 (clj-meta/clr-meta의
+  U6/mini-backend가 이번 세션에 `let`→`loop`/`recur`→closure 순으로 넓어진
+  것과 균형 맞추기, 사용자가 명시적으로 rs-meta 지목):**
+  - **`let` 지원 (13→17):** `fn` 본문/`if` 분기가 이제 `MiniBlock { stmts:
+    Vec<MiniStmt>, tail: Box<MiniExpr> }` — 0개 이상 `let` 문 다음 필수 tail
+    식. 얕은 스코프(블록이 끝나도 스코프 밖으로 안 나감, flat env)를
+    의도적으로 선택 — 어떤 fixture도 이 차이에 안 걸림. `mut` 키워드도
+    파싱만(다음 단계에서 실제 mutation). 새 fixture: sequential let,
+    shadowing, if-분기 안 let, mut 파라미터.
+  - **`while`+대입 지원 (17→21):** `MiniStmt::Assign`/`MiniStmt::While`
+    추가(while 본문은 tail 없는 순수 문장 시퀀스, real Rust의 unit `while`과
+    동일). 파서는 `IDENT =`(`==`와 별개 토큰, 충돌 없음) 2-token lookahead로
+    대입문 인식. 새 fixture: 합산 loop, factorial loop, mut 파라미터 loop,
+    중첩 while.
+  - 검증: 두 단계 각각 `self-check` 408/408, `tv-check` 408/408 재실행(
+    `independent_mini_backend.rs` 자체가 rs-meta 자기호스팅 corpus 일부라
+    self-check가 이 파일의 파싱/타입체크도 검증), `independent-mini-backend-
+    check` 21/21 전부 실제 `rustc` 대비. 회귀 없음. 상세는 `STATUS.md`
+    "Trusting-Trust defense roadmap" 참조.
+- **What "done" looks like (여전히 aspirational, hard bar 아님):** widen
+  toward (not necessarily matching 1:1) the 407-case main corpus. 다음 자연스러운
+  후보는 클로저(`|x| ...`) — clj-meta/clr-meta가 거친 nested-fn 단계의 대응물.
+  `!=`, 문자열/불리언 처리도 여전히 후보.
 - **Size:** small-to-medium, incremental, purely additive, no known blockers —
-  each new fixture is its own self-contained slice.
+  each new fixture (or small feature slice) is its own self-contained step.
 
 ### 3. mrustc-based Trusting-Trust DDC (Wheeler bar) — deferred, Linux-only
 
