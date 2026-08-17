@@ -2851,6 +2851,26 @@ fn independent_mini_backend_fixtures() -> Vec<(&'static str, &'static str, &'sta
             "fn f(a: i64, b: i64, c: i64, d: i64) -> i64 { a * b + c * d } fn main() { println!(\"{}\", f(2, 3, 4, 9)); }",
             "42",
         ),
+        (
+            "mini-let-sequential",
+            "fn f(x: i64) -> i64 { let a = x + 1; let b = a * 2; b - 1 } fn main() { println!(\"{}\", f(10)); }",
+            "21",
+        ),
+        (
+            "mini-let-shadow",
+            "fn f(x: i64) -> i64 { let x = x + 1; x * 2 } fn main() { println!(\"{}\", f(10)); }",
+            "22",
+        ),
+        (
+            "mini-let-in-if-branch",
+            "fn f(x: i64) -> i64 { if x > 0 { let y = x * 2; y + 1 } else { let y = 0 - x; y - 1 } } fn main() { println!(\"{}\", f(5)); }",
+            "11",
+        ),
+        (
+            "mini-let-mut-param",
+            "fn f(mut x: i64) -> i64 { let y = x + 1; y } fn main() { println!(\"{}\", f(41)); }",
+            "42",
+        ),
     ]
 }
 

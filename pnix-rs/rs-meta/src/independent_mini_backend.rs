@@ -99,6 +99,7 @@ fn tokenize(src: &str) -> Result<Vec<MiniTok>, String> {
             '<' => "<",
             '>' => ">",
             '!' => "!",
+            '=' => "=",
             _ => return Err(format!("tiny lexer: unexpected char {:?}", c)),
         };
         out.push(MiniTok::Punct(one));
@@ -124,15 +125,36 @@ enum MiniExpr {
     Int(i64),
     Var(String),
     Bin(MiniBinOp, Box<MiniExpr>, Box<MiniExpr>),
-    If(Box<MiniExpr>, Box<MiniExpr>, Box<MiniExpr>),
+    If(Box<MiniExpr>, Box<MiniBlock>, Box<MiniBlock>),
     Call(String, Vec<MiniExpr>),
+}
+
+// A `{ let a = ...; let b = ...; TAIL }` block: zero or more `let` statements
+// (evaluated for their side effect on `env`, left-to-right) followed by a
+// required tail expression that produces the block's value -- matching the
+// two places real Rust needs exactly this shape: a `fn` body and each arm of
+// an `if`/`else` used as an expression. Deliberately shallow scoping: `let`
+// stores directly into the enclosing call's flat `env` rather than a fresh
+// child scope, so (unlike real Rust) a name bound inside an `if` branch
+// stays visible after the branch ends. No fixture relies on that
+// difference (each uses fresh names), so it is left undocumented in code
+// but noted here rather than silently risking a future divergence.
+#[derive(Debug, Clone)]
+struct MiniBlock {
+    stmts: Vec<MiniStmt>,
+    tail: Box<MiniExpr>,
+}
+
+#[derive(Debug, Clone)]
+enum MiniStmt {
+    Let(String, MiniExpr),
 }
 
 #[derive(Debug, Clone)]
 struct FnDef {
     name: String,
     params: Vec<String>,
-    body: MiniExpr,
+    body: MiniBlock,
 }
 
 struct MiniParser {
@@ -187,6 +209,9 @@ impl MiniParser {
         self.expect_punct("(")?;
         let mut params = Vec::new();
         while !self.is_punct(")") {
+            if self.is_ident("mut") {
+                self.next()?;
+            }
             let p = self.expect_ident()?;
             self.skip_type_annotation()?;
             params.push(p);
@@ -199,10 +224,38 @@ impl MiniParser {
             self.next()?;
             self.expect_ident()?; // return type, ignored
         }
-        self.expect_punct("{")?;
-        let body = self.parse_expr()?;
-        self.expect_punct("}")?;
+        let body = self.parse_block()?;
         Ok(FnDef { name, params, body })
+    }
+
+    // `{ let ... ; let ... ; TAIL }`
+    fn parse_block(&mut self) -> Result<MiniBlock, String> {
+        self.expect_punct("{")?;
+        let stmts = self.parse_stmt_list()?;
+        let tail = Box::new(self.parse_expr()?);
+        self.expect_punct("}")?;
+        Ok(MiniBlock { stmts, tail })
+    }
+
+    fn parse_stmt_list(&mut self) -> Result<Vec<MiniStmt>, String> {
+        let mut out = Vec::new();
+        while self.is_ident("let") {
+            out.push(self.parse_let_stmt()?);
+        }
+        Ok(out)
+    }
+
+    fn parse_let_stmt(&mut self) -> Result<MiniStmt, String> {
+        self.next()?; // "let"
+        if self.is_ident("mut") {
+            self.next()?;
+        }
+        let name = self.expect_ident()?;
+        self.skip_type_annotation()?;
+        self.expect_punct("=")?;
+        let init = self.parse_expr()?;
+        self.expect_punct(";")?;
+        Ok(MiniStmt::Let(name, init))
     }
 
     fn parse_expr(&mut self) -> Result<MiniExpr, String> {
@@ -272,14 +325,10 @@ impl MiniParser {
         if self.is_ident("if") {
             self.next()?;
             let cond = self.parse_expr()?;
-            self.expect_punct("{")?;
-            let then_e = self.parse_expr()?;
-            self.expect_punct("}")?;
+            let then_b = self.parse_block()?;
             self.expect_ident()?; // "else"
-            self.expect_punct("{")?;
-            let else_e = self.parse_expr()?;
-            self.expect_punct("}")?;
-            return Ok(MiniExpr::If(Box::new(cond), Box::new(then_e), Box::new(else_e)));
+            let else_b = self.parse_block()?;
+            return Ok(MiniExpr::If(Box::new(cond), Box::new(then_b), Box::new(else_b)));
         }
         match self.next()? {
             MiniTok::Int(n) => Ok(MiniExpr::Int(n)),
@@ -343,9 +392,25 @@ fn parse_mini_program(src: &str) -> Result<(Vec<FnDef>, MiniExpr), String> {
     Ok((fns, main_expr))
 }
 
+fn eval_block(
+    block: &MiniBlock,
+    env: &mut HashMap<String, i64>,
+    fns: &HashMap<String, FnDef>,
+) -> Result<i64, String> {
+    for stmt in &block.stmts {
+        match stmt {
+            MiniStmt::Let(name, init) => {
+                let v = eval_expr(init, env, fns)?;
+                env.insert(name.clone(), v);
+            }
+        }
+    }
+    eval_expr(&block.tail, env, fns)
+}
+
 fn eval_expr(
     e: &MiniExpr,
-    env: &HashMap<String, i64>,
+    env: &mut HashMap<String, i64>,
     fns: &HashMap<String, FnDef>,
 ) -> Result<i64, String> {
     match e {
@@ -374,11 +439,11 @@ fn eval_expr(
                 MiniBinOp::Eq => (lv == rv) as i64,
             })
         }
-        MiniExpr::If(cond, then_e, else_e) => {
+        MiniExpr::If(cond, then_b, else_b) => {
             if eval_expr(cond, env, fns)? != 0 {
-                eval_expr(then_e, env, fns)
+                eval_block(then_b, env, fns)
             } else {
-                eval_expr(else_e, env, fns)
+                eval_block(else_b, env, fns)
             }
         }
         MiniExpr::Call(name, args) => {
@@ -390,9 +455,10 @@ fn eval_expr(
             }
             let mut call_env = HashMap::new();
             for (p, a) in f.params.iter().zip(args.iter()) {
-                call_env.insert(p.clone(), eval_expr(a, env, fns)?);
+                let v = eval_expr(a, env, fns)?;
+                call_env.insert(p.clone(), v);
             }
-            eval_expr(&f.body, &call_env, fns)
+            eval_block(&f.body, &mut call_env, fns)
         }
     }
 }
@@ -407,7 +473,7 @@ pub fn compile_and_run(src: &str) -> Result<String, String> {
     for f in fn_defs.into_iter() {
         fn_map.insert(f.name.clone(), f);
     }
-    let env = HashMap::new();
-    let value = eval_expr(&main_expr, &env, &fn_map)?;
+    let mut env = HashMap::new();
+    let value = eval_expr(&main_expr, &mut env, &fn_map)?;
     Ok(format!("{}\n", value))
 }
