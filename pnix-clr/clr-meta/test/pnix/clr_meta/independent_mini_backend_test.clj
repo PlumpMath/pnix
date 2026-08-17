@@ -24,7 +24,12 @@
    ["(fn [a b c] (+ (+ a b) c))" [10 20 12] 42]
    ["(fn [a b c] (if (< a b) (+ b c) (- b c)))" [1 20 22] 42]
    ["(fn [a b c d] (+ (+ a b) (+ c d)))" [10 10 10 12] 42]
-   ["(fn [a b c d] (if (> a b) (+ c d) (- d c)))" [5 1 20 22] 42]])
+   ["(fn [a b c d] (if (> a b) (+ c d) (- d c)))" [5 1 20 22] 42]
+   ["(fn [x] (let [y (+ x 1)] (* y 2)))" [10] 22]
+   ["(fn [x y] (let [a (+ x y) b (* a 2)] (- b 1)))" [3 4] 13]
+   ["(fn [x] (let [y (if (> x 0) x (- 0 x))] (* y y)))" [-5] 25]
+   ["(fn [x] (let [x (+ x 1)] (* x 2)))" [10] 22]
+   ["(fn [x] (let [a (+ x 1)] (let [b (* a 2)] (+ a b))))" [5] 18]])
 
 (deftest independent-mini-backend-agrees-with-host-eval
   (testing "real host ClojureCLR eval and the independent mini backend agree"

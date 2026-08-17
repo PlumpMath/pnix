@@ -1,6 +1,6 @@
 # clr-meta 상태 (peer host-meta floor)
 
-마지막 검증: 2026-08-12.
+마지막 검증: 2026-08-15.
 
 ## Peer-floor 선언
 
@@ -312,7 +312,42 @@ fixture 첫 run accept, full aggregate 게이트 여전히 green.
 full Wheeler bar를 자체로 넘지 않는다 (mini-backend 자체 scope note와 같은
 honest bar) — necessary, not sufficient piece.
 
-**다음 구체적 단계:** 어느 DDC witness fixture set이든 더 넓히거나,
+**Mini-backend에 `let` 추가, 2026-08-15:** JVM host(`pnix-clj/clj-meta`)
+쪽 U6 witness를 이번에 크게 확장한 세션에서, 균형을 맞추기 위해 나머지
+4개 host 중 사용자가 지목한 clr-meta부터 착수. `independent_mini_backend.clj`
+(compiler-backend witness, `DynamicMethod`+`ILGenerator` 직접 emit)는
+지금까지 `fn`(단일 arity, closure/캡처 없음)/`if`/이항 산술·비교뿐이었고
+`let`이 없었음 — `independent_mini_interpreter.clj`(별도 트리 워킹
+인터프리터 witness)는 이미 `let`을 갖고 있었지만 그건 완전히 다른 코드
+경로(둘이 서로 코드를 공유하지 않는 게 이 witness들의 핵심 요구사항).
+
+analyzer를 재설계: 기존엔 `env`가 심볼을 바로 arg 인덱스(정수)로
+매핑했는데, `let` 바인딩은 arg가 아니므로 이 스킴이 안 맞음 — JVM host의
+`frontend_selfhost.clj`가 쓰는 것과 같은 패턴으로, analyze 시점엔 `env`가
+이름의 **존재 여부만** 추적(param과 `let` 바인딩 둘 다 그냥 `:op
+:local` 노드로 귀결)하고, 실제 저장 방식(arg 슬롯 vs 선언된 local)은
+EMIT 시점에 결정하도록 분리 — `.NET`의 `ILGenerator/DeclareLocal`가
+살아있는 `ILGenerator`가 있어야 호출 가능하기 때문에(param의 고정
+`Ldarg` 인덱스와 달리) 자연스러운 경계. `let` 바인딩은 `DeclareLocal
+Int64`(boxing 전혀 없음 — 이 backend의 checked-Int64 프로파일 전체가
+unboxed로 유지)로 진짜 `Int64` local을 선언 후 `Stloc`/`Ldloc`으로
+읽고 쓰는, JVM local variable slot의 직접적인 .NET 대응.
+
+sequential binding(뒤 바인딩이 앞 바인딩 참조), 바인딩 안에 `if` 포함,
+outer 이름을 가리는 shadowing(파라미터 `x`를 `let`으로 재바인딩), nested
+`let` 4가지 조합 전부 실제 host ClojureCLR `eval` 대비 검증(전부 일치).
+`independent-mini-backend-test`에 5개 fixture 추가(15→20 value fixture,
+overflow negative 4개는 그대로). 회귀 없음: `bootstrap-test` 재실행
+20 tests/219 assertions(기존 209에서 +10, fixture당 host/mini 두
+assertion씩) 0 fail/0 error, `./bin/clr-meta-gate eval-only` 여전히
+PASS. Stage1-7 compiler-selfhost family(`compiler_stage1.clj`/
+`compiler_selfhost_*.clj`)는 이 변경과 코드 공유가 전혀 없어 전체
+stage1-N 체인은 이번엔 재실행 안 함(이 STATUS.md 자체가 이미 "heavy
+C1-C3 게이트는 매 세션 재실행 아님" 관행을 명시).
+
+**다음 구체적 단계:** mini-backend에 nested `fn`/closure 캡처 추가(JVM
+host U6이 이미 거친 것과 같은 다음 단계 — 지금 mini-backend는 top-level
+단일 `fn`만 지원, closure는 오직 interpreter witness에만 있음), 또는
 `todo.md` item 6/7을 집어 든다 (broad ClojureCLR compatibility/replacement,
 roadmap 자체 ordering이 명시적으로 연기).
 
@@ -335,12 +370,12 @@ selfhost-stage1-gate → selfhost-stage2-gate.
 선호. `PATH` 앞에 `pnix-clr/bin`을 두지 **말 것** — 그 tree가 old `rg`
 shim을 실을 수 있다.
 
-## 마지막 run (이 머신, 2026-08-07)
+## 마지막 run (이 머신, 2026-08-15)
 
 | 게이트 | 결과 | 비고 |
 |---|---|---|
-| `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; tool-gate PASS |
-| full C1–C3 chain | 이 세션 재실행 안 함 | scripts/*-gate; docs claim closed |
+| `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/219 assertions; tool-gate PASS |
+| full C1–C3/Stage1-N chain | 이 세션 재실행 안 함 | `independent_mini_backend.clj`와 코드 공유 없음; docs claim closed |
 | `./scripts/clr-meta-compiler-selfhost-stage3-gate` | **PASS** | Stage2→Stage3 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage4-gate` | **PASS** | Stage3→Stage4 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage5-gate` | **PASS** | Stage4→Stage5 + source-hidden replay |

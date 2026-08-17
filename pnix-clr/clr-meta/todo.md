@@ -55,6 +55,27 @@ widening, Stage8, Stage9, Stage10–15/N 각각) — 각 item 자체 항목에�
    assertions, full `bin/clr-meta-gate --no-build` 209/209 assertions,
    `:ready true`, regression 없음. open으로 다시 플래그하지 말 것.
 
+   **추가 확장, 2026-08-15: `let` 지원.** JVM host(clj-meta) U6 witness를
+   이번 세션에 크게 넓힌 뒤, 나머지 4개 host 중 사용자가 지목한 clr-meta부터
+   균형을 맞추려 착수. mini-backend는 여태 `fn`(단일 arity, closure 없음)/
+   `if`/이항 산술·비교뿐 — `let`이 없었음(interpreter witness는 이미
+   있었지만 완전히 다른 코드 경로). analyzer를 재설계: `env`가 심볼을 arg
+   인덱스로 직접 매핑하던 것에서, analyze 시점엔 존재 여부만 추적하고
+   (param/`let` 바인딩 둘 다 `:op :local`), 실제 저장(arg 슬롯 vs
+   `ILGenerator/DeclareLocal`로 선언한 local)은 EMIT 시점에 결정하는
+   방식으로 — JVM host `frontend_selfhost.clj`와 같은 analyze/emit 분리.
+   `let` 바인딩은 진짜 `Int64` local(`DeclareLocal`+`Stloc`/`Ldloc`, boxing
+   없음). Sequential binding, `let` 안 `if`, outer 이름 shadowing, nested
+   `let` 4가지 조합 실제 host `eval` 대비 검증. fixture 5개 추가(15→20
+   value fixture). 검증: `bootstrap-test` 20 tests/219 assertions(기존
+   209에서 +10) 0 fail/0 error, `./bin/clr-meta-gate eval-only` PASS,
+   회귀 없음. Stage1-N compiler-selfhost family는 이 파일과 코드 공유
+   없어 전체 chain 재실행 안 함.
+
+   **다음 후보:** mini-backend에 nested `fn`/closure 캡처 추가(지금은
+   top-level 단일 `fn`만 지원 — JVM host U6가 이미 거친 다음 단계와 같은
+   모양).
+
 2. **Stage8 — reproducible assembly artifact closure — DONE (2026-08-12).**
    였음: 시작 안 됨 (design doc 없음, gate/builder script 없음, 어디에나
    `stage8: false` stamp). 지금: roadmap generic list를 가정하지 않고
