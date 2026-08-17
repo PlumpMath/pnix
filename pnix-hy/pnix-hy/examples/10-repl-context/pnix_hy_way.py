@@ -4,7 +4,7 @@ pnix REPL은 한 프로세스에서 pnix env를 '누적'한다: `a = 20` 후 `b 
 `b` 는 42. 인터프리터가 hot 상태로 유지되므로 반복 CLI보다 빠르다. 여기선 헤드리스로(문자열
 입력을 흘려서) 컨텍스트 유지를 검증한다. 순수 — Hy 불필요.
 
-대화형으로는:  nix run .#repl-pnix-hy-pnix   또는   pnix-hy-project --repl pnix
+대화형으로는:  nix run .#pnix-hy-pnix   또는   pnix-hy-project --repl pnix
 """
 import io
 import os

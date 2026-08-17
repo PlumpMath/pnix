@@ -180,7 +180,8 @@ pnix-hy-project --gate      # + sacred 레인 (runtime self-test, rust corpus, 4
 | hy-meta · hy | `.#hy-meta-hy` | — | 호스트 레인용 Hy REPL |
 | hy-meta · python | `.#hy-meta-python` | — | CPython REPL, `sys.path`에 `./hy-meta` + 저장소 루트 |
 
-`nix run .#repl-*` 앱은 **저장소 루트에서**(PNIX_HY_PYTHON을 flake Hy로 설정, 소스 트리 사용).
+위 5개 REPL 앱(`.#pnix-hy-pnix`/`.#pnix-hy-hy`/`.#pnix-hy-python`/`.#hy-meta-hy`/
+`.#hy-meta-python`)은 **저장소 루트에서**(PNIX_HY_PYTHON을 flake Hy로 설정, 소스 트리 사용).
 `nix develop` 안에서는 `pnix-hy-project --repl <mode>`가 PATH에 있다.
 
 ### pnix REPL

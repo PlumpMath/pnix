@@ -18,7 +18,7 @@
 ## pnix-hy의 방식 (`pnix_hy_way.py`)
 - pnix REPL은 **warm 프로세스**로 pnix env를 누적(context 유지) → 반복 CLI보다 빠름.
 - `_` = 직전 값, `name = expr`/`:let`, `:env`/`:reset`/`:help`/`:quit`, 오류 줄은 진단 후 세션 유지.
-- 헤드리스: `run_pnix_repl(inp, out)`; 대화형: `nix run .#repl-pnix-hy-pnix` /
+- 헤드리스: `run_pnix_repl(inp, out)`; 대화형: `nix run .#pnix-hy-pnix` /
   `pnix-hy-project --repl pnix` (python/hy 모드도 있음 — 저장소 README 참고).
 
 ## 어디에 쓰나
@@ -29,5 +29,5 @@
 ```sh
 python pnix-hy/examples/10-repl-context/limit_python.py
 python pnix-hy/examples/10-repl-context/pnix_hy_way.py     # 헤드리스 검증
-nix run .#repl-pnix-hy-pnix                                # 대화형
+nix run .#pnix-hy-pnix                                     # 대화형
 ```

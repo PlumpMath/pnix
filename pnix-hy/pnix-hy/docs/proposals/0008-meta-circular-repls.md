@@ -2,7 +2,8 @@
 
 - Status: **SHIPPED 2026-07-01** (accepted "구현시작"). Structure: thin front-end (as chosen).
   `pnix_hy/repl.py` + `pnix-hy-project --repl {python|hy|pnix}` + 5 flake apps
-  (`repl-pnix-hy-{pnix,hy,python}`, `repl-hy-meta-{hy,python}`); `repl` self-check → `--check`
+  (`pnix-hy-{pnix,hy,python}`, `hy-meta-{hy,python}` — the final shipped names, without the
+  `repl-` prefix this proposal originally drafted below); `repl` self-check → `--check`
   now 55/55; `--gate` PASS. Verified: pnix REPL retains context (`a=20; b=a+22; b`→42; attrsets;
   `:env`/`:reset`; survives a bad line), python REPL (`ph` preloaded), hy REPL (hands off to the
   proof Python's Hy 1.3.0). No core/sacred/ABI change.
@@ -47,10 +48,10 @@ REPLs are a separate exposure layer.
 - **CLI**: `pnix-hy-project --repl {python|hy|pnix}` (a new facility flag) and/or a
   `pnix-hy-repl` console-script. `python` → `code.interact` with `pnix_hy` imported; `hy` → hand
   off to the proof Python's `hy` REPL; `pnix` → `pnix_hy.repl.run()`.
-- **flake apps** (launchers, `PNIX_HY_PYTHON` + repo-root aware; final names at impl):
-  `nix run .#repl-pnix-hy-pnix`, `.#repl-pnix-hy-hy`, `.#repl-pnix-hy-python`,
-  `.#repl-hy-meta-hy`, `.#repl-hy-meta-python`. The devShell already puts `python`/`hy` on PATH,
-  so these are conveniences.
+- **flake apps** (launchers, `PNIX_HY_PYTHON` + repo-root aware; drafted here with a `repl-`
+  prefix, shipped without it — see the Status line above): `nix run .#pnix-hy-pnix`,
+  `.#pnix-hy-hy`, `.#pnix-hy-python`, `.#hy-meta-hy`, `.#hy-meta-python`. The devShell already
+  puts `python`/`hy` on PATH, so these are conveniences.
 
 ## Acceptance criteria
 
