@@ -709,6 +709,10 @@
     :source "(fn [x] (((fn [y] (fn [z] (+ x (+ y z)))) 2) 3))"
     :args [1]
     :expected 6}
+   {:id :mini-backend-closure-multi-arity-shared-capture
+    :source "(fn [x] (let [g (fn ([] x) ([y] (+ x y)))] (+ (g) (g 10))))"
+    :args [5]
+    :expected 20}
    {:id :mini-backend-letfn-single-binding
     :source "(fn [x] (letfn [(add-x [y] (+ x y))] (add-x 10)))"
     :args [3]

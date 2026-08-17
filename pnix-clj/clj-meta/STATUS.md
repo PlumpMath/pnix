@@ -1199,6 +1199,43 @@ DDC lane: OK`) 녹색, 회귀 없음.
 real host의 더 정교한 최적-매치 규칙과 다를 수 있음 — 현재
 fixture들은 이 애매한 경우를 만들지 않음.
 
+**같은 날 마흔 번째 확장 (2026-08-15): 중첩 closure의 multi-arity
+지원.** 사용자가 "문제점있는것을 찾아서 해결해봐"로 지시. 먼저
+이번 세션에 새로 만든 `letfn`/`reify`/`deftype`/`extend-protocol`
+코드 자체에 실제 버그가 있는지 실제 host 대비로 교차 조합
+테스트(nested closure 안에서 extend-protocol 디스패치, reify/
+deftype 메서드 안에서 protocol 호출, side-effect가 있는 인자가
+정확히 한 번만 평가되는지 등)부터 먼저 확인 — 전부 실제 host와
+일치, 새 버그는 못 찾음. 그래서 남은 좁은 gap 중 실제로 액션
+가능한 것(중첩 closure의 multi-arity 제한)을 다음으로 착수.
+`javap -c`로 host-AOT-컴파일된 `(let [g (fn ([] x) ([y] (+ x
+y)))] ...)`를 확인: 클래스 하나, 캡처 필드 하나(`x`, 양쪽 arity가
+공유), `invoke()`/`invoke(Object)` 두 override — 이미 top-level
+`fn`이 쓰고 있던 `emit-class`의 multi-arity 메커니즘과 완전히
+동일. `analyze-fn`과 `analyze-nested-fn`에 각각 따로 있던 arity
+검증 로직(최소 1개, 고정 arity 중복 없음, variadic 최대 1개,
+고정 arity가 variadic보다 파라미터 많으면 안 됨)을
+`validate-arities!`로 통합. **구현 중 발견한 진짜 주의점**: 캡처
+계산을 여러 clause를 합친 하나의 "own names" 집합으로 하면 안 됨
+— clause A의 파라미터가 outer 스코프의 어떤 이름을 가리는데
+(shadow) clause B(그 파라미터가 없는)가 바로 그 이름을 outer에서
+캡처해야 하는 경우, 합쳐서 계산하면 clause B의 진짜 캡처가
+빠짐. 각 clause의 캡처를 독립적으로 계산한 뒤 합집합을 취하는
+방식으로 수정 — `(fn ([y] (+ y 1)) ([] (+ y 100)))`(바깥 `y`=7)
+케이스로 실제 host 대비 검증해서 이 수정이 꼭 필요함을 확인
+(`[2 107]` 일치). `emit-closure`는 `arities`를 그대로
+`emit-class`에 넘기도록 단순화(기존 multi-arity 메커니즘 재사용,
+새 바이트코드 없음). 공유 캡처, variadic+고정 혼합, self-recursion
+(clause 간 재귀 호출), transitive capture와의 조합, shadowing
+엣지 케이스까지 전부 실제 host 대비 검증. U6:
+225→229(`:tiny-closure-multi-arity-shared-capture`,
+`:tiny-closure-multi-arity-variadic`,
+`:tiny-closure-multi-arity-self-recursive`,
+`:tiny-closure-multi-arity-per-clause-capture-shadowing`).
+`compiler.clj`도 지원 확인 후 DDC 행 연결(123→124, 실측 확인).
+전체 `-M:conformance`(116/116)와 `bin/clj-meta-gate`(`metacircular
+gate: READY ✅`, `reproducible DDC lane: OK`) 녹색, 회귀 없음.
+
 **아직 진정으로 열린 것:** full Wheeler DDC는 독립 backend 커버리지가 43-fixture
 부분 집합이 아니라 *production* corpus와 맞아야 하고, (더 어렵게)
 behavior-identical이 아니라 bit-identical 출력이 필요합니다 — 우연히 같은

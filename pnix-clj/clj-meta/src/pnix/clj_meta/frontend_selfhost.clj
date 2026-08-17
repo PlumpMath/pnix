@@ -1425,40 +1425,83 @@
     :else
     #{}))
 
+;; Shared by `analyze-fn` (top-level) and `analyze-nested-fn` (a closure):
+;; both allow `([x] ..) ([x y] ..)` multi-arity clauses, and both need the
+;; exact same three checks on the resulting `arities` vector -- at least
+;; one clause, no two FIXED clauses sharing a param count (a fixed clause
+;; sharing its count with the separately-checked, at-most-one variadic
+;; clause is fine: confirmed live, `(fn ([a b] :fixed) ([a b & r]
+;; :variadic))` compiles, the fixed clause's own `invoke(N)` override just
+;; takes precedence for that exact arity), at most one variadic clause
+;; (`clojure.lang.RestFn` only supports one `doInvoke`/one
+;; `getRequiredArity` ceiling), and no fixed clause with MORE params than
+;; the variadic clause's own fixed-param count (confirmed live: `(fn ([a b
+;; c] 1) ([a & r] 2))` throws "Can't have fixed arity function with more
+;; params than variadic function" on real host).
+(defn- validate-arities!
+  [arities form]
+  (when-not (seq arities)
+    (throw (ex-info "tiny analyzer: fn needs at least one arity" {:form form})))
+  (let [param-counts (map (comp count :params) (remove :rest-param arities))]
+    (when-not (= (count param-counts) (count (distinct param-counts)))
+      (throw (ex-info "tiny analyzer: duplicate fn arity" {:form form}))))
+  (let [variadic-arities (filter :rest-param arities)]
+    (when (< 1 (count variadic-arities))
+      (throw (ex-info "tiny analyzer: fn cannot have more than one variadic clause"
+                      {:form form})))
+    (when-let [{variadic-params :params} (first variadic-arities)]
+      (when (some #(> (count (:params %)) (count variadic-params))
+                  (remove :rest-param arities))
+        (throw (ex-info "tiny analyzer: fixed arity cannot have more params than the variadic arity"
+                        {:form form}))))))
+
 (defn- analyze-nested-fn
   "A `fn` literal appearing WITHIN another fn's body (not the top-level form
   `compile-source` itself compiles) -- a genuine closure, unlike the
-  top-level case. Deliberately narrow scope: a single arity clause only (no
-  `([x] ..) ([x y] ..)` multi-arity nested closures) -- a separate,
-  sizeable extension, not attempted here. Nesting depth itself is
-  UNBOUNDED (a closure inside a closure inside a closure...): confirmed
-  via `javap -c` on a host-AOT-compiled `(fn [x] (fn [y] (fn [z] (+ x (+ y
-  z)))))` that a MIDDLE closure captures a name purely to pass it through
-  to an INNER closure's constructor, even when the middle closure's own
-  body never references that name directly -- `ast-referenced-names`
-  handles this by treating a nested `:closure` node's own `:captures` as
-  \"referenced\" by whatever encloses it, so this transitive threading
-  falls out of the SAME free-variable computation used for one level,
-  with no depth-specific logic needed at all."
+  top-level case. Multi-arity (`([x] ..) ([x y] ..)`) IS supported --
+  confirmed via `javap -c` on a host-AOT-compiled `(let [g (fn ([] x) ([y]
+  (+ x y)))] ...)`: exactly ONE class, one shared capture field per free
+  variable (`x`, here), and one `invoke` override per arity clause, all
+  reading the SAME field -- i.e. exactly `emit-class`'s EXISTING
+  multi-arity machinery (already used for the top-level case), just with a
+  non-empty `:captures` list. The one subtlety multi-arity adds: captures
+  must be computed PER CLAUSE, not from a single merged \"own names\" set
+  across all clauses -- if clause A's param happens to shadow a name that
+  clause B (which does NOT have that param) needs to capture from the
+  OUTER scope, merging first would wrongly treat that name as \"own\"
+  everywhere and drop clause B's real capture. Computing each clause's own
+  captures independently, then taking the union, avoids that. Nesting
+  depth itself is UNBOUNDED (a closure inside a closure inside a
+  closure...): confirmed via `javap -c` on a host-AOT-compiled `(fn [x]
+  (fn [y] (fn [z] (+ x (+ y z)))))` that a MIDDLE closure captures a name
+  purely to pass it through to an INNER closure's constructor, even when
+  the middle closure's own body never references that name directly --
+  `ast-referenced-names` handles this by treating a nested `:closure`
+  node's own `:captures` as \"referenced\" by whatever encloses it, so
+  this transitive threading falls out of the SAME free-variable
+  computation used for one level, with no depth-specific logic needed at
+  all."
   [env args]
   (let [fn-name (when (symbol? (first args)) (first args))
-        rest-args (if fn-name (rest args) args)]
-    (when (and (seq rest-args) (seq? (first rest-args)))
-      (throw (ex-info "tiny analyzer: a nested (non-top-level) fn literal supports a single arity clause only"
-                      {:form args})))
-    (let [{:keys [params rest-param body]}
-          (analyze-fn-clause rest-args fn-name (assoc env closure-depth-key true))
-          own-names (cond-> (set params)
-                      rest-param (conj rest-param)
-                      fn-name (conj fn-name))
-          referenced (ast-referenced-names body)
-          outer-names (disj (set (keys env)) closure-depth-key)
-          captures (vec (filter #(and (outer-names %) (not (own-names %))) referenced))]
+        rest-args (if fn-name (rest args) args)
+        multi-arity? (and (seq rest-args) (seq? (first rest-args)))
+        clauses (if multi-arity? rest-args [rest-args])
+        base-env (assoc env closure-depth-key true)
+        arities (mapv #(analyze-fn-clause % fn-name base-env) clauses)]
+    (validate-arities! arities args)
+    (let [outer-names (disj (set (keys env)) closure-depth-key)
+          own-names-for (fn [{:keys [params rest-param]}]
+                          (cond-> (set params)
+                            rest-param (conj rest-param)
+                            fn-name (conj fn-name)))
+          captures-for (fn [{:keys [body] :as arity}]
+                         (let [referenced (ast-referenced-names body)
+                               own (own-names-for arity)]
+                           (filter #(and (outer-names %) (not (own %))) referenced)))
+          captures (vec (distinct (mapcat captures-for arities)))]
       {:op :closure
        :fn-name fn-name
-       :params params
-       :rest-param rest-param
-       :body body
+       :arities arities
        :captures captures})))
 
 ;; `letfn` with genuine MUTUAL reference between siblings (`even?` calling
@@ -1805,43 +1848,8 @@
         ;; a vector, not a list), so it is wrapped as the sole clause below.
         multi-arity? (and (seq rest-form) (seq? (first rest-form)))
         clauses (if multi-arity? rest-form [rest-form])
-        arities (mapv #(analyze-fn-clause % fn-name {}) clauses)
-        ;; Only compared among FIXED clauses: a fixed clause sharing its
-        ;; param count with the (separately checked, at-most-one) variadic
-        ;; clause is not a duplicate at all -- confirmed live, `(fn ([a b]
-        ;; :fixed) ([a b & r] :variadic))` compiles fine on real host, and
-        ;; the fixed clause's own `invoke(N)` override simply takes
-        ;; precedence for that exact arity (see below).
-        param-counts (map (comp count :params) (remove :rest-param arities))]
-    (when-not (seq arities)
-      (throw (ex-info "tiny analyzer: fn needs at least one arity" {:form form})))
-    (when-not (= (count param-counts) (count (distinct param-counts)))
-      (throw (ex-info "tiny analyzer: duplicate fn arity" {:form form})))
-    ;; At most one variadic clause per `fn` -- `clojure.lang.RestFn` only
-    ;; supports one `doInvoke`/one `getRequiredArity` ceiling, and real host
-    ;; itself rejects a second `&`-clause the same way (a plain duplicate
-    ;; arity, since two variadic clauses would both need the same fixed
-    ;; param count to even be distinguishable).
-    (let [variadic-arities (filter :rest-param arities)]
-      (when (< 1 (count variadic-arities))
-        (throw (ex-info "tiny analyzer: fn cannot have more than one variadic clause"
-                        {:form form})))
-      ;; Real host rejects a fixed clause with MORE params than the variadic
-      ;; clause's own fixed-param count -- confirmed live: `(fn ([a b c] 1)
-      ;; ([a & r] 2))` throws "Can't have fixed arity function with more
-      ;; params than variadic function". A fixed clause with EQUAL param
-      ;; count is fine and takes precedence over the variadic clause for
-      ;; that exact arity (confirmed live: `(f 1 2)` picks the `([a b] ...)`
-      ;; clause, not `([a b & r] ...)`, when both exist) -- this falls out
-      ;; for free from emitting a direct `invoke(N)` override for every
-      ;; fixed clause, same as the pure-fixed-multi-arity path already does:
-      ;; the JVM dispatches to the most-derived override, no extra runtime
-      ;; logic needed.
-      (when-let [{variadic-params :params} (first variadic-arities)]
-        (when (some #(> (count (:params %)) (count variadic-params))
-                    (remove :rest-param arities))
-          (throw (ex-info "tiny analyzer: fixed arity cannot have more params than the variadic arity"
-                          {:form form})))))
+        arities (mapv #(analyze-fn-clause % fn-name {}) clauses)]
+    (validate-arities! arities form)
     {:op :fn
      :fn-name fn-name
      :arities arities}))
@@ -2847,14 +2855,20 @@
 ;; here, before the outer method's own bytecode finishes -- the JVM has no
 ;; ordering requirement stronger than "loadable by the time it's actually
 ;; `NEW`-ed at runtime", which eager definition trivially satisfies).
-;; Each captured value is pushed via the OUTER method's own `emit-local`
-;; (its env already carries the right `:arg`/`:let`/`:self`/`:capture` kind
-;; for each captured name, since captures are by construction names already
+;; `arities` (possibly more than one clause -- see `analyze-nested-fn`) is
+;; passed straight through to `emit-class`: it's already the SAME
+;; multi-invoke-method machinery the top-level `fn` case uses, needing no
+;; closure-specific changes at all, since every clause's capture-field
+;; reads go through the SAME per-clause `arg-env` construction there
+;; regardless of whether the class happens to be nested or top-level. Each
+;; captured value is pushed via the OUTER method's own `emit-local` (its
+;; env already carries the right `:arg`/`:let`/`:self`/`:capture` kind for
+;; each captured name, since captures are by construction names already
 ;; bound in the outer scope) -- reusing existing local-resolution machinery
 ;; rather than inventing a parallel one.
 (defn- emit-closure
-  [^GeneratorAdapter ga env {:keys [fn-name params rest-param body captures]}]
-  (let [artifact (emit-class {:arities [{:params params :rest-param rest-param :body body}]
+  [^GeneratorAdapter ga env {:keys [fn-name arities captures]}]
+  (let [artifact (emit-class {:arities arities
                               :fn-name fn-name
                               :captures captures})
         inner-type (Type/getObjectType (.replace ^String (:class-name artifact) \. \/))
@@ -3983,6 +3997,22 @@
     :source "(fn [a] ((((fn [b] (fn [c] (fn [d] (+ a (+ b (+ c d)))))) 2) 3) 4))"
     :args [1]
     :expected 10}
+   {:id :tiny-closure-multi-arity-shared-capture
+    :source "(fn [x] (let [g (fn ([] x) ([y] (+ x y)))] (+ (g) (g 10))))"
+    :args [5]
+    :expected 20}
+   {:id :tiny-closure-multi-arity-variadic
+    :source "(fn [x] (let [g (fn ([] x) ([a b] (+ x a b)) ([a b & r] (+ x a b (count r))))] [(g) (g 1 2) (g 1 2 3 4)]))"
+    :args [100]
+    :expected [100 103 105]}
+   {:id :tiny-closure-multi-arity-self-recursive
+    :source "(fn [x] ((fn fact ([n] (fact n 1)) ([n acc] (if (zero? n) (+ x acc) (fact (dec n) (* acc n))))) 5))"
+    :args [1000]
+    :expected 1120}
+   {:id :tiny-closure-multi-arity-per-clause-capture-shadowing
+    :source "(fn [y] (let [g (fn ([y] (+ y 1)) ([] (+ y 100)))] [(g 1) (g)]))"
+    :args [7]
+    :expected [2 107]}
    {:id :tiny-letfn-single-binding-captures-outer
     :source "(fn [x] (letfn [(add-x [y] (+ x y))] (add-x 10)))"
     :args [3]

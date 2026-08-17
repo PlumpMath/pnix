@@ -740,9 +740,33 @@ top-line claim, but the substance is much closer than "false" implies:
   계층일 때 우선순위는 선언 순서 first-match뿐(현재 fixture들은
   이 애매한 경우를 만들지 않음).
 
-  U6에 남은 큰 gap: 중첩 closure는 단일 arity로만 범위 제한(깊이
-  제한은 해제됨). protocol 디스패치도 이제 real host 대비 검증됨
-  (extend-protocol 포함) — 이 slice 이후 남은 4개 갭 전부 닫힘.
+  **40번째 슬라이스, 2026-08-15: 중첩 closure의 multi-arity 지원**
+  (225→229). 먼저 이번 세션 신규 코드(letfn/reify/deftype/
+  extend-protocol)에 진짜 버그가 있는지 교차 조합으로 실제 host
+  대비 확인(전부 일치, 새 버그 없음) — 그 다음 남은 좁은 gap 중
+  실제 액션 가능한 항목 착수. `javap -c` 확인: multi-arity nested
+  closure도 클래스 하나, 캡처 필드 공유, arity별 invoke override —
+  top-level fn이 이미 쓰던 `emit-class`의 multi-arity 메커니즘과
+  동일. `analyze-fn`/`analyze-nested-fn`의 중복 arity 검증을
+  `validate-arities!`로 통합. **주의점 발견**: 캡처를 여러 clause
+  합친 하나의 "own names"로 계산하면 안 됨 — clause A가 가리는
+  이름을 clause B(그 파라미터 없음)가 outer에서 캡처해야 하는
+  경우 깨짐. 각 clause 독립 계산 후 합집합으로 수정 —
+  `(fn ([y] (+ y 1)) ([] (+ y 100)))` shadowing 케이스로 실제
+  host 대비 검증해서 이 수정이 필요함을 확인. 공유 캡처,
+  variadic+고정 혼합, self-recursion, transitive capture와의
+  조합까지 검증. `compiler.clj`도 지원 확인 후 DDC 행 연결
+  (123→124, 실측 확인). `-M:conformance` 116/116 영향 없음,
+  `bin/clj-meta-gate` `metacircular gate: READY ✅` +
+  `reproducible DDC lane: OK`, 회귀 없음.
+
+  U6에 남은 큰 gap: 이번 세션 시작 시점에 있던 4개 갭(closure 깊이,
+  letfn 상호재귀, reify/deftype primitive/multi-interface, protocol
+  진짜 디스패치) + 이후 추가로 찾은 것(closure multi-arity) 전부
+  닫힘. 남은 건 `extend-protocol`의 좁은 문서화된 제약(완전정규명
+  필요, 클래스 계층 우선순위 단순 first-match)뿐 — 별도 슬라이스로
+  닫기보다는 이 파일 전체의 "정직하게 더 좁은 범위" 원칙과 일관된
+  경계로 유지.
 - **Remaining, size large/open-ended (may be permanently held)**: bit-identical
   (not just behavior-identical) compiler-binary DDC needs a *fully
   independent* second compiler targeting the same bytecode format by
