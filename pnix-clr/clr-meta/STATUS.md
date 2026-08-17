@@ -465,10 +465,12 @@ TypeBuilder-hosted `public static` 메서드로 컴파일해서 그 안에서 �
 fixture) — 전부 실제 host ClojureCLR `eval` 대비 검증. 회귀 없음:
 `bootstrap-test` 20 tests/245 assertions(기존 239에서 +6, fixture 3개 ×
 2 assertion) 0 fail/0 error, `./bin/clr-meta-gate eval-only` PASS. Stage1-N
-family와 코드 공유 없어 이번에도 전체 체인 재실행은 하지 않음(이전 슬라이스와
-같은 근거) — 다만 이번엔 추가로 `./scripts/clr-meta-gate --no-build` 전체를
-background에서 별도로 돌려 Stage1-N 체인 자체의 회귀 여부도 확인 중(결과 나오는
-대로 이 섹션에 추가 기록).
+family와 코드 공유 없어 보통은 전체 체인 재실행을 안 하지만(이전 슬라이스와
+같은 근거), 이번엔 여분으로 `./scripts/clr-meta-gate --no-build` 전체를
+background에서 끝까지 돌려 확인 완료: bootstrap-test부터 tool-gate,
+compiler-stage1-gate, selfhost-stage1/2-gate, selfhost-stage3–7-gate,
+self-reproduction check, independent-mini-interpreter-gate,
+selfhost-stage8–15/N-gate까지 전부 **PASS**, exit code 0, 회귀 전혀 없음.
 
 **다음 구체적 단계:** 이걸로 clj-meta U6가 이번 세션 초반에 거쳤던 것과
 같은 순서(`let` → `loop`/`recur` → nested fn → 진짜 클로저)를 clr-meta의
@@ -504,7 +506,7 @@ shim을 실을 수 있다.
 | 게이트 | 결과 | 비고 |
 |---|---|---|
 | `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/245 assertions; tool-gate PASS |
-| full C1–C3/Stage1-N chain | 이 세션 재실행 안 함 | `independent_mini_backend.clj`와 코드 공유 없음; docs claim closed |
+| full C1–C3/Stage1-N chain (`./scripts/clr-meta-gate --no-build`) | **PASS** | 클로저 슬라이스 여분 확인용으로 이번엔 전체 재실행; bootstrap-test~StageN 전부 PASS, exit 0 |
 | `./scripts/clr-meta-compiler-selfhost-stage3-gate` | **PASS** | Stage2→Stage3 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage4-gate` | **PASS** | Stage3→Stage4 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage5-gate` | **PASS** | Stage4→Stage5 + source-hidden replay |
