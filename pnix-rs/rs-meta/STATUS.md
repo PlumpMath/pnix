@@ -409,6 +409,33 @@ fixture 추가(27→31), 전부 실제 `rustc` 대비 검증. 회귀 없음: `se
 **다음 후보:** `!=`, 문자열/불리언 처리, 클로저를 top-level fn 인자로 넘기는
 고차 함수 형태는 여전히 열려 있음.
 
+**5단계 (`!=` + 고차 함수), 같은 날:** 위에 적어둔 두 후보 중 둘을 처리.
+`!=`는 기존 비교 연산자 패턴 그대로 `MiniBinOp::Ne` 추가(토크나이저 2-char
+표에 `!=` 추가, `==`와 같은 자리에 파싱/평가) — 사소함.
+
+고차 함수(클로저를 top-level `fn`의 파라미터로 넘기는 형태,
+`fn apply_twice(f: impl Fn(i64) -> i64, x: i64) -> i64 { f(f(x)) }`류)는
+**파서만 확장하면 됐고 인터프리터 쪽은 손댈 필요가 전혀 없었음** — 흥미로운
+발견. `skip_type_annotation`이 이제 bare `i64` 외에 `impl Fn(T, ...) -> T`
+모양도 인식해서 건너뛰도록만 넓혔을 뿐(다른 타입 어노테이션 형태 —
+`&dyn Fn`, `Box<dyn Fn>`, generic `F: Fn(...)` bound 등 — 는 어떤 fixture도
+필요 없어서 미지원, 이 backend는 애초에 타입체크를 안 하므로 타입 어노테이션은
+그냥 건너뛰는 존재일 뿐). 왜 인터프리터가 안 바뀌어도 됐는지: 클로저 값이
+`let`으로 묶였든 fn **파라미터**로 묶였든 결국 같은 `env: HashMap<String,
+MiniVal>`에 똑같이 저장되고, 기존 `Call` dispatch 로직(`env`에서 그 이름을
+먼저 찾아 클로저면 클로저 호출)이 이름의 "출신"(let-binding vs param)을
+전혀 구분하지 않기 때문 — 3단계(클로저) 슬라이스에서 이미 일반적으로 설계해둔
+덕을 여기서 봄.
+
+`!=` 비교 1개, 고차 함수 3개(단순 apply-twice, 2-파라미터 클로저를 받는
+버전, 캡처를 가진 클로저를 여러 번 인자로 넘기는 버전) 총 4개 fixture 추가
+(31→35), 전부 실제 `rustc` 대비 검증. 회귀 없음: `self-check` 408/408,
+`tv-check` 408/408.
+
+**다음 후보:** 문자열/불리언 처리는 여전히 열려 있음. 나머지는 특별히 없음
+— clj-meta/clr-meta가 이번 세션에 거친 let/loop-recur/closure 축 전체를
+rs-meta도 사실상 따라잡음.
+
 ## Primary gate
 
 ```sh
@@ -424,5 +451,5 @@ fixture 추가(27→31), 전부 실제 `rustc` 대비 검증. 회귀 없음: `se
 |---|---|---|
 | `self-check` | **PASS** 408/408 | cargo 1.97.1 / rustc 1.97.1 |
 | `tv-check` | **PASS** 408/408 | |
-| `independent-mini-backend-check` | **PASS** 31/31 | 13→17 (`let`) →21 (`while`/assignment) →27 (closures) →31 (`loop`/`break`), this session |
+| `independent-mini-backend-check` | **PASS** 35/35 | 13→17→21→27→31→35 (`let`/`while`/closures/`loop`/`!=`+higher-order), this session |
 | full `bootstrap check` | not default primary | longer; includes stage matrix |

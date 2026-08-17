@@ -2941,6 +2941,26 @@ fn independent_mini_backend_fixtures() -> Vec<(&'static str, &'static str, &'sta
             "fn f(n: i64) -> i64 { let mut total = 0; let count = loop { let mut j = 0; let mut inner_sum = 0; while j < n { inner_sum = inner_sum + j; j = j + 1; } total = total + inner_sum; if total > 20 { break total; } }; count } fn main() { println!(\"{}\", f(4)); }",
             "24",
         ),
+        (
+            "mini-not-equal-branch",
+            "fn f(x: i64) -> i64 { if x != 42 { 0 } else { 1 } } fn main() { println!(\"{}\", f(42)); }",
+            "1",
+        ),
+        (
+            "mini-higher-order-apply-twice",
+            "fn apply_twice(f: impl Fn(i64) -> i64, x: i64) -> i64 { f(f(x)) } fn g(x: i64) -> i64 { let add_one = |y: i64| y + 1; apply_twice(add_one, x) } fn main() { println!(\"{}\", g(5)); }",
+            "7",
+        ),
+        (
+            "mini-higher-order-two-params",
+            "fn combine(f: impl Fn(i64, i64) -> i64, a: i64, b: i64) -> i64 { f(a, b) } fn g(n: i64) -> i64 { let add = |x: i64, y: i64| x + y; combine(add, n, n * 2) } fn main() { println!(\"{}\", g(14)); }",
+            "42",
+        ),
+        (
+            "mini-higher-order-capturing-arg",
+            "fn apply(f: impl Fn(i64) -> i64, x: i64) -> i64 { f(x) } fn g(n: i64, k: i64) -> i64 { let add_k = move |x: i64| x + k; apply(add_k, n) + apply(add_k, n + 1) } fn main() { println!(\"{}\", g(10, 5)); }",
+            "31",
+        ),
     ]
 }
 

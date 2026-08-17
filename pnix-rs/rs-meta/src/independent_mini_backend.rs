@@ -80,6 +80,7 @@ fn tokenize(src: &str) -> Result<Vec<MiniTok>, String> {
                 "<=" => Some("<="),
                 ">=" => Some(">="),
                 "==" => Some("=="),
+                "!=" => Some("!="),
                 _ => None,
             } {
                 out.push(MiniTok::Punct(p));
@@ -123,6 +124,7 @@ enum MiniBinOp {
     Le,
     Ge,
     Eq,
+    Ne,
 }
 
 #[derive(Debug, Clone)]
@@ -275,11 +277,35 @@ impl MiniParser {
             && matches!(self.toks.get(self.pos + 1), Some(MiniTok::Punct(q)) if *q == "=")
     }
 
-    // Skip an optional `: i64` type annotation.
+    // Skip an optional `: i64` type annotation -- or, for a higher-order
+    // function parameter, `: impl Fn(i64, ...) -> i64`. This is the ONLY
+    // extra type shape this backend's tiny "type" system understands: real
+    // Rust also allows `&dyn Fn(...)`, `Box<dyn Fn(...)>`, generic `F: Fn(...)`
+    // bounds, etc., none of which any fixture needs, so none are parsed.
+    // Like the bare-`i64` case, the annotation is skipped/ignored entirely --
+    // this backend never type-checks, it just needs to consume the right
+    // number of tokens so the rest of the program parses.
     fn skip_type_annotation(&mut self) -> Result<(), String> {
         if self.is_punct(":") {
             self.next()?;
-            self.expect_ident()?; // just "i64"
+            if self.is_ident("impl") {
+                self.next()?; // "impl"
+                self.expect_ident()?; // "Fn" (Fn/FnMut/FnOnce -- not distinguished)
+                self.expect_punct("(")?;
+                while !self.is_punct(")") {
+                    self.expect_ident()?; // a param type, e.g. "i64"
+                    if self.is_punct(",") {
+                        self.next()?;
+                    }
+                }
+                self.expect_punct(")")?;
+                if self.is_punct("->") {
+                    self.next()?;
+                    self.expect_ident()?; // return type
+                }
+            } else {
+                self.expect_ident()?; // just "i64"
+            }
         }
         Ok(())
     }
@@ -419,6 +445,7 @@ impl MiniParser {
             Some(MiniTok::Punct("<=")) => Some(MiniBinOp::Le),
             Some(MiniTok::Punct(">=")) => Some(MiniBinOp::Ge),
             Some(MiniTok::Punct("==")) => Some(MiniBinOp::Eq),
+            Some(MiniTok::Punct("!=")) => Some(MiniBinOp::Ne),
             _ => None,
         };
         if let Some(op) = op {
@@ -677,6 +704,7 @@ fn eval_expr(
                 MiniBinOp::Le => (lv <= rv) as i64,
                 MiniBinOp::Ge => (lv >= rv) as i64,
                 MiniBinOp::Eq => (lv == rv) as i64,
+                MiniBinOp::Ne => (lv != rv) as i64,
             }))
         }
         MiniExpr::If(cond, then_b, else_b) => {

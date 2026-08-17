@@ -158,15 +158,28 @@ non-goal) remain open, and neither is actionable from this machine.
     실제로 잡아서 값으로 삼거나 `None`이면 무조건 재반복(진짜 Rust `loop`처럼).
     부수적으로 `%`(modulo) 추가. 합산 loop, tail 위치 loop, 중첩
     if-무-else+break, loop 안 while 중첩 4개 fixture 추가.
-  - 검증: 네 단계 각각 `self-check` 408/408, `tv-check` 408/408 재실행(
+  - **`!=` + 고차 함수 지원 (31→35), 같은 날:** `!=`는 기존 비교 연산자
+    패턴 그대로 `MiniBinOp::Ne` 추가(사소함). 고차 함수(클로저를 top-level
+    `fn` 파라미터로 넘기는 형태)는 **파서만 확장하면 됐고 인터프리터 쪽은
+    전혀 안 바뀜** — `skip_type_annotation`이 bare `i64` 외에
+    `impl Fn(T, ...) -> T` 모양도 인식해서 건너뛰도록만 넓혔을 뿐(다른 타입
+    어노테이션 형태는 미지원, 이 backend는 타입체크를 안 해서 어노테이션은
+    그냥 건너뛰는 존재). 왜 인터프리터가 안 바뀌어도 됐는지: 클로저 값이
+    `let`으로 묶였든 fn 파라미터로 묶였든 결국 같은
+    `env: HashMap<String, MiniVal>`에 똑같이 저장되고, 기존 `Call`
+    dispatch가 이름의 출신을 구분하지 않기 때문 — 클로저 슬라이스에서
+    이미 일반적으로 설계해둔 덕을 봄. `!=` 1개 + 고차함수(단순
+    apply-twice, 2-파라미터, 캡처를 가진 클로저를 여러 번 인자로) 3개, 총
+    4개 fixture 추가.
+  - 검증: 다섯 단계 각각 `self-check` 408/408, `tv-check` 408/408 재실행(
     `independent_mini_backend.rs` 자체가 rs-meta 자기호스팅 corpus 일부라
     self-check가 이 파일의 파싱/타입체크도 검증), `independent-mini-backend-
-    check` 31/31 전부 실제 `rustc` 대비. 회귀 없음. 상세는 `STATUS.md`
+    check` 35/35 전부 실제 `rustc` 대비. 회귀 없음. 상세는 `STATUS.md`
     "Trusting-Trust defense roadmap" 참조.
 - **What "done" looks like (여전히 aspirational, hard bar 아님):** widen
-  toward (not necessarily matching 1:1) the 407-case main corpus. `!=`,
-  문자열/불리언 처리, 클로저를 top-level fn 인자로 넘기는 고차 함수 형태가
-  여전히 후보.
+  toward (not necessarily matching 1:1) the 407-case main corpus. 문자열/
+  불리언 처리가 유일하게 남은 후보 — clj-meta/clr-meta가 이번 세션에 거친
+  let/loop-recur/closure 축 전체는 rs-meta도 사실상 따라잡음.
 - **Size:** small-to-medium, incremental, purely additive, no known blockers —
   each new fixture (or small feature slice) is its own self-contained step.
 
