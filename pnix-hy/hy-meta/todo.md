@@ -136,8 +136,26 @@ listed here; see the detailed sections below for the full history.
    추가(14→19), 전부 실제 upstream Hy + kernel_direct(`stage2/kernel.hy`가
    자체 `compile-fn-expr`로 이미 `fn` 지원) + mini backend 3-way 일치 확인.
    회귀 없음: `self-check`/`stage7-check` 둘 다 PASS. 상세는 `STATUS.md`
-   참조. 이걸로 hy-meta도 다른 host들이 이번 세션에 거친 축을 따라잡음 —
-   남은 후보(macro, keyword dict, 더 많은 seq ops)는 위 "Still open"과 동일.
+   참조. 이걸로 hy-meta도 다른 host들이 이번 세션에 거친 축을 따라잡음.
+
+   **`get`/dot-메서드/keyword dict 추가, 같은 날:** "남은것들 해결해봐" 재확인
+   후 위 Still-open 후보 중 tractable한 것 처리. `len`은 이미 코드 변경 없이
+   동작함을 실제 테스트로 확인(Python `exec()`의 암묵적 `__builtins__` 덕).
+   새로 추가: `(get target index)` → `ast.Subscript`(Hy 특수형, Python
+   builtin 아님이라 backend가 직접 인식해야 함); `(.method target args...)`
+   → `ast.Attribute`+`ast.Call`(dot-method-call 설탕, list mutation의 유일한
+   경로); keyword-키 dict 리터럴(`{:a 1 :b 2}`) — 이전엔 범위 밖이었으나
+   `hy.models.Keyword`가 (이 파일이 이미 신뢰하는 `ast`/`compile()`과 같은
+   성격의) 순수 값 타입임을 재검토해서 지원(토크나이저가 `:name`을 인식,
+   emit이 `Keyword(name)` 생성 호출로 컴파일, exec namespace에 `Keyword`
+   자체 주입). 세 다리 각각 fixture 추가 전 직접 실행해 확인. fixture 3개
+   추가(19→22), 전부 3-way 일치. 회귀 없음: `self-check`/`stage7-check` PASS.
+
+   **macro/`require`는 이번 패스도 미시도**: 진짜 컴파일타임 매크로 확장
+   인프라(매크로 테이블, quasiquote/unquote, 매크로 본문을 코드로 실행해서
+   폼을 돌려받는 메커니즘)가 통째로 필요 — 지금까지의 작은 증분 패턴과
+   규모가 다름. 정직하게 열린 채로 남김; 착수하려면 별도의 크게 스코프된
+   슬라이스가 되어야 함.
 
 6. **Stage8–StageN proof ladder — closed except 3 cross-repo-blocked Stage14
    items.** Verified: every stage8–stageN checklist item in this file is

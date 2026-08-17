@@ -205,6 +205,43 @@ proof Python을 새로 준비함(아래 "기본 게이트" 섹션 명령 그대�
 `fn18gnw83nihv5cy71z08cyw5bkd3shf`) setuptools 자체 테스트까지 소스
 빌드하느라 pip 경로보다 훨씬 오래 걸림 — 급할 때는 pip venv가 더 실용적.
 
+**`get`/dot-메서드/keyword dict 추가, 같은 날 (2026-08-17):** 사용자가
+"남은것들 해결해봐"로 재확인 — 위 "Still open"에 적어뒀던 후보 중
+tractable한 것들을 처리. `len`은 이미 아무 코드 변경 없이 동작함을 먼저
+**실제로 테스트해서** 확인(가정 아님) — `exec()`에 빈 namespace를 주면
+Python이 암묵적으로 `__builtins__`를 주입해서, 기존 `_is_sym(head)` →
+`ast.Call(func=Name(...))` fallback이 `len` 같은 Python builtin 이름도
+그냥 호출해버림.
+
+새로 추가한 것: (1) `(get target index)` — Hy의 subscript-access 특수형
+(Python builtin이 아니라 `if`/`fn`처럼 backend가 직접 인식해야 함) →
+`ast.Subscript`. (2) `(.method target args...)` — Hy의 dot-method-call
+설탕(`target.method(args...)`), list mutation(`(.append lst x)`)의 유일한
+경로 — head 심볼이 `.`로 시작하면 `ast.Attribute` + `ast.Call`로. (3)
+keyword-키 dict 리터럴(`{:a 1 :b 2}`) — 이전엔 명시적으로 범위 밖(reader-model
+정체성 문제)이었으나, `hy.models.Keyword`가 순수 VALUE 타입(이 파일이 이미
+`ast`/`compile()`을 신뢰 substrate로 쓰는 것과 같은 성격 — reader/compiler
+로직 재사용이 아니라 값 표현만 빌림)임을 인식하고 재검토해서 지원: 토크나이저가
+`:name` 토큰을 `("__kw__", name)` 마커로 읽고, emit이 `Keyword(name)`을
+호출하는 `ast.Call`로(compiled 코드가 실행될 exec namespace에 `Keyword` 자체를
+주입) 컴파일. 실제 upstream Hy도 keyword 리터럴을 정확히 같은 방식(런타임에
+`Keyword(name)` 생성자 호출)으로 컴파일한다는 것을 `kernel.hy` 소스를 읽어
+확인 후 착수(가정 아님).
+
+fixture 추가 전 세 다리(host/kernel_direct/mini) 각각에 대해 수동으로
+`get`/`.append`/keyword-dict 코드를 직접 실행해 결과 일치 확인, 그 다음
+fixture 3개 추가(19→22): `mini-get-subscript`, `mini-dot-method-mutation`,
+`mini-keyword-dict-literal`. 회귀 없음: `self-check`, `stage7-check` 둘 다
+PASS.
+
+**macro/`require`는 이번 패스에서도 미시도**: `kernel.hy` 자체
+`compile-fn-expr`처럼 새 reader/emitter case 몇 개로 되는 수준이 아니라,
+진짜 컴파일타임 매크로 확장 인프라(매크로 테이블, quasiquote/unquote 파싱,
+매크로 본문을 코드로 실행해서 폼을 폼으로 돌려받는 메커니즘, 최소한의
+hygiene)가 통째로 필요 — 지금까지의 "작은 증분, 각자 완전히 검증" 패턴과
+규모가 다름. 정직하게 열린 상태로 남김(과대주장 안 함) — 언젠가 착수한다면
+별도의, 그 자체로 크게 스코프된 슬라이스가 되어야 함.
+
 **이 세션 수정: 누락 native-corpus 의존성.** fresh checkout/venv는 예전에
 `diverse-double-compile-check` 및 기타 native-corpus 의존 체크를
 `hy.errors.HyRequireError: No module named 'tests'`로 실패시킴(수정 없는
@@ -250,5 +287,5 @@ export HY_META_PYTHON=/tmp/pnix-hy-py311-venv/bin/python
 | Gate | Result | Notes |
 |---|---|---|
 | `hy-meta-gate primary` (self-check + stage7-check) | **PASS** | Python 3.11.16 + hy 1.3.1 + funcparserlib (pip venv) |
-| `independent-mini-backend-check` | **PASS** 19/19 | 8→12→14 (이전 세션) →19 (클로저, 이번 세션) |
+| `independent-mini-backend-check` | **PASS** 22/22 | 8→12→14 (이전 세션) →19 (클로저) →22 (`get`/dot-메서드/keyword dict), 이번 세션 |
 | full ladder stage8–stagen | not default-run | available via bootstrap.py |

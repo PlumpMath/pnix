@@ -1715,6 +1715,21 @@ def independent_mini_backend_fixtures() -> list[dict[str, Any]]:
             ),
             "expected": 7,
         },
+        {
+            "id": "mini-get-subscript",
+            "source": "(defn f [lst] (get lst 1)) (f [10 20 30])",
+            "expected": 20,
+        },
+        {
+            "id": "mini-dot-method-mutation",
+            "source": "(defn f [lst] (.append lst 4) (len lst)) (f [1 2 3])",
+            "expected": 4,
+        },
+        {
+            "id": "mini-keyword-dict-literal",
+            "source": '(defn f [] {:a 1 :b 2}) (f)',
+            "expected": {hy.models.Keyword("a"): 1, hy.models.Keyword("b"): 2},
+        },
     ]
 
 

@@ -12,9 +12,10 @@ remain trusted substrate for clj-meta's analogous `frontend_selfhost.clj`.
 It is a frontier witness, not a replacement for the production frontend: it
 covers a bounded fixture set (arithmetic, comparisons, `if`, `defn`,
 recursion, calling between top-level `defn`s, boolean/`None` literals,
-string/list/dict literals (dict keys are string literals only),
-`setv`/`while` mutation, and genuine closures via `fn` (single-expression
-body only)), not the Hy language.
+string/list/dict/keyword literals, `get` subscript access, dot-prefixed
+method calls (`(.method target args...)`), `setv`/`while` mutation, and
+genuine closures via `fn` (single-expression body only)), not the Hy
+language.
 """
 
 from __future__ import annotations
@@ -22,6 +23,16 @@ from __future__ import annotations
 import ast
 import re
 from typing import Any
+
+# `hy.models.Keyword` is a plain VALUE type (like Python's own `ast` module
+# is treated as trusted substrate elsewhere in this file) -- importing it is
+# not the same as reusing `hy.reader`/`hy.compiler`'s READING or COMPILING
+# logic (the actual thing this witness independently re-derives). It's
+# needed so a keyword literal compiled by this backend constructs the exact
+# same runtime value real Hy's own compiled output does (`Keyword("a") ==
+# Keyword("a")` by `.name`), so `mini_result == expected` comparisons in the
+# 3-way check are meaningful for keyword-keyed fixtures.
+from hy.models import Keyword
 
 TOKEN_RE = re.compile(r'\s*("(?:[^"\\]|\\.)*"|\(|\)|\[|\]|\{|\}|-?\d+|[^\s()\[\]{}]+)')
 
@@ -80,6 +91,8 @@ def _parse_one(tokens: list[str], i: int) -> tuple[Any, int]:
         return ast.literal_eval(tok), i + 1
     if re.fullmatch(r"-?\d+", tok):
         return int(tok), i + 1
+    if tok.startswith(":") and len(tok) > 1:
+        return ("__kw__", tok[1:]), i + 1
     return ("__sym__", tok), i + 1
 
 
@@ -123,6 +136,13 @@ def _is_dict(form: Any) -> bool:
     return isinstance(form, tuple) and len(form) == 2 and form[0] == "__dict__"
 
 
+def _is_kw(form: Any) -> bool:
+    return isinstance(form, tuple) and len(form) == 2 and form[0] == "__kw__"
+
+
+_KEYWORD_NAME = "__mini_backend_Keyword__"
+
+
 def _emit_expr(form: Any) -> ast.expr:
     if isinstance(form, bool):
         return ast.Constant(value=form)
@@ -136,19 +156,29 @@ def _emit_expr(form: Any) -> ast.expr:
         return ast.List(elts=[_emit_expr(item) for item in form], ctx=ast.Load())
     if _is_sym(form):
         return ast.Name(id=_sym_name(form), ctx=ast.Load())
+    if _is_kw(form):
+        # `:name` -- real Hy reads this as a `hy.models.Keyword("name")`
+        # value; compiled code constructs one at runtime the same way real
+        # Hy's own compiled output does (see the `hy.models` import note at
+        # the top of this file).
+        _, name = form
+        return ast.Call(
+            func=ast.Name(id=_KEYWORD_NAME, ctx=ast.Load()),
+            args=[ast.Constant(value=name)],
+            keywords=[],
+        )
     if _is_dict(form):
-        # Keys are string literals only (the DDC fixtures this backend
-        # targets) -- Hy keyword literals (`:a`) read as `hy.models.Keyword`
-        # objects on the real host, a reader-model identity this backend
-        # does not reproduce, so keyword-keyed dict literals are out of
-        # scope here.
+        # Keys are string OR keyword literals -- `_emit_expr` on the key
+        # form handles both uniformly now.
         _, pairs = form
         keys = []
         values = []
         for key_f, value_f in pairs:
-            if not isinstance(key_f, str):
-                raise SyntaxError("tiny analyzer: dict literal key must be a string literal")
-            keys.append(ast.Constant(value=key_f))
+            if not (isinstance(key_f, str) or _is_kw(key_f)):
+                raise SyntaxError(
+                    "tiny analyzer: dict literal key must be a string or keyword literal"
+                )
+            keys.append(_emit_expr(key_f))
             values.append(_emit_expr(value_f))
         return ast.Dict(keys=keys, values=values)
     if isinstance(form, tuple):
@@ -217,6 +247,34 @@ def _emit_expr(form: Any) -> ast.expr:
                 left=_emit_expr(args[0]),
                 ops=[_CMPOPS[_sym_name(head)]],
                 comparators=[_emit_expr(args[1])],
+            )
+        if _is_sym(head, "get"):
+            # `(get target index)` -- Hy special form for subscript access
+            # (`target[index]`), NOT a Python builtin (there is no free
+            # function named `get`), so it needs its own case here rather
+            # than falling through to the generic call dispatch below.
+            if len(args) != 2:
+                raise SyntaxError("tiny analyzer: get arity")
+            return ast.Subscript(
+                value=_emit_expr(args[0]),
+                slice=_emit_expr(args[1]),
+                ctx=ast.Load(),
+            )
+        if _is_sym(head) and _sym_name(head).startswith("."):
+            # `(.method target args...)` -- Hy's dot-prefixed method-call
+            # sugar, compiling to `target.method(args...)`. Needed for
+            # mutation methods like `(.append lst x)` (no dedicated
+            # `setv`-like list-mutation special form exists in Hy; methods
+            # are how it's done), but works for any zero-or-more-arg method
+            # call generally.
+            method = _sym_name(head)[1:]
+            if not method or not args:
+                raise SyntaxError("tiny analyzer: .method call needs a method name and a target")
+            target_f, method_args = args[0], args[1:]
+            return ast.Call(
+                func=ast.Attribute(value=_emit_expr(target_f), attr=method, ctx=ast.Load()),
+                args=[_emit_expr(a) for a in method_args],
+                keywords=[],
             )
         if _is_sym(head):
             return ast.Call(
@@ -317,6 +375,6 @@ def compile_and_eval(source: str) -> Any:
     module = ast.Module(body=stmts, type_ignores=[])
     ast.fix_missing_locations(module)
     code = compile(module, "<independent-mini-backend>", "exec")
-    namespace: dict[str, Any] = {}
+    namespace: dict[str, Any] = {_KEYWORD_NAME: Keyword}
     exec(code, namespace)  # noqa: S102 - trusted, hand-built AST, no eval of untrusted strings
     return namespace[_RESULT_NAME]
