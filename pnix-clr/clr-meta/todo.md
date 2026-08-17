@@ -90,8 +90,32 @@ widening, Stage8, Stage9, Stage10–15/N 각각) — 각 item 자체 항목에�
    219에서 +8) 0 fail/0 error, `./bin/clr-meta-gate eval-only` PASS,
    회귀 없음.
 
-   **다음 후보:** nested `fn`/closure(새 값 표현 + 일반 apply 설계
-   필요 — 착수 전 설계부터), 또는 item 6/7.
+   **추가 확장, 같은 날: nested `fn` (closure, 런타임 값 없이).** 실제
+   설계 정리 후 착수 — 핵심 통찰: fixture들의 "closure"는 전부
+   즉시-적용(immediately-applied) 중첩 `fn`이라 표준 beta-reduction
+   `((fn [p...] a...) args...)` ≡ `(let [p... args...] a...)` 그
+   자체이고, 새 런타임 값이나 일반 apply 없이 이미 검증된 `let`
+   메커니즘 재사용으로 처리 가능. `desugar` pass 추가: (1)
+   beta-reduction, (2) `((let [b...] TAIL) a...)` → `(let [b...] (TAIL
+   a...))` let-floating(자식부터 bottom-up + 고정점까지 재귀 적용해서
+   임의 깊이/transitive capture 공짜로 처리), (3) named-local-fn
+   단일-tail-호출 패턴도 같은 방식으로 인식. **의도적으로 좁힌 경계**:
+   진짜 first-class 클로저(저장 후 나중에 호출 등)는 미지원, 시도하면
+   "unsupported op fn"으로 명확히 에러(조용히 틀린 값 아님 확인).
+   capture-avoiding substitution 아님(형제 인자와 파라미터 이름 충돌
+   케이스 미지원, 이 repo 실제 fixture엔 없는 모양). 단순/4단계 중첩,
+   `if` 안 중첩, named-local-fn 6가지 조합 실제 host 대비 검증 + 미지원
+   형태의 명확한 에러도 확인. fixture 6개 추가(24→30). 검증:
+   `bootstrap-test` 20 tests/239 assertions(기존 227에서 +12) 0 fail/0
+   error, `./bin/clr-meta-gate eval-only` PASS, 회귀 없음.
+
+   이걸로 clj-meta U6가 이번 세션 초반에 거친 것과 같은 순서(`let` →
+   `loop`/`recur` → nested fn)를 clr-meta의 mini-backend도 따라잡음.
+
+   **다음 후보:** 여러 번 호출되는 named-local-fn까지 desugar 일반화
+   (지금은 tail 위치 단일 호출만), `independent_mini_interpreter.clj`
+   witness 쪽 fixture 확장(이번 세션엔 mini-backend만 건드림, 9개
+   그대로), 또는 item 6/7.
 
 2. **Stage8 — reproducible assembly artifact closure — DONE (2026-08-12).**
    였음: 시작 안 됨 (design doc 없음, gate/builder script 없음, 어디에나

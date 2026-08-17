@@ -66,6 +66,95 @@
       (throw (Exception. "tiny reader: trailing tokens")))
     form))
 
+;; ---- nested-fn desugaring (beta-reduction, no runtime closure value) ----
+;;
+;; This backend's whole checked-Int64 profile stays unboxed throughout --
+;; there is no notion of a class (unlike the reference JVM host's
+;; `emit-class`/`emit-closure` pair) and no general "call an arbitrary
+;; computed value" mechanism (only the fixed operators below). Genuine
+;; first-class closures (stored in a binding, applied later through an
+;; unrelated path, returned across a `compile-source` boundary) would need
+;; both a new runtime value representation and a general apply form -- a
+;; substantially bigger step than anything else in this file, deliberately
+;; NOT attempted here.
+;;
+;; What IS supported: a `fn` literal applied DIRECTLY, `((fn [p...] body)
+;; a...)`, which is exactly the standard beta-reduction `(let [p... a...]
+;; body)` -- needing no new runtime machinery at all, since it collapses
+;; onto the SAME `let` analysis/emission already built and verified.
+;; Arbitrary nesting/transitive capture (the shape every closure-flavored
+;; fixture in this repo -- `bootstrap.clj`'s own conformance corpus,
+;; `independent_mini_interpreter.clj`'s fixtures -- actually uses) falls
+;; out for free by ALSO floating an application through a `let` a nested
+;; reduction already produced (`((let [b...] TAIL) a...)` -> `(let [b...]
+;; (TAIL a...))`, sound because a function call's ARGS are always
+;; evaluated independently of the callee's own internal scope), then
+;; re-running both rules until nothing more reduces. `desugar` walks
+;; bottom-up (children first), so by the time either rule checks the
+;; current node's operator, that operator has already been reduced as far
+;; as it can be.
+;;
+;; Also handled: a NAMED local fn, bound via `let` and called once as the
+;; let's own tail expression -- `(let [... name (fn [p...] body)] (name
+;; a...))` -- the natural "define a small helper, call it right here"
+;; idiom, distinct from an anonymous fn applied inline. Only that exact
+;; shape (the fn-binding is the LAST binding, and the tail is a direct
+;; call to that same name) is recognized: it reduces to `(let
+;; [...earlier-bindings...] ((fn [p...] body) a...))`, re-desugared so the
+;; inner application immediately falls to the same beta-reduction rule
+;; above. A `name` called more than once, or used any other way (passed as
+;; a value, etc.), is NOT inlined -- still the same first-class-closure
+;; boundary noted above.
+;;
+;; Known, deliberately unguarded boundary: this is plain substitution, not
+;; capture-avoiding substitution -- a nested `fn`'s parameter name
+;; colliding with a name used in one of ITS OWN call's sibling arguments
+;; (e.g. `((fn [x y] (+ x y)) 1 x)`, where the second arg `x` means the
+;; OUTER `x`, not the fresh param) is not handled correctly. None of this
+;; repo's actual fixtures need that shape; a real capture-avoiding pass
+;; (alpha-renaming every binding to a fresh gensym first) is a well-known,
+;; well-scoped follow-up if it's ever needed.
+(defn- desugar [form]
+  (cond
+    (seq? form)
+    (let [desugared (map desugar form)
+          op (first desugared) args (rest desugared)]
+      (cond
+        (and (seq? op) (= 'fn (first op)))
+        (let [[_ params & body] op]
+          (when-not (and (vector? params) (every? symbol? params)
+                         (= (count params) (count (distinct params)))
+                         (= 1 (count body)))
+            (throw (Exception. "tiny reader: malformed nested fn")))
+          (when-not (= (count params) (count args))
+            (throw (Exception. "tiny reader: nested fn arity mismatch")))
+          (desugar (list* 'let (vec (interleave params args)) body)))
+
+        (and (seq? op) (= 'let (first op)))
+        (let [[_ bindings tail] op]
+          (desugar (list 'let bindings (list* tail args))))
+
+        (and (= op 'let) (= 2 (count args))
+             (vector? (first args)) (even? (count (first args))) (seq (first args))
+             (seq? (second args)))
+        (let [[bindings tail] args
+              pairs (partition 2 bindings)
+              [last-name last-init] (last pairs)]
+          (if (and (seq? last-init) (= 'fn (first last-init))
+                   (= last-name (first tail)))
+            (let [earlier (vec (apply concat (butlast pairs)))
+                  reduced-tail (cons last-init (rest tail))]
+              (desugar (if (seq earlier)
+                         (list 'let earlier reduced-tail)
+                         reduced-tail)))
+            (apply list op args)))
+
+        :else
+        (apply list op args)))
+
+    (vector? form) (mapv desugar form)
+    :else form))
+
 ;; ---- tiny analyzer ----
 ;; (fn [params...] body) -> {:params [...] :body <expr>}
 ;; expr := int | sym | (if t then else) | (let [name val ...] body)
@@ -296,7 +385,7 @@
 (defn compile-source
   "Compile `(fn [params...] body)` source text to an invokable DynamicMethod."
   [source]
-  (let [form (tiny-read source)
+  (let [form (desugar (tiny-read source))
         ast (analyze-fn form)
         arity (count (:params ast))
         param-types (into-array System.Type (repeat arity Int64))

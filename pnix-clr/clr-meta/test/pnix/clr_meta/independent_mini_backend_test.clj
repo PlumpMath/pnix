@@ -33,7 +33,13 @@
    ["(fn [n] (loop [i 0 acc 0] (if (> i n) acc (recur (+ i 1) (+ acc i)))))" [10] 55]
    ["(fn [n] (loop [i n acc 1] (if (<= i 1) acc (recur (- i 1) (* acc i)))))" [5] 120]
    ["(fn [n acc] (if (= n 0) acc (recur (- n 1) (+ acc n))))" [5 0] 15]
-   ["(fn [n a b] (loop [i n a a b b] (if (= i 0) a (recur (- i 1) b a))))" [3 1 2] 2]])
+   ["(fn [n a b] (loop [i n a a b b] (if (= i 0) a (recur (- i 1) b a))))" [3 1 2] 2]
+   ["(fn [] ((fn [x] (+ x 1)) 41))" [] 42]
+   ["(fn [] (((fn [x] (fn [y] (+ x y))) 20) 22))" [] 42]
+   ["(fn [] ((((fn [a] (fn [b] (fn [c] (+ a (+ b c))))) 1) 2) 3))" [] 6]
+   ["(fn [n] (if (> n 0) ((fn [x] (* x 2)) n) 0))" [5] 10]
+   ["(fn [n] (let [square (fn [x] (* x x))] (square n)))" [7] 49]
+   ["(fn [n] (let [k 10 add-k (fn [x] (+ x k))] (add-k n)))" [5] 15]])
 
 (deftest independent-mini-backend-agrees-with-host-eval
   (testing "real host ClojureCLR eval and the independent mini backend agree"

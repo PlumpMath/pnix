@@ -375,11 +375,59 @@ assertions(기존 219에서 +8) 0 fail/0 error, `./bin/clr-meta-gate
 eval-only` 여전히 PASS. Stage1-N family와 코드 공유 없어 전체 체인
 재실행 안 함.
 
-**다음 구체적 단계:** named self-recursion은 이미 bare recur로 커버되므로,
-남은 자연스러운 다음 단계는 여전히 nested `fn`/closure(단, 이번에 확인한
-대로 값 표현+일반 apply를 새로 설계해야 하는 진짜 큰 작업 — 착수 전에
-설계를 먼저 정리할 것), 또는 `todo.md` item 6/7 (broad ClojureCLR
-compatibility/replacement, roadmap 자체 ordering이 명시적으로 연기).
+**Mini-backend에 nested `fn` 지원 추가(closure, 진짜 런타임 값 없이),
+같은 날 (2026-08-15):** 사용자가 "jvm clojure 만큼의 수준만큼 clr-meta도
+높여달라"로 명시적으로 재확인 — nested closure 설계를 실제로 정리해서
+착수. 핵심 통찰: 이 backend가 다루는 fixture들의 "closure"는 전부
+**즉시 적용되는(immediately-applied)** 중첩 `fn` 형태였음
+(`(((fn [x] (fn [y] (+ x y))) 20) 22)`처럼 — `bootstrap.clj` 자체
+conformance corpus와 `independent_mini_interpreter.clj`의 closure
+fixture 둘 다 정확히 이 모양). 이런 형태는 표준 **beta-reduction**
+`((fn [p...] a...) args...)` ≡ `(let [p... args...] a...)` 그 자체라서,
+진짜 런타임 클로저 값이나 일반 apply 메커니즘 전혀 없이, 이미 만들어져
+검증된 `let` 메커니즘 그대로 재사용해서 처리 가능함을 확인.
+
+`desugar`라는 새 raw-form 재작성 pass 추가(reader 출력과 analyzer 사이):
+(1) `((fn [p...] body) a...)` → `(let [p... a...] body)` beta-reduction,
+(2) `((let [b...] TAIL) a...)` → `(let [b...] (TAIL a...))` let-floating
+(함수 호출의 인자는 항상 callee의 내부 스코프와 독립적으로 평가되므로
+안전) — 두 규칙을 자식부터 먼저 처리(bottom-up)하며 고정점까지 재귀
+적용해서 임의 깊이 중첩과 transitive capture를 공짜로 처리(자식이 먼저
+reduce되므로, 바깥 레벨에서 op를 검사할 때 이미 최대한 줄어든 상태).
+(3) 자연스러운 확장으로 "named local fn을 let으로 묶고 그 자리에서
+한 번 호출"하는 흔한 패턴(`(let [square (fn [x] (* x x))] (square n))`)도
+같은 방식으로 인식해서 처리 — 마지막 바인딩이 `fn` 리터럴이고 tail이
+정확히 그 이름 호출이면 beta-reduction으로 환원.
+
+**의도적으로 좁힌 경계, 명시적으로 정직하게 문서화**: (a) 진짜 first-class
+클로저(변수에 저장 후 나중에 별도 경로로 호출, `compile-source` 경계를
+넘어 반환 등)는 여전히 미지원 — 새 런타임 값 표현 + 일반 apply가
+필요한 훨씬 큰 작업이라 착수 안 함(시도했다가 미지원 형태에 대해서는
+"tiny analyzer: unsupported op fn"라는 명확한 구조적 에러로 실패 —
+조용히 틀린 값 아님, 확인됨). (b) capture-avoiding substitution이
+아니라 순수 substitution이라, 중첩 fn의 파라미터 이름이 자기 호출의
+형제 인자에 등장하는 경우(`((fn [x y] (+ x y)) 1 x)`에서 두 번째
+인자 `x`가 바깥 `x`를 의미해야 하는 경우)는 정확하지 않음 — 이 repo의
+실제 fixture 중 이런 모양은 없음, alpha-renaming(고정 gensym) pass가
+필요하면 나중에 잘 정의된 후속 작업으로 남김.
+
+단순 중첩, transitive/4단계 중첩, `if` 안에 중첩 적용, named-local-fn
+(단독 바인딩/앞선 바인딩과 함께) 6가지 조합 전부 실제 host ClojureCLR
+`eval` 대비 검증(전부 일치) + 미지원 형태(let에 저장만 하고 호출 안 함,
+named-local-fn을 let으로 만들었지만 나중에 부른 경우)가 조용히 틀리지
+않고 명확히 에러내는 것도 확인. fixture 6개 추가(24→30). 회귀 없음:
+`bootstrap-test` 20 tests/239 assertions(기존 227에서 +12) 0 fail/0
+error, `./bin/clr-meta-gate eval-only` 여전히 PASS. Stage1-N family와
+코드 공유 없어 전체 체인 재실행 안 함.
+
+**다음 구체적 단계:** 이걸로 clj-meta U6가 이번 세션 초반에 거쳤던 것과
+같은 순서(`let` → `loop`/`recur` → nested fn)를 clr-meta의
+mini-backend도 따라잡음. 남은 자연스러운 다음 단계는 (a) 여러 번 호출되는
+named-local-fn까지 desugar 일반화(지금은 tail 위치 단일 호출만), (b)
+`independent_mini_interpreter.clj` witness 쪽 fixture도 같이 넓히기(9개
+그대로 — 이번 세션엔 mini-backend만 확장), (c) `todo.md` item 6/7 (broad
+ClojureCLR compatibility/replacement, roadmap 자체 ordering이 명시적으로
+연기).
 
 ## Primary 게이트
 
@@ -404,7 +452,7 @@ shim을 실을 수 있다.
 
 | 게이트 | 결과 | 비고 |
 |---|---|---|
-| `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/227 assertions; tool-gate PASS |
+| `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/239 assertions; tool-gate PASS |
 | full C1–C3/Stage1-N chain | 이 세션 재실행 안 함 | `independent_mini_backend.clj`와 코드 공유 없음; docs claim closed |
 | `./scripts/clr-meta-compiler-selfhost-stage3-gate` | **PASS** | Stage2→Stage3 + source-hidden replay |
 | `./scripts/clr-meta-compiler-selfhost-stage4-gate` | **PASS** | Stage3→Stage4 + source-hidden replay |
