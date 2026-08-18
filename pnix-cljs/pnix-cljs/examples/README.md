@@ -10,7 +10,7 @@
 |--------|----------------------|
 | clj / hy | 연구용 dense 카탈로그 |
 | rs | 중간 pillar 카탈로그 |
-| **cljs** | **코어 00–16** (이 트리) — 실표면이 있을 때만 확장 |
+| **cljs** | **코어 00–17** (이 트리) — 실표면이 있을 때만 확장 |
 
 공유 테마 표: 모노레포 [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
 
@@ -42,6 +42,7 @@
 | [`14-tryEval`](14-tryEval/) | tryEval 성공/throw |
 | [`15-string-and-version`](15-string-and-version/) | substring · concatStringsSep · splitVersion |
 | [`16-closures`](16-closures/) | 커링 클로저의 바깥 바인딩 캡처 + 다회 재호출 |
+| [`17-repl-session`](17-repl-session/) | `--repl` 대화형 pnix REPL 세션 |
 
 ## 실행 (대표)
 

@@ -12,8 +12,8 @@
 | **clj** | `pnix-clj/pnix-clj/examples/` | ~90개 슬라이스 | 가장  densest: spine, machine, oracle, AI gate |
 | **hy** | `pnix-hy/pnix-hy/examples/` | ~41 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf, Hy 구성체 프로젝션, meta-circular tower, 양방향 closure 등 |
 | **rs** | `pnix-rs/pnix-rs/examples/` | ~28 | 중간: gate, mirror, BTA, embed, Jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/tower-depth/project-health |
-| **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–16 | experimental seed; Node 라이브러리 import + 클로저 |
-| **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–16 | experimental seed; C# 라이브러리 + in-process opt-in + 클로저 |
+| **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–17 | experimental seed; Node 라이브러리 import + 클로저 + REPL |
+| **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–17 | experimental seed; C# 라이브러리 + in-process opt-in + 클로저 + REPL |
 
 모노레포 host-import 스모크(제품 카탈로그 아님): `examples/host-import/`.
 
