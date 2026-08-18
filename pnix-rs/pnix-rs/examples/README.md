@@ -53,6 +53,19 @@ pnix-rs / rs-meta
 | `13-peer-engine` | 두 엔진을 공통 제어면(.px)으로 잇는 표준이 없음 | **engine-verdict/attestation** = rs-meta를 peer 엔진으로, `.px` 봉투로 라우팅 |
 | `14-runners-and-repls` | 두 언어의 컴파일러/인터프리터 실행기 분류가 없음 | 역할별 flake runner + px/Rust **REPL**(인터프리터 모드) |
 | `15-embed-pnix-in-rust` † | 호스트 Rust에 임베드한 pnix는 죽은 문자열(read-time 승격 없음) | 임베드 pnix를 **평가+Rust 사영+witness** — 언어-수준 interop(형제 08 대응) |
+| `16-jones-optimality` | 부분평가가 Jones-최적인지 측정할 표준이 없음 | **jones-check**: 인터프리터 비만-불변 + 인터프리터-free + 프로그램 추적성 |
+| `17-welltyped-floor` | 타입검사 판정을 재검토 가능한 증거로 안 남김 | **welltyped-check**: meta-circular 플로어 typeck 재인증 + 이빨(음성 사례) |
+| `18-cogen-second-futamura` | 2차 Futamura 사영(컴파일러 생성기)이 없음 | **cogen-check**: 프로그램별 컴파일된 residual 직접 생성 |
+| `19-typed-attestation` | 타입 있는 증명서(predicate-subject)가 없음 | **attest-check**: witness → in-toto/SLSA식 typed attestation |
+| `20-verifying-cache` | 빌드 캐시가 신뢰만 하고 재검증 안 함 | **verifying-cache-check**: hit 재검증 + 변조 탐지(이빨) |
+| `21-ir-diff` | 텍스트 diff뿐, 의미 갈라지는 위치를 구조로 못 짚음 | **ir-diff-check**: 정본 IR 구조 diff + 첫 차이 위치 |
+| `22-capability-attenuation` | effect 권한의 비가역적 축소 모델이 없음 | **attenuate-check**: 감쇠 + 비가역성 + 회수 + 연쇄 감쇠 |
+| `23-specialization-soundness` | 특화의 가정 의존성/유효성을 안 추적함 | **phase-check + assumption-check**: 구조 경계 + stale 탐지·재특화 |
+| `24-differential-certificate` | 배터리 동등성을 재검토 가능한 인증서로 안 묶음 | **certify-check**: 내용해시 인증서 + 결정성 + 이빨 |
+| `25-cross-host-oracle` | 참조 데이터의 cross-project 스키마 고정을 안 게이트함 | **cross-host-check**: 오라클 export drift + witness 스키마 고정 |
+| `26-stage-ladder` | 여러 실행 경로의 의미 일치를 코퍼스 규모로 안 검사함 | **stage-check**: direct/normalized/CAS/AST-roundtrip/replay 5경로 일치 |
+| `27-reflect-tower-coherence` | reify/reflect 반복의 탑 정합성 개념이 없음 | **reflect-tower-check**: 레벨 1·2 정합 + 메타-레벨 투명성 |
+| `28-project-health-gates` | 문서/설명이 구현과 어긋나는지 사람 리뷰에만 의존 | **explain/capabilities/registry-check**: 자기정합 3종 게이트 |
 
 ## 두 언어 · interop — 형제 프로젝트와의 대응
 
