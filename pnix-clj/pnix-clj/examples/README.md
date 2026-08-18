@@ -258,6 +258,8 @@ lane    = 같은 문제를 푸는 다른 길. 여러 길이 같은 답을 내는
 | `90-machine-report-fuel-witness` | 손 report는 shared corpus/stack/fuel 증거가 없음 | M7g `machine/report`와 fuel bound를 regression artifact로 확인 |
 | `91-machine-report-artifact-gate` | machine report 모양의 파일은 gate capability 증거가 아님 | M7g `:machine` report artifact를 registry/gate 경로로 materialize |
 | `92-machine-property-fuzzer-lane` | sample 몇 개 통과는 random machine agreement가 아님 | M7h `property-fuzzer`가 machine⇄evaluator exact agreement를 fifth property로 검사 |
+| `93-live-oracle-differential` | 손 셸아웃은 구조화된 matched/mismatched 집계가 없음 | `live-oracle`이 실제 `nix-instantiate`와 소스별로 직접 값을 비교(없으면 구조화된 skip) |
+| `94-mirror-pair-corpus-report` | 199개 소스를 손으로 4-레인 비교할 수 없음 | `mirror-pair`가 committed 코퍼스 전체의 4-레인(evaluator/clj-meta/px-runtime/pnix-mirror) 수렴을 집계 |
 
 각 pnix-clj 능력은 테스트 스위트와 runnable example로 회귀 고정되어 있습니다.
 

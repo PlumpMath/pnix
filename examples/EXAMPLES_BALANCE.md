@@ -9,7 +9,7 @@
 
 | 호스트 | 제품 예제 루트 | 카탈로그 깊이 (대략) | 비고 |
 |--------|----------------|----------------------|------|
-| **clj** | `pnix-clj/pnix-clj/examples/` | ~90개 슬라이스 | 가장  densest: spine, machine, oracle, AI gate |
+| **clj** | `pnix-clj/pnix-clj/examples/` | ~94개 슬라이스 | 가장 densest: spine, machine, oracle, AI gate, live oracle, mirror-pair corpus |
 | **hy** | `pnix-hy/pnix-hy/examples/` | ~41 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf, Hy 구성체 프로젝션, meta-circular tower, 양방향 closure 등 |
 | **rs** | `pnix-rs/pnix-rs/examples/` | ~28 | 중간: gate, mirror, BTA, embed, Jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/tower-depth/project-health |
 | **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–17 | experimental seed; Node 라이브러리 import + 클로저 + REPL |
@@ -69,3 +69,15 @@ capabilities+registry — 를 16–28로 채움. hy: `pnix_stage_ladder`/
 clr-meta/cljs-meta 내부(Stage15/N)는 여전히 승격하지 않음(규칙 4). 규칙
 1·3에 따라 clj/hy 슬라이스 복제가 아니라 각 host 자신의 실행 가능한
 표면만 반영 — 5개 host 전부 이번 감사 완료).
+
+2차 감사 (같은 날): rs `02`가 `ir` 명령으로 개념만 보여주고 실제
+`ir-check` 게이트는 안 부르던 것을 보강(34개 게이트 완전 커버). hy:
+CLI 플래그(`--defmacro`/`--import`/`--macro-steps`/`--quasiquote`/
+`--reader-macro`/`--tower`/`--synth-pnix`/`--closure`/`--hy-closure`)를
+뒷받침하는 함수 8개가 예제 전무였던 것을 39–41로 채움. clr/cljs: 이번
+세션에 새로 생긴 `--repl`이 예제 없던 것을 17로 채움. clj: 생성
+capabilities 인덱스(`docs/CAPABILITIES.md`)의 report-artifact kind
+전수 대조로 `live-oracle`(실제 nix-instantiate와의 실시간 차분 비교)과
+`mirror-pair`(199-소스 코퍼스 전체 4-레인 수렴 집계 — `72`는 단일
+소스 디버그 뷰라 범위가 다름)가 예제 없던 것을 93–94로 채움; 나머지
+kind는 전부 기존 예제가 namespace require로 실제 커버 중임을 확인.
