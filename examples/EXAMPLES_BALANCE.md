@@ -10,7 +10,7 @@
 | 호스트 | 제품 예제 루트 | 카탈로그 깊이 (대략) | 비고 |
 |--------|----------------|----------------------|------|
 | **clj** | `pnix-clj/pnix-clj/examples/` | ~94개 슬라이스 | 가장 densest: spine, machine, oracle, AI gate, live oracle, mirror-pair corpus |
-| **hy** | `pnix-hy/pnix-hy/examples/` | ~41 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf, Hy 구성체 프로젝션, meta-circular tower, 양방향 closure 등 |
+| **hy** | `pnix-hy/pnix-hy/examples/` | ~43 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf, Hy 구성체 프로젝션, meta-circular tower, 양방향 closure, 호스트 콜러블 호출, opaque 참조 생명주기 등 |
 | **rs** | `pnix-rs/pnix-rs/examples/` | ~28 | 중간: gate, mirror, BTA, embed, Jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/tower-depth/project-health |
 | **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–17 | experimental seed; Node 라이브러리 import + 클로저 + REPL |
 | **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–17 | experimental seed; C# 라이브러리 + in-process opt-in + 클로저 + REPL |
@@ -28,7 +28,7 @@
 | 순수 / fail-closed 평가 | 01 | 01 | 01 | 01 | 01 |
 | 결정성 / 해시 / drift | 13–15, 21 | 02, 29 | 02, 21 | — | — |
 | 호스트 라이브러리 import | host-import + 51 | 14 | 15 | **02** | **02** |
-| 호스트↔pnix interop / embed | 04, 07–08 | 04, 07–08 | 04, 15 | **04** | **04** |
+| 호스트↔pnix interop / embed | 04, 07–08 | 04, 07–08, 42–43 | 04, 15 | **04** | **04** |
 | 결과 모양 / 영수증 정직 | 02, 05 | 05, 37 | 05, 19, 28 | **03, 05** | **03, 05** |
 | Specialize / Futamura | 03, 33 | 03, 33 | 06, 16, 18, 23 | — | — |
 | Self-host / meta 쌍 | 11, 35 | 11, 35, 36, 40, 41 | 11, 26, 27 | **06** | **06** |
@@ -81,3 +81,14 @@ capabilities 인덱스(`docs/CAPABILITIES.md`)의 report-artifact kind
 `mirror-pair`(199-소스 코퍼스 전체 4-레인 수렴 집계 — `72`는 단일
 소스 디버그 뷰라 범위가 다름)가 예제 없던 것을 93–94로 채움; 나머지
 kind는 전부 기존 예제가 namespace require로 실제 커버 중임을 확인.
+
+3차 감사 (같은 날): hy `pnix_hy.__all__`(공개 interop API) 전수 대조로
+"값 변환"(04)과는 다른 두 축 — 호스트 함수/메서드 **호출**
+(`call_host`/`call_host_method`/`try_call_host`/`host_callable_arity`/
+`host_module_to_pnix`/`to_host_eval`)과 SES식 **opaque 호스트 참조
+생명주기**(`make_opaque_ref`/`opaque_allowed_methods`/`lend_opaque`/
+`harden_opaque`/`declare_opaque_invariants`, private 메서드 미노출까지
+검증)가 예제 전무였던 것을 42–43으로 채움(둘 다 Hy 불필요, bare
+python3로 확인). hy의 "Self-check reports"(`--capabilities`) 73개
+목록은 대부분 이미 커버된 capability의 내부 회귀 테스트 wrapper임을
+확인하고 오탐으로 제외.

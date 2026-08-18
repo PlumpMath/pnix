@@ -36,7 +36,7 @@ Python 초급자에게 `eval("1+2")`는 결과 `3`만 준다. pnix-hy 방식은 
 AST/IR/hash는 이렇다 · 다시 돌려도 같다 · 번역해도 같은 의미다
 문제가 있으면 어느 줄 어느 칸에서 막혔다
 ```
-까지 같이 준다. → 이 폴더는 **"그냥 실행"과 "증거·안전·의미보존·재현성까지 포함해 다루기"의 차이**를 실행되는 82개 예제로 보여준다.
+까지 같이 준다. → 이 폴더는 **"그냥 실행"과 "증거·안전·의미보존·재현성까지 포함해 다루기"의 차이**를 실행되는 86개 예제로 보여준다.
 
 ## 핵심 대비 (한 줄 요약)
 
@@ -83,9 +83,11 @@ AST/IR/hash는 이렇다 · 다시 돌려도 같다 · 번역해도 같은 의�
 | `39-hy-construct-projection` † | 매크로 정의/import/quasiquote/reader-macro/전개 단계를 구조화된 값으로 조회 불가 | `hy_defmacro_projection`/`hy_import_projection`/`hy_macro_step_trace`/`hy_quasiquote_projection`/`hy_reader_macro_projection` |
 | `40-meta-circular-tower` † | read→compile→run→pnix→collapse 5단계 사슬이 없음 | `meta_circular_tower` = 전체 여정을 한 산출물로 |
 | `41-bidirectional-closure` † | pnix↔Hy 소스 왕복 닫힘(closure) 개념이 없음 | `synthesize_pnix_from_hy`/`pnix_projection_closure`/`hy_projection_closure` |
+| `42-host-callable-invocation` | 호스트 함수/메서드 호출에 effect-class/witness 증거가 없음 | `call_host`/`call_host_method`/`try_call_host`/`host_callable_arity`/`host_module_to_pnix`/`to_host_eval` |
+| `43-opaque-host-ref-lifecycle` | 객체를 넘기면 전권 — 공개 메서드/빌림 스코프/표면 동결이 없음 | `make_opaque_ref`/`opaque_allowed_methods`/`lend_opaque`/`harden_opaque`/`declare_opaque_invariants` |
 
 † = Hy 1.3.0 proof Python 필요 (`nix develop` 또는 `PNIX_HY_PYTHON` 설정 후 실행).
-그 외 섹션(01–06, 09, 10, 12, 13, 17, 18)은 의존성 없이 바로 실행됩니다.
+그 외 섹션(01–06, 09, 10, 12, 13, 17, 18, 42, 43)은 의존성 없이 바로 실행됩니다.
 
 ## 실행법
 
@@ -109,7 +111,7 @@ Hy가 필요한(프로젝션/mirror/hy-meta) 예제는 저장소 루트에서 `P
 
 ## 한 줄 결론
 
-pnix-hy/hy-meta가 정말 meta-circular 기능을 갖는지 **말이 아니라 실행되는 82개 예제로** 보여주는
+pnix-hy/hy-meta가 정말 meta-circular 기능을 갖는지 **말이 아니라 실행되는 86개 예제로** 보여주는
 데모 세트다 — "코드를 실행하는 것"을 넘어 "증거·안전·의미보존·재현성까지 포함해 다루는 것".
 
 > 상위 개요/CLI/REPL은 저장소 루트 `README.md`, 능력 전체 목록은 `../docs/` 와 `../todo.md` 참고.
