@@ -171,11 +171,16 @@ enum MiniExpr {
 #[derive(Debug, Clone)]
 enum MiniVal {
     Int(i64),
-    Closure(Rc<ClosureVal>),
+    Closure(Rc<MiniClosureVal>),
 }
 
+// Named distinctly from interp.rs's own (pre-existing, unrelated) ClosureVal
+// -- this backend's whole-repo source-bundle self-hosting check compiles
+// every src/*.rs file as one concatenated unit, so a same-named top-level
+// struct here would collide with that one at compile time despite the two
+// types otherwise sharing no code.
 #[derive(Debug, Clone)]
-struct ClosureVal {
+struct MiniClosureVal {
     params: Vec<String>,
     body: MiniExpr,
     env: HashMap<String, MiniVal>,
@@ -714,7 +719,7 @@ fn eval_expr(
                 eval_block(else_b, env, fns)
             }
         }
-        MiniExpr::Closure(params, body) => Ok(MiniVal::Closure(Rc::new(ClosureVal {
+        MiniExpr::Closure(params, body) => Ok(MiniVal::Closure(Rc::new(MiniClosureVal {
             params: params.clone(),
             body: (**body).clone(),
             env: env.clone(),
@@ -728,16 +733,24 @@ fn eval_expr(
         },
         MiniExpr::Call(name, args) => {
             if let Some(MiniVal::Closure(closure)) = env.get(name) {
-                let closure = closure.clone();
-                if closure.params.len() != args.len() {
+                // Destructured out of the Rc immediately, rather than
+                // accessing fields on the `Rc<MiniClosureVal>` value
+                // directly -- this backend's own self-hosted typeck (part
+                // of source-bundle-check's interp==rustc dual lane) only
+                // models field/method access through Rc<T> for a narrow
+                // set of built-in T (Vec/String), not arbitrary
+                // user-defined structs; real rustc has no such limit, but
+                // the bundle must satisfy both.
+                let MiniClosureVal { params, body, env: closure_env } = (**closure).clone();
+                if params.len() != args.len() {
                     return Err(format!("tiny interp: arity mismatch calling closure {}", name));
                 }
-                let mut call_env = closure.env.clone();
-                for (p, a) in closure.params.iter().zip(args.iter()) {
+                let mut call_env = closure_env;
+                for (p, a) in params.iter().zip(args.iter()) {
                     let v = eval_expr(a, env, fns)?;
                     call_env.insert(p.clone(), v);
                 }
-                return eval_expr(&closure.body, &mut call_env, fns);
+                return eval_expr(&body, &mut call_env, fns);
             }
             if env.contains_key(name) {
                 return Err(format!("tiny interp: {} is not callable", name));
