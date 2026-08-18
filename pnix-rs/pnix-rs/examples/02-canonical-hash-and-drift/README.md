@@ -16,6 +16,8 @@ Rust에는 '소스의 의미에 대한 안정적 내용주소 해시'가 없다.
 ## pnix-rs의 방식 (`pnix_rs_way.sh`) — Rust ↔ pnix
 - `pnix-rs ir -c '<px>'` — 정본 IR + `ir_sha256` 내용주소
 - 바인딩 순서 변형이 **같은 ir_sha256**을 공유함을 확인(realisation 조기 컷오프의 기반)
+- `pnix-rs ir-check` — 같은 보장(sha256 FIPS self-test + 직접 평가 가능 + identity
+  sharing)을 위 두 손 실험이 아니라 **전체 코퍼스**로 게이트
 
 ## 어디에 쓰나
 빌드 캐시 / 증분 평가 / 재현 가능한 아티팩트 주소.

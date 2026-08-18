@@ -10,7 +10,7 @@
 | 호스트 | 제품 예제 루트 | 카탈로그 깊이 (대략) | 비고 |
 |--------|----------------|----------------------|------|
 | **clj** | `pnix-clj/pnix-clj/examples/` | ~90개 슬라이스 | 가장  densest: spine, machine, oracle, AI gate |
-| **hy** | `pnix-hy/pnix-hy/examples/` | ~38 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf 등 |
+| **hy** | `pnix-hy/pnix-hy/examples/` | ~41 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf, Hy 구성체 프로젝션, meta-circular tower, 양방향 closure 등 |
 | **rs** | `pnix-rs/pnix-rs/examples/` | ~28 | 중간: gate, mirror, BTA, embed, Jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/tower-depth/project-health |
 | **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–16 | experimental seed; Node 라이브러리 import + 클로저 |
 | **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–16 | experimental seed; C# 라이브러리 + in-process opt-in + 클로저 |
@@ -31,7 +31,7 @@
 | 호스트↔pnix interop / embed | 04, 07–08 | 04, 07–08 | 04, 15 | **04** | **04** |
 | 결과 모양 / 영수증 정직 | 02, 05 | 05, 37 | 05, 19, 28 | **03, 05** | **03, 05** |
 | Specialize / Futamura | 03, 33 | 03, 33 | 06, 16, 18, 23 | — | — |
-| Self-host / meta 쌍 | 11, 35 | 11, 35, 36 | 11, 26, 27 | **06** | **06** |
+| Self-host / meta 쌍 | 11, 35 | 11, 35, 36, 40, 41 | 11, 26, 27 | **06** | **06** |
 | Compartment / capability | 23, 31 | 23, 31 | 08, 22 | — | — |
 | Cache / incremental | 12, 30 | 12, 22, 30 | 07, 20 | — | — |
 | Machine / abstract CEK | 61, 78–92 | 35 | 26, 27 | — | — |

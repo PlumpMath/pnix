@@ -16,3 +16,6 @@ echo "# 바인딩 순서만 다른 두 식이 같은 IR 해시를 공유 (identi
 h1=$("$PNIX_RS" ir -c 'let a = 1; b = 2; in a + b' | awk '/ir_sha256/{print $2}')
 h2=$("$PNIX_RS" ir -c 'let b = 2; a = 1; in a + b' | awk '/ir_sha256/{print $2}')
 echo "h1=$h1"; echo "h2=$h2"; [ "$h1" = "$h2" ] && echo "=> 같은 주소 (identity sharing OK)" || echo "=> 다름"
+echo
+echo "# 같은 보장을 코퍼스 전체로: sha256 self-test + 모든 프로그램이 직접 평가 가능 + identity sharing"
+run ir-check
