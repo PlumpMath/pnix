@@ -377,6 +377,12 @@ pub enum PxFrame {
 #[derive(Clone, Debug, PartialEq)]
 enum PxTok {
     Int(i64),
+    /// The unsigned magnitude `9223372036854775808` (abs(i64::MIN)) -- one
+    /// more than i64::MAX, so it can never tokenize as a positive `Int`.
+    /// Only valid when parse_neg's `-` fold consumes it directly; a bare
+    /// occurrence falls through to parse_atom's generic "unexpected token"
+    /// error.
+    IntMinMagnitude,
     Float(f64),
     Ident(String),
     /// Deprecated-but-supported Nix URI literal. Kept distinct from `Str`
@@ -959,6 +965,9 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
             } else {
                 match digits.parse::<i64>() {
                     Ok(n) => toks.push(PxTok::Int(n)),
+                    Err(_) if digits == "9223372036854775808" => {
+                        toks.push(PxTok::IntMinMagnitude)
+                    }
                     Err(_) => return Err(format!("px: bad integer {}", digits)),
                 }
             }
@@ -1616,6 +1625,19 @@ impl PxParser {
     fn parse_neg(&mut self) -> Result<PxExpr, String> {
         if self.peek_is(PxTok::Minus) {
             self.pos += 1;
+            // `-9223372036854775808` is i64::MIN -- its unsigned magnitude
+            // alone never fits a positive i64, and desugaring through
+            // `0 - operand` would itself overflow, so fold sign+magnitude
+            // into one literal here instead.
+            if self.peek_is(PxTok::IntMinMagnitude) {
+                self.pos += 1;
+                // Written as `-9223372036854775807 - 1` rather than the
+                // literal magnitude itself: rs-meta's own Rust-subset lexer
+                // has the identical "unsigned literal one past i64::MAX"
+                // limitation this fix works around at the pnix layer, so
+                // this file must stay inside rs-meta's interpretable subset.
+                return Ok(PxExpr::Int(-9223372036854775807i64 - 1));
+            }
             let operand = self.parse_neg()?;
             return Ok(PxExpr::Binary {
                 op: PxOp::Sub,
