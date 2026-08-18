@@ -140,10 +140,10 @@ pnix-clj 코어에 들어오면 안 됩니다.
 
 현재 최상위 레지스트리 개수:
 
-- CORE: 38
-- EXPERIMENTAL: 6
-- PROOF-ONLY: 26
-- TOTAL: 70
+- CORE: 43
+- EXPERIMENTAL: 7
+- PROOF-ONLY: 28
+- TOTAL: 78
 
 다음 표면은 CORE 정체성 표면입니다.
 

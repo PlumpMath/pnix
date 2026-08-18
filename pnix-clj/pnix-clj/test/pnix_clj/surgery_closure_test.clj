@@ -32,8 +32,9 @@
       ;; The direct clj-meta host executor is core: 77 -> 78.
       ;; The explicit filesystem convenience boundary is core: 78 -> 79.
       ;; The redb adapter remains outside the clean R1 extraction.
-      (is (= 79 row-count))
-      (is (= {:core 44 :experimental 7 :proof-only 28} counts)))))
+      ;; The pnix-meta loader row was retired from the live ns inventory: 79 -> 78.
+      (is (= 78 row-count))
+      (is (= {:core 43 :experimental 7 :proof-only 28} counts)))))
 
 (deftest surgery-closure-tests-are-wired
   (testing "all scope/lane identity gates are wired into the test runner"
@@ -52,8 +53,8 @@
           readme (doc "README.md")]
       (is (has-all?
            scope-lock
-           ["Clojure-hosted pnix runtime"
-            "meta-circular witness substrate"
+           ["Clojure 호스팅 pnix 런타임"
+            "메타원형 증인 substrate"
             "Hangul codec"
             "MSV"
             "gate-graph"
@@ -61,14 +62,14 @@
             "tick runner"]))
       (is (has-all?
            lane-doc
-           ["CORE: 38"
-            "EXPERIMENTAL: 6"
-            "PROOF-ONLY: 26"
-            "TOTAL: 70"
-            "not disposable dev-only surfaces"
+           ["CORE: 43"
+            "EXPERIMENTAL: 7"
+            "PROOF-ONLY: 28"
+            "TOTAL: 78"
+            "버릴 수 있는 개발 전용 표면이 아닙니다"
             "QUARANTINE"]))
       (is (has-all?
            readme
-           ["Clojure-hosted pnix"
+           ["Clojure 호스팅 pnix"
             "NL/MSV/Hangul"
-            "out of scope"])))))
+            "코어 범위 밖"])))))

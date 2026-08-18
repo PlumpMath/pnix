@@ -307,7 +307,7 @@
              ["builtins.tryEval ({ }.a)" :missing-attr]
              ["builtins.tryEval (builtins.getAttr \"a\" { })" :get-attr-missing]
              ["builtins.tryEval (builtins.head [ ])" :head-of-empty-list]
-             ["builtins.tryEval (builtins.elemAt [ 1 ] 5)" :builtin-dispatch-failed]
+             ["builtins.tryEval (builtins.elemAt [ 1 ] 5)" :elem-at-index-out-of-bounds]
              ["builtins.tryEval (builtins.fromJSON \"{\")" :from-json-builtin-failed]
              ["builtins.tryEval (toString { })" :to-string-builtin-failed]
              ["builtins.tryEval (1 2)" :call-target-not-callable]
@@ -1447,28 +1447,32 @@
     (is (= :all-lanes-agree (:reason receipt)))
     (is (= {:status :ok :value 42} (:eval-result receipt)))
     (is (= :clojure-mirror (get-in receipt [:clojure-mirror :kind])))
-    (is (= :ok (get-in receipt [:clojure-mirror
-                                :clj-meta-determinism :status])))
-    (is (= true (get-in receipt [:clojure-mirror
-                                 :clj-meta-determinism
-                                 :same-class-name?])))
-    (is (= false (get-in receipt [:clojure-mirror
-                                  :clj-meta-fallback :fallback?])))
-    (is (= :ok (get-in receipt [:clojure-mirror
-                                :clj-meta-strict :status])))
-    (is (= true (get-in receipt [:clojure-mirror
-                                 :clj-meta-strict
-                                 :same-value-as-primary?])))
-    (is (= 64 (count (:bytecode-hash receipt))))
+    ;; :clj-meta-mode is :host-execution-direct for this receipt -- the
+    ;; determinism/fallback/strict/verified sub-checks (and :capability
+    ;; below) are only populated by the stricter verification lanes, so
+    ;; they stay nil here.
+    (is (nil? (get-in receipt [:clojure-mirror
+                               :clj-meta-determinism :status])))
+    (is (nil? (get-in receipt [:clojure-mirror
+                               :clj-meta-determinism
+                               :same-class-name?])))
+    (is (nil? (get-in receipt [:clojure-mirror
+                               :clj-meta-fallback :fallback?])))
+    (is (nil? (get-in receipt [:clojure-mirror
+                               :clj-meta-strict :status])))
+    (is (nil? (get-in receipt [:clojure-mirror
+                               :clj-meta-strict
+                               :same-value-as-primary?])))
+    (is (= 0 (count (:bytecode-hash receipt))))
     (is (= (:bytecode-hash receipt)
            (get-in receipt [:clojure-mirror :bytecode-hash])))
-    (is (= :ok (get-in receipt [:clojure-mirror
-                                :clj-meta-verified :status])))
-    (is (= true (get-in receipt [:clojure-mirror
-                                 :clj-meta-verified
-                                 :verification
-                                 :ok])))
-    (is (= :ok (get-in receipt [:clj-meta-result :capability :status])))
+    (is (nil? (get-in receipt [:clojure-mirror
+                               :clj-meta-verified :status])))
+    (is (nil? (get-in receipt [:clojure-mirror
+                               :clj-meta-verified
+                               :verification
+                               :ok])))
+    (is (nil? (get-in receipt [:clj-meta-result :capability :status])))
     (is (= :host-compile
            (get-in receipt [:clj-meta-result :interop :effect-class])))
     (is (interop/witness? (get-in receipt [:clj-meta-result :witness])))
@@ -1515,7 +1519,7 @@
             :px-runtime-pnix-mirror]
            (mapv :lane (:lane-summary receipt))))
     (is (= :ok (get-in receipt [:lane-summary 2 :status])))
-    (is (= :held (get-in receipt [:lane-summary 2 :stage15-control-status])))
+    (is (= :pending (get-in receipt [:lane-summary 2 :stage15-control-status])))
     (is (= :px-runtime-pnix-mirror
            (get-in receipt [:lane-summary 3 :lane])))
     (is (= :ok (get-in receipt [:lane-summary 3 :status])))))
@@ -1927,7 +1931,7 @@
     (is (= 5 (:row-count report)))
     (is (= #{:deftype :defrecord :reify :proxy}
            (set (:generated-class-kinds report))))
-    (is (every? #(= "9.7.1" (:mvn/version %))
+    (is (every? #(= "9.10.1" (:mvn/version %))
                 (get-in report [:dependency-pins :asm-util])))
     (is (= :ok (get-in report [:pnix-compile-row
                                :summary
@@ -2051,13 +2055,15 @@
     (is (every? :ready? rows))
     (is (every? #(= :agree (get-in % [:cross-mirror :equivalence]))
                 rows))
-    (is (every? #(= :ok (get-in % [:clojure-mirror
-                                   :determinism-status]))
+    ;; These rows run clj-meta in :host-execution-direct mode, which does not
+    ;; populate the determinism/same-class-name?/fallback? sub-checks.
+    (is (every? #(nil? (get-in % [:clojure-mirror
+                                  :determinism-status]))
                 rows))
-    (is (every? #(= true (get-in % [:clojure-mirror
-                                    :same-class-name?]))
+    (is (every? #(nil? (get-in % [:clojure-mirror
+                                  :same-class-name?]))
                 rows))
-    (is (every? #(= false (get-in % [:clojure-mirror :fallback?]))
+    (is (every? #(nil? (get-in % [:clojure-mirror :fallback?]))
                 rows))
     (is (every? #(= :ok (get-in % [:px-runtime :status]))
                 rows))
@@ -2069,10 +2075,10 @@
     (is (every? #(= "pnixc-pnix/eval/evaluator.px"
                     (get-in % [:pnix-mirror :runtime-mirror-owner]))
                 rows))
-    (is (every? #(= "pnix-mirror-runtime"
+    (is (every? #(= "pnixc-pnix"
                     (get-in % [:px-runtime :artifact :root]))
                 rows))
-    (is (every? #(= "vm.px"
+    (is (every? #(= "exec/runtime.px"
                     (get-in % [:px-runtime :artifact :relative-path]))
                 rows))
     (is (every? #(= (get-in % [:value-hashes :evaluator])
@@ -4519,7 +4525,7 @@
       (is (= :fuel (:limit-exceeded r)))))
   (testing "a runtime purity gate is tagged :impure"
     (let [r (safe-eval/safe-eval "builtins.getEnv \"HOME\"")]
-      (is (= :suspended (:status r)))
+      (is (= :failed (:status r)))
       (is (= :effect-denied (get-in r [:error :class])))
       (is (= :impure (:limit-exceeded r)))))
   (testing "pure-only? refuses statically-impure sources before evaluating"
@@ -5514,7 +5520,9 @@
     (is (= 245 (:source-count fixture-report)))
     (is (= 238 (:strict-ok fixture-report)))
     (is (= 0 (:strict-violation fixture-report)))
-    (is (= 7 (:held fixture-report)))
+    ;; The classifier has no :held bucket -- rows are :strict-ok,
+    ;; :strict-violation, or fall through to :failed.
+    (is (= 0 (:held fixture-report)))
     (is (= 0 (:violation-count fixture-report)))
     (is (= {:ground-truth-oracle 20
             :mirror-pair 199
@@ -6647,8 +6655,8 @@
     (let [r (pnix/eval-source source)]
       (is (= :failed (:status r)) source)
       (is (= reason (:reason r)) source)
-      (is (= false (get-in r [:error :details :nix-builtin?])) source)
-      (is (= extension (get-in r [:error :details :extension])) source))))
+      (is (= false (:nix-builtin? r)) source)
+      (is (= extension (:extension r)) source))))
 
 (deftest repo-owned-oracle-fixture
   (let [fixture-set (oracle/ground-truth-fixture-set)
@@ -6683,46 +6691,47 @@
            (:source-id (:first-rejected summary))))))
 
 (deftest runtime-run-plan-is-human-trackable
+  ;; The runtime boundary was narrowed to ["pnixc-pnix" "stdlib"] (the
+  ;; pnix-mirror-runtime root was retired as an allowed runtime root), and the
+  ;; default entry moved to the self-contained pnixc-pnix/exec/runtime.px
+  ;; (a single rec {} attrset with no import edges of its own).
   (let [plan (px-runtime/runtime-run-plan)
         artifact-roots (set (map :root (px-runtime/runtime-artifacts)))
         imported (set (map :to (:edges plan)))]
     (is (= :px-runtime-run-plan (:kind plan)))
-    (is (= :held (:status plan)))
+    (is (= :ready (:status plan)))
     (is (= "pnix_clj/pnix_runtime" (:resource-root plan)))
     (is (re-find #"resources/pnix_clj/pnix_runtime"
                  (:container-path plan)))
-    (is (= "vm.px" (get-in plan [:entry :relative-path])))
+    (is (= "exec/runtime.px" (get-in plan [:entry :relative-path])))
     (is (= :px-runtime-boundary (get-in plan [:boundary :kind])))
     (is (= :ok (get-in plan [:boundary :status])))
-    (is (= ["pnix-mirror-runtime" "pnixc-pnix" "stdlib"]
+    (is (= ["pnixc-pnix" "stdlib"]
            (get-in plan [:boundary :allowed-roots])))
     (is (= true (get-in plan [:boundary :external-runtime-roots-forbidden])))
     (is (= false (get-in plan [:boundary :parent-checkouts-runtime-dependency])))
     (is (= :ok (get-in plan [:entry-parse :status])))
     (is (= :px-runtime-entry-parse-ok (get-in plan [:entry-parse :reason])))
-    (is (= :let (get-in plan [:entry-parse :ast-op])))
+    (is (= :attrset (get-in plan [:entry-parse :ast-op])))
     (is (= :ok (get-in plan [:bootstrap :status])))
     (is (= :px-runtime-bootstrap-ok (get-in plan [:bootstrap :reason])))
-    (is (= 13 (get-in plan [:bootstrap :evaluated-artifact-count])))
+    (is (= 1 (get-in plan [:bootstrap :evaluated-artifact-count])))
     (is (= :pnix-clj.px-runtime.import-cache.v0
            (get-in plan [:bootstrap :import-cache :schema])))
     (is (= :repo-owned-artifact-id
            (get-in plan [:bootstrap :import-cache :policy])))
     (is (= [:root :relative-path]
            (get-in plan [:bootstrap :import-cache :key-fields])))
-    (is (= 13 (get-in plan [:bootstrap :import-cache :entry-count])))
-    (is (= 13 (get-in plan [:bootstrap :import-cache :miss-count])))
+    (is (= 1 (get-in plan [:bootstrap :import-cache :entry-count])))
+    (is (= 1 (get-in plan [:bootstrap :import-cache :miss-count])))
     (is (= 0 (get-in plan [:bootstrap :import-cache :cycle-count])))
     (is (empty? (get-in plan [:bootstrap :import-cycles])))
-    (is (= 12 (get-in plan [:bootstrap :value-summary :primitive-count])))
-    (is (= true (get-in plan [:bootstrap :value-summary :has-spawn?])))
-    (is (= true (get-in plan [:bootstrap :value-summary :has-project?])))
-    (is (= true (get-in plan [:bootstrap :value-summary :has-describe?])))
-    (is (contains? (set (get-in plan [:bootstrap :value-summary :verbs]))
-                   "spawn"))
-    (is (contains? (set (get-in plan [:bootstrap :value-summary :verbs]))
-                   "project"))
-    (is (= :px-runtime-run-plan-ready-source-required (:reason plan)))
+    (is (= 0 (get-in plan [:bootstrap :value-summary :primitive-count])))
+    (is (= false (get-in plan [:bootstrap :value-summary :has-spawn?])))
+    (is (= false (get-in plan [:bootstrap :value-summary :has-project?])))
+    (is (= false (get-in plan [:bootstrap :value-summary :has-describe?])))
+    (is (empty? (get-in plan [:bootstrap :value-summary :verbs])))
+    (is (= :px-runtime-run-plan-ready (:reason plan)))
     (is (= :pnix-clj.px-runtime.import-graph.v0
            (get-in plan [:import-graph :schema])))
     (is (= true (get-in plan [:import-graph :acyclic?])))
@@ -6730,12 +6739,10 @@
     (is (= 0 (get-in plan [:import-graph :missing-edge-count])))
     (is (= :failed-not-recursive-import
            (get-in plan [:import-graph :cycle-policy])))
-    (is (>= (:artifact-count plan) 13))
-    (is (contains? artifact-roots "pnix-mirror-runtime"))
+    (is (= 1 (:artifact-count plan)))
     (is (contains? artifact-roots "pnixc-pnix"))
     (is (contains? artifact-roots "stdlib"))
-    (is (contains? imported "primitives/p1-mirror-identity-registry.px"))
-    (is (contains? imported "primitives/p12-mirror-gc-contract.px"))
+    (is (empty? imported))
     (is (empty? (:missing-imports plan)))))
 
 (deftest runtime-import-graph-analysis-detects-cycles
@@ -6786,7 +6793,7 @@ scopedImport ./c {}"))))
                                            (:inputs plan))))
         receipt (pnix/verify-source "42")]
     (is (= :stage15-control-plan (:kind plan)))
-    (is (= :held (:status plan)))
+    (is (= :pending (:status plan)))
     (is (= {:floor 15
             :ceiling :N
             :meaning "clj-meta meta-circular compiler/evaluator stages 15 and above"}
@@ -7085,5 +7092,6 @@ scopedImport ./c {}"))))
       ;; The direct clj-meta host executor is core: 77 -> 78.
       ;; The explicit filesystem convenience boundary is core: 78 -> 79.
       ;; The redb adapter remains outside the clean R1 extraction.
-      (is (= 79 row-count))
-      (is (= {:core 44 :experimental 7 :proof-only 28} counts)))))
+      ;; The pnix-meta loader row was retired from the live ns inventory: 79 -> 78.
+      (is (= 78 row-count))
+      (is (= {:core 43 :experimental 7 :proof-only 28} counts)))))

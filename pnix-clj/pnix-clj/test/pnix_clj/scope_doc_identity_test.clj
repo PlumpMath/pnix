@@ -11,10 +11,10 @@
 (deftest scope-documents-preserve-identity
   (testing "README and SCOPE_LOCK keep the core boundary"
     (is (has-all? (doc "README.md")
-                  ["Clojure-hosted pnix" "NL/MSV/Hangul" "out of scope"]))
+                  ["Clojure 호스팅 pnix" "NL/MSV/Hangul" "코어 범위 밖"]))
     (is (has-all? (doc "SCOPE_LOCK.md")
-                  ["Clojure-hosted pnix runtime"
-                   "meta-circular witness substrate"
+                  ["Clojure 호스팅 pnix 런타임"
+                   "메타원형 증인 substrate"
                    "Hangul codec"
                    "MSV"
                    "gate-graph"
@@ -23,19 +23,21 @@
 
   (testing "LANE_CLASSIFICATION keeps current identity lock"
     (is (has-all? (doc "LANE_CLASSIFICATION.md")
-                  ["Current identity lock addendum"
-                   "CORE: 38"
-                   "EXPERIMENTAL: 6"
-                   "PROOF-ONLY: 26"
-                   "TOTAL: 70"
+                  ;; the pnix-meta loader row was retired from the live ns
+                  ;; inventory (see docs/LANE_REGISTRY.md history): 79 -> 78
+                  ["현재 정체성 잠금 부록"
+                   "CORE: 43"
+                   "EXPERIMENTAL: 7"
+                   "PROOF-ONLY: 28"
+                   "TOTAL: 78"
                    "interop"
-                   "Clojure runtime"
-                   "pnix runtime"
+                   "Clojure 런타임"
+                   "pnix 런타임"
                    "nREPL"
-                   "meta-circular interactive control surface"
+                   "메타순환 대화형 제어 표면"
                    "wiki"
-                   "self-documenting capability"
-                   "not disposable dev-only surfaces"
+                   "자기 문서화 능력"
+                   "버릴 수 있는 개발 전용 표면이 아닙니다"
                    "QUARANTINE"
                    "Hangul codec"
                    "MSV / meaning sentence variants"
@@ -47,8 +49,9 @@
 
   (testing "generated lane registry exposes current core surfaces"
     (is (has-all? (doc "docs/LANE_REGISTRY.md")
-                  ;; M7 added pnix-clj.machine (proof-only): 27 -> 28
-              ["`:core`: 44"
+                  ;; the pnix-meta loader row was retired from the live ns
+                  ;; inventory: :core 44 -> 43
+              ["`:core`: 43"
                    "`:experimental`: 7"
                    "`:proof-only`: 28"
                    "pnix-clj.interop"
