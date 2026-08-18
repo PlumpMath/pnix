@@ -72,89 +72,165 @@ cd pnix-clj && nix run .#gate
 개별 호스트는 자체 추가 기능을 둔다 — `nix run .#pnix-rs-px-eval`, `.#substrate-check`, `.#tower`, `.#deps-lock`, `.#pnix-clr-library`.
 호스트 안에서 `nix flake show`로 노출 전체를 확인.
 
-## 로컬 체크아웃을 다른 flake에서 오버라이드해 설치하기
+## NixOS / Home Manager 설정에서 pnix를 "오버라이드"로 설치하기
 
 이 저장소에는 **최상위 통합 `flake.nix`가 없다** — `pnix-clj/`, `pnix-cljs/`,
-`pnix-clr/`, `pnix-hy/`, `pnix-rs/` 각각이 독립된 flake다. 다른 시스템 설정
-(NixOS, Home Manager, 또는 그냥 개인 flake)에서 이 로컬 체크아웃을 소비하려면,
-관심 있는 호스트 **디렉터리**를 flake input으로 가리키면 된다.
+`pnix-clr/`, `pnix-hy/`, `pnix-rs/` 각각이 독립된 flake다. 아래는 시스템
+설정(NixOS/nix-darwin/Home Manager, flake 기반)에서 이 호스트들을 **기존
+언어 커맨드(`clojure`, `python`, `cargo`, `node`, …) 자체를 대체하거나
+PATH 우선순위로 끼워 넣는** 방식으로 통합하는, 실전에서 쓰이는 패턴이다.
 
-### 1) flake input으로 로컬 경로 지정
+### 1) 각 호스트를 flake input으로 추가
 
 ```nix
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # 로컬 체크아웃을 직접 가리킨다 — 커밋/푸시 없이 편집이 바로 반영된다.
-    # 경로는 이 monorepo를 clone한 실제 위치로 바꿀 것 (호스트 서브디렉터리까지).
-    pnix-rs.url = "path:/home/YOU/pnix/pnix-rs";
-    pnix-clj.url = "path:/home/YOU/pnix/pnix-clj";
-    # 필요한 호스트만 추가하면 된다 (clj / cljs / clr / hy / rs).
-
-    # 재현 가능한(로컬 체크아웃에 안 묶인) 설치가 필요하면 대신 이렇게:
-    # pnix-rs.url = "github:PlumpMath/pnix?dir=pnix-rs";
+    # 필요한 호스트만 추가 (clj / cljs / clr / hy / rs). dir= 로 monorepo
+    # 안의 호스트 서브디렉터리를 골라낸다.
+    pnix-clj.url  = "github:YOU/pnix?dir=pnix-clj";
+    pnix-hy.url   = "github:YOU/pnix?dir=pnix-hy";
+    pnix-rs.url   = "github:YOU/pnix?dir=pnix-rs";
+    pnix-cljs.url = "github:YOU/pnix?dir=pnix-cljs";
+    pnix-clr.url  = "github:YOU/pnix?dir=pnix-clr";
   };
 
-  outputs = { self, nixpkgs, pnix-rs, pnix-clj, ... }: {
-    # 아래 참고
+  outputs = { self, nixpkgs, pnix-clj, pnix-hy, pnix-rs, ... }: {
+    # 아래 절 참고
   };
 }
 ```
 
-`path:` input은 git이 추적하는 파일만 본다 — 새 파일을 추가했다면 평가 전에
-`git add` 해야 flake가 그 파일을 볼 수 있다 (Nix flake의 일반적인 동작).
-
-### 2) NixOS 시스템 설정에서 패키지로 소비
-
-```nix
-{ pnix-rs, ... }:
-let system = "x86_64-linux"; in
-{
-  environment.systemPackages = [
-    pnix-rs.packages.${system}.pnix-rs   # 런타임 CLI
-    pnix-rs.packages.${system}.rs-meta   # 원하면 meta 절반도
-  ];
-}
-```
-
-### 3) Home Manager에서 소비
-
-```nix
-{ pnix-rs, ... }:
-let system = "x86_64-linux"; in
-{
-  home.packages = [
-    pnix-rs.packages.${system}.pnix-rs
-  ];
-}
-```
-
-`nix run`/`writeShellScriptBin`으로 PATH에 여러 호스트를 동시에 배선하는
-더 정교한 패턴(호스트별 CLI 이름 충돌 회피, devShell 자동 진입 등)은 각자의
-Home Manager 구성 스타일에 맞춰 직접 구성한다 — 이 README는 flake input
-오버라이드 자체까지만 다룬다.
-
-### 4) 커밋 없이 즉석으로 오버라이드 (CLI 한 줄)
-
-기존 flake(예: 이미 `pnix-rs`를 `github:PlumpMath/pnix?dir=pnix-rs`로 고정해
-둔 시스템 설정)를 건드리지 않고, 이번만 로컬 체크아웃으로 빌드/실행해보고 싶다면
-(아래는 **당신의 시스템/HM flake 디렉터리**에서 실행):
+**로컬에서 편집 중인 체크아웃을 커밋/푸시 없이 바로 반영**하려면 (다른
+세션이 `~/pnix`를 계속 고치고 있을 때 유용) `flake.lock`을 로컬 경로로
+오버라이드한다:
 
 ```bash
-# 이 pnix 저장소 자체를 바로 실행/빌드 — 오버라이드할 다른 flake가 필요 없다
-cd pnix-rs && nix run .
-
-# 다른 flake(당신의 NixOS/HM 설정)가 이미 pnix-rs를 input으로 갖고 있고,
-# 이번만 로컬 체크아웃으로 바꿔치기해서 빌드하고 싶을 때
-nix build --override-input pnix-rs path:/home/YOU/pnix/pnix-rs \
-  .#nixosConfigurations.myhost.config.system.build.toplevel
+cd ~/your-system-flake-dir
+nix flake lock \
+  --override-input pnix-clj  path:$HOME/pnix/pnix-clj \
+  --override-input pnix-hy   path:$HOME/pnix/pnix-hy \
+  --override-input pnix-rs   path:$HOME/pnix/pnix-rs \
+  --override-input pnix-cljs path:$HOME/pnix/pnix-cljs \
+  --override-input pnix-clr  path:$HOME/pnix/pnix-clr
 ```
 
-### 5) 그냥 개발만 하려면
+`path:` input은 **git이 추적하는 파일만** 본다 — 새 파일을 추가했다면 평가
+전에 `git add` 해야 flake가 그 파일을 본다.
 
-시스템에 설치할 필요 없이 이 체크아웃 안에서 바로 작업한다면 오버라이드가
-전혀 필요 없다 — 위 "호스트 실행" 절에 있는 대로 해당 호스트 디렉터리에서
+### 2) 두 가지 "오버라이드" 방식 — 언제 어느 쪽인가
+
+호스트 CLI를 시스템 전역에 배선하는 방법은 둘로 나뉜다. **어느 쪽을 쓸지는
+그 언어 패키지가 nixpkgs의 다른 빌드에서 내부적으로 쓰이는지**로 정해진다.
+
+| 방식 | 언제 | 예 |
+|---|---|---|
+| **(A) nixpkgs overlay로 완전 교체** | 그 언어 실행파일이 nixpkgs 다른 패키지의 빌드 입력으로 안 쓰일 때 (Clojure CLI가 대표적) | `clojure` 자체를 pnix-aware 래퍼로 치환 |
+| **(B) PATH 우선순위 래퍼(join)만 추가** | 그 언어 패키지 전체(`python3Packages`, `rustc` 등)가 nixpkgs 빌드 시스템 안에서 널리 쓰일 때 | `python`/`hy`, `cargo`/`rustc`, `node` |
+
+**(B)가 기본값**이다 — `python3`/`rustc` 같은 패키지 그래프를 통째로
+overlay로 바꿔치기하면 그 패키지들에 의존하는 무관한 nixpkgs 빌드가 깨질
+수 있다(예: `cargo-auditable`, f-string 빌더). (A)는 그 언어의 **개발자용
+CLI 하나만** 안전하게 완전 대체할 수 있다고 확신할 때만 쓴다.
+
+### 2a) (A) overlay로 완전 교체 — Clojure 예시
+
+`clojure` 실행 시 항상 `pnix-clj`가 로컬 의존성으로 클래스패스에 잡히도록
+만드는 overlay:
+
+```nix
+# overlay.nix
+final: prev:
+let
+  jdk = prev.jdk21;
+  stockClojure = prev.clojure;
+  pnixRoot = "${inputs.pnix-clj}/pnix-clj";  # flake input을 그대로 소스 경로로 사용
+  path = prev.lib.makeBinPath [ stockClojure jdk prev.git prev.rlwrap ];
+
+  pnixClojureCommand = prev.writeShellScriptBin "pnix-clj-clj" ''
+    export PATH="${path}:$PATH"
+    export JAVA_HOME="${jdk}"
+    export PNIX_CLJ_ROOT="${pnixRoot}"
+    pnix_deps='{:deps {pnix/pnix-clj {:local/root "${pnixRoot}"}}}'
+    inject_pnix=1
+    for arg in "$@"; do
+      case "$arg" in -Sdeps|-Sdeps=*) inject_pnix=0 ;; esac
+    done
+    if [ "$inject_pnix" -eq 1 ]; then
+      exec ${stockClojure}/bin/clojure -Sdeps "$pnix_deps" "$@"
+    else
+      exec ${stockClojure}/bin/clojure "$@"
+    fi
+  '';
+  pnixClojure = prev.symlinkJoin {
+    name = "pnix-clj-clj";
+    paths = [ pnixClojureCommand ];
+    postBuild = ''ln -sfn pnix-clj-clj "$out/bin/clojure"'';
+    meta.mainProgram = "pnix-clj-clj";
+  };
+in {
+  clojure-stock = stockClojure;  # 원본 clojure는 이 이름으로 남겨 둔다
+  clojure = pnixClojure;         # nixpkgs.clojure 자체를 교체 (진짜 "오버라이드")
+}
+```
+
+시스템 설정에서 이 overlay를 켜기만 하면 된다:
+
+```nix
+{ nixpkgs.overlays = [ (import ./overlay.nix) ]; }
+```
+
+`pkgs.clojure`를 쓰는 자리는 이제 전부 이 래퍼를 받는다 — jar/버전 정보가
+필요하면 (래퍼가 아니라) `pkgs.clojure-stock`을 쓴다.
+
+### 2b) (B) PATH 우선순위 래퍼 — Python/Hy 예시
+
+`python3Packages`/`rustc` 전체 그래프는 그대로 두고, `home.packages`(또는
+`environment.systemPackages`)에 **더 앞선 우선순위**로 얹는 얇은 래퍼만
+추가한다:
+
+```nix
+{ pkgs, pnix-hy, ... }:
+let
+  system = pkgs.stdenv.hostPlatform.system;
+  sitePackages = "${pnix-hy}/pnix-hy";  # pnix_hy 소스 루트
+in {
+  home.packages = [
+    (pkgs.writeShellScriptBin "python" ''
+      export PYTHONPATH="${sitePackages}''${PYTHONPATH:+:$PYTHONPATH}"
+      exec ${pkgs.python311}/bin/python3 "$@"
+    '')
+  ];
+}
+```
+
+`home.packages`는 nixpkgs의 `python3`/`python3Packages` 자체를 안 건드리고
+**이 사용자 세션의 PATH에서만** `python`을 이 래퍼로 가린다 — 다른 파생물이
+빌드 중에 `pkgs.python3`을 참조해도 원본 그대로 쓴다. 같은 패턴을
+`cargo`/`rustc`(rs), `node`/`clojurescript`(cljs), `clojure-clr`(clr)에도
+반복한다 — 언어별 세부 env var(`PNIX_HY_HOME`, `PNIX_RS_LIB_DIR`,
+`NODE_PATH`, `PNIX_CLR_ROOT` 등)는 각 호스트의 `README.md`/`HOST_IMPORT.md`
+참고.
+
+### 3) 공통 함정
+
+- **`writeShellApplication`을 쓰지 말 것** — `writeShellScriptBin`만 쓴다.
+  전자는 항상 `shellcheck-minimal`(→ Haskell/GHC)을 끌고 들어와 무관한
+  플랫폼(특히 x86_64-darwin)에서 재빌드 시간이 급증하거나 substitute가
+  깨진다.
+- **`symlinkJoin`으로 host join과 그 구성원을 동시에 `home.packages`에
+  넣지 말 것** — 예를 들어 `pnix-hy-host`(join)와 flake의 `hy` 패키지를
+  같이 넣으면 같은 `bin/` 파일 이름이 충돌한다. join **하나만** 넣는다.
+- **패키지 전체 그래프(`python3Packages`, `rustc` 등)를 overlay로 바꿔치기
+  하지 말 것** — 2b)의 PATH 방식을 쓴다. 예외는 그 실행파일이 다른
+  nixpkgs 빌드의 입력으로 전혀 안 쓰인다고 확신할 때뿐이다(Clojure CLI가
+  그런 경우).
+
+### 4) 그냥 개발만 하려면
+
+시스템에 설치할 필요 없이 이 체크아웃 안에서 바로 작업한다면 위 오버라이드가
+전혀 필요 없다 — "호스트 실행" 절에 있는 대로 해당 호스트 디렉터리에서
 `nix develop`(devShell) / `nix run .#...` 를 쓰면 된다.
 
 ## 업스트림 substrate
