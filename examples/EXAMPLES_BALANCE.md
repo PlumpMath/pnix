@@ -13,7 +13,7 @@
 | **hy** | `pnix-hy/pnix-hy/examples/` | ~38 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf 등 |
 | **rs** | `pnix-rs/pnix-rs/examples/` | ~28 | 중간: gate, mirror, BTA, embed, Jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/tower-depth/project-health |
 | **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–15 | experimental seed; Node 라이브러리 import |
-| **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–15 | experimental seed; C# 라이브러리 + in-process opt-in |
+| **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–16 | experimental seed; C# 라이브러리 + in-process opt-in + 클로저 |
 
 모노레포 host-import 스모크(제품 카탈로그 아님): `examples/host-import/`.
 
@@ -36,7 +36,7 @@
 | Cache / incremental | 12, 30 | 12, 22, 30 | 07, 20 | — | — |
 | Machine / abstract CEK | 61, 78–92 | 35 | 26, 27 | — | — |
 | In-process 호스트 eval | — | — | — | — | **05** (opt-in) |
-| builtins / 문법 seed | 다수 | 다수 | gate·eval | **07–09, 11–15** | **07–08, 11–15** |
+| builtins / 문법 seed | 다수 | 다수 | gate·eval | **07–09, 11–15** | **07–08, 11–16** |
 | 파일·artifact 게이트 | eval-file 등 | import hook | embed | **08** | **09–10** |
 
 ## 균형 규칙
@@ -64,6 +64,8 @@
 phase+assumption/certify/cross-host/stage/reflect-tower/explain+
 capabilities+registry — 를 16–28로 채움. hy: `pnix_stage_ladder`/
 `eval_receipt`/`performance_report` 세 CLI 표면(`--stage-ladder`/
-`--receipt`/`--perf`)에 예제가 없던 것을 36–38로 채움. 규칙 1·3에 따라
-clj/hy 슬라이스 복제가 아니라 각 host 자신의 실행 가능한 표면만 반영;
-clr/cljs 감사는 진행 중).
+`--receipt`/`--perf`)에 예제가 없던 것을 36–38로 채움. clr: 제품 런타임의
+클로저(커링+캡처 재사용, 06/기존 슬라이스와 무관하게 실측됨)에 예제가
+없던 것을 16으로 채움 — clr-meta 내부(Stage15/N)는 여전히 승격하지 않음
+(규칙 4). 규칙 1·3에 따라 clj/hy 슬라이스 복제가 아니라 각 host 자신의
+실행 가능한 표면만 반영; cljs 감사는 진행 중).
