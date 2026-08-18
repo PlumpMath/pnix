@@ -21,7 +21,10 @@ import json as _json
 from typing import Any
 
 from . import pnix_runtime as rt
-from . import pnix_mirror as _pm
+# Absolute import: bypasses the package's lazy __getattr__ (see the note in
+# pnix_mirror.py) so a bare `import pnix_hy.stage` doesn't cascade through
+# .meta/.proof and re-enter this module before it has finished loading.
+import pnix_hy.pnix_mirror as _pm
 from .pnix_mirror import cached_eval
 
 

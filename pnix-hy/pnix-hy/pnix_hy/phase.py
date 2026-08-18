@@ -16,7 +16,9 @@ from __future__ import annotations
 from typing import Any
 
 from . import pnix_runtime as rt
-from . import ir as ir_mod
+# Absolute import: bypasses the package's lazy __getattr__ (see the note in
+# pnix_mirror.py).
+import pnix_hy.ir as ir_mod
 
 PHASE_SHIFTS: dict[str, int] = {
     "read": 0,

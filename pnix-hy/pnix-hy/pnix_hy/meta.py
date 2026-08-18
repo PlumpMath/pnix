@@ -10,9 +10,12 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-from . import cogen as cogen_module
-from . import compiled as compiled_module
-from . import tower as tower_module
+# Absolute imports: bypass the package's lazy __getattr__ (see the note in
+# pnix_mirror.py) so loading .meta doesn't re-enter itself through a
+# hasattr() probe on one of these submodule names.
+import pnix_hy.cogen as cogen_module
+import pnix_hy.compiled as compiled_module
+import pnix_hy.tower as tower_module
 from .cogen import (
     cogen,
     cogen_report,

@@ -22,7 +22,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import pnix_mirror as _pm
+# Absolute import: bypasses the package's lazy __getattr__ (see the note in
+# pnix_mirror.py).
+import pnix_hy.pnix_mirror as _pm
 
 
 def mirror_run(source: str, *, trace: bool = False) -> dict[str, Any]:

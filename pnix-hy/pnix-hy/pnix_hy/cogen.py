@@ -29,7 +29,9 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from . import pnix_runtime as rt
-from . import tower
+# Absolute import: bypasses the package's lazy __getattr__ (see the note in
+# pnix_mirror.py).
+import pnix_hy.tower as tower
 
 
 def generating_extension(source: str, dynamic_vars: tuple[str, ...] = ()) -> Callable[..., str]:

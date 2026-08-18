@@ -13,7 +13,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from . import hy_mirror as hm
+# Absolute import: bypasses the package's lazy __getattr__ (see the note in
+# pnix_mirror.py).
+import pnix_hy.hy_mirror as hm
 
 
 def _probe_projection_python(py: str) -> bool:

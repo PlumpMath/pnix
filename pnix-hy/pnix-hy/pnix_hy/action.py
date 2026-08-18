@@ -11,10 +11,13 @@ import hashlib
 import json
 from typing import Any
 
-from . import gate
-from . import ir
-from . import mirror
-from . import pnix_mirror as pm
+# Absolute imports: bypass the package's lazy __getattr__ (see the note in
+# pnix_mirror.py) so this module stays safe to import before .meta/.proof
+# have loaded these submodules some other way.
+import pnix_hy.gate as gate
+import pnix_hy.ir as ir
+import pnix_hy.mirror as mirror
+import pnix_hy.pnix_mirror as pm
 
 ACTION_SCHEMA = "pnix-hy.action.report.v0"
 ACTION_REPORT_SCHEMA = "pnix-hy.action.report.v0"

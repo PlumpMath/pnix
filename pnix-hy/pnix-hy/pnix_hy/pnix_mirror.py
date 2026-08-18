@@ -15,7 +15,15 @@ import re as _re
 import hashlib as _hashlib
 from typing import Any
 
-from . import hy_mirror
+# `from . import hy_mirror` would resolve via `hasattr(pnix_hy, "hy_mirror")`,
+# which (since pnix_hy/__init__.py defines a lazy module __getattr__) pulls in
+# the ENTIRE .meta/.proof graph just to answer that probe -- and that graph
+# transitively re-enters this module (pnix_mirror) before it has finished
+# executing past this point, breaking on names defined further down (e.g.
+# gate.py's `_sha256`, stage.py's `cached_eval`). An absolute dotted import
+# bypasses the package's __getattr__ entirely (it goes straight through the
+# ordinary submodule-import path), so it can't trigger that cascade.
+import pnix_hy.hy_mirror as hy_mirror
 from . import interop as _interop
 from . import pnix_runtime as rt
 
