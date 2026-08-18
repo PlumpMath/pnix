@@ -16,6 +16,13 @@
 
 (declare parse-expr parse-root parse-string-template-token)
 
+(def ^:private min-i64-magnitude-text
+  ;; abs(Long/MIN_VALUE) as unsigned text -- one more than Long/MAX_VALUE, so
+  ;; it never parses as a positive long. Only valid when a unary `-`
+  ;; immediately negates it (see parse-unary's fold below); a bare
+  ;; occurrence is still rejected where int tokens become AST literals.
+  "9223372036854775808")
+
 (def ^:private parse-cache
   (atom {}))
 
@@ -82,6 +89,16 @@
    :text text
    :value value
    :span span})
+
+(defn- int-token-ast
+  "Build an :int AST literal from a token, rejecting a bare occurrence of
+  the Long/MIN_VALUE magnitude (only valid when parse-unary's `-` fold
+  consumes the token directly, which never reaches this function)."
+  [source tok idx]
+  (when (= min-i64-magnitude-text (:text tok))
+    (throw (ex-info "syntax error: integer literal out of range"
+                    {:index idx :span (:span tok)})))
+  [(ast source :int (:value tok) {:span (:span tok)}) (inc idx)])
 
 (defn- string-template-literal?
   [string-lit]
@@ -487,7 +504,9 @@
                                       int-lit
                                       (if (str/includes? int-lit ".")
                                         (parse-float-literal int-lit [pos end])
-                                        (Long/parseLong int-lit))
+                                        (if (= int-lit min-i64-magnitude-text)
+                                          Long/MIN_VALUE
+                                          (Long/parseLong int-lit)))
                                       [pos end])))
 
                   punct
@@ -1189,7 +1208,7 @@
                       {:index idx
                        :span [idx idx]})))
     (case (:kind tok)
-      :int [(ast source :int (:value tok) {:span (:span tok)}) (inc idx)]
+      :int (int-token-ast source tok idx)
       :float [(ast source :float (:value tok) {:span (:span tok)}) (inc idx)]
       :string [(ast source :string (:value tok) {:span (:span tok)}) (inc idx)]
       :uri [(ast source :string (:value tok) {:span (:span tok)}) (inc idx)]
@@ -1346,7 +1365,7 @@
                       {:index idx
                        :span [idx idx]})))
     (case (:kind tok)
-      :int [(ast source :int (:value tok) {:span (:span tok)}) (inc idx)]
+      :int (int-token-ast source tok idx)
       :float [(ast source :float (:value tok) {:span (:span tok)}) (inc idx)]
       :string [(ast source :string (:value tok) {:span (:span tok)}) (inc idx)]
       :uri [(ast source :string (:value tok) {:span (:span tok)}) (inc idx)]
@@ -1504,6 +1523,18 @@
                                :span [(first (:span tok))
                                       (second (ast-span expr))]})
          i'])
+
+      (and (= :punct (:kind tok))
+           (= "-" (:text tok))
+           (= :int (:kind (nth tokens (inc idx) nil)))
+           (= min-i64-magnitude-text (:text (nth tokens (inc idx)))))
+      ;; `-9223372036854775808` is Long/MIN_VALUE -- its unsigned magnitude
+      ;; alone never fits a positive long, so fold sign+magnitude into one
+      ;; literal here rather than negating an already-rejected token.
+      (let [int-tok (nth tokens (inc idx))]
+        [(ast source :int Long/MIN_VALUE
+              {:span [(first (:span tok)) (second (:span int-tok))]})
+         (+ idx 2)])
 
       (and (= :punct (:kind tok))
            (= "-" (:text tok)))
