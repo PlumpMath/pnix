@@ -71,8 +71,10 @@ inventory 행, gate, 또는 명시적 Held 경로가 되어야 합니다.
 경로입니다. 일반 mirror dispatch 연산
 (`applyMirrorPlateWithLensDispatch`)에 대해 pnixc-meta는 이미 정본 대상이며,
 새 증명은 pnix-eval을 정본으로 다루지 말아야 합니다. 남은 직접 호출자는
-`project-wiki/maps/non-mirror-px-pnixc-meta-migration-plan.md`의 2026-05-17
-수렴 계획이 추적하는 caller-cleanup debt입니다.
+`pnix-zero` 자매 저장소의 project-wiki에 있는
+`maps/non-mirror-px-pnixc-meta-migration-plan.md`의 2026-05-17 수렴 계획이
+추적하던 caller-cleanup debt입니다 (그 저장소는 이 자기완결 트리의
+일부가 아님).
 
 ## Ontology-Example 업그레이드 기준
 
@@ -84,13 +86,15 @@ inventory 행, gate, 또는 명시적 Held 경로가 되어야 합니다.
 meaning atom -> mirror plate -> runtime function -> receipt / trace -> next turn
 ```
 
-그 경로는
-`project-wiki/maps/ontology-examples-to-mirror-meta-interpreter-map.md`에서
-추적합니다.
+그 경로는 `pnix-zero` 자매 저장소의 project-wiki에 있는
+`maps/ontology-examples-to-mirror-meta-interpreter-map.md`에서 추적했습니다.
 
 ## 교차 참조
 
-- `project-wiki/maps/ankh-macro-mirror-turn-axiom.md` — 어휘
-- `project-wiki/maps/mirror-spawn-substrate-4-primitives-design.md` — 프리미티브 설계 초안
-- `project-wiki/maps/mirror-upgrade-experiment-routes.md` — 이 재작성을 촉발한 walking 결과
-- `project-wiki/maps/ontology-examples-to-mirror-meta-interpreter-map.md` — ontology examples를 넘어서는 효과 기준
+아래는 모두 `pnix-zero` 자매 저장소의 project-wiki에 있던 문서이며, 이
+자기완결 트리의 일부가 아닙니다 (역사적 설계 근거로만 참고):
+
+- `maps/ankh-macro-mirror-turn-axiom.md` — 어휘
+- `maps/mirror-spawn-substrate-4-primitives-design.md` — 프리미티브 설계 초안
+- `maps/mirror-upgrade-experiment-routes.md` — 이 재작성을 촉발한 walking 결과
+- `maps/ontology-examples-to-mirror-meta-interpreter-map.md` — ontology examples를 넘어서는 효과 기준

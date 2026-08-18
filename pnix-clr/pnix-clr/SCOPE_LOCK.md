@@ -14,7 +14,7 @@ PNIX-agnostic ClojureCLR meta/bootstrap lane이다.
   C2는 Stage2와 self-reproduction을 false로 유지하면서
   fresh-process unseen-target compilation과 semantic mutation
   propagation을 증명해야 함
-- 그 plan이 선언한 정확히 아홉 DLL을 담은 `host-clojureclr-aot` manifest,
+- 그 plan이 선언한 정확히 여덟 DLL을 담은 `host-clojureclr-aot` manifest,
   plan/source/output hash와 explicit entrypoint 포함
 - artifact-only PNIX product loading: live plan, source set,
   output set, exact manifest/tree shape, 기록된 모든 digest 검증;
@@ -31,22 +31,22 @@ PNIX-agnostic ClojureCLR meta/bootstrap lane이다.
   `Requested`와 `Suspended`에 대한 carrier/observer shape만
 - 공통 11-case basic-outcome contract에 필요한 exact integer/string/
   `if`/checked-`+`/integer-`/` 메커니즘
-- `../../pnix-meta`에서 canonical module의 relative, read-only,
-  lexically confined loading (아직 symlink-safe security boundary 아님)
-- deterministic seed JSON projection; `bool-01` bytes가 pinned common
-  expected file과 일치
+- deterministic seed JSON projection (canonical, sorted-key, control-character
+  safe — `pnix-clr.test-runner`의 `canonical-json-is-sorted-and-valid-for-control-characters`로 검증)
 - dead `if` branch, unused argument, unselected attr field가 import
-  expression을 resolve하거나 read하지 않는다는 common-corpus 증거
+  expression을 resolve하거나 read하지 않는다는 로컬 test-suite 증거
+  (`dead-import-mechanisms-never-resolve-or-read`)
 - null 및 bool/int/string scalar equality와 static identifier attr-path
   `?`, application binding이 `?`보다 더 tight; structural equality는
   여전히 제외
 - source-originated `System.Int64` unary negation 및 checked add, subtract,
-  multiply, truncating division, `production-checked-i64-01`이 요구하는
-  structured overflow 및 lazy dead-overflow 동작 포함
+  multiply, truncating division, structured overflow 및 lazy dead-overflow
+  동작 포함 (`checked-i64-errors-are-structured-and-left-strict`,
+  `checked-i64-overflow-remains-lazy`)
 - **README corpus language surface** (clj/hy/rs/cljs와의 peer parity 의도):
   builtins + `lib` (core/attrs/lists/strings/predicates/math/combinators/FS/
   best-effort fetch), nested attr path (`foo.bar = expr`), partial builtin
-  application, `root-environment` frame. 기존 아홉 namespace 안에서 구현
+  application, `root-environment` frame. 기존 여덟 namespace 안에서 구현
   (`evaluator.clj` / `host.clj`); 새 artifact namespace 없음
 - ClojureCLR/.NET host adapter
 - JVM host로 fallback할 수 없는 focused net10 게이트
@@ -57,7 +57,9 @@ tri-host promotion을 **확립하지 않는다**.
 
 Artifact dependency는 layer identity를 병합하지 않는다. `pnix-clr`는
 namespace plan과 PNIX 메커니즘을 소유; `clr-meta`는 generic validation과 CLR
-artifact production을 소유; `pnix-meta`는 portable meaning을 소유. pinned
+artifact production을 소유. 이 저장소에는 portable/cross-host PNIX meaning을
+소유하는 별도 sibling 트리가 없다 — `pnix-clr`는 그 소유권을 주장하지
+않으며, 어떤 sibling corpus에도 실행 시점에 의존하지 않는다. pinned
 ClojureCLR compiler/runtime은 explicit bootstrap 및 host-AOT trust root로
 남는다.
 
@@ -71,7 +73,7 @@ resource limitation이지 `Held` 결과 또는 stage receipt가 아니다.
 ## 범위 밖
 
 - JVM classfile, ASM, Java reflection, Maven/JAR execution, 또는 JVM fallback
-- `../../pnix-meta`에서 portable PNIX semantics 복사
+- 어떤 sibling corpus 트리에서든 portable PNIX semantics를 복사해오는 것
 - basic execution에 대한 service admission, deployment policy, 또는 proof receipt
 - Hangul/NL/dictionary/agent/domain 콘텐츠
 - 완전한 mature JVM-host parity, IL fixed-point self-hosting, 또는
@@ -111,4 +113,6 @@ facade에서 generated compiler tool로 더 넓은 compatibility command 이전�
 PNIX common-compiler integration과 CLR host promotion은 그 이후 독립적으로
 닫힌다. `../clr-meta/STAGE15_N_ROADMAP.md` 참조. 현재 CLR artifact/adoption
 게이트 통과는 증거이지, established host로서의 자동 교체 또는 admission이 아니다.
-`../../project-wiki/CONSTITUTION.md`의 공유 헌법이 권위 문서로 남는다.
+이 저장소 자체의 `../CLAUDE.md`가 권위 문서로 남는다 — 이전에 인용되던
+`project-wiki/CONSTITUTION.md`는 `pnix-zero` 자매 저장소에만 있으며, 이
+자기완결 트리에는 없다.

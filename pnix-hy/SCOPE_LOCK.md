@@ -112,11 +112,12 @@ admitted by an explicit scope + proposal). The **shared common-`.px` core**
 track is now IN scope for this repo:
 
 - loading common `.px` from `../pnix-meta` through the pnix-hy runtime;
-- the cross-repo canonical-result + effect/capability ABI
-  (`../project-wiki/maps/shared-blockers-map.md` B1–B3);
+- the cross-repo canonical-result + effect/capability ABI (blockers B1–B3,
+  originally tracked in the `pnix-zero` sibling repo's project-wiki — this
+  self-contained tree has no such sibling tree to load);
 - the "full pnix language" growth **only as needed to run the shared corpus**.
 
-Bound by the constitution (`../CLAUDE.md`, `../project-wiki/CONSTITUTION.md`):
+Bound by the constitution (`./CLAUDE.md`):
 
 1. **Non-regression** — the existing §1–§24 closed scope stays closed and its
    gate stays green; the shared-core track is ADDITIVE, never a rewrite.

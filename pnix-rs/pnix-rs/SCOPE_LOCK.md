@@ -76,12 +76,14 @@ Owner-authorized. Previously `import` was a reserved/held effect word and the
 runtime had no import/module system. Now IN scope for this repo:
 
 - an **import / module / resource resolver + export ABI** for `.px`
-  (`../project-wiki/maps/shared-blockers-map.md` B2) — the current hard blocker;
+  (blocker B2 — the current hard blocker); B1–B3 originally tracked in the
+  `pnix-zero` sibling repo's project-wiki, which this self-contained tree
+  does not have;
 - loading common `.px` from `../pnix-meta` and running it;
 - a px-level canonical result + held reason (B1) and the effect/capability
   bridge (B3).
 
-Bound by the constitution (`../CLAUDE.md`, `../project-wiki/CONSTITUTION.md`):
+Bound by the constitution (`../CLAUDE.md`):
 
 1. **Meta-first** — the `rs-meta` interpretable-subset constraint still governs
    runtime growth; every new `px.rs` surface must stay `substrate-check`-clean.

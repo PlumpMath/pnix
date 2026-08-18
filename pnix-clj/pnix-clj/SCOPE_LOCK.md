@@ -50,7 +50,8 @@ clj-meta는 호스트 언어 증명 레인이다.
 직접 확장으로서 여기 범위 안이다:
 
 - 외부 `../pnix-meta` 루트에서 common `.px` 로딩 (승인된 external-root
-  loader, `../project-wiki/maps/shared-blockers-map.md` B2);
+  loader, blocker B2 — 원래 `pnix-zero` 자매 저장소의 project-wiki에서
+  추적되던 항목이며, 이 자기완결 트리에는 그 자매 트리가 없다);
 - 공유 정규 결과 + held reason 방출 (B1);
 - 실제 호스트 IO로의 effect/capability 브리지 (B3).
 
