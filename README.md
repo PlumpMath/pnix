@@ -243,6 +243,21 @@ in {
   구동하는 각 에디터/LSP/도구 설정에서 "이 커맨드를 어떻게 찾는가"를 확인해,
   하드코딩된 기본값(`npx ...`, 절대경로 캐시 등)이 있으면 `executable-find`
   등으로 PATH에서 찾은 wrapper를 명시적으로 가리키게 고쳐야 한다.
+- **CIDER가 jack-in 시 주입하는 nREPL 미들웨어 버전이 프로젝트가 이미 pin한
+  버전보다 새로우면 충돌한다** — `cider-jack-in`/`cider-jack-in-cljs`는 기본적으로
+  자기 번들 버전(예: `nrepl 1.7.0`, `cider-nrepl 0.62.2`)을 `-d`/`-Sdeps`로 강제
+  주입한다(`cider-inject-dependencies-at-jack-in`, 기본값 `t`). `shadow-cljs.edn`
+  (또는 `deps.edn`)이 이미 구버전(예: `nrepl 0.9.0`/`cider-nrepl 0.27.4`)을
+  `:dependencies`로 pin해둔 프로젝트에서는, 그 오래된 shadow-cljs/nREPL 서버
+  코드가 새 미들웨어 시그니처와 안 맞아 `ArityException: wrap-describe` 같은
+  에러로 nREPL 시작 자체가 죽는다. 실측: 프로젝트가 선언한 구버전 그대로
+  순정 `shadow-cljs server`를 띄우면 정상 기동한다. 고치는 법 — 프로젝트가
+  이미 nREPL 미들웨어를 pin해 두고 있다면 CIDER의 자체 주입을 끈다:
+  ```elisp
+  (setq cider-inject-dependencies-at-jack-in nil)
+  ```
+  (부수 효과: 위 (A) overlay 패턴의 `-Sdeps` 감지·스킵 로직도, CIDER가 더 이상
+  자기 `-Sdeps`를 안 붙이니 pnix 주입을 건너뛰지 않게 되어 자연히 정상 동작한다.)
 
 ### 4) 그냥 개발만 하려면
 
