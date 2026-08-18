@@ -4,13 +4,22 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
+# clr-meta/STATUS.md and clr-meta/todo.md are excluded: this repo's Korean
+# progress-tracking prose there legitimately names clj-meta for cross-host
+# comparison narrative (e.g. "clj-meta도 let 다음이 loop/recur였다") -- not
+# copied code or a stale identity leak, which is what this check actually
+# guards against. pnix-cljs-identity-gate's analogous check already scopes
+# to an explicit file allowlist that excludes its own STATUS.md/todo.md for
+# the same reason; this mirrors that intent for a blanket-scan gate instead.
 stale_identity='\bpnix-clj\b|\bpnix_clj\b|\bclj-meta\b|\bclj_meta\b'
 if rg -n --hidden --pcre2 "$stale_identity" . \
     -g '!.git/**' \
     -g '!clojure-clr-clojure-1.12.3-alpha8/**' \
     -g '!clr-bootstrap/bin/**' \
     -g '!clr-bootstrap/obj/**' \
-    -g '!bin/pnix-clr-identity-gate'; then
+    -g '!bin/pnix-clr-identity-gate' \
+    -g '!clr-meta/STATUS.md' \
+    -g '!clr-meta/todo.md'; then
   echo "pnix-clr identity gate: stale JVM-host identity" >&2
   exit 1
 fi
