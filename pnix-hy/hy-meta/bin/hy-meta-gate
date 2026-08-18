@@ -34,6 +34,31 @@ if ! "$PY" -c 'import hy, funcparserlib' 2>/dev/null; then
 fi
 
 MODE="${1:-primary}"
+
+# self-host-check/bootstrap-fixedpoint-check compile tests/resources/__init__.py
+# from the hy-src corpus, which imports pytest -- a dependency this script's own
+# `import hy, funcparserlib` probe above doesn't cover. Outside `nix develop`
+# (whose shellHook materializes ./tests/ and provides pytest on PATH), this fails
+# several frames deep inside a Hy macro-expansion HyRequireError that doesn't
+# name pytest as the cause. Check it up front for these two modes only.
+case "$MODE" in
+  full|self-host-check|bootstrap-fixedpoint-check)
+    if [[ ! -e "$ROOT/tests" ]]; then
+      echo "hy-meta-gate: $ROOT/tests is missing (needed by self-host-check /" >&2
+      echo "  bootstrap-fixedpoint-check). Enter 'nix develop' once to materialize" >&2
+      echo "  it from the pinned hy-src input, then re-run (works outside the" >&2
+      echo "  devShell afterward)." >&2
+      exit 2
+    fi
+    if ! "$PY" -c 'import pytest' 2>/dev/null; then
+      echo "hy-meta-gate: $PY has no pytest (needed by self-host-check /" >&2
+      echo "  bootstrap-fixedpoint-check, via tests/resources/__init__.py)." >&2
+      echo "  Run inside 'nix develop' (its python has pytest), or set" >&2
+      echo "  HY_META_PYTHON to an interpreter that does." >&2
+      exit 2
+    fi
+    ;;
+esac
 case "$MODE" in
   primary|self-check)
     "$PY" hy-meta/bootstrap.py self-check
