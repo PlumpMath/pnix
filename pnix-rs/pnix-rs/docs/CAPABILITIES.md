@@ -40,11 +40,12 @@ attrset(+`//`, `.name`, `?`, 깊은 identity-aware `==`)/재귀 let·rec(call-by
 lambda+juxtaposition/if-then-else/with/string `+`/bool `&& || !`/산술·비교/`#` 주석/
 MD5·SHA1·SHA256·SHA512 `hashString`/Nix 호환 source-float grammar.
 
-등록된 public builtins 144종(함수 + 값 상수 + 재귀 `builtins` 필드; presence inventory):
-toString stringLength concatStringsSep substring length map filter all any isFunction isNull isFloat typeOf baseNameOf dirOf abort foldl genList foldl' attrNames hasAttr sort head tail elemAt elem listToAttrs removeAttrs replaceStrings getAttr isAttrs isInt isBool isString isList toJSON fromJSON throw deepSeq addErrorContext hashString concatMap concatLists match split sin cos tan sqrt exp ln log abs ceil floor pow max min mod add sub mul div lessThan bitAnd bitOr bitXor attrValues mapAttrs catAttrs intersectAttrs zipAttrsWith groupBy partition seq splitVersion compareVersions break parseDrvName toPath unsafeDiscardOutputDependency unsafeDiscardStringContext tryEval isPath trace toXML toFile readFile readDir pathExists fetchurl fetchTarball fetchGit last init flatten foldr getAttrFromPath hasAttrByPath attrByPath getAttrFromPathOr filterAttrs filterAttrsRecursive mapAttrsRecursive concatMapStringsSep removePrefix removeSuffix hasPrefix hasSuffix splitString toLower toUpper boolToString implies optional optionals optionalAttrs when id const flip pipe fix range sum product recursiveUpdate updateManyAttrs getName getVersion unique intersectLists subtractLists zipLists zipListsWith warn assertMsg true false null langVersion nixVersion storeDir builtins
+등록된 public builtins 145종(함수 + 값 상수 + 재귀 `builtins` 필드; presence inventory):
+toString stringLength concatStringsSep substring length map filter all any isFunction isNull isFloat typeOf baseNameOf dirOf abort foldl genList foldl' attrNames hasAttr sort head tail elemAt elem listToAttrs removeAttrs replaceStrings getAttr isAttrs isInt isBool isString isList toJSON fromJSON throw deepSeq addErrorContext hashString concatMap concatLists match split sin cos tan sqrt exp ln log abs ceil floor pow max min mod functionArgs add sub mul div lessThan bitAnd bitOr bitXor attrValues mapAttrs catAttrs intersectAttrs zipAttrsWith groupBy partition seq splitVersion compareVersions break parseDrvName toPath unsafeDiscardOutputDependency unsafeDiscardStringContext tryEval isPath trace toXML toFile readFile readDir pathExists fetchurl fetchTarball fetchGit last init flatten foldr getAttrFromPath hasAttrByPath attrByPath getAttrFromPathOr filterAttrs filterAttrsRecursive mapAttrsRecursive concatMapStringsSep removePrefix removeSuffix hasPrefix hasSuffix splitString toLower toUpper boolToString implies optional optionals optionalAttrs when id const flip pipe fix range sum product recursiveUpdate updateManyAttrs getName getVersion unique intersectLists subtractLists zipLists zipListsWith warn assertMsg true false null langVersion nixVersion storeDir builtins
 
-presence는 호출 parity 주장이 아니다. 다음 12개 extension 이름은 호출 시 fail-closed HELD:
-sin cos tan sqrt exp ln log abs pow max min mod
+presence는 호출 parity 주장이 아니다. 다음 11개 extension 이름은 호출 시 fail-closed HELD
+(max/min은 구현됨 — 이전 텍스트가 부정확했음):
+sin cos tan sqrt exp ln log abs pow mod functionArgs
 
 ## px 표면 (명시 미지원 — held)
 

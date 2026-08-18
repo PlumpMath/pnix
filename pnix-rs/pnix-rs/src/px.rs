@@ -1427,7 +1427,60 @@ impl PxParser {
     fn parse_let(&mut self) -> Result<PxExpr, String> {
         self.eat(PxTok::KwLet)?;
         let mut bindings = Vec::new();
+        // Same `:`-marked-name trick parse_attrset_literal's `rec { inherit
+        // x; }` uses: a plain `inherit x;` must resolve `x` in the scope
+        // ENCLOSING this let, not this let's own (mutually recursive)
+        // bindings. Capture such names under a `:`-marked binding in a
+        // separate outer LetIn wrapper instead of adding evaluator-side
+        // scope-resolution logic.
+        let mut outer: Vec<(String, PxExpr)> = Vec::new();
         while !self.peek_is(PxTok::KwIn) {
+            if let Some(PxTok::Ident(kw)) = self.toks.get(self.pos) {
+                if kw == "inherit" && !matches!(self.toks.get(self.pos + 1), Some(PxTok::Assign)) {
+                    self.pos += 1;
+                    let mut from: Option<PxExpr> = None;
+                    if self.peek_is(PxTok::LParen) {
+                        self.pos += 1;
+                        let e = self.parse_expr()?;
+                        self.eat(PxTok::RParen)?;
+                        from = Some(e);
+                    }
+                    let mut got_any = false;
+                    while !self.peek_is(PxTok::Semi) {
+                        match self.toks.get(self.pos).cloned() {
+                            Some(PxTok::Ident(n)) => {
+                                self.pos += 1;
+                                got_any = true;
+                                match &from {
+                                    Some(e) => bindings.push((
+                                        n.clone(),
+                                        PxExpr::Select {
+                                            base: Box::new(e.clone()),
+                                            name: n.clone(),
+                                        },
+                                    )),
+                                    None => {
+                                        let marked = format!(":{}", n);
+                                        outer.push((marked.clone(), PxExpr::Var(n.clone())));
+                                        bindings.push((n, PxExpr::Var(marked)));
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "px parse: inherit expects attribute names, found {}",
+                                    self.cur_desc()
+                                ))
+                            }
+                        }
+                    }
+                    if !got_any {
+                        return Err(String::from("px parse: empty inherit"));
+                    }
+                    self.eat(PxTok::Semi)?;
+                    continue;
+                }
+            }
             let name = self.ident()?;
             self.eat(PxTok::Assign)?;
             let value = self.parse_expr()?;
@@ -1436,9 +1489,17 @@ impl PxParser {
         }
         self.eat(PxTok::KwIn)?;
         let body = self.parse_expr()?;
-        Ok(PxExpr::LetIn {
+        let inner = PxExpr::LetIn {
             bindings,
             body: Box::new(body),
+        };
+        Ok(if outer.is_empty() {
+            inner
+        } else {
+            PxExpr::LetIn {
+                bindings: outer,
+                body: Box::new(inner),
+            }
         })
     }
 
@@ -3866,6 +3927,7 @@ pub fn px_builtin_names() -> Vec<&'static str> {
         "max",
         "min",
         "mod",
+        "functionArgs",
         // Runtime-gap closure (2026-07-09): pure Nix builtins pnix-rs lacked
         // while clj/hy had them. Each oracle-pinned against nix 2.34.7 before
         // implementation (see px_builtin_exec).
@@ -4224,7 +4286,7 @@ fn px_builtin_arity(name: &str) -> usize {
     } else if name == "isFunction" || name == "throw"
         || name == "sin" || name == "cos" || name == "tan" || name == "sqrt"
         || name == "exp" || name == "ln" || name == "log" || name == "abs"
-        || name == "ceil" || name == "floor"
+        || name == "ceil" || name == "floor" || name == "functionArgs"
     {
         1
     } else {
@@ -5297,6 +5359,14 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
     {
         // remaining math: HELD at call until B1 numeric model lands.
         Err(format!("px: builtins.{} is held (B1 numeric model undecided)", name))
+    } else if name == "functionArgs" {
+        // HELD: attrset-pattern lambdas desugar to a plain Lambda/Closure
+        // (parse_pattern_lambda) with no formals metadata retained on the
+        // resulting value, so this can't yet distinguish a pattern lambda
+        // from a plain one at call time.
+        Err(String::from(
+            "px: builtins.functionArgs is held (pattern-lambda formals are not retained after desugaring)",
+        ))
     } else if name == "trace" || name == "warn" {
         let msg = match &args[0] {
             PxVal::Str(s) => s.clone(),

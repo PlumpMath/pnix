@@ -4816,8 +4816,9 @@ fn capabilities_doc() -> String {
         builtin_names.len(),
         builtin_names.join(" ")
     ));
-    d.push_str("presence는 호출 parity 주장이 아니다. 다음 12개 extension 이름은 호출 시 fail-closed HELD:\n");
-    d.push_str("sin cos tan sqrt exp ln log abs pow max min mod\n\n");
+    d.push_str("presence는 호출 parity 주장이 아니다. 다음 11개 extension 이름은 호출 시 fail-closed HELD\n");
+    d.push_str("(max/min은 구현됨 — 이전 텍스트가 부정확했음):\n");
+    d.push_str("sin cos tan sqrt exp ln log abs pow mod functionArgs\n\n");
     d.push_str("## px 표면 (명시 미지원 — held)
 
 ");
