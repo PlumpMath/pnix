@@ -515,12 +515,12 @@
                                          :target source
                                          :name name}
                                         {:op :variable :name name})})))))))
-        (let [name-token (expect! parser :identifier)]
+        (let [path (parse-static-binding-path parser)]
           (expect! parser :equal)
           (let [value (parse-expression parser)]
             (expect! parser :semicolon)
-            (recur (conj bindings {:name (:value name-token)
-                                   :value value}))))))))
+            (recur (merge-attr-fields parser bindings
+                                      (nest-attr-path path value)))))))))
 
 (defn parse-expression [parser]
   (case (:kind (current-token parser))
