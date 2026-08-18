@@ -1481,11 +1481,27 @@ impl PxParser {
                     continue;
                 }
             }
-            let name = self.ident()?;
+            // Nested static path `a.b = v` desugars to `a = { b = v; }`,
+            // same as attrset literals (parse_attrset_literal / merge_attr_field).
+            let mut path = vec![self.ident()?];
+            while self.peek_is(PxTok::Dot) {
+                if let Some(PxTok::Ident(n2)) = self.toks.get(self.pos + 1).cloned() {
+                    self.pos += 1; // Dot
+                    self.pos += 1; // Ident
+                    path.push(n2);
+                } else {
+                    break;
+                }
+            }
             self.eat(PxTok::Assign)?;
-            let value = self.parse_expr()?;
+            let mut value = self.parse_expr()?;
             self.eat(PxTok::Semi)?;
-            bindings.push((name, value));
+            let mut i = path.len();
+            while i > 1 {
+                i -= 1;
+                value = PxExpr::Attrs(vec![(path[i].clone(), value)]);
+            }
+            bindings = merge_let_binding(bindings, path[0].clone(), value);
         }
         self.eat(PxTok::KwIn)?;
         let body = self.parse_expr()?;
@@ -2607,6 +2623,44 @@ fn merge_attr_field(
         out.push((name, value));
     }
     Ok(out)
+}
+
+/// Same attrset-merge recursion as merge_attr_field, for `let a.b = 1; a.c =
+/// 2; in ...`, but `let` bindings intentionally SHADOW on a genuine leaf
+/// collision instead of erroring (seed_let_shadow.px: `let x = 1; x = 2; in
+/// x` => 2, "the later binding shadows the earlier one" -- a pnix-rs `let`
+/// design choice that predates and diverges from merge_attr_field's
+/// Nix-parity duplicate-key error for `{ }` literals).
+fn merge_let_binding(bindings: Vec<(String, PxExpr)>, name: String, value: PxExpr) -> Vec<(String, PxExpr)> {
+    let mut out: Vec<(String, PxExpr)> = Vec::new();
+    let mut merged_flag = false;
+    for (k, v) in bindings {
+        if k == name && !merged_flag {
+            if px_is_attrs_lit(&v) && px_is_attrs_lit(&value) {
+                let mut merged = match v {
+                    PxExpr::Attrs(x) => x,
+                    _ => Vec::new(),
+                };
+                let newf = match &value {
+                    PxExpr::Attrs(x) => x.clone(),
+                    _ => Vec::new(),
+                };
+                for (nk, nv) in newf {
+                    merged = merge_let_binding(merged, nk, nv);
+                }
+                out.push((k, PxExpr::Attrs(merged)));
+            } else {
+                out.push((k, value.clone()));
+            }
+            merged_flag = true;
+        } else {
+            out.push((k, v));
+        }
+    }
+    if !merged_flag {
+        out.push((name, value));
+    }
+    out
 }
 
 /// Strip the leading `:` inherit mark (rs-meta subset: no string slicing).

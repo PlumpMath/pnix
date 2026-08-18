@@ -1,0 +1,4 @@
+# `let a.b = 1; a.c = 2; in ...` desugars to nested attrsets rooted at `a`
+# (same nested-path desugar attrset literals already use), so a.b and a.c
+# merge into one attrset instead of colliding as duplicate bindings.
+let a.b = 1; a.c = 2; in a.b + a.c

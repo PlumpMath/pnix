@@ -662,11 +662,21 @@ substrate-checked).
 
 ## 5. 정직 경계
 
-- runtime 기판 미지원(정직 거부): floats(c01), `builtins.toJSON`(c06), 중첩
-  attrset-키 interpolation(c10), string `+`, bool `&& || !`, `?`, `rec`, `with`,
-  paths. **mirror/gate 유기체가 수요를 만들 때만 확장.**
-- `builtins.sort`는 selection sort(비안정) — Nix는 안정 정렬. corpus 값이 전부
-  distinct라 현재 관측 불가; 안정성 요구가 생기면 명시 수정.
+- 2026-08-19 정정: floats/toJSON/중첩 attrset-키 interpolation/string `+`/bool
+  `&& || !`/`?`/`rec`/`with`는 이 줄이 "미지원"이라고 적은 뒤 실제로는 전부
+  구현·동작하도록 성장했다(직접 재확인: `"a"+"b"`, `false && (1/0>0)`,
+  `{a=1;}?a`, `with {a=1;}; a`, `rec {a=1;b=a+1;}.b` 전부 정상값 반환) — 이
+  문서가 갱신을 안 따라간 사례. **`paths`만 여전히 실제 갭**: `./x`가
+  `builtins.typeOf`상 `"string"`으로 나오고 `builtins.isPath`가 `false`를
+  반환한다 — path가 string과 구분되는 진짜 값 타입으로 존재하지 않는다
+  (`PxVal`에 `Path` variant 자체가 없음). 이건 단일 함수 수정이 아니라
+  typeOf/isPath/JSON 투영/canonical print/동등성을 관통하는 새 값 타입
+  추가라 범위가 크다 — mirror/gate 수요가 생기면 그때 추가.
+- `builtins.sort`는 selection sort지만, 비교자가 strict less-than일 때만
+  `min`을 갱신하는 tie-break 규칙 때문에 **실제로는 안정 정렬**이다(직접
+  재확인: 동일 키 3개를 인터리브해도 원래 상대 순서 유지). "비안정"이라고
+  적은 이전 문장이 틀렸음 — corpus가 distinct라서 몰랐던 게 아니라 애초에
+  안정적이었다.
 - canonical print 형식(`{ k = v; }` 정렬)은 이 lane의 잠정 canonical이며,
   cross-host(pnix-clj/pnix-hy) canonical과의 정합은 M7에서 확정.
 - substrate-check는 px 엔진의 rs-meta-해석 동등 증거이지, px 의미론의 형식증명이

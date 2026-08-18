@@ -179,6 +179,11 @@ fn px_corpus() -> Vec<(&'static str, &'static str, &'static str)> {
             "2",
         ),
         (
+            "seed_let_dotted",
+            "runtime/corpus/seed_let_dotted.px",
+            "3",
+        ),
+        (
             "c01_arith",
             "runtime/corpus/c01_arith.px",
             "{ div = 10; flt = 7.0; mixed = 44; modv = 1; prod = 42; sum = 23; }",
