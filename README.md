@@ -226,6 +226,23 @@ in {
   하지 말 것** — 2b)의 PATH 방식을 쓴다. 예외는 그 실행파일이 다른
   nixpkgs 빌드의 입력으로 전혀 안 쓰인다고 확신할 때뿐이다(Clojure CLI가
   그런 경우).
+- **에디터/도구가 자기만의 커맨드 경로 설정을 갖고 있으면 `$PATH` 래퍼를
+  건너뛴다** — 예: Emacs CIDER의 `cider-shadow-cljs-command` 기본값은
+  `"npx shadow-cljs"`다. `npx`는 셸 `$PATH`가 아니라 자기 방식으로 패키지를
+  찾으므로, PATH에 심어 둔 pnix-wrapped `shadow-cljs`(`PNIX_CLJS`/
+  `NODE_PATH` 주입)를 완전히 우회한다. `cider-clojure-cli-command`도 같은
+  이유로 `pnix-clj-clj`의 절대경로로 명시 고정해야 한다:
+  ```elisp
+  (setq cider-default-cljs-repl 'shadow)
+  (when-let ((cmd (executable-find "pnix-clj-clj")))
+    (setq cider-clojure-cli-command cmd))
+  (when-let ((cmd (executable-find "shadow-cljs")))
+    (setq cider-shadow-cljs-command cmd))
+  ```
+  일반화하면: PATH 우선순위 래퍼(2b)를 깔았다고 끝이 아니다 — 그 언어를
+  구동하는 각 에디터/LSP/도구 설정에서 "이 커맨드를 어떻게 찾는가"를 확인해,
+  하드코딩된 기본값(`npx ...`, 절대경로 캐시 등)이 있으면 `executable-find`
+  등으로 PATH에서 찾은 wrapper를 명시적으로 가리키게 고쳐야 한다.
 
 ### 4) 그냥 개발만 하려면
 
