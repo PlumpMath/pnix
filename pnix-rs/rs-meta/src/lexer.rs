@@ -374,6 +374,19 @@ pub fn lex_spanned(src: &str) -> Result<(Vec<Tok>, Vec<usize>), String> {
                             chars[frac_start..k].iter().filter(|c| **c != '_').collect();
                         text.push_str(&frac);
                         i = k;
+                        // Optional `f32`/`f64` type suffix (e.g. `0.0f64`) --
+                        // consumed and discarded: this backend's floats are
+                        // always f64 internally regardless of an explicit
+                        // suffix, so the suffix carries no information the
+                        // value itself doesn't already have.
+                        if i + 3 <= chars.len()
+                            && chars[i] == 'f'
+                            && ((chars[i + 1] == '3' && chars[i + 2] == '2')
+                                || (chars[i + 1] == '6' && chars[i + 2] == '4'))
+                            && !matches!(peek(&chars, i + 3), Some(ch) if ch.is_ascii_alphanumeric() || ch == '_')
+                        {
+                            i += 3;
+                        }
                         toks.push(Tok::Float(text));
                         continue;
                     }

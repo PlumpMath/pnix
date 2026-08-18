@@ -8,7 +8,6 @@
 | 명령 | 목적 | schema |
 |---|---|---|
 | px-eval -c\|-f | .px 평가 → canonical 출력 | - |
-| pnix-meta-conformance [ROOT] | 외부 pnix-meta corpus 컨포먼스(toJSON canonical + per-case 타이밍, tri-host 게이트의 rs 몫) | pnix-rs.pnix-meta-conformance.v0 |
 | px-check | corpus가 기대 canonical과 일치 | - |
 | mirror -c\|-f / mirror-check | singleton mirror facet + roundtrip 어휘 | pnix-rs.mirror.v0 |
 | stage -c\|-f / stage-check | px-stage1..5 + closure | pnix-rs.stage.v0 |
@@ -41,8 +40,8 @@ attrset(+`//`, `.name`, `?`, 깊은 identity-aware `==`)/재귀 let·rec(call-by
 lambda+juxtaposition/if-then-else/with/string `+`/bool `&& || !`/산술·비교/`#` 주석/
 MD5·SHA1·SHA256·SHA512 `hashString`/Nix 호환 source-float grammar.
 
-등록된 public builtins 91종(함수 + 값 상수 + 재귀 `builtins` 필드; presence inventory):
-toString stringLength concatStringsSep substring length map filter all any isFunction isNull isFloat typeOf baseNameOf dirOf abort foldl genList foldl' attrNames hasAttr sort head tail elemAt elem listToAttrs removeAttrs replaceStrings getAttr isAttrs isInt isBool isString isList toJSON fromJSON throw deepSeq addErrorContext hashString concatMap concatLists match split sin cos tan sqrt exp ln log abs ceil floor pow max min mod add sub mul div lessThan bitAnd bitOr bitXor attrValues mapAttrs catAttrs intersectAttrs zipAttrsWith groupBy partition seq splitVersion compareVersions break parseDrvName toPath unsafeDiscardOutputDependency unsafeDiscardStringContext tryEval isPath true false null langVersion nixVersion storeDir builtins
+등록된 public builtins 144종(함수 + 값 상수 + 재귀 `builtins` 필드; presence inventory):
+toString stringLength concatStringsSep substring length map filter all any isFunction isNull isFloat typeOf baseNameOf dirOf abort foldl genList foldl' attrNames hasAttr sort head tail elemAt elem listToAttrs removeAttrs replaceStrings getAttr isAttrs isInt isBool isString isList toJSON fromJSON throw deepSeq addErrorContext hashString concatMap concatLists match split sin cos tan sqrt exp ln log abs ceil floor pow max min mod add sub mul div lessThan bitAnd bitOr bitXor attrValues mapAttrs catAttrs intersectAttrs zipAttrsWith groupBy partition seq splitVersion compareVersions break parseDrvName toPath unsafeDiscardOutputDependency unsafeDiscardStringContext tryEval isPath trace toXML toFile readFile readDir pathExists fetchurl fetchTarball fetchGit last init flatten foldr getAttrFromPath hasAttrByPath attrByPath getAttrFromPathOr filterAttrs filterAttrsRecursive mapAttrsRecursive concatMapStringsSep removePrefix removeSuffix hasPrefix hasSuffix splitString toLower toUpper boolToString implies optional optionals optionalAttrs when id const flip pipe fix range sum product recursiveUpdate updateManyAttrs getName getVersion unique intersectLists subtractLists zipLists zipListsWith warn assertMsg true false null langVersion nixVersion storeDir builtins
 
 presence는 호출 parity 주장이 아니다. 다음 12개 extension 이름은 호출 시 fail-closed HELD:
 sin cos tan sqrt exp ln log abs pow max min mod
@@ -72,7 +71,6 @@ effects: file-read | file-write | host-call | import | network
 | 게이트 | 증명 | 상태 |
 |---|---|---|
 | px-check | seed corpus가 기대 canonical로 평가 (부동/toJSON/동적키/깊은== 포함) | DONE |
-| pnix-meta-conformance | 외부 pnix-meta corpus가 공유 canonical(toJSON)과 일치 — tri-host 게이트의 rs 몫 (root 부재=명시적 FAIL) | DONE |
 | mirror-check | corpus mirror lossless (emit 고정점 + 값 일치) | DONE |
 | stage-check | px-stage1..5 + closure 런타임 사다리 닫힘 | DONE |
 | ir-check | sha256 벡터 + IR 증명 + identity sharing (바인딩 순서 무관) | DONE |
