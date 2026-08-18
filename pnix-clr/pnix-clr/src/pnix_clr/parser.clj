@@ -226,7 +226,16 @@
       :true (do (take-token! state) {:op :bool :value true})
       :false (do (take-token! state) {:op :bool :value false})
       :null (do (take-token! state) {:op :null})
-      :int (do (take-token! state) {:op :int :value (:value token)})
+      :int (do (take-token! state)
+               (when (and (= (:value token) System.Int64/MinValue)
+                          (= (:text token) lexer/min-i64-magnitude-text))
+                 ;; Reached without parse-unary's negate-fold consuming it
+                 ;; first, so this is a bare (unsigned) occurrence -- the
+                 ;; magnitude never fits a positive Int64.
+                 (outcome/fail! :parse :syntax-error
+                                {:reason "integer-literal-out-of-range"
+                                 :literal (:text token)}))
+               {:op :int :value (:value token)})
       :float (do (take-token! state) {:op :float :value (:value token)})
       :string (do (take-token! state) {:op :string :value (:value token)})
       ;; Deprecated Nix URI literals evaluate as plain strings.
@@ -286,7 +295,13 @@
     {:op :not :value (parse-additive state)}
 
     (accept! state :minus)
-    {:op :negate :value (parse-unary state)}
+    (if (and (= :int (:kind (token-at state)))
+             (= lexer/min-i64-magnitude-text (:text (token-at state))))
+      ;; `-9223372036854775808` is Int64.MinValue -- its unsigned magnitude
+      ;; alone never fits a positive Int64, so fold sign+magnitude into one
+      ;; literal here rather than negating an already-rejected token.
+      (do (take-token! state) {:op :int :value System.Int64/MinValue})
+      {:op :negate :value (parse-unary state)})
 
     :else
     (parse-application state)))

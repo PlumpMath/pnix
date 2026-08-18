@@ -127,13 +127,22 @@
                      {:offset offset :literal text}))
     value))
 
+(def min-i64-magnitude-text
+  ;; abs(Int64.MinValue) as unsigned text -- one more than Int64.MaxValue, so
+  ;; it can never parse as a positive Int64. Only valid when a unary `-`
+  ;; immediately negates it (see parse-unary's fold in parser.clj); a bare
+  ;; occurrence is still rejected there.
+  "9223372036854775808")
+
 (defn- parse-nix-int
   [text offset]
   (try
     (System.Int64/Parse text)
     (catch System.OverflowException _
-      (syntax-error! "integer-literal-out-of-range"
-                     {:offset offset :literal text}))))
+      (if (= text min-i64-magnitude-text)
+        System.Int64/MinValue
+        (syntax-error! "integer-literal-out-of-range"
+                       {:offset offset :literal text})))))
 
 (declare tokenize scan-string scan-indented)
 

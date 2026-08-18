@@ -150,9 +150,16 @@
     (is (= :failed (outcome/kind bare)))
     (is (= "syntax-error" (:class (result-error bare)))))
   (is (= [-1] (result-value (source-result "[ (-1) ]"))))
-  (let [literal-min (source-result "(-9223372036854775808)")]
-    (is (= :failed (outcome/kind literal-min)))
-    (is (= "syntax-error" (:class (result-error literal-min))))))
+  ;; i64::MIN as a direct literal: sign+magnitude fold in parse-unary, not a
+  ;; syntax error (the bare unsigned magnitude alone is still rejected below).
+  (is (= System.Int64/MinValue
+         (result-value (source-result "(-9223372036854775808)"))))
+  (let [bare-min-magnitude (source-result "9223372036854775808")]
+    (is (= :failed (outcome/kind bare-min-magnitude)))
+    (is (= "syntax-error" (:class (result-error bare-min-magnitude)))))
+  (let [double-negate (source-result "(- (0 - 9223372036854775807 - 1))")]
+    (is (= :failed (outcome/kind double-negate)))
+    (is (= "integer-overflow" (:class (result-error double-negate))))))
 
 (deftest checked-i64-errors-are-structured-and-left-strict
   (let [min-expr "(0 - 9223372036854775807 - 1)"
