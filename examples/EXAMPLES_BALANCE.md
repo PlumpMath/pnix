@@ -10,7 +10,7 @@
 | 호스트 | 제품 예제 루트 | 카탈로그 깊이 (대략) | 비고 |
 |--------|----------------|----------------------|------|
 | **clj** | `pnix-clj/pnix-clj/examples/` | ~90개 슬라이스 | 가장  densest: spine, machine, oracle, AI gate |
-| **hy** | `pnix-hy/pnix-hy/examples/` | ~35 | specialize, cogen, compartment, Jones 등 |
+| **hy** | `pnix-hy/pnix-hy/examples/` | ~38 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf 등 |
 | **rs** | `pnix-rs/pnix-rs/examples/` | ~28 | 중간: gate, mirror, BTA, embed, Jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/tower-depth/project-health |
 | **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–15 | experimental seed; Node 라이브러리 import |
 | **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–15 | experimental seed; C# 라이브러리 + in-process opt-in |
@@ -29,9 +29,9 @@
 | 결정성 / 해시 / drift | 13–15, 21 | 02, 29 | 02, 21 | — | — |
 | 호스트 라이브러리 import | host-import + 51 | 14 | 15 | **02** | **02** |
 | 호스트↔pnix interop / embed | 04, 07–08 | 04, 07–08 | 04, 15 | **04** | **04** |
-| 결과 모양 / 영수증 정직 | 02, 05 | 05 | 05, 19, 28 | **03, 05** | **03, 05** |
+| 결과 모양 / 영수증 정직 | 02, 05 | 05, 37 | 05, 19, 28 | **03, 05** | **03, 05** |
 | Specialize / Futamura | 03, 33 | 03, 33 | 06, 16, 18, 23 | — | — |
-| Self-host / meta 쌍 | 11, 35 | 11, 35 | 11, 26, 27 | **06** | **06** |
+| Self-host / meta 쌍 | 11, 35 | 11, 35, 36 | 11, 26, 27 | **06** | **06** |
 | Compartment / capability | 23, 31 | 23, 31 | 08, 22 | — | — |
 | Cache / incremental | 12, 30 | 12, 22, 30 | 07, 20 | — | — |
 | Machine / abstract CEK | 61, 78–92 | 35 | 26, 27 | — | — |
@@ -62,6 +62,8 @@
 최종 갱신: 2026-08-18 (rs: `pnix-rs check`의 34개 등록 게이트 중 아직 예제
 없던 16개 — jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/
 phase+assumption/certify/cross-host/stage/reflect-tower/explain+
-capabilities+registry — 를 16–28로 채움. 규칙 1·3에 따라 clj/hy 슬라이스
-복제가 아니라 rs 자신의 실행 가능한 표면만 반영; hy/clr/cljs 감사는
-진행 중).
+capabilities+registry — 를 16–28로 채움. hy: `pnix_stage_ladder`/
+`eval_receipt`/`performance_report` 세 CLI 표면(`--stage-ladder`/
+`--receipt`/`--perf`)에 예제가 없던 것을 36–38로 채움. 규칙 1·3에 따라
+clj/hy 슬라이스 복제가 아니라 각 host 자신의 실행 가능한 표면만 반영;
+clr/cljs 감사는 진행 중).

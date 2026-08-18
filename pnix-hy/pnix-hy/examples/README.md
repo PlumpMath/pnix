@@ -36,7 +36,7 @@ Python 초급자에게 `eval("1+2")`는 결과 `3`만 준다. pnix-hy 방식은 
 AST/IR/hash는 이렇다 · 다시 돌려도 같다 · 번역해도 같은 의미다
 문제가 있으면 어느 줄 어느 칸에서 막혔다
 ```
-까지 같이 준다. → 이 폴더는 **"그냥 실행"과 "증거·안전·의미보존·재현성까지 포함해 다루기"의 차이**를 실행되는 70개 예제로 보여준다.
+까지 같이 준다. → 이 폴더는 **"그냥 실행"과 "증거·안전·의미보존·재현성까지 포함해 다루기"의 차이**를 실행되는 76개 예제로 보여준다.
 
 ## 핵심 대비 (한 줄 요약)
 
@@ -77,6 +77,9 @@ AST/IR/hash는 이렇다 · 다시 돌려도 같다 · 번역해도 같은 의�
 | `33-futamura-ladder` | 인터프리터 하나로 컴파일러·cogen 파생 불가 | `futamura_ladder`/`--futamura` = 1·2·3차 사영을 한 산출물로 |
 | `34-module-distribution` | 평범한 패키지는 자기 위치·증명 레인 못 찾음 | `deployment_info` = 자기 발견 레이어링+능력 티어(core/projection/full) |
 | `35-staging-tower-internals` | plain eval은 통째로—멈춤·reify·재개·정적/동적 분류 없음 | CEK 기계(pause/reify/resume)+stage-poly(interpret/compile)+offline BTA |
+| `36-stage-ladder` † | 다단 실행 경로(stage tower/캐시/컴파일)의 값 일치를 검사할 표준 없음 | `pnix_stage_ladder` = stage1-7 tower + store-backed + compiler-closure 3단 일치 |
+| `37-eval-receipt` † | 재현성/감사 영수증(해시+값+수렴+흔적)을 한 장으로 안 묶음 | `eval_receipt` = 소스·값 해시 + 4-lane 수렴 + 실행흔적 + 순수성 한 장 |
+| `38-performance-report` † | 파이프라인 레인별(parse/emit/compile/exec) 벤치마크 표준 없음 | `performance_report` = 레인별 나노초 계측 + 생성 코드 내용주소 |
 
 † = Hy 1.3.0 proof Python 필요 (`nix develop` 또는 `PNIX_HY_PYTHON` 설정 후 실행).
 그 외 섹션(01–06, 09, 10, 12, 13, 17, 18)은 의존성 없이 바로 실행됩니다.
@@ -103,7 +106,7 @@ Hy가 필요한(프로젝션/mirror/hy-meta) 예제는 저장소 루트에서 `P
 
 ## 한 줄 결론
 
-pnix-hy/hy-meta가 정말 meta-circular 기능을 갖는지 **말이 아니라 실행되는 70개 예제로** 보여주는
+pnix-hy/hy-meta가 정말 meta-circular 기능을 갖는지 **말이 아니라 실행되는 76개 예제로** 보여주는
 데모 세트다 — "코드를 실행하는 것"을 넘어 "증거·안전·의미보존·재현성까지 포함해 다루는 것".
 
 > 상위 개요/CLI/REPL은 저장소 루트 `README.md`, 능력 전체 목록은 `../docs/` 와 `../todo.md` 참고.
