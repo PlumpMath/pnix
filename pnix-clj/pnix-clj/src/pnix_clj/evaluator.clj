@@ -543,6 +543,14 @@
   [phase reason-details left right]
   (or (audit-numeric-operands "/" left right)
       (cond
+        (zero? right)
+        (err/failed phase
+                  :division-by-zero
+                  (assoc reason-details
+                         :operator "/"
+                         :left left
+                         :right right))
+
         (and (integer? left) (integer? right)
              (= left Long/MIN_VALUE)
              (= right -1))
@@ -569,20 +577,27 @@
 (defn- mod-result
   [phase reason-details left right]
   (or (audit-numeric-operands "%" left right)
-      (try
-        {:status :ok
-         :value (if (and (integer? left) (integer? right))
-                  (rem left right)
-                  (- left (* (math/div left right) right)))}
-        (catch ArithmeticException t
-          (if (= "long overflow" (.getMessage t))
-            (err/failed phase
-                      :integer-overflow
-                      (assoc reason-details
-                             :operator "%"
-                             :left left
-                             :right right))
-            (throw t))))))
+      (if (zero? right)
+        (err/failed phase
+                  :division-by-zero
+                  (assoc reason-details
+                         :operator "%"
+                         :left left
+                         :right right))
+        (try
+          {:status :ok
+           :value (if (and (integer? left) (integer? right))
+                    (rem left right)
+                    (- left (* (math/div left right) right)))}
+          (catch ArithmeticException t
+            (if (= "long overflow" (.getMessage t))
+              (err/failed phase
+                        :integer-overflow
+                        (assoc reason-details
+                               :operator "%"
+                               :left left
+                               :right right))
+              (throw t)))))))
 
 (defn- builtin
   [name arity]
