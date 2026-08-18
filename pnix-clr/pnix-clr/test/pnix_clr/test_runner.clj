@@ -522,6 +522,18 @@
                (source-result "builtins.genericClosure { startSet = []; operator = x: []; }"))))
     (is (= :failed (outcome/kind (source-result "builtins.storePath \"/x\""))))))
 
+(deftest slash-after-number-is-division-not-a-path
+  ;; The lexer used to always start a path token at `/` when the next char
+  ;; was non-space/non-bracket, regardless of what preceded it -- so
+  ;; `1/0` (no surrounding spaces) mis-tokenized as `1` followed by a path
+  ;; literal `/0`. Only numbers immediately before `/` should push it
+  ;; toward division; `builtins.isPath /tmp/x` (identifier, then a fresh
+  ;; absolute-path argument) is real application syntax and must keep
+  ;; working.
+  (is (= "division-by-zero" (:class (result-error (source-result "1/0")))))
+  (is (= 5 (result-value (source-result "10/2"))))
+  (is (= true (result-value (source-result "builtins.isPath /tmp/does-not-need-to-exist")))))
+
 (defn -main
   [& args]
   (reset! test-root (host/canonical-path (or (first args)

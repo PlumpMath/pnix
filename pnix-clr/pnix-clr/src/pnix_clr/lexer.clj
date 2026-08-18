@@ -49,15 +49,24 @@
   [ch]
   (or (ident-start? ch) (ascii-digit? ch) (= ch \-) (= ch \')))
 
+(def ^:private expression-terminator-kinds
+  ;; Only numbers push an immediately-adjacent `/` toward division (`1/0`).
+  ;; Identifiers/closing delimiters must keep allowing a path to follow --
+  ;; `builtins.isPath /tmp/foo` is real, tested application-with-path-
+  ;; argument syntax (oracle-pinned), not re-derived here.
+  #{:int :float})
+
 (defn- path-start?
-  [source index]
+  [source index tokens]
   (let [ch (nth source index)
         next-ch (when (< (inc index) (count source))
                   (nth source (inc index)))]
     (or (and (= ch \/)
              next-ch
              (not (whitespace? next-ch))
-             (not (contains? #{\( \) \[ \] \{ \} \;} next-ch)))
+             (not (contains? #{\( \) \[ \] \{ \} \;} next-ch))
+             (not (contains? expression-terminator-kinds
+                              (:kind (peek tokens)))))
         (and (= ch \.) (contains? #{\. \/} next-ch)))))
 
 (defn- uri-scheme-char?
@@ -467,7 +476,7 @@
                          (conj tokens {:kind :int :text text
                                        :value value :offset index})))))
 
-            (path-start? source index)
+            (path-start? source index tokens)
             (let [end (scan-while source index path-char?)
                   text (subs source index end)]
               (recur end (conj tokens {:kind :path :text text :offset index})))
