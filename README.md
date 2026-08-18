@@ -72,6 +72,91 @@ cd pnix-clj && nix run .#gate
 개별 호스트는 자체 추가 기능을 둔다 — `nix run .#pnix-rs-px-eval`, `.#substrate-check`, `.#tower`, `.#deps-lock`, `.#pnix-clr-library`.
 호스트 안에서 `nix flake show`로 노출 전체를 확인.
 
+## 로컬 체크아웃을 다른 flake에서 오버라이드해 설치하기
+
+이 저장소에는 **최상위 통합 `flake.nix`가 없다** — `pnix-clj/`, `pnix-cljs/`,
+`pnix-clr/`, `pnix-hy/`, `pnix-rs/` 각각이 독립된 flake다. 다른 시스템 설정
+(NixOS, Home Manager, 또는 그냥 개인 flake)에서 이 로컬 체크아웃을 소비하려면,
+관심 있는 호스트 **디렉터리**를 flake input으로 가리키면 된다.
+
+### 1) flake input으로 로컬 경로 지정
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    # 로컬 체크아웃을 직접 가리킨다 — 커밋/푸시 없이 편집이 바로 반영된다.
+    # 경로는 이 monorepo를 clone한 실제 위치로 바꿀 것 (호스트 서브디렉터리까지).
+    pnix-rs.url = "path:/home/YOU/pnix/pnix-rs";
+    pnix-clj.url = "path:/home/YOU/pnix/pnix-clj";
+    # 필요한 호스트만 추가하면 된다 (clj / cljs / clr / hy / rs).
+
+    # 재현 가능한(로컬 체크아웃에 안 묶인) 설치가 필요하면 대신 이렇게:
+    # pnix-rs.url = "github:PlumpMath/pnix?dir=pnix-rs";
+  };
+
+  outputs = { self, nixpkgs, pnix-rs, pnix-clj, ... }: {
+    # 아래 참고
+  };
+}
+```
+
+`path:` input은 git이 추적하는 파일만 본다 — 새 파일을 추가했다면 평가 전에
+`git add` 해야 flake가 그 파일을 볼 수 있다 (Nix flake의 일반적인 동작).
+
+### 2) NixOS 시스템 설정에서 패키지로 소비
+
+```nix
+{ pnix-rs, ... }:
+let system = "x86_64-linux"; in
+{
+  environment.systemPackages = [
+    pnix-rs.packages.${system}.pnix-rs   # 런타임 CLI
+    pnix-rs.packages.${system}.rs-meta   # 원하면 meta 절반도
+  ];
+}
+```
+
+### 3) Home Manager에서 소비
+
+```nix
+{ pnix-rs, ... }:
+let system = "x86_64-linux"; in
+{
+  home.packages = [
+    pnix-rs.packages.${system}.pnix-rs
+  ];
+}
+```
+
+`nix run`/`writeShellScriptBin`으로 PATH에 여러 호스트를 동시에 배선하는
+더 정교한 패턴(호스트별 CLI 이름 충돌 회피, devShell 자동 진입 등)은 각자의
+Home Manager 구성 스타일에 맞춰 직접 구성한다 — 이 README는 flake input
+오버라이드 자체까지만 다룬다.
+
+### 4) 커밋 없이 즉석으로 오버라이드 (CLI 한 줄)
+
+기존 flake(예: 이미 `pnix-rs`를 `github:PlumpMath/pnix?dir=pnix-rs`로 고정해
+둔 시스템 설정)를 건드리지 않고, 이번만 로컬 체크아웃으로 빌드/실행해보고 싶다면
+(아래는 **당신의 시스템/HM flake 디렉터리**에서 실행):
+
+```bash
+# 이 pnix 저장소 자체를 바로 실행/빌드 — 오버라이드할 다른 flake가 필요 없다
+cd pnix-rs && nix run .
+
+# 다른 flake(당신의 NixOS/HM 설정)가 이미 pnix-rs를 input으로 갖고 있고,
+# 이번만 로컬 체크아웃으로 바꿔치기해서 빌드하고 싶을 때
+nix build --override-input pnix-rs path:/home/YOU/pnix/pnix-rs \
+  .#nixosConfigurations.myhost.config.system.build.toplevel
+```
+
+### 5) 그냥 개발만 하려면
+
+시스템에 설치할 필요 없이 이 체크아웃 안에서 바로 작업한다면 오버라이드가
+전혀 필요 없다 — 위 "호스트 실행" 절에 있는 대로 해당 호스트 디렉터리에서
+`nix develop`(devShell) / `nix run .#...` 를 쓰면 된다.
+
 ## 업스트림 substrate
 
 호스트 언어 컴파일러는 고정된 업스트림 릴리스 패키지로 소비하며, 이 트리에 벤더하지 않는다:
