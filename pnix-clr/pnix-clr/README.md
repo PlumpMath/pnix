@@ -1,9 +1,10 @@
 # pnix-clr runtime
 
 This directory contains the CLR-native PNIX host mechanism. It runs as
-ClojureCLR on .NET 10 and loads portable `.px` meaning from the monorepo's
-`../../pnix-meta` tree. Its product entry now runs from a `clr-meta`-produced
-AOT artifact rather than adding `src/` to the runtime load path.
+ClojureCLR on .NET 10 and parses/evaluates `.px` source directly — it does not
+depend on a sibling corpus tree. Its product entry now runs from a
+`clr-meta`-produced AOT artifact rather than adding `src/` to the runtime load
+path.
 
 From the outer `pnix-clr/` directory:
 
@@ -15,26 +16,22 @@ From the outer `pnix-clr/` directory:
 ./bin/pnix-clr -e 'builtins.typeOf 1'
 ./bin/pnix-clr -e 'lib.sum [1 2 3 4]'
 ./bin/pnix-clr -e 'builtins.getAttrFromPath [ "foo" "bar" ] { foo.bar = 42; }'
-./bin/pnix-clr ../pnix-meta/corpus/conformance/bool-01.px
-./bin/pnix-clr ../pnix-meta/corpus/conformance/builtin-dead-import-01.px
-./bin/pnix-clr ../pnix-meta/corpus/conformance/hasattr-apply-precedence-01.px
-./bin/pnix-clr ../pnix-meta/corpus/conformance/production-checked-i64-01.px
-./bin/pnix-clr --pnix-meta-smoke
+./bin/pnix-clr --production-outcome-self-check
 ./bin/pnix-clr-production-outcome-gate
 ./bin/pnix-clr-gate
 ```
 
 `runtime-artifact.edn` is the product-owned seam. It declares entry namespace
-`pnix-clr.main` and an ordered, exact set of nine namespaces:
+`pnix-clr.main` and an ordered, exact set of eight namespaces:
 
 ```text
 outcome -> lexer -> parser -> host -> json -> evaluator
-        -> pnix-meta -> production-outcome -> main
+        -> production-outcome -> main
 ```
 
 The PNIX-agnostic `clr-meta` builder checks that these are exactly the `.clj`
 files under `src/`, AOT-compiles them with the explicitly pinned host backend,
-and publishes exactly nine namespace DLLs plus `manifest.json`. The manifest
+and publishes exactly eight namespace DLLs plus `manifest.json`. The manifest
 binds the plan hash, source rows and closure hash, output rows and closure hash,
 entry, target, producer, and backend.
 
@@ -97,13 +94,11 @@ nine-namespace artifact plan is unchanged.
   lambdas and `//`/`++` are live on this host (see corpus gap map).
 
 The bootstrap surface remains fail-closed. The README at `../README.md`
-records the exact non-claims. Portable meaning belongs to `../../pnix-meta`;
-this host owns parsing/evaluation machinery, CLR adapters, nominal host
-MachineOutcome carriers, and bounded observer projections only.
-The smoke report adopts the live-verified common slice in
-`pnix-meta/adopted-case-names` (live five-host common slice). Expansion is
-evidence-only — not full multi-host corpus promotion. Keep five-host `CASES`
-in sync via `bin/five-host-common-slice-gate`.
+records the exact non-claims. This host owns parsing/evaluation machinery,
+CLR adapters, nominal host MachineOutcome carriers, and bounded observer
+projections only — it does not depend on or gate against any sibling corpus
+tree; `--production-outcome-self-check` verifies the host's own nominal
+outcome-boundary contract in isolation (see `examples/08-production-outcome-self-check`).
 
 **Principles this host currently owns** (see `../clr-meta/RESIDUAL_SURFACE.md`):
 dynamic attribute keys, exact signed-64-bit integer ops, mixed float promote

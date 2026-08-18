@@ -9,7 +9,7 @@
 5. **`04-csharp-embed-pnix`** — C# host-main.
 6. **`05-inprocess-opt-in`** — 선택적 ALC 경로; 기본은 process-spawn.
 7. **`06-meta-pair-boundary`** — 제품 절반 vs meta 절반.
-8. **`07`–`10`** — builtins · pnix-meta 스모크 · artifact 게이트 · multi-ns bootstrap.
+8. **`07`–`10`** — builtins · production outcome self-check · artifact 게이트 · multi-ns bootstrap.
 9. **`11`–`15`** — 리스트 고차 · with/merge · 패턴 람다 · tryEval · 문자열/버전.
 
 깊은 self-host stage 사다리는 **`pnix-clr/clr-meta/`** 에 있다 (이 카탈로그 아님).

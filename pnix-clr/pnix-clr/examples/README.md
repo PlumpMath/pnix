@@ -25,7 +25,7 @@
 
 | 디렉터리 | 테마 |
 |----------|------|
-| [`00-foundation`](00-foundation/) | pnix-main seed + meta smoke 포인터 |
+| [`00-foundation`](00-foundation/) | pnix-main seed + production outcome self-check 포인터 |
 | [`01-pure-eval-boundary`](01-pure-eval-boundary/) | plain .NET eval vs 게스트 경계 |
 | [`02-host-library-import`](02-host-library-import/) | 로컬 Pnix.Clr export (nuget.org 아님) |
 | [`03-outcome-projection`](03-outcome-projection/) | production outcome / fail-closed 모양 |
@@ -33,7 +33,7 @@
 | [`05-inprocess-opt-in`](05-inprocess-opt-in/) | experimental in-process (net10); 기본은 process-spawn |
 | [`06-meta-pair-boundary`](06-meta-pair-boundary/) | pnix-clr vs clr-meta 역할 |
 | [`07-builtins-surface`](07-builtins-surface/) | typeOf · getAttrFromPath · lib.sum |
-| [`08-pnix-meta-smoke`](08-pnix-meta-smoke/) | 형제 pnix-meta 정규 케이스 |
+| [`08-production-outcome-self-check`](08-production-outcome-self-check/) | CLI 자신의 outcome 경계 계약 self-check (로컬) |
 | [`09-artifact-gate`](09-artifact-gate/) | AOT artifact fail-closed |
 | [`10-clojure-clr-multi-ns`](10-clojure-clr-multi-ns/) | bootstrap 다중 ns (호스트 Clojure) |
 | [`11-list-higher-order`](11-list-higher-order/) | map · filter · genList · concatLists |
@@ -53,4 +53,6 @@ cd pnix-clr
 ./bin/pnix-clr-library-smoke    # 로컬 피드만
 ```
 
-모노레포 `examples/host-import/clr/`, `examples/clojure-clr-project/` 도 참고.
+모노레포 `examples/host-import/clr/`도 참고. 호스트 Clojure 멀티파일
+bootstrap 템플릿은 `pnix-clr/examples/clojure-clr-project/`(이 저장소
+루트 기준, `pnix-clr/pnix-clr/`가 아님).
