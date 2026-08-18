@@ -114,5 +114,5 @@ PNIX common-compiler integration과 CLR host promotion은 그 이후 독립적�
 닫힌다. `../clr-meta/STAGE15_N_ROADMAP.md` 참조. 현재 CLR artifact/adoption
 게이트 통과는 증거이지, established host로서의 자동 교체 또는 admission이 아니다.
 이 저장소 자체의 `../CLAUDE.md`가 권위 문서로 남는다 — 이전에 인용되던
-`project-wiki/CONSTITUTION.md`는 `pnix-zero` 자매 저장소에만 있으며, 이
+`project-wiki/CONSTITUTION.md`는 `pnix-zero` 이전 저장소에만 있으며, 이
 자기완결 트리에는 없다.

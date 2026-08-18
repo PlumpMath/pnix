@@ -77,7 +77,7 @@ runtime had no import/module system. Now IN scope for this repo:
 
 - an **import / module / resource resolver + export ABI** for `.px`
   (blocker B2 — the current hard blocker); B1–B3 originally tracked in the
-  `pnix-zero` sibling repo's project-wiki, which this self-contained tree
+  `pnix-zero` predecessor repo's project-wiki, which this self-contained tree
   does not have;
 - loading common `.px` from `../pnix-meta` and running it;
 - a px-level canonical result + held reason (B1) and the effect/capability

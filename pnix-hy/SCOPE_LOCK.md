@@ -113,7 +113,7 @@ track is now IN scope for this repo:
 
 - loading common `.px` from `../pnix-meta` through the pnix-hy runtime;
 - the cross-repo canonical-result + effect/capability ABI (blockers B1–B3,
-  originally tracked in the `pnix-zero` sibling repo's project-wiki — this
+  originally tracked in the `pnix-zero` predecessor repo's project-wiki — this
   self-contained tree has no such sibling tree to load);
 - the "full pnix language" growth **only as needed to run the shared corpus**.
 
