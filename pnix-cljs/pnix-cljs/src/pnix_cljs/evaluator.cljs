@@ -2333,6 +2333,22 @@
             (checked-integer (js/BigInt (.toFixed result 0)))
             result)))
 
+      ;; Truncated remainder (C `%`, matches Nix builtins.mod), paired with
+      ;; the truncating integer-divide above -- sign follows the dividend.
+      :mod
+      (if (< (count arguments) 2)
+        (->BuiltinValue :mod arguments)
+        (let [a (require-number (nth arguments 0))
+              b (require-number (nth arguments 1))]
+          (if (and (integer-value? a) (integer-value? b))
+            (if (integer-zero? b)
+              (evaluation-failure! "division-by-zero" {"operation" "mod"})
+              (checked-integer (js* "(~{} % ~{})" a b)))
+            (let [a (as-double a) b (as-double b)]
+              (if (zero? b)
+                (evaluation-failure! "division-by-zero" {"operation" "mod"})
+                (- a (* b (js/Math.trunc (/ a b)))))))))
+
       :sqrt (js/Math.sqrt (as-double argument))
       :exp (js/Math.exp (as-double argument))
       :ln (js/Math.log (as-double argument))
@@ -2811,6 +2827,7 @@
 
                 ;; ---- Extended builtins (maturity pass 2026-08-11) ----
                 "pow" (->BuiltinValue :pow [])
+                "mod" (->BuiltinValue :mod [])
                 "sqrt" (->BuiltinValue :sqrt [])
                 "exp" (->BuiltinValue :exp [])
                 "ln" (->BuiltinValue :ln [])
