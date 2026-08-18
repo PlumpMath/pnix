@@ -6,7 +6,7 @@
 핵심 basic 예: [[safe_eval]] · [[explain_pnix]].
 명시적 proof/service API: `pnix_hy.proof.check_action` · `pnix_hy.deploy.deployment_info` (basic top-level export 아님).
 
-counts: symbols=47 · reports=73 · proposals=31
+counts: symbols=48 · reports=73 · proposals=31
 
 ## Public API (`pnix_hy.__all__`)
 
@@ -23,6 +23,7 @@ counts: symbols=47 · reports=73 · proposals=31
 | `call_host_method` | function | interop (boundary) | `pnix_hy.interop` | Invoke a host object's public method across the interop boundary. |
 | `declare_opaque_invariants` | function | interop (boundary) | `pnix_hy.interop` | 0020/I6 (Trustworthy Proxies): declare attributes whose values must NEVER change for the |
 | `eval_ast` | function | pnix-hy (runtime, sacred) | `pnix_hy.pnix_runtime` |  |
+| `eval_file` | function | pnix-hy (runtime, sacred) | `pnix_hy.pnix_runtime` | Entry point A for a `.px` file: read it and run it at host speed. |
 | `eval_from_ast` | function | pnix-hy (runtime, sacred) | `pnix_hy.pnix_runtime` |  |
 | `eval_normalized_source` | function | pnix-hy (runtime, sacred) | `pnix_hy.pnix_runtime` |  |
 | `eval_source` | function | pnix-hy (runtime, sacred) | `pnix_hy.pnix_runtime` |  |
