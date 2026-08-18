@@ -15243,6 +15243,15 @@ RUST_REGEX_CORPUS: list[dict[str, Any]] = [
 ]
 
 
+# Fixtures below read a real, always-present repo file (this project's own
+# todo.md) to exercise hashFile/readFile/pathExists/readDir against actual
+# filesystem I/O. Resolved from this module's own location rather than a
+# bare "todo.md" relative literal, which only worked when the gate happened
+# to be invoked with pnix-hy/ (not the monorepo root, where these corpora
+# are actually run from) as the process cwd.
+_RUST_IO_FIXTURE_DIR = str(Path(__file__).resolve().parents[1])
+_RUST_IO_FIXTURE_TODO = str((Path(__file__).resolve().parents[1] / "todo.md").resolve())
+
 RUST_PATH_FS_IO_CORPUS: list[dict[str, Any]] = [
     {"name": "rs-path-plus-path-total", "source": "builtins.typeOf (./foo + ./bar)", "expect": "path"},
     {"name": "rs-path-plus-string-basename", "source": 'builtins.baseNameOf (./foo + "/bar/baz")', "expect": "baz"},
@@ -15314,37 +15323,37 @@ RUST_PATH_FS_IO_CORPUS: list[dict[str, Any]] = [
     },
     {
         "name": "rs-hashFile-md5-crypto",
-        "source": 'builtins.hashFile "md5" "todo.md"',
+        "source": f'builtins.hashFile "md5" "{_RUST_IO_FIXTURE_TODO}"',
         "error": True,
         "error_contains": "cryptographically broken",
     },
     {
         "name": "rs-hashFile-md5-single-quote",
-        "source": 'builtins.hashFile "md5" "todo.md"',
+        "source": f'builtins.hashFile "md5" "{_RUST_IO_FIXTURE_TODO}"',
         "error": True,
         "error_contains": "algorithm 'md5' is not supported",
     },
     {
         "name": "rs-hashFile-md5-backtick",
-        "source": 'builtins.hashFile "md5" "todo.md"',
+        "source": f'builtins.hashFile "md5" "{_RUST_IO_FIXTURE_TODO}"',
         "error": True,
         "error_contains": "`md5`",
     },
     {
         "name": "rs-hashFile-unknown",
-        "source": 'builtins.hashFile "blake2" "todo.md"',
+        "source": f'builtins.hashFile "blake2" "{_RUST_IO_FIXTURE_TODO}"',
         "error": True,
         "error_contains": "unsupported algorithm 'blake2'",
     },
     {
         "name": "rs-hashFile-unknown-supported",
-        "source": 'builtins.hashFile "blake2" "todo.md"',
+        "source": f'builtins.hashFile "blake2" "{_RUST_IO_FIXTURE_TODO}"',
         "error": True,
         "error_contains": "'sha256', 'sha512'",
     },
     {
         "name": "rs-hashFile-non-string-algo",
-        "source": 'builtins.hashFile 42 "todo.md"',
+        "source": f'builtins.hashFile 42 "{_RUST_IO_FIXTURE_TODO}"',
         "error": True,
         "error_contains": "must be string",
     },
@@ -15362,7 +15371,10 @@ RUST_PATH_FS_IO_CORPUS: list[dict[str, Any]] = [
     },
     {
         "name": "rs-hashFile-readFile-parity",
-        "source": 'builtins.hashFile "sha256" "todo.md" == builtins.hashString "sha256" (builtins.readFile "todo.md")',
+        "source": (
+            f'builtins.hashFile "sha256" "{_RUST_IO_FIXTURE_TODO}" == '
+            f'builtins.hashString "sha256" (builtins.readFile "{_RUST_IO_FIXTURE_TODO}")'
+        ),
         "expect": True,
     },
 ]
@@ -15447,14 +15459,18 @@ RUST_PATH_CONTEXT_IO_CORPUS: list[dict[str, Any]] = [
         "source": 'let p = "prefix/" + ./subdir; in builtins.pathExists p',
         "expect": False,
     },
-    {"name": "rs-io-pathExists-todo", "source": 'builtins.pathExists "todo.md"', "expect": True},
-    {"name": "rs-io-readFileType-todo", "source": 'builtins.readFileType "todo.md"', "expect": "regular"},
+    {"name": "rs-io-pathExists-todo", "source": f'builtins.pathExists "{_RUST_IO_FIXTURE_TODO}"', "expect": True},
+    {"name": "rs-io-readFileType-todo", "source": f'builtins.readFileType "{_RUST_IO_FIXTURE_TODO}"', "expect": "regular"},
     {
         "name": "rs-io-readFile-todo-prefix",
-        "source": 'builtins.hasPrefix "# pnix-hy todo" (builtins.readFile "todo.md")',
+        "source": f'builtins.hasPrefix "# pnix-hy todo" (builtins.readFile "{_RUST_IO_FIXTURE_TODO}")',
         "expect": True,
     },
-    {"name": "rs-io-readDir-current-has-todo", "source": 'builtins.hasAttr "todo.md" (builtins.readDir ".")', "expect": True},
+    {
+        "name": "rs-io-readDir-current-has-todo",
+        "source": f'builtins.hasAttr "todo.md" (builtins.readDir "{_RUST_IO_FIXTURE_DIR}")',
+        "expect": True,
+    },
     {"name": "rs-io-toFile-type", "source": 'builtins.typeOf (builtins.toFile "note.txt" "hello")', "expect": "path"},
     {"name": "rs-io-toFile-readFile", "source": 'builtins.readFile (builtins.toFile "note.txt" "hello")', "expect": "hello"},
     {"name": "rs-io-isPath-attr-lazy", "source": 'builtins.isPath { a = throw "payload"; }', "expect": False},

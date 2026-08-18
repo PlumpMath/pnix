@@ -13,6 +13,7 @@ at the META level; IR is data).
 
 from __future__ import annotations
 
+import sys
 from typing import Any, Callable
 
 from . import pnix_runtime as rt
@@ -508,6 +509,21 @@ def futamura_ladder(interpreter_src: str | None = None, program_lit: str | None 
 def tower_ladder_report() -> dict[str, Any]:
     """Self-check (proposal 0026, milestone-1): stage polymorphism, mix-in-pnix parity, the
     cogen acceptance harness, gated reify/reflect with stage7 parity, and dual-mode EM."""
+    # The M2-M5 checks below build/parse/specialize a small pnix-expressed interpreter
+    # (INTERP_IN_PNIX -- a 4-branch if/else-if chain) whose recursive-descent parse tree
+    # needs noticeably more than Python's conservative default 1000-frame recursion limit
+    # (confirmed live: fails under the default limit, succeeds cleanly once raised -- this
+    # is genuine, bounded deep recursion from real nested source, not an infinite loop).
+    # Scoped to just this call, restored afterward either way.
+    _prev_recursion_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(_prev_recursion_limit, 4000))
+    try:
+        return _tower_ladder_report_body()
+    finally:
+        sys.setrecursionlimit(_prev_recursion_limit)
+
+
+def _tower_ladder_report_body() -> dict[str, Any]:
     try:
         # T5m: one evaluator, two roles; compile-then-eval == interpret (mini 1st projection)
         prog, dynv = "x * 3 + if b then 1 else 2", ("x", "b")
