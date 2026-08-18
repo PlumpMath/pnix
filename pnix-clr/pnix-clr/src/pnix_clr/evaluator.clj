@@ -2,7 +2,7 @@
   "Small CLR seed evaluator. It has no host-language evaluator fallback: every
   accepted AST node is interpreted here and every other node is Failed.
   Builtins live here (not separate namespaces) to keep runtime-artifact.edn
-  at exactly nine namespaces."
+  at exactly eight namespaces."
   (:require [clojure.string :as str]
             [pnix-clr.host :as host]
             [pnix-clr.json :as json]

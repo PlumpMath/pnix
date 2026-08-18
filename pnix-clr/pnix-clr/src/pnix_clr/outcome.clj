@@ -6,8 +6,9 @@
   "pnix.production-basic-outcome-projection.v1")
 
 ;; These nominal CLR types keep machine control outside the forgeable guest
-;; map domain.  The portable model remains owned by pnix-meta; this namespace
-;; is only its ClojureCLR representation and observer adapter.
+;; map domain.  This namespace is only the ClojureCLR representation and
+;; observer adapter for pnix.machine.host-outcome.v1 — it does not depend on
+;; or read from any sibling corpus tree.
 (deftype EvalError [phase className evidence])
 (deftype EffectRequest [effect args])
 (deftype Continuation [id])

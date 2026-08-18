@@ -19,8 +19,8 @@ receipt. 이 페이지는 roadmap이지 closure 증거가 아니다.
 `clr-meta`는 PNIX-agnostic ClojureCLR host-language layer다. generic CLR
 compiler/artifact service를 노출할 수 있지만, PNIX syntax나 portable PNIX
 meaning을 소유하지 않는다. `pnix-clr`가 product plan을 공급하고 결과 CLR
-artifact를 사용한다; `pnix-meta`는 portable PNIX evaluator/compiler model의
-owner로 남는다.
+artifact를 사용한다; 이 저장소에는 portable/cross-host PNIX meaning을
+소유하는 별도 sibling 트리가 없다 — 그 소유권은 unclaimed로 남는다.
 
 의도된 composition:
 
@@ -28,7 +28,6 @@ owner로 남는다.
 pinned ClojureCLR bootstrap trust root
   -> clr-meta host-language evaluator/compiler/artifact mechanisms
   -> pnix-clr CLR mechanism and backend seam
-  -> common pnix-meta meaning
 ```
 
 distribution 또는 command directory를 공유해도 이 owner들이 병합되지 않는다.
@@ -55,7 +54,7 @@ interpreter를 15 self-extension으로 확장하는 것을 live로 시도했고 
 - generic `clr-meta` builder가 하나의 exact namespace plan과 source closure를
   검증;
 - backend는 pinned host ClojureCLR compiler, identity `host-clojureclr-aot`;
-- `pnix-clr` plan이 정확히 아홉 AOT namespace DLL을 생산;
+- `pnix-clr` plan이 정확히 여덟 AOT namespace DLL을 생산;
 - manifest가 plan, ordered source row, exact output row, entry, target,
   closure hash를 바인딩;
 - product runner가 모두 검증하고 load path를 artifact directory로 교체;

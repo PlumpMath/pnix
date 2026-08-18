@@ -1,7 +1,10 @@
 (ns pnix-clr.production-outcome
   "ClojureCLR projection of the common production basic-outcome contract.
-  The cases and their meaning remain owned by pnix-meta; this namespace reads
-  the generated TSV and supplies only the CLR runtime/observer adapter."
+  `--self-check` verifies this host's own nominal outcome boundary in
+  isolation. `production-report` can additionally replay an externally
+  supplied case-matrix TSV (case/kind/phase/class/expected-value/source
+  columns) against this host's evaluator; it is not wired to any sibling
+  corpus tree by default and supplies only the CLR runtime/observer adapter."
   (:require [clojure.string :as str]
             [pnix-clr.evaluator :as evaluator]
             [pnix-clr.host :as host]

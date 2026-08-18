@@ -176,8 +176,8 @@ exact output set, entry, target, closure hash를 바인딩하는 deterministic
 JSON manifest를 emit한다. product identity는 caller의 plan에 남는다;
 `clr-meta`는 PNIX namespace list를 포함하지 않는다.
 
-`pnix-clr`의 경우 `runtime-artifact.edn`이 아홉 namespace를 선언하므로
-정확히 아홉 `.clj.dll` output이 나온다. 이는 real artifact-production
+`pnix-clr`의 경우 `runtime-artifact.edn`이 여덟 namespace를 선언하므로
+정확히 여덟 `.clj.dll` output이 나온다. 이는 real artifact-production
 seam이지만, backend는 정직하게 `host-clojureclr-aot`로 명명된다. manifest는
 한 build가 만든 bytes를 pin한다; 두 raw AOT build가 byte-identical임을
 증명하지 않는다. product runner는 추가로 cwd를 verified artifact로

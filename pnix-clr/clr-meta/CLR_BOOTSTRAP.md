@@ -42,8 +42,8 @@ namespace dependency를 거부하고, exact DLL set을 검증한 뒤, plan, sour
 output, entry, target, byte hash를 바인딩하는 JSON manifest를 atomically
 publish한다.
 
-현재 `pnix-clr` plan은 아홉 namespace를 선언하고 backend identity
-`host-clojureclr-aot`로 정확히 아홉 DLL을 만든다. `pnix-clr` product runner는
+현재 `pnix-clr` plan은 여덟 namespace를 선언하고 backend identity
+`host-clojureclr-aot`로 정확히 여덟 DLL을 만든다. `pnix-clr` product runner는
 manifest와 live plan/source/output closure를 검증하고, load path를 artifact로
 교체하며, cwd를 verified tree로 바꾸고, pinned runtime lookup root의
 product namespace shadow를 거부하며, product source를 compile하거나 load하는
