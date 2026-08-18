@@ -666,7 +666,20 @@ def tokenize(source: str) -> list[Token]:
                 i += 1
                 continue
             pnix_error("expected `/` after `~` for home path")
-        if c == "/" and i + 1 < n and source[i + 1] != "/" and (_is_path_char(source[i + 1]) or source[i + 1] == "$"):
+        # `1/0` is division, not a path -- but `f /tmp/x` (identifier then a
+        # fresh absolute-path argument) is real, tested application syntax
+        # (rs-path-absolute-isPath), so only numbers push `/` toward
+        # division; identifiers/closing delimiters keep allowing a path to
+        # follow (oracle-pinned, not re-derived here).
+        prev = tokens[-1] if tokens else None
+        prev_is_number = prev is not None and prev.kind == "number"
+        if (
+            c == "/"
+            and i + 1 < n
+            and source[i + 1] != "/"
+            and (_is_path_char(source[i + 1]) or source[i + 1] == "$")
+            and not prev_is_number
+        ):
             token, i = _read_path_token(source, i)
             tokens.append(token)
             continue
