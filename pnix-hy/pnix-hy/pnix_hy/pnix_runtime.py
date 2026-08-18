@@ -1737,9 +1737,7 @@ def length_value(value: Any) -> int:
     value = force_value(value)
     if isinstance(value, list):
         return len(value)
-    if is_string_value(value):
-        return len(str(value).encode("utf-8"))
-    pnix_error(f"builtins.length: expected list or string, got {_type_of(value)}")
+    pnix_error(f"builtins.length: expected list, got {_type_of(value)}")
     raise AssertionError("unreachable")
 
 
@@ -7924,8 +7922,7 @@ HY_AST_EVALUATOR_SOURCE = r'''
 	      (setv value (force-value value))
 	      (cond
 	        (isinstance value list) (len value)
-	        (isinstance value str) (len (.encode (str value) "utf-8" "surrogateescape"))
-	        True (pnix-error (+ "builtins.length: expected list or string, got " (type-of value))))))
+	        True (pnix-error (+ "builtins.length: expected list, got " (type-of value))))))
 
 	  (defn substring-builtin-decode [data st end]
 	    (.decode (cut data st end) "utf-8" "surrogateescape"))
@@ -10993,8 +10990,7 @@ def _strlen(x): return len(_sbytes(_str(x,"builtins.stringLength string")))
 def _length(x):
     x=_force(x)
     if isinstance(x,list): return len(x)
-    if _isstr(x): return len(_sbytes(x))
-    raise Exception("builtins.length: expected list or string, got "+_typeof(x))
+    raise Exception("builtins.length: expected list, got "+_typeof(x))
 def _substr(start,length,text):
     st=_num(start,"builtins.substring start"); ln=_num(length,"builtins.substring length")
     if type(st) is float or type(ln) is float: raise Exception("builtins.substring start and length must be integers")
@@ -14372,13 +14368,13 @@ RUST_EVAL_CORPUS: list[dict[str, Any]] = [
     {"name": "rs-all-short-circuit", "source": 'builtins.all (x: x > 0) [ 0 (throw "later") ]', "expect": False},
     {"name": "rs-length-list", "source": "builtins.length [ 1 2 3 ]", "expect": 3},
     {"name": "rs-length-empty-list", "source": "builtins.length []", "expect": 0},
-    {"name": "rs-length-string", "source": 'builtins.length "abc"', "expect": 3},
-    {"name": "rs-length-utf8", "source": 'builtins.length "héllo"', "expect": 6},
-    {"name": "rs-length-int-err", "source": "builtins.length 42", "error": True, "error_contains": "expected list or string"},
-    {"name": "rs-length-null-err", "source": "builtins.length null", "error": True, "error_contains": "expected list or string"},
-    {"name": "rs-length-bool-err", "source": "builtins.length true", "error": True, "error_contains": "expected list or string"},
-    {"name": "rs-length-float-err", "source": "builtins.length 1.5", "error": True, "error_contains": "expected list or string"},
-    {"name": "rs-length-set-err", "source": "builtins.length { a = 1; b = 2; }", "error": True, "error_contains": "expected list or string"},
+    {"name": "rs-length-string-err", "source": 'builtins.length "abc"', "error": True, "error_contains": "expected list"},
+    {"name": "rs-length-utf8-err", "source": 'builtins.length "héllo"', "error": True, "error_contains": "expected list"},
+    {"name": "rs-length-int-err", "source": "builtins.length 42", "error": True, "error_contains": "expected list"},
+    {"name": "rs-length-null-err", "source": "builtins.length null", "error": True, "error_contains": "expected list"},
+    {"name": "rs-length-bool-err", "source": "builtins.length true", "error": True, "error_contains": "expected list"},
+    {"name": "rs-length-float-err", "source": "builtins.length 1.5", "error": True, "error_contains": "expected list"},
+    {"name": "rs-length-set-err", "source": "builtins.length { a = 1; b = 2; }", "error": True, "error_contains": "expected list"},
     {"name": "rs-foldr-empty", "source": "builtins.foldr (a: b: a + b) 0 []", "expect": 0},
     {"name": "rs-foldr-sum", "source": "builtins.foldr (a: b: a + b) 0 [ 1 2 3 ]", "expect": 6},
     {"name": "rs-foldr-minus", "source": "builtins.foldr (a: b: a - b) 0 [ 1 2 3 4 ]", "expect": -2},
@@ -16557,7 +16553,7 @@ SELF_TEST_CASES = [
     {"name": "builtin-import-exists", "source": "builtins.typeOf builtins.import", "expect": "lambda"},
     {"name": "builtin-scopedImport-exists", "source": "builtins.typeOf builtins.scopedImport", "expect": "lambda"},
     {"name": "builtin-fold-alias", "source": "builtins.fold (acc: x: acc + x) 0 [ 1 2 3 4 ]", "expect": 10},
-    {"name": "builtin-length-string-byte", "source": 'builtins.length "héllo"', "expect": 6},
+    {"name": "builtin-length-string-rejected", "source": '(builtins.tryEval (builtins.length "héllo")).success', "expect": False},
     {"name": "builtin-length-error", "source": "(builtins.tryEval (builtins.length { a = 1; })).success", "expect": False},
     {"name": "builtin-seq-shallow-attr", "source": 'builtins.seq { a = throw "inner"; } 1', "expect": 1},
     {"name": "builtin-seq-top-throw", "source": '(builtins.tryEval (builtins.seq (throw "top") 1)).success', "expect": False},
@@ -17171,7 +17167,7 @@ HY_RUNTIME_CORE_CASES = {
     "builtin-import-exists",
     "builtin-scopedImport-exists",
     "builtin-fold-alias",
-    "builtin-length-string-byte",
+    "builtin-length-string-rejected",
     "builtin-length-error",
     "builtin-seq-shallow-attr",
     "builtin-seq-top-throw",
