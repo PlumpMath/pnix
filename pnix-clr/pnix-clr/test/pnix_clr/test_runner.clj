@@ -534,6 +534,17 @@
   (is (= 5 (result-value (source-result "10/2"))))
   (is (= true (result-value (source-result "builtins.isPath /tmp/does-not-need-to-exist")))))
 
+(deftest dotted-let-bindings-desugar-to-nested-attrsets
+  ;; Real Nix: `let a.b = 1; in ...` desugars to `let a = { b = 1; }; in ...`
+  ;; (same nested-path desugaring attrset literals already use via
+  ;; merge-attr-field/nest-attr-path). parse-let previously only accepted a
+  ;; bare identifier before `=`, rejecting any `.` in a let-binding name.
+  (is (= 1 (result-value (source-result "let a.b = 1; in a.b"))))
+  (is (= 3 (result-value (source-result "let a.b = 1; a.c = 2; in a.b + a.c"))))
+  (is (= 3 (result-value (source-result "let a = 1; b = 2; in a + b"))))
+  (is (= "syntax-error"
+         (:class (result-error (source-result "let a.b = 1; a.b = 2; in a.b"))))))
+
 (defn -main
   [& args]
   (reset! test-root (host/canonical-path (or (first args)

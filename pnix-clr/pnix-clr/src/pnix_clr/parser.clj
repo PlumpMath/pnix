@@ -545,17 +545,14 @@
                        (assoc acc binding-name value))
                      bindings
                      inherited)))
-          (let [name-token (expect! state :ident)
-                binding-name (:text name-token)]
-            (when (contains? bindings binding-name)
-              (outcome/fail! :parse :syntax-error
-                             {:reason "duplicate-binding"
-                              :binding binding-name
-                              :offset (:offset name-token)}))
+          (let [name-token (token-at state)
+                path (parse-attr-binding-path state)]
             (expect! state :assign)
             (let [value (parse-expression state)]
               (expect! state :semicolon)
-              (recur (assoc bindings binding-name value)))))))
+              (let [[binding-name nested-value] (nest-attr-path path value)]
+                (recur (merge-attr-field bindings binding-name nested-value
+                                         (:offset name-token)))))))))
     (parse-if state)))
 
 (defn- parse-assert
