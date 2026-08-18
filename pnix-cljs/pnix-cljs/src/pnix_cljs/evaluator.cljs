@@ -3177,8 +3177,11 @@
 (defn build-let-environment [bindings environment]
   (let [environment-reference (atom nil)
         cells (into {}
-                    (map (fn [{:keys [name value]}]
-                           [name (cell value environment-reference)]))
+                    (map (fn [{:keys [name value lexical-inherit]}]
+                           [name (cell value
+                                       (if lexical-inherit
+                                         (atom environment)
+                                         environment-reference))]))
                     bindings)
         result (merge environment cells)]
     (reset! environment-reference result)

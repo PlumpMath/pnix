@@ -496,12 +496,31 @@
       {:op :let
        :bindings bindings
        :body (parse-expression parser)}
-      (let [name-token (expect! parser :identifier)]
-        (expect! parser :equal)
-        (let [value (parse-expression parser)]
-          (expect! parser :semicolon)
-          (recur (conj bindings {:name (:value name-token)
-                                 :value value})))))))
+      (if (match! parser :inherit)
+        (let [source (when (match! parser :left-paren)
+                       (let [value (parse-expression parser)]
+                         (expect! parser :right-paren)
+                         value))]
+          (recur
+           (loop [inherited-bindings bindings]
+             (if (match! parser :semicolon)
+               inherited-bindings
+               (let [name-token (expect! parser :identifier)
+                     name (:value name-token)]
+                 (recur (conj inherited-bindings
+                              {:name name
+                               :lexical-inherit (nil? source)
+                               :value (if source
+                                        {:op :select
+                                         :target source
+                                         :name name}
+                                        {:op :variable :name name})})))))))
+        (let [name-token (expect! parser :identifier)]
+          (expect! parser :equal)
+          (let [value (parse-expression parser)]
+            (expect! parser :semicolon)
+            (recur (conj bindings {:name (:value name-token)
+                                   :value value}))))))))
 
 (defn parse-expression [parser]
   (case (:kind (current-token parser))
