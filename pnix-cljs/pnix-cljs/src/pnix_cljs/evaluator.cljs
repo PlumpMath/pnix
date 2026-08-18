@@ -1582,7 +1582,7 @@
       :ceil (numeric-round :ceil argument)
       :floor (numeric-round :floor argument)
       :throw (if (string-value? argument)
-               (evaluation-failure! "explicit-throw" {})
+               (evaluation-failure! "explicit-throw" {"message" (string-text argument)})
                (evaluation-failure! "type-error"
                                     {"operation" "throw"}))
       :tryEval (try-eval-cell argument)
