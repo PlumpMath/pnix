@@ -560,6 +560,17 @@
   (is (= "Xbc"
          (result-value (source-result "builtins.replaceStrings [\"a\" \"ab\"] [\"X\" \"Y\"] \"abc\"")))))
 
+(deftest bare-dollar-brace-dynamic-attr-select
+  ;; `attrs.${expr}` (no surrounding quotes) previously had no lexer support
+  ;; at all -- a bare `$` outside a string literal fell through to the
+  ;; catch-all "unsupported-syntax" error, even though the quoted form
+  ;; `attrs."${expr}"` already worked end to end (parser + evaluator already
+  ;; understood the resulting :pnix/dynamic-attr shape; only the bare-`$`
+  ;; lexer/parser entry point was missing).
+  (is (= 1 (result-value (source-result "{ a = 1; }.${\"a\"}"))))
+  (is (= 2 (result-value (source-result "let k = \"b\"; in { a = 1; b = 2; }.${k}"))))
+  (is (= 1 (result-value (source-result "{ a = 1; }.\"${\"a\"}\"")))))
+
 (defn -main
   [& args]
   (reset! test-root (host/canonical-path (or (first args)

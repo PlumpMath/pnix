@@ -368,6 +368,13 @@
             (recur (inc index)
                    (conj tokens {:kind :not :text "!" :offset index}))
 
+            ;; Bare dynamic attr-select head: `attrs.${expr}` (as opposed to
+            ;; the already-supported quoted `attrs."${expr}"` form, whose
+            ;; `${` only appears inside `scan-string`/`scan-indented`).
+            (= pair "${")
+            (recur (+ index 2)
+                   (conj tokens {:kind :dollar-lbrace :text "${" :offset index}))
+
             (= ch \")
             (let [[end value] (scan-string source index)]
               (if (string? value)

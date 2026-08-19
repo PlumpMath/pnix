@@ -120,6 +120,13 @@
         {:pnix/dynamic-attr true
          :ast (parse-string-interp-ast t)})
 
+      ;; Dynamic attribute, bare form: `attrs.${expr}` (no surrounding quotes).
+      (= :dollar-lbrace (:kind tok))
+      (do (take-token! state)
+          (let [expr (parse-expression state)]
+            (expect! state :rbrace)
+            {:pnix/dynamic-attr true :ast expr}))
+
       ;; `builtins.true` / `{ null = 1; }.null` — keyword tokens as attr names.
       (contains? #{:true :false :null} (:kind tok))
       (do (take-token! state)
