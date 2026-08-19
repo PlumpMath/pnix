@@ -62,15 +62,25 @@
     (seq? v)                         (str "[ " (str/join " " (map render v)) " ]")
     :else                            (pr-str v)))
 
+(defn- print-eval-result
+  [{:keys [status value error] :as r}]
+  (if (= :ok status)
+    (println (render value))
+    (println "error:" (or (:message error) (pr-str (or error (:status r))))))
+  status)
+
 (defn eval-print
   "Evaluate one pnix source string and print the value or the error. Returns the
   result status."
   [src]
-  (let [{:keys [status value error] :as r} (core/eval-source src)]
-    (if (= :ok status)
-      (println (render value))
-      (println "error:" (or (:message error) (pr-str (or error (:status r))))))
-    status))
+  (print-eval-result (core/eval-source src)))
+
+(defn eval-print-file
+  "Evaluate a `.px` file (real filesystem import resolution: `import <target>`
+  inside the file resolves relative to the file's own directory) and print
+  the value or the error. Returns the result status."
+  [path]
+  (print-eval-result (core/eval-file path)))
 
 (defn repl-loop
   "A read-eval-print loop over the current *in*/*out* (used both for the
@@ -117,7 +127,7 @@
   (cond
     (and (seq args) (or (str/ends-with? (first args) ".px")
                         (str/ends-with? (first args) ".nix")))
-    (System/exit (if (= :ok (eval-print (slurp (first args)))) 0 1))
+    (System/exit (if (= :ok (eval-print-file (first args))) 0 1))
 
     (and (seq args) (= "-e" (first args)))
     (System/exit (if (= :ok (eval-print (str/join " " (rest args)))) 0 1))
@@ -131,7 +141,7 @@
     ;; bare invocation: Nix default.nix convention -> eval ./default.px if present
     (entry-file)
     (do (println (str ";; evaluating " (entry-file)))
-        (System/exit (if (= :ok (eval-print (slurp (entry-file)))) 0 1)))
+        (System/exit (if (= :ok (eval-print-file (entry-file))) 0 1)))
 
     :else
     (do (interactive!) (shutdown-agents))))

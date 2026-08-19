@@ -179,6 +179,52 @@
                :evidence {:target target}}
        :target target})))
 
+(defn- filesystem-import-resolver
+  "Resolve `import <target>` by reading `.px` source from disk. Same shape as
+  in-memory-import-resolver (cycle detection, module-env/scope wiring) but the
+  module store is the real filesystem instead of a supplied map, keyed on
+  canonical absolute paths so the same file imported under different
+  relative spellings still shares one cycle-chain entry. Used by eval-file,
+  never bound by bare eval-source (which stays no-filesystem-access by
+  default -- see *import-modules*)."
+  [context target scope]
+  (let [structured? (map? context)
+        chain (vec (if structured? (:chain context) context))
+        origin (if structured? (:origin context) (last chain))
+        resolved (evaluator/contextual-import-target
+                  (if origin [origin] []) target)
+        file (java.io.File. (str resolved))
+        canonical (try (.getCanonicalPath file)
+                       (catch java.io.IOException _ (.getAbsolutePath file)))]
+    (cond
+      (some #(= canonical %) chain)
+      {:status :failed :reason :import-cycle
+       :error {:phase :resolution
+               :class :import-cycle
+               :evidence {:target canonical :chain (conj chain canonical)}}
+       :target canonical}
+
+      (not (.isFile file))
+      {:status :failed :reason :import-module-not-found
+       :error {:phase :resolution
+               :class :import-module-not-found
+               :evidence {:target canonical}}
+       :target canonical}
+
+      :else
+      (let [{:keys [status ast] :as parsed} (parse-source (slurp file))]
+        (if (= :ok status)
+          (let [module-context (conj chain canonical)
+                module-env (assoc (if scope
+                                    (merge evaluator/default-env scope)
+                                    evaluator/default-env)
+                                  evaluator/import-context-key
+                                  canonical)]
+            (binding [evaluator/*import-context* module-context
+                      evaluator/*import-origin* canonical]
+              (eval-ast-lane-whnf ast module-env)))
+          parsed)))))
+
 (def ^:private deep-stack-bytes
   "Stack size for the dedicated evaluation thread. The JVM default (~512KB-1MB)
   overflows around 1k-deep nesting where real Nix handles 100k+ (oracle-probed:
@@ -269,10 +315,17 @@
          parsed)))))
 
 (defn eval-file
-  "Host-language import of a `.px` file: slurp + eval-source.
+  "Host-language import of a `.px` file: reads and evaluates it with real
+  filesystem import resolution wired in, so `import <target>` statements
+  inside the file resolve relative to the file's own directory (matching
+  eval-source's *import-modules* in-memory lane, but reading from disk).
   Host-bound (JVM/clj); not a portable multi-host bytecode package."
   [path]
-  (eval-source (slurp path)))
+  (let [canonical (.getCanonicalPath (java.io.File. (str path)))]
+    (binding [evaluator/*import-resolver* filesystem-import-resolver
+              evaluator/*import-context* [canonical]
+              evaluator/*import-origin* canonical]
+      (eval-source (slurp canonical)))))
 
 (defn eval-source-with-imports
   "Like eval-source but resolves `import <target>` against the supplied
