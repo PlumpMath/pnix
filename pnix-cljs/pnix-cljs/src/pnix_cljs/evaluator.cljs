@@ -1633,6 +1633,18 @@
                (evaluation-failure! "abort" {"message" (string-text argument)})
                (evaluation-failure! "type-error"
                                     {"operation" "abort"}))
+      :getEnv (if (string-value? argument)
+                (or (aget (.-env js/process) (string-text argument)) "")
+                (evaluation-failure! "type-error" {"operation" "getEnv"}))
+      :assertMsg
+      (if (< (count arguments) 2)
+        (->BuiltinValue :assertMsg arguments)
+        (let [condition (nth arguments 0)
+              message (nth arguments 1)]
+          (if (require-boolean condition)
+            true
+            (evaluation-failure! "assertion-failed"
+                                 {"message" (string-text message)}))))
       :tryEval (try-eval-cell argument)
       :hashString
       (if (< (count arguments) 2)
@@ -2770,6 +2782,7 @@
                 "abs" (->BuiltinValue :abs [])
                 "add" (->BuiltinValue :add [])
                 "any" (->BuiltinValue :any [])
+                "assertMsg" (->BuiltinValue :assertMsg [])
                 "attrByPath" (->BuiltinValue :attrByPath [])
                 "attrNames" (->BuiltinValue :attrNames [])
                 "attrValues" (->BuiltinValue :attrValues [])
@@ -2802,6 +2815,7 @@
                 "fromJSON" (->BuiltinValue :fromJSON [])
                 "genList" (->BuiltinValue :genList [])
                 "getAttr" (->BuiltinValue :getAttr [])
+                "getEnv" (->BuiltinValue :getEnv [])
                 "getAttrFromPath" (->BuiltinValue :getAttrFromPath [])
                 "getName" (->BuiltinValue :getName [])
                 "getVersion" (->BuiltinValue :getVersion [])
