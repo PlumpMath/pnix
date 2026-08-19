@@ -4401,6 +4401,124 @@ fn px_to_string_coerce(v: &PxVal) -> Result<PxVal, String> {
     }
 }
 
+// `{a, b ? d}: body` (parse_pattern_lambda) desugars to a plain
+// `Closure { param: __pat_arg, body: LetIn { bindings: [(a, getAttr "a"
+// __pat_arg), (b, if hasAttr "b" __pat_arg then getAttr "b" __pat_arg else
+// d)], .. } }` with no separate marker retained. functionArgs recovers the
+// formal/has-default map by recognizing that exact shape on the closure body
+// rather than adding a new AST/Value field (keeps the fix inside px.rs's
+// rs-meta-evaluable subset and out of the shared Closure representation).
+fn px_is_pattern_getattr(expr: &PxExpr, bname: &str, param: &str) -> bool {
+    if let PxExpr::Apply { func, arg } = expr {
+        if let PxExpr::Var(v) = arg.as_ref() {
+            if v == param {
+                if let PxExpr::Apply { func: gfunc, arg: garg } = func.as_ref() {
+                    if let PxExpr::Select { base, name } = gfunc.as_ref() {
+                        if name == "getAttr" {
+                            if let PxExpr::Var(b) = base.as_ref() {
+                                if b == "builtins" {
+                                    if let PxExpr::Str(parts) = garg.as_ref() {
+                                        if let Some(PxStrPart::Lit(s)) = parts.first() {
+                                            return s == bname;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn px_is_pattern_hasattr(expr: &PxExpr, bname: &str, param: &str) -> bool {
+    if let PxExpr::Apply { func, arg } = expr {
+        if let PxExpr::Var(v) = arg.as_ref() {
+            if v == param {
+                if let PxExpr::Apply { func: gfunc, arg: garg } = func.as_ref() {
+                    if let PxExpr::Select { base, name } = gfunc.as_ref() {
+                        if name == "hasAttr" {
+                            if let PxExpr::Var(b) = base.as_ref() {
+                                if b == "builtins" {
+                                    if let PxExpr::Str(parts) = garg.as_ref() {
+                                        if let Some(PxStrPart::Lit(s)) = parts.first() {
+                                            return s == bname;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn px_pattern_formal_has_default(bname: &str, value: &PxExpr, param: &str) -> Option<bool> {
+    if px_is_pattern_getattr(value, bname, param) {
+        return Some(false);
+    }
+    if let PxExpr::If { cond, then_e, .. } = value {
+        if px_is_pattern_hasattr(cond, bname, param) && px_is_pattern_getattr(then_e, bname, param) {
+            return Some(true);
+        }
+    }
+    None
+}
+
+// parse_pattern_lambda's real desugared body is
+// `if <arity guard> then <bindings-let> else throw "attrset pattern:
+// argument mismatch (missing required or unexpected key)"` — the throw's
+// message is a marker unique to that desugar path, so unwrap through it
+// rather than re-deriving the guard expression (which also depends on the
+// formal names and would be a second, more fragile shape to match).
+fn px_is_pattern_mismatch_throw(expr: &PxExpr) -> bool {
+    if let PxExpr::Apply { func, arg } = expr {
+        if let PxExpr::Var(v) = func.as_ref() {
+            if v == "throw" {
+                if let PxExpr::Str(parts) = arg.as_ref() {
+                    if let Some(PxStrPart::Lit(s)) = parts.first() {
+                        return s
+                            == "attrset pattern: argument mismatch (missing required or unexpected key)";
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn px_function_args(param: &str, body: &PxExpr) -> PxVal {
+    let inner = match body {
+        PxExpr::If { then_e, else_e, .. } if px_is_pattern_mismatch_throw(else_e) => {
+            then_e.as_ref()
+        }
+        _ => return px_attrs(Vec::new()),
+    };
+    if let PxExpr::LetIn { bindings, .. } = inner {
+        if !bindings.is_empty() {
+            let mut fields = Vec::new();
+            let mut all_matched = true;
+            for (bname, bexpr) in bindings {
+                match px_pattern_formal_has_default(bname, bexpr, param) {
+                    Some(has_default) => fields.push((bname.clone(), PxVal::Bool(has_default))),
+                    None => {
+                        all_matched = false;
+                    }
+                }
+            }
+            if all_matched {
+                return px_attrs(fields);
+            }
+        }
+    }
+    px_attrs(Vec::new())
+}
+
 fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
     // hashString validates the selector before forcing the payload. Nix's
     // error order is observable when the second argument is a failing thunk.
@@ -4572,8 +4690,8 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
     } else if name == "substring" {
         match (&args[0], &args[1], &args[2]) {
             (PxVal::Int(start), PxVal::Int(len), PxVal::Str(s)) => {
-                if *start < 0 || *len < 0 {
-                    return Err(String::from("px: substring start/len must be >= 0"));
+                if *start < 0 {
+                    return Err(String::from("px: substring: negative start"));
                 }
                 // ★B4 BYTE model: byte offsets like Nix. A cut off a UTF-8
                 // char boundary would need invalid-UTF-8 strings (Nix allows
@@ -4588,7 +4706,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                 if a >= bytes.len() {
                     return Ok(PxVal::Str(String::new()));
                 }
-                let b0 = a + (*len as usize);
+                // A negative length means "to the end of the string" (same
+                // clamp as the Bytes arm below), not an error.
+                let b0 = if *len < 0 { bytes.len() } else { a + (*len as usize) };
                 let b = if b0 > bytes.len() { bytes.len() } else { b0 };
                 let mut out: Vec<u8> = Vec::new();
                 let mut i = a;
@@ -5435,13 +5555,13 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
         // remaining math: HELD at call until B1 numeric model lands.
         Err(format!("px: builtins.{} is held (B1 numeric model undecided)", name))
     } else if name == "functionArgs" {
-        // HELD: attrset-pattern lambdas desugar to a plain Lambda/Closure
-        // (parse_pattern_lambda) with no formals metadata retained on the
-        // resulting value, so this can't yet distinguish a pattern lambda
-        // from a plain one at call time.
-        Err(String::from(
-            "px: builtins.functionArgs is held (pattern-lambda formals are not retained after desugaring)",
-        ))
+        match &args[0] {
+            PxVal::Closure { param, body, .. } => Ok(px_function_args(param, body)),
+            other => Err(format!(
+                "px: builtins.functionArgs expects a lambda, got {}",
+                px_kind(other)
+            )),
+        }
     } else if name == "trace" || name == "warn" {
         let msg = match &args[0] {
             PxVal::Str(s) => s.clone(),

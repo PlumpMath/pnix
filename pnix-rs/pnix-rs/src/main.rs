@@ -189,6 +189,16 @@ fn px_corpus() -> Vec<(&'static str, &'static str, &'static str)> {
             r#""xaxbx""#,
         ),
         (
+            "seed_function_args_pattern",
+            "runtime/corpus/seed_function_args_pattern.px",
+            "{ a = false; b = true; }",
+        ),
+        (
+            "seed_substring_negative_length",
+            "runtime/corpus/seed_substring_negative_length.px",
+            r#""ello""#,
+        ),
+        (
             "c01_arith",
             "runtime/corpus/c01_arith.px",
             "{ div = 10; flt = 7.0; mixed = 44; modv = 1; prod = 42; sum = 23; }",
@@ -4826,9 +4836,10 @@ fn capabilities_doc() -> String {
         builtin_names.len(),
         builtin_names.join(" ")
     ));
-    d.push_str("presence는 호출 parity 주장이 아니다. 다음 11개 extension 이름은 호출 시 fail-closed HELD\n");
-    d.push_str("(max/min은 구현됨 — 이전 텍스트가 부정확했음):\n");
-    d.push_str("sin cos tan sqrt exp ln log abs pow mod functionArgs\n\n");
+    d.push_str("presence는 호출 parity 주장이 아니다. 다음 10개 extension 이름은 호출 시 fail-closed HELD\n");
+    d.push_str("(max/min은 구현됨 — 이전 텍스트가 부정확했음; functionArgs는 2026-08-19 pattern-lambda\n");
+    d.push_str("desugar-shape 인식으로 구현됨):\n");
+    d.push_str("sin cos tan sqrt exp ln log abs pow mod\n\n");
     d.push_str("## px 표면 (명시 미지원 — held)
 
 ");

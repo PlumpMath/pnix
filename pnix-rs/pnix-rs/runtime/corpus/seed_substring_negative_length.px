@@ -1,0 +1,4 @@
+# A negative `len` means "to the end of the string" (matches the sibling
+# Bytes-arm clamp already in `substring`, and the other 4 pnix hosts) —
+# it must not be a hard error the way a negative `start` still is.
+builtins.substring 1 (-1) "hello"

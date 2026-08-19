@@ -1,0 +1,6 @@
+# `functionArgs` on an attrset-pattern lambda must report which formals have
+# a default (2026-08-19: cross-host battery testing found pnix-rs was the
+# only host of 5 that HELD this call — `{a, b?1}: ...` desugars to a plain
+# Closure with no pattern metadata retained, so functionArgs recognizes the
+# desugared shape on the closure body instead).
+builtins.functionArgs ({ a, b ? 1 }: a + b)
