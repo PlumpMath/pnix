@@ -102,6 +102,12 @@ fn purity_walk(e: &px::PxExpr, uses: &mut Vec<String>, uncertain: &mut Vec<Strin
             purity_walk(scope, uses, uncertain);
             purity_walk(body, uses, uncertain);
         }
+        px::PxExpr::Isolated { with_scope, body } => {
+            if let Some(ws) = with_scope {
+                purity_walk(ws, uses, uncertain);
+            }
+            purity_walk(body, uses, uncertain);
+        }
         px::PxExpr::Str(parts) => {
             for part in parts {
                 if let px::PxStrPart::Sub(sub) = part {

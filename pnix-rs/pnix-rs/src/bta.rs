@@ -60,6 +60,13 @@ impl Analyzer {
             px::PxExpr::DeferredError(_) => Bt::Static,
             px::PxExpr::Int(_) | px::PxExpr::Float(_) | px::PxExpr::Bool(_) | px::PxExpr::Null => Bt::Static,
             px::PxExpr::With { scope, body } => join(self.bt(scope, env), self.bt(body, env)),
+            px::PxExpr::Isolated { with_scope, body } => {
+                let body_bt = self.bt(body, env);
+                match with_scope {
+                    Some(ws) => join(self.bt(ws, env), body_bt),
+                    None => body_bt,
+                }
+            }
             px::PxExpr::Str(parts) => {
                 let mut acc = Bt::Static;
                 for p in parts {

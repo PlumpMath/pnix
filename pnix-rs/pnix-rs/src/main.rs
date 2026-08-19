@@ -472,6 +472,15 @@ fn cmd_px_eval(rest: &[String]) -> ExitCode {
 fn px_import_targets(expr: &px::PxExpr, out: &mut Vec<String>) {
     match expr {
         px::PxExpr::DeferredError(_) => {}
+        // Not produced by the parser or reachable here (px_import_targets
+        // scans the raw pre-expansion tree; Isolated only exists in
+        // px_expand_imports' output) -- handled for exhaustiveness only.
+        px::PxExpr::Isolated { with_scope, body } => {
+            if let Some(ws) = with_scope {
+                px_import_targets(ws, out);
+            }
+            px_import_targets(body, out);
+        }
         px::PxExpr::Apply { func, arg } => {
             if let px::PxExpr::Var(name) = func.as_ref() {
                 if name == "import" {

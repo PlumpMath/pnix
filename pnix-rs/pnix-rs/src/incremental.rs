@@ -199,6 +199,7 @@ fn substitute_sibling_refs(
         }
         px::PxExpr::Int(_) | px::PxExpr::Float(_) | px::PxExpr::Bool(_) | px::PxExpr::Null => e.clone(),
         px::PxExpr::With { .. } => e.clone(),
+        px::PxExpr::Isolated { .. } => e.clone(),
         px::PxExpr::Str(parts) => px::PxExpr::Str(
             parts
                 .iter()

@@ -93,6 +93,9 @@ fn reify_with(e: &px::PxExpr, ctr: &mut i64) -> Result<px::PxVal, String> {
         )),
         px::PxExpr::Null => Ok(attr("null", vec![])),
         px::PxExpr::With { .. } => Err(String::from("held: with encoding is future work")),
+        px::PxExpr::Isolated { .. } => {
+            Err(String::from("held: isolated encoding is future work"))
+        }
         px::PxExpr::Var(name) => Ok(attr(
             "var",
             vec![(String::from("name"), px::PxVal::Str(name.clone()))],

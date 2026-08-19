@@ -148,6 +148,22 @@ pub enum PxExpr {
     /// remain lazy without exposing a source identifier that user scope could
     /// capture.
     DeferredError(String),
+    /// Internal-only environment reset. The parser never constructs this;
+    /// import expansion wraps a substituted module's AST in it so the
+    /// module evaluates from a fresh (empty) environment instead of
+    /// inheriting whatever let/with/lambda frames were active at the
+    /// splice site -- import substitutes the target's AST directly into
+    /// the tree (no separate per-module evaluation call), so without this
+    /// the module's free variables would accidentally resolve against the
+    /// importing site's local scope. `with_scope`, when present
+    /// (scopedImport), is evaluated in the OUTER (caller's) environment --
+    /// same as any ordinary argument expression -- and its value becomes
+    /// the *only* frame `body` starts with, so scope is visible to the
+    /// module without also re-admitting the caller's other local bindings.
+    Isolated {
+        with_scope: Option<Box<PxExpr>>,
+        body: Box<PxExpr>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -2857,6 +2873,16 @@ fn px_expr_is_immediate(expr: &PxExpr) -> bool {
 pub fn px_eval_outcome(expr: &PxExpr, env: &Vec<PxFrame>) -> Result<PxVal, PxError> {
     match expr {
         PxExpr::DeferredError(message) => Err(px_error_unsupported(message.clone())),
+        PxExpr::Isolated { with_scope, body } => {
+            let fresh_env: Vec<PxFrame> = match with_scope {
+                Some(scope_expr) => {
+                    let scope_val = px_eval_outcome(scope_expr, env)?;
+                    vec![PxFrame::With(scope_val)]
+                }
+                None => Vec::new(),
+            };
+            px_eval_outcome(body, &fresh_env)
+        }
         PxExpr::Int(n) => Ok(PxVal::Int(*n)),
         PxExpr::Float(f) => Ok(PxVal::Float(*f)),
         PxExpr::Bool(b) => Ok(PxVal::Bool(*b)),
@@ -8773,6 +8799,13 @@ pub fn px_expand_imports(
 ) -> Result<PxExpr, String> {
     match e {
         PxExpr::DeferredError(message) => Ok(PxExpr::DeferredError(message.clone())),
+        PxExpr::Isolated { with_scope, body } => Ok(PxExpr::Isolated {
+            with_scope: match with_scope {
+                Some(ws) => Some(Box::new(px_expand_imports(ws, modules, cur_dir, stack)?)),
+                None => None,
+            },
+            body: Box::new(px_expand_imports(body, modules, cur_dir, stack)?),
+        }),
         PxExpr::Apply { func, arg } => {
             let is_import = matches!(func.as_ref(), PxExpr::Var(n) if n == "import");
             if is_import {
@@ -8809,7 +8842,13 @@ pub fn px_expand_imports(
                         stack.push(key);
                         let out = px_expand_imports(&ast, modules, &tdir, stack)?;
                         stack.pop();
-                        return Ok(out);
+                        // Isolated: the module evaluates from a fresh (empty)
+                        // environment, not whatever let/with/lambda frames
+                        // are active at this splice site.
+                        return Ok(PxExpr::Isolated {
+                            with_scope: None,
+                            body: Box::new(out),
+                        });
                     }
                 }
             }
@@ -8865,10 +8904,16 @@ pub fn px_expand_imports(
                             stack.push(key);
                             let module_out = px_expand_imports(&ast, modules, &tdir, stack)?;
                             stack.pop();
+                            // scope_ast expands (nested imports inside the
+                            // scope expression itself) but stays otherwise
+                            // un-isolated -- it evaluates in the CALLER's
+                            // environment when the Isolated node is reached
+                            // (see px_eval_outcome), same as any ordinary
+                            // scopedImport argument expression.
                             let scope_out =
                                 px_expand_imports(scope_ast, modules, cur_dir, stack)?;
-                            return Ok(PxExpr::With {
-                                scope: Box::new(scope_out),
+                            return Ok(PxExpr::Isolated {
+                                with_scope: Some(Box::new(scope_out)),
                                 body: Box::new(module_out),
                             });
                         }
@@ -9100,6 +9145,13 @@ pub fn px_emit(e: &PxExpr) -> String {
             "builtins.throw {}",
             px_emit(&PxExpr::Str(vec![PxStrPart::Lit(message.clone())]))
         ),
+        // Isolated is internal-only (see its doc comment); this rendering
+        // exists for diagnostics only, `with` is its closest real-syntax
+        // approximation (scope's names visible, nothing else inherited).
+        PxExpr::Isolated { with_scope, body } => match with_scope {
+            Some(scope) => format!("with ({}); ({})", px_emit(scope), px_emit(body)),
+            None => format!("({})", px_emit(body)),
+        },
         PxExpr::Int(n) => {
             if *n >= 0 {
                 format!("{}", n)
@@ -9230,6 +9282,10 @@ pub fn px_value_has_opaque(v: &PxVal) -> bool {
 pub fn px_normalize(e: &PxExpr) -> PxExpr {
     match e {
         PxExpr::DeferredError(message) => PxExpr::DeferredError(message.clone()),
+        PxExpr::Isolated { with_scope, body } => PxExpr::Isolated {
+            with_scope: with_scope.as_ref().map(|ws| Box::new(px_normalize(ws))),
+            body: Box::new(px_normalize(body)),
+        },
         PxExpr::Int(n) => PxExpr::Int(*n),
         PxExpr::Float(f) => PxExpr::Float(*f),
         PxExpr::Bool(b) => PxExpr::Bool(*b),

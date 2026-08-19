@@ -38,6 +38,15 @@ pub fn px_free_vars(e: &px::PxExpr, out: &mut Vec<String>, bound: &mut Vec<Strin
             // body vars conservatively as free (specialization stays sound).
             px_free_vars(body, out, bound);
         }
+        px::PxExpr::Isolated { with_scope, body } => {
+            // body evaluates in a reset (fresh) environment, but be as
+            // conservative as With above rather than trying to prove body's
+            // vars don't depend on the outer scope at all.
+            if let Some(ws) = with_scope {
+                px_free_vars(ws, out, bound);
+            }
+            px_free_vars(body, out, bound);
+        }
         px::PxExpr::Str(parts) => {
             for part in parts {
                 if let px::PxStrPart::Sub(sub) = part {
