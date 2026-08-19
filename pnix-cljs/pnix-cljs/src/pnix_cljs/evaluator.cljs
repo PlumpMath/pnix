@@ -3111,6 +3111,41 @@
             (swap! cache assoc module-id module-cell)
             (force-cell module-cell)))))))
 
+(defn load-module-scoped [requested-path scope environment]
+  (when-not (instance? AttrsetValue scope)
+    (evaluation-failure! "type-error" {"operation" "scopedImport"}))
+  (let [context (get environment module-context-key)]
+    (when-not (and (map? context)
+                   (string? (:source-id context))
+                   (fn? (:load-source context))
+                   (some? (:cache context)))
+      (evaluation-failure! "import-loader-unavailable"
+                           {"path" requested-path}))
+    (let [loaded (try
+                   ((:load-source context)
+                    (:source-id context)
+                    requested-path)
+                   (catch :default _
+                     (evaluation-failure! "import-error"
+                                          {"path" requested-path})))
+          module-id (:source-id loaded)
+          source (:source loaded)]
+      (when-not (and (string? module-id) (string? source))
+        (evaluation-failure! "invalid-import-source"
+                             {"path" requested-path}))
+      ;; Never cached (unlike load-module): scope changes the result, so this
+      ;; must not share load-module's module-id cache slot with a plain
+      ;; import of the same file. scope does NOT propagate into this
+      ;; module's own nested imports -- module-context below is the plain
+      ;; context, so those still resolve through the ordinary cached
+      ;; load-module path.
+      (let [module-context (assoc context :source-id module-id)
+            module-environment (assoc (merge (builtin-environment) (:fields scope))
+                                      module-context-key
+                                      module-context)
+            module-cell (cell (parser/parse source) (atom module-environment))]
+        (force-cell module-cell)))))
+
 (defn referenced-cell [value]
   (loop [current value
          seen #{}]
@@ -3406,6 +3441,10 @@
     :null nil
     :variable (lookup environment (:name expression))
     :import (load-module (:path expression) environment)
+    :scoped-import (load-module-scoped (:path expression)
+                                       (evaluate-expression (:scope expression)
+                                                            environment)
+                                       environment)
 
     :lambda (->ClosureValue (:parameter expression)
                             (:body expression)

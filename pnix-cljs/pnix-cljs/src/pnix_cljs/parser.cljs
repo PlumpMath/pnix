@@ -240,6 +240,16 @@
                     (parse-failure! parser "import-path-required" {}))
                   (advance! parser)
                   {:op :import :path (:value path-token)}))
+      :scopedImport (do
+                      (advance! parser)
+                      (let [scope-expression (parse-selection parser)
+                            path-token (current-token parser)]
+                        (when-not (= :path (:kind path-token))
+                          (parse-failure! parser "import-path-required" {}))
+                        (advance! parser)
+                        {:op :scoped-import
+                         :scope scope-expression
+                         :path (:value path-token)}))
       :left-paren (do
                     (advance! parser)
                     (let [expression (parse-expression parser)]
@@ -276,7 +286,7 @@
 (def atom-starts
   #{:integer :float :string :interpolated-string :indented-string :uri
     :true :false :null :identifier
-    :import :left-paren :left-bracket :left-brace :rec})
+    :import :scopedImport :left-paren :left-bracket :left-brace :rec})
 
 (defn parse-application [parser]
   (loop [expression (parse-selection parser)]

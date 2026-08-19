@@ -12,6 +12,7 @@
    "rec" :rec
    "inherit" :inherit
    "import" :import
+   "scopedImport" :scopedImport
    "assert" :assert
    "with" :with})
 
