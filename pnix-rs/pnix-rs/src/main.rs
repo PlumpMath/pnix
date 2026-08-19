@@ -184,6 +184,11 @@ fn px_corpus() -> Vec<(&'static str, &'static str, &'static str)> {
             "3",
         ),
         (
+            "seed_replace_strings_empty",
+            "runtime/corpus/seed_replace_strings_empty.px",
+            r#""xaxbx""#,
+        ),
+        (
             "c01_arith",
             "runtime/corpus/c01_arith.px",
             "{ div = 10; flt = 7.0; mixed = 44; modv = 1; prod = 42; sum = 23; }",

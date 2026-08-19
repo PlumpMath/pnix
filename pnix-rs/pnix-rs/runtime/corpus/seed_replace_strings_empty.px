@@ -1,0 +1,5 @@
+# An empty `from` string matches at every position, including the end of
+# the subject: `replaceStrings [""] ["x"] "ab"` must reach "xaxbx", not
+# "xaxb" (a single-pass loop that stops at `i >= length` misses the
+# trailing match).
+builtins.replaceStrings [ "" ] [ "x" ] "ab"

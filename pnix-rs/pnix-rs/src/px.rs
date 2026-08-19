@@ -5270,17 +5270,25 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                     return Err(String::from("px: replaceStrings: from/to length mismatch"));
                 }
                 let chars: Vec<char> = s0.chars().collect();
+                let n = chars.len();
                 let mut out = String::new();
+                // Single left-to-right pass over positions 0..=n (INCLUSIVE
+                // of the end): at each position, try each `from` in order
+                // and take the first prefix match. An empty `from` matches
+                // at every position, including n, so it must not be
+                // excluded -- but a zero-width match must still emit the
+                // current character (if any) and advance by exactly 1, or
+                // the same empty match would fire forever at the same spot.
                 let mut i = 0usize;
-                while i < chars.len() {
-                    let mut matched = false;
+                while i <= n {
+                    let mut matched: Option<(usize, String)> = None;
                     let mut fi = 0usize;
-                    while fi < from.len() && !matched {
+                    while fi < from.len() && matched.is_none() {
                         let from_item = px_force(&from[fi])?;
                         let to_item = px_force(&to[fi])?;
                         if let (PxVal::Str(f), PxVal::Str(t)) = (&from_item, &to_item) {
                             let fc: Vec<char> = f.chars().collect();
-                            if !fc.is_empty() && i + fc.len() <= chars.len() {
+                            if i + fc.len() <= n {
                                 let mut eq = true;
                                 let mut k = 0usize;
                                 while k < fc.len() {
@@ -5290,17 +5298,30 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                                     k += 1;
                                 }
                                 if eq {
-                                    out.push_str(t);
-                                    i += fc.len();
-                                    matched = true;
+                                    matched = Some((fc.len(), t.clone()));
                                 }
                             }
                         }
                         fi += 1;
                     }
-                    if !matched {
-                        out.push(chars[i]);
-                        i += 1;
+                    match matched {
+                        Some((0, replacement)) => {
+                            out.push_str(&replacement);
+                            if i < n {
+                                out.push(chars[i]);
+                            }
+                            i += 1;
+                        }
+                        Some((len, replacement)) => {
+                            out.push_str(&replacement);
+                            i += len;
+                        }
+                        None => {
+                            if i < n {
+                                out.push(chars[i]);
+                            }
+                            i += 1;
+                        }
                     }
                 }
                 Ok(PxVal::Str(out))
