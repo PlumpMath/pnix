@@ -194,7 +194,11 @@ O = 등록됨(실제로 호출되는지는 별개, §5 참고). 표는 5개 호�
 각 호스트 evaluator 소스에서 빌트인 이름 등록 패턴을 grep, 5개를 합쳐서
 diff).
 
-`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함). 새로 표를 다시 뽑을 때 이 두 줄은 자동 추출 결과를 믿지 말 것.
+`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함).
+
+`langVersion`/`nixVersion`/`storeDir`\*: 같은 이유로 또 다른 blind spot(2026-08-20 발견) — clj/clr/cljs에서 이 셋은 콜러블이 아니라 zero-arg 상수 값으로 등록돼 있어서 `(builtin ...)`/`(bi ...)`/`(->BuiltinValue ...)` 패턴에 안 잡힌다. 직접 소스 확인 후 수동 정정함(실제로는 5개 다 있음).
+
+새로 표를 다시 뽑을 때 이 5줄(`*` 표시)은 자동 추출 결과를 믿지 말 것 — `bin/gen-builtin-presence-matrix`가 이미 이 5줄을 손으로 보정한다.
 
 | 이름 | clj | clr | cljs | rs | hy |
 |---|---|---|---|---|---|
@@ -210,7 +214,7 @@ diff).
 | appendContext | O | - | - | - | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
-| atan2 | O | O | O | - | O |
+| atan2 | O | O | O | O | O |
 | attrByPath | O | O | O | O | O |
 | attrNames | O | O | O | O | O |
 | attrValues | O | O | O | O | O |
@@ -313,18 +317,18 @@ diff).
 | isPath | O | O | O | O | O |
 | isString | O | O | O | O | O |
 | keys | O | O | O | O | O |
-| langVersion | - | - | - | O | O |
+| langVersion* | O | O | O | O | O |
 | last | O | O | O | O | O |
 | le | O | O | O | O | O |
 | length | O | O | O | O | O |
 | lessThan | O | O | O | O | O |
 | listToAttrs | O | O | O | O | O |
 | ln | O | O | O | O | O |
-| log | - | - | - | O | O |
+| log | O | O | O | O | O |
 | lt | O | O | O | O | O |
 | map | O | O | O | O | O |
 | mapAttrs | O | O | O | O | O |
-| mapAttrs' | O | - | - | - | - |
+| mapAttrs' | O | O | O | O | O |
 | mapAttrsRecursive | O | O | O | O | O |
 | mapAttrsToList | O | O | O | O | O |
 | mapGet | - | - | - | - | O |
@@ -340,7 +344,7 @@ diff).
 | mul | O | O | O | O | O |
 | nameValuePair | O | O | O | O | O |
 | neg | O | O | O | O | O |
-| nixVersion | - | - | - | O | O |
+| nixVersion* | O | O | O | O | O |
 | not | O | O | O | O | O |
 | null | - | - | - | O | - |
 | optional | O | O | O | O | O |
@@ -380,7 +384,7 @@ diff).
 | splitString | O | O | O | O | O |
 | splitVersion | O | O | O | O | O |
 | sqrt | O | O | O | O | O |
-| storeDir | - | - | - | O | O |
+| storeDir* | O | O | O | O | O |
 | storePath | O | O | O | O | O |
 | stringLength | O | O | O | O | O |
 | stringToCharacters | O | O | O | O | O |
@@ -390,7 +394,7 @@ diff).
 | sum | O | O | O | O | O |
 | tail | O | O | O | O | O |
 | take | O | O | O | O | O |
-| tan | - | - | - | O | O |
+| tan | O | O | O | O | O |
 | throw | O | O | O | O | O |
 | toFile | O | O | O | O | O |
 | toInt | O | O | O | O | O |
@@ -491,6 +495,12 @@ evaluator, 빌트인, cljs-meta self-host substrate, 예제, 문서 전부를
 개(절대경로, scopedImport)는 둘 다 한 번에 잘 됐는데, 이건 환경 모델이
 단순한(맵 하나) 덕분으로 보인다 — 복잡한 프레임 체인/AST 치환 방식보다
 사고 날 여지가 적음.
+
+### 오늘(2026-08-20) 실제로 고친 것들 — 무엇을, 왜
+
+| 커밋 | 무엇을 |
+|---|---|
+| (커밋 전) | cross-host 빌트인 프레즌스 매트릭스에서 빠진 6개 중 `log`/`tan` 신규 구현(수학 빌트인, `ln`/`sin`/`cos` 바로 옆에 동일한 등록+dispatch 패턴으로 추가)과 `mapAttrs'` 신규 구현(유일한 참고 구현인 pnix-clj `evaluator.clj`의 알고리즘을 이식 — `f name value`로 `{ name; value; }` pair를 받아 반환된 `name`으로 결과 attrset을 재구성하는, `mapAttrs`와 달리 키를 바꿀 수 있는 변형, 중복 결과 이름은 `listToAttrs`와 동일하게 첫 항목이 우선). `nixVersion`은 이미 등록은 돼 있었지만 값이 `"2.34.7"`로 틀려 있던 걸 `"2.18.0-pnix"`(pnix-rs/pnix-hy와 일치)로 정정. `storeDir`/`langVersion`은 이미 올바른 값으로 등록돼 있어서 코드 변경 없음 — 애초에 프레즌스 매트릭스(§4)가 stale했던 케이스였다. |
 
 ## 7. 이 문서가 코드와 어긋나지 않게 유지하는 법
 

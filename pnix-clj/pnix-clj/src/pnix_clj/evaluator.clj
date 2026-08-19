@@ -726,6 +726,7 @@
                "le" (builtin :le 2)
                "lessThan" (builtin :lessThan 2)
                "ln" (builtin :ln 1)
+               "log" (builtin :log 1)
                "listToAttrs" (builtin :listToAttrs 1)
                "lt" (builtin :lt 2)
                "match" (builtin :match 2)
@@ -755,6 +756,7 @@
                "reverseList" (builtin :reverseList 1)
                "cos" (builtin :cos 1)
                "sin" (builtin :sin 1)
+               "tan" (builtin :tan 1)
                "sqrt" (builtin :sqrt 1)
                "sort" (builtin :sort 2)
                "sub" (builtin :sub 2)
@@ -3399,6 +3401,17 @@
                                    rows)]
                 (recur (rest remaining) (assoc out attr-name values)))
               {:status :ok :value out})))))
+
+    ;; log/tan land here (not in finish-builtin's main case) purely to stay
+    ;; under the JVM method-size limit — same math-builtin shape as
+    ;; sin/cos/ln/exp/sqrt there (Math/<fn> on a coerced double).
+    :log
+    {:status :ok
+     :value (Math/log (double (first args)))}
+
+    :tan
+    {:status :ok
+     :value (Math/tan (double (first args)))}
 
     nil))
 

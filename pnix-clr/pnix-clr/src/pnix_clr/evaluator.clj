@@ -510,7 +510,7 @@
 
 (def ^:private lazy-arg-builtins
   "Builtins whose next argument is kept as a thunk (Nix lazy positions)."
-  #{:tryEval :map :mapAttrs :filter :filterAttrs :concatMap :genList
+  #{:tryEval :map :mapAttrs :mapAttrs' :filter :filterAttrs :concatMap :genList
     :foldl :foldl' :foldr :partition :sort :any :all :zipListsWith
     :concatMapStringsSep :pipe :fix :flip :const :id :optional :optionals
     :optionalAttrs :optionalString :when :implies :trace :warn :hashString})
@@ -1082,6 +1082,37 @@
              (map (fn [[k v]]
                     [k (thunk #(apply-callable2 f k v))]))
              (:entries attrs))))
+
+    :mapAttrs'
+    ;; `f name value` must return a `{ name; value; }` pair; results are
+    ;; collected into a NEW attrset keyed by the returned name (so `f` can
+    ;; rename keys), first occurrence of a duplicated resulting name wins
+    ;; (same tie-break as listToAttrs). The name is forced eagerly (it
+    ;; determines placement); the value is carried over unforced (lazy).
+    (let [f (force-value (first args))
+          attrs (require-attrset (second args) "mapAttrs'")]
+      (attrset-value
+       (loop [remaining (sorted-attr-keys attrs)
+              out {}]
+         (if-let [k (first remaining)]
+           (let [pair (require-attrset
+                       (apply-callable2 f k (get (:entries attrs) k))
+                       "mapAttrs'")]
+             (when-not (and (contains? (:entries pair) "name")
+                            (contains? (:entries pair) "value"))
+               (outcome/fail! :eval :type-error
+                              {:operation "mapAttrs'"
+                               :expected "name-value-pair"}))
+             (let [n (force-value (get (:entries pair) "name"))]
+               (when-not (string? n)
+                 (outcome/fail! :eval :type-error
+                                {:operation "mapAttrs'"
+                                 :expected "name-string"}))
+               (recur (rest remaining)
+                      (if (contains? out n)
+                        out
+                        (assoc out n (get (:entries pair) "value"))))))
+           out))))
 
     :filterAttrs
     (let [pred (force-value (first args))
@@ -1798,11 +1829,17 @@
     :ln
     (nix-double (Math/Log (float-double (force-value (first args)))))
 
+    :log
+    (nix-double (Math/Log (float-double (force-value (first args)))))
+
     :sin
     (nix-double (Math/Sin (float-double (force-value (first args)))))
 
     :cos
     (nix-double (Math/Cos (float-double (force-value (first args)))))
+
+    :tan
+    (nix-double (Math/Tan (float-double (force-value (first args)))))
 
     :atan2
     (nix-double (Math/Atan2 (float-double (force-value (first args)))
@@ -2205,6 +2242,7 @@
    "hasAttrByPath" (bi :hasAttrByPath 2)
    "attrByPath" (bi :attrByPath 3)
    "mapAttrs" (bi :mapAttrs 2)
+   "mapAttrs'" (bi :mapAttrs' 2)
    "filterAttrs" (bi :filterAttrs 2)
    "listToAttrs" (bi :listToAttrs 1)
    "removeAttrs" (bi :removeAttrs 2)
@@ -2299,7 +2337,7 @@
    "true" true
    "false" false
    "null" nil
-   "nixVersion" "2.34.7"
+   "nixVersion" "2.18.0-pnix"
    "langVersion" (i64 6)
    "storeDir" "/nix/store"
 
@@ -2308,8 +2346,10 @@
    "sqrt" (bi :sqrt 1)
    "exp" (bi :exp 1)
    "ln" (bi :ln 1)
+   "log" (bi :log 1)
    "sin" (bi :sin 1)
    "cos" (bi :cos 1)
+   "tan" (bi :tan 1)
    "atan2" (bi :atan2 2)
    "bitAnd" (bi :bitAnd 2)
    "bitOr" (bi :bitOr 2)

@@ -11,6 +11,12 @@ cd "$root"
 # guards against. pnix-cljs-identity-gate's analogous check already scopes
 # to an explicit file allowlist that excludes its own STATUS.md/todo.md for
 # the same reason; this mirrors that intent for a blanket-scan gate instead.
+# pnix-clr/pnix-clr/docs/{IMPLEMENTATION,BUGS,PLANS,TODO}.md and AGENTS.md
+# are excluded for the identical reason since the 2026-08-20 doc
+# consolidation: IMPLEMENTATION.md's builtin presence matrix and history
+# table, and PLANS.md's CAPABILITIES.md-generator backlog item, both
+# legitimately cite pnix-clj by name/path as a cross-host reference
+# implementation to converge toward -- not a stale copy-paste leak.
 stale_identity='\bpnix-clj\b|\bpnix_clj\b|\bclj-meta\b|\bclj_meta\b'
 if rg -n --hidden --pcre2 "$stale_identity" . \
     -g '!.git/**' \
@@ -19,7 +25,12 @@ if rg -n --hidden --pcre2 "$stale_identity" . \
     -g '!clr-bootstrap/obj/**' \
     -g '!bin/pnix-clr-identity-gate' \
     -g '!clr-meta/STATUS.md' \
-    -g '!clr-meta/todo.md'; then
+    -g '!clr-meta/todo.md' \
+    -g '!pnix-clr/docs/IMPLEMENTATION.md' \
+    -g '!pnix-clr/docs/BUGS.md' \
+    -g '!pnix-clr/docs/PLANS.md' \
+    -g '!pnix-clr/docs/TODO.md' \
+    -g '!AGENTS.md'; then
   echo "pnix-clr identity gate: stale JVM-host identity" >&2
   exit 1
 fi

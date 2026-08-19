@@ -18,10 +18,20 @@
 # import/scopedImport are reserved parser keywords in clr/cljs/rs, not
 # registry entries, so this script cannot see them there — those two rows
 # are always hand-patched to `import*`/`scopedImport*` with all-O afterward,
-# same as when the matrix was first built (2026-08-19). Small deltas (a
-# handful of names) vs. a previous run are normal — internal helper names or
-# aliases can match the loose regexes. Investigate deltas by hand; don't
-# trust this script as authoritative on its own.
+# same as when the matrix was first built (2026-08-19).
+#
+# Second known blind spot (found 2026-08-20): clj/clr/cljs's regexes only
+# match CALLABLE dispatch entries (`(builtin ...)`/`(bi ...)`/
+# `(->BuiltinValue ...)`) — zero-arg constant VALUES registered directly as
+# `"name" some-value` (e.g. clr's `"nixVersion" "2.18.0-pnix"`, cljs's
+# `"storeDir" "/nix/store"`) don't match and show as false-negative `-`.
+# `langVersion`/`nixVersion`/`storeDir` are hand-patched to all-O for this
+# reason as of 2026-08-20 — if you add another zero-arg constant builtin,
+# check by hand whether it's really missing before trusting a `-` here.
+#
+# Small deltas (a handful of names) vs. a previous run are normal —
+# internal helper names or aliases can match the loose regexes. Investigate
+# deltas by hand; don't trust this script as authoritative on its own.
 #
 # Usage:
 #   bin/gen-builtin-presence-matrix            print the fresh markdown table
@@ -73,6 +83,13 @@ sort -u "$TMP"/{clj,clr,cljs,rs,hy}.txt > "$TMP/all.txt"
 # import/scopedImport are reserved keywords in clr/cljs/rs — hand-correct.
 sed -i '' 's/^| import | O | - | - | - | O |$/| import* | O | O | O | O | O |/' "$TMP/matrix.md"
 sed -i '' 's/^| scopedImport | O | - | - | - | O |$/| scopedImport* | O | O | O | O | O |/' "$TMP/matrix.md"
+
+# langVersion/nixVersion/storeDir are zero-arg constant values in clj/clr/
+# cljs, not callable dispatch entries — the regexes above can't see them.
+# Confirmed present (2026-08-20) by direct source read on all 3 hosts.
+sed -i '' "s/^| langVersion | - | - | - | O | O |\$/| langVersion* | O | O | O | O | O |/" "$TMP/matrix.md"
+sed -i '' "s/^| nixVersion | - | - | - | O | O |\$/| nixVersion* | O | O | O | O | O |/" "$TMP/matrix.md"
+sed -i '' "s/^| storeDir | - | - | - | O | O |\$/| storeDir* | O | O | O | O | O |/" "$TMP/matrix.md"
 
 if [[ "${1:-}" == "--check" ]]; then
   status=0

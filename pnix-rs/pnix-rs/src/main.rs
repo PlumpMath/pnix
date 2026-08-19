@@ -4873,10 +4873,14 @@ fn capabilities_doc() -> String {
         builtin_names.len(),
         builtin_names.join(" ")
     ));
-    d.push_str("presence는 호출 parity 주장이 아니다. 다음 10개 extension 이름은 호출 시 fail-closed HELD\n");
-    d.push_str("(max/min은 구현됨 — 이전 텍스트가 부정확했음; functionArgs는 2026-08-19 pattern-lambda\n");
-    d.push_str("desugar-shape 인식으로 구현됨):\n");
-    d.push_str("sin cos tan sqrt exp ln log abs pow mod\n\n");
+    d.push_str("presence는 호출 parity 주장이 아니다(max/min은 구현됨 — 이전 텍스트가 부정확했음;\n");
+    d.push_str("functionArgs는 2026-08-19 pattern-lambda desugar-shape 인식으로 구현됨). 2026-08-20:\n");
+    d.push_str("이전까지 fail-closed HELD였던 10개 확장 수학 빌트인 `sin cos tan sqrt exp ln log abs\n");
+    d.push_str("pow mod`도 실구현됨 — 다른 4개 호스트(clj/clr/cljs/hy)가 이미 갖고 있던 4/5 합의\n");
+    d.push_str("사례였고, 순수 산술(Newton's method/Taylor 급수)로 구현했다: rs-meta의 인터프리트\n");
+    d.push_str("Rust 부분집합은 f64 메서드 디스패치가 없어서 `.sin()`/`.sqrt()`/`.exp()`/`.ln()` 같은\n");
+    d.push_str("표준 라이브러리 호출을 못 쓰기 때문(`px_bit_op`의 bit-by-bit 구현과 같은 이유). 같은\n");
+    d.push_str("변경에서 `atan2`(오라클: pnix-hy)와 `mapAttrs'`(오라클: pnix-clj)도 신규 추가됨.\n\n");
     d.push_str("## px 표면 (명시 미지원 — held)
 
 ");

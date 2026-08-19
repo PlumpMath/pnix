@@ -84,7 +84,11 @@ O = 등록됨(실제로 호출되는지는 별개, §3 참고). 표는 5개 호�
 각 호스트 evaluator 소스에서 빌트인 이름 등록 패턴을 grep, 5개를 합쳐서
 diff).
 
-`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함). 새로 표를 다시 뽑을 때 이 두 줄은 자동 추출 결과를 믿지 말 것.
+`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함).
+
+`langVersion`/`nixVersion`/`storeDir`\*: 같은 이유로 또 다른 blind spot(2026-08-20 발견) — clj/clr/cljs에서 이 셋은 콜러블이 아니라 zero-arg 상수 값으로 등록돼 있어서 `(builtin ...)`/`(bi ...)`/`(->BuiltinValue ...)` 패턴에 안 잡힌다. 직접 소스 확인 후 수동 정정함(실제로는 5개 다 있음).
+
+새로 표를 다시 뽑을 때 이 5줄(`*` 표시)은 자동 추출 결과를 믿지 말 것 — `bin/gen-builtin-presence-matrix`가 이미 이 5줄을 손으로 보정한다.
 
 | 이름 | clj | clr | cljs | rs | hy |
 |---|---|---|---|---|---|
@@ -100,7 +104,7 @@ diff).
 | appendContext | O | - | - | - | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
-| atan2 | O | O | O | - | O |
+| atan2 | O | O | O | O | O |
 | attrByPath | O | O | O | O | O |
 | attrNames | O | O | O | O | O |
 | attrValues | O | O | O | O | O |
@@ -203,18 +207,18 @@ diff).
 | isPath | O | O | O | O | O |
 | isString | O | O | O | O | O |
 | keys | O | O | O | O | O |
-| langVersion | - | - | - | O | O |
+| langVersion* | O | O | O | O | O |
 | last | O | O | O | O | O |
 | le | O | O | O | O | O |
 | length | O | O | O | O | O |
 | lessThan | O | O | O | O | O |
 | listToAttrs | O | O | O | O | O |
 | ln | O | O | O | O | O |
-| log | - | - | - | O | O |
+| log | O | O | O | O | O |
 | lt | O | O | O | O | O |
 | map | O | O | O | O | O |
 | mapAttrs | O | O | O | O | O |
-| mapAttrs' | O | - | - | - | - |
+| mapAttrs' | O | O | O | O | O |
 | mapAttrsRecursive | O | O | O | O | O |
 | mapAttrsToList | O | O | O | O | O |
 | mapGet | - | - | - | - | O |
@@ -230,7 +234,7 @@ diff).
 | mul | O | O | O | O | O |
 | nameValuePair | O | O | O | O | O |
 | neg | O | O | O | O | O |
-| nixVersion | - | - | - | O | O |
+| nixVersion* | O | O | O | O | O |
 | not | O | O | O | O | O |
 | null | - | - | - | O | - |
 | optional | O | O | O | O | O |
@@ -270,7 +274,7 @@ diff).
 | splitString | O | O | O | O | O |
 | splitVersion | O | O | O | O | O |
 | sqrt | O | O | O | O | O |
-| storeDir | - | - | - | O | O |
+| storeDir* | O | O | O | O | O |
 | storePath | O | O | O | O | O |
 | stringLength | O | O | O | O | O |
 | stringToCharacters | O | O | O | O | O |
@@ -280,7 +284,7 @@ diff).
 | sum | O | O | O | O | O |
 | tail | O | O | O | O | O |
 | take | O | O | O | O | O |
-| tan | - | - | - | O | O |
+| tan | O | O | O | O | O |
 | throw | O | O | O | O | O |
 | toFile | O | O | O | O | O |
 | toInt | O | O | O | O | O |
@@ -381,6 +385,13 @@ root/file 컨텍스트 추적)이 5개 중 제일 견고했다. rs가 나중에 
 `import`를 고칠 때도(scope 누수 버그) 결국 "각 import가 독립된 환경에서
 평가돼야 한다"는 이 호스트의 기본 전제를 따라가는 방향으로 고쳐졌다 —
 새 호스트에서 import 관련 기능을 만들 일이 있으면 여기부터 참고할 것.
+
+### 오늘(2026-08-20) 실제로 고친 것들 — 무엇을, 왜
+
+| 커밋 | 무엇을 |
+|---|---|
+| (미커밋, 리뷰 대기) | 크로스호스트 빌트인 presence matrix diff에서 빠진 6개 추가: `log`(`ln`과 동일하게 자연로그, `Math/Log`), `tan`(`sin`/`cos`와 같은 모양, `Math/Tan`), `mapAttrs'`(pnix-clj가 유일한 레퍼런스 — `f name value`가 `{ name; value; }` 쌍을 반환, 반환된 name으로 새 attrset을 키잉하고 중복 name은 first-wins(`listToAttrs`와 동일한 tie-break); name은 즉시 force, value는 thunk로 lazy 유지). 그리고 이미 등록돼 있었지만 매트릭스가 놓친 것 2개도 정정: `nixVersion` 값이 `"2.34.7"`로 잘못돼 있던 걸 rs/hy와 맞춰 `"2.18.0-pnix"`로 고침(`storeDir`/`langVersion`은 값도 이미 맞았음 — 매트릭스 자동추출 스크립트가 `(bi :name arity)` 패턴만 잡고 plain-value 등록은 못 잡아서 `-`로 잘못 표시됐던 것, §2 표 자체가 stale). |
+| (미커밋, 리뷰 대기) | `bin/pnix-clr-identity-gate`가 이 문서(§4/§9)의 정당한 크로스호스트 인용("pnix-clj" 문자열)을 "stale JVM-host identity 누수"로 오탐지하던 것 수정 — 2026-08-20 문서 통합 때 §4 역사 표/§9 백로그 항목이 pnix-clj를 이름으로 인용하게 되면서 생긴 회귀. `clr-meta/STATUS.md`/`todo.md`에 이미 있던 것과 같은 파일 allowlist 패턴을 `docs/{IMPLEMENTATION,BUGS,PLANS,TODO}.md`/`AGENTS.md`에도 적용해서 게이트가 다시 PASS하도록 고침. |
 
 ## 5. 범위 — 뭐가 admit됐고 뭐가 아직 open인가
 

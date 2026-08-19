@@ -2233,6 +2233,351 @@ fn px_num_f64(v: &PxVal) -> Result<f64, String> {
     }
 }
 
+// ---- pure-arithmetic transcendental math (2026-08-20) ---------------------
+//
+// rs-meta's interpreted Rust subset (exercised by `substrate-check`, which
+// feeds this entire file through ../rs-meta's bootstrap interpreter) has NO
+// method dispatch for `f64`: `call_method` in rs-meta/src/interp.rs only
+// recognizes `i64`/`i32`/`u32`/`u64`/`u8`/`usize` as numeric method-call
+// targets, so `.sin()`/`.sqrt()`/`.exp()`/`.ln()`/`.powf()`/... are all
+// "unknown method". The transcendental math builtins below are therefore
+// hand-rolled from the same primitive vocabulary this file already uses
+// elsewhere for the same reason (`px_bit_op`'s bit-by-bit AND/OR/XOR,
+// `px_round_to_int`'s cast-and-adjust ceil/floor): `+ - * /`, comparisons,
+// `as` casts, and `while`. They target full f64 precision (~1e-15 relative
+// error) for finite, non-extreme inputs; `sin`/`cos`/`tan` on
+// extreme-magnitude arguments trade some precision the way any single
+// double-precision range reduction against `2*pi` does — a Payne-Hanek-grade
+// reduction was judged not worth the complexity for a config-language
+// builtin.
+
+/// `2^k` for any i64 `k`, via exponentiation by squaring. The f64
+/// accumulator overflows to `inf` / underflows to `0.0` exactly the way a
+/// real power-of-two would.
+fn px_pow2_i64(k: i64) -> f64 {
+    if k == 0 {
+        return 1.0;
+    }
+    let neg = k < 0;
+    let mut n = if neg { 0 - k } else { k };
+    let mut result = 1.0;
+    let mut base = 2.0;
+    while n > 0 {
+        if n % 2 == 1 {
+            result = result * base;
+        }
+        base = base * base;
+        n = n / 2;
+    }
+    if neg { 1.0 / result } else { result }
+}
+
+/// Round-half-away-from-zero, f64 -> i64 (used for exp/sin/cos range
+/// reduction). Plain `as i64` truncates toward zero, so a manual +/-0.5
+/// shift is required.
+fn px_round_f64_to_i64(q: f64) -> i64 {
+    if q >= 0.0 {
+        (q + 0.5) as i64
+    } else {
+        (q - 0.5) as i64
+    }
+}
+
+/// `sqrt` via Newton's method (`g' = (g + x/g) / 2`). Quadratically
+/// convergent, so a fixed iteration count reaches full f64 precision from
+/// any starting guess in range with room to spare.
+fn px_math_sqrt(x: f64) -> f64 {
+    if x != x {
+        return x; // NaN in, NaN out
+    }
+    if x < 0.0 {
+        return 0.0 / 0.0; // NaN: sqrt of a negative number
+    }
+    if x == 0.0 {
+        return x; // preserves the sign of zero, like libm
+    }
+    if x - x != 0.0 {
+        return x; // +infinity
+    }
+    let mut g = if x > 1.0 { x } else { 1.0 };
+    let mut i = 0;
+    while i < 60 {
+        g = 0.5 * (g + x / g);
+        i += 1;
+    }
+    g
+}
+
+/// `exp` via range reduction to `x = r + k*ln2` (so `exp(x) = exp(r) * 2^k`)
+/// followed by a Taylor series for `exp(r)` on the small remainder.
+fn px_math_exp(x: f64) -> f64 {
+    if x != x {
+        return x;
+    }
+    if x - x != 0.0 {
+        if x > 0.0 {
+            return x; // +infinity
+        }
+        return 0.0; // -infinity
+    }
+    let ln2 = 0.6931471805599453;
+    let k = px_round_f64_to_i64(x / ln2);
+    let r = x - (k as f64) * ln2;
+    let mut term = 1.0;
+    let mut sum = 1.0;
+    let mut n = 1.0;
+    let mut i = 0;
+    while i < 25 {
+        term = term * r / n;
+        sum = sum + term;
+        n = n + 1.0;
+        i += 1;
+    }
+    sum * px_pow2_i64(k)
+}
+
+/// `ln` via binary range reduction into `[1, 2)` plus the fast-converging
+/// `ln(m) = 2*atanh((m-1)/(m+1))` series (`(m-1)/(m+1)` is at most `1/3` on
+/// that range). Domain-checked like the pnix-hy reference's `math.log`.
+fn px_math_ln(x: f64) -> Result<f64, String> {
+    if x != x {
+        return Ok(x);
+    }
+    if x <= 0.0 {
+        return Err(String::from("px: ln: argument must be positive"));
+    }
+    if x - x != 0.0 {
+        return Ok(x); // +infinity
+    }
+    let ln2 = 0.6931471805599453;
+    let mut m = x;
+    let mut k: i64 = 0;
+    while m >= 2.0 {
+        m = m / 2.0;
+        k += 1;
+    }
+    while m < 1.0 {
+        m = m * 2.0;
+        k -= 1;
+    }
+    let z = (m - 1.0) / (m + 1.0);
+    let z2 = z * z;
+    let mut term = z;
+    let mut sum = z;
+    let mut i = 1;
+    while i < 30 {
+        term = term * z2;
+        let denom = ((2 * i) + 1) as f64;
+        sum = sum + term / denom;
+        i += 1;
+    }
+    Ok((2.0 * sum) + ((k as f64) * ln2))
+}
+
+/// `sin`/`cos` share range reduction into a small remainder against `2*pi`,
+/// then a direct Taylor series (fast-converging at this magnitude: `pi`
+/// raised to the ~50th power is still dwarfed by `50!`).
+fn px_trig_reduce(x: f64) -> f64 {
+    let two_pi = 6.283185307179586;
+    let k = px_round_f64_to_i64(x / two_pi);
+    x - ((k as f64) * two_pi)
+}
+
+fn px_math_sin(x: f64) -> f64 {
+    if x != x || x - x != 0.0 {
+        return 0.0 / 0.0; // NaN: undefined angle (NaN or +/-infinity input)
+    }
+    let r = px_trig_reduce(x);
+    let r2 = r * r;
+    let mut term = r;
+    let mut sum = r;
+    let mut k: i64 = 0;
+    while k < 25 {
+        let denom = (((2 * k) + 2) * ((2 * k) + 3)) as f64;
+        term = (term * (0.0 - r2)) / denom;
+        sum = sum + term;
+        k += 1;
+    }
+    sum
+}
+
+fn px_math_cos(x: f64) -> f64 {
+    if x != x || x - x != 0.0 {
+        return 0.0 / 0.0;
+    }
+    let r = px_trig_reduce(x);
+    let r2 = r * r;
+    let mut term = 1.0;
+    let mut sum = 1.0;
+    let mut k: i64 = 0;
+    while k < 25 {
+        let denom = (((2 * k) + 1) * ((2 * k) + 2)) as f64;
+        term = (term * (0.0 - r2)) / denom;
+        sum = sum + term;
+        k += 1;
+    }
+    sum
+}
+
+fn px_math_tan(x: f64) -> f64 {
+    px_math_sin(x) / px_math_cos(x)
+}
+
+/// `atan` via reciprocal + half-angle reduction (`atan(x) = 2*atan(x /
+/// (1 + sqrt(1+x^2)))`, applied repeatedly) into a range where the Taylor
+/// series converges quickly; `atan2` layers quadrant selection on top.
+fn px_math_atan(x: f64) -> f64 {
+    if x != x {
+        return x;
+    }
+    let pi_half = 1.5707963267948966;
+    if x - x != 0.0 {
+        if x > 0.0 {
+            return pi_half;
+        }
+        return 0.0 - pi_half;
+    }
+    let neg = x < 0.0;
+    let mut a = if neg { 0.0 - x } else { x };
+    let reciprocal = a > 1.0;
+    if reciprocal {
+        a = 1.0 / a;
+    }
+    let mut i = 0;
+    while i < 4 {
+        a = a / (1.0 + px_math_sqrt(1.0 + (a * a)));
+        i += 1;
+    }
+    let a2 = a * a;
+    let mut term = a;
+    let mut sum = a;
+    let mut k: i64 = 0;
+    while k < 30 {
+        term = term * (0.0 - a2);
+        let denom = ((2 * k) + 3) as f64;
+        sum = sum + (term / denom);
+        k += 1;
+    }
+    let mut j = 0;
+    while j < 4 {
+        sum = 2.0 * sum;
+        j += 1;
+    }
+    let result = if reciprocal { pi_half - sum } else { sum };
+    if neg { 0.0 - result } else { result }
+}
+
+/// `atan2(y, x)`: standard quadrant selection around `atan(y/x)`.
+fn px_math_atan2(y: f64, x: f64) -> f64 {
+    if y != y || x != x {
+        return 0.0 / 0.0;
+    }
+    let pi = 3.141592653589793;
+    let pi_half = 1.5707963267948966;
+    if x > 0.0 {
+        return px_math_atan(y / x);
+    }
+    if x < 0.0 {
+        if y < 0.0 {
+            return px_math_atan(y / x) - pi;
+        }
+        return px_math_atan(y / x) + pi;
+    }
+    if y > 0.0 {
+        return pi_half;
+    }
+    if y < 0.0 {
+        return 0.0 - pi_half;
+    }
+    0.0
+}
+
+/// `mod`'s float branch: truncated remainder (`fmod`), matching the
+/// pnix-hy reference's `math.fmod`. Truncates the quotient toward zero via
+/// the same `as i64` cast `px_round_to_int` already relies on for ceil/floor.
+fn px_fmod_f64(a: f64, b: f64) -> f64 {
+    if a != a || b != b || b == 0.0 {
+        return 0.0 / 0.0;
+    }
+    if a - a != 0.0 {
+        return 0.0 / 0.0; // infinite dividend: undefined
+    }
+    if b - b != 0.0 {
+        return a; // finite dividend mod an infinite divisor is the dividend
+    }
+    let q = a / b;
+    let qi = q as i64;
+    let qt = qi as f64;
+    a - (qt * b)
+}
+
+/// `abs`'s float branch (no `.abs()` method dispatch in rs-meta's
+/// interpreted subset — see the block comment above `px_pow2_i64`).
+fn px_abs_f64(f: f64) -> f64 {
+    if f != f {
+        return f;
+    }
+    if f == 0.0 {
+        return 0.0; // normalizes -0.0 to 0.0, matching libm fabs
+    }
+    if f < 0.0 { 0.0 - f } else { f }
+}
+
+/// Checked integer exponentiation by squaring (`base^exp`, `exp >= 0`),
+/// erroring the same way `px_int_arith` does on i64 overflow.
+fn px_checked_ipow(base: i64, exp: i64) -> Result<i64, String> {
+    let mut result: i64 = 1;
+    let mut b = base;
+    let mut e = exp;
+    while e > 0 {
+        if e % 2 == 1 {
+            match result.checked_mul(b) {
+                Some(v) => result = v,
+                None => return Err(format!("px: integer overflow in pow {} {}", base, exp)),
+            }
+        }
+        e = e / 2;
+        if e > 0 {
+            match b.checked_mul(b) {
+                Some(v) => b = v,
+                None => return Err(format!("px: integer overflow in pow {} {}", base, exp)),
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// `pow`'s float branch: `base^exp = exp(exp * ln(base))` for `base > 0`,
+/// with the same negative/zero-base special cases real `pow` implementations
+/// carry (integer exponent on a negative base, zero base, zero exponent).
+fn px_powf(base: f64, exp: f64) -> Result<f64, String> {
+    if exp == 0.0 {
+        return Ok(1.0);
+    }
+    if base == 0.0 {
+        if exp > 0.0 {
+            return Ok(0.0);
+        }
+        return Ok(1.0 / 0.0);
+    }
+    if base < 0.0 {
+        let exp_i = exp as i64;
+        if (exp_i as f64) == exp {
+            let mag = px_math_exp(exp * px_math_ln(0.0 - base)?);
+            if exp_i % 2 != 0 {
+                Ok(0.0 - mag)
+            } else {
+                Ok(mag)
+            }
+        } else {
+            Ok(0.0 / 0.0)
+        }
+    } else {
+        let l = px_math_ln(base)?;
+        Ok(px_math_exp(exp * l))
+    }
+}
+
 fn px_int_arith_outcome(name: &str, a: i64, b: i64) -> Result<i64, PxError> {
     if name == "div" && b == 0 {
         return Err(px_error_eval(
@@ -4194,6 +4539,16 @@ pub fn px_builtin_names() -> Vec<&'static str> {
         "neg",
         "get",
         "set",
+        // Held-math un-hold + new math additions (2026-08-20): sin/cos/tan/
+        // sqrt/exp/ln/log/abs/pow/mod above were registered names but always
+        // errored at call time ("held (B1 numeric model undecided)"); the
+        // other 4 hosts (clj/clr/cljs/hy) all had working implementations,
+        // so the hold is lifted (pure-arithmetic implementations — see the
+        // block comment above `px_pow2_i64` for why rs-meta's interpreted
+        // subset rules out std f64 methods). `atan2` and `mapAttrs'` are new
+        // additions, oracle-pinned against pnix-hy and pnix-clj respectively.
+        "atan2",
+        "mapAttrs'",
     ]
 }
 
@@ -5128,6 +5483,77 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             }
             other => Err(format!("px: mapAttrs expects an attrset, got {}", px_kind(other))),
         }
+    } else if name == "mapAttrs'" {
+        // oracle (pnix-clj `:mapAttrs'`): apply `f name value` over each
+        // attribute (sorted-key order, matching `mapAttrs`); `f` must return
+        // a `{ name; value; }` pair, and results are collected into a NEW
+        // attrset keyed by the returned `name` — the first occurrence of a
+        // duplicated resulting name wins, same tie-break as `listToAttrs`.
+        match &args[1] {
+            PxVal::Attrs(fields) => {
+                let mut out: Vec<(String, PxVal)> = Vec::new();
+                for (k, v) in fields.iter() {
+                    let with_name = px_defer_apply(args[0].clone(), PxVal::Str(k.clone()));
+                    let pair = px_defer_apply(with_name, v.clone());
+                    match px_force(&pair)? {
+                        PxVal::Attrs(pair_fields) => {
+                            let mut new_name: Option<String> = None;
+                            let mut new_value: Option<PxVal> = None;
+                            for (pk, pv) in pair_fields.iter() {
+                                if pk == "name" {
+                                    // the name field must be forced to check
+                                    // it is a string; the value field stays a
+                                    // thunk (kept lazy in the result).
+                                    match px_force(pv)? {
+                                        PxVal::Str(s) => new_name = Some(s.clone()),
+                                        other => {
+                                            return Err(format!(
+                                                "px: mapAttrs' name must be a string, got {}",
+                                                px_kind(&other)
+                                            ))
+                                        }
+                                    }
+                                }
+                                if pk == "value" {
+                                    new_value = Some(pv.clone());
+                                }
+                            }
+                            match (new_name, new_value) {
+                                (Some(n), Some(v)) => {
+                                    // Accumulator is pre-invariant (unsorted):
+                                    // linear first-wins check, same as
+                                    // listToAttrs.
+                                    let mut seen = false;
+                                    let mut i = 0usize;
+                                    while i < out.len() {
+                                        if out[i].0 == n {
+                                            seen = true;
+                                        }
+                                        i += 1;
+                                    }
+                                    if !seen {
+                                        out.push((n, v));
+                                    }
+                                }
+                                _ => {
+                                    return Err(String::from(
+                                        "px: mapAttrs' function must return a { name; value; } pair",
+                                    ))
+                                }
+                            }
+                        }
+                        other => {
+                            return Err(format!(
+                                "px: mapAttrs' function must return an attrset, got {}",
+                                px_kind(&other)
+                            ))
+                        }
+                    }
+                }
+                Ok(px_attrs(out))
+            }
+            other => Err(format!("px: mapAttrs' expects an attrset, got {}", px_kind(other))),
+        }
     } else if name == "catAttrs" {
         match (&args[0], &args[1]) {
             (PxVal::Str(key), PxVal::List(items)) => {
@@ -5716,12 +6142,81 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                 Ok(PxVal::Float(r))
             }
         }
-    } else if name == "sin" || name == "cos" || name == "tan" || name == "sqrt"
-        || name == "exp" || name == "ln" || name == "log" || name == "abs"
-        || name == "pow" || name == "mod"
-    {
-        // remaining math: HELD at call until B1 numeric model lands.
-        Err(format!("px: builtins.{} is held (B1 numeric model undecided)", name))
+    } else if name == "sqrt" {
+        Ok(PxVal::Float(px_math_sqrt(px_num_f64(&args[0])?)))
+    } else if name == "exp" {
+        Ok(PxVal::Float(px_math_exp(px_num_f64(&args[0])?)))
+    } else if name == "ln" || name == "log" {
+        // oracle (pnix-hy): `log` is natural log, identical to `ln` — not
+        // base-10/base-2 — kept as a separate name for historical
+        // Nix-adjacent reasons (`"log": lambda value: math.log(value)`).
+        Ok(PxVal::Float(px_math_ln(px_num_f64(&args[0])?)?))
+    } else if name == "sin" {
+        Ok(PxVal::Float(px_math_sin(px_num_f64(&args[0])?)))
+    } else if name == "cos" {
+        Ok(PxVal::Float(px_math_cos(px_num_f64(&args[0])?)))
+    } else if name == "tan" {
+        Ok(PxVal::Float(px_math_tan(px_num_f64(&args[0])?)))
+    } else if name == "atan2" {
+        // oracle (pnix-hy): curried (y)(x), i.e. `atan2 y x` per math
+        // convention, not the argument-name-alphabetical order.
+        let y = px_num_f64(&args[0])?;
+        let x = px_num_f64(&args[1])?;
+        Ok(PxVal::Float(px_math_atan2(y, x)))
+    } else if name == "abs" {
+        // oracle: int -> int (checked, like add/sub/mul/div); any float -> float.
+        match &args[0] {
+            PxVal::Int(n) => {
+                let n = *n;
+                if n < 0 {
+                    match 0i64.checked_sub(n) {
+                        Some(v) => Ok(PxVal::Int(v)),
+                        None => Err(format!("px: integer overflow in abs {}", n)),
+                    }
+                } else {
+                    Ok(PxVal::Int(n))
+                }
+            }
+            other => Ok(PxVal::Float(px_abs_f64(px_num_f64(other)?))),
+        }
+    } else if name == "pow" {
+        // oracle (pnix-hy `pow_value`): int^int with a non-negative exponent
+        // stays int (checked, errors on i64 overflow like add/sub/mul/div);
+        // anything else (negative int exponent or any float operand) -> float.
+        match (&args[0], &args[1]) {
+            (PxVal::Int(base), PxVal::Int(exp)) if *exp >= 0 => {
+                Ok(PxVal::Int(px_checked_ipow(*base, *exp)?))
+            }
+            _ => {
+                let bf = px_num_f64(&args[0])?;
+                let ef = px_num_f64(&args[1])?;
+                Ok(PxVal::Float(px_powf(bf, ef)?))
+            }
+        }
+    } else if name == "mod" {
+        // oracle: int⊕int -> int (checked, truncating remainder, same sign
+        // rules as Rust's native `%`); any float operand -> float (fmod).
+        match (&args[0], &args[1]) {
+            (PxVal::Int(a), PxVal::Int(b)) => {
+                let a = *a;
+                let b = *b;
+                if b == 0 {
+                    return Err(String::from("px: division by zero"));
+                }
+                match a.checked_rem(b) {
+                    Some(v) => Ok(PxVal::Int(v)),
+                    None => Err(format!("px: integer overflow in mod {} {}", a, b)),
+                }
+            }
+            _ => {
+                let af = px_num_f64(&args[0])?;
+                let bf = px_num_f64(&args[1])?;
+                if bf == 0.0 {
+                    return Err(String::from("px: division by zero"));
+                }
+                Ok(PxVal::Float(px_fmod_f64(af, bf)))
+            }
+        }
     } else if name == "functionArgs" {
         match &args[0] {
             PxVal::Closure { param, body, .. } => Ok(px_function_args(param, body)),

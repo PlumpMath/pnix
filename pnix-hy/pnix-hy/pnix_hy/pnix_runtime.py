@@ -3350,6 +3350,26 @@ def map_attrs_value(func: Any, attrs: Any, ctx: dict[str, Any]) -> dict[str, Any
     }
 
 
+def map_attrs_prime_value(func: Any, attrs: Any, ctx: dict[str, Any]) -> dict[str, Any]:
+    source = attrset_value(attrs, "builtins.mapAttrs' set")
+    out: dict[str, Any] = {}
+    for key, value in source.items():
+        pair = force_value(
+            apply_pnix(
+                apply_pnix(func, Thunk(lambda key=key: key), ctx),
+                Thunk(lambda value=value: force_value(value)),
+                ctx,
+            )
+        )
+        entry = attrset_value(pair, "builtins.mapAttrs' result")
+        if "value" not in entry:
+            pnix_error("builtins.mapAttrs': function must return { name; value; }")
+        name = string_value(entry.get("name"), "builtins.mapAttrs' name")
+        if name not in out:
+            out[name] = entry["value"]
+    return out
+
+
 def filter_list_value(func: Any, xs: Any, ctx: dict[str, Any]) -> list[Any]:
     out: list[Any] = []
     for index, item in enumerate(list_arg_value(xs, "filter", "second argument")):
@@ -4953,6 +4973,7 @@ def native_builtins(ctx: dict[str, Any]) -> dict[str, Any]:
         "attrValues": lambda m: attr_values_value(m, "builtins.attrValues"),
         "getAttrs": lambda names: (lambda attrs: get_attrs_value(names, attrs)),
         "mapAttrs": lambda f: (lambda m: map_attrs_value(f, m, ctx)),
+        "mapAttrs'": lambda f: (lambda m: map_attrs_prime_value(f, m, ctx)),
         "sort": lambda pred: (
             lambda xs: sorted(
                 sort_list_arg(xs),
@@ -5246,6 +5267,7 @@ BUILTIN_ALIAS_NAMES = (
     "attrValues",
     "getAttrs",
     "mapAttrs",
+    "mapAttrs'",
     "sort",
     "substring",
     "stringLength",
@@ -5391,6 +5413,7 @@ def build_lib_attrset(builtins: dict[str, Any], ctx: dict[str, Any]) -> dict[str
         "getAttrFromPath": builtins["getAttrFromPath"],
         "hasAttrByPath": builtins["hasAttrByPath"],
         "mapAttrs": builtins["mapAttrs"],
+        "mapAttrs'": builtins["mapAttrs'"],
         "mapAttrsToList": builtins["mapAttrsToList"],
         "filterAttrs": builtins["filterAttrs"],
         "filterAttrsRecursive": builtins["filterAttrsRecursive"],
@@ -9767,6 +9790,25 @@ HY_AST_EVALUATOR_SOURCE = r'''
                     (make-value-thunk (get m key))))))
         out)))
 
+  (defn map-attrs-prime-from-keys [func m keys out]
+    (if (= (len keys) 0)
+      out
+      (do
+        (setv key (get keys 0))
+        (setv pair (force-value
+                     (apply-pnix
+                       (apply-pnix func (make-value-thunk key))
+                       (make-value-thunk (get m key)))))
+        (setv entry (attrset-value pair "builtins.mapAttrs' result"))
+        (if (not (in "value" entry))
+          (pnix-error "builtins.mapAttrs': function must return { name; value; }")
+          None)
+        (setv name (string-value (get entry "name") "builtins.mapAttrs' name"))
+        (if (not (in name out))
+          (setv (get out name) (get entry "value"))
+          None)
+        (map-attrs-prime-from-keys func m (cut keys 1 None) out))))
+
   (defn filter-attrs-from-keys [func m keys]
     (if (= (len keys) 0)
       {}
@@ -10448,6 +10490,10 @@ HY_AST_EVALUATOR_SOURCE = r'''
        (do
          (setv mm (attrset-value m "builtins.mapAttrs set"))
          (map-attrs-from-keys f mm (sorted (.keys mm))))))
+     "mapAttrs'" (fn [f] (fn [m]
+       (do
+         (setv mm (attrset-value m "builtins.mapAttrs' set"))
+         (map-attrs-prime-from-keys f mm (sorted (.keys mm)) {}))))
      "sort" (fn [pred] (fn [xs]
        (sorted
          (sort-list-value xs)
@@ -10562,7 +10608,7 @@ HY_AST_EVALUATOR_SOURCE = r'''
      "map" "filter" "foldl'" "fold" "foldl" "foldr" "cons" "append" "take" "drop" "reverse" "reverseList"
      "zip" "flatten" "find" "get" "mapGet" "set" "mapSet" "keys" "mapKeys" "values" "mapValues" "merge" "mapMerge"
      "elem" "any" "all" "concatLists" "concatMap"
-     "genList" "groupBy" "partition" "genericClosure" "attrValues" "getAttrs" "mapAttrs" "sort"
+     "genList" "groupBy" "partition" "genericClosure" "attrValues" "getAttrs" "mapAttrs" "mapAttrs'" "sort"
      "substring" "stringLength" "hasPrefix" "hasSuffix" "replaceStrings"
      "concatStringsSep" "concatStrings" "compareVersions" "splitVersion" "parseDrvName"
      "match" "split" "fromJSON" "fromTOML" "schemaValidate" "schemaNormalize" "schemaExplain"
@@ -11306,6 +11352,17 @@ def _mapattrs(f,m):
     d=_force(m)
     if not isinstance(d,dict): raise Exception("builtins.mapAttrs set must be an attrset")
     return {k:_T(lambda k=k,v=v: _apply(_apply(f,_tv(k)),_T(lambda v=v: _force(v)))) for k,v in d.items()}
+def _mapattrsprime(f,m):
+    d=_force(m)
+    if not isinstance(d,dict): raise Exception("builtins.mapAttrs' set must be an attrset")
+    out={}
+    for k,v in d.items():
+        pair=_force(_apply(_apply(f,_tv(k)),_T(lambda v=v: _force(v))))
+        if not isinstance(pair,dict): raise Exception("builtins.mapAttrs' result must be attrset")
+        if "value" not in pair: raise Exception("builtins.mapAttrs': function must return { name; value; }")
+        n=_str(pair.get("name"),"builtins.mapAttrs' name")
+        if n not in out: out[n]=pair["value"]
+    return out
 def _getattr_builtin(name,m):
     k=str(_force(name)); d=_attrsarg(m,"getAttr")
     if k not in d: raise Exception("builtins.getAttr: attribute '%s' missing"%k)
@@ -12332,6 +12389,7 @@ def _bi():
     b["attrValues"]=_C(lambda m:_values(m,"builtins.attrValues"))
     b["getAttrs"]=_C(lambda names:_C(lambda attrs:_getattrs(names,attrs)))
     b["mapAttrs"]=_C(lambda f:_C(lambda m:_mapattrs(f,m)))
+    b["mapAttrs'"]=_C(lambda f:_C(lambda m:_mapattrsprime(f,m)))
     b["sort"]=_C(lambda p:_C(lambda xs:_sort(p,_sortlist(xs))))
     b["substring"]=_C(lambda start:_C(lambda length:_C(lambda s:_substr(start,length,s))))
     b["stringLength"]=_C(lambda s: _strlen(s))
@@ -12822,7 +12880,7 @@ __PARSER__
      "map" "filter" "foldl'" "fold" "foldl" "foldr" "cons" "append" "take" "drop" "reverse" "reverseList"
      "zip" "flatten" "find" "get" "mapGet" "set" "mapSet" "keys" "mapKeys" "values" "mapValues" "merge" "mapMerge"
      "elem" "any" "all" "concatLists" "concatMap"
-     "genList" "groupBy" "partition" "genericClosure" "attrValues" "getAttrs" "mapAttrs" "sort"
+     "genList" "groupBy" "partition" "genericClosure" "attrValues" "getAttrs" "mapAttrs" "mapAttrs'" "sort"
      "substring" "stringLength" "hasPrefix" "hasSuffix" "replaceStrings"
      "concatStringsSep" "concatStrings" "compareVersions" "splitVersion" "parseDrvName"
      "match" "split" "fromJSON" "fromTOML" "schemaValidate" "schemaNormalize" "schemaExplain"

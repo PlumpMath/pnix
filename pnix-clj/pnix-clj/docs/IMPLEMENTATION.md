@@ -71,7 +71,11 @@ O = 등록됨(실제로 호출되는지는 별개, §3 참고). 표는 5개 호�
 각 호스트 evaluator 소스에서 빌트인 이름 등록 패턴을 grep, 5개를 합쳐서
 diff).
 
-`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함). 새로 표를 다시 뽑을 때 이 두 줄은 자동 추출 결과를 믿지 말 것.
+`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함).
+
+`langVersion`/`nixVersion`/`storeDir`\*: 같은 이유로 또 다른 blind spot(2026-08-20 발견) — clj/clr/cljs에서 이 셋은 콜러블이 아니라 zero-arg 상수 값으로 등록돼 있어서 `(builtin ...)`/`(bi ...)`/`(->BuiltinValue ...)` 패턴에 안 잡힌다. 직접 소스 확인 후 수동 정정함(실제로는 5개 다 있음).
+
+새로 표를 다시 뽑을 때 이 5줄(`*` 표시)은 자동 추출 결과를 믿지 말 것 — `bin/gen-builtin-presence-matrix`가 이미 이 5줄을 손으로 보정한다.
 
 | 이름 | clj | clr | cljs | rs | hy |
 |---|---|---|---|---|---|
@@ -87,7 +91,7 @@ diff).
 | appendContext | O | - | - | - | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
-| atan2 | O | O | O | - | O |
+| atan2 | O | O | O | O | O |
 | attrByPath | O | O | O | O | O |
 | attrNames | O | O | O | O | O |
 | attrValues | O | O | O | O | O |
@@ -190,18 +194,18 @@ diff).
 | isPath | O | O | O | O | O |
 | isString | O | O | O | O | O |
 | keys | O | O | O | O | O |
-| langVersion | - | - | - | O | O |
+| langVersion* | O | O | O | O | O |
 | last | O | O | O | O | O |
 | le | O | O | O | O | O |
 | length | O | O | O | O | O |
 | lessThan | O | O | O | O | O |
 | listToAttrs | O | O | O | O | O |
 | ln | O | O | O | O | O |
-| log | - | - | - | O | O |
+| log | O | O | O | O | O |
 | lt | O | O | O | O | O |
 | map | O | O | O | O | O |
 | mapAttrs | O | O | O | O | O |
-| mapAttrs' | O | - | - | - | - |
+| mapAttrs' | O | O | O | O | O |
 | mapAttrsRecursive | O | O | O | O | O |
 | mapAttrsToList | O | O | O | O | O |
 | mapGet | - | - | - | - | O |
@@ -217,7 +221,7 @@ diff).
 | mul | O | O | O | O | O |
 | nameValuePair | O | O | O | O | O |
 | neg | O | O | O | O | O |
-| nixVersion | - | - | - | O | O |
+| nixVersion* | O | O | O | O | O |
 | not | O | O | O | O | O |
 | null | - | - | - | O | - |
 | optional | O | O | O | O | O |
@@ -257,7 +261,7 @@ diff).
 | splitString | O | O | O | O | O |
 | splitVersion | O | O | O | O | O |
 | sqrt | O | O | O | O | O |
-| storeDir | - | - | - | O | O |
+| storeDir* | O | O | O | O | O |
 | storePath | O | O | O | O | O |
 | stringLength | O | O | O | O | O |
 | stringToCharacters | O | O | O | O | O |
@@ -267,7 +271,7 @@ diff).
 | sum | O | O | O | O | O |
 | tail | O | O | O | O | O |
 | take | O | O | O | O | O |
-| tan | - | - | - | O | O |
+| tan | O | O | O | O | O |
 | throw | O | O | O | O | O |
 | toFile | O | O | O | O | O |
 | toInt | O | O | O | O | O |
@@ -380,6 +384,19 @@ checklist 작업, evidence-store SPINE 구축, 407 커밋 앞서 있었다는
 확장점을 볼 때마다 "이거 진짜로 뭔가 바인딩하는 코드가 있나"까지
 확인할 것 — 인프라 존재 여부와 실제로 동작하는지는 다른 질문이다(rs의
 `functionArgs`가 등록은 됐지만 항상 held였던 것과 같은 패턴).
+
+### 오늘(2026-08-20) 실제로 고친 것들 — 무엇을, 왜
+
+| 커밋 | 무엇을 |
+|---|---|
+| (미커밋) | §2 표에서 clj가 빠져 있던 5개 빌트인 중 `log`/`tan`을 hy 기준 시맨틱으로 신규 구현(`Math/log`·`Math/tan`, sin/cos/ln과 동일한 패턴); `nixVersion`/`storeDir`/`langVersion`은 조사해보니 `init` 커밋부터 이미 구현돼 있었고 §2 표만 stale했던 것으로 판명 — 표만 정정. `log`/`tan`은 `finish-builtin`의 메인 `case`(3400줄대)에 넣으면 JVM 메서드 바이트코드 64KB 한도(`Method code too large!`)를 넘겨 컴파일이 깨져서, 정확히 이 문제를 피하려고 이미 존재하던 `finish-extra-builtin`(2831줄, 별도 메서드로 분리된 오버플로 빌트인 처리) 쪽에 대신 추가함 |
+
+이번에 배운 것: `finish-builtin`의 메인 `case`는 이미 JVM 메서드 크기
+한도에 바짝 붙어 있다 — 새 산술/문자열류 빌트인을 여기 늘리기 전에 반드시
+컴파일부터 해볼 것(`clojure -e "(require 'pnix-clj.evaluator)"`), 안
+들어가면 `finish-extra-builtin`(또는 `finish-context-builtin`) 같은
+분리된 헬퍼로 보낼 것 — 이 파일 자체가 이미 그 분산 패턴을 쓰고 있다(§1
+"여러 지점에 빌트인 로직이 흩어져 있다" 참고).
 
 ## 5. 스코프 경계
 

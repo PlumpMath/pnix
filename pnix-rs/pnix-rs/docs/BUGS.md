@@ -43,14 +43,24 @@ toJSON/문자열 보간/`string+`/bool/`?`/`rec`/`with`는 이미 구현됐지�
   비유한 값에서 명시 에러 또는 held(2026-07-03 감사 #2 기록). 관찰·비교는
   가능하지만 roundtrip되는 canonical print는 없다.
 
-## 2. 의도적으로 held된 수학 확장 빌트인 (이건 버그 아니라 의도된 제한)
+## 2. ~~의도적으로 held된 수학 확장 빌트인~~ — 정정(2026-08-20)
 
-`sin cos tan sqrt exp ln log abs pow mod`(그리고 `atan2`도 같은 부류) —
-`docs/CAPABILITIES.md`/§2 빌트인 표에서는 O(등록됨)로 보이지만 **호출하면
-에러 나는 게 정상**이다. 숫자 모델(B1) 전체를 어떻게 할지 아직 결정이 안
-나서 의도적으로 묶어놓은 것 — `functionArgs`/`abs`처럼 개별적으로
-un-hold된 것들과 이 부류는 성격이 다르다. 상세는
-`IMPLEMENTATION.md` §3 참고.
+~~`sin cos tan sqrt exp ln log abs pow mod` — 호출하면 에러 나는 게
+정상이다. 숫자 모델(B1) 전체를 어떻게 할지 아직 결정이 안 나서 의도적으로
+묶어놓은 것.~~ **더 이상 사실이 아니다.** 이 10개는 다른 4개 호스트
+(pnix-clj/pnix-clr/pnix-cljs/pnix-hy)가 전부 이미 동작하는 구현을 갖고
+있던 4/5 합의 사례였고, "B1 숫자 모델" 우려는 실제로는 언어 전체의
+int/float 승격 정책에 관한 것이었지 이런 단순 단항/이항 float 수학 함수
+구현을 막는 이유가 아니었다 — hold를 풀고 실구현했다(순수 산술: Newton's
+method/Taylor 급수. rs-meta의 인터프리트 Rust 부분집합은 f64 메서드
+디스패치가 아예 없어서 — `substrate-check`가 이 파일 전체를 rs-meta
+bootstrap으로 해석하는데 `interp.rs`의 `call_method`는 i64 계열만
+숫자 타깃으로 인식한다 — `.sin()`/`.sqrt()`/`.exp()`/`.ln()`/`.powf()` 같은
+표준 라이브러리 호출을 쓸 수 없다; 이 파일이 이미 같은 이유로 쓰던 관례
+(`px_bit_op`의 bit-by-bit AND/OR/XOR, `px_round_to_int`의 cast-and-adjust
+ceil/floor)를 그대로 따라 손으로 짰다). `atan2`(pnix-hy 오라클 고정)와
+`mapAttrs'`(pnix-clj 오라클 고정)도 신규 추가됐다. 상세는
+`IMPLEMENTATION.md` §4 역사 표 참고.
 
 ## 3. Nix와의 의도적 동작 차이 (divergence, 이건 버그 아니라 의도된 제한)
 

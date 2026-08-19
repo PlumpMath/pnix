@@ -81,7 +81,11 @@ O = 등록됨(실제로 호출되는지는 별개, §3 참고). 표는 5개 호�
 각 호스트 evaluator 소스에서 빌트인 이름 등록 패턴을 grep, 5개를 합쳐서
 diff).
 
-`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함). 새로 표를 다시 뽑을 때 이 두 줄은 자동 추출 결과를 믿지 말 것.
+`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함).
+
+`langVersion`/`nixVersion`/`storeDir`\*: 같은 이유로 또 다른 blind spot(2026-08-20 발견) — clj/clr/cljs에서 이 셋은 콜러블이 아니라 zero-arg 상수 값으로 등록돼 있어서 `(builtin ...)`/`(bi ...)`/`(->BuiltinValue ...)` 패턴에 안 잡힌다. 직접 소스 확인 후 수동 정정함(실제로는 5개 다 있음).
+
+새로 표를 다시 뽑을 때 이 5줄(`*` 표시)은 자동 추출 결과를 믿지 말 것 — `bin/gen-builtin-presence-matrix`가 이미 이 5줄을 손으로 보정한다.
 
 | 이름 | clj | clr | cljs | rs | hy |
 |---|---|---|---|---|---|
@@ -97,7 +101,7 @@ diff).
 | appendContext | O | - | - | - | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
-| atan2 | O | O | O | - | O |
+| atan2 | O | O | O | O | O |
 | attrByPath | O | O | O | O | O |
 | attrNames | O | O | O | O | O |
 | attrValues | O | O | O | O | O |
@@ -200,18 +204,18 @@ diff).
 | isPath | O | O | O | O | O |
 | isString | O | O | O | O | O |
 | keys | O | O | O | O | O |
-| langVersion | - | - | - | O | O |
+| langVersion* | O | O | O | O | O |
 | last | O | O | O | O | O |
 | le | O | O | O | O | O |
 | length | O | O | O | O | O |
 | lessThan | O | O | O | O | O |
 | listToAttrs | O | O | O | O | O |
 | ln | O | O | O | O | O |
-| log | - | - | - | O | O |
+| log | O | O | O | O | O |
 | lt | O | O | O | O | O |
 | map | O | O | O | O | O |
 | mapAttrs | O | O | O | O | O |
-| mapAttrs' | O | - | - | - | - |
+| mapAttrs' | O | O | O | O | O |
 | mapAttrsRecursive | O | O | O | O | O |
 | mapAttrsToList | O | O | O | O | O |
 | mapGet | - | - | - | - | O |
@@ -227,7 +231,7 @@ diff).
 | mul | O | O | O | O | O |
 | nameValuePair | O | O | O | O | O |
 | neg | O | O | O | O | O |
-| nixVersion | - | - | - | O | O |
+| nixVersion* | O | O | O | O | O |
 | not | O | O | O | O | O |
 | null | - | - | - | O | - |
 | optional | O | O | O | O | O |
@@ -267,7 +271,7 @@ diff).
 | splitString | O | O | O | O | O |
 | splitVersion | O | O | O | O | O |
 | sqrt | O | O | O | O | O |
-| storeDir | - | - | - | O | O |
+| storeDir* | O | O | O | O | O |
 | storePath | O | O | O | O | O |
 | stringLength | O | O | O | O | O |
 | stringToCharacters | O | O | O | O | O |
@@ -277,7 +281,7 @@ diff).
 | sum | O | O | O | O | O |
 | tail | O | O | O | O | O |
 | take | O | O | O | O | O |
-| tan | - | - | - | O | O |
+| tan | O | O | O | O | O |
 | throw | O | O | O | O | O |
 | toFile | O | O | O | O | O |
 | toInt | O | O | O | O | O |
@@ -730,6 +734,7 @@ git log에 있음 — 여기는 "무엇이 언제 SHIPPED됐는지"만.
 | `ad65caf` | `N/M`이 나눗셈이 아니라 경로로 잘못 렉싱되던 버그 — clr 규칙 중 숫자 제외 부분만 이식(§3) |
 | `c501cbb` | 다른 호스트엔 있고 hy만 없던 빌트인 12개 추가(`pnixMounts`는 합의 없어서 의도적으로 제외, §3). 4/4 자체 게이트(`--check`/`--gate`) 통과 확인, 세 lane 다 확인 |
 | `722a124` | `builtins.storePath`가 순수 평가기인데 실제 파일 경로를 계산해버리던 버그(다른 4개 호스트는 "store 없음" 에러) — 3개 lane 다 있는 자체 구현을 다 고쳐야 했고, 그 과정에서 self-test 3개가 예전(틀린) 동작을 기준으로 고정돼 있던 것도 같이 고침, compile lane은 `pnix_error`가 스코프에 없어서 별도 헬퍼 필요했음(§1) |
+| (커밋 전, 2026-08-20) | `builtins.mapAttrs'` 신규 구현(clj가 유일한 레퍼런스 — `f name value`가 `{name;value;}` 쌍을 리턴, 결과 이름으로 재키잉, `listToAttrs`와 같은 first-wins 충돌 규칙). 3개 lane 전부 추가(인터프리터 `map_attrs_prime_value` + compile-backend `map-attrs-prime-from-keys` + `_C` minimal-backend `_mapattrsprime`) + `lib.attrsets` 재노출 + 이름 목록 2곳. `lanes_agree=True` 확인, 전체 `--check` all_ready 통과 |
 
 교차검증에서 배운 것: 이 호스트는 "3중 구현"이라는 특수성 때문에, 겉보기
 게이트가 초록불이어도 **lane 하나를 빠뜨린 채 커밋했다가 나중에 게이트

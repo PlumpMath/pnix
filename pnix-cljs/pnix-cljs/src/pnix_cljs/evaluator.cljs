@@ -1895,6 +1895,44 @@
                                                    attribute-cell]}
                                  (atom {}))])
                         (:fields attrs)))))))
+      ;; mapAttrs' f attrs: apply (f name value) over each attribute; f must
+      ;; return a { name; value; } pair, and results are collected into a new
+      ;; attrset keyed by the returned name (unlike mapAttrs, this can rename
+      ;; keys). First occurrence of a duplicated result name wins, same
+      ;; tie-break as listToAttrs.
+      :mapAttrs'
+      (if (< (count arguments) 2)
+        (->BuiltinValue :mapAttrs' arguments)
+        (let [function-value (nth arguments 0)
+              attrs (nth arguments 1)]
+          (if-not (instance? AttrsetValue attrs)
+            (evaluation-failure! "type-error"
+                                 {"operation" "mapAttrs'"})
+            (->AttrsetValue
+             (reduce
+              (fn [fields name]
+                (let [attribute-cell (get (:fields attrs) name)
+                      pair (force-cell (apply-value2 function-value
+                                                       name
+                                                       attribute-cell))]
+                  (when-not (instance? AttrsetValue pair)
+                    (evaluation-failure! "type-error"
+                                         {"operation" "mapAttrs'"}))
+                  (when-not (and (contains? (:fields pair) "name")
+                                 (contains? (:fields pair) "value"))
+                    (evaluation-failure! "type-error"
+                                         {"operation" "mapAttrs'"}))
+                  (let [result-name (force-cell (get (:fields pair) "name"))]
+                    (when-not (string? result-name)
+                      (evaluation-failure! "type-error"
+                                           {"operation" "mapAttrs'"}))
+                    (if (contains? fields result-name)
+                      fields
+                      (assoc fields
+                             result-name
+                             (get (:fields pair) "value"))))))
+              {}
+              (sorted-field-names (:fields attrs)))))))
       :zipAttrsWith
       (if (< (count arguments) 2)
         (->BuiltinValue :zipAttrsWith arguments)
@@ -2427,8 +2465,10 @@
       :sqrt (js/Math.sqrt (as-double argument))
       :exp (js/Math.exp (as-double argument))
       :ln (js/Math.log (as-double argument))
+      :log (js/Math.log (as-double argument))
       :sin (js/Math.sin (as-double argument))
       :cos (js/Math.cos (as-double argument))
+      :tan (js/Math.tan (as-double argument))
       :atan2
       (if (< (count arguments) 2)
         (->BuiltinValue :atan2 arguments)
@@ -2845,13 +2885,14 @@
                 "listToAttrs" (->BuiltinValue :listToAttrs [])
                 "map" (->BuiltinValue :map [])
                 "mapAttrs" (->BuiltinValue :mapAttrs [])
+                "mapAttrs'" (->BuiltinValue :mapAttrs' [])
                 "mapAttrsRecursive" (->BuiltinValue :mapAttrsRecursive [])
                 "mapAttrsToList" (->BuiltinValue :mapAttrsToList [])
                 "match" (->BuiltinValue :match [])
                 "max" (->BuiltinValue :max [])
                 "min" (->BuiltinValue :min [])
                 "mul" (->BuiltinValue :mul [])
-                "nixVersion" "2.34.7"
+                "nixVersion" "2.18.0-pnix"
                 "null" nil
                 "optional" (->BuiltinValue :optional [])
                 "optionalAttrs" (->BuiltinValue :optionalAttrs [])
@@ -2913,8 +2954,10 @@
                 "sqrt" (->BuiltinValue :sqrt [])
                 "exp" (->BuiltinValue :exp [])
                 "ln" (->BuiltinValue :ln [])
+                "log" (->BuiltinValue :log [])
                 "sin" (->BuiltinValue :sin [])
                 "cos" (->BuiltinValue :cos [])
+                "tan" (->BuiltinValue :tan [])
                 "atan2" (->BuiltinValue :atan2 [])
                 "bitAnd" (->BuiltinValue :bitAnd [])
                 "bitOr" (->BuiltinValue :bitOr [])

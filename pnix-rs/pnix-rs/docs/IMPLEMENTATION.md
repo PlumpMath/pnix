@@ -97,7 +97,11 @@ O = 등록됨(실제로 호출되는지는 별개, §3 참고). 표는 5개 호�
 각 호스트 evaluator 소스에서 빌트인 이름 등록 패턴을 grep, 5개를 합쳐서
 diff).
 
-`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함). 새로 표를 다시 뽑을 때 이 두 줄은 자동 추출 결과를 믿지 말 것.
+`import`/`scopedImport`\*: 자동 추출 스크립트는 "평범한 빌트인 이름 등록 패턴"만 grep하는데, clr/cljs/rs는 이 둘을 예약 키워드(파서 전용 문법)로 구현해서 그 패턴에 안 잡힌다 — 실제로는 5개 다 있음(값으로 표는 수동 정정함).
+
+`langVersion`/`nixVersion`/`storeDir`\*: 같은 이유로 또 다른 blind spot(2026-08-20 발견) — clj/clr/cljs에서 이 셋은 콜러블이 아니라 zero-arg 상수 값으로 등록돼 있어서 `(builtin ...)`/`(bi ...)`/`(->BuiltinValue ...)` 패턴에 안 잡힌다. 직접 소스 확인 후 수동 정정함(실제로는 5개 다 있음).
+
+새로 표를 다시 뽑을 때 이 5줄(`*` 표시)은 자동 추출 결과를 믿지 말 것 — `bin/gen-builtin-presence-matrix`가 이미 이 5줄을 손으로 보정한다.
 
 | 이름 | clj | clr | cljs | rs | hy |
 |---|---|---|---|---|---|
@@ -113,7 +117,7 @@ diff).
 | appendContext | O | - | - | - | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
-| atan2 | O | O | O | - | O |
+| atan2 | O | O | O | O | O |
 | attrByPath | O | O | O | O | O |
 | attrNames | O | O | O | O | O |
 | attrValues | O | O | O | O | O |
@@ -216,18 +220,18 @@ diff).
 | isPath | O | O | O | O | O |
 | isString | O | O | O | O | O |
 | keys | O | O | O | O | O |
-| langVersion | - | - | - | O | O |
+| langVersion* | O | O | O | O | O |
 | last | O | O | O | O | O |
 | le | O | O | O | O | O |
 | length | O | O | O | O | O |
 | lessThan | O | O | O | O | O |
 | listToAttrs | O | O | O | O | O |
 | ln | O | O | O | O | O |
-| log | - | - | - | O | O |
+| log | O | O | O | O | O |
 | lt | O | O | O | O | O |
 | map | O | O | O | O | O |
 | mapAttrs | O | O | O | O | O |
-| mapAttrs' | O | - | - | - | - |
+| mapAttrs' | O | O | O | O | O |
 | mapAttrsRecursive | O | O | O | O | O |
 | mapAttrsToList | O | O | O | O | O |
 | mapGet | - | - | - | - | O |
@@ -243,7 +247,7 @@ diff).
 | mul | O | O | O | O | O |
 | nameValuePair | O | O | O | O | O |
 | neg | O | O | O | O | O |
-| nixVersion | - | - | - | O | O |
+| nixVersion* | O | O | O | O | O |
 | not | O | O | O | O | O |
 | null | - | - | - | O | - |
 | optional | O | O | O | O | O |
@@ -283,7 +287,7 @@ diff).
 | splitString | O | O | O | O | O |
 | splitVersion | O | O | O | O | O |
 | sqrt | O | O | O | O | O |
-| storeDir | - | - | - | O | O |
+| storeDir* | O | O | O | O | O |
 | storePath | O | O | O | O | O |
 | stringLength | O | O | O | O | O |
 | stringToCharacters | O | O | O | O | O |
@@ -293,7 +297,7 @@ diff).
 | sum | O | O | O | O | O |
 | tail | O | O | O | O | O |
 | take | O | O | O | O | O |
-| tan | - | - | - | O | O |
+| tan | O | O | O | O | O |
 | throw | O | O | O | O | O |
 | toFile | O | O | O | O | O |
 | toInt | O | O | O | O | O |
@@ -350,13 +354,6 @@ diff).
   `-e` 인라인 모드에서도 import가 실패하는 게 똑같지만 이유가 다르다
   (clr은 파일 컨텍스트가 없어서 명시적으로 거부; rs는 애초에 모듈 맵이
   안 채워짐).
-- **수학 확장 빌트인 다수가 의도적으로 held.** `sin cos tan sqrt exp ln
-  log abs pow mod`(그리고 아마 `atan2`도 같은 부류) — `docs/CAPABILITIES.md`
-  와 `SCOPE_LOCK.md`에 "B1 numeric model 미결정"이라고 명시. 표에서
-  O로 보여도 **호출하면 에러 나는 게 정상**이니 "왜 안 되지" 하고 새로
-  만들려 하지 말 것 — 이건 오늘(2026-08-19) `functionArgs`/`abs`처럼
-  개별적으로 un-hold한 것들과 다르게, 숫자 모델 전체를 어떻게 할지
-  아직 결정이 안 나서 의도적으로 묶어놓은 것.
 - **`pnixMounts`, `unsafeGetAttrPos`**: 5개 호스트 다 설계가 안 끝난
   상태. 자세한 내용과 방향 아이디어는 [`docs/PLANS.md`](PLANS.md)의
   "pnixMounts / unsafeGetAttrPos" 절.
@@ -432,6 +429,12 @@ pnix-rs 자체는 대부분 오늘(§4-오늘) 있었음):
 버그가 많다 — 예: `functionArgs`는 등록은 돼 있었지만 항상 held 에러였고,
 `import`는 동작은 했지만 캡처 버그가 있었다. 이름 존재 여부(§2 표)와
 "실제로 올바르게 동작하는가"는 다른 질문이다.
+
+### 오늘(2026-08-20) 실제로 고친 것들 — 무엇을, 왜
+
+| 커밋 | 무엇을 |
+|---|---|
+| (미커밋 — 검토 대기) | 08-19에 "B1 숫자 모델 미결정"으로 held 묶었던 확장 수학 빌트인 10개(`sin cos tan sqrt exp ln log abs pow mod`)를 실구현. 다른 4개 호스트(clj/clr/cljs/hy)가 이미 전부 동작하는 구현을 갖고 있던 4/5 합의 사례였음이 재확인되어 hold 해제 — "B1 숫자 모델" 우려는 실제로는 언어 전체 int/float 승격 정책에 관한 것이었지, 이 단순 단항/이항 float 함수들을 막을 이유는 아니었다. rs-meta의 인터프리트 Rust 부분집합은 f64 메서드 디스패치가 아예 없어서(`substrate-check`가 `src/px.rs` 전체를 rs-meta bootstrap으로 해석하는데, `interp.rs`의 `call_method`는 i64 계열만 숫자 메서드 타깃으로 인식) `.sin()`/`.sqrt()`/`.exp()`/`.ln()`/`.powf()` 같은 표준 라이브러리 호출을 못 쓴다 — 이 파일이 이미 같은 이유로 쓰던 관례(`px_bit_op`의 bit-by-bit AND/OR/XOR, `px_round_to_int`의 cast-and-adjust ceil/floor)를 그대로 따라 순수 산술(Newton's method 제곱근, 2*ln2/2*pi 범위축소 + Taylor 급수)로 직접 구현(`px_math_sqrt`/`px_math_exp`/`px_math_ln`/`px_math_sin`/`px_math_cos`/`px_math_tan`/`px_math_atan`/`px_math_atan2`, `px.rs`의 `px_num_f64` 옆). `abs`/`pow`/`mod`는 기존 `add`/`sub`/`mul`/`div` 관례(int⊕int는 checked 정수 유지, 오버플로우 에러; 그 외는 float)를 그대로 따름. 같은 변경에서 신규 `atan2`(오라클: pnix-hy, 커링 순서 `atan2 y x`)와 `builtins.mapAttrs'`(오라클: pnix-clj — `f name value`가 `{ name; value; }` 쌍을 돌려주고 결과 이름으로 재-키잉, 충돌 시 first-name-wins는 `listToAttrs`와 동일 규칙)도 추가. |
 
 ## 5. 게이트 레지스트리 (중복개발 방지용, 옛 REGISTRY.md §1 편입)
 
