@@ -1290,6 +1290,29 @@
                    [name attribute-cell]))
                (:fields attrs)))))
 
+(defn remove-attrs-value [attrs names]
+  (when-not (instance? AttrsetValue attrs)
+    (evaluation-failure! "type-error" {"operation" "removeAttrs"}))
+  (when-not (vector? names)
+    (evaluation-failure! "type-error" {"operation" "removeAttrs"}))
+  (let [remove-set (into #{} (map (fn [c] (string-text (force-cell c))) names))]
+    (->AttrsetValue
+     (into {} (remove (fn [[k _]] (contains? remove-set k)) (:fields attrs))))))
+
+(defn cat-attrs-value [attribute attrsets]
+  (when-not (string? attribute)
+    (evaluation-failure! "type-error" {"operation" "catAttrs"}))
+  (when-not (vector? attrsets)
+    (evaluation-failure! "type-error" {"operation" "catAttrs"}))
+  (into []
+        (keep (fn [c]
+                (let [attrs (force-cell c)]
+                  (when-not (instance? AttrsetValue attrs)
+                    (evaluation-failure! "type-error" {"operation" "catAttrs"}))
+                  (when (contains? (:fields attrs) attribute)
+                    (get (:fields attrs) attribute)))))
+        attrsets))
+
 (defn unique-values [values]
   (when-not (vector? values)
     (evaluation-failure! "type-error" {"operation" "unique"}))
@@ -2077,6 +2100,16 @@
         (->BuiltinValue :filterAttrs arguments)
         (filter-attrs-value (nth arguments 0) (nth arguments 1)))
 
+      :removeAttrs
+      (if (< (count arguments) 2)
+        (->BuiltinValue :removeAttrs arguments)
+        (remove-attrs-value (nth arguments 0) (nth arguments 1)))
+
+      :catAttrs
+      (if (< (count arguments) 2)
+        (->BuiltinValue :catAttrs arguments)
+        (cat-attrs-value (nth arguments 0) (nth arguments 1)))
+
       :filterAttrsRecursive
       (if (< (count arguments) 2)
         (->BuiltinValue :filterAttrsRecursive arguments)
@@ -2712,6 +2745,7 @@
                 "boolToString" (->BuiltinValue :boolToString [])
                 "builtins" self-cell
                 "break" (->BuiltinValue :identity [])
+                "catAttrs" (->BuiltinValue :catAttrs [])
                 "ceil" (->BuiltinValue :ceil [])
                 "concatLists" (->BuiltinValue :concatLists [])
                 "concatMap" (->BuiltinValue :concatMap [])
@@ -2785,6 +2819,7 @@
                 "readDir" (->BuiltinValue :readDir [])
                 "readFile" (->BuiltinValue :readFile [])
                 "recursiveUpdate" (->BuiltinValue :recursiveUpdate [])
+                "removeAttrs" (->BuiltinValue :removeAttrs [])
                 "removePrefix" (->BuiltinValue :removePrefix [])
                 "removeSuffix" (->BuiltinValue :removeSuffix [])
                 "stringLength" (->BuiltinValue :stringLength [])
