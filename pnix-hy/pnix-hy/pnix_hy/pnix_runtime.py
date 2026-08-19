@@ -2220,6 +2220,91 @@ def concat_map_strings_sep_value(sep: Any, func: Any, xs: Any, ctx: dict[str, An
     return separator.join(parts)
 
 
+def concat_map_strings_value(func: Any, xs: Any, ctx: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for item in list_value(xs, "lib.concatMapStrings list"):
+        mapped = apply_pnix(func, Thunk(lambda item=item: force_value(item)), ctx)
+        parts.append(value_to_string(mapped, ctx))
+    return "".join(parts)
+
+
+def find_first_value(pred: Any, default: Any, xs: Any, ctx: dict[str, Any]) -> Any:
+    for item in list_value(xs, "lib.findFirst list"):
+        forced = force_value(item)
+        matched = bool_value(
+            apply_pnix(pred, Thunk(lambda forced=forced: forced), ctx),
+            "lib.findFirst predicate",
+        )
+        if matched:
+            return forced
+    return force_value(default)
+
+
+def foldl_attrs_value(func: Any, init: Any, attrs: Any, ctx: dict[str, Any]) -> Any:
+    source = attrset_value(attrs, "lib.foldlAttrs set")
+    acc = init
+    for key in sorted(source.keys()):
+        value = source[key]
+        step = apply_pnix(func, Thunk(lambda acc=acc: force_value(acc)), ctx)
+        step = apply_pnix(step, Thunk(lambda key=key: key), ctx)
+        acc = apply_pnix(step, Thunk(lambda value=value: force_value(value)), ctx)
+    return acc
+
+
+def gen_attrs_value(names: Any, func: Any, ctx: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for name in list_value(names, "lib.genAttrs names"):
+        key = string_value(name, "lib.genAttrs name")
+        out[key] = Thunk(lambda key=key: apply_pnix(func, Thunk(lambda key=key: key), ctx))
+    return out
+
+
+def has_infix_value(needle: Any, haystack: Any) -> bool:
+    infix = string_value(needle, "lib.hasInfix infix")
+    s = string_value(haystack, "lib.hasInfix string")
+    return infix in s
+
+
+def imap_value(func: Any, xs: Any, ctx: dict[str, Any], start: int) -> list[Any]:
+    return [
+        Thunk(
+            lambda i=i, item=item: apply_pnix(
+                apply_pnix(func, Thunk(lambda i=i: i), ctx),
+                Thunk(lambda item=item: force_value(item)),
+                ctx,
+            )
+        )
+        for i, item in enumerate(list_value(xs, "lib.imap list"), start=start)
+    ]
+
+
+def optional_string_value(cond: Any, s: Any) -> str:
+    if bool_value(cond, "lib.optionalString"):
+        return string_value(s, "lib.optionalString string")
+    return ""
+
+
+def replicate_value(count: Any, value: Any) -> list[Any]:
+    n = nonnegative_count_value(count, "lib.replicate count")
+    return [value for _ in range(n)]
+
+
+def string_to_characters_value(s: Any) -> list[str]:
+    text = string_value(s, "builtins.stringToCharacters string")
+    return list(text)
+
+
+_TO_INT_RE = re.compile(r"^[+-]?[0-9]+$")
+
+
+def to_int_value(value: Any) -> int:
+    text = string_value(value, "builtins.toInt argument")
+    stripped = text.strip()
+    if not _TO_INT_RE.match(stripped):
+        pnix_error(f"builtins.toInt: invalid integer: '{text}'", error_class="type-error")
+    return int(stripped)
+
+
 def _store_cache_dir() -> Path:
     store_dir = Path(tempfile.gettempdir()) / "pnix-nix-store"
     store_dir.mkdir(parents=True, exist_ok=True)
@@ -5026,6 +5111,21 @@ def native_builtins(ctx: dict[str, Any]) -> dict[str, Any]:
         "fetchurl": lambda arg: fetchurl_value(arg),
         "fetchTarball": lambda arg: fetch_tarball_value(arg),
         "fetchGit": lambda arg: fetch_git_value(arg),
+        # --- cross-host lib parity additions ---
+        "concatMapStrings": lambda f: (lambda xs: concat_map_strings_value(f, xs, ctx)),
+        "findFirst": lambda pred: (
+            lambda default: (lambda xs: find_first_value(pred, default, xs, ctx))
+        ),
+        "foldlAttrs": lambda f: (lambda init: (lambda attrs: foldl_attrs_value(f, init, attrs, ctx))),
+        "genAttrs": lambda names: (lambda f: gen_attrs_value(names, f, ctx)),
+        "hasInfix": lambda infix: (lambda s: has_infix_value(infix, s)),
+        "imap0": lambda f: (lambda xs: imap_value(f, xs, ctx, 0)),
+        "imap1": lambda f: (lambda xs: imap_value(f, xs, ctx, 1)),
+        "nameValuePair": lambda name: (lambda value: {"name": name, "value": value}),
+        "optionalString": lambda cond: (lambda s: optional_string_value(cond, s)),
+        "replicate": lambda n: (lambda x: replicate_value(n, x)),
+        "stringToCharacters": lambda s: string_to_characters_value(s),
+        "toInt": lambda s: to_int_value(s),
     }
     builtins["true"] = True
     builtins["false"] = False
