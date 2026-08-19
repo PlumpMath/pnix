@@ -1373,30 +1373,34 @@
                      (= (count froms) (count tos)))
         (outcome/fail! :eval :type-error
                        {:operation "replaceStrings"}))
+      ;; Loop bound is INCLUSIVE of i = (count s): an empty `from` matches
+      ;; at every position including the end, so
+      ;; replaceStrings [""] ["x"] "ab" must reach "xaxbx", not "xaxb".
       (loop [i 0
              out ""]
-        (if (>= i (count s))
+        (if (> i (count s))
           out
           (let [matched
                 (loop [j 0]
                   (if (>= j (count froms))
                     nil
                     (let [f (nth froms j)]
-                      (if (and (pos? (count f))
-                               (<= (+ i (count f)) (count s))
-                               (= f (subs s i (+ i (count f)))))
-                        j
-                        (if (and (zero? (count f))
-                                 ;; empty from matches every position once
-                                 true)
+                      (if (<= (+ i (count f)) (count s))
+                        (if (or (zero? (count f))
+                                (= f (subs s i (+ i (count f)))))
                           j
-                          (recur (inc j)))))))]
+                          (recur (inc j)))
+                        (recur (inc j))))))]
             (if (nil? matched)
-              (recur (inc i) (str out (subs s i (inc i))))
+              (if (< i (count s))
+                (recur (inc i) (str out (subs s i (inc i))))
+                out)
               (let [f (nth froms matched)
                     t (nth tos matched)]
                 (if (zero? (count f))
-                  (recur (inc i) (str out t (subs s i (inc i))))
+                  (if (< i (count s))
+                    (recur (inc i) (str out t (subs s i (inc i))))
+                    (str out t))
                   (recur (+ i (count f)) (str out t)))))))))
 
     :removePrefix

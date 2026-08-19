@@ -545,6 +545,21 @@
   (is (= "syntax-error"
          (:class (result-error (source-result "let a.b = 1; a.b = 2; in a.b"))))))
 
+(deftest replace-strings-empty-pattern-reaches-the-end-position
+  ;; A single left-to-right pass over positions 0..(count s) INCLUSIVE of
+  ;; the end: an empty `from` matches at every position, including the end.
+  ;; The loop previously stopped at `i >= (count s)`, so the replacement
+  ;; was never emitted at the trailing position: "ab" -> "xaxb" instead of
+  ;; the correct "xaxbx".
+  (is (= "xaxbx"
+         (result-value (source-result "builtins.replaceStrings [\"\"] [\"x\"] \"ab\""))))
+  (is (= "xyc"
+         (result-value (source-result "builtins.replaceStrings [\"a\" \"b\"] [\"x\" \"y\"] \"abc\""))))
+  (is (= "abc"
+         (result-value (source-result "builtins.replaceStrings [] [] \"abc\""))))
+  (is (= "Xbc"
+         (result-value (source-result "builtins.replaceStrings [\"a\" \"ab\"] [\"X\" \"Y\"] \"abc\"")))))
+
 (defn -main
   [& args]
   (reset! test-root (host/canonical-path (or (first args)
