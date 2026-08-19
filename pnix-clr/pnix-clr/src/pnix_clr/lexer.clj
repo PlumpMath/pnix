@@ -6,6 +6,7 @@
    "in" :in
    "rec" :rec
    "import" :import
+   "scopedImport" :scoped-import
    "true" :true
    "false" :false
    "null" :null

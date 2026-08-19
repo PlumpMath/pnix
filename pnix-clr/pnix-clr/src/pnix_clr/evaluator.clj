@@ -9,7 +9,7 @@
             [pnix-clr.outcome :as outcome]
             [pnix-clr.parser :as parser]))
 
-(declare eval-ast* eval-file* force-value realize-value
+(declare eval-ast* eval-file* eval-file-scoped* force-value realize-value
          apply-callable apply-callable2 exec-builtin root-environment)
 
 ;; ---------------------------------------------------------------------------
@@ -2912,6 +2912,20 @@
                                            (:value target))]
          (eval-file* (:root context) resolved (:modules context))))
 
+     :scoped-import
+     (let [scope (require-attrset (eval-ast* (:scope ast) environment context)
+                                  "scopedImport")
+           target (force-value (eval-ast* (:target ast) environment context))]
+       (when-not (path-value? target)
+         (outcome/fail! :resolution :type-error
+                        {:operation "scopedImport"}))
+       (when-not context
+         (outcome/fail! :resolution :import-module-not-found {}))
+       (let [resolved (host/resolve-import (:root context)
+                                           (:file context)
+                                           (:value target))]
+         (eval-file-scoped* (:root context) resolved (:modules context) scope)))
+
      (outcome/fail! :eval :unsupported-expression
                     {:operator (name (:op ast))}))))
 
@@ -2934,6 +2948,25 @@
         ;; thunk's :running state, while a later lazy reference reuses :done.
         (swap! modules assoc path module)
         (force-value module)))))
+
+(defn eval-file-scoped*
+  "Like eval-file* but with `scope` (a forced attrset) merged as an extra,
+  innermost frame on top of the root environment -- scope keys shadow base
+  globals on name conflict, base globals stay available otherwise. Never
+  cached: scope changes the result, so this must not share eval-file*'s
+  canonical-path cache slot with a plain `import` of the same file. scope
+  does NOT propagate into this module's own nested imports (those still go
+  through the ordinary cached :import case with scope=nil, matching Nix's
+  scopedImport semantics)."
+  [root path modules scope]
+  (let [path (host/canonical-path path)
+        source (host/read-source path)
+        ast (parser/parse-source source)
+        context {:root (host/canonical-path root)
+                 :file path
+                 :modules modules}
+        scoped-environment (vec (cons (atom (:entries scope)) (root-environment)))]
+    (eval-ast* ast scoped-environment context)))
 
 (defn realize-value
   [value]

@@ -330,8 +330,18 @@
   [state]
   ;; `import` consumes one term.  Any following atom remains an argument to
   ;; the imported function: `import ./module.px 1` is `(import ./module.px) 1`.
-  (if (accept! state :import)
+  ;; `scopedImport` is the same shape with an extra leading scope term:
+  ;; `scopedImport { x = 1; } ./module.px`.
+  (cond
+    (accept! state :import)
     {:op :import :target (parse-application-term state)}
+
+    (accept! state :scoped-import)
+    {:op :scoped-import
+     :scope (parse-application-term state)
+     :target (parse-application-term state)}
+
+    :else
     (parse-postfix state)))
 
 (defn- parse-static-attr-path
