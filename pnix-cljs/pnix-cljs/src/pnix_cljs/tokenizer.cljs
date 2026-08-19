@@ -260,6 +260,14 @@
       (and (<= (+ index 3) (count source))
            (= "../" (subs source index (+ index 3))))))
 
+;; A bare `/` starts an absolute path literal (e.g. `import /a/b.px`,
+;; `builtins.isPath /tmp/x`) UNLESS it immediately follows a number, where
+;; it's division (`1/0`) -- same disambiguation already used for pnix-clr
+;; and pnix-hy's lexers.
+(defn absolute-path-start? [source index tokens]
+  (and (= "/" (character source index))
+       (not (contains? #{:integer :float} (:kind (peek tokens))))))
+
 (defn path-character? [value]
   (and (not (whitespace? value))
        (not (contains? #{";" "(" ")" "[" "]" "{" "}"} value))))
@@ -325,7 +333,8 @@
                                        :value value
                                        :offset index}))))
 
-          (relative-path-start? source index)
+          (or (relative-path-start? source index)
+              (absolute-path-start? source index tokens))
           (let [end (read-while source index path-character?)
                 value (subs source index end)]
             (recur end (conj tokens {:kind :path
