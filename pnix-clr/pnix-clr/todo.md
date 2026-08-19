@@ -60,3 +60,20 @@
 **중요**: 위 두 항목은 전부 방향 제시용 메모다. 5개 호스트를 실제로
 통일시키는 작업은 기본 언어 기능이 production 수준으로 완전히 갖춰진 다음,
 필요에 의해 결정한다.
+
+## 실제 백로그 — CAPABILITIES.md 자동 생성기 없음 (2026-08-19)
+
+위 두 항목과 달리 이건 "아직 예정 없음" 메모가 아니라 **참고할 작동하는
+구현이 이미 3개 있는** 실제 gap이다. clj(`docs/CAPABILITIES.md` +
+`capabilities.clj`, `clojure -M:capabilities`로 재생성, drift 게이트
+있음), hy(`docs/CAPABILITIES.md` + `pnix_hy/capabilities.py`,
+`pnix-hy-project --capabilities`), rs(`docs/CAPABILITIES.md` +
+`capabilities` 서브커맨드, `capabilities-check` 게이트) 셋 다 코드에서
+자동 파생되고 drift가 나면 게이트가 잡는 능력 인덱스를 갖고 있다.
+
+이 호스트(pnix-clr)와 pnix-cljs만 이게 없다 — `docs/CLOJURE_CLR_ADMITTED_SURFACE.md`
+같은 지금 있는 문서는 전부 사람이 손으로 쓰고 갱신하는 것이라 코드가
+바뀌어도 자동으로 어긋난다는 걸 보장 못 한다. 만들 때는 이 3개 호스트의
+패턴(CLI 서브커맨드가 소스를 훑어 `docs/CAPABILITIES.md`를 재생성 +
+그 결과와 실제 파일을 비교하는 drift 게이트)을 그대로 참고하면 된다 —
+자세한 배경은 `docs/IMPLEMENTATION_MAP.md` §5.

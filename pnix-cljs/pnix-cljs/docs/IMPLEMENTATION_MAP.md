@@ -47,6 +47,22 @@ AST), `evaluator.cljs`(값 표현 + 평가기 + 빌트인, 가장 큼), `module.
   안 새게 돼 있음(clr과 같은 패턴 — rs는 원래 이게 안 됐다가 2026-08-19
   에 `PxExpr::Isolated`로 뒤늦게 맞춘 것과 비교해볼 것).
 
+### 관련 문서 — 여기 없는 내용은 여기서 찾을 것
+
+이 문서는 "무엇이 어디 있는지"에 집중한다. 아래는 이미 있는 다른 문서들 —
+내용을 중복하지 않고 링크만 한다. `cljs-meta/`는 이 트리(`pnix-cljs/`,
+파서/평가기)와 별개인 자매 메커니즘(ClojureScript self-hosting
+substrate)이라 여기서 다시 설명 안 하고 링크만 한다.
+
+| 문서 | 다루는 것 |
+|---|---|
+| [`pnix-cljs/pnix-cljs/SCOPE_LOCK.md`](../SCOPE_LOCK.md) | 이 호스트가 소유하는 것(tokenize/parse/eval, nominal outcome, Node/CommonJS interop) vs 명시적으로 제외된 것(service policy, proof-receipt gating, retained effect, JVM 코드, 복사된 stdlib) |
+| [`pnix-cljs/pnix-cljs/todo.md`](../todo.md) | 현재 백로그(pnixMounts/unsafeGetAttrPos 통일 아이디어 등) |
+| [`pnix-cljs/pnix-cljs/examples/README.md`](../examples/README.md), [`FOUNDATION_PATH.md`](../examples/FOUNDATION_PATH.md) | 예제 00~17 카탈로그 + 온보딩용 추천 읽기 순서 |
+| [`cljs-meta/README.md`](../../cljs-meta/README.md), [`cljs-meta/STATUS.md`](../../cljs-meta/STATUS.md) | cljs-meta(자매 프로젝트, ClojureScript self-host 컴파일 substrate)의 소개 + peer-floor 상태(다른 호스트들의 meta floor와 동등한 지점이 뭔지 진술) |
+| [`cljs-meta/FIXED-POINT.md`](../../cljs-meta/FIXED-POINT.md) | stage0→stage3 self-recompile fixed-point 빌드, trust root, 게이트 요구사항 |
+| [`cljs-meta/todo.md`](../../cljs-meta/todo.md) | cljs-meta 자체의 남은 작업(DDC/Trusting-Trust 축, 멀티플랫폼 byte 결정성 등) — pnix-cljs/todo.md와는 별개 |
+
 ## 2. 빌트인 구현 현황 (5개 호스트 비교, 2026-08-19 기준)
 
 O = 등록됨(실제로 호출되는지는 별개, §3 참고). 표는 5개 호스트 소스에서
@@ -80,7 +96,6 @@ diff).
 | bitXor | O | O | O | O | O |
 | boolToString | O | O | O | O | O |
 | break | O | O | O | O | O |
-| builtin | - | - | - | - | O |
 | builtins | - | - | - | O | - |
 | catAttrs | O | O | O | O | O |
 | ceil | O | O | O | O | O |
@@ -199,7 +214,6 @@ diff).
 | min | O | O | O | O | O |
 | mod | O | O | O | O | O |
 | mul | O | O | O | O | O |
-| name | - | - | - | - | O |
 | nameValuePair | O | O | O | O | O |
 | neg | O | O | O | O | O |
 | nixVersion | - | - | - | O | O |
@@ -216,7 +230,6 @@ diff).
 | pipe | O | O | O | O | O |
 | placeholder | O | O | O | O | O |
 | pnixMounts | O | O | O | - | - |
-| policy | - | - | - | - | O |
 | pow | O | O | O | O | O |
 | product | O | O | O | O | O |
 | range | O | O | O | O | O |
@@ -275,7 +288,6 @@ diff).
 | unsafeDiscardStringContext | O | O | O | O | O |
 | unsafeGetAttrPos | O | O | O | - | O |
 | updateManyAttrs | O | O | O | O | O |
-| value | - | - | - | - | O |
 | values | O | O | O | O | O |
 | warn | O | O | O | O | O |
 | when | O | O | O | O | O |
@@ -307,7 +319,32 @@ diff).
   이 그냥 `merge` 한 줄로 끝난다 — clr처럼 새 프레임을 cons하거나 rs처럼
   전용 AST 노드를 새로 만들 필요가 없었음.
 
-## 4. 오늘(2026-08-19) 실제로 고친 것들 — 무엇을, 왜
+## 4. 역사 — 무엇이 언제 만들어졌는가
+
+**git log의 한계부터**: `git log --all -- pnix-cljs/`는 41개 커밋뿐이고
+(2026-08-10~08-19), 첫 커밋(`4240414`, `init`)이 tokenizer/parser/
+evaluator, 빌트인, cljs-meta self-host substrate, 예제, 문서 전부를
+한 스냅샷으로 들여온다. **렉서/파서/평가기가 실제로 처음 어떻게
+설계됐는지는 이 repo git 이력으로 재구성이 안 된다** — `init`
+한 커밋 안에 이미 다 있었다. 그 이전 서사는 `cljs-meta/STATUS.md`,
+`cljs-meta/FIXED-POINT.md`에 글로만 남아있다.
+
+`init` 이후 이 repo git 이력 안에서 있었던 주요 사건:
+
+| 커밋 | 무엇을 |
+|---|---|
+| `4240414` | `init` — tokenizer/parser/evaluator, 빌트인, cljs-meta self-host substrate, 예제, 문서 전체가 한 스냅샷으로 들어옴 |
+| `e848f82` | 빌트인 성숙 패스: `evaluator.cljs`에 +424줄 — math/bitwise/list/attrset 헬퍼를 clj 패리티 쪽으로 이식 |
+| `4b0cbcd` | cljs-meta: 첫 독립 mini backend(Diverse Double-Compiling) — 진짜 Trusting-Trust gap을 닫음(문서만이 아니라) |
+| `0c8c875`/`c9043c0`/`c13bbb0` | cljs-meta: 독립 mini backend DDC fixture 8→14→21→34로 확장(map, seq 연산, 구조 분해) |
+| `8d3b1af` | cljs-meta: 독립 mini backend에 loop/recur + 진짜 클로저 — DDC 백엔드의 의미 있는 언어-커버리지 도약 |
+| `75c9ec5` | `bin/export-pnix-cljs-library` + `bin/pnix-cljs-library-smoke` — 로컬 호스트-라이브러리 export 메커니즘("library" 축이 실제로 테스트 가능해짐) |
+| `116f5fe` | 클로저 예제 추가 — 실제 제품 런타임 gap을 메움(클로저가 end-to-end로 진짜 동작함을 확인) |
+| `9eadb52`/`b2e3ef2` | `let` 안 `inherit`/dotted-name 바인딩 지원(오늘, §4-오늘과 겹치는 항목이지만 언어-문법 확장이라 여기도 표기) |
+
+이후 2026-08-19 하루 동안 있었던 일은 아래 §4-오늘 참고.
+
+### 오늘(2026-08-19) 실제로 고친 것들 — 무엇을, 왜
 
 빠른 참고용 요약. 각 커밋 메시지에 훨씬 자세한 설명이 있다.
 
@@ -330,3 +367,24 @@ diff).
 개(절대경로, scopedImport)는 둘 다 한 번에 잘 됐는데, 이건 환경 모델이
 단순한(맵 하나) 덕분으로 보인다 — 복잡한 프레임 체인/AST 치환 방식보다
 사고 날 여지가 적음.
+
+## 5. 이 문서가 코드와 어긋나지 않게 유지하는 법
+
+- **§2 빌트인 표는 자동 생성이 아니다.** 5개 호스트를 나란히 비교하기
+  위해 수동으로 추출한 2026-08-19 스냅샷이고, 빌트인이 추가/삭제될 때마다
+  stale해진다. 다시 뽑으려면 저장소 루트(`~/pnix`)에서:
+  ```bash
+  bin/gen-builtin-presence-matrix          # 새 표 출력
+  bin/gen-builtin-presence-matrix --check  # 5개 문서 표가 실제 소스와 다르면 비영 종료
+  ```
+  `import`/`scopedImport`는 이 호스트에서 예약 키워드라 이 스크립트가
+  못 잡아서 손으로 `*` 표시가 남아있다(§2 상단 각주).
+- **정직하게 밝혀야 할 gap**: clj/hy/rs 세 호스트는 각각
+  `docs/CAPABILITIES.md`(+clj는 `LANE_REGISTRY.md`/`WIKI.md`까지)라는
+  **코드에서 자동 생성되고 drift-게이트로 보호되는** 능력 인덱스를
+  갖고 있다(생성 명령 실행 → 결과가 코드와 다르면 게이트 실패). **이
+  호스트(pnix-cljs)와 pnix-clr은 그런 문서가 아직 없다** — §1 "관련
+  문서"의 `SCOPE_LOCK.md`/`todo.md` 등은 전부 사람이 손으로 쓰고
+  갱신하는 문서라서, 코드가 바뀌어도 자동으로는 안 어긋난다는 보장이
+  없다. 이건 "미래 아이디어"가 아니라 **참고할 작동하는 구현이 이미
+  3개 있는 실제 백로그 항목**이다 — `todo.md`에 적어뒀다.

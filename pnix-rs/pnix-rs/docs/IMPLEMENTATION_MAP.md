@@ -67,6 +67,20 @@ AST 순회 유틸 — `PxExpr`에 새 variant를 추가하면 이 파일들도 �
   `./target/release/pnix-rs substrate-check`로 실제 확인해야 한다(다른
   전체 게이트 통과해도 이거 하나만 따로 깨질 수 있음, 2026-08-19 실측).
 
+### 관련 문서 — 여기 없는 내용은 여기서 찾을 것
+
+이 문서는 "무엇이 어디 있는지"에 집중한다. 아래는 이미 있는 다른 문서들 —
+내용을 중복하지 않고 링크만 한다.
+
+| 문서 | 다루는 것 |
+|---|---|
+| [`pnix-rs/REGISTRY.md`](../../REGISTRY.md) | **중복개발 방지용 통합 인덱스** — pnix-rs(18 게이트)/rs-meta(57 게이트) 전체 게이트 레지스트리(truth = code) + §2 로드맵(아직 안 만든 것, proposal 링크 포함). 새 능력을 만들기 전엔 여기부터 grep할 것 — 이 IMPLEMENTATION_MAP.md보다 이쪽이 "이미 구현됐는지" 질문의 1차 소스다 |
+| [`pnix-rs/pnix-rs/SCOPE_LOCK.md`](../SCOPE_LOCK.md) | 권위 있는 범위 선언 — "scope 대비 완성"의 정의, 의도적으로 보류된 기능 목록(경로/string-context 값, float 정규화, 정렬 안정성 등) |
+| [`pnix-rs/pnix-rs/todo.md`](../todo.md)(795줄) | 작업 로그/로드맵 — 아키텍처, constitution(zero-dep, 재귀 let 의미론), DONE/TODO/HELD 정직성 표기, 날짜별 슬라이스 |
+| [`docs/CAPABILITIES.md`](CAPABILITIES.md) | **자동 생성**(손 편집 금지) — CLI 명령/모듈/px 표면/185개 빌트인 인벤토리. `pnix-rs capabilities`로 재생성, drift 게이트 `capabilities-check`가 어긋나면 잡음. 이 문서 §2 빌트인 표는 5개 호스트를 나란히 비교하려고 수동으로 만든 별개의 스냅샷이다(§5 참고) |
+| [`rs-meta/STATUS.md`](../../rs-meta/STATUS.md) | rs-meta(자매 프로젝트, pnix을 전혀 모르는 순수 Rust-in-Rust 메타순환 엔진)의 peer-floor 상태 |
+| `docs/proposals/000N-*.md`(10개), `docs/research/2026-07-03-metacircular-frontier.md` | 미구현 아이디어의 근거/설계 노트 — REGISTRY.md §2 로드맵 행이 여기를 가리킴 |
+
 ## 2. 빌트인 구현 현황 (5개 호스트 비교, 2026-08-19 기준)
 
 O = 등록됨(실제로 호출되는지는 별개, §3 참고). 표는 5개 호스트 소스에서
@@ -100,7 +114,6 @@ diff).
 | bitXor | O | O | O | O | O |
 | boolToString | O | O | O | O | O |
 | break | O | O | O | O | O |
-| builtin | - | - | - | - | O |
 | builtins | - | - | - | O | - |
 | catAttrs | O | O | O | O | O |
 | ceil | O | O | O | O | O |
@@ -219,7 +232,6 @@ diff).
 | min | O | O | O | O | O |
 | mod | O | O | O | O | O |
 | mul | O | O | O | O | O |
-| name | - | - | - | - | O |
 | nameValuePair | O | O | O | O | O |
 | neg | O | O | O | O | O |
 | nixVersion | - | - | - | O | O |
@@ -236,7 +248,6 @@ diff).
 | pipe | O | O | O | O | O |
 | placeholder | O | O | O | O | O |
 | pnixMounts | O | O | O | - | - |
-| policy | - | - | - | - | O |
 | pow | O | O | O | O | O |
 | product | O | O | O | O | O |
 | range | O | O | O | O | O |
@@ -295,7 +306,6 @@ diff).
 | unsafeDiscardStringContext | O | O | O | O | O |
 | unsafeGetAttrPos | O | O | O | - | O |
 | updateManyAttrs | O | O | O | O | O |
-| value | - | - | - | - | O |
 | values | O | O | O | O | O |
 | warn | O | O | O | O | O |
 | when | O | O | O | O | O |
@@ -341,7 +351,38 @@ diff).
 - **`pnixMounts`, `unsafeGetAttrPos`**: 5개 호스트 다 설계가 안 끝난
   상태. 자세한 내용과 방향 아이디어는 `todo.md`의 "미래 아이디어" 절.
 
-## 4. 오늘(2026-08-19) 실제로 고친 것들 — 무엇을, 왜
+## 4. 역사 — 무엇이 언제 만들어졌는가
+
+**git log의 한계부터**: `git log --oneline --all -- pnix-rs/`는 48개
+커밋뿐이고(2026-08-10~08-19), 첫 커밋(`4240414`, `init`)이 `px.rs`(당시
+이미 8379줄), `gate.rs`, `tower.rs`, `bta.rs`, `specialize.rs`,
+`incremental.rs`, `stage.rs`, `ir.rs`, `mirror.rs`, `rust_mirror.rs`,
+`compartment.rs`, rs-meta의 interp/typeck/check(8291줄) 전체를 한
+스냅샷(2만+5.6만 줄)으로 들여온다. **tower/specialize/bta/gate.rs/
+substrate-check/self-hosting이 "언제, 어떤 순서로" 만들어졌는지는 이
+repo git 이력으로 재구성이 안 된다** — 전부 `init` 한 커밋 안에 이미
+있었다. 그 이전 서사가 궁금하면 `REGISTRY.md`, `rs-meta/STATUS.md`,
+`docs/proposals/*.md`의 날짜/버전 표기를 참고할 것(git 커밋이 아니라
+문서 자체의 날짜가 유일한 단서인 경우가 많다).
+
+`init` 이후 이 repo git 이력 안에서 있었던 주요 사건(rs-meta 쪽 —
+pnix-rs 자체는 대부분 오늘(§4-오늘) 있었음):
+
+| 커밋 | 날짜 | 무엇을 |
+|---|---|---|
+| `4240414` | 08-10 | `init` — px.rs/gate.rs/tower.rs/bta.rs/specialize.rs/incremental.rs/ir.rs/mirror.rs/rust_mirror.rs/compartment.rs + rs-meta interp/typeck/check 전체가 한 스냅샷으로 들어옴 |
+| `272ccef` | 08-11 | rs-meta: 독립 mini backend(Diverse Double-Compiling)로 진짜 Trusting-Trust DDC gap을 닫음 |
+| `34f8099` | 08-11 | rs-meta: `stage9-aggregate-replay-check`로 찾은 실제 self-hosting 버그 수정 |
+| `ae170e0` | 08-11 | rs-meta: `source-bundle-check`를 PASS로(5개 레이어 수정) |
+| `79464d6` | 08-13 | rs-meta: A4 제네릭 추론 tail 닫음, mini-backend 13 fixture로 확장, trait-boundary-check 회귀 수정 |
+| `d367c3c`/`f3074ad`/`f47edd6`/`2519605` | 08-17 | rs-meta: 독립 mini backend에 `let`/`while`/대입, 클로저, `loop`/`break`/`%`, `!=`+고차함수 매개변수 순차 추가 |
+| `c9e35a9` | 08-18 | pnix-rs: `check`의 34개 게이트 대비 예제 gap 13개 채움 |
+
+이후 2026-08-19 하루 동안 pnix-rs 쪽에서 있었던 일은 아래 §4-오늘 참고
+(같은 날 안에서도 `import`/`scopedImport`/40개 빌트인처럼 큰 일이 몰려
+있었다).
+
+### 오늘(2026-08-19) 실제로 고친 것들 — 무엇을, 왜
 
 빠른 참고용 요약. 각 커밋 메시지에 훨씬 자세한 설명이 있다(`git log
 --oneline -- src/`로 목록, 커밋 해시로 `git show`).
@@ -364,3 +405,31 @@ diff).
 버그가 많다 — 예: `functionArgs`는 등록은 돼 있었지만 항상 held 에러였고,
 `import`는 동작은 했지만 캡처 버그가 있었다. 이름 존재 여부(§2 표)와
 "실제로 올바르게 동작하는가"는 다른 질문이다.
+
+## 5. 이 문서가 코드와 어긋나지 않게 유지하는 법
+
+이 문서는 두 성격이 섞여 있다 — 어느 쪽인지 구분해서 신뢰할 것.
+
+- **§2 빌트인 표는 자동 생성이 아니다.** 5개 호스트를 나란히 비교하기
+  위해 수동으로 추출한 2026-08-19 스냅샷이고, 빌트인이 추가/삭제될 때마다
+  stale해진다. 다시 뽑으려면 저장소 루트(`~/pnix`)에서:
+  ```bash
+  bin/gen-builtin-presence-matrix          # 새 표 출력
+  bin/gen-builtin-presence-matrix --check  # 5개 문서 표가 실제 소스와 다르면 비영 종료
+  ```
+  이 스크립트는 rs 쪽엔 `docs/CAPABILITIES.md`(아래 참고)의 185개 빌트인
+  인벤토리 줄을 그대로 읽는다 — rs 자체 소스를 다시 grep하지 않는다.
+  `import`/`scopedImport`는 예약 키워드라 어차피 못 잡아서 손으로 `*`
+  표시가 남아있다(§2 상단 각주). 이 스크립트는 5개 호스트를 가로지르는
+  monorepo 레벨 도구라 어느 한 호스트의 self-contained 게이트에는
+  넣지 않았다.
+- **`docs/CAPABILITIES.md`는 진짜 자동 생성+drift-게이트다** — `pnix-rs
+  capabilities`로 재생성, `capabilities-check` 게이트가 코드와의 drift를
+  잡는다(생성 원천 = 코드). CLI 명령/모듈/px 표면/빌트인 인벤토리가
+  궁금하면 이 문서의 §1/§2보다 그쪽을 먼저 믿을 것. `REGISTRY.md`는 그
+  위에 게이트 레지스트리 전체(pnix-rs 18개 + rs-meta 57개)를 얹은
+  상위 인덱스 — "이미 구현됐는지" 확인의 1차 소스는 `REGISTRY.md`다.
+- clj/hy도 각자 CAPABILITIES.md(+clj는 LANE_REGISTRY.md/WIKI.md까지)를
+  가진 같은 패턴이다(각 호스트 IMPLEMENTATION_MAP.md §5 참고). clr/cljs는
+  아직 이런 자동 drift-게이트 문서가 없다 — clr/cljs 쪽 IMPLEMENTATION_MAP.md
+  §5에 실제 미해결 gap으로 적어뒀다.

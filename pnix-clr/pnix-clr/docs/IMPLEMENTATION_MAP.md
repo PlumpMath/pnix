@@ -54,6 +54,25 @@
   변경사항이 반영 안 된다 — 오늘 몇 번 이걸 깜빡해서 "source-stale"
   에러를 봤다.
 
+### 관련 문서 — 여기 없는 내용은 여기서 찾을 것
+
+이 문서는 "무엇이 어디 있는지"에 집중한다. 아래는 이미 있는 다른 문서들 —
+내용을 중복하지 않고 링크만 한다. 아래 목록엔 처음 이 문서를 쓸 때
+빠뜨렸던 `clr-meta/` 쪽 설계 문서들도 포함(2026-08-19 감사에서 발견한
+누락 — 여러 STAGE*_DESIGN.md가 링크 하나 없이 존재했었음).
+
+| 문서 | 다루는 것 |
+|---|---|
+| [`pnix-clr/pnix-clr/SCOPE_LOCK.md`](../SCOPE_LOCK.md) | 권위 있는 범위 선언 — 정확히 뭐가 admit됐는지(checked-I64, list/attrset 구조적 동등성, import 등) vs 제외된 것(BigInt, effect request, primitive-manifest 등) |
+| [`pnix-clr/pnix-clr/todo.md`](../todo.md) | 현재 백로그(pnixMounts/unsafeGetAttrPos 통일 아이디어 등) |
+| [`pnix-clr/docs/CLOJURE_CLR_ADMITTED_SURFACE.md`](../../docs/CLOJURE_CLR_ADMITTED_SURFACE.md) | `bin/clojure-clr`/`bin/clr-meta` CLI 프로파일이 오늘 admit하는 것의 인벤토리 |
+| [`pnix-clr/docs/IN_PROCESS_EVAL.md`](../../docs/IN_PROCESS_EVAL.md) | 실험적 in-process C# evaluator spike vs 기본 process-spawn `Eval.Source`/`Eval.File` |
+| [`pnix-clr/docs/TFM_POLICY.md`](../../docs/TFM_POLICY.md) | net10.0(pnix-clr 제품) vs net8.0(Rhino plugin) TFM/SDK 분리 규칙 — 섞어 쓰면 안 됨 |
+| [`pnix-clr/csharp/Pnix.Clr/README.md`](../../csharp/Pnix.Clr/README.md) | C# 호스트 라이브러리 표면(`Eval.Source/File`, guest AOT DLL 연결) |
+| [`clr-meta/STATUS.md`](../../../clr-meta/STATUS.md) | clr-meta의 peer-floor 상태표(JVM/Hy/Rust host-meta 대비) |
+| [`clr-meta/STAGE15_N_ROADMAP.md`](../../../clr-meta/STAGE15_N_ROADMAP.md) | Stage1→15/N 목표 정의 + closure 상태 — CLAUDE.md가 이걸 직접 가리킴 |
+| `clr-meta/STAGE{3..15,N}_DESIGN.md`(14개), `SELF_REPRODUCTION_DESIGN.md`, `INDEPENDENT_MINI_INTERPRETER_DESIGN.md`, `CLR_BOOTSTRAP.md`, `RESIDUAL_SURFACE.md` | 닫힌 self-host 컴파일러 단계별 설계 문서 + B==C 자기재생 + 2번째 독립 인터프리터(DDC) 설계 + evaluator-generation 0→1→2 자기해석 주장 + 원칙 레벨의 남은/닫힌 것 지도 |
+
 ## 2. 빌트인 구현 현황 (5개 호스트 비교, 2026-08-19 기준)
 
 O = 등록됨(실제로 호출되는지는 별개, §3 참고). 표는 5개 호스트 소스에서
@@ -87,7 +106,6 @@ diff).
 | bitXor | O | O | O | O | O |
 | boolToString | O | O | O | O | O |
 | break | O | O | O | O | O |
-| builtin | - | - | - | - | O |
 | builtins | - | - | - | O | - |
 | catAttrs | O | O | O | O | O |
 | ceil | O | O | O | O | O |
@@ -206,7 +224,6 @@ diff).
 | min | O | O | O | O | O |
 | mod | O | O | O | O | O |
 | mul | O | O | O | O | O |
-| name | - | - | - | - | O |
 | nameValuePair | O | O | O | O | O |
 | neg | O | O | O | O | O |
 | nixVersion | - | - | - | O | O |
@@ -223,7 +240,6 @@ diff).
 | pipe | O | O | O | O | O |
 | placeholder | O | O | O | O | O |
 | pnixMounts | O | O | O | - | - |
-| policy | - | - | - | - | O |
 | pow | O | O | O | O | O |
 | product | O | O | O | O | O |
 | range | O | O | O | O | O |
@@ -282,7 +298,6 @@ diff).
 | unsafeDiscardStringContext | O | O | O | O | O |
 | unsafeGetAttrPos | O | O | O | - | O |
 | updateManyAttrs | O | O | O | O | O |
-| value | - | - | - | - | O |
 | values | O | O | O | O | O |
 | warn | O | O | O | O | O |
 | when | O | O | O | O | O |
@@ -313,7 +328,38 @@ diff).
   stage(Stage1~15/N, 실제 컴파일러)가 별개 축이라는 점을 문서 여러 곳에서
   강조한다(`README.md`) — 헷갈리지 말 것.
 
-## 4. 오늘(2026-08-19) 실제로 고친 것들 — 무엇을, 왜
+## 4. 역사 — 무엇이 언제 만들어졌는가
+
+**git log의 한계부터**: `git log --all -- pnix-clr/`는 64개 커밋뿐이고
+(2026-08-10~08-19), 첫 커밋(`4240414`, `init`)이 lexer.clj/parser.clj/
+evaluator.clj(당시 이미 2529줄)/host.clj/json.clj/outcome.clj,
+checked-I64 산술, `import`, clr-meta의 Stage1~7 self-host 스캐폴딩까지
+전부 첫날부터 이미 존재하는 채로 들어온다. **Stage1~15/N 각각이 실제로
+"언제" 닫혔는지는 git 커밋 시점으로 오해하기 쉽지만, Stage1~7은 이미
+`init` 안에 완성돼 있었다** — git 이력만 보고 단계별 완성 시점을
+재구성하려 하지 말 것. 그 시기의 서사는 `clr-meta/STATUS.md`,
+`STAGE15_N_ROADMAP.md`, 개별 `STAGE*_DESIGN.md`(§1 관련 문서)에 있다.
+
+`init` 이후 이 repo git 이력 안에서 있었던 주요 사건:
+
+| 커밋 | 날짜 | 무엇을 |
+|---|---|---|
+| `4240414` | 08-10 | `init` — lexer/parser/evaluator(2529줄)/host.clj, checked-I64, import, clr-meta Stage1~7 스캐폴딩까지 전체가 한 스냅샷으로 들어옴 |
+| `e848f82` | 08-11 | pnix-clj 패리티를 향한 빌트인 성숙 패스: list/attrset 구조적 동등성, float 리터럴, 확장 math/bitwise/list/attrset 빌트인 |
+| `d173826` | 08-11 | 독립 mini backend(2번째 from-scratch DynamicMethod 컴파일러)를 19 fixture로 확장: nested if, 추가 arity, checked overflow |
+| `1c38118` | 08-12 | 컴파일러 Stage8 닫음: 재현 가능/byte-identical 어셈블리 아티팩트 |
+| `c510d9b` | 08-12 | 컴파일러 Stage9 닫음: clean-process 컴파일러/런타임 replay |
+| `3ff0824` | 08-12 | 컴파일러 Stage10~15/N 닫음(session/sandbox, adapter, quarantine, horizon, cross-impl, evidence-federation) |
+| `119417a` | 08-13 | 컴파일러 자기재생(B==C fixed point) 닫음 |
+| `8eac081` | 08-13 | 독립 인터프리터 DDC 트랙 닫음(2번째 from-scratch tree-walking 인터프리터) |
+| `6b33951` | 08-13 | `pnix-clr-library`: C# `Pnix.Clr` 호스트 + guest AOT export, `.px` eval-file 헬퍼 |
+| `22c4f33` | 08-14 | 실험적 in-process C# evaluator spike + parity 게이트 |
+| `9b8156b`/`9b362da`/`c8e378f`/`4637561` | 08-17 | 독립 mini backend에 `let`, `loop`/`recur`, nested fn/closure(beta-reduction desugar), 진짜 1급 클로저 순차 추가 |
+| `feb7a51` | 08-17 | 클로저 슬라이스용 Stage1~15/N 전체 체인 재확인 |
+
+이후 2026-08-19 하루 동안 있었던 일은 아래 §4-오늘 참고.
+
+### 오늘(2026-08-19) 실제로 고친 것들 — 무엇을, 왜
 
 빠른 참고용 요약. 각 커밋 메시지에 훨씬 자세한 설명이 있다.
 
@@ -331,3 +377,29 @@ root/file 컨텍스트 추적)이 5개 중 제일 견고했다. rs가 나중에 
 `import`를 고칠 때도(scope 누수 버그) 결국 "각 import가 독립된 환경에서
 평가돼야 한다"는 이 호스트의 기본 전제를 따라가는 방향으로 고쳐졌다 —
 새 호스트에서 import 관련 기능을 만들 일이 있으면 여기부터 참고할 것.
+
+## 5. 이 문서가 코드와 어긋나지 않게 유지하는 법
+
+- **§2 빌트인 표는 자동 생성이 아니다.** 5개 호스트를 나란히 비교하기
+  위해 수동으로 추출한 2026-08-19 스냅샷이고, 빌트인이 추가/삭제될 때마다
+  stale해진다. 다시 뽑으려면 저장소 루트(`~/pnix`)에서:
+  ```bash
+  bin/gen-builtin-presence-matrix          # 새 표 출력
+  bin/gen-builtin-presence-matrix --check  # 5개 문서 표가 실제 소스와 다르면 비영 종료
+  ```
+  `import`/`scopedImport`는 이 호스트에서 예약 키워드라 이 스크립트가
+  못 잡아서 손으로 `*` 표시가 남아있다(§2 상단 각주).
+- **정직하게 밝혀야 할 gap**: clj/hy/rs 세 호스트는 각각
+  `docs/CAPABILITIES.md`(+clj는 `LANE_REGISTRY.md`/`WIKI.md`까지)라는
+  **코드에서 자동 생성되고 drift-게이트로 보호되는** 능력 인덱스를
+  갖고 있다(생성 명령 실행 → 결과가 코드와 다르면 게이트 실패). **이
+  호스트(pnix-clr)와 pnix-cljs는 그런 문서가 아직 없다** — §1의
+  "관련 문서" 목록에 있는 것들(`CLOJURE_CLR_ADMITTED_SURFACE.md`,
+  clr-meta의 각종 `STAGE*_DESIGN.md` 등)은 전부 사람이 손으로 쓰고
+  손으로 갱신하는 문서라서, 코드가 바뀌어도 자동으로는 안 어긋난다는
+  보장이 없다. 이건 새로 뭔가를 만들어야 할 "미래 아이디어"가 아니라
+  **참고할 작동하는 구현이 이미 3개나 있는 실제 백로그 항목**이다
+  (`pnix-clj/pnix-clj/docs/CAPABILITIES.md` + `capabilities.clj`,
+  `pnix-hy/pnix-hy/docs/CAPABILITIES.md` + `pnix_hy/capabilities.py`,
+  `pnix-rs/pnix-rs/docs/CAPABILITIES.md` + `capabilities` 서브커맨드가
+  전부 패턴 참고용으로 존재). `todo.md`에 적어뒀다.

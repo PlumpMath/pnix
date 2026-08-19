@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Regenerate the 5-host builtins presence matrix embedded in each host's
+# docs/IMPLEMENTATION_MAP.md. This is a cross-host dev-hygiene tool, not part
+# of any single host's own gate (that would violate self-containment) — run
+# it by hand when builtins are added/removed, or with --check to see if the
+# tables embedded in the docs have drifted from source.
+#
+# Extraction is a heuristic grep per host source, not a formal registry:
+# - clj/clr use `"name" (builtin ...)` / `"name" (bi ...)` dispatch entries
+# - cljs uses `"name" (->BuiltinValue ...)` entries
+# - rs reads its own generated docs/CAPABILITIES.md builtins line (source of
+#   truth there is already the `capabilities`/`capabilities-check` gate)
+# - hy reads the top-level keys of the `builtins = {...}` dict in
+#   pnix_runtime.py (lane 1 of hy's 3-lane duplication — see hy's
+#   IMPLEMENTATION_MAP.md §1)
+#
+# import/scopedImport are reserved parser keywords in clr/cljs/rs, not
+# registry entries, so this script cannot see them there — those two rows
+# are always hand-patched to `import*`/`scopedImport*` with all-O afterward,
+# same as when the matrix was first built (2026-08-19). Small deltas (a
+# handful of names) vs. a previous run are normal — internal helper names or
+# aliases can match the loose regexes. Investigate deltas by hand; don't
+# trust this script as authoritative on its own.
+#
+# Usage:
+#   bin/gen-builtin-presence-matrix            print the fresh markdown table
+#   bin/gen-builtin-presence-matrix --check    exit non-zero if any host's
+#                                               IMPLEMENTATION_MAP.md table
+#                                               disagrees with a fresh extract
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+grep -oE '"[A-Za-z_][A-Za-z0-9_'"'"']*" \(builtin ' \
+  pnix-clj/pnix-clj/src/pnix_clj/evaluator.clj \
+  | sed -E 's/^"//; s/" \(builtin $//' | sort -u > "$TMP/clj.txt"
+
+grep -oE '"[A-Za-z_][A-Za-z0-9_'"'"']*" \(bi ' \
+  pnix-clr/pnix-clr/src/pnix_clr/evaluator.clj \
+  | sed -E 's/^"//; s/" \(bi $//' | sort -u > "$TMP/clr.txt"
+
+grep -oE '"[A-Za-z_][A-Za-z0-9_'"'"']*" \(->BuiltinValue' \
+  pnix-cljs/pnix-cljs/src/pnix_cljs/evaluator.cljs \
+  | sed -E 's/^"//; s/" \(->BuiltinValue$//' | sort -u > "$TMP/cljs.txt"
+
+awk '/presence inventory\):$/{getline; print; exit}' pnix-rs/pnix-rs/docs/CAPABILITIES.md \
+  | tr ' ' '\n' | sed '/^$/d' | sort -u > "$TMP/rs.txt"
+
+start=$(grep -n '^    builtins = {$' pnix-hy/pnix-hy/pnix_hy/pnix_runtime.py | head -1 | cut -d: -f1)
+end=$(awk -v s="$start" 'NR>s && /^    }$/{print NR; exit}' pnix-hy/pnix-hy/pnix_hy/pnix_runtime.py)
+sed -n "${start},${end}p" pnix-hy/pnix-hy/pnix_hy/pnix_runtime.py \
+  | grep -oE "^ *\"[A-Za-z_][A-Za-z0-9_']*\":" | sed -E "s/^ *\"//; s/\":\$//" | sort -u > "$TMP/hy.txt"
+
+sort -u "$TMP"/{clj,clr,cljs,rs,hy}.txt > "$TMP/all.txt"
+
+{
+  echo "| 이름 | clj | clr | cljs | rs | hy |"
+  echo "|---|---|---|---|---|---|"
+  while read -r name; do
+    row="| $name |"
+    for h in clj clr cljs rs hy; do
+      if grep -qxF "$name" "$TMP/$h.txt"; then row="$row O |"; else row="$row - |"; fi
+    done
+    echo "$row"
+  done < "$TMP/all.txt"
+} > "$TMP/matrix.md"
+
+# import/scopedImport are reserved keywords in clr/cljs/rs — hand-correct.
+sed -i '' 's/^| import | O | - | - | - | O |$/| import* | O | O | O | O | O |/' "$TMP/matrix.md"
+sed -i '' 's/^| scopedImport | O | - | - | - | O |$/| scopedImport* | O | O | O | O | O |/' "$TMP/matrix.md"
+
+if [[ "${1:-}" == "--check" ]]; then
+  status=0
+  for f in pnix-clj/pnix-clj pnix-clr/pnix-clr pnix-cljs/pnix-cljs pnix-rs/pnix-rs pnix-hy/pnix-hy; do
+    doc="$f/docs/IMPLEMENTATION_MAP.md"
+    [[ -f "$doc" ]] || continue
+    tag="${f//\//_}"
+    awk '/^\| 이름 \| clj \| clr \| cljs \| rs \| hy \|$/{p=1} p{print} p && /^\| zipListsWith /{exit}' "$doc" > "$TMP/embedded-$tag.md" 2>/dev/null || true
+    if ! diff -q "$TMP/matrix.md" "$TMP/embedded-$tag.md" >/dev/null 2>&1; then
+      echo "DRIFT: $doc's table differs from a fresh extract"
+      diff "$TMP/embedded-$tag.md" "$TMP/matrix.md" || true
+      status=1
+    fi
+  done
+  exit "$status"
+fi
+
+cat "$TMP/matrix.md"
