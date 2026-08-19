@@ -809,6 +809,31 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
                 i += 1;
             }
             toks.push(PxTok::PathLit(p));
+        } else if c == '/'
+            && !matches!(toks.last(), Some(PxTok::Int(_)) | Some(PxTok::Float(_)))
+            && i + 1 < chars.len()
+            && chars[i + 1] != '/'
+            && !chars[i + 1].is_whitespace()
+            && !matches!(chars[i + 1], ')' | ']' | '}' | ';')
+        {
+            // Absolute path literal `/a/b` (Nix) -- same shape as the `./`/`../`
+            // case above, just without the leading dot segment. Guarded against
+            // following a number (`1/0` stays division), a second `/` (the
+            // `//` update operator, tokenized further below as SlashSlash --
+            // must not be shadowed here) AND against being followed by
+            // whitespace/a closer (`a / b`, `(a/)` stay division
+            // / syntax, not a bogus path) -- same two-sided disambiguation
+            // pnix-clr's path-start? already uses.
+            let mut p = String::new();
+            while i < chars.len()
+                && (chars[i].is_ascii_alphanumeric()
+                    || chars[i] == '_' || chars[i] == '\'' || chars[i] == '.'
+                    || chars[i] == '/' || chars[i] == '-')
+            {
+                p.push(chars[i]);
+                i += 1;
+            }
+            toks.push(PxTok::PathLit(p));
         } else if c == '.' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
             let mut digits = String::from("0.");
             i += 1;
@@ -8672,6 +8697,12 @@ fn px_str_lt(a: &str, b: &str) -> bool {
 
 /// Normalize `dir/rel` (handling `./` and `../`) into a `./a/b.px` key.
 fn px_path_join(dir: &str, rel: &str) -> String {
+    // An absolute `rel` (matches load_px_module's Rust std Path::join, which
+    // already replaces rather than appends for an absolute component) ignores
+    // `dir` entirely -- only the ".<absolute-path>" key format is added.
+    if rel.starts_with("/") {
+        return format!(".{}", rel);
+    }
     let mut parts: Vec<String> = Vec::new();
     for seg in dir.split("/") {
         if seg != "" && seg != "." {
