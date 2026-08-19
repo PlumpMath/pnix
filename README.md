@@ -87,11 +87,11 @@ PATH 우선순위로 끼워 넣는** 방식으로 통합하는, 실전에서 쓰
 
     # 필요한 호스트만 추가 (clj / cljs / clr / hy / rs). dir= 로 monorepo
     # 안의 호스트 서브디렉터리를 골라낸다.
-    pnix-clj.url  = "github:YOU/pnix?dir=pnix-clj";
-    pnix-hy.url   = "github:YOU/pnix?dir=pnix-hy";
-    pnix-rs.url   = "github:YOU/pnix?dir=pnix-rs";
-    pnix-cljs.url = "github:YOU/pnix?dir=pnix-cljs";
-    pnix-clr.url  = "github:YOU/pnix?dir=pnix-clr";
+    pnix-clj.url = "github:PlumpMath/pnix?ref=main&dir=pnix-clj";
+    pnix-hy.url   = "github:PlumpMath/pnix?ref=main&dir=pnix-hy";
+    pnix-rs.url   = "github:PlumpMath/pnix?ref=main&dir=pnix-rs";
+    pnix-cljs.url = "github:PlumpMath/pnix?ref=main&dir=pnix-cljs";
+    pnix-clr.url  = "github:PlumpMath/pnix?ref=main&dir=pnix-clr";
   };
 
   outputs = { self, nixpkgs, pnix-clj, pnix-hy, pnix-rs, ... }: {
