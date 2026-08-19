@@ -483,6 +483,24 @@ fn px_import_targets(expr: &px::PxExpr, out: &mut Vec<String>) {
                     }
                 }
             }
+            // scopedImport scope path -- func is itself Apply{Var("scopedImport"), scope},
+            // so the plain-import check above (func == bare Var) never matches;
+            // the path marker is still the outer arg.
+            if let px::PxExpr::Apply {
+                func: inner_func,
+                arg: scope,
+            } = func.as_ref()
+            {
+                if matches!(inner_func.as_ref(), px::PxExpr::Var(n) if n == "scopedImport") {
+                    if let px::PxExpr::Var(marked) = arg.as_ref() {
+                        if marked.starts_with(":path:") {
+                            out.push(marked.chars().skip(6).collect());
+                            px_import_targets(scope, out);
+                            return;
+                        }
+                    }
+                }
+            }
             px_import_targets(func, out);
             px_import_targets(arg, out);
         }

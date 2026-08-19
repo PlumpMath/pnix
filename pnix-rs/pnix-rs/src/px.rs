@@ -8813,6 +8813,68 @@ pub fn px_expand_imports(
                     }
                 }
             }
+            // scopedImport scope path: `Apply{ func: Apply{ func: Var("scopedImport"),
+            // arg: scope }, arg: :path:-marked }`. Same module-lookup/cycle
+            // logic as plain import, but the substituted module AST is
+            // wrapped in `with <scope>; <module>` instead of splicing the
+            // module AST in bare -- scope's names become available (lowest
+            // priority, so the module's own `let`/lambda bindings still
+            // shadow them) without needing to thread a runtime scope value
+            // through this AST-only expansion pass. scope does NOT propagate
+            // into the module's own nested imports (those recurse through
+            // this same match arm with scope=nil, i.e. the plain-import
+            // branch above).
+            if let PxExpr::Apply {
+                func: inner_func,
+                arg: scope_ast,
+            } = func.as_ref()
+            {
+                let is_scoped_import =
+                    matches!(inner_func.as_ref(), PxExpr::Var(n) if n == "scopedImport");
+                if is_scoped_import {
+                    if let PxExpr::Var(marked) = arg.as_ref() {
+                        if marked.starts_with(":path:") {
+                            let rel: String = marked.chars().skip(6).collect();
+                            let key = px_path_join(cur_dir, &rel);
+                            if stack.iter().any(|k| *k == key) {
+                                return Ok(px_deferred_import_error(format!(
+                                    "px: import cycle at {}",
+                                    key
+                                )));
+                            }
+                            let mut src_opt: Option<&String> = None;
+                            for (k, v) in modules.iter() {
+                                if *k == key {
+                                    src_opt = Some(v);
+                                }
+                            }
+                            let src = match src_opt {
+                                Some(s) => s,
+                                None => {
+                                    return Ok(px_deferred_import_error(format!(
+                                        "px: import target not in the module map: {}",
+                                        key
+                                    )));
+                                }
+                            };
+                            let ast = match px_parse(src) {
+                                Ok(value) => value,
+                                Err(error) => return Ok(px_deferred_import_error(error)),
+                            };
+                            let tdir = px_key_dir(&key);
+                            stack.push(key);
+                            let module_out = px_expand_imports(&ast, modules, &tdir, stack)?;
+                            stack.pop();
+                            let scope_out =
+                                px_expand_imports(scope_ast, modules, cur_dir, stack)?;
+                            return Ok(PxExpr::With {
+                                scope: Box::new(scope_out),
+                                body: Box::new(module_out),
+                            });
+                        }
+                    }
+                }
+            }
             Ok(PxExpr::Apply {
                 func: Box::new(px_expand_imports(func, modules, cur_dir, stack)?),
                 arg: Box::new(px_expand_imports(arg, modules, cur_dir, stack)?),
