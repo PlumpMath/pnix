@@ -4849,7 +4849,11 @@ def native_builtins(ctx: dict[str, Any]) -> dict[str, Any]:
         "baseNameOf": lambda path: base_name_value(path),
         "dirOf": lambda path: dir_of_value(path),
         "toPath": lambda value: to_path_string_value(value),
-        "storePath": lambda value: PnixPath(path_text_value(value, ctx, "builtins.storePath")),
+        "storePath": lambda value: pnix_error(
+            "builtins.storePath: pure evaluator has no store",
+            error_class="effect-denied",
+            evidence={"builtin": "storePath", "policy": "pure-evaluator-no-store"},
+        ),
         "getEnv": lambda name: get_env_value(name),
         "placeholder": lambda name: make_context_string(
             "/pnix-placeholder/" + string_value(name, "builtins.placeholder name"),
@@ -10352,7 +10356,7 @@ HY_AST_EVALUATOR_SOURCE = r'''
      "baseNameOf" (fn [path] (base-name-builtin path))
      "dirOf" (fn [path] (dir-of-builtin path))
      "toPath" (fn [value] (to-path-string value))
-     "storePath" (fn [value] (make-path (fs-path value "builtins.storePath")))
+     "storePath" (fn [value] (pnix-error "builtins.storePath: pure evaluator has no store"))
      "getEnv" (fn [name] (get-env-builtin name))
      "placeholder" (fn [name]
        (do
@@ -11532,6 +11536,8 @@ def _dirof(x):
     return _mkstr("/" if head=="" else head,ctx)
 def _topath(x,label):
     return _P(_fspath(x,label))
+def _storepath_denied(value):
+    raise Exception("builtins.storePath: pure evaluator has no store")
 def _topathstr(x):
     text,ctx=_strctx(x,"builtins.toPath string")
     if not text.startswith("/"): raise Exception("string '%s' doesn't represent an absolute path"%text)
@@ -12266,7 +12272,7 @@ def _bi():
     b["baseNameOf"]=_C(lambda p:_basename(p))
     b["dirOf"]=_C(lambda p:_dirof(p))
     b["toPath"]=_C(lambda value:_topathstr(value))
-    b["storePath"]=_C(lambda value:_topath(value,"builtins.storePath"))
+    b["storePath"]=_C(lambda value:_storepath_denied(value))
     b["getEnv"]=_C(lambda name:_getenv(name))
     b["placeholder"]=_C(lambda name:_mkstr("/pnix-placeholder/"+_str(name,"builtins.placeholder name"),{"=placeholder!"+_str(name,"builtins.placeholder name")}))
     b["break"]=_C(lambda value:_force(value))
@@ -14329,7 +14335,7 @@ RUST_EVAL_CORPUS: list[dict[str, Any]] = [
     {"name": "rs-path-pathExists-plain", "source": 'builtins.pathExists "/non-existent-dir-xyz"', "expect": False},
     {"name": "rs-path-pathExists-path", "source": "builtins.pathExists ./non-existent-xyz", "expect": False},
     {"name": "rs-path-toPath-context", "source": 'builtins.typeOf (builtins.toPath "${/tmp}")', "expect": "string"},
-    {"name": "rs-path-storePath-context", "source": 'builtins.typeOf (builtins.storePath "${./local}")', "expect": "path"},
+    {"name": "rs-path-storePath-context", "source": 'builtins.typeOf (builtins.storePath "${./local}")', "error": True, "error_contains": "no store"},
     {"name": "rs-tofile-literal", "source": 'builtins.typeOf (builtins.toFile "name" "literal content")', "expect": "path"},
     {"name": "rs-tofile-empty", "source": 'builtins.typeOf (builtins.toFile "empty" "")', "expect": "path"},
     {"name": "rs-tofile-discard", "source": 'builtins.typeOf (builtins.toFile "n" (builtins.unsafeDiscardStringContext "x${./p}"))', "expect": "path"},
@@ -15538,7 +15544,7 @@ RUST_PATH_CONTEXT_IO_CORPUS: list[dict[str, Any]] = [
         "error_contains": "builtins.readFile",
     },
     {"name": "rs-io-toPath-context-type", "source": 'builtins.typeOf (builtins.toPath "${/tmp}")', "expect": "string"},
-    {"name": "rs-io-storePath-context-type", "source": 'builtins.typeOf (builtins.storePath "${./local}")', "expect": "path"},
+    {"name": "rs-io-storePath-context-type", "source": 'builtins.typeOf (builtins.storePath "${./local}")', "error": True, "error_contains": "no store"},
     {
         "name": "rs-io-readFileType-context-missing",
         "source": 'builtins.readFileType "${./not-a-file-xyz-zzz}"',
@@ -16536,7 +16542,7 @@ SELF_TEST_CASES = [
     {"name": "builtin-baseNameOf", "source": f'builtins.baseNameOf "{SELF_TEST_TODO_PATH}"', "expect": "todo.md"},
     {"name": "builtin-dirOf", "source": f'builtins.dirOf "{SELF_TEST_TODO_PATH}"', "expect": str(Path(SELF_TEST_TODO_PATH).parent)},
     {"name": "builtin-toPath-isPath", "source": f'builtins.isPath (builtins.toPath "{SELF_TEST_TODO_PATH}")', "expect": False},
-    {"name": "builtin-storePath-isPath", "source": f'builtins.isPath (builtins.storePath "{SELF_TEST_TODO_PATH}")', "expect": True},
+    {"name": "builtin-storePath-isPath", "source": f'builtins.isPath (builtins.storePath "{SELF_TEST_TODO_PATH}")', "error": True, "error_contains": "no store"},
     {"name": "builtin-getEnv-missing", "source": 'builtins.getEnv "PNIX_HY_SELF_TEST_SHOULD_NOT_EXIST_9C4C2E6D"', "expect": ""},
     {"name": "builtin-placeholder", "source": 'builtins.placeholder "out"', "expect": "/pnix-placeholder/out"},
     {"name": "builtin-break", "source": "builtins.break 42", "expect": 42},
