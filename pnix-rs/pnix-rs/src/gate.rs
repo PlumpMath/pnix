@@ -39,6 +39,11 @@ pub fn effect_of(builtin: &str) -> Option<&'static str> {
         Some("file-write")
     } else if builtin == "fetchurl" || builtin == "fetchTarball" || builtin == "fetchGit" {
         Some("network")
+    } else if builtin == "getEnv" {
+        // Reads the host process environment (std::env::var) — impure, and
+        // closest of the five declared classes to "ask the host for
+        // something outside the pure expression" (2026-08-19 tranche).
+        Some("host-call")
     } else {
         None
     }

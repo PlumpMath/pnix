@@ -228,6 +228,16 @@ fn px_corpus() -> Vec<(&'static str, &'static str, &'static str)> {
             "runtime/corpus/seed_list_to_attrs.px",
             "{ flag = true; nonflag = false; picked = 2; s = { a = 1; b = 2; }; }",
         ),
+        (
+            "seed_generic_closure",
+            "runtime/corpus/seed_generic_closure.px",
+            "[ { key = 1; } { key = 2; } { key = 3; } { key = 4; } { key = 5; } { key = 6; } { key = 7; } ]",
+        ),
+        (
+            "seed_get_set",
+            "runtime/corpus/seed_get_set.px",
+            "{ a = 9; b = 1; }",
+        ),
     ]
 }
 

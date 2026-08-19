@@ -1,0 +1,6 @@
+# builtins.get/set: cross-host testing showed real disagreement about
+# these names (pnix-clj's quick probe looked curried/broken), so the arg
+# order below is the one that actually reached 4/4 agreement:
+#   get  attrs key       -> value at key (errors like getAttr if missing)
+#   set  attrs key value -> attrs with key set, insert-or-overwrite
+builtins.set (builtins.set { a = 1; } "b" (builtins.get { a = 1; } "a")) "a" 9

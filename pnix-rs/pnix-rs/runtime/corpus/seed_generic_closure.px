@@ -1,0 +1,10 @@
+# builtins.genericClosure: FIFO worklist traversal, deduped by `key`
+# (oracle-pinned against pnix-clr/pnix-cljs — both agree on this exact
+# breadth-first visitation order for a branching operator).
+builtins.genericClosure {
+  startSet = [ { key = 1; } ];
+  operator = item:
+    if item.key < 4
+    then [ { key = item.key * 2; } { key = item.key * 2 + 1; } ]
+    else [ ];
+}

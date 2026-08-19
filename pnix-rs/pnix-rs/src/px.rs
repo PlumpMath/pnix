@@ -3404,6 +3404,35 @@ fn px_str_has_suffix(s: &str, suf: &str) -> bool {
     true
 }
 
+/// Naive substring search (char-based, mirrors `px_str_has_suffix`'s manual
+/// Vec<char> comparison rather than relying on `str::contains`).
+fn px_str_has_infix(hay: &str, needle: &str) -> bool {
+    let hc: Vec<char> = hay.chars().collect();
+    let nc: Vec<char> = needle.chars().collect();
+    if nc.is_empty() {
+        return true;
+    }
+    if nc.len() > hc.len() {
+        return false;
+    }
+    let mut i = 0usize;
+    while i + nc.len() <= hc.len() {
+        let mut matched = true;
+        let mut j = 0usize;
+        while j < nc.len() {
+            if hc[i + j] != nc[j] {
+                matched = false;
+            }
+            j += 1;
+        }
+        if matched {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
 fn px_flatten_into(v: &PxVal, out: &mut Vec<PxVal>) -> Result<(), String> {
     let v = px_force(v)?;
     match v {
@@ -4066,6 +4095,54 @@ pub fn px_builtin_names() -> Vec<&'static str> {
         "zipListsWith",
         "warn",
         "assertMsg",
+        // Cross-host consensus tranche (2026-08-19): builtins present across
+        // >=3 of the 4 reference hosts (pnix-clj/pnix-clr/pnix-cljs/pnix-hy)
+        // but missing from pnix-rs, oracle-pinned against those hosts before
+        // implementation (see px_builtin_exec). `mapAttrsToList`/`zipAttrs`
+        // already existed as dispatch targets (reachable only via lib before
+        // now); this tranche makes them public builtins.* names too.
+        // Skipped (cross-host disagreement, see commit message):
+        // `pnixMounts`, `unsafeGetAttrPos`.
+        "cons",
+        "append",
+        "drop",
+        "take",
+        "find",
+        "findFirst",
+        "reverseList",
+        "replicate",
+        "zip",
+        "zipAttrs",
+        "keys",
+        "values",
+        "mapAttrsToList",
+        "merge",
+        "genAttrs",
+        "foldlAttrs",
+        "genericClosure",
+        "nameValuePair",
+        "concatStrings",
+        "concatMapStrings",
+        "stringToCharacters",
+        "hasInfix",
+        "optionalString",
+        "imap0",
+        "imap1",
+        "toInt",
+        "placeholder",
+        "storePath",
+        "getEnv",
+        "and",
+        "or",
+        "not",
+        "eq",
+        "lt",
+        "le",
+        "gt",
+        "ge",
+        "neg",
+        "get",
+        "set",
     ]
 }
 
@@ -4306,6 +4383,19 @@ fn px_builtin_arity(name: &str) -> usize {
         || name == "getName"
         || name == "getVersion"
         || name == "zipAttrs"
+        // Cross-host consensus tranche (2026-08-19), arity 1.
+        || name == "reverseList"
+        || name == "keys"
+        || name == "values"
+        || name == "stringToCharacters"
+        || name == "concatStrings"
+        || name == "toInt"
+        || name == "placeholder"
+        || name == "storePath"
+        || name == "getEnv"
+        || name == "not"
+        || name == "neg"
+        || name == "genericClosure"
     {
         1
     } else if name == "concatLists" {
@@ -4328,6 +4418,29 @@ fn px_builtin_arity(name: &str) -> usize {
         || name == "filterAttrsRecursive" || name == "mapAttrsRecursive"
         || name == "mapAttrsToList" || name == "assertMsg"
         || name == "updateManyAttrs"
+        // Cross-host consensus tranche (2026-08-19), arity 2.
+        || name == "cons"
+        || name == "append"
+        || name == "drop"
+        || name == "take"
+        || name == "find"
+        || name == "zip"
+        || name == "merge"
+        || name == "genAttrs"
+        || name == "nameValuePair"
+        || name == "concatMapStrings"
+        || name == "hasInfix"
+        || name == "optionalString"
+        || name == "imap0"
+        || name == "imap1"
+        || name == "and"
+        || name == "or"
+        || name == "eq"
+        || name == "lt"
+        || name == "le"
+        || name == "gt"
+        || name == "ge"
+        || name == "get"
     {
         2
     } else if name == "replaceStrings" || name == "foldl" || name == "foldr"
@@ -4335,6 +4448,10 @@ fn px_builtin_arity(name: &str) -> usize {
         || name == "concatMapStringsSep" || name == "flip"
         || name == "attrByPath" || name == "getAttrFromPathOr"
         || name == "zipListsWith"
+        // Cross-host consensus tranche (2026-08-19), arity 3.
+        || name == "findFirst"
+        || name == "foldlAttrs"
+        || name == "set"
     {
         3
     } else if name == "isFunction" || name == "throw"
@@ -6222,6 +6339,477 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
         match &args[0] {
             PxVal::List(_) => Ok(PxVal::Bool(true)),
             _ => Ok(PxVal::Bool(false)),
+        }
+    // ---- Cross-host consensus tranche (2026-08-19) --------------------
+    // Every builtin below was oracle-pinned against >=3 of the 4 reference
+    // hosts (pnix-clj/pnix-clr/pnix-cljs/pnix-hy) before being ported here.
+    } else if name == "cons" {
+        match &args[1] {
+            PxVal::List(items) => {
+                let mut out = Vec::new();
+                out.push(args[0].clone());
+                for it in items.iter() {
+                    out.push(it.clone());
+                }
+                Ok(px_list(out))
+            }
+            other => Err(format!("px: cons expects a list, got {}", px_kind(other))),
+        }
+    } else if name == "append" {
+        match (&args[0], &args[1]) {
+            (PxVal::List(a), PxVal::List(b)) => {
+                let mut out = Vec::new();
+                for it in a.iter() {
+                    out.push(it.clone());
+                }
+                for it in b.iter() {
+                    out.push(it.clone());
+                }
+                Ok(px_list(out))
+            }
+            _ => Err(String::from("px: append expects two lists")),
+        }
+    } else if name == "drop" {
+        match (&args[0], &args[1]) {
+            (PxVal::Int(n), PxVal::List(items)) => {
+                let n = if *n < 0 { 0usize } else { *n as usize };
+                let mut out = Vec::new();
+                let mut i = 0usize;
+                while i < items.len() {
+                    if i >= n {
+                        out.push(items[i].clone());
+                    }
+                    i += 1;
+                }
+                Ok(px_list(out))
+            }
+            _ => Err(String::from("px: drop expects (int, list)")),
+        }
+    } else if name == "take" {
+        match (&args[0], &args[1]) {
+            (PxVal::Int(n), PxVal::List(items)) => {
+                let n = if *n < 0 { 0usize } else { *n as usize };
+                let mut out = Vec::new();
+                let mut i = 0usize;
+                while i < items.len() && i < n {
+                    out.push(items[i].clone());
+                    i += 1;
+                }
+                Ok(px_list(out))
+            }
+            _ => Err(String::from("px: take expects (int, list)")),
+        }
+    } else if name == "find" {
+        // find needle list: linear scan for a structurally-equal element;
+        // the element itself (not a bool) is returned, or null.
+        match &args[1] {
+            PxVal::List(items) => {
+                for it in items.iter() {
+                    if px_val_eq_nested(&args[0], it)? {
+                        return px_force(it);
+                    }
+                }
+                Ok(PxVal::Null)
+            }
+            other => Err(format!("px: find expects a list, got {}", px_kind(other))),
+        }
+    } else if name == "findFirst" {
+        match &args[2] {
+            PxVal::List(items) => {
+                for it in items.iter() {
+                    let keep = px_force(&px_apply(&args[0], it.clone())?)?;
+                    match keep {
+                        PxVal::Bool(true) => return px_force(it),
+                        PxVal::Bool(false) => {}
+                        other => {
+                            return Err(format!(
+                                "px: findFirst predicate must return bool, got {}",
+                                px_kind(&other)
+                            ))
+                        }
+                    }
+                }
+                Ok(args[1].clone())
+            }
+            other => Err(format!("px: findFirst expects a list, got {}", px_kind(other))),
+        }
+    } else if name == "reverseList" {
+        match &args[0] {
+            PxVal::List(items) => {
+                let mut out = Vec::new();
+                let mut i = items.len();
+                while i > 0 {
+                    i -= 1;
+                    out.push(items[i].clone());
+                }
+                Ok(px_list(out))
+            }
+            other => Err(format!("px: reverseList expects a list, got {}", px_kind(other))),
+        }
+    } else if name == "replicate" {
+        match &args[0] {
+            PxVal::Int(n) => {
+                if *n < 0 {
+                    return Err(String::from("px: replicate: negative count"));
+                }
+                let mut out = Vec::new();
+                let mut i = 0i64;
+                while i < *n {
+                    out.push(args[1].clone());
+                    i += 1;
+                }
+                Ok(px_list(out))
+            }
+            other => Err(format!("px: replicate expects an int, got {}", px_kind(other))),
+        }
+    } else if name == "zip" {
+        match (&args[0], &args[1]) {
+            (PxVal::List(a), PxVal::List(b)) => {
+                let n = if a.len() < b.len() { a.len() } else { b.len() };
+                let mut out = Vec::new();
+                let mut i = 0usize;
+                while i < n {
+                    out.push(px_list(vec![a[i].clone(), b[i].clone()]));
+                    i += 1;
+                }
+                Ok(px_list(out))
+            }
+            _ => Err(String::from("px: zip expects two lists")),
+        }
+    } else if name == "keys" {
+        px_builtin_exec("attrNames", &vec![args[0].clone()])
+    } else if name == "values" {
+        px_builtin_exec("attrValues", &vec![args[0].clone()])
+    } else if name == "merge" {
+        px_binary_outcome(&PxOp::Update, &args[0], &args[1]).map_err(|e| e.diagnostic)
+    } else if name == "genAttrs" {
+        match &args[0] {
+            PxVal::List(names) => {
+                let mut out = Vec::new();
+                for n in names.iter() {
+                    let n = px_force(n)?;
+                    match &n {
+                        PxVal::Str(k) => {
+                            out.push((k.clone(), px_defer_apply(args[1].clone(), PxVal::Str(k.clone()))));
+                        }
+                        other => {
+                            return Err(format!(
+                                "px: genAttrs expects a list of strings, got {}",
+                                px_kind(other)
+                            ))
+                        }
+                    }
+                }
+                Ok(px_attrs(out))
+            }
+            other => Err(format!("px: genAttrs expects a list, got {}", px_kind(other))),
+        }
+    } else if name == "foldlAttrs" {
+        // foldlAttrs op init attrs — visits keys in sorted order.
+        match &args[2] {
+            PxVal::Attrs(fields) => {
+                let mut names = Vec::new();
+                for (k, _v) in fields.iter() {
+                    names.push(k.clone());
+                }
+                let sorted = px_sort_strings(names);
+                let mut acc = args[1].clone();
+                for n in sorted {
+                    for (k, v) in fields.iter() {
+                        if *k == n {
+                            let step = px_apply(&args[0], acc)?;
+                            let step = px_apply(&step, PxVal::Str(k.clone()))?;
+                            acc = px_force(&px_apply(&step, v.clone())?)?;
+                        }
+                    }
+                }
+                Ok(acc)
+            }
+            other => Err(format!("px: foldlAttrs expects an attrset, got {}", px_kind(other))),
+        }
+    } else if name == "genericClosure" {
+        match &args[0] {
+            PxVal::Attrs(fields) => {
+                let operator = match px_attrs_find(fields.as_ref(), "operator") {
+                    Some(v) => v.clone(),
+                    None => return Err(String::from(
+                        "px: genericClosure: missing attribute 'operator'",
+                    )),
+                };
+                let start_set = match px_attrs_find(fields.as_ref(), "startSet") {
+                    Some(v) => px_force(v)?,
+                    None => return Err(String::from(
+                        "px: genericClosure: missing attribute 'startSet'",
+                    )),
+                };
+                let mut worklist: Vec<PxVal> = match &start_set {
+                    PxVal::List(items) => {
+                        let mut out = Vec::new();
+                        for it in items.iter() {
+                            out.push(it.clone());
+                        }
+                        out
+                    }
+                    other => {
+                        return Err(format!(
+                            "px: genericClosure: startSet must be a list, got {}",
+                            px_kind(other)
+                        ))
+                    }
+                };
+                let mut seen: Vec<PxVal> = Vec::new();
+                let mut result: Vec<PxVal> = Vec::new();
+                let mut i = 0usize;
+                while i < worklist.len() {
+                    let item = px_force(&worklist[i])?;
+                    let item_fields = match &item {
+                        PxVal::Attrs(fs) => fs,
+                        other => {
+                            return Err(format!(
+                                "px: genericClosure: item must be an attrset, got {}",
+                                px_kind(other)
+                            ))
+                        }
+                    };
+                    let key = match px_attrs_find(item_fields.as_ref(), "key") {
+                        Some(k) => px_force(k)?,
+                        None => return Err(String::from(
+                            "px: genericClosure: item missing attribute 'key'",
+                        )),
+                    };
+                    let mut already = false;
+                    for s in seen.iter() {
+                        if px_val_eq_nested(s, &key)? {
+                            already = true;
+                        }
+                    }
+                    if !already {
+                        seen.push(key);
+                        result.push(item.clone());
+                        let next = px_force(&px_apply(&operator, item.clone())?)?;
+                        match &next {
+                            PxVal::List(next_items) => {
+                                for it in next_items.iter() {
+                                    worklist.push(it.clone());
+                                }
+                            }
+                            other => {
+                                return Err(format!(
+                                    "px: genericClosure: operator must return a list, got {}",
+                                    px_kind(other)
+                                ))
+                            }
+                        }
+                    }
+                    i += 1;
+                }
+                Ok(px_list(result))
+            }
+            other => Err(format!(
+                "px: genericClosure expects an attrset, got {}",
+                px_kind(other)
+            )),
+        }
+    } else if name == "nameValuePair" {
+        match &args[0] {
+            PxVal::Str(_) => Ok(px_attrs(vec![
+                (String::from("name"), args[0].clone()),
+                (String::from("value"), args[1].clone()),
+            ])),
+            other => Err(format!(
+                "px: nameValuePair expects a string name, got {}",
+                px_kind(other)
+            )),
+        }
+    } else if name == "concatStrings" {
+        match &args[0] {
+            PxVal::List(items) => {
+                let mut out = String::new();
+                for it in items.iter() {
+                    let it = px_force(it)?;
+                    match &it {
+                        PxVal::Str(s) => out.push_str(s),
+                        other => {
+                            return Err(format!(
+                                "px: concatStrings expects strings, got {}",
+                                px_kind(other)
+                            ))
+                        }
+                    }
+                }
+                Ok(PxVal::Str(out))
+            }
+            other => Err(format!("px: concatStrings expects a list, got {}", px_kind(other))),
+        }
+    } else if name == "concatMapStrings" {
+        match &args[1] {
+            PxVal::List(items) => {
+                let mut out = String::new();
+                for it in items.iter() {
+                    let r = px_force(&px_apply(&args[0], it.clone())?)?;
+                    match px_to_string_coerce(&r)? {
+                        PxVal::Str(s) => out.push_str(&s),
+                        _ => {}
+                    }
+                }
+                Ok(PxVal::Str(out))
+            }
+            other => Err(format!(
+                "px: concatMapStrings expects a list, got {}",
+                px_kind(other)
+            )),
+        }
+    } else if name == "stringToCharacters" {
+        match &args[0] {
+            PxVal::Str(s) => {
+                let mut out = Vec::new();
+                for c in s.chars() {
+                    let mut t = String::new();
+                    t.push(c);
+                    out.push(PxVal::Str(t));
+                }
+                Ok(px_list(out))
+            }
+            other => Err(format!(
+                "px: stringToCharacters expects a string, got {}",
+                px_kind(other)
+            )),
+        }
+    } else if name == "hasInfix" {
+        match (&args[0], &args[1]) {
+            (PxVal::Str(needle), PxVal::Str(hay)) => Ok(PxVal::Bool(px_str_has_infix(hay, needle))),
+            _ => Err(String::from("px: hasInfix expects two strings")),
+        }
+    } else if name == "optionalString" {
+        match &args[0] {
+            PxVal::Bool(true) => match &args[1] {
+                PxVal::Str(s) => Ok(PxVal::Str(s.clone())),
+                other => Err(format!(
+                    "px: optionalString expects a string, got {}",
+                    px_kind(other)
+                )),
+            },
+            PxVal::Bool(false) => Ok(PxVal::Str(String::new())),
+            other => Err(format!("px: optionalString expects a bool, got {}", px_kind(other))),
+        }
+    } else if name == "imap0" {
+        match &args[1] {
+            PxVal::List(items) => {
+                let mut out = Vec::new();
+                let mut i = 0i64;
+                for it in items.iter() {
+                    let step = px_apply(&args[0], PxVal::Int(i))?;
+                    out.push(px_defer_apply(step, it.clone()));
+                    i += 1;
+                }
+                Ok(px_list(out))
+            }
+            other => Err(format!("px: imap0 expects a list, got {}", px_kind(other))),
+        }
+    } else if name == "imap1" {
+        match &args[1] {
+            PxVal::List(items) => {
+                let mut out = Vec::new();
+                let mut i = 1i64;
+                for it in items.iter() {
+                    let step = px_apply(&args[0], PxVal::Int(i))?;
+                    out.push(px_defer_apply(step, it.clone()));
+                    i += 1;
+                }
+                Ok(px_list(out))
+            }
+            other => Err(format!("px: imap1 expects a list, got {}", px_kind(other))),
+        }
+    } else if name == "toInt" {
+        match &args[0] {
+            PxVal::Str(s) => match s.parse::<i64>() {
+                Ok(n) => Ok(PxVal::Int(n)),
+                Err(_) => Err(format!("px: toInt: not an integer: '{}'", s)),
+            },
+            other => Err(format!("px: toInt expects a string, got {}", px_kind(other))),
+        }
+    } else if name == "placeholder" {
+        match &args[0] {
+            PxVal::Str(output) => {
+                let bytes = sha_utf8_bytes(&format!("pnix-output:{}", output));
+                let hex = px_sha256_hex(bytes);
+                let hex_chars: Vec<char> = hex.chars().collect();
+                let mut prefix = String::new();
+                let mut i = 0usize;
+                while i < 32 && i < hex_chars.len() {
+                    prefix.push(hex_chars[i]);
+                    i += 1;
+                }
+                Ok(PxVal::Str(format!("/{}", prefix)))
+            }
+            other => Err(format!("px: placeholder expects a string, got {}", px_kind(other))),
+        }
+    } else if name == "storePath" {
+        // Pure evaluator: no store to resolve a store path against (matches
+        // the clr/cljs/clj majority: this always fails closed here too).
+        Err(String::from("px: storePath: pure evaluator has no store"))
+    } else if name == "getEnv" {
+        match &args[0] {
+            PxVal::Str(k) => match std::env::var(k) {
+                Ok(v) => Ok(PxVal::Str(v)),
+                Err(_) => Ok(PxVal::Str(String::new())),
+            },
+            other => Err(format!("px: getEnv expects a string, got {}", px_kind(other))),
+        }
+    } else if name == "and" {
+        match (&args[0], &args[1]) {
+            (PxVal::Bool(a), PxVal::Bool(b)) => Ok(PxVal::Bool(*a && *b)),
+            _ => Err(String::from("px: and expects two bools")),
+        }
+    } else if name == "or" {
+        match (&args[0], &args[1]) {
+            (PxVal::Bool(a), PxVal::Bool(b)) => Ok(PxVal::Bool(*a || *b)),
+            _ => Err(String::from("px: or expects two bools")),
+        }
+    } else if name == "not" {
+        match &args[0] {
+            PxVal::Bool(a) => Ok(PxVal::Bool(!*a)),
+            other => Err(format!("px: not expects a bool, got {}", px_kind(other))),
+        }
+    } else if name == "eq" {
+        px_binary_outcome(&PxOp::Eq, &args[0], &args[1]).map_err(|e| e.diagnostic)
+    } else if name == "lt" {
+        px_binary_outcome(&PxOp::Lt, &args[0], &args[1]).map_err(|e| e.diagnostic)
+    } else if name == "le" {
+        px_binary_outcome(&PxOp::Le, &args[0], &args[1]).map_err(|e| e.diagnostic)
+    } else if name == "gt" {
+        px_binary_outcome(&PxOp::Gt, &args[0], &args[1]).map_err(|e| e.diagnostic)
+    } else if name == "ge" {
+        px_binary_outcome(&PxOp::Ge, &args[0], &args[1]).map_err(|e| e.diagnostic)
+    } else if name == "neg" {
+        px_binary_outcome(&PxOp::Sub, &PxVal::Int(0), &args[0]).map_err(|e| e.diagnostic)
+    } else if name == "get" {
+        match (&args[0], &args[1]) {
+            (PxVal::Attrs(fields), PxVal::Str(k)) => match px_attrs_find(fields.as_ref(), k) {
+                Some(value) => Ok(value.clone()),
+                None => Err(format!("px: get: attribute '{}' missing", k)),
+            },
+            _ => Err(String::from("px: get expects (attrset, string)")),
+        }
+    } else if name == "set" {
+        match (&args[0], &args[1]) {
+            (PxVal::Attrs(fields), PxVal::Str(k)) => {
+                let mut out = Vec::new();
+                let mut replaced = false;
+                for (fk, fv) in fields.iter() {
+                    if fk == k {
+                        out.push((fk.clone(), args[2].clone()));
+                        replaced = true;
+                    } else {
+                        out.push((fk.clone(), fv.clone()));
+                    }
+                }
+                if !replaced {
+                    out.push((k.clone(), args[2].clone()));
+                }
+                Ok(px_attrs(out))
+            }
+            _ => Err(String::from("px: set expects (attrset, string, value)")),
         }
     } else {
         Err(format!("px: unknown builtin {}", name))
