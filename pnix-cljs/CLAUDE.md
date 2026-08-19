@@ -24,8 +24,8 @@ pnix-cljs
   일상적인 `pnix-cljs` 평가를 gate 할 수 없다.
 - 활성 ClojureScript 소스 클로저에 JVM, Java reflection, ASM, 또는
   Clojure 전용 구현 코드를 복사하지 않는다.
-- 이 seed는 세 확립 호스트와의 완전 패리티를 주장하지 않는다. 다만
-  2026-08-11 성숙도 패스에서 builtin 표면이 상당히 넓어졌다
+- 이 seed는 다른 호스트들과 아직 공유 corpus/all-host gate로 교차검증되지
+  않았다. 2026-08-11 성숙도 패스에서 builtin 표면은 상당히 넓어졌다
   (math, bitwise, list/attrset 헬퍼를 참조 호스트 `evaluator.clj`에서 이식).
 
 ## 이중 축 + 호스트 라이브러리 (혼동 금지)

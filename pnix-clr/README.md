@@ -1,6 +1,6 @@
 # pnix-clr
 
-`pnix-clr`는 PNIX의 실험적 ClojureCLR/.NET 호스트다.
+`pnix-clr`는 PNIX의 ClojureCLR/.NET 호스트다.
 
 ```text
 pinned ClojureCLR bootstrap trust root

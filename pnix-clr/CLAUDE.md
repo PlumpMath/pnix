@@ -1,4 +1,4 @@
-# pnix-clr — ~/pnix의 experimental CLR host limb
+# pnix-clr — pnix의 ClojureCLR/.NET 호스트
 
 이 identity들을 분리 유지:
 
