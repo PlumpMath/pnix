@@ -1,6 +1,6 @@
 {
   description = "pnix-clj + clj-meta: a Clojure(clj-meta) <-> pnix meta-circular toolkit (Clojure/JVM-hosted pnix runtime + clj-meta host-proof lane: pure eval, Futamura specialize, 4-substrate self-hosting tower, content-addressed cache, capability index).";
-  # Scope is locked by ./pnix-clj/SCOPE_LOCK.md. pnix-clj core is the Clojure-hosted pnix meta-circular proof lane; NL/MSV/Hangul/gate-graph/multi-language emit/coding-agent lanes are out of scope.
+  # Scope is locked by ./pnix-clj/docs/IMPLEMENTATION.md §5. pnix-clj core is the Clojure-hosted pnix meta-circular proof lane; NL/MSV/Hangul/gate-graph/multi-language emit/coding-agent lanes are out of scope.
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -111,7 +111,7 @@
               echo "# Host-main deps.edn:"
               echo "#   {:deps {pnix/pnix-clj {:local/root \"$root\"}}}"
               echo "# Import: (require '[pnix-clj.core :as c]) (c/eval-file \"x.px\")"
-              echo "# Cookbook: pnix-clj/docs/HOST_IMPORT.md"
+              echo "# Cookbook: pnix-clj/docs/IMPLEMENTATION.md §11"
             '';
           };
         in

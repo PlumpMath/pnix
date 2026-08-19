@@ -3,7 +3,7 @@
 **목적:** `clojure-clr` focused facade(`-e` / 단일 폼)를 넘는 P3.2 step 3
 템플릿 — 업스트림 bootstrap + `CLOJURE_LOAD_PATH`로 멀티 네임스페이스 로드.
 
-**TFM:** net10.0만. Rhino net8과 혼동 금지 — monorepo `docs/TFM_POLICY.md`.
+**TFM:** net10.0만. Rhino net8과 혼동 금지 — `pnix-clr/docs/IMPLEMENTATION.md` §7.
 
 ## 레이아웃
 

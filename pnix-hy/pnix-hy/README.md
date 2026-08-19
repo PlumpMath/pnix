@@ -75,4 +75,5 @@ pnix-hy-project --check                                 # 모든 toolkit self-ch
 (설치 없이 소스 체크아웃에서: `PYTHONPATH=. python bin/pnix-hy-project ...` 또는
 `python -m pnix_hy.cli ...`.)
 
-전체 기능 목록과 설계/로드맵은 `todo.md`, 실행되는 대비 예제는 `examples/` 참고.
+전체 기능 목록과 설계/로드맵은 `docs/TODO.md`(진행 중 작업)·`docs/PLANS.md`(미확정 방향),
+실행되는 대비 예제는 `examples/` 참고.

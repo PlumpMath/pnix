@@ -98,7 +98,7 @@ namespace Pnix.Clr
     /// <summary>
     /// Evaluate pnix source or a <c>.px</c> file from C#.
     /// Default path process-spawns <c>pnix-clr</c>. In-process embedding is
-    /// design-only — see <c>docs/IN_PROCESS_EVAL.md</c>.
+    /// design-only — see <c>pnix-clr/docs/IMPLEMENTATION.md</c> §8.
     /// </summary>
     public static class Eval
     {
@@ -124,7 +124,7 @@ namespace Pnix.Clr
         /// <summary>
         /// Experimental in-process eval (net10+). Loads ClojureCLR + guest AOT
         /// without <c>Process.Start</c>. Requires substrate + artifact paths
-        /// (see <c>docs/IN_PROCESS_EVAL.md</c>). Default supported path remains
+        /// (see <c>pnix-clr/docs/IMPLEMENTATION.md</c> §8). Default supported path remains
         /// <see cref="Source"/> (process-spawn).
         /// </summary>
         public static EvalResult SourceInProcess(string source, EvalOptions? options = null)
@@ -136,7 +136,7 @@ namespace Pnix.Clr
             _ = options;
             throw new NotSupportedException(
                 "Pnix.Clr in-process eval requires net10.0+ (product TFM). " +
-                "On net8 use Eval.Source (process-spawn). See docs/IN_PROCESS_EVAL.md.");
+                "On net8 use Eval.Source (process-spawn). See pnix-clr/docs/IMPLEMENTATION.md §8.");
 #endif
         }
 
@@ -153,7 +153,7 @@ namespace Pnix.Clr
             _ = options;
             throw new NotSupportedException(
                 "Pnix.Clr in-process eval requires net10.0+ (product TFM). " +
-                "On net8 use Eval.File (process-spawn). See docs/IN_PROCESS_EVAL.md.");
+                "On net8 use Eval.File (process-spawn). See pnix-clr/docs/IMPLEMENTATION.md §8.");
 #endif
         }
 

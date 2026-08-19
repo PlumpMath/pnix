@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Regenerate the 5-host builtins presence matrix embedded in each host's
-# docs/IMPLEMENTATION_MAP.md. This is a cross-host dev-hygiene tool, not part
+# docs/IMPLEMENTATION.md (was IMPLEMENTATION_MAP.md until the 2026-08-20
+# per-host doc consolidation). This is a cross-host dev-hygiene tool, not part
 # of any single host's own gate (that would violate self-containment) — run
 # it by hand when builtins are added/removed, or with --check to see if the
 # tables embedded in the docs have drifted from source.
@@ -12,7 +13,7 @@
 #   truth there is already the `capabilities`/`capabilities-check` gate)
 # - hy reads the top-level keys of the `builtins = {...}` dict in
 #   pnix_runtime.py (lane 1 of hy's 3-lane duplication — see hy's
-#   IMPLEMENTATION_MAP.md §1)
+#   IMPLEMENTATION.md §1)
 #
 # import/scopedImport are reserved parser keywords in clr/cljs/rs, not
 # registry entries, so this script cannot see them there — those two rows
@@ -25,7 +26,7 @@
 # Usage:
 #   bin/gen-builtin-presence-matrix            print the fresh markdown table
 #   bin/gen-builtin-presence-matrix --check    exit non-zero if any host's
-#                                               IMPLEMENTATION_MAP.md table
+#                                               IMPLEMENTATION.md table
 #                                               disagrees with a fresh extract
 set -euo pipefail
 
@@ -76,7 +77,7 @@ sed -i '' 's/^| scopedImport | O | - | - | - | O |$/| scopedImport* | O | O | O 
 if [[ "${1:-}" == "--check" ]]; then
   status=0
   for f in pnix-clj/pnix-clj pnix-clr/pnix-clr pnix-cljs/pnix-cljs pnix-rs/pnix-rs pnix-hy/pnix-hy; do
-    doc="$f/docs/IMPLEMENTATION_MAP.md"
+    doc="$f/docs/IMPLEMENTATION.md"
     [[ -f "$doc" ]] || continue
     tag="${f//\//_}"
     awk '/^\| 이름 \| clj \| clr \| cljs \| rs \| hy \|$/{p=1} p{print} p && /^\| zipListsWith /{exit}' "$doc" > "$TMP/embedded-$tag.md" 2>/dev/null || true

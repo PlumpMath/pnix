@@ -122,7 +122,7 @@
               echo "PNIX_RS_RUNTIME=${pnix-rs}/bin/pnix-rs"
               echo "# Link: -L $lib/lib  -I $lib/include  (pnix_rs.h)"
               echo "# Rust: pnix_rs::eval_file(\"x.px\")   C: pnix_rs_eval"
-              echo "# Cookbook: ../HOST_IMPORT.md § rs + docs/CARGO_HOST_IMPORT.md"
+              echo "# Cookbook: ../HOST_IMPORT.md § rs + pnix-rs/docs/IMPLEMENTATION.md §7"
               if [ -d "$lib/lib" ]; then
                 find "$lib/lib" -maxdepth 1 -type f -printf '#   lib/%f\n' 2>/dev/null \
                   || find "$lib/lib" -maxdepth 1 -type f | sed 's|.*/|#   lib/|'

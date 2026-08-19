@@ -34,11 +34,12 @@ $P px-eval -f runtime/corpus/c05_recurse.px
 병치 적용 (`f x y`), **재귀** `let ... in` (형제·자기 참조 해석 — pnix let 의미),
 attrset 리터럴 `{ k = v; }` (정렬된 정규 출력), `#` 주석.
 seed 밖 (float, 문자열, 리스트, `//` merge, selection, builtins)은 정직하게
-거부되며 `todo.md`에 추적된다.
+거부되며(대부분은 이후 확장됨 — 현재 지원 현황은
+`docs/IMPLEMENTATION.md`, 남은 진짜 갭은 `docs/BUGS.md`에 추적된다).
 
 `runtime/corpus/`의 코퍼스 파일은 이후 크로스호스트 비교를 위해 pnix-clj
 `rust_grounded` 불변 코퍼스에서 벤더한 두 케이스(`c05_recurse`, `c09_lambda`)와
 seed 소유 케이스(재귀 let 회귀 가드 `seed_let_rec.px` 포함)를 포함한다.
 
-**이중 축 / Cargo 임포트:** [`../docs/CARGO_HOST_IMPORT.md`](../docs/CARGO_HOST_IMPORT.md),
+**이중 축 / Cargo 임포트:** [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) §7,
 [`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md).

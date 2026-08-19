@@ -223,8 +223,8 @@ def _scan_docs() -> list[Path]:
     docs: list[Path] = []
     if _DOCS_DIR.is_dir():
         docs += sorted(_DOCS_DIR.rglob("*.md"))
-    for extra in (_PKG_ROOT / "README.md", _PKG_ROOT / "todo.md",
-                  _REPO_ROOT / "README.md", _REPO_ROOT / "SCOPE_LOCK.md"):
+    for extra in (_PKG_ROOT / "README.md",
+                  _REPO_ROOT / "README.md", _REPO_ROOT / "AGENTS.md"):
         if extra.is_file():
             docs.append(extra)
     return docs

@@ -11,11 +11,12 @@ Python 언어 생태계(**Hy**, Python)와 **pnix**(순수·지연·Nix 계열 �
   (first-party 코드, Hy 자체와 별개). Hy 인터프리터 자체는 벤더링하지 않고 flake input
   (`github:hylang/hy` 태그 고정)에서 받아오며, `proofPython`이 설치된 패키지로 제공한다
   (`HY_ROOT` = 이 저장소 루트).
-- **`SCOPE_LOCK.md`** — 권위 있는 경계 선언(무엇을 바꾸기 전에 먼저 읽을 것).
+- **범위 선언**은 [`pnix-hy/docs/IMPLEMENTATION.md`](pnix-hy/docs/IMPLEMENTATION.md) §4
+  (무엇을 바꾸기 전에 먼저 읽을 것; 예전 `SCOPE_LOCK.md`, 2026-08-20 통합).
 
 > 이 프로젝트는 **현재 선언된 meta-circular-projection scope 안에서 닫혀 있음**
 > (`--check` 56/56, `--gate` PASS). 즉 *선언된 범위 기준으로 완성*이지 "전부 완성"이 아니다.
-> `SCOPE_LOCK.md` 참고.
+> `pnix-hy/docs/IMPLEMENTATION.md` §4 참고.
 
 ### 이중 축 + 라이브러리 (필독)
 
@@ -276,9 +277,13 @@ pnix-hy --deployment                             # projection/full = True 확인
 
 - `pnix-hy/README.md` — pnix-hy 패키지 상세 + 설계 근거.
 - `pnix-hy/examples/` — "plain의 한계 vs meta-circular 능력" 대비 예제(한글, 실행되는 데모).
-- `pnix-hy/docs/` — `IMPLEMENTATION_AUDIT.md`, `INTEROP_ROLE_MATRIX.md`, `SEPARATION.md`,
-  `proposals/`(변경 프로세스; 새 기능은 proposal로 시작, `SCOPE_LOCK.md` §7).
-- `pnix-hy/todo.md` / `hy-meta/todo.md` — 전체 기능 목록 + 상태.
+- `pnix-hy/docs/IMPLEMENTATION.md` — 아키텍처+빌트인 현황+범위 선언+레이어링+interop 매트릭스
+  (예전 `IMPLEMENTATION_MAP.md`+`SCOPE_LOCK.md`+`SEPARATION.md`+`IMPLEMENTATION_AUDIT.md`+
+  `INTEROP_ROLE_MATRIX.md`를 2026-08-20에 통합).
+- `pnix-hy/docs/BUGS.md` — 알려진 버그 + 의도적으로 고치지 않는 항목.
+- `pnix-hy/docs/PLANS.md` — 미확정 방향 + `docs/proposals/` 전체 인덱스(변경 프로세스; 새 기능은
+  proposal로 시작).
+- `pnix-hy/docs/TODO.md` / `hy-meta/todo.md` — 전체 기능 목록 + 상태.
 
 > 참고: `docs/`의 감사/설계/proposal 문서와 `todo.md`는 코드 식별자·해시·날짜가 섞인 **엔지니어링
 > 기록**이라 영어/혼용으로 둔다(정밀·이력 보존 목적). 사용자용 매뉴얼(이 README와 예제)은 한글이다.

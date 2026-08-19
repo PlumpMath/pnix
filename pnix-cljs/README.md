@@ -21,14 +21,14 @@ cljs-meta (cljs.js self-host substrate)
 
 ### 이중 축 + 라이브러리 (필독)
 
-정본: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). 에이전트 노트: [`CLAUDE.md`](CLAUDE.md).
+정본: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). 에이전트 노트: [`AGENTS.md`](AGENTS.md).
 
 | 축 | 명령 / 표면 |
 |------|-------------------|
 | **host-main** | bare `clojurescript` → `pnix-cljs`; `NODE_PATH` 있는 Node → `share/pnix-cljs` |
 | **pnix-main** | `nix run .#pnix-cljs-pnix` / `pnix-cljs --repl` |
 | **library** | flake 패키지 `$out/share/pnix-cljs` — **호스트 바인딩** JS, 이식 `.px` 아님 |
-| **Node에서 `.px` 임포트** | `require('@plumpmath/pnix-cljs')` → `evalFile*` — [HOST_IMPORT.md](HOST_IMPORT.md) |
+| **Node에서 `.px` 임포트** | `require('@plumpmath/pnix-cljs')` → `evalFile*` — [pnix-cljs/docs/IMPLEMENTATION.md](pnix-cljs/docs/IMPLEMENTATION.md) §3 |
 
 `shadow-cljs`는 **빌드 오케스트레이터**로 남을 수 있다. 기본 **런타임** 호스트는
 `pnix-cljs`이며 이식 가능한 멀티호스트 바이트코드 패키지가 아니다.

@@ -1,8 +1,10 @@
-# pnix-cljs todo
+# pnix-cljs PLANS
 
-이 파일은 pnix-cljs의 개별 작업 백로그다(범위/원칙은 `SCOPE_LOCK.md`,
-에이전트 지침은 `../CLAUDE.md` 참고). 아직 항목이 많지 않다 — 앞으로
-정리되는 아이디어/미완 항목을 여기 계속 추가한다.
+목적: 아직 확정 안 된 미래 설계 방향 — 방향 제시용 메모이지 착수가
+결정된 작업이 아니다. 지금 당장 누가 집어서 바로 진행할 수 있는 작업은
+[`TODO.md`](TODO.md)에 둔다. (구 `todo.md`의 "미래 아이디어" 절과 "실제
+백로그" 절을 2026-08-20에 그대로 옮겨왔다 — 둘 다 착수 확정은 안 됐지만
+방향은 있는 항목이라는 점에서 동일한 성격.)
 
 ## 미래 아이디어 — pnixMounts / unsafeGetAttrPos 통일 (아직 예정 없음, 2026-08-19)
 
@@ -64,7 +66,7 @@
 
 ## 실제 백로그 — CAPABILITIES.md 자동 생성기 없음 (2026-08-19)
 
-위 두 항목과 달리 이건 "아직 예정 없음" 메모가 아니라 **참고할 작동하는
+위 항목과 달리 이건 "아직 예정 없음" 메모가 아니라 **참고할 작동하는
 구현이 이미 3개 있는** 실제 gap이다. clj(`docs/CAPABILITIES.md` +
 `capabilities.clj`, `clojure -M:capabilities`로 재생성, drift 게이트
 있음), hy(`docs/CAPABILITIES.md` + `pnix_hy/capabilities.py`,
@@ -72,9 +74,10 @@
 `capabilities` 서브커맨드, `capabilities-check` 게이트) 셋 다 코드에서
 자동 파생되고 drift가 나면 게이트가 잡는 능력 인덱스를 갖고 있다.
 
-이 호스트(pnix-cljs)와 pnix-clr만 이게 없다 — 지금 있는 `SCOPE_LOCK.md`/
-`todo.md` 같은 문서는 전부 사람이 손으로 쓰고 갱신하는 것이라 코드가
-바뀌어도 자동으로 어긋난다는 걸 보장 못 한다. 만들 때는 이 3개 호스트의
-패턴(CLI 서브커맨드가 소스를 훑어 `docs/CAPABILITIES.md`를 재생성 +
-그 결과와 실제 파일을 비교하는 drift 게이트)을 그대로 참고하면 된다 —
-자세한 배경은 `docs/IMPLEMENTATION_MAP.md` §5.
+이 호스트(pnix-cljs)와 pnix-clr만 이게 없다 — 지금 있는
+`IMPLEMENTATION.md`/`TODO.md`/`BUGS.md`/`PLANS.md` 같은 문서는 전부
+사람이 손으로 쓰고 갱신하는 것이라 코드가 바뀌어도 자동으로 어긋난다는
+걸 보장 못 한다. 만들 때는 이 3개 호스트의 패턴(CLI 서브커맨드가 소스를
+훑어 `docs/CAPABILITIES.md`를 재생성 + 그 결과와 실제 파일을 비교하는
+drift 게이트)을 그대로 참고하면 된다 — 자세한 배경은
+[`IMPLEMENTATION.md`](IMPLEMENTATION.md) §7.

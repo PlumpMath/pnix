@@ -2,7 +2,7 @@
 // Loads ClojureCLR substrate + guest AOT into the default ALC via Resolving,
 // then invokes pnix-clr.evaluator without Process.Start.
 //
-// Design: docs/IN_PROCESS_EVAL.md
+// Design: pnix-clr/docs/IMPLEMENTATION.md §8
 // Status: experimental opt-in — process-spawn remains the supported default.
 
 #if NET10_0_OR_GREATER

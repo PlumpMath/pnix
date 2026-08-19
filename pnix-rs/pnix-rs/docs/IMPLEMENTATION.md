@@ -4,7 +4,11 @@
 중복해서 다시 만들지 않도록, 뭔가 다르게 동작하는 걸 발견했을 때 "진짜
 버그인지 원래 그런 건지" 빨리 판단할 수 있도록, 다른 4개 호스트와 비교할
 때 참고하도록 만들었다. 2026-08-19 작성 시작 — 이후 구조가 바뀌면 여기도
-같이 갱신할 것.
+같이 갱신할 것. 2026-08-20: `docs/IMPLEMENTATION_MAP.md`에서 이 이름으로
+옮기면서 REGISTRY.md/SCOPE_LOCK.md/todo.md/docs/CARGO_HOST_IMPORT.md
+4개 문서의 내용을 흡수(§5~§7 신설, §4에 압축 이력 추가) — 저 4개는
+삭제됐다. 열린 작업은 `docs/TODO.md`, 알려진 제한/의도적 held는
+`docs/BUGS.md`, 미확정 로드맵은 `docs/PLANS.md`로 분리.
 
 ## 1. 아키텍처 개요 — 어디서 뭘 찾아야 하는가
 
@@ -70,16 +74,21 @@ AST 순회 유틸 — `PxExpr`에 새 variant를 추가하면 이 파일들도 �
 ### 관련 문서 — 여기 없는 내용은 여기서 찾을 것
 
 이 문서는 "무엇이 어디 있는지"에 집중한다. 아래는 이미 있는 다른 문서들 —
-내용을 중복하지 않고 링크만 한다.
+내용을 중복하지 않고 링크만 한다. **2026-08-20 문서 정리**: 예전에는
+REGISTRY.md/SCOPE_LOCK.md/todo.md/docs/CARGO_HOST_IMPORT.md 4개로 흩어져
+있던 내용을 이 문서(구현/게이트/원칙)와 `docs/TODO.md`(열린 작업)/
+`docs/BUGS.md`(알려진 제한)/`docs/PLANS.md`(미확정 방향)로 모았다 — 저
+4개 파일은 삭제됨, 아래 표는 새 위치 기준.
 
 | 문서 | 다루는 것 |
 |---|---|
-| [`pnix-rs/REGISTRY.md`](../../REGISTRY.md) | **중복개발 방지용 통합 인덱스** — pnix-rs(18 게이트)/rs-meta(57 게이트) 전체 게이트 레지스트리(truth = code) + §2 로드맵(아직 안 만든 것, proposal 링크 포함). 새 능력을 만들기 전엔 여기부터 grep할 것 — 이 IMPLEMENTATION_MAP.md보다 이쪽이 "이미 구현됐는지" 질문의 1차 소스다 |
-| [`pnix-rs/pnix-rs/SCOPE_LOCK.md`](../SCOPE_LOCK.md) | 권위 있는 범위 선언 — "scope 대비 완성"의 정의, 의도적으로 보류된 기능 목록(경로/string-context 값, float 정규화, 정렬 안정성 등) |
-| [`pnix-rs/pnix-rs/todo.md`](../todo.md)(795줄) | 작업 로그/로드맵 — 아키텍처, constitution(zero-dep, 재귀 let 의미론), DONE/TODO/HELD 정직성 표기, 날짜별 슬라이스 |
+| §6(아래) 게이트 레지스트리 | pnix-rs/rs-meta 전체 게이트 목록(truth = code, 옛 REGISTRY.md §1) — 새 능력을 만들기 전엔 여기부터 grep할 것 |
+| [`docs/TODO.md`](TODO.md) | 지금 당장 손댈 수 있는 열린 작업만(옛 todo.md의 미완료분 — 사실상 거의 없음, 대부분 이미 §4 역사로 편입됨) |
+| [`docs/BUGS.md`](BUGS.md) | 알려진 버그·제한, 그리고 **의도적으로 안 고치는 것**(옛 SCOPE_LOCK.md의 held 목록) |
+| [`docs/PLANS.md`](PLANS.md) | 미확정 로드맵 — proposal별 1~2줄 요약 + 링크(옛 REGISTRY.md §2) |
 | [`docs/CAPABILITIES.md`](CAPABILITIES.md) | **자동 생성**(손 편집 금지) — CLI 명령/모듈/px 표면/185개 빌트인 인벤토리. `pnix-rs capabilities`로 재생성, drift 게이트 `capabilities-check`가 어긋나면 잡음. 이 문서 §2 빌트인 표는 5개 호스트를 나란히 비교하려고 수동으로 만든 별개의 스냅샷이다(§5 참고) |
 | [`rs-meta/STATUS.md`](../../rs-meta/STATUS.md) | rs-meta(자매 프로젝트, pnix을 전혀 모르는 순수 Rust-in-Rust 메타순환 엔진)의 peer-floor 상태 |
-| `docs/proposals/000N-*.md`(10개), `docs/research/2026-07-03-metacircular-frontier.md` | 미구현 아이디어의 근거/설계 노트 — REGISTRY.md §2 로드맵 행이 여기를 가리킴 |
+| `docs/proposals/000N-*.md`(10개), `docs/research/2026-07-03-metacircular-frontier.md` | 미구현 아이디어의 근거/설계 노트 — 원본은 그대로 두고 `docs/PLANS.md`가 요약+링크만 건다 |
 
 ## 2. 빌트인 구현 현황 (5개 호스트 비교, 2026-08-19 기준)
 
@@ -349,7 +358,8 @@ diff).
   개별적으로 un-hold한 것들과 다르게, 숫자 모델 전체를 어떻게 할지
   아직 결정이 안 나서 의도적으로 묶어놓은 것.
 - **`pnixMounts`, `unsafeGetAttrPos`**: 5개 호스트 다 설계가 안 끝난
-  상태. 자세한 내용과 방향 아이디어는 `todo.md`의 "미래 아이디어" 절.
+  상태. 자세한 내용과 방향 아이디어는 [`docs/PLANS.md`](PLANS.md)의
+  "pnixMounts / unsafeGetAttrPos" 절.
 
 ## 4. 역사 — 무엇이 언제 만들어졌는가
 
@@ -361,9 +371,26 @@ diff).
 스냅샷(2만+5.6만 줄)으로 들여온다. **tower/specialize/bta/gate.rs/
 substrate-check/self-hosting이 "언제, 어떤 순서로" 만들어졌는지는 이
 repo git 이력으로 재구성이 안 된다** — 전부 `init` 한 커밋 안에 이미
-있었다. 그 이전 서사가 궁금하면 `REGISTRY.md`, `rs-meta/STATUS.md`,
+있었다. 그 이전 서사가 궁금하면 아래 §4-이전 압축 요약, `rs-meta/STATUS.md`,
 `docs/proposals/*.md`의 날짜/버전 표기를 참고할 것(git 커밋이 아니라
 문서 자체의 날짜가 유일한 단서인 경우가 많다).
+
+### §4-이전 (2026-07-02~07-10, git 이력 밖) — 옛 todo.md 압축 요약
+
+옛 `todo.md`(795줄)는 이 기간의 작업을 P0~P13 단위로 하나하나 기록했다.
+전부 `[x]` DONE이고 커밋 해시가 없어(위 git log 한계 참고) 날짜만 남는다.
+아래는 그 내용을 날짜 단위로 압축한 것 — 상세 설계/수용 기준이 궁금하면
+`docs/proposals/000N-*.md`와 `docs/research/2026-07-03-metacircular-frontier.md`를
+볼 것([`docs/PLANS.md`](PLANS.md) §2가 각 proposal을 1~2줄로 요약+링크).
+
+| 날짜 | 무엇을 |
+|---|---|
+| 07-02 | **P0~P10을 한 날에 완주**: px 런타임 기판(P0) · singleton mirror_run(P1, roundtrip 어휘 lossless/lossy-ok/held/rejected 확정) · pnix 런타임 stage ladder(P2) · canonical IR + in-house SHA-256(P3) · gate/witness 13필드(P4) · interop 경계(P5, host 접촉을 서브프로세스 호출·파일 읽기 두 가지로 한정) · rust-mirror v0 값 축(P6) · check 집계+`docs/CAPABILITIES.md` 자동생성(P7) · specialize 부분평가(P8) · incremental(P9, Unison식 의존성-치환 해시 + realisation 캐시) · compartment SES 격리(P10). 12 reports all_ready. |
+| 07-02~07-03 | **P11 tower** — 문헌 기반(Amin&Rompf POPL'18, Jones/Gomard/Sestoft, 3-Lisp) milestone 사다리: reify/reflect+self-interpreter(m1)→재귀 let 인코딩(m2)→**Rc 공유로 성능벽 해소**(m3a, 원 스케일 재귀 프로브 5분+ 타임아웃→19.2s)→str/list/attrs 인코딩(m3b)→고차 builtins 브리지(m4)→px로 쓴 specializer(m5)→**1차 Futamura 사영**(m6a, 인터프리터-free residual)→mix 자기언어 커버리지(m6b)→**2차 사영은 6라운드(1R~6R) 미종결**(20분~1h40m+, memo/lid/gid/정렬 이진탐색/축소객체까지 다 시도해도 안 풀림)→계측으로 진범 확정: **call-by-name 재귀 let의 지수 재평가**→**thunk-memo call-by-need 도입**(proposal 0003)으로 **1h40m+ → ~0.1초**(m6f, 2차 Futamura 사영 완주). 3차 사영(자기적용/cogen)은 **polyvariance가 의미적으로 폭발**해 연구 지평으로 확인(m7 fv-제한 coarsening은 5% 개선이 한계 — Jones-optimality를 못 올리는 강도 천장, deep-research finding 5). |
+| 07-03 | 같은 날: BTA 오프라인 분석기(m8, mix 폴딩의 상한임을 명시) · **Jones-optimality 게이트**(m9, jones-check) · 손으로 쓴 cogen bounded(proposal 0004) · 잘-타입된 residual 게이트(proposal 0005, rs-meta에 `typecheck` 커맨드 추가) · Rust AST projection v1a~v8(proposal 0001, 제네릭 struct/impl까지) · peer-engine adapter(proposal 0008, `src/engine.rs`) · canonical Rust IR + FNV hash(proposal 0009) · attest/reflect-tower/verifying-cache/phase/assumption/ir-diff/attenuate/explain 게이트 전부 이 날 편입(deep-research 프론티어 인덱스, proposal 0007). P12 action, P13 cross-host(TSV export)도 이 날. |
+| 07-08 | **owner amendment**: import/module system이 처음 범위 안으로(이전엔 예약/held 취급) — `SCOPE_LOCK.md`(이제 이 문서 §6)에 기록. 이 repo git 이력보다 이전이라 커밋 없음(init 스냅샷에 이미 반영돼 있었음); 실제 구현/`Isolated` 캡처 버그 수정은 08-19(§4-오늘). |
+| 07-10 | **proposal 0010 builtin surface convergence phase 1-2**: discovery baseline Nix 118종 대비 rs 77→phase 1 후 91종. checked i64 산술, 혼합 int/float 산술·비교(**Nix와 합치 — 이전에 있던 "int↔float 승격 없음" divergence가 이때 해소됨**), 부동소수점 `toString`(6자리, NaN/Infinity 스펠링), `hashString`(md5/sha1/sha256/sha512) 전부 `nix-instantiate 2.34.7`을 로컬 오라클로 pin해 검증. rs/hy/clj 3개 호스트 + shared conformance 148→182케이스 교차 게이트 PASS. raw-surface 전체 수렴·path/string-context 값·canonical JSON float(지수 표기/무한대 인코딩)는 명시적으로 open으로 남김(`docs/PLANS.md` 참고). |
+| 08-13~08-14 | **호스트 언어 임포트(Cargo)**: flake `packages.pnix-rs-library` + C 헤더, `PNIX_RS_LIB_DIR`/`PNIX_RS_INCLUDE_DIR` env, `pnix_rs::eval_file`/C `pnix_rs_eval`(§7 참고). crates.io 공개 배포는 owner가 "이 owner에겐 product goal 아님(로컬 전용)"으로 명시 결정. |
 
 `init` 이후 이 repo git 이력 안에서 있었던 주요 사건(rs-meta 쪽 —
 pnix-rs 자체는 대부분 오늘(§4-오늘) 있었음):
@@ -406,7 +433,220 @@ pnix-rs 자체는 대부분 오늘(§4-오늘) 있었음):
 `import`는 동작은 했지만 캡처 버그가 있었다. 이름 존재 여부(§2 표)와
 "실제로 올바르게 동작하는가"는 다른 질문이다.
 
-## 5. 이 문서가 코드와 어긋나지 않게 유지하는 법
+## 5. 게이트 레지스트리 (중복개발 방지용, 옛 REGISTRY.md §1 편입)
+
+**새 기능을 만들기 전에 여기부터 grep할 것.** 이미 구현된 것과 아직 안
+만든 것을 한 곳에 모아 누락·중복개발을 막는다는 옛 REGISTRY.md의 원칙을
+그대로 가져왔다 — 로드맵(아직 안 만든 것) 쪽은 [`docs/PLANS.md`](PLANS.md)로
+옮겨졌다. 두 lane 모두 crates.io 의존 0(std만); rs-meta는 네이티브 tier용으로
+rustc만 호출.
+
+### 5.1 pnix-rs (Rust↔px 프론트엔드)
+
+`pnix-rs check`가 all_ready로 집계하는 게이트 이름 목록, **소스 =
+`check_commands()`(`src/main.rs`)** — 2026-08-20 실측 **35개**:
+
+```text
+px · mirror · stage · ir · gate · interop · rust-mirror · specialize ·
+incremental · compartment · tower · bta · jones · welltyped · certify ·
+cogen · attest · reflect-tower · verifying-cache · phase · assumption ·
+ir-diff · attenuate · explain · engine-verdict · engine-artifact ·
+engine-request · engine-attestation · engine-verify · engine-batch ·
+action · cross-host · substrate · capabilities · registry
+```
+
+(각 게이트에 `-check` CLI 서브커맨드가 대응. 옛 REGISTRY.md는 "18 게이트"라고
+적어뒀었는데 실제로 세보니 35개였다 — REGISTRY.md 자신도 자기가 경고하던
+drift를 피하지 못한 사례. 정확한 개수가 궁금하면 이 표를 다시 믿지 말고
+`check_commands()`를 직접 셀 것.)
+
+무엇을 증명하는지 한 줄 요약(이름만으로 안 드러나는 것만):
+
+- **incremental** — demand-driven 변경 전파: 독립 변경→그것만, 피의존→전이적
+  의존자까지만 재평가.
+- **tower** — reify/reflect + px 자기해석기 == 네이티브 + **1·2차 Futamura
+  사영**(§4 역사 07-02~07-03 참고).
+- **bta** — 오프라인 binding-time 분석 + mix 교차검증(mix 폴딩의 상한).
+- **jones** — Jones-optimality(해석 계층이 실제로 제거됐는가, bloat-불변 게이트).
+- **certify** — proof-carrying residual(differential testing 기반 재검증 가능 인증서).
+- **cogen** — 손으로 쓴 generating extension(3차 사영을 자기적용 없이).
+- **attest** — typed attestation(predicate 타입 URI + subject content hash).
+- **reflect-tower** — 3-Lisp 유한 반영 타워(2-레벨 coherent).
+- **verifying-cache** — 캐시 무결성.
+- **phase** — phase 관측적 분리.
+- **assumption** — assumed specialization.
+- **ir-diff** — canonical IR 의미 diff.
+- **attenuate** — SES capability 생명주기(grant→감쇠→회수, 재확대 불가).
+- **welltyped** — px→Rust residual이 플로어 typeck(rs-meta `typecheck`)로
+  well-typed(Rust 정적 강점, proposal 0005).
+- **explain** — 사람이 읽는 진단 한 방(px 값+gate+ir+mirror+witness 조합,
+  새 기계 없음 — `main.rs`의 `explain_report`).
+- **engine-\***(verdict/artifact/request/attestation/verify/batch) —
+  `src/engine.rs`, proposal 0008(peer-engine adapter). rs-meta의 Rust
+  translation-validation 결과를 pnix-hy/pnix-clj류 peer engine이 이해할
+  공통 `.px` verdict 봉투로 매핑(`pnix.engine.verdict.v0` 등) — rs-meta는
+  여전히 pnix를 모르고 프로세스 경계(bootstrap CLI) 너머로만 호출된다.
+- **substrate** — rs-meta interp==rustc==native 3-way(px.rs 자체가
+  rs-meta subset 안에서 해석 가능함의 증거).
+- **capabilities/registry** — 이 절 자체의 drift 게이트(§8 참고).
+
+생성 원천: `pnix-rs capabilities` → `docs/CAPABILITIES.md`(drift 게이트
+`capabilities-check`, 정합 게이트 `registry-check`).
+
+### 5.2 rs-meta (Rust-in-Rust meta-circular, 자매 프로젝트)
+
+**out of scope 리마인더**: rs-meta 자체는 이 문서에서 건드리지 않는다
+(자세한 내용은 `rs-meta/STATUS.md`). 여기 적힌 건 REGISTRY.md가 남겨둔
+공개 요약뿐 — pnix-rs가 왜/어떻게 그걸 쓰는지 이해하는 데만 필요한 정도.
+
+`bootstrap check` PASS 기준 57 게이트(게이트 원천: `rs-meta/proofs/stage-manifest.tsv`
+의 status 열). rs-meta는 pnix를 전혀 모르는 독립 Rust meta-circular engine —
+pnix-rs는 CLI 프로세스 경계로만 호출한다:
+
+self · tv(interp==rustc) · typeck · roundtrip · emit-tv(310/310) ·
+emit-self-host(방출 번들이 corpus 재생) · ast-canonical(제네릭 faithful) ·
+ast-diff(정본 AST 의미 diff) · rust-ir(content-addressed canonical Rust IR +
+format-invariant ir_hash) · borrow-boundary(ownership 경계: rustc reason
+code 보존, interp≠borrow checker) · trait-boundary(supported vs held:
+assoc-type/dyn/where/blanket) · macro-boundary(fixed vs macro_rules!/proc
+held) · source-ast/bundle · stage2/stage3 mirror·fixedpoint·core ·
+stage8~stageN 사다리 · witness/hash · cap · trace · diag · manifest ·
+isolation · constitution.
+
+### 5.3 배포 (실제 설치 작동)
+
+`flake.nix`(저장소 루트 `pnix-rs/`): packages(rs-meta/pnix-rs) ·
+apps(pnix-rs/rs-meta/rs-meta-check/pnix-rs-check/substrate-check) ·
+devShell. `nix build`·`nix run` 검증됨(래퍼가 rustc/RS_META_BOOTSTRAP 배선,
+substrate-check 3-way PASS). 예제: `pnix-rs/examples/` 12섹션(각
+`limit_rust.rs` + `pnix_rs_way.sh`, 전량 실행/컴파일 — examples는 이 정리
+작업의 범위 밖, 손대지 않았다).
+
+## 6. 이 lane의 개발 원칙 (옛 SCOPE_LOCK.md §0/§2/§3/§4 편입)
+
+권위 있는 범위 선언이었던 `SCOPE_LOCK.md`(2026-07-02 수립, 형식은
+pnix-hy SCOPE_LOCK을 따르되 이 lane은 Rust/rs-meta뿐)의 내용. 새 기능을
+구현하기 전에 먼저 읽을 것. 의도적으로 보류된 기능 목록(경로/string-context
+값, 수학 확장 빌트인 등) 자체는 [`docs/BUGS.md`](BUGS.md)로 옮겨졌다 —
+여기 남은 건 "어떻게 개발하는가"에 대한 원칙.
+
+### 6.1 source of truth / 완성 문구
+
+`main` 브랜치가 권위 상태. 완성/닫힘 주장은 이 브랜치의 커밋과 `pnix-rs
+check`(all_ready) receipt만 근거로 한다. **"전체 완성"/"Complete overall"
+같은 문구는 쓰지 말 것** — 항상 scope-relative로만 표현한다: "pnix-rs는
+현재 선언된 Rust↔pnix meta-circular projection scope(P0~P13 milestone-1)
+안에서 open todo 0으로 수렴했다. Complete **with respect to the stated
+Rust↔pnix projection scope.**"
+
+### 6.2 대원칙
+
+> **의도적 placeholder를 미구현으로 재해석해서 구현하지 말 것.**
+
+[`docs/BUGS.md`](BUGS.md)에 적힌 held 항목들이 바로 이 원칙의 대상이다 —
+"왜 이거 안 되지"가 보이면 먼저 BUGS.md를 확인하고, 거기 없으면 그때
+진짜 버그로 다룰 것.
+
+### 6.3 절차 (변경 불가 규칙)
+
+- 새 기능/경계 이동은 `docs/proposals/NNNN-*.md`로 시작한다.
+- **스키마 동결**: witness 13필드(이름·순서, `gate.rs`의 `WITNESS_FIELDS`가
+  정의) 변경 금지. roundtrip 어휘(lossless/lossy-ok/held/rejected), effect
+  어휘(file-read/file-write/host-call/import/network) 변경 금지. 기존
+  receipt 스키마(`pnix-rs.*.v0`)는 필드 추가 시 v1로 올리고 마이그레이션을
+  명시한다.
+- **두 번째 평가기/mirror/gate 금지** — 모든 평가는 `src/px.rs`(sacred
+  runtime) 경유.
+- **zero crates.io dependency.** Python/Hy 불가촉(pnix-hy는 구조 모범일 뿐,
+  코드를 가져오거나 이식하지 않는다).
+- **rs-meta에 pnix 코드 금지** — 필요한 기능은 pnix와 무관한 범용 기능으로
+  rs-meta 쪽에 제안만 한다.
+- `px.rs`는 rs-meta evaluated subset 안에 머물러야 한다(`substrate-check`가
+  게이트) — §1의 substrate-check 제약 참고.
+
+### 6.4 걷지 않는 길
+
+에이전트/coding-agent 런타임 ❌, task routing/plan synthesis/autonomous
+실행 ❌, MSV/gate-graph 실험 ❌, corpus 표면(문장처리) 갈기 자체가 목적이
+되는 것 ❌. pnix-rs는 **human-operated meta-circular language projection
+lab**이다 — 모든 기능은 "Rust↔pnix projection과 mirror evidence를
+개선하는가"로만 판단하고, 에이전트를 굴리는가/작업을 라우팅하는가로
+판단하지 않는다.
+
+**호스트 언어 경계**: pnix-hy는 길의 모범(구조·수준)일 뿐이다. 이 lane은
+Python도 Hy도 다루지 않는다 — 호스트는 오직 Rust/rs-meta, projection은
+오직 Rust↔px. pnix-hy/pnix-clj와의 접점은 cross-host(§5.1의 `cross-host`
+게이트) 하나뿐이며, 그것도 `.px` 결과물/witness의 **비교**이지 그쪽
+호스트를 만지는 게 아니다.
+
+## 7. Cargo host-main에서 `pnix-rs-library` 임포트 (옛 docs/CARGO_HOST_IMPORT.md 편입)
+
+**교리:** `../../HOST_DEV_ENV.md` · `../../HOST_IMPORT.md`(저장소 루트 문서,
+이 정리 작업 범위 밖).
+
+`pnix-rs`는 `publish = false`이며 **crates.io 의존 0개**. 호스트 crate는
+오늘 crates.io 좌표를 쓰지 않는다(§4 역사 08-14: crates.io 공개 배포는
+owner가 "이 owner에겐 product goal 아님"으로 명시 결정, 로컬 전용). 지원
+패턴 세 가지:
+
+### A. 시스템 라이브러리 (nix / home-manager) — 일상용 권장
+
+`pnix-rs-refs` 실행 시 `PNIX_RS_LIB_DIR`/`PNIX_RS_INCLUDE_DIR`가 나온다.
+`build.rs`에서 `cargo:rustc-link-search`/`cargo:rustc-link-lib=static=pnix_rs`로
+연결하거나, C FFI로 `#include "pnix_rs.h"`
+(`-I$PNIX_RS_INCLUDE_DIR -L$PNIX_RS_LIB_DIR -lpnix_rs`). 로컬 export(개인
+피드, crates.io 아님):
+
+```bash
+cd pnix-rs/pnix-rs
+./bin/export-pnix-rs-library          # → target/pnix-rs-library/{lib,include}
+./bin/pnix-rs-library-smoke
+set -a; source target/pnix-rs-library/refs.env; set +a
+```
+
+### B. Path dependency (monorepo 체크아웃) — `~/pnix` 안에서 개발할 때 우선
+
+```toml
+# Cargo.toml
+[dependencies]
+pnix-rs = { path = "../../../../pnix-rs/pnix-rs", package = "pnix-rs" }
+```
+
+```rust
+fn main() {
+    println!("{}", pnix_rs::eval("1 + 2").unwrap());
+    println!("{}", pnix_rs::eval_file("prog.px").unwrap());
+}
+```
+
+참고: crate 이름은 `pnix-rs`이고 lib 이름은 `pnix_rs`(`[lib] name =
+"pnix_rs"`, `src/lib.rs` — "Embeddable PNIX runtime library", ABI 버전
+`PNIX_RS_ABI_VERSION = 1`)이므로 `package = "pnix-rs"`가 필요. 인트리 미니
+데모: `examples/host-import/rs/pnix-rs-smoke`(`cargo run -q -- ../../hello.px`
+→ `3`).
+
+### C. `nix build` 아티팩트만
+
+```bash
+cd pnix-rs
+nix build .#pnix-rs-library
+ls result/lib result/include
+export PNIX_RS_LIB_DIR=$PWD/result/lib
+export PNIX_RS_INCLUDE_DIR=$PWD/result/include
+```
+
+### 하지 말 것
+
+- 전체 `pnix-rs` 패키지(dylib 포함)와 `pnix-rs-library`를 하나의
+  home-manager `buildEnv`에 혼합(파일 충돌).
+- crates.io `pnix-rs` 기대 — 미게시(`publish = false`).
+- 이식 가능한 멀티호스트 `.px` 패키지 주장; 이것은 **Rust/rs 호스트
+  바인딩**이다(공통 이식 가능 `.px` 라이브러리 트랙은 별도 미래 작업이며
+  이 owner의 손으로 직접 쓸 예정 — pnix-meta 스타일, 여기서 진행하지 않음).
+- C ABI 버전 정책: 깨지는 변경 시 `include/pnix_rs.h`에서
+  `PNIX_RS_ABI_VERSION`을 올린다(현재 1, 아직 깬 적 없음).
+
+## 8. 이 문서가 코드와 어긋나지 않게 유지하는 법
 
 이 문서는 두 성격이 섞여 있다 — 어느 쪽인지 구분해서 신뢰할 것.
 
@@ -426,10 +666,11 @@ pnix-rs 자체는 대부분 오늘(§4-오늘) 있었음):
 - **`docs/CAPABILITIES.md`는 진짜 자동 생성+drift-게이트다** — `pnix-rs
   capabilities`로 재생성, `capabilities-check` 게이트가 코드와의 drift를
   잡는다(생성 원천 = 코드). CLI 명령/모듈/px 표면/빌트인 인벤토리가
-  궁금하면 이 문서의 §1/§2보다 그쪽을 먼저 믿을 것. `REGISTRY.md`는 그
-  위에 게이트 레지스트리 전체(pnix-rs 18개 + rs-meta 57개)를 얹은
-  상위 인덱스 — "이미 구현됐는지" 확인의 1차 소스는 `REGISTRY.md`다.
+  궁금하면 이 문서의 §1/§2보다 그쪽을 먼저 믿을 것. §5(게이트 레지스트리)는
+  그 위에 게이트 이름 전체(pnix-rs 35개 + rs-meta 57개)를 얹은 상위
+  인덱스(옛 `REGISTRY.md`, 2026-08-20에 이 문서로 흡수) — "이미
+  구현됐는지" 확인의 1차 소스는 이제 §5다.
 - clj/hy도 각자 CAPABILITIES.md(+clj는 LANE_REGISTRY.md/WIKI.md까지)를
-  가진 같은 패턴이다(각 호스트 IMPLEMENTATION_MAP.md §5 참고). clr/cljs는
-  아직 이런 자동 drift-게이트 문서가 없다 — clr/cljs 쪽 IMPLEMENTATION_MAP.md
-  §5에 실제 미해결 gap으로 적어뒀다.
+  가진 같은 패턴이다(각 호스트 IMPLEMENTATION.md/IMPLEMENTATION_MAP.md §5
+  참고). clr/cljs는 아직 이런 자동 drift-게이트 문서가 없다 — clr/cljs 쪽
+  문서에 실제 미해결 gap으로 적어뒀다.

@@ -21,4 +21,4 @@ pnix.evalSource("let x = 20; in x + 22");
 관찰 증거일 뿐, 언어 값도 타입 권위도 아니다.
 
 **이중 축 / 라이브러리:** monorepo [`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md),
-[`../HOST_IMPORT.md`](../HOST_IMPORT.md).
+[`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) §3.

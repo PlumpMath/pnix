@@ -13,8 +13,10 @@
 (deftest surgery-closure-documents-exist
   (testing "closure-critical documents exist"
     (doseq [path ["README.md"
-                 "SCOPE_LOCK.md"
-                 "LANE_CLASSIFICATION.md"
+                 "docs/IMPLEMENTATION.md"
+                 "docs/TODO.md"
+                 "docs/BUGS.md"
+                 "docs/PLANS.md"
                  "docs/CAPABILITIES.md"
                  "docs/LANE_REGISTRY.md"]]
       (is (.exists (clojure.java.io/file path)) path))))
@@ -48,8 +50,8 @@
 
 (deftest surgery-closure-scope-boundary-is-visible
   (testing "core scope and quarantine boundary remain visible"
-    (let [scope-lock (doc "SCOPE_LOCK.md")
-          lane-doc (doc "LANE_CLASSIFICATION.md")
+    (let [scope-lock (doc "docs/IMPLEMENTATION.md")
+          lane-doc (doc "docs/IMPLEMENTATION.md")
           readme (doc "README.md")]
       (is (has-all?
            scope-lock

@@ -671,7 +671,7 @@
           (is (= :ok status) name))))))
 
 (deftest weval-ir-pe-dispatch-elimination
-  ;; F8 (bounded spike, docs/REMAINING_DECISION.md B): weval-shaped IR-level
+  ;; F8 (bounded spike, landed — see docs/IMPLEMENTATION.md §4 history): weval-shaped IR-level
   ;; 1st Futamura on the IR-interpreter body — pc-as-context residual blocks,
   ;; memoized so join points are SHARED (the known anti-exponential fix),
   ;; hand-placed boundaries, static residuals only. Honest labels: correctness
@@ -2276,7 +2276,7 @@
     (is (= :mirror-error-report (:kind report)))
     (is (= :mirror-error-fixture-set (:fixture-kind report)))
     ;; rec-forward-reference was reclassified out of this error-agreement corpus
-    ;; (see rec-forward-reference-taxonomy.md); it is a valid forward reference,
+    ;; (see docs/IMPLEMENTATION.md §9); it is a valid forward reference,
     ;; not an error the lanes agree on. Genuine error cases remain here.
     (is (= 4 (:fixture-count report)))
     (is (= 4 (:total report)))
@@ -5627,7 +5627,7 @@
     (is (= 0 (:oracle-held compared)))))
 
 (deftest forward-reference-frontier-corpus
-  ;; The reclassified home (see rec-forward-reference-taxonomy.md) for rec/let
+  ;; The reclassified home (see docs/IMPLEMENTATION.md §9) for rec/let
   ;; forward references. R1 lifted the valid forward-reference rows across the
   ;; clj-meta and .px runtime lanes; deterministic error rows fail.
   (let [{:keys [cases lifted-lanes]}
@@ -5698,7 +5698,7 @@
 (deftest evaluator-rec-attrset-mutual-recursion
   ;; rec attrsets are the same recursive scope as let: a binding can reference a
   ;; sibling defined later (forward reference) and mutual recursion resolves.
-  ;; This mirrors eval-let. See rec-forward-reference-taxonomy.md for the
+  ;; This mirrors eval-let. See docs/IMPLEMENTATION.md §9 for the
   ;; multi-lane reclassification that this fix required.
   (testing "forward references and mutual recursion resolve"
     (is (= 1 (:value (pnix/eval-source "rec { x = y; y = 1; }.x"))))

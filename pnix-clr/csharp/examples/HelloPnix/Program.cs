@@ -7,7 +7,7 @@ static class Program
     {
         try
         {
-            // Experimental net10 in-process path (see docs/IN_PROCESS_EVAL.md).
+            // Experimental net10 in-process path (see pnix-clr/docs/IMPLEMENTATION.md §8).
             var inProcess = args.Length >= 1 && args[0] == "--inprocess";
             if (inProcess)
                 args = args[1..];

@@ -24,8 +24,7 @@ pinned ClojureCLR bootstrap trust root
 
 정본: [`../HOST_DEV_ENV.md`](../HOST_DEV_ENV.md). 에이전트 노트: [`CLAUDE.md`](CLAUDE.md).  
 C# 패키지: [`csharp/Pnix.Clr/README.md`](csharp/Pnix.Clr/README.md).  
-**`clojure-clr` 허용 표면 (fail-closed):** [`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`](docs/CLOJURE_CLR_ADMITTED_SURFACE.md).  
-**TFM 정책:** [`docs/TFM_POLICY.md`](docs/TFM_POLICY.md).  
+**`clojure-clr` 허용 표면 (fail-closed) + TFM 정책:** [`pnix-clr/docs/IMPLEMENTATION.md`](pnix-clr/docs/IMPLEMENTATION.md) §6, §7.  
 **멀티-ns bootstrap 템플릿:** [`examples/clojure-clr-project/`](examples/clojure-clr-project/).  
 **프로파일 스모크:** `./bin/clojure-clr-profiles-smoke` (tool-eval + multi-ns).
 

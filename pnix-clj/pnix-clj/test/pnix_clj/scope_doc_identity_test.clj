@@ -9,10 +9,10 @@
   (every? #(str/includes? text %) xs))
 
 (deftest scope-documents-preserve-identity
-  (testing "README and SCOPE_LOCK keep the core boundary"
+  (testing "README and IMPLEMENTATION.md §5 keep the core boundary"
     (is (has-all? (doc "README.md")
                   ["Clojure 호스팅 pnix" "NL/MSV/Hangul" "코어 범위 밖"]))
-    (is (has-all? (doc "SCOPE_LOCK.md")
+    (is (has-all? (doc "docs/IMPLEMENTATION.md")
                   ["Clojure 호스팅 pnix 런타임"
                    "메타원형 증인 substrate"
                    "Hangul codec"
@@ -21,8 +21,8 @@
                    "multi-language emit registry"
                    "tick runner"])))
 
-  (testing "LANE_CLASSIFICATION keeps current identity lock"
-    (is (has-all? (doc "LANE_CLASSIFICATION.md")
+  (testing "IMPLEMENTATION.md §6 keeps current lane-classification identity lock"
+    (is (has-all? (doc "docs/IMPLEMENTATION.md")
                   ;; the pnix-meta loader row was retired from the live ns
                   ;; inventory (see docs/LANE_REGISTRY.md history): 79 -> 78
                   ["현재 정체성 잠금 부록"

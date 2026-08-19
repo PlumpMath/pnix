@@ -12,7 +12,7 @@
 | 표면 | 역할 |
 |------|------|
 | `Pnix.Clr.Eval.Source` / `File` | **지원:** 프로세스 스폰 `pnix-clr`, JSON CLI 결과 파싱 |
-| `Eval.SourceInProcess` / `FileInProcess` | **실험 (net10+)** — ALC/substrate 임베드; gate `bin/pnix-clr-inprocess-eval-gate`; [`docs/IN_PROCESS_EVAL.md`](../../docs/IN_PROCESS_EVAL.md) 참고 |
+| `Eval.SourceInProcess` / `FileInProcess` | **실험 (net10+)** — ALC/substrate 임베드; gate `bin/pnix-clr-inprocess-eval-gate`; [`docs/IMPLEMENTATION.md`](../../pnix-clr/docs/IMPLEMENTATION.md) §8 참고 |
 | `lib/net10.0/runtime-artifact/*.clj.dll` | Guest AOT (ClojureCLR 바인딩) |
 | `build/Pnix.Clr.props` + `.targets` (export 레이아웃; 소스는 `msbuild/`) | MSBuild HintPath / Reference 배선 |
 
@@ -67,7 +67,7 @@ var f = Eval.File("examples/hello.px").EnsureDone();
 ./bin/pnix-clr-library-smoke           # export + API 검사 + nupkg + HelloPnix
 ./bin/pack-pnix-clr-nupkg              # 로컬 .nupkg만
 # MSBuild 샘플: ../Directory.Build.props.sample
-# 인프로세스: ../../docs/IN_PROCESS_EVAL.md  ·  HelloPnix --inprocess
+# 인프로세스: ../../pnix-clr/docs/IMPLEMENTATION.md §8  ·  HelloPnix --inprocess
 # HelloPnix 기본은 ProjectReference (최신 API); PnixClrUseExport=true 로
 # PNIX_CLR_LIBRARY DLL Reference 강제.
 ```

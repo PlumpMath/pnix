@@ -4,9 +4,10 @@ from pathlib import Path
 
 ROOT = Path("/Users/gp/pnix/pnix-clr")
 files = [
-    ROOT / "docs/IN_PROCESS_EVAL.md",
-    ROOT / "docs/CLOJURE_CLR_ADMITTED_SURFACE.md",
-    ROOT / "pnix-clr/SCOPE_LOCK.md",
+    ROOT / "pnix-clr/docs/IMPLEMENTATION.md",
+    ROOT / "pnix-clr/docs/TODO.md",
+    ROOT / "pnix-clr/docs/BUGS.md",
+    ROOT / "pnix-clr/docs/PLANS.md",
     ROOT / "clr-meta/README.md",
     ROOT / "clr-meta/RESIDUAL_SURFACE.md",
     ROOT / "clr-meta/CLR_BOOTSTRAP.md",
@@ -29,7 +30,7 @@ files = [
     ROOT / "clr-meta/STAGE15_N_ROADMAP.md",
     ROOT / "clr-meta/STATUS.md",
     ROOT / "clr-meta/todo.md",
-    ROOT / "CLAUDE.md",
+    ROOT / "AGENTS.md",
 ]
 
 ok, bad = [], []

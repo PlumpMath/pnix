@@ -18,7 +18,7 @@ mirror — 에서 교차 검증되며, self-hosting **tower**가 하나의 값�
 | **host-main** | `pnix-clj-clj` / bare `clojure` — 이 트리를 `-Sdeps`로 주입 |
 | **pnix-main** | `nix run .#pnix-clj-pnix` |
 | **library** | classpath의 `pnix-clj` 소스; `PNIX_CLJ_ROOT` — **호스트 바인딩**, 이식 가능 `.px` 아님 |
-| **Clojure에서 `.px` import** | `(pnix-clj.core/eval-file "x.px")` — [docs/HOST_IMPORT.md](pnix-clj/docs/HOST_IMPORT.md) |
+| **Clojure에서 `.px` import** | `(pnix-clj.core/eval-file "x.px")` — [docs/IMPLEMENTATION.md](pnix-clj/docs/IMPLEMENTATION.md) §11 |
 
 ## 레이아웃
 

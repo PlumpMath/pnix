@@ -306,7 +306,7 @@ JSON
               echo "PNIX_CLJS=$pkg/bin/pnix-cljs"
               echo "NODE_PATH=$nm:$share''${NODE_PATH:+:$NODE_PATH}"
               echo "# require('@plumpmath/pnix-cljs')  or  require('pnix-cljs-module.js')"
-              echo "# Cookbook: HOST_IMPORT.md"
+              echo "# Cookbook: pnix-cljs/docs/IMPLEMENTATION.md §3"
               # ShellCheck SC2012: prefer find over ls in writeShellApplication checkPhase
               if [ -d "$share" ]; then
                 find "$share" -maxdepth 1 -type f -printf '#   share/%f\n' 2>/dev/null \
