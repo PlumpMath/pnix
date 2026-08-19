@@ -18,8 +18,6 @@
 | [`pnix-hy/`](pnix-hy) | Hy / Python | `hy-meta` + `pnix-hy` |
 | [`pnix-rs/`](pnix-rs) | Rust | `rs-meta` + `pnix-rs` |
 
-성숙도는 호스트마다 다르다.
-`pnix-clj`가 가장 완성도가 높다. `pnix-clr`와 `pnix-cljs`는 명시적으로 실험적이다.
 각 호스트의 `README.md`와 `CLAUDE.md`가 무엇을 주장하고 무엇을 주장하지 않는지 밝힌다 —
 패리티를 가정하기 전에 읽을 것.
 
@@ -274,11 +272,6 @@ in {
 - Hy — 업스트림 `hylang/hy` 태그, `pnix-hy/flake.lock`에 pin
 
 빌드 산출물 (`work/`, `dist/`, `target/`)은 각 호스트 게이트가 재생성하며 추적하지 않는다.
-
-## 상태
-
-활발히 개발 중인 연구 코드다.
-인터페이스는 바뀌며, 호스트는 같은 입력에서 동일한 동작을 보장하지 않는다.
 
 ## 라이선스
 
