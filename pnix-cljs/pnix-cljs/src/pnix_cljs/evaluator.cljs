@@ -508,6 +508,9 @@
 (defn integer-zero? [value]
   (js* "~{} === 0n" value))
 
+(defn integer-negative? [value]
+  (js* "~{} < 0n" value))
+
 (defn integer-add [left right] (js* "(~{} + ~{})" left right))
 (defn integer-subtract [left right] (js* "(~{} - ~{})" left right))
 (defn integer-multiply [left right] (js* "(~{} * ~{})" left right))
@@ -900,6 +903,17 @@
     :else
     (evaluation-failure! "type-error"
                          {"operation" (name operation)})))
+
+(defn numeric-abs [value]
+  (cond
+    (integer-value? value)
+    (if (integer-negative? value) (integer-negate value) value)
+
+    (number? value)
+    (js/Math.abs value)
+
+    :else
+    (evaluation-failure! "type-error" {"operation" "abs"})))
 
 (defn nix-to-string [value]
   (cond
@@ -1299,6 +1313,12 @@
     (->AttrsetValue
      (into {} (remove (fn [[k _]] (contains? remove-set k)) (:fields attrs))))))
 
+(defn intersect-attrs-value [e1 e2]
+  (when-not (and (instance? AttrsetValue e1) (instance? AttrsetValue e2))
+    (evaluation-failure! "type-error" {"operation" "intersectAttrs"}))
+  (->AttrsetValue
+   (into {} (filter (fn [[k _]] (contains? (:fields e1) k)) (:fields e2)))))
+
 (defn cat-attrs-value [attribute attrsets]
   (when-not (string? attribute)
     (evaluation-failure! "type-error" {"operation" "catAttrs"}))
@@ -1604,10 +1624,15 @@
                   (ordered-less (nth arguments 0) (nth arguments 1)))
       :ceil (numeric-round :ceil argument)
       :floor (numeric-round :floor argument)
+      :abs (numeric-abs argument)
       :throw (if (string-value? argument)
                (evaluation-failure! "explicit-throw" {"message" (string-text argument)})
                (evaluation-failure! "type-error"
                                     {"operation" "throw"}))
+      :abort (if (string-value? argument)
+               (evaluation-failure! "abort" {"message" (string-text argument)})
+               (evaluation-failure! "type-error"
+                                    {"operation" "abort"}))
       :tryEval (try-eval-cell argument)
       :hashString
       (if (< (count arguments) 2)
@@ -2104,6 +2129,11 @@
       (if (< (count arguments) 2)
         (->BuiltinValue :removeAttrs arguments)
         (remove-attrs-value (nth arguments 0) (nth arguments 1)))
+
+      :intersectAttrs
+      (if (< (count arguments) 2)
+        (->BuiltinValue :intersectAttrs arguments)
+        (intersect-attrs-value (nth arguments 0) (nth arguments 1)))
 
       :catAttrs
       (if (< (count arguments) 2)
@@ -2736,7 +2766,9 @@
 (defn builtins-value []
   (let [self-cell (->Cell nil nil (atom {:tag :evaluating}))
         value (->AttrsetValue
-               {"add" (->BuiltinValue :add [])
+               {"abort" (->BuiltinValue :abort [])
+                "abs" (->BuiltinValue :abs [])
+                "add" (->BuiltinValue :add [])
                 "any" (->BuiltinValue :any [])
                 "attrByPath" (->BuiltinValue :attrByPath [])
                 "attrNames" (->BuiltinValue :attrNames [])
@@ -2781,6 +2813,7 @@
                 "head" (->BuiltinValue :head [])
                 "id" (->BuiltinValue :id [])
                 "init" (->BuiltinValue :init [])
+                "intersectAttrs" (->BuiltinValue :intersectAttrs [])
                 "intersectLists" (->BuiltinValue :intersectLists [])
                 "isAttrs" (->BuiltinValue :isAttrs [])
                 "isBool" (->BuiltinValue :isBool [])
