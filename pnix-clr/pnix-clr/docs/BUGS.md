@@ -55,11 +55,14 @@ admit 절차를 따라 새로 admit해야 하는 것들이지, 지금 코드에�
   없음
 - production effect request/resume, finite-fuel suspension,
   common-machine replacement, 또는 canonical-result/JCS completion 없음
-- Nix UTF-8 byte-string model, string-context propagation, pattern
-  lambda, 또는 derivation/store purity 게이트 없음 — 단, **float literal,
-  `with`, list/attrset structural `==`, language `assert`,
-  `inherit`/`inherit (expr)`는 이후 admit되어 이미 동작한다**(위 목록에
-  넣지 말 것 — `IMPLEMENTATION.md` §5 admit된 것 목록 참고)
+- Nix UTF-8 byte-string model, pattern lambda, 또는 store purity 게이트
+  없음 — 단, **float literal, `with`, list/attrset structural `==`,
+  language `assert`, `inherit`/`inherit (expr)`, string-context
+  propagation(`appendContext`/`getContext`/`hasContext`/
+  `unsafeDiscardStringContext`/`unsafeDiscardOutputDependency`),
+  `derivation`/`derivationStrict`/`placeholder`는 이후 admit되어 이미
+  동작한다**(위 목록에 넣지 말 것 — `IMPLEMENTATION.md` §5 admit된 것
+  목록 참고; string-context/derivation의 pure-simulation 범위는 §6 참고)
 
 ## 2. CLI 허용 표면 — 금지된 지름길(의도적, 버그 아님)
 
@@ -119,3 +122,48 @@ admit 절차를 따라 새로 admit해야 하는 것들이지, 지금 코드에�
 generation vs compiler stage 축 분리. "clr에서만 다르게 동작하네?"
 싶으면 여기부터 확인할 것 — 대부분 버그가 아니라 이 호스트의 설계
 선택이다.
+
+## 6. string-context / derivation — pure-simulation 범위(의도적, 버그 아님)
+
+2026-08-20 admit. `builtins.appendContext`/`getContext`/`hasContext`/
+`unsafeDiscardStringContext`/`unsafeDiscardOutputDependency`와
+`builtins.derivation`/`derivationStrict`/`placeholder`(pnix-clj를
+1차 오라클로, 같은 Clojure 계열인 pnix-cljs의 이미 끝난 포트를 2차
+참고로 삼아 이 호스트의 `{:pnix/type ...}` 태그드 맵 관례로 이식함 —
+`{:pnix/type :string-context :value "..." :context [...]}`, `evaluator.clj`
+`ctx-string`/`ctx-string?` 근방). 아래는 전부 오라클(pnix-clj)도 똑같이
+갖고 있거나, 값 모델 자체의 근본적 한계라 여기서 풀 수 없는 것들이다 —
+"고쳐야 하나?"의 답은 "아니다".
+
+- **`d.out == d` self-reference 없음.** 진짜 Nix에서 derivation 값의
+  `d.out`은 `d` 자기 자신(순환 참조)이지만, 이 호스트를 포함한 모든
+  Clojure 계열 host의 값 모델은 순수 불변 맵이라 순환을 표현할 수
+  없다. `derivation`이 반환하는 `d.<output>` 서브 attrset은 `type`/
+  `name`/`drvPath`/`outPath`/`outputName`만 담은 축약된, 비순환
+  attrset이다(오라클과 동일한 타협).
+- **pseudo-hash, 진짜 Nix 스토어 해시 아님.** `derivation-hash-hex`(및
+  `derivation-paths`)가 만드는 `/nix/store/<32-hex>-<name>` 경로는
+  deep-forced 입력 attrset의 정렬된 canonical 표현을 SHA-256으로 해싱한
+  것 — 결정적이고 이 호스트 안에서 내부 일관성은 있지만, 실제 Nix의
+  ATerm 기반 store-path 해싱 알고리즘과 byte-compatible하지 않다(순수
+  시뮬레이션, 처음부터 그렇게 설계됨). 다른 호스트와도 바이트 단위로
+  같을 필요 없음 — 실제로 우연히 일치하는 경우가 있는데(단순 입력
+  attrset일 때 정렬된 맵의 `pr-str` 표현이 같아서) 이건 우연이지 보장이
+  아니다.
+- **`appendContext`/`getContext`는 WHICH 의존성 + 어떤 kind(path/
+  allOutputs/outputs)까지만 추적한다.** 진짜 store-derivation 그래프
+  (실제 빌드 依존관계, output 유효성 등)는 없음 — 순수 값 레벨 시뮬레이션.
+- **fail-closed 게이트(`ctx-string-in-args?`)는 shallow scan이다** —
+  최상위 인자 + 벡터 인자 한 겹까지만 검사(`exec-builtin`의 인자
+  리스트). unforced thunk 뒤에 숨은 contextful string은 이 스캔을
+  통과한다 — 예를 들어 `sort`/`filter`에 넘긴, 아직 강제되지 않은 list
+  element 안의 contextful string은 안 잡힌다. 이건 버그가 아니라
+  **오라클(pnix-clj)의 실제 동작을 그대로 재현한 것**이다(오라클도
+  shallow scan) — 더 엄격한 recursive scan을 만들면 오히려 오라클과
+  달라진다. 자세한 근거는 `evaluator.clj`의 `ctx-string-in-args?`
+  docstring 참고.
+- **canonical 출력 경계(`realize-value`, CLI JSON)에서 context는 항상
+  버려진다** — content만 남는다. 이건 시뮬레이션 한계가 아니라 진짜
+  Nix `--json` 출력도 마찬가지(문자열 context는 애초에 JSON으로 표현할
+  방법이 없다). 평가 도중에는 context가 계속 추적/게이트되고, 이 경계
+  에서만 의도적으로 벗겨진다.

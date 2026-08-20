@@ -370,6 +370,308 @@ fn px_attrs_find<'a>(fields: &'a [(String, PxVal)], name: &str) -> Option<&'a Px
     None
 }
 
+// ---- string context (pure simulation of Nix string context) ---------------
+//
+// A Nix string carries a context: the set of store-path dependencies that
+// must be realized before the string may be used. Context-free strings stay
+// plain `PxVal::Str` (zero representation change for the overwhelming
+// majority of string uses); a string only becomes the tagged shape below
+// when its context is non-empty (built by `builtins.appendContext` today, and
+// by derivation drvPath/outPath). This mirrors pnix-clj's/pnix-clr's own
+// design exactly: a context-bearing string is a `PxVal::Attrs` carrying
+// sentinel keys, NOT a new `PxVal` variant (a new variant would force
+// exhaustive-match edits across bta.rs/gate.rs/incremental.rs/specialize.rs/
+// tower.rs/main.rs; `Attrs` already exists and is already handled
+// everywhere). This follows the same precedent already established by
+// `PxVal::Bytes` above: a special value shape that only the oracle-pinned
+// surface (the fixed `context-aware-builtins` allowlist below) understands —
+// everything else is HELD fail-closed rather than silently mangling or
+// dropping the context.
+const PX_CTX_STRING_TAG: &str = "string-context";
+
+/// Sort + dedup a context list (same normalization as pnix-clj's/pnix-cljs's
+/// own `ctx-string` constructor). Manual adjacent-scan dedup after sorting,
+/// matching this file's existing `px_attrs`-style explicit-loop idiom rather
+/// than `Vec::dedup`.
+fn px_ctx_normalize(context: Vec<String>) -> Vec<String> {
+    let sorted = px_sort_strings(context);
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0usize;
+    while i < sorted.len() {
+        let dup = !out.is_empty() && out[out.len() - 1] == sorted[i];
+        if !dup {
+            out.push(sorted[i].clone());
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Build a context-bearing string value. Collapses to a plain `PxVal::Str`
+/// when the (deduped) context is empty, so context-free results stay
+/// indistinguishable from ordinary strings — the same collapsing rule
+/// pnix-clj's `ctx-string` uses.
+fn px_ctx_string(content: String, context: Vec<String>) -> PxVal {
+    let ctx = px_ctx_normalize(context);
+    if ctx.is_empty() {
+        return PxVal::Str(content);
+    }
+    let mut ctx_vals = Vec::new();
+    let mut i = 0usize;
+    while i < ctx.len() {
+        ctx_vals.push(PxVal::Str(ctx[i].clone()));
+        i += 1;
+    }
+    px_attrs(vec![
+        (String::from("__pnix_value_kind"), PxVal::Str(String::from(PX_CTX_STRING_TAG))),
+        (String::from("string"), PxVal::Str(content)),
+        (String::from("context"), px_list(ctx_vals)),
+    ])
+}
+
+/// True when `v` is a context-bearing string built by `px_ctx_string`. `v`
+/// must already be forced (WHNF) — every call site here forces first, the
+/// same contract the shallow fail-closed scan below relies on.
+fn px_is_ctx_string(v: &PxVal) -> bool {
+    match v {
+        PxVal::Attrs(fields) => match px_attrs_find(fields.as_ref(), "__pnix_value_kind") {
+            Some(PxVal::Str(tag)) => tag == PX_CTX_STRING_TAG,
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// A real pnix attrset — `PxVal::Attrs` that is NOT the context-string
+/// sentinel shape. Every generic "is this an attrset" site (`.` select, `?`,
+/// `//`, `isAttrs`) must use this instead of a bare `PxVal::Attrs(_)` match,
+/// or a context-bearing string would leak its internal representation
+/// through ordinary attrset operations.
+fn px_is_real_attrset(v: &PxVal) -> bool {
+    matches!(v, PxVal::Attrs(_)) && !px_is_ctx_string(v)
+}
+
+/// Character content of a string-like value (plain `Str` or a ctx-string);
+/// `None` for anything else (including `Bytes`, tracked separately).
+fn px_string_like_content(v: &PxVal) -> Option<String> {
+    if let PxVal::Str(s) = v {
+        return Some(s.clone());
+    }
+    if let PxVal::Attrs(fields) = v {
+        if px_is_ctx_string(v) {
+            if let Some(PxVal::Str(s)) = px_attrs_find(fields.as_ref(), "string") {
+                return Some(s.clone());
+            }
+        }
+    }
+    None
+}
+
+/// `px_string_like_content`, defaulting to the empty string instead of
+/// `None` — an explicit match instead of `Option::unwrap_or_default`
+/// (unsupported by rs-meta's interpreted-subset typeck; substrate-check
+/// caught it — see the `+`-style explicit-match idiom this file already
+/// uses throughout). Callers use this only where the value has already been
+/// confirmed string-like by the caller's own dispatch guard, so the `None`
+/// arm is unreachable in practice; the empty-string default keeps it total.
+fn px_string_like_content_or_empty(v: &PxVal) -> String {
+    match px_string_like_content(v) {
+        Some(s) => s,
+        None => String::new(),
+    }
+}
+
+/// True for anything `px_string_like_content` can extract from (plain `Str`
+/// or ctx-string) — NOT `Bytes`, which is tracked by the separate raw-byte
+/// surface.
+fn px_is_string_like(v: &PxVal) -> bool {
+    px_string_like_content(v).is_some()
+}
+
+/// The context vector of a string-like value; `[]` for a plain string or
+/// anything else (including `Bytes`).
+fn px_string_like_context(v: &PxVal) -> Vec<String> {
+    if let PxVal::Attrs(fields) = v {
+        if px_is_ctx_string(v) {
+            if let Some(PxVal::List(items)) = px_attrs_find(fields.as_ref(), "context") {
+                let mut out = Vec::new();
+                let mut i = 0usize;
+                while i < items.len() {
+                    if let PxVal::Str(s) = &items[i] {
+                        out.push(s.clone());
+                    }
+                    i += 1;
+                }
+                return out;
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// Union two values' contexts (used by `+` concat and every context-unioning
+/// builtin below). `px_ctx_string` sorts+dedups, so callers can just
+/// concatenate.
+fn px_ctx_union(a: &PxVal, b: &PxVal) -> Vec<String> {
+    let mut out = px_string_like_context(a);
+    out.extend(px_string_like_context(b));
+    out
+}
+
+/// Every character of `s` after the first (`s` is always one of this file's
+/// own ASCII sentinel-prefixed context elements, e.g. `"=<path>"` or
+/// `"!<rest>"` — so a char-count drop of 1 is exact). Manual char-vector
+/// rebuild rather than byte-range string slicing, matching this file's
+/// existing prefix/suffix idiom (`px_str_has_suffix` etc.).
+fn px_str_tail(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::new();
+    let mut i = 1usize;
+    while i < chars.len() {
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+/// Split a `getContext` output-dependency encoding "<output>!<path>" (the
+/// text AFTER the leading '!' the caller already stripped) at its first
+/// remaining '!'. `None` when there is no second '!' (a bare path element
+/// that happens to start with '!', falls back to a plain path element).
+fn px_split_bang(rest: &str) -> Option<(String, String)> {
+    let chars: Vec<char> = rest.chars().collect();
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i] == '!' {
+            let mut output = String::new();
+            let mut j = 0usize;
+            while j < i {
+                output.push(chars[j]);
+                j += 1;
+            }
+            let mut path = String::new();
+            let mut k = i + 1;
+            while k < chars.len() {
+                path.push(chars[k]);
+                k += 1;
+            }
+            return Some((output, path));
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Find (by linear scan) or insert a fresh zeroed `(path, has_path,
+/// all_outputs, outputs)` record in `getContext`'s per-path accumulator,
+/// returning its index.
+fn px_getcontext_find_or_insert(
+    acc: &mut Vec<(String, bool, bool, Vec<String>)>,
+    path: &str,
+) -> usize {
+    let mut i = 0usize;
+    while i < acc.len() {
+        if acc[i].0 == path {
+            return i;
+        }
+        i += 1;
+    }
+    acc.push((String::from(path), false, false, Vec::new()));
+    acc.len() - 1
+}
+
+/// The fixed, oracle-verified allowlist of builtins permitted to receive a
+/// contextful string argument (ported by NAME from pnix-clj's own
+/// `context-aware-builtins` / pnix-cljs's port of the same set — not
+/// reinvented). Every other builtin is denied by default: a contextful
+/// string reaching it fails closed instead of silently dropping or mangling
+/// context. Grow this set only builtin-by-builtin, with the builtin itself
+/// taught to propagate context correctly.
+fn px_context_aware_builtin(name: &str) -> bool {
+    name == "hasContext"
+        || name == "getContext"
+        || name == "hashString"
+        || name == "unsafeDiscardStringContext"
+        || name == "unsafeDiscardOutputDependency"
+        || name == "appendContext"
+        || name == "toPath"
+        || name == "toString"
+        || name == "typeOf"
+        || name == "isString"
+        || name == "isAttrs"
+        || name == "isList"
+        || name == "isInt"
+        || name == "isFloat"
+        || name == "isBool"
+        || name == "isNull"
+        || name == "isFunction"
+        || name == "seq"
+        || name == "deepSeq"
+        || name == "trace"
+        || name == "id"
+        || name == "eq"
+        || name == "derivation"
+        || name == "derivationStrict"
+        || name == "placeholder"
+        || name == "storePath"
+        || name == "stringLength"
+        || name == "substring"
+        || name == "concatStringsSep"
+        || name == "hasPrefix"
+        || name == "hasSuffix"
+        || name == "hasInfix"
+        || name == "toUpper"
+        || name == "toLower"
+        || name == "replaceStrings"
+        || name == "match"
+        || name == "split"
+        || name == "toJSON"
+        || name == "fromJSON"
+        || name == "stringToCharacters"
+        || name == "splitString"
+        || name == "removePrefix"
+        || name == "removeSuffix"
+        || name == "toInt"
+        || name == "concatStrings"
+        || name == "concatMapStrings"
+        || name == "head"
+        || name == "tail"
+        || name == "elemAt"
+        || name == "last"
+        || name == "init"
+        || name == "length"
+        || name == "elem"
+}
+
+/// Shallow scan (top level + one level into list elements) for a contextful
+/// string among builtin call args, mirroring pnix-clj's/pnix-cljs's own
+/// `ctx-string-in-args?` exactly, INCLUDING its limits: an element still
+/// hidden behind an unforced `Thunk` is opaque here (matches the oracle —
+/// empirically confirmed there that a context string nested inside an
+/// unforced list element passed to e.g. `sort`/`filter` is NOT caught by
+/// this scan). Matching that shallow scan rather than a deeper eager-forcing
+/// one keeps this host's fail-closed behavior identical to the oracle's
+/// instead of stricter than it.
+fn px_ctx_string_in_args(args: &Vec<PxVal>) -> bool {
+    let mut i = 0usize;
+    while i < args.len() {
+        if px_is_ctx_string(&args[i]) {
+            return true;
+        }
+        if let PxVal::List(items) = &args[i] {
+            let mut j = 0usize;
+            while j < items.len() {
+                if px_is_ctx_string(&items[j]) {
+                    return true;
+                }
+                j += 1;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Environment frame. `Rec` is a recursive let frame: every binding in it can
 /// see every other binding in the same frame (pnix let is recursive scope, not
 /// sequential). `Bind` is a single evaluated value (lambda parameter).
@@ -3234,24 +3536,35 @@ pub fn px_eval_outcome(expr: &PxExpr, env: &Vec<PxFrame>) -> Result<PxVal, PxErr
         PxExpr::Null => Ok(PxVal::Null),
         PxExpr::Str(parts) => {
             let mut out = String::new();
+            // A contextful chunk interpolates as itself; the template joiner
+            // unions the contexts of every chunk (matches pnix-clj's
+            // `eval-string-template`). Context-free templates stay a plain
+            // Str, byte-identical to before this feature existed.
+            let mut ctx: Vec<String> = Vec::new();
             for part in parts {
                 match part {
                     PxStrPart::Lit(s) => out.push_str(s),
                     PxStrPart::Sub(e) => {
                         let v = px_force_outcome(&px_eval_outcome(e, env)?)?;
-                        match v {
-                            PxVal::Str(s) => out.push_str(&s),
+                        match &v {
+                            PxVal::Str(s) => out.push_str(s),
+                            _ if px_is_ctx_string(&v) => {
+                                if let Some(content) = px_string_like_content(&v) {
+                                    out.push_str(&content);
+                                    ctx.extend(px_string_like_context(&v));
+                                }
+                            }
                             other => {
                                 return Err(px_error_type(format!(
                                     "px: interpolation must be a string, got {} (use builtins.toString)",
-                                    px_kind(&other)
+                                    px_kind(other)
                                 )))
                             }
                         }
                     }
                 }
             }
-            Ok(PxVal::Str(out))
+            Ok(px_ctx_string(out, ctx))
         }
         PxExpr::Var(name) => px_lookup_outcome(name, env),
         PxExpr::List(items) => {
@@ -3277,6 +3590,22 @@ pub fn px_eval_outcome(expr: &PxExpr, env: &Vec<PxFrame>) -> Result<PxVal, PxErr
         PxExpr::Select { base, name } => {
             let b = px_force_outcome(&px_eval_outcome(base, env)?)?;
             match b {
+                // A context-bearing string is never selectable (real Nix:
+                // strings are never attrsets). NOTE: this deliberately
+                // diverges from the pnix-clj oracle, which represents
+                // ctx-strings as a plain map too but never guards `.` select
+                // with its `attrset-value?` predicate (unlike `?`/`//`,
+                // which it DOES guard) — oracle-confirmed to leak the raw
+                // representation (`a.string` returns the content). That is a
+                // representational accident in one function, not a modeled
+                // Nix behavior; the pnix-cljs port already avoids it (it
+                // uses a genuinely distinct record type), and pnix-rs
+                // follows that cleaner precedent here instead of
+                // replicating the leak.
+                PxVal::Attrs(_) if px_is_ctx_string(&b) => Err(px_error_type(format!(
+                    "px: cannot select from {}",
+                    px_kind(&b),
+                ))),
                 PxVal::Attrs(fields) => match px_attrs_find(fields.as_ref(), name) {
                     // force at extraction: the containment invariant keeps
                     // thunks inside Attrs slots and forces them out here, so a
@@ -3584,7 +3913,11 @@ fn px_binary_outcome(op: &PxOp, l: &PxVal, r: &PxVal) -> Result<PxVal, PxError> 
             ))),
         };
         return Ok(PxVal::Bool(match l {
-            PxVal::Attrs(fields) => fields.iter().any(|(k, _)| k == name),
+            // A context-bearing string is never a real attrset (oracle-
+            // confirmed: `?` on a ctx-string is false, unlike `.` select,
+            // which the clj oracle itself leaks through — pnix-rs instead
+            // follows the cleaner cljs port here and refuses the leak).
+            PxVal::Attrs(fields) if px_is_real_attrset(l) => fields.iter().any(|(k, _)| k == name),
             _ => false,
         }));
     }
@@ -3602,6 +3935,39 @@ fn px_binary_outcome(op: &PxOp, l: &PxVal, r: &PxVal) -> Result<PxVal, PxError> 
         _ => {}
     }
     match (l, r) {
+        // String-context-aware operators: `+` concat unions both operands'
+        // contexts (collapsing to a plain Str when the union is empty);
+        // ordering compares CONTENT only (context never participates in
+        // ordering, same as equality). This is a LANGUAGE operator, so it is
+        // always context-aware — never gated by the builtin allowlist (`+`/
+        // `<` etc. are not routed through px_builtin_exec). Matches
+        // pnix-clj's `binary-value-result` treating string concat/ordering
+        // this way unconditionally.
+        (PxVal::Attrs(_), _) | (_, PxVal::Attrs(_))
+            if px_is_ctx_string(l) || px_is_ctx_string(r) =>
+        {
+            match (px_string_like_content(l), px_string_like_content(r)) {
+                (Some(lc), Some(rc)) => match op {
+                    PxOp::Add => {
+                        let mut out = lc;
+                        out.push_str(&rc);
+                        Ok(px_ctx_string(out, px_ctx_union(l, r)))
+                    }
+                    PxOp::Lt => Ok(PxVal::Bool(lc < rc)),
+                    PxOp::Le => Ok(PxVal::Bool(lc <= rc)),
+                    PxOp::Gt => Ok(PxVal::Bool(lc > rc)),
+                    PxOp::Ge => Ok(PxVal::Bool(lc >= rc)),
+                    _ => Err(px_error_type(String::from(
+                        "px: unsupported string-context operation",
+                    ))),
+                },
+                _ => Err(px_error_type(format!(
+                    "px: unsupported operands {} and {}",
+                    px_kind(l),
+                    px_kind(r)
+                ))),
+            }
+        }
         (PxVal::Float(a), PxVal::Float(b)) => {
             px_float_binary_outcome(op, *a, *b)
         }
@@ -4343,6 +4709,232 @@ fn px_fetch_git_arg(v: &PxVal) -> Result<PxVal, String> {
     }
 }
 
+// ---- derivations (pure simulation, no builder/store) --------------------------
+//
+// Deterministic pseudo store paths carrying string context, without any
+// builder or on-disk store (Tvix-style separation of derivation VALUES from
+// realization) — ported from pnix-clj's/pnix-cljs's `derivation-core` design.
+// Paths look like /nix/store/<32-hex>-<name>(.drv) where the hex comes from
+// a sha256 of the deep-forced input attrs' canonical JSON projection —
+// deterministic within this host, but NOT byte-compatible with real Nix
+// store hashing or with any other pnix host's own hash (documented
+// simulation scope). Context elements use Nix's encoding: a drvPath depends
+// on itself as "=<drvPath>", an output path as "!<output>!<drvPath>".
+
+/// First 32 hex characters of a sha256 digest (the same truncation
+/// `placeholder` already uses) — factored out since derivation hashing
+/// needs it twice per output plus once for drvPath.
+fn px_hex_prefix32(hex: &str) -> String {
+    let hex_chars: Vec<char> = hex.chars().collect();
+    let mut prefix = String::new();
+    let mut i = 0usize;
+    while i < 32 && i < hex_chars.len() {
+        prefix.push(hex_chars[i]);
+        i += 1;
+    }
+    prefix
+}
+
+/// Walk a deep-forced derivation input and report whether a function value
+/// occurs anywhere inside it (functions cannot be part of a derivation
+/// attrset). A context-bearing string is a leaf value here, not a real
+/// attrset (`px_is_real_attrset` excludes it), so it never recurses into
+/// its own tagged fields.
+fn px_derivation_uncoercible(v: &PxVal) -> bool {
+    match v {
+        PxVal::Closure { .. } | PxVal::Builtin { .. } => true,
+        PxVal::List(items) => {
+            let mut i = 0usize;
+            while i < items.len() {
+                if px_derivation_uncoercible(&items[i]) {
+                    return true;
+                }
+                i += 1;
+            }
+            false
+        }
+        PxVal::Attrs(fields) if px_is_real_attrset(v) => {
+            let mut i = 0usize;
+            while i < fields.len() {
+                if px_derivation_uncoercible(&fields[i].1) {
+                    return true;
+                }
+                i += 1;
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+/// Deterministic PSEUDO drvPath and per-output store paths for a
+/// deep-forced derivation input. Non-"out" outputs get the Nix-style
+/// "-<output>" name suffix (oracle: /nix/store/<h>-t vs
+/// /nix/store/<h>-t-dev). `px_derivation_uncoercible` has already ruled out
+/// functions by the time this runs (see `px_derivation_core`), so
+/// `px_to_json`'s function-rejection branch cannot fire here.
+fn px_derivation_paths(
+    forced: &PxVal,
+    name: &str,
+    outputs: &Vec<String>,
+) -> Result<(String, Vec<(String, String)>), String> {
+    let canonical = px_to_json(forced)?;
+    let drv_hex = px_sha256_hex(sha_utf8_bytes(&format!("drv:{}", canonical)));
+    let drv_path = format!("/nix/store/{}-{}.drv", px_hex_prefix32(&drv_hex), name);
+    let mut out_paths = Vec::new();
+    let mut i = 0usize;
+    while i < outputs.len() {
+        let o = &outputs[i];
+        let out_hex = px_sha256_hex(sha_utf8_bytes(&format!("out:{}:{}", o, canonical)));
+        let suffix = if o == "out" {
+            String::new()
+        } else {
+            format!("-{}", o)
+        };
+        out_paths.push((
+            o.clone(),
+            format!("/nix/store/{}-{}{}", px_hex_prefix32(&out_hex), name, suffix),
+        ));
+        i += 1;
+    }
+    Ok((drv_path, out_paths))
+}
+
+/// Validated + realized derivation input: `(forced_attrs, name, outputs,
+/// drv_path, out_paths)`. Validates name/system/builder required, name a
+/// plain string, no function anywhere in the (deep-forced) attrs, outputs
+/// defaulting to `["out"]` and otherwise a non-empty vector of distinct
+/// strings — oracle-pinned, matches pnix-clj's/pnix-cljs's
+/// `derivation-core`.
+fn px_derivation_core(
+    builtin_name: &str,
+    attrs: &PxVal,
+) -> Result<(PxVal, String, Vec<String>, String, Vec<(String, String)>), String> {
+    if !px_is_real_attrset(attrs) {
+        return Err(format!(
+            "px: {}: argument must be an attrset, got {}",
+            builtin_name,
+            px_kind(attrs)
+        ));
+    }
+    let forced = px_force_deep(attrs)?;
+    let fields = match &forced {
+        PxVal::Attrs(f) => f.clone(),
+        _ => return Err(format!("px: {}: argument must be an attrset", builtin_name)),
+    };
+    let required = ["name", "system", "builder"];
+    let mut ri = 0usize;
+    while ri < required.len() {
+        if px_attrs_find(fields.as_ref(), required[ri]).is_none() {
+            return Err(format!(
+                "px: {}: missing required attribute '{}'",
+                builtin_name, required[ri]
+            ));
+        }
+        ri += 1;
+    }
+    let name = match px_attrs_find(fields.as_ref(), "name") {
+        Some(PxVal::Str(s)) => s.clone(),
+        Some(other) => {
+            return Err(format!(
+                "px: {}: name must be a plain string, got {}",
+                builtin_name,
+                px_kind(other)
+            ))
+        }
+        None => return Err(format!("px: {}: missing required attribute 'name'", builtin_name)),
+    };
+    if px_derivation_uncoercible(&forced) {
+        return Err(format!(
+            "px: {}: derivation attrs cannot contain a function",
+            builtin_name
+        ));
+    }
+    let outputs: Vec<String> = match px_attrs_find(fields.as_ref(), "outputs") {
+        None => vec![String::from("out")],
+        Some(PxVal::List(items)) => {
+            let mut out = Vec::new();
+            let mut i = 0usize;
+            while i < items.len() {
+                match &items[i] {
+                    PxVal::Str(s) => out.push(s.clone()),
+                    other => {
+                        return Err(format!(
+                            "px: {}: outputs must be strings, got {}",
+                            builtin_name,
+                            px_kind(other)
+                        ))
+                    }
+                }
+                i += 1;
+            }
+            out
+        }
+        Some(other) => {
+            return Err(format!(
+                "px: {}: outputs must be a list, got {}",
+                builtin_name,
+                px_kind(other)
+            ))
+        }
+    };
+    if outputs.is_empty() {
+        return Err(format!("px: {}: outputs must be non-empty", builtin_name));
+    }
+    let mut oi = 0usize;
+    while oi < outputs.len() {
+        let mut oj = oi + 1;
+        while oj < outputs.len() {
+            if outputs[oi] == outputs[oj] {
+                return Err(format!("px: {}: outputs must be distinct", builtin_name));
+            }
+            oj += 1;
+        }
+        oi += 1;
+    }
+    let (drv_path, out_paths) = px_derivation_paths(&forced, &name, &outputs)?;
+    Ok((forced, name, outputs, drv_path, out_paths))
+}
+
+/// Set (overwrite if present, else append) a key in a field-list accumulator
+/// — Nix `assoc`/`//`-style "last write wins" semantics for the reserved
+/// `type`/`drvPath`/`outPath`/`outputName`/`<output-name>` keys `derivation`
+/// adds on top of the user's own input attrs (oracle: pnix-clj does this
+/// via plain Clojure `assoc`, which silently overwrites; `px_attrs`'s
+/// sorted-unique invariant needs the explicit overwrite instead).
+fn px_fields_set(fields: &mut Vec<(String, PxVal)>, key: String, value: PxVal) {
+    // Rebuild rather than assign through `fields[i].1 = ..` — indexed
+    // tuple-field assignment does not typeck in rs-meta's interpreted
+    // subset (substrate-check caught it). `px_attrs` re-sorts afterward, so
+    // losing the removed entry's original position here is harmless.
+    let mut i = 0usize;
+    let mut found = false;
+    while i < fields.len() {
+        if fields[i].0 == key {
+            found = true;
+            break;
+        }
+        i += 1;
+    }
+    if found {
+        fields.remove(i);
+    }
+    fields.push((key, value));
+}
+
+/// Look up an output's store path in a `px_derivation_core` result's
+/// `out_paths` list (linear scan; there are at most a handful of outputs).
+fn px_out_path_for<'a>(out_paths: &'a Vec<(String, String)>, output: &str) -> &'a str {
+    let mut i = 0usize;
+    while i < out_paths.len() {
+        if out_paths[i].0 == output {
+            return &out_paths[i].1;
+        }
+        i += 1;
+    }
+    ""
+}
+
 // ---- builtins -----------------------------------------------------------------
 
 pub fn px_builtin_names() -> Vec<&'static str> {
@@ -4434,6 +5026,14 @@ pub fn px_builtin_names() -> Vec<&'static str> {
         "toPath",
         "unsafeDiscardOutputDependency",
         "unsafeDiscardStringContext",
+        // String-context builtins (proposal 0006 slice): pure-simulation
+        // tracking of Nix's string context, ported from pnix-clj/pnix-clr's
+        // tagged-Attrs design (see the "string context" section above).
+        "hasContext",
+        "getContext",
+        "appendContext",
+        "derivation",
+        "derivationStrict",
         "tryEval",
         "isPath",
         // README surface: missing Nix builtins + pure helpers shared with lib
@@ -4802,6 +5402,10 @@ fn px_builtin_arity(name: &str) -> usize {
         || name == "not"
         || name == "neg"
         || name == "genericClosure"
+        || name == "hasContext"
+        || name == "getContext"
+        || name == "derivation"
+        || name == "derivationStrict"
     {
         1
     } else if name == "concatLists" {
@@ -4847,6 +5451,7 @@ fn px_builtin_arity(name: &str) -> usize {
         || name == "gt"
         || name == "ge"
         || name == "get"
+        || name == "appendContext"
     {
         2
     } else if name == "replaceStrings" || name == "foldl" || name == "foldr"
@@ -4919,6 +5524,61 @@ fn px_to_string_coerce(v: &PxVal) -> Result<PxVal, String> {
             // Parser-level unary minus is desugared to `0 - operand`, so the
             // literal `-0.0` has already become positive zero, matching Nix.
             Ok(PxVal::Str(format!("{:.6}", x)))
+        }
+        other => Err(format!("px: toString unsupported for {}", px_kind(other))),
+    }
+}
+
+/// Context-aware `toString` coercion — the `toString` BUILTIN's own full
+/// implementation, distinct from `px_to_string_coerce` above (which stays
+/// strict/context-free and backs builtins NOT on the context-aware
+/// allowlist, e.g. `concatMapStringsSep`; a ctx-string reaching THOSE stays
+/// a hard error, matching pnix-clj's `pnix-to-string` vs `:toString`'s
+/// separate `coerce` split). Strings keep their context; list elements'
+/// contexts are collected into `ctx` (oracle: `toString [ ctx "b" ]`
+/// carries the context).
+fn px_to_string_coerce_ctx(v: &PxVal, ctx: &mut Vec<String>) -> Result<String, String> {
+    let v = px_force(v)?;
+    match &v {
+        PxVal::Int(n) => Ok(format!("{}", n)),
+        PxVal::Str(s) => Ok(s.clone()),
+        _ if px_is_ctx_string(&v) => {
+            ctx.extend(px_string_like_context(&v));
+            Ok(px_string_like_content_or_empty(&v))
+        }
+        PxVal::Null => Ok(String::new()),
+        PxVal::Bool(b) => {
+            if *b {
+                Ok(String::from("1"))
+            } else {
+                Ok(String::new())
+            }
+        }
+        PxVal::List(items) => {
+            let mut out = String::new();
+            let mut first = true;
+            for item in items.iter() {
+                let txt = px_to_string_coerce_ctx(item, ctx)?;
+                if !first {
+                    out.push(' ');
+                }
+                out.push_str(&txt);
+                first = false;
+            }
+            Ok(out)
+        }
+        PxVal::Float(f) => {
+            let x = *f;
+            if x - x != 0.0 {
+                if x != x {
+                    return Ok(String::from("nan"));
+                }
+                if x > 0.0 {
+                    return Ok(String::from("inf"));
+                }
+                return Ok(String::from("-inf"));
+            }
+            Ok(format!("{:.6}", x))
         }
         other => Err(format!("px: toString unsupported for {}", px_kind(other))),
     }
@@ -5075,6 +5735,11 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                 }
                 out
             }
+            // Oracle: hashString consumes UTF-8 bytes and returns lowercase
+            // hex. A contextful DATA string is accepted but the digest is
+            // context-free (the algorithm selector above may not carry
+            // context — already rejected).
+            _ if px_is_ctx_string(&payload) => sha_utf8_bytes(&px_string_like_content_or_empty(&payload)),
             other => {
                 return Err(format!(
                     "px: hashString payload must be string-like, got {}",
@@ -5122,6 +5787,25 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
         out
     };
     let args = &forced;
+    // Fail-closed string-context frontier (single chokepoint, right before
+    // dispatch): a contextful string reaching a builtin the allowlist does
+    // not recognize is a hard error rather than a silently dropped/mangled
+    // context. Scanning the FORCED args (top level only — list ELEMENTS
+    // inside a forced list arg are still individually lazy, since forcing
+    // an arg to WHNF does not force its contents) reproduces the oracle's
+    // exact shallow-scan behavior: a top-level scalar contextful argument is
+    // always caught, while one nested inside an unforced list element
+    // (e.g. passed to `sort`/`filter`) is not — empirically confirmed to
+    // match the real pnix-clj oracle, not merely the pnix-cljs port (see
+    // `px_ctx_string_in_args`). `hashString`/`elem` above return before this
+    // point, but both are allowlisted, so the gate could never reject them
+    // anyway.
+    if px_ctx_string_in_args(args) && !px_context_aware_builtin(name) {
+        return Err(format!(
+            "px: {}: string-context-frontier: this builtin does not accept a contextful string argument yet",
+            name
+        ));
+    }
     if name == "break" {
         Ok(args[0].clone())
     } else if name == "parseDrvName" {
@@ -5141,31 +5825,222 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
     } else if name == "toPath" {
         match &args[0] {
             PxVal::Str(s) => Ok(PxVal::Str(px_to_path_string(s)?)),
+            // Lexically normalize the content; the context (if any) is kept
+            // unchanged (oracle-pinned: toPath does not touch context).
+            _ if px_is_ctx_string(&args[0]) => {
+                let content = px_string_like_content_or_empty(&args[0]);
+                let normalized = px_to_path_string(&content)?;
+                Ok(px_ctx_string(normalized, px_string_like_context(&args[0])))
+            }
             other => Err(format!(
                 "px: toPath expects a string, got {}",
                 px_kind(other)
             )),
         }
-    } else if name == "unsafeDiscardOutputDependency"
-        || name == "unsafeDiscardStringContext"
-    {
-        // PxVal::Str has no context payload yet, so both operations are exact
-        // identity functions on every representable string.
+    } else if name == "unsafeDiscardStringContext" {
         match &args[0] {
             PxVal::Str(s) => Ok(PxVal::Str(s.clone())),
+            _ if px_is_ctx_string(&args[0]) => {
+                Ok(PxVal::Str(px_string_like_content_or_empty(&args[0])))
+            }
             other => Err(format!(
                 "px: {} expects a string, got {}",
                 name,
                 px_kind(other)
             )),
         }
+    } else if name == "unsafeDiscardOutputDependency" {
+        match &args[0] {
+            PxVal::Str(s) => Ok(PxVal::Str(s.clone())),
+            // Keep the content and every PATH-kind context element; drop
+            // only output-dependency elements ("!o!<drv>") and the drvPath
+            // allOutputs element ("=<drv>") — oracle-pinned to mirror
+            // pnix-clj's `:unsafeDiscardOutputDependency`.
+            _ if px_is_ctx_string(&args[0]) => {
+                let content = px_string_like_content_or_empty(&args[0]);
+                let mut kept = Vec::new();
+                let ctx = px_string_like_context(&args[0]);
+                let mut i = 0usize;
+                while i < ctx.len() {
+                    let e = &ctx[i];
+                    if !e.starts_with("!") && !e.starts_with("=") {
+                        kept.push(e.clone());
+                    }
+                    i += 1;
+                }
+                Ok(px_ctx_string(content, kept))
+            }
+            other => Err(format!(
+                "px: {} expects a string, got {}",
+                name,
+                px_kind(other)
+            )),
+        }
+    } else if name == "hasContext" {
+        if px_is_string_like(&args[0]) {
+            Ok(PxVal::Bool(px_is_ctx_string(&args[0])))
+        } else {
+            Err(format!(
+                "px: hasContext expects a string, got {}",
+                px_kind(&args[0])
+            ))
+        }
+    } else if name == "getContext" {
+        // Decode Nix-encoded context elements back into per-path info
+        // attrsets, merging kinds on the same path (oracle: nix-instantiate
+        // 2.34.7 — plain "<p>" -> { path = true; }, "!o!<drv>" -> { outputs
+        // = [o..]; }, "=<drv>" -> { allOutputs = true; }; mixed kinds merge
+        // on one key). Pure-simulation scope: WHICH dependency + which
+        // kind, not the fuller real-Nix detail.
+        if !px_is_string_like(&args[0]) {
+            return Err(format!(
+                "px: getContext expects a string, got {}",
+                px_kind(&args[0])
+            ));
+        }
+        let ctx = px_string_like_context(&args[0]);
+        let mut acc: Vec<(String, bool, bool, Vec<String>)> = Vec::new();
+        let mut i = 0usize;
+        while i < ctx.len() {
+            let e = &ctx[i];
+            if e.starts_with("=") {
+                let path = px_str_tail(e);
+                let idx = px_getcontext_find_or_insert(&mut acc, &path);
+                acc[idx].2 = true;
+            } else if e.starts_with("!") {
+                let rest = px_str_tail(e);
+                match px_split_bang(&rest) {
+                    Some((output, path)) => {
+                        let idx = px_getcontext_find_or_insert(&mut acc, &path);
+                        let mut already = false;
+                        let mut k = 0usize;
+                        while k < acc[idx].3.len() {
+                            if acc[idx].3[k] == output {
+                                already = true;
+                            }
+                            k += 1;
+                        }
+                        if !already {
+                            // `.push()` needs a plain local mutable
+                            // receiver in rs-meta's interpreted subset —
+                            // indexing through `acc[idx].3` directly does
+                            // not typeck there (substrate-check caught it)
+                            // — so clone out, push, and write back instead.
+                            let mut updated = acc[idx].3.clone();
+                            updated.push(output);
+                            acc[idx].3 = updated;
+                        }
+                    }
+                    None => {
+                        let idx = px_getcontext_find_or_insert(&mut acc, e);
+                        acc[idx].1 = true;
+                    }
+                }
+            } else {
+                let idx = px_getcontext_find_or_insert(&mut acc, e);
+                acc[idx].1 = true;
+            }
+            i += 1;
+        }
+        let mut result = Vec::new();
+        let mut i = 0usize;
+        while i < acc.len() {
+            let (path, has_path, all_outputs, outputs) = &acc[i];
+            let mut info = Vec::new();
+            if *has_path {
+                info.push((String::from("path"), PxVal::Bool(true)));
+            }
+            if *all_outputs {
+                info.push((String::from("allOutputs"), PxVal::Bool(true)));
+            }
+            if !outputs.is_empty() {
+                let sorted_outs = px_sort_strings(outputs.clone());
+                let mut ov = Vec::new();
+                let mut k = 0usize;
+                while k < sorted_outs.len() {
+                    ov.push(PxVal::Str(sorted_outs[k].clone()));
+                    k += 1;
+                }
+                info.push((String::from("outputs"), px_list(ov)));
+            }
+            result.push((path.clone(), px_attrs(info)));
+            i += 1;
+        }
+        Ok(px_attrs(result))
+    } else if name == "appendContext" {
+        // appendContext s ctxAttrs: interpret each key's info attrset into
+        // Nix-encoded context elements — path=true -> "<p>", allOutputs=true
+        // -> "=<p>", outputs=[o..] -> "!o!<p>". An EMPTY info attrset
+        // contributes NOTHING (oracle-confirmed against real nix-instantiate:
+        // hasContext (appendContext s { p = {}; }) is false). Real arg
+        // order is (string, ctxAttrs) — string FIRST.
+        if !px_is_string_like(&args[0]) {
+            return Err(format!(
+                "px: appendContext expects a string, got {}",
+                px_kind(&args[0])
+            ));
+        }
+        let ctx_attrs = px_force(&args[1])?;
+        let info_map = match &ctx_attrs {
+            PxVal::Attrs(f) if px_is_real_attrset(&ctx_attrs) => f.clone(),
+            other => {
+                return Err(format!(
+                    "px: appendContext expects an attrset context, got {}",
+                    px_kind(other)
+                ))
+            }
+        };
+        let mut extra: Vec<String> = Vec::new();
+        let mut i = 0usize;
+        while i < info_map.len() {
+            let key = &info_map[i].0;
+            let info = px_force(&info_map[i].1)?;
+            let info_fields = match &info {
+                PxVal::Attrs(f) if px_is_real_attrset(&info) => f.clone(),
+                other => {
+                    return Err(format!(
+                        "px: appendContext: context info for '{}' must be an attrset, got {}",
+                        key,
+                        px_kind(other)
+                    ))
+                }
+            };
+            if let Some(v) = px_attrs_find(info_fields.as_ref(), "path") {
+                if let PxVal::Bool(true) = px_force(v)? {
+                    extra.push(key.clone());
+                }
+            }
+            if let Some(v) = px_attrs_find(info_fields.as_ref(), "allOutputs") {
+                if let PxVal::Bool(true) = px_force(v)? {
+                    extra.push(format!("={}", key));
+                }
+            }
+            if let Some(v) = px_attrs_find(info_fields.as_ref(), "outputs") {
+                if let PxVal::List(outs) = px_force(v)? {
+                    let mut j = 0usize;
+                    while j < outs.len() {
+                        if let PxVal::Str(o) = px_force(&outs[j])? {
+                            extra.push(format!("!{}!{}", o, key));
+                        }
+                        j += 1;
+                    }
+                }
+            }
+            i += 1;
+        }
+        let content = px_string_like_content_or_empty(&args[0]);
+        let mut full_ctx = px_string_like_context(&args[0]);
+        full_ctx.extend(extra);
+        Ok(px_ctx_string(content, full_ctx))
     } else if name == "isPath" {
         // The seed value model has no path variant. This is exact for every
         // currently representable value, including toPath (which Nix returns
         // as a string); path literals outside import remain a held frontier.
         Ok(PxVal::Bool(false))
     } else if name == "toString" {
-        px_to_string_coerce(&args[0])
+        let mut ctx: Vec<String> = Vec::new();
+        let content = px_to_string_coerce_ctx(&args[0], &mut ctx)?;
+        Ok(px_ctx_string(content, ctx))
     } else if name == "stringLength" {
         match &args[0] {
             // ★B4 DECIDED (owner 2026-07-09): the BYTE model — Nix counts
@@ -5173,44 +6048,98 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             // chars().count() (a real divergence the gate exposed).
             PxVal::Str(s) => Ok(PxVal::Int(s.len() as i64)),
             PxVal::Bytes(b) => Ok(PxVal::Int(b.len() as i64)),
+            _ if px_is_ctx_string(&args[0]) => {
+                Ok(PxVal::Int(px_string_like_content_or_empty(&args[0]).len() as i64))
+            }
             other => Err(format!("px: stringLength expects a string, got {}", px_kind(other))),
         }
     } else if name == "concatStringsSep" {
-        match (&args[0], &args[1]) {
-            (PxVal::Str(sep), PxVal::List(items)) => {
-                // RAW-BYTE aware: concat at the BYTE level so per-byte
-                // fragments (substring cuts, e.g. the harvested lexer's
-                // char_at) reassemble; revalidate -> Str when valid UTF-8.
-                let sep_bytes = px_str_bytes(sep);
-                let mut out: Vec<u8> = Vec::new();
-                let mut first = true;
-                for item in items.iter() {
-                    let item = px_force(item)?;
-                    match px_val_bytes(&item) {
-                        Some(b) => {
-                            if !first {
-                                for x in sep_bytes.iter() {
+        // Context-aware: contents join at the byte level exactly as before
+        // (RAW-BYTE aware: per-byte fragments from e.g. a substring cut
+        // reassemble; revalidate -> Str when valid UTF-8); the contexts of
+        // the separator and every element union onto the result. A
+        // context-free result stays a plain Str/Bytes as before.
+        match px_item_bytes_and_ctx(&args[0]) {
+            Some((sep_bytes, sep_ctx)) => {
+              let mut ctx = sep_ctx;
+              match &args[1] {
+                PxVal::List(items) => {
+                    let mut out: Vec<u8> = Vec::new();
+                    let mut first = true;
+                    for item in items.iter() {
+                        let item = px_force(item)?;
+                        match px_item_bytes_and_ctx(&item) {
+                            Some((b, ic)) => {
+                                if !first {
+                                    for x in sep_bytes.iter() {
+                                        out.push(*x);
+                                    }
+                                }
+                                for x in b.iter() {
                                     out.push(*x);
                                 }
+                                ctx.extend(ic);
+                                first = false;
                             }
-                            for x in b.iter() {
-                                out.push(*x);
+                            None => {
+                                return Err(format!(
+                                    "px: concatStringsSep expects strings, got {}",
+                                    px_kind(&item)
+                                ))
                             }
-                            first = false;
-                        }
-                        None => {
-                            return Err(format!(
-                                "px: concatStringsSep expects strings, got {}",
-                                px_kind(&item)
-                            ))
                         }
                     }
+                    match px_bytes_val(out) {
+                        PxVal::Str(s) => Ok(px_ctx_string(s, ctx)),
+                        other if ctx.is_empty() => Ok(other),
+                        _ => Err(String::from(
+                            "px: concatStringsSep: raw-byte result cannot carry string context",
+                        )),
+                    }
                 }
-                Ok(px_bytes_val(out))
+                _ => Err(String::from("px: concatStringsSep expects (string, list)")),
+              }
             }
-            _ => Err(String::from("px: concatStringsSep expects (string, list)")),
+            None => Err(String::from("px: concatStringsSep expects (string, list)")),
         }
     } else if name == "substring" {
+        // Context-aware: Nix keeps the ENTIRE original context on a
+        // substring (context is not sliced along with the content) —
+        // oracle-pinned, matches pnix-clj's `:substring`.
+        if px_is_ctx_string(&args[2]) {
+            return match (&args[0], &args[1]) {
+                (PxVal::Int(start), PxVal::Int(len)) => {
+                    if *start < 0 {
+                        return Err(String::from("px: substring: negative start"));
+                    }
+                    let orig_ctx = px_string_like_context(&args[2]);
+                    let content = px_string_like_content_or_empty(&args[2]);
+                    let bytes = px_str_bytes(&content);
+                    let a = *start as usize;
+                    if a >= bytes.len() {
+                        return Ok(px_ctx_string(String::new(), orig_ctx));
+                    }
+                    let b0 = if *len < 0 { bytes.len() } else { a + (*len as usize) };
+                    let b = if b0 > bytes.len() { bytes.len() } else { b0 };
+                    let mut out: Vec<u8> = Vec::new();
+                    let mut i = a;
+                    while i < b {
+                        out.push(bytes[i]);
+                        i += 1;
+                    }
+                    match px_bytes_val(out) {
+                        PxVal::Str(s) => Ok(px_ctx_string(s, orig_ctx)),
+                        // A raw-byte cut of a CONTEXTFUL string: the byte
+                        // value cannot carry context — held (matches
+                        // pnix-clj's `:substring-raw-bytes-with-context`).
+                        _ => Err(String::from(
+                            "px: substring: raw-byte cut of a contextful string is not supported",
+                        )),
+                    }
+                }
+                _ => Err(String::from("px: substring expects (int, int, string)")),
+            };
+        }
         match (&args[0], &args[1], &args[2]) {
             (PxVal::Int(start), PxVal::Int(len), PxVal::Str(s)) => {
                 if *start < 0 {
@@ -5888,16 +6817,14 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             _ => Err(String::from("px: getAttr expects (string, attrset)")),
         }
     } else if name == "isAttrs" {
-        match &args[0] {
-            PxVal::Attrs(_) => Ok(PxVal::Bool(true)),
-            _ => Ok(PxVal::Bool(false)),
-        }
+        Ok(PxVal::Bool(px_is_real_attrset(&args[0])))
     } else if name == "isNull" {
         Ok(PxVal::Bool(matches!(&args[0], PxVal::Null)))
     } else if name == "isFloat" {
         Ok(PxVal::Bool(matches!(&args[0], PxVal::Float(_))))
     } else if name == "typeOf" {
-        // Nix names (oracle-pinned): attrsets are "set".
+        // Nix names (oracle-pinned): attrsets are "set"; a context-bearing
+        // string is a "string" (context is metadata, not a type).
         let t = match &args[0] {
             PxVal::Int(_) => "int",
             PxVal::Float(_) => "float",
@@ -5906,6 +6833,7 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             PxVal::Str(_) => "string",
             PxVal::Bytes(_) => "string",
             PxVal::List(_) => "list",
+            PxVal::Attrs(_) if px_is_ctx_string(&args[0]) => "string",
             PxVal::Attrs(_) => "set",
             PxVal::Closure { .. } | PxVal::Builtin { .. } => "lambda",
             // typeOf forces its argument to WHNF (Nix); re-dispatch on the
@@ -5978,14 +6906,23 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             _ => Err(String::from("px: removeAttrs expects (attrset, list)")),
         }
     } else if name == "replaceStrings" {
-        match (&args[0], &args[1], &args[2]) {
-            (PxVal::List(from), PxVal::List(to), PxVal::Str(s0)) => {
+        // Context-aware: needles match on content only; the result carries
+        // the subject's own context PLUS the context of every replacement
+        // actually USED (an unused `to` pair contributes nothing — exact,
+        // not an over-approximation). Content-free everywhere collapses to
+        // a plain Str exactly as before (`px_ctx_string` collapses on an
+        // empty context), so this is a byte-identical rewrite of the
+        // original context-free algorithm, not a behavior change for it.
+        match (&args[0], &args[1]) {
+            (PxVal::List(from), PxVal::List(to)) if px_is_string_like(&args[2]) => {
                 if from.len() != to.len() {
                     return Err(String::from("px: replaceStrings: from/to length mismatch"));
                 }
-                let chars: Vec<char> = s0.chars().collect();
+                let content = px_string_like_content_or_empty(&args[2]);
+                let chars: Vec<char> = content.chars().collect();
                 let n = chars.len();
                 let mut out = String::new();
+                let mut used_ctx = px_string_like_context(&args[2]);
                 // Single left-to-right pass over positions 0..=n (INCLUSIVE
                 // of the end): at each position, try each `from` in order
                 // and take the first prefix match. An empty `from` matches
@@ -5995,12 +6932,13 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                 // the same empty match would fire forever at the same spot.
                 let mut i = 0usize;
                 while i <= n {
-                    let mut matched: Option<(usize, String)> = None;
+                    let mut matched: Option<(usize, String, Vec<String>)> = None;
                     let mut fi = 0usize;
                     while fi < from.len() && matched.is_none() {
                         let from_item = px_force(&from[fi])?;
                         let to_item = px_force(&to[fi])?;
-                        if let (PxVal::Str(f), PxVal::Str(t)) = (&from_item, &to_item) {
+                        if px_is_string_like(&from_item) && px_is_string_like(&to_item) {
+                            let f = px_string_like_content_or_empty(&from_item);
                             let fc: Vec<char> = f.chars().collect();
                             if i + fc.len() <= n {
                                 let mut eq = true;
@@ -6012,22 +6950,28 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                                     k += 1;
                                 }
                                 if eq {
-                                    matched = Some((fc.len(), t.clone()));
+                                    matched = Some((
+                                        fc.len(),
+                                        px_string_like_content_or_empty(&to_item),
+                                        px_string_like_context(&to_item),
+                                    ));
                                 }
                             }
                         }
                         fi += 1;
                     }
                     match matched {
-                        Some((0, replacement)) => {
+                        Some((0, replacement, r_ctx)) => {
                             out.push_str(&replacement);
+                            used_ctx.extend(r_ctx);
                             if i < n {
                                 out.push(chars[i]);
                             }
                             i += 1;
                         }
-                        Some((len, replacement)) => {
+                        Some((len, replacement, r_ctx)) => {
                             out.push_str(&replacement);
+                            used_ctx.extend(r_ctx);
                             i += len;
                         }
                         None => {
@@ -6038,7 +6982,7 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                         }
                     }
                 }
-                Ok(PxVal::Str(out))
+                Ok(px_ctx_string(out, used_ctx))
             }
             _ => Err(String::from("px: replaceStrings expects (list, list, string)")),
         }
@@ -6443,11 +7387,20 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
     } else if name == "toLower" {
         match &args[0] {
             PxVal::Str(s) => Ok(PxVal::Str(s.to_lowercase())),
+            // Case conversion keeps the context (oracle-pinned).
+            _ if px_is_ctx_string(&args[0]) => Ok(px_ctx_string(
+                px_string_like_content_or_empty(&args[0]).to_lowercase(),
+                px_string_like_context(&args[0]),
+            )),
             other => Err(format!("px: toLower expects a string, got {}", px_kind(other))),
         }
     } else if name == "toUpper" {
         match &args[0] {
             PxVal::Str(s) => Ok(PxVal::Str(s.to_uppercase())),
+            _ if px_is_ctx_string(&args[0]) => Ok(px_ctx_string(
+                px_string_like_content_or_empty(&args[0]).to_uppercase(),
+                px_string_like_context(&args[0]),
+            )),
             other => Err(format!("px: toUpper expects a string, got {}", px_kind(other))),
         }
     } else if name == "boolToString" {
@@ -6486,6 +7439,32 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             other => Err(format!("px: when expects a bool, got {}", px_kind(other))),
         }
     } else if name == "removePrefix" {
+        // substring-based lib semantics: the result keeps `s`'s WHOLE
+        // context; a contextful prefix argument only affects the
+        // comparison (oracle-pinned, matches pnix-clj's `:removePrefix`).
+        if px_is_ctx_string(&args[0]) || px_is_ctx_string(&args[1]) {
+            return match (px_string_like_content(&args[0]), px_string_like_content(&args[1])) {
+                (Some(pre), Some(s)) => {
+                    let s_ctx = px_string_like_context(&args[1]);
+                    if s.starts_with(pre.as_str()) {
+                        let mut out = String::new();
+                        let mut skipped = 0usize;
+                        let n = pre.chars().count();
+                        for c in s.chars() {
+                            if skipped < n {
+                                skipped += 1;
+                            } else {
+                                out.push(c);
+                            }
+                        }
+                        Ok(px_ctx_string(out, s_ctx))
+                    } else {
+                        Ok(px_ctx_string(s, s_ctx))
+                    }
+                }
+                _ => Err(String::from("px: removePrefix expects two strings")),
+            };
+        }
         match (&args[0], &args[1]) {
             (PxVal::Str(pre), PxVal::Str(s)) => {
                 if s.starts_with(pre.as_str()) {
@@ -6507,6 +7486,30 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             _ => Err(String::from("px: removePrefix expects two strings")),
         }
     } else if name == "removeSuffix" {
+        // Same context contract as removePrefix.
+        if px_is_ctx_string(&args[0]) || px_is_ctx_string(&args[1]) {
+            return match (px_string_like_content(&args[0]), px_string_like_content(&args[1])) {
+                (Some(suf), Some(s)) => {
+                    let s_ctx = px_string_like_context(&args[1]);
+                    if px_str_has_suffix(&s, &suf) {
+                        let n = s.chars().count();
+                        let m = suf.chars().count();
+                        let mut out = String::new();
+                        let mut i = 0usize;
+                        for c in s.chars() {
+                            if i < n - m {
+                                out.push(c);
+                            }
+                            i += 1;
+                        }
+                        Ok(px_ctx_string(out, s_ctx))
+                    } else {
+                        Ok(px_ctx_string(s, s_ctx))
+                    }
+                }
+                _ => Err(String::from("px: removeSuffix expects two strings")),
+            };
+        }
         match (&args[0], &args[1]) {
             (PxVal::Str(suf), PxVal::Str(s)) => {
                 if px_str_has_suffix(s, suf) {
@@ -6528,16 +7531,52 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             _ => Err(String::from("px: removeSuffix expects two strings")),
         }
     } else if name == "hasPrefix" {
+        // Content-based predicate: context does not affect the answer.
+        if px_is_ctx_string(&args[0]) || px_is_ctx_string(&args[1]) {
+            return match (px_string_like_content(&args[0]), px_string_like_content(&args[1])) {
+                (Some(pre), Some(s)) => Ok(PxVal::Bool(s.starts_with(pre.as_str()))),
+                _ => Err(String::from("px: hasPrefix expects two strings")),
+            };
+        }
         match (&args[0], &args[1]) {
             (PxVal::Str(pre), PxVal::Str(s)) => Ok(PxVal::Bool(s.starts_with(pre.as_str()))),
             _ => Err(String::from("px: hasPrefix expects two strings")),
         }
     } else if name == "hasSuffix" {
+        if px_is_ctx_string(&args[0]) || px_is_ctx_string(&args[1]) {
+            return match (px_string_like_content(&args[0]), px_string_like_content(&args[1])) {
+                (Some(suf), Some(s)) => Ok(PxVal::Bool(px_str_has_suffix(&s, &suf))),
+                _ => Err(String::from("px: hasSuffix expects two strings")),
+            };
+        }
         match (&args[0], &args[1]) {
             (PxVal::Str(suf), PxVal::Str(s)) => Ok(PxVal::Bool(px_str_has_suffix(s, suf))),
             _ => Err(String::from("px: hasSuffix expects two strings")),
         }
     } else if name == "splitString" {
+        // lib.splitString is builtins.split-based, and split results are
+        // context-free (oracle) — pieces come back as plain strings even
+        // when the separator/subject carry context.
+        if px_is_ctx_string(&args[0]) || px_is_ctx_string(&args[1]) {
+            return match (px_string_like_content(&args[0]), px_string_like_content(&args[1])) {
+                (Some(sep), Some(s)) => {
+                    let mut out = Vec::new();
+                    if sep.is_empty() {
+                        for c in s.chars() {
+                            let mut t = String::new();
+                            t.push(c);
+                            out.push(PxVal::Str(t));
+                        }
+                    } else {
+                        for part in s.split(sep.as_str()) {
+                            out.push(PxVal::Str(String::from(part)));
+                        }
+                    }
+                    Ok(px_list(out))
+                }
+                _ => Err(String::from("px: splitString expects two strings")),
+            };
+        }
         match (&args[0], &args[1]) {
             (PxVal::Str(sep), PxVal::Str(s)) => {
                 let mut out = Vec::new();
@@ -6847,13 +7886,24 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             other => Err(format!("px: assert expects a bool, got {}", px_kind(other))),
         }
     } else if name == "match" {
+        // Oracle: a contextful REGEX is an error (falls to the catch-all
+        // below, since a ctx-string never matches PxVal::Str); a contextful
+        // SUBJECT is accepted and its captures come back context-free (Nix
+        // collects but drops the subject's context on match results).
         match (&args[0], &args[1]) {
             (PxVal::Str(re), PxVal::Str(sub)) => px_match(re, sub),
+            (PxVal::Str(re), _) if px_is_ctx_string(&args[1]) => {
+                px_match(re, &px_string_like_content_or_empty(&args[1]))
+            }
             _ => Err(String::from("px: match expects (string, string)")),
         }
     } else if name == "split" {
+        // Same oracle contract as match.
         match (&args[0], &args[1]) {
             (PxVal::Str(re), PxVal::Str(sub)) => px_split(re, sub),
+            (PxVal::Str(re), _) if px_is_ctx_string(&args[1]) => {
+                px_split(re, &px_string_like_content_or_empty(&args[1]))
+            }
             _ => Err(String::from("px: split expects (string, string)")),
         }
     } else if name == "fromJSON" {
@@ -6862,10 +7912,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             other => Err(format!("px: fromJSON expects a string, got {}", px_kind(other))),
         }
     } else if name == "toJSON" {
-        match px_to_json(&args[0]) {
-            Ok(s) => Ok(PxVal::Str(s)),
-            Err(e) => Err(e),
-        }
+        let mut ctx: Vec<String> = Vec::new();
+        let json = px_to_json_ctx(&args[0], &mut ctx)?;
+        Ok(px_ctx_string(json, ctx))
     } else if name == "isInt" {
         match &args[0] {
             PxVal::Int(_) => Ok(PxVal::Bool(true)),
@@ -6879,6 +7928,7 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
     } else if name == "isString" {
         match &args[0] {
             PxVal::Str(_) => Ok(PxVal::Bool(true)),
+            PxVal::Attrs(_) if px_is_ctx_string(&args[0]) => Ok(PxVal::Bool(true)),
             _ => Ok(PxVal::Bool(false)),
         }
     } else if name == "isList" {
@@ -7168,13 +8218,20 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             )),
         }
     } else if name == "concatStrings" {
+        // Context-aware: contents join exactly as before, element contexts
+        // union onto the output.
         match &args[0] {
             PxVal::List(items) => {
                 let mut out = String::new();
+                let mut ctx: Vec<String> = Vec::new();
                 for it in items.iter() {
                     let it = px_force(it)?;
                     match &it {
                         PxVal::Str(s) => out.push_str(s),
+                        _ if px_is_ctx_string(&it) => {
+                            out.push_str(&px_string_like_content_or_empty(&it));
+                            ctx.extend(px_string_like_context(&it));
+                        }
                         other => {
                             return Err(format!(
                                 "px: concatStrings expects strings, got {}",
@@ -7183,22 +8240,27 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                         }
                     }
                 }
-                Ok(PxVal::Str(out))
+                Ok(px_ctx_string(out, ctx))
             }
             other => Err(format!("px: concatStrings expects a list, got {}", px_kind(other))),
         }
     } else if name == "concatMapStrings" {
+        // concatMapStrings f xs = concatStrings (map f xs); context-aware —
+        // contexts of the mapped results union onto the output.
         match &args[1] {
             PxVal::List(items) => {
                 let mut out = String::new();
+                let mut ctx: Vec<String> = Vec::new();
                 for it in items.iter() {
                     let r = px_force(&px_apply(&args[0], it.clone())?)?;
-                    match px_to_string_coerce(&r)? {
-                        PxVal::Str(s) => out.push_str(&s),
-                        _ => {}
+                    if px_is_ctx_string(&r) {
+                        out.push_str(&px_string_like_content_or_empty(&r));
+                        ctx.extend(px_string_like_context(&r));
+                    } else if let PxVal::Str(s) = px_to_string_coerce(&r)? {
+                        out.push_str(&s);
                     }
                 }
-                Ok(PxVal::Str(out))
+                Ok(px_ctx_string(out, ctx))
             }
             other => Err(format!(
                 "px: concatMapStrings expects a list, got {}",
@@ -7206,6 +8268,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             )),
         }
     } else if name == "stringToCharacters" {
+        // lib.stringToCharacters is substring-based, and substring keeps
+        // the whole context — so each character carries the source's full
+        // context.
         match &args[0] {
             PxVal::Str(s) => {
                 let mut out = Vec::new();
@@ -7216,12 +8281,30 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                 }
                 Ok(px_list(out))
             }
+            _ if px_is_ctx_string(&args[0]) => {
+                let ctx = px_string_like_context(&args[0]);
+                let content = px_string_like_content_or_empty(&args[0]);
+                let mut out = Vec::new();
+                for c in content.chars() {
+                    let mut t = String::new();
+                    t.push(c);
+                    out.push(px_ctx_string(t, ctx.clone()));
+                }
+                Ok(px_list(out))
+            }
             other => Err(format!(
                 "px: stringToCharacters expects a string, got {}",
                 px_kind(other)
             )),
         }
     } else if name == "hasInfix" {
+        // Content-based predicate: context does not affect the answer.
+        if px_is_ctx_string(&args[0]) || px_is_ctx_string(&args[1]) {
+            return match (px_string_like_content(&args[0]), px_string_like_content(&args[1])) {
+                (Some(needle), Some(hay)) => Ok(PxVal::Bool(px_str_has_infix(&hay, &needle))),
+                _ => Err(String::from("px: hasInfix expects two strings")),
+            };
+        }
         match (&args[0], &args[1]) {
             (PxVal::Str(needle), PxVal::Str(hay)) => Ok(PxVal::Bool(px_str_has_infix(hay, needle))),
             _ => Err(String::from("px: hasInfix expects two strings")),
@@ -7272,8 +8355,85 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                 Ok(n) => Ok(PxVal::Int(n)),
                 Err(_) => Err(format!("px: toInt: not an integer: '{}'", s)),
             },
+            // Content parses to the integer; the result carries no context
+            // (oracle-pinned).
+            _ if px_is_ctx_string(&args[0]) => {
+                let content = px_string_like_content_or_empty(&args[0]);
+                match content.parse::<i64>() {
+                    Ok(n) => Ok(PxVal::Int(n)),
+                    Err(_) => Err(format!("px: toInt: not an integer: '{}'", content)),
+                }
+            }
             other => Err(format!("px: toInt expects a string, got {}", px_kind(other))),
         }
+    } else if name == "derivationStrict" {
+        // Low-level derivation primitive: drvPath plus one attr per output
+        // (oracle: attrNames = ["dev" "drvPath" "out"] for outputs=["out"
+        // "dev"]), each carrying its own string context — drvPath
+        // allOutputs ("=<drvPath>"), an output path its own output
+        // ("!<o>!<drvPath>").
+        let (_forced, _name, outputs, drv_path, out_paths) =
+            px_derivation_core(name, &args[0])?;
+        let mut fields = vec![(
+            String::from("drvPath"),
+            px_ctx_string(drv_path.clone(), vec![format!("={}", drv_path)]),
+        )];
+        let mut i = 0usize;
+        while i < outputs.len() {
+            let o = &outputs[i];
+            fields.push((
+                o.clone(),
+                px_ctx_string(
+                    String::from(px_out_path_for(&out_paths, o)),
+                    vec![format!("!{}!{}", o, drv_path)],
+                ),
+            ));
+            i += 1;
+        }
+        Ok(px_attrs(fields))
+    } else if name == "derivation" {
+        // High-level wrapper (in real Nix a nix-lang wrapper over
+        // derivationStrict): the input attrs merged with
+        // type/name/drvPath/outPath/outputName, plus one attr per output.
+        // outPath/outputName follow the FIRST output (oracle:
+        // outputs=["dev" "out"] -> outputName="dev"). Each d.<o> is a
+        // NON-cyclic reduced derivation attrset (type/name/drvPath/
+        // outPath/outputName only) — real Nix's `d.out == d`
+        // self-reference is not representable in this plain-Attrs value
+        // model; documented simulation limit (see docs/BUGS.md).
+        let (forced, drv_name, outputs, drv_path, out_paths) =
+            px_derivation_core(name, &args[0])?;
+        let drv_ctx = px_ctx_string(drv_path.clone(), vec![format!("={}", drv_path)]);
+        let out_attr = |o: &str| -> PxVal {
+            px_ctx_string(
+                String::from(px_out_path_for(&out_paths, o)),
+                vec![format!("!{}!{}", o, drv_path)],
+            )
+        };
+        let forced_fields = match &forced {
+            PxVal::Attrs(f) => f.as_ref().clone(),
+            _ => Vec::new(),
+        };
+        let mut fields = forced_fields;
+        let mut i = 0usize;
+        while i < outputs.len() {
+            let o = &outputs[i];
+            let sub_drv = px_attrs(vec![
+                (String::from("type"), PxVal::Str(String::from("derivation"))),
+                (String::from("name"), PxVal::Str(drv_name.clone())),
+                (String::from("drvPath"), drv_ctx.clone()),
+                (String::from("outputName"), PxVal::Str(o.clone())),
+                (String::from("outPath"), out_attr(o)),
+            ]);
+            px_fields_set(&mut fields, o.clone(), sub_drv);
+            i += 1;
+        }
+        let first_o = outputs[0].clone();
+        px_fields_set(&mut fields, String::from("type"), PxVal::Str(String::from("derivation")));
+        px_fields_set(&mut fields, String::from("drvPath"), drv_ctx);
+        px_fields_set(&mut fields, String::from("outPath"), out_attr(&first_o));
+        px_fields_set(&mut fields, String::from("outputName"), PxVal::Str(first_o));
+        Ok(px_attrs(fields))
     } else if name == "placeholder" {
         match &args[0] {
             PxVal::Str(output) => {
@@ -7412,6 +8572,15 @@ fn px_val_eq_mode(a: &PxVal, b: &PxVal, allow_identity: bool) -> Result<bool, St
                 _ => Ok(false),
             }
         }
+        // Nix string equality compares character content only; context
+        // rides along without participating (oracle-confirmed, matches
+        // pnix-clj's `nix-equal-result`). Guarded so genuine attrset
+        // structural equality below is unaffected.
+        (PxVal::Attrs(_), _) | (_, PxVal::Attrs(_))
+            if px_is_ctx_string(&a) || px_is_ctx_string(&b) =>
+        {
+            Ok(px_string_like_content(&a) == px_string_like_content(&b))
+        }
         // Nix semantics: deep structural equality; lists elementwise,
         // attrsets by name set + per-name value equality (order-insensitive).
         (PxVal::List(xs), PxVal::List(ys)) => {
@@ -7546,6 +8715,20 @@ fn px_val_lt(a: &PxVal, b: &PxVal) -> Result<bool, String> {
         (PxVal::Float(x), PxVal::Int(y)) => Ok(*x < (*y as f64)),
         (PxVal::Float(x), PxVal::Float(y)) => Ok(x < y),
         (PxVal::Str(x), PxVal::Str(y)) => Ok(x < y),
+        // Context-bearing strings order by content only (context never
+        // participates), matching pnix-clj's `pnix-less-than-result`.
+        (PxVal::Attrs(_), _) | (_, PxVal::Attrs(_))
+            if px_is_ctx_string(&a) || px_is_ctx_string(&b) =>
+        {
+            match (px_string_like_content(&a), px_string_like_content(&b)) {
+                (Some(x), Some(y)) => Ok(x < y),
+                _ => Err(format!(
+                    "px: cannot compare {} and {}",
+                    px_kind(&a),
+                    px_kind(&b)
+                )),
+            }
+        }
         (PxVal::List(xs), PxVal::List(ys)) => {
             let mut i = 0usize;
             while i < xs.len() && i < ys.len() {
@@ -8422,6 +9605,21 @@ fn px_val_bytes(v: &PxVal) -> Option<Vec<u8>> {
     }
 }
 
+/// Byte content + context of a builtin-arg element, for the context-aware
+/// concat family (`concatStrings`/`concatStringsSep`/`concatMapStrings`):
+/// plain `Str`/`Bytes` contribute an empty context; a ctx-string contributes
+/// its own. `None` for anything not string-like.
+fn px_item_bytes_and_ctx(v: &PxVal) -> Option<(Vec<u8>, Vec<String>)> {
+    if px_is_ctx_string(v) {
+        let content = px_string_like_content_or_empty(v);
+        return Some((px_str_bytes(&content), px_string_like_context(v)));
+    }
+    match px_val_bytes(v) {
+        Some(b) => Some((b, Vec::new())),
+        None => None,
+    }
+}
+
 // ---- subset-safe hashes (RFC 1321, FIPS 180-4) -------------------------------
 // rs-meta-INTERPRETABLE implementations living inside px.rs (the substrate
 // rejects crate-path calls and the native helpers use arrays/rotate intrinsics
@@ -9050,6 +10248,16 @@ pub fn px_to_json(v: &PxVal) -> Result<String, String> {
         }
         PxVal::Bool(b) => Ok(format!("{}", b)),
         PxVal::Str(s) => Ok(format!("\"{}\"", px_json_escape(s))),
+        // Canonical/CLI output boundary: a contextful string serializes as
+        // its content only — context has no representation in canonical
+        // JSON (matches real Nix's own `--json` output of e.g. a
+        // derivation's outPath: content only). The `toJSON` BUILTIN itself
+        // uses the separate context-COLLECTING `px_to_json_ctx` below
+        // instead of this function, so `builtins.toJSON` still keeps
+        // context on its resulting string value.
+        PxVal::Attrs(_) if px_is_ctx_string(&v) => {
+            Ok(format!("\"{}\"", px_json_escape(&px_string_like_content_or_empty(&v))))
+        }
         PxVal::List(items) => {
             let mut parts = Vec::new();
             for item in items.iter() {
@@ -9081,6 +10289,63 @@ pub fn px_to_json(v: &PxVal) -> Result<String, String> {
     }
 }
 
+/// The `toJSON` BUILTIN's own context-aware serialization — oracle: toJSON
+/// KEEPS context, the resulting JSON-text string carries the union of every
+/// embedded contextful string's context. Otherwise identical to
+/// `px_to_json` (same escaping/sorting/shape); kept as a separate function
+/// rather than a flag on `px_to_json` because every OTHER caller of
+/// `px_to_json` (the CLI `--json` boundary, `production_outcome.rs`, the
+/// meta-tower round-trip lanes) wants the plain content-only projection.
+fn px_to_json_ctx(v: &PxVal, ctx: &mut Vec<String>) -> Result<String, String> {
+    let v = px_force(v)?;
+    match &v {
+        PxVal::Null => Ok(String::from("null")),
+        PxVal::Int(n) => Ok(format!("{}", n)),
+        PxVal::Float(f) => {
+            let x = *f;
+            if x - x == 0.0 {
+                Ok(format!("{:?}", f))
+            } else {
+                Err(String::from("px: toJSON of non-finite float"))
+            }
+        }
+        PxVal::Bool(b) => Ok(format!("{}", b)),
+        PxVal::Str(s) => Ok(format!("\"{}\"", px_json_escape(s))),
+        PxVal::Attrs(_) if px_is_ctx_string(&v) => {
+            ctx.extend(px_string_like_context(&v));
+            Ok(format!("\"{}\"", px_json_escape(&px_string_like_content_or_empty(&v))))
+        }
+        PxVal::List(items) => {
+            let mut parts = Vec::new();
+            for item in items.iter() {
+                parts.push(px_to_json_ctx(item, ctx)?);
+            }
+            Ok(format!("[{}]", parts.join(",")))
+        }
+        PxVal::Attrs(fields) => {
+            let mut remaining = Vec::new();
+            for (name, value) in fields.iter() {
+                remaining.push((name.clone(), px_to_json_ctx(value, ctx)?));
+            }
+            let mut parts = Vec::new();
+            while !remaining.is_empty() {
+                let mut min = 0usize;
+                let mut j = 1usize;
+                while j < remaining.len() {
+                    if px_str_lt(&remaining[j].0, &remaining[min].0) {
+                        min = j;
+                    }
+                    j += 1;
+                }
+                let (name, rendered) = remaining.remove(min);
+                parts.push(format!("\"{}\":{}", px_json_escape(&name), rendered));
+            }
+            Ok(format!("{{{}}}", parts.join(",")))
+        }
+        other => Err(format!("px: toJSON unsupported for {}", px_kind(other))),
+    }
+}
+
 pub fn px_kind(v: &PxVal) -> String {
     match v {
         PxVal::Int(_) => String::from("int"),
@@ -9092,6 +10357,7 @@ pub fn px_kind(v: &PxVal) -> String {
         PxVal::List(_) => String::from("list"),
         PxVal::Closure { .. } => String::from("lambda"),
         PxVal::Builtin { .. } => String::from("builtin"),
+        PxVal::Attrs(_) if px_is_ctx_string(v) => String::from("string"),
         PxVal::Attrs(_) => String::from("attrset"),
         // diagnostic only; force best-effort so the message names the real kind
         PxVal::Thunk(_) => match px_force(v) {
@@ -9152,6 +10418,13 @@ pub fn px_print(v: &PxVal) -> String {
             }
             out.push(']');
             out
+        }
+        // Canonical output boundary: a contextful string prints as its
+        // content only — context has no representation in printed/canonical
+        // form (matches real Nix, where context is invisible in `nix
+        // repl`/`--eval` output; only `builtins.getContext` observes it).
+        PxVal::Attrs(_) if px_is_ctx_string(v) => {
+            format!("\"{}\"", px_escape_string(&px_string_like_content_or_empty(v)))
         }
         PxVal::Attrs(fields) => {
             let mut remaining = Vec::new();

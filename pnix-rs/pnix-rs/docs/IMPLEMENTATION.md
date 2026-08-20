@@ -61,6 +61,23 @@ AST 순회 유틸 — `PxExpr`에 새 variant를 추가하면 이 파일들도 �
   맵)에 채우는 건 `main.rs`의 `load_px_module`(진입 파일에서부터 재귀적으로
   모든 import 대상을 미리 훑음) — **`-c`(인라인) 모드는 이 사전 스캔을
   안 해서 import가 항상 실패한다. `-f`(파일) 모드만 import가 된다.**
+- **string-context (2026-08-20)**: Nix의 string context(파생물 추적용
+  store-path 의존성 집합)를 순수 시뮬레이션한다. **`PxVal`에 새 variant를
+  추가하지 않았다** — `PxVal::Bytes`가 이미 쓰던 "특수 값 모양, 지정된
+  표면만 이해, 나머지는 fail-closed"라는 선례를 그대로 따라, context를
+  가진 문자열을 `__pnix_value_kind = "string-context"` 센티널 키를 가진
+  `PxVal::Attrs`로 태그한다(pnix-clj/pnix-clr의 태그된-맵 설계를 그대로
+  이식). 대표 함수: `px_ctx_string`(생성자, context가 비면 평범한 `Str`로
+  붕괴), `px_is_ctx_string`/`px_string_like_content`/`px_string_like_context`
+  (접근자), `px_context_aware_builtin`(고정 allowlist, pnix-clj의
+  `context-aware-builtins`를 이름 그대로 이식), `px_ctx_string_in_args`
+  (얕은 fail-closed 스캔 — `px_builtin_exec`의 단일 chokepoint에서
+  실행). `+`/`${...}` 문자열 보간/`==`/`<` 같은 **언어 연산자**는
+  allowlist를 거치지 않고 항상 context-aware다(`px_builtin_exec`를 안
+  거치므로). `builtins.derivation`/`derivationStrict`/`placeholder`도
+  이 절에서 같이 구현됨(pure-simulation 의사 store path). 상세 설계·
+  알려진 한계(pseudo-hash, `d.out == d` 미표현, `.` select에서의 의도적
+  오라클 발산)는 [`docs/BUGS.md`](BUGS.md) §1을 볼 것.
 - **오류 모델**: `PxError{class, diagnostic}` + `px_error_into_diagnostic`
   로 최종 문자열화. `builtins.tryEval`은 `throw`/`assert` 실패만 잡고
   나머지(0으로 나누기, 오버플로, 타입에러 등)는 그대로 전파.
@@ -86,7 +103,7 @@ REGISTRY.md/SCOPE_LOCK.md/todo.md/docs/CARGO_HOST_IMPORT.md 4개로 흩어져
 | [`docs/TODO.md`](TODO.md) | 지금 당장 손댈 수 있는 열린 작업만(옛 todo.md의 미완료분 — 사실상 거의 없음, 대부분 이미 §4 역사로 편입됨) |
 | [`docs/BUGS.md`](BUGS.md) | 알려진 버그·제한, 그리고 **의도적으로 안 고치는 것**(옛 SCOPE_LOCK.md의 held 목록) |
 | [`docs/PLANS.md`](PLANS.md) | 미확정 로드맵 — proposal별 1~2줄 요약 + 링크(옛 REGISTRY.md §2) |
-| [`docs/CAPABILITIES.md`](CAPABILITIES.md) | **자동 생성**(손 편집 금지) — CLI 명령/모듈/px 표면/185개 빌트인 인벤토리. `pnix-rs capabilities`로 재생성, drift 게이트 `capabilities-check`가 어긋나면 잡음. 이 문서 §2 빌트인 표는 5개 호스트를 나란히 비교하려고 수동으로 만든 별개의 스냅샷이다(§5 참고) |
+| [`docs/CAPABILITIES.md`](CAPABILITIES.md) | **자동 생성**(손 편집 금지) — CLI 명령/모듈/px 표면/192개 빌트인 인벤토리. `pnix-rs capabilities`로 재생성, drift 게이트 `capabilities-check`가 어긋나면 잡음. 이 문서 §2 빌트인 표는 5개 호스트를 나란히 비교하려고 수동으로 만든 별개의 스냅샷이다(§5 참고) |
 | [`rs-meta/STATUS.md`](../../rs-meta/STATUS.md) | rs-meta(자매 프로젝트, pnix을 전혀 모르는 순수 Rust-in-Rust 메타순환 엔진)의 peer-floor 상태 |
 | `docs/proposals/000N-*.md`(10개), `docs/research/2026-07-03-metacircular-frontier.md` | 미구현 아이디어의 근거/설계 노트 — 원본은 그대로 두고 `docs/PLANS.md`가 요약+링크만 건다 |
 
@@ -114,7 +131,7 @@ diff).
 | and | O | O | O | O | O |
 | any | O | O | O | O | O |
 | append | O | O | O | O | O |
-| appendContext | O | - | - | - | O |
+| appendContext | O | O | O | O | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
 | atan2 | O | O | O | O | O |
@@ -143,8 +160,8 @@ diff).
 | count | O | - | - | - | - |
 | currentSystem | - | - | - | - | O |
 | deepSeq | O | O | O | O | O |
-| derivation | O | - | - | - | O |
-| derivationStrict | O | - | - | - | O |
+| derivation | O | O | O | O | O |
+| derivationStrict | O | O | O | O | O |
 | dirOf | O | O | O | O | O |
 | div | O | O | O | O | O |
 | drop | O | O | O | O | O |
@@ -182,7 +199,7 @@ diff).
 | getAttrFromPath | O | O | O | O | O |
 | getAttrFromPathOr | O | O | O | O | O |
 | getAttrs | - | - | - | - | O |
-| getContext | O | - | - | - | O |
+| getContext | O | O | O | O | O |
 | getEnv | O | O | O | O | O |
 | getName | O | O | O | O | O |
 | getVersion | O | O | O | O | O |
@@ -190,7 +207,7 @@ diff).
 | gt | O | O | O | O | O |
 | hasAttr | O | O | O | O | O |
 | hasAttrByPath | O | O | O | O | O |
-| hasContext | O | - | - | - | O |
+| hasContext | O | O | O | O | O |
 | hasInfix | O | O | O | O | O |
 | hasPrefix | O | O | O | O | O |
 | hasSuffix | O | O | O | O | O |
@@ -357,6 +374,14 @@ diff).
 - **`pnixMounts`, `unsafeGetAttrPos`**: 5개 호스트 다 설계가 안 끝난
   상태. 자세한 내용과 방향 아이디어는 [`docs/PLANS.md`](PLANS.md)의
   "pnixMounts / unsafeGetAttrPos" 절.
+- **context 있는 문자열에 `.` select를 쓰면 clj 오라클과 다르게 동작한다
+  (의도적).** clj는 `eval-select`가 `attrset-value?`가 아니라 맨 `map?`을
+  써서 ctx-string의 내부 표현이 `a.string` 같은 select로 그대로 샌다
+  (`?`/`//`는 같은 오라클에서도 올바르게 막혀 있어 `eval-select` 한
+  함수만의 우연한 누락으로 보임). rs는 pnix-cljs 포트(애초에 별개 레코드
+  타입이라 이 누락을 재현할 수 없었던 선례)의 판단을 따라 `.` select에서
+  ctx-string을 명시적으로 거부한다(타입 에러 — 실제 Nix도 문자열에 `.`를
+  쓰면 타입 에러). 상세는 [`docs/BUGS.md`](BUGS.md) §1.
 
 ## 4. 역사 — 무엇이 언제 만들어졌는가
 
@@ -434,6 +459,7 @@ pnix-rs 자체는 대부분 오늘(§4-오늘) 있었음):
 
 | 커밋 | 무엇을 |
 |---|---|
+| (미커밋 — 검토 대기) | **string-context + derivation 구현** (proposal 0006/0010이 명시적으로 open으로 남겨뒀던 두 갭 중 string-context 쪽 해소). pnix-clj(오라클)/pnix-cljs(이식 선례)의 설계를 pnix-rs 관용구로 이식: `PxVal::Bytes` 선례를 따라 새 variant 없이 태그된 `PxVal::Attrs`(`__pnix_value_kind = "string-context"`)로 표현, `px_builtin_exec` 단일 chokepoint에서 고정 allowlist 기반 얕은 fail-closed 게이트, `+`/`${...}`/`==`/`<`는 언어 연산자라 항상 context-aware. 신규 빌트인 5개(`hasContext`/`getContext`/`appendContext`/`derivation`/`derivationStrict`) + 기존 25개 이상 빌트인(`toString`/`toJSON`/`stringLength`/`substring`/`concatStrings(Sep)`/`concatMapStrings`/`replaceStrings`/`match`/`split`/`toUpper`/`toLower`/`hasPrefix`/`hasSuffix`/`hasInfix`/`removePrefix`/`removeSuffix`/`toInt`/`stringToCharacters`/`splitString`/`toPath`/`hashString`/`unsafeDiscardStringContext`/`unsafeDiscardOutputDependency`/`typeOf`/`isString`/`isAttrs`)에 context 전파/인식 로직 추가. 캐노니컬 출력 경계(`px_print`/`px_to_json`)는 context를 벗겨 content만 방출(실제 Nix `--json`과 동일 — context는 텍스트에 표현되지 않는 메타데이터). `pnix-clj` 라이브 오라클 대비 30여 항목 교차검증 배터리 전부 일치; 유일한 의도적 발산은 `.` select(오라클의 `eval-select`가 `attrset-value?`가 아니라 맨 `map?`을 써서 ctx-string 내부 표현이 새는 것으로 확인됐는데, 이건 오라클 자신의 대상함수 하나짜리 누락으로 보여 pnix-cljs의 별개-레코드-타입 판단을 따라 재현하지 않음 — `docs/BUGS.md` §1 참고). `rs-meta` 인터프리트 서브셋에서 새로 걸린 제약: `Option::unwrap_or_default` 미지원(명시 `match`로 대체), `char` 리터럴 `starts_with`(문자열 리터럴로 대체 — 08-19에 이미 알려진 제약과 동일 종류), 패턴 안 `mut` 바인딩(`Some((x, mut y))`) 미지원, 인덱싱을 거친 튜플 필드 대입(`acc[idx].1 = v`)과 그 필드에 대한 메서드 호출(`acc[idx].3.push(v)`) 둘 다 미지원(둘 다 "로컬 변수로 꺼내 수정 후 되쓰기"로 우회) — 전부 `substrate-check`로 실제 잡아냈고, 이 파일이 이미 쓰던 명시-루프 관용구를 그대로 따라 우회함. `capabilities-check`/`registry-check`/전체 `check` 34+1개 게이트 재검증 PASS(`capabilities-check`는 재생성 전 1회만 FAIL — 드리프트 게이트가 실제로 작동함을 확인한 것). |
 | (미커밋 — 검토 대기) | 08-19에 "B1 숫자 모델 미결정"으로 held 묶었던 확장 수학 빌트인 10개(`sin cos tan sqrt exp ln log abs pow mod`)를 실구현. 다른 4개 호스트(clj/clr/cljs/hy)가 이미 전부 동작하는 구현을 갖고 있던 4/5 합의 사례였음이 재확인되어 hold 해제 — "B1 숫자 모델" 우려는 실제로는 언어 전체 int/float 승격 정책에 관한 것이었지, 이 단순 단항/이항 float 함수들을 막을 이유는 아니었다. rs-meta의 인터프리트 Rust 부분집합은 f64 메서드 디스패치가 아예 없어서(`substrate-check`가 `src/px.rs` 전체를 rs-meta bootstrap으로 해석하는데, `interp.rs`의 `call_method`는 i64 계열만 숫자 메서드 타깃으로 인식) `.sin()`/`.sqrt()`/`.exp()`/`.ln()`/`.powf()` 같은 표준 라이브러리 호출을 못 쓴다 — 이 파일이 이미 같은 이유로 쓰던 관례(`px_bit_op`의 bit-by-bit AND/OR/XOR, `px_round_to_int`의 cast-and-adjust ceil/floor)를 그대로 따라 순수 산술(Newton's method 제곱근, 2*ln2/2*pi 범위축소 + Taylor 급수)로 직접 구현(`px_math_sqrt`/`px_math_exp`/`px_math_ln`/`px_math_sin`/`px_math_cos`/`px_math_tan`/`px_math_atan`/`px_math_atan2`, `px.rs`의 `px_num_f64` 옆). `abs`/`pow`/`mod`는 기존 `add`/`sub`/`mul`/`div` 관례(int⊕int는 checked 정수 유지, 오버플로우 에러; 그 외는 float)를 그대로 따름. 같은 변경에서 신규 `atan2`(오라클: pnix-hy, 커링 순서 `atan2 y x`)와 `builtins.mapAttrs'`(오라클: pnix-clj — `f name value`가 `{ name; value; }` 쌍을 돌려주고 결과 이름으로 재-키잉, 충돌 시 first-name-wins는 `listToAttrs`와 동일 규칙)도 추가. |
 
 ## 5. 게이트 레지스트리 (중복개발 방지용, 옛 REGISTRY.md §1 편입)
@@ -660,7 +686,7 @@ export PNIX_RS_INCLUDE_DIR=$PWD/result/include
   bin/gen-builtin-presence-matrix          # 새 표 출력
   bin/gen-builtin-presence-matrix --check  # 5개 문서 표가 실제 소스와 다르면 비영 종료
   ```
-  이 스크립트는 rs 쪽엔 `docs/CAPABILITIES.md`(아래 참고)의 185개 빌트인
+  이 스크립트는 rs 쪽엔 `docs/CAPABILITIES.md`(아래 참고)의 192개 빌트인
   인벤토리 줄을 그대로 읽는다 — rs 자체 소스를 다시 grep하지 않는다.
   `import`/`scopedImport`는 예약 키워드라 어차피 못 잡아서 손으로 `*`
   표시가 남아있다(§2 상단 각주). 이 스크립트는 5개 호스트를 가로지르는

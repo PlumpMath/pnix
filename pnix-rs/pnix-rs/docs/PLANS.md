@@ -23,8 +23,8 @@
 |---|---|---|---|---|
 | 1 | **full 3차 사영** — feature-rich specialiser 자기적용 (bounded cogen DONE; full은 연구 지평) | 연구 프론티어 | pnix-rs tower/bta | [0004](proposals/0004-hand-written-cogen.md) |
 | 2 | **P6 v9+** — 트레이트 solving / 클로저 projection (수요 시) | 기계적 확장 | pnix-rs rust_mirror | [0001](proposals/0001-rust-ast-projection.md) |
-| 3 | **runtime 표면(수요 시)** — 경로/string-context 값, URI 리터럴, 중첩 동적 attr 경로, POSIX ERE 전체, JSON float exponent canonicalization, 비유한 float canonical-print | 기계적 확장 | pnix-rs px | [0006](proposals/0006-runtime-surface-on-demand.md) |
-| 4 | **Nix builtin 표면 완전 수렴** — raw presence 전체, path/string-context 값, canonical JSON float(지수 표기/무한대 인코딩/에러 클래스/Nix 버전 정책) | 기계적 확장 | pnix-rs px / builtin overlay | [0010](proposals/0010-builtin-surface-convergence.md) |
+| 3 | **runtime 표면(수요 시)** — 경로 값, URI 리터럴, 중첩 동적 attr 경로, POSIX ERE 전체, JSON float exponent canonicalization, 비유한 float canonical-print (string-context 값은 2026-08-20에 구현 완료 — `docs/IMPLEMENTATION.md` §의 string-context 절, `docs/BUGS.md` §1 참고) | 기계적 확장 | pnix-rs px | [0006](proposals/0006-runtime-surface-on-demand.md) |
+| 4 | **Nix builtin 표면 완전 수렴** — raw presence 전체, path 값, canonical JSON float(지수 표기/무한대 인코딩/에러 클래스/Nix 버전 정책) (string-context 값/`derivation`/`derivationStrict`/`placeholder`는 2026-08-20에 구현 완료) | 기계적 확장 | pnix-rs px / builtin overlay | [0010](proposals/0010-builtin-surface-convergence.md) |
 | 5 | **full S=L** + stage-polymorphic | 연구 지평 | pnix-rs tower | [0007](proposals/0007-research-frontier-index.md) |
 | 6 | research open — step-level bisimulation · CompCert류 certified compilation · N-레벨 collapsing tower [incremental·proof-carrying·finite reflective tower는 이미 DONE] · poly-optimizations(sharing/eta/let-insertion) 명시 게이트 미구현 | 후속 리서치 | pnix-rs tower | [0007](proposals/0007-research-frontier-index.md) |
 | ext | 자매 lane(pnix-clj/pnix-hy) TSV 파일-대-파일 비교 | external 대기 | pnix-rs cross-host | [0007](proposals/0007-research-frontier-index.md) — 상세 상태는 [`docs/BUGS.md`](BUGS.md) §4 |

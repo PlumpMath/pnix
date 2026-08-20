@@ -28,7 +28,9 @@
   (`parse-expression` → ... → `parse-primary`).
 - **값 표현**: 태그드 맵 — `{:pnix/type :closure ...}`, `{:pnix/type
   :path :value "..."}`(진짜 Path 값 타입 있음, rs/cljs와 다름),
-  `{:pnix/type :raw-bytes ...}`. attrset은 `{:entries {...}}`.
+  `{:pnix/type :raw-bytes ...}`, `{:pnix/type :string-context :value ".."
+  :context [".."]}`(2026-08-20 admit, 아래 별도 항목). attrset은
+  `{:entries {...}}`.
 - **환경/스코프**: `environment`는 **프레임 체인**(`[frame1 frame2 ...]`,
   각 frame은 `(atom {name -> value})`). 조회(`lookup-value`)는 앞에서부터
   순서대로, 못 찾으면 다음 프레임. `root-environment`가 `[frame]`(builtins/
@@ -50,6 +52,26 @@
   거의 같지만 **캐시를 안 탄다**(scope가 다르면 같은 파일이라도 결과이
   달라지므로, `eval-file*`의 canonical-path 캐시 슬롯을 공유하면 안 됨)
   는 게 핵심 차이.
+- **string-context + derivation**(2026-08-20 admit): Nix 문자열은 context
+  (실현돼야 하는 store-path 의존성 집합)를 옆에 매달고 다닐 수 있다는
+  것의 순수 시뮬레이션. context가 빈 문자열은 여전히 평범한 CLR
+  `String`(표현/비용 변화 없음); 비어있지 않을 때만
+  `{:pnix/type :string-context :value ".." :context [".."]}`가 된다
+  (`ctx-string` 생성자가 collapse — `evaluator.clj`). `exec-builtin`
+  진입부에 fail-closed 게이트(`ctx-string-in-args?` — 최상위 인자 +
+  벡터 인자 한 겹까지 shallow scan) — contextful string이 `context-
+  aware-builtins`(고정 53개 이름, 오라클에서 이름 그대로 이식) 밖의
+  빌트인에 들어가면 `string-context-frontier` type-error로 즉시 거부,
+  절대 조용히 버려지거나 망가지지 않는다. `+`(`eval-binary`의 `:plus`)와
+  `<`/`>`/`<=`/`>=`, 문자열 보간(`:string-interp`)은 빌트인이 아니라
+  이 게이트 대상이 아니라서 항상 context-aware(양쪽 context 합집합).
+  `hasContext`/`getContext`/`appendContext`/`unsafeDiscardStringContext`/
+  `unsafeDiscardOutputDependency`, `derivation`/`derivationStrict`
+  빌트인 신규 추가(`placeholder`/`storePath`는 기존 구현이 이미
+  오라클과 일치해서 무변경). CLI JSON 출력 경계(`realize-value`)에서는
+  context를 content로 벗긴다(진짜 Nix `--json`도 마찬가지). 알려진
+  pure-simulation 한계(`d.out == d` 없음, pseudo-hash, shallow scan 등)는
+  [`BUGS.md`](BUGS.md) §6 참고.
 - **제품 실행 방식이 독특함**: `pnix-clr`는 다른 4개 호스트처럼 소스를
   즉석 인터프리트하는 게 아니라, **미리 빌드된 정확한 8-DLL 아티팩트만
   신뢰하고 로드**한다(`bin/pnix-clr`가 root/file/artifact 해시를 다
@@ -102,7 +124,7 @@ diff).
 | and | O | O | O | O | O |
 | any | O | O | O | O | O |
 | append | O | O | O | O | O |
-| appendContext | O | - | - | - | O |
+| appendContext | O | O | O | O | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
 | atan2 | O | O | O | O | O |
@@ -131,8 +153,8 @@ diff).
 | count | O | - | - | - | - |
 | currentSystem | - | - | - | - | O |
 | deepSeq | O | O | O | O | O |
-| derivation | O | - | - | - | O |
-| derivationStrict | O | - | - | - | O |
+| derivation | O | O | O | O | O |
+| derivationStrict | O | O | O | O | O |
 | dirOf | O | O | O | O | O |
 | div | O | O | O | O | O |
 | drop | O | O | O | O | O |
@@ -170,7 +192,7 @@ diff).
 | getAttrFromPath | O | O | O | O | O |
 | getAttrFromPathOr | O | O | O | O | O |
 | getAttrs | - | - | - | - | O |
-| getContext | O | - | - | - | O |
+| getContext | O | O | O | O | O |
 | getEnv | O | O | O | O | O |
 | getName | O | O | O | O | O |
 | getVersion | O | O | O | O | O |
@@ -178,7 +200,7 @@ diff).
 | gt | O | O | O | O | O |
 | hasAttr | O | O | O | O | O |
 | hasAttrByPath | O | O | O | O | O |
-| hasContext | O | - | - | - | O |
+| hasContext | O | O | O | O | O |
 | hasInfix | O | O | O | O | O |
 | hasPrefix | O | O | O | O | O |
 | hasSuffix | O | O | O | O | O |
@@ -394,6 +416,7 @@ root/file 컨텍스트 추적)이 5개 중 제일 견고했다. rs가 나중에 
 | (미커밋, 리뷰 대기) | 크로스호스트 빌트인 presence matrix diff에서 빠진 6개 추가: `log`(`ln`과 동일하게 자연로그, `Math/Log`), `tan`(`sin`/`cos`와 같은 모양, `Math/Tan`), `mapAttrs'`(pnix-clj가 유일한 레퍼런스 — `f name value`가 `{ name; value; }` 쌍을 반환, 반환된 name으로 새 attrset을 키잉하고 중복 name은 first-wins(`listToAttrs`와 동일한 tie-break); name은 즉시 force, value는 thunk로 lazy 유지). 그리고 이미 등록돼 있었지만 매트릭스가 놓친 것 2개도 정정: `nixVersion` 값이 `"2.34.7"`로 잘못돼 있던 걸 rs/hy와 맞춰 `"2.18.0-pnix"`로 고침(`storeDir`/`langVersion`은 값도 이미 맞았음 — 매트릭스 자동추출 스크립트가 `(bi :name arity)` 패턴만 잡고 plain-value 등록은 못 잡아서 `-`로 잘못 표시됐던 것, §2 표 자체가 stale). |
 | (미커밋, 리뷰 대기) | `bin/pnix-clr-identity-gate`가 이 문서(§4/§9)의 정당한 크로스호스트 인용("pnix-clj" 문자열)을 "stale JVM-host identity 누수"로 오탐지하던 것 수정 — 2026-08-20 문서 통합 때 §4 역사 표/§9 백로그 항목이 pnix-clj를 이름으로 인용하게 되면서 생긴 회귀. `clr-meta/STATUS.md`/`todo.md`에 이미 있던 것과 같은 파일 allowlist 패턴을 `docs/{IMPLEMENTATION,BUGS,PLANS,TODO}.md`/`AGENTS.md`에도 적용해서 게이트가 다시 PASS하도록 고침. |
 | (미커밋, 리뷰 대기) | `docs/CAPABILITIES.md` 자동 생성기 신설(PLANS.md §2 해결) — `pnix-clr.evaluator/builtin-names`(신규 public, `builtins-entries` 등록 테이블을 직접 introspect)와 `pnix-clr.main`의 신규 `capabilities`/`capabilities-check` 서브커맨드 + `capabilities-doc`/`cli-commands`; `bin/pnix-clr`의 인자 재작성 로직이 `-e`/`--production-outcome`처럼 이 두 bare 서브커맨드도 특별 취급하도록 수정(안 그러면 caller-relative 파일 경로로 잘못 재작성됨); `bin/pnix-clr-gate`에 drift 게이트로 연결. clj/hy/rs 패턴 참고, pnix-clr 스코프(namespace 8개 고정)에 맞춰 새 namespace 없이 기존 evaluator.clj/main.clj에 얹음. |
+| (미커밋, 리뷰 대기) | string-context + derivation 이식(§1 "string-context" 문단, BUGS.md §6). pnix-clj를 1차 오라클, 같은 Clojure 계열이라 이 호스트 idiom에 더 가까운 pnix-cljs의 이미 끝난 포트를 2차 참고로 삼음. 새 `{:pnix/type :string-context :value ".." :context [..]}` 값(`ctx-string`/`ctx-string?`/`string-content`/`string-ctx`), `exec-builtin` 진입부의 fail-closed `context-aware-builtins` 게이트(`ctx-string-in-args?`, shallow scan), `+`/`<`/문자열 보간의 context 합집합 전파, `hasContext`/`getContext`/`appendContext`/`unsafeDiscardStringContext`/`unsafeDiscardOutputDependency` 5개 빌트인(2개는 동작 재작성, 3개는 신규), `derivation`/`derivationStrict`(신규, `placeholder`/`storePath`는 기존 구현이 이미 오라클과 맞아서 무변경), 그리고 `realize-value`(CLI JSON 출력 경계)에서 context를 content로 벗기는 스트립. 오라클 비교 배틀리 + fail-closed 확인 + 기존 게이트/테스트 스위트 전부 통과. |
 
 ## 5. 범위 — 뭐가 admit됐고 뭐가 아직 open인가
 

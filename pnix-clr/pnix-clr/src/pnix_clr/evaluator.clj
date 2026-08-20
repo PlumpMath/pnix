@@ -1054,10 +1054,10 @@
   is denied by default (a `string-context-frontier` type-error) so context
   is never silently dropped or mangled by a builtin that was never taught to
   propagate it. This is a fixed, oracle-verified set -- ported by name from
-  the pnix-clj/pnix-cljs reference string-context designs, not reinvented;
-  every one of these names already exists as a pnix-clr builtin (cross-
-  checked against `builtins-entries` below) except hasContext/getContext/
-  appendContext/derivation/derivationStrict, newly added alongside this set."
+  the reference string-context design, not reinvented; every one of these
+  names already exists as a pnix-clr builtin (cross-checked against
+  `builtins-entries` below) except hasContext/getContext/appendContext/
+  derivation/derivationStrict, newly added alongside this set."
   #{:hasContext :getContext :hashString :unsafeDiscardStringContext
     :unsafeDiscardOutputDependency :appendContext :toPath
     :toString :typeOf :isString :isAttrs :isList :isInt :isFloat :isBool
@@ -1079,7 +1079,7 @@
   thunk is opaque here -- this mirrors the reference design's own shallow
   scan exactly, including its limits (oracle-confirmed: a contextful string
   buried inside an unforced list element passed to e.g. sort/filter is NOT
-  caught by this scan either, in pnix-clj/pnix-cljs or here)."
+  caught by this scan in the reference design either)."
   [args]
   (boolean
    (some (fn [a]
@@ -1124,6 +1124,117 @@
       :else
       (outcome/fail! :eval :type-error
                      {:operation "toJSON" :reason "unsupported-value"}))))
+
+;; ---------------------------------------------------------------------------
+;; Derivation (Tvix-style separation: VALUES only -- deterministic pseudo
+;; store paths carrying string context, no builder, no on-disk store).
+;; ---------------------------------------------------------------------------
+
+(defn- deep-force
+  "Force a value and every nested list/attrset element to WHNF, recursively.
+  Leaf pnix values (numbers/strings/bool/nil/path/ctx-string/raw-bytes/
+  closure/builtin) pass through unchanged -- only vector/attrset containers
+  recurse. Used by the derivation builtins to validate + hash a fully
+  realized input attrset."
+  [value]
+  (let [value (force-value value)]
+    (cond
+      (vector? value) (mapv deep-force value)
+      (attrset? value)
+      (attrset-value (into {} (map (fn [[k v]] [k (deep-force v)])) (:entries value)))
+      :else value)))
+
+(defn- derivation-uncoercible?
+  "True when a deep-forced derivation input attrset contains a function
+  anywhere inside it (functions cannot be part of a derivation attrset)."
+  [value]
+  (cond
+    (or (closure? value) (builtin? value)) true
+    (vector? value) (boolean (some derivation-uncoercible? value))
+    (attrset? value) (boolean (some derivation-uncoercible? (vals (:entries value))))
+    :else false))
+
+(defn- derivation-hash-repr
+  "Canonical, deterministic printable form of a deep-forced value for
+  derivation path hashing: sorted-key maps so the digest does not depend on
+  hash-map iteration order; ctx-string/path/raw-bytes render their full
+  tagged shape so context participates in the hash, same as the reference
+  hosts hashing their own force-deep'd result via plain pr-str."
+  [value]
+  (cond
+    (attrset? value)
+    (into (sorted-map)
+          (map (fn [[k v]] [k (derivation-hash-repr v)]))
+          (:entries value))
+    (vector? value) (mapv derivation-hash-repr value)
+    (ctx-string? value) [:string-context (:value value) (:context value)]
+    (path-value? value) [:path (:value value)]
+    (raw-bytes? value) [:raw-bytes (vec (:bytes value))]
+    (float-value? value) (float-double value)
+    :else value))
+
+(defn- derivation-hash-hex
+  "Deterministic, pure-simulation hash of `salt` + the forced derivation
+  input -- NOT a real Nix store hash, just an internally-consistent pseudo
+  hash (documented simulation scope)."
+  [salt forced]
+  (let [text (pr-str [salt (derivation-hash-repr forced)])
+        bytes (.GetBytes utf8-lenient ^String text)
+        digest (.ComputeHash (System.Security.Cryptography.SHA256/Create) bytes)]
+    (subs (-> (System.BitConverter/ToString digest)
+              (str/replace "-" "")
+              str/lower-case)
+          0 32)))
+
+(defn- derivation-paths
+  "Deterministic pseudo drvPath and per-output paths for a deep-forced
+  derivation input. Non-\"out\" outputs get the Nix-style \"-<output>\" name
+  suffix (oracle: /nix/store/<h>-t vs /nix/store/<h>-t-dev)."
+  [forced name outputs]
+  {:drv-path (str "/nix/store/" (derivation-hash-hex :drv forced) "-" name ".drv")
+   :out-paths (into {}
+                    (map (fn [o]
+                           [o (str "/nix/store/" (derivation-hash-hex [:out o] forced) "-" name
+                                   (when (not= o "out") (str "-" o)))]))
+                    outputs)})
+
+(defn- derivation-core
+  "Validate + realize a derivation input attrset. Returns
+  {:forced .. :name .. :outputs .. :drv-path .. :out-paths ..} or throws a
+  structured Failed (outcome/fail!) via the usual mechanism."
+  [builtin-name attrs]
+  (let [attrs (force-value attrs)]
+    (when-not (attrset? attrs)
+      (outcome/fail! :eval :type-error
+                     {:operation builtin-name :reason "not-an-attrset"}))
+    (let [forced (deep-force attrs)
+          entries (:entries forced)
+          name-v (get entries "name")
+          missing (first (remove #(contains? entries %) ["name" "system" "builder"]))]
+      (when missing
+        (outcome/fail! :eval :type-error
+                       {:operation builtin-name
+                        :reason "missing-required-attr"
+                        :attr missing}))
+      (when-not (string? name-v)
+        (outcome/fail! :eval :type-error
+                       {:operation builtin-name :reason "name-not-plain-string"}))
+      (when (derivation-uncoercible? forced)
+        (outcome/fail! :eval :type-error
+                       {:operation builtin-name :reason "attr-not-coercible"}))
+      (let [outputs (or (get entries "outputs") ["out"])]
+        (when-not (and (vector? outputs)
+                       (seq outputs)
+                       (every? string? outputs)
+                       (apply distinct? outputs))
+          (outcome/fail! :eval :type-error
+                         {:operation builtin-name :reason "invalid-outputs"}))
+        (let [{:keys [drv-path out-paths]} (derivation-paths forced name-v outputs)]
+          {:forced forced
+           :name name-v
+           :outputs outputs
+           :drv-path drv-path
+           :out-paths out-paths})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Builtin execution
@@ -1643,7 +1754,7 @@
                      (if (< i n)
                        (recur (inc i) (str out (emit-str t) (subs content i (inc i))))
                        (str out (emit-str t)))
-                     (recur (+ i (count f)) (str out (emit-str t))))))))
+                     (recur (+ i (count f)) (str out (emit-str t)))))))))
          @used-ctx)))
 
     :removePrefix
@@ -1903,6 +2014,126 @@
       (ctx-string (string-content v)
                   (remove #(or (str/starts-with? % "!") (str/starts-with? % "="))
                           (string-ctx v))))
+
+    :hasContext
+    (let [v (force-value (first args))]
+      (if (string-like? v)
+        (ctx-string? v)
+        (outcome/fail! :eval :type-error
+                       {:operation "hasContext" :expected "string"})))
+
+    :getContext
+    ;; Decode the Nix-encoded context elements back into per-path info
+    ;; attrsets and merge kinds on the same path (oracle: nix-instantiate
+    ;; 2.34.7 -- plain "<p>" -> { path = true; }, "!o!<drv>" -> { outputs =
+    ;; [o..]; }, "=<drv>" -> { allOutputs = true; }; mixed kinds merge on one
+    ;; key). Pure-simulation scope: WHICH dependency + which kind, not a real
+    ;; store-derivation graph.
+    (let [v (force-value (first args))]
+      (if (string-like? v)
+        (let [raw (reduce
+                   (fn [acc e]
+                     (cond
+                       (str/starts-with? e "=")
+                       (update acc (subs e 1) assoc "allOutputs" true)
+
+                       (str/starts-with? e "!")
+                       (if-let [[_ output p] (re-matches #"!([^!]*)!(.*)" e)]
+                         (update-in acc [p "outputs"]
+                                    (fn [outs]
+                                      (vec (sort (distinct (conj (or outs []) output))))))
+                         (update acc e assoc "path" true))
+
+                       :else
+                       (update acc e assoc "path" true)))
+                   {}
+                   (string-ctx v))]
+          (attrset-value
+           (into (sorted-map)
+                 (map (fn [[k info]] [k (attrset-value (into (sorted-map) info))]))
+                 raw)))
+        (outcome/fail! :eval :type-error
+                       {:operation "getContext" :expected "string"})))
+
+    :appendContext
+    ;; appendContext s ctxAttrs (STRING FIRST): interpret each key's info
+    ;; attrset into Nix-encoded context elements -- path=true -> "<p>",
+    ;; allOutputs=true -> "=<p>", outputs=[o..] -> "!o!<p>". An EMPTY info
+    ;; attrset contributes nothing (oracle: nix-instantiate 2.34.7 --
+    ;; hasContext (appendContext s { p = {}; }) is false).
+    (let [s (force-value (first args))
+          ctx-attrs (force-value (second args))]
+      (cond
+        (not (string-like? s))
+        (outcome/fail! :eval :type-error
+                       {:operation "appendContext" :expected "string"})
+
+        (not (attrset? ctx-attrs))
+        (outcome/fail! :eval :type-error
+                       {:operation "appendContext" :reason "context-not-attrset"})
+
+        :else
+        (let [infos (:entries (deep-force ctx-attrs))
+              bad (some (fn [[k info]] (when-not (attrset? info) k)) infos)]
+          (when bad
+            (outcome/fail! :eval :type-error
+                           {:operation "appendContext"
+                            :reason "info-not-attrset"
+                            :key bad}))
+          (ctx-string
+           (string-content s)
+           (concat (string-ctx s)
+                   (for [[k info] infos
+                         e (concat
+                            (when (get (:entries info) "path") [k])
+                            (when (get (:entries info) "allOutputs") [(str "=" k)])
+                            (for [o (get (:entries info) "outputs" [])]
+                              (str "!" o "!" k)))]
+                     e))))))
+
+    :derivationStrict
+    ;; Low-level derivation primitive: drvPath plus one attr per output
+    ;; (oracle: attrNames = ["dev" "drvPath" "out"] for outputs=["out" "dev"]),
+    ;; each carrying its own string context -- drvPath allOutputs
+    ;; ("=<drvPath>"), an output path its own output ("!<o>!<drvPath>").
+    (let [{:keys [drv-path out-paths outputs]}
+          (derivation-core "derivationStrict" (first args))]
+      (attrset-value
+       (reduce (fn [acc o]
+                 (assoc acc o (ctx-string (get out-paths o) [(str "!" o "!" drv-path)])))
+               {"drvPath" (ctx-string drv-path [(str "=" drv-path)])}
+               outputs)))
+
+    :derivation
+    ;; High-level wrapper (in Nix a nix-lang wrapper over derivationStrict):
+    ;; the input attrs merged with type/name/drvPath/outPath/outputName, plus
+    ;; one attr per output. outPath/outputName follow the FIRST output
+    ;; (oracle: outputs=["dev" "out"] -> outputName="dev"). Each d.<o> is a
+    ;; NON-cyclic reduced derivation attrset (type/name/drvPath/outPath/
+    ;; outputName only) -- real Nix's d.out == d self-reference is not
+    ;; representable in the plain-map value model here; documented
+    ;; simulation scope (BUGS.md).
+    (let [{:keys [forced drv-path out-paths outputs name]}
+          (derivation-core "derivation" (first args))
+          drv-ctx (ctx-string drv-path [(str "=" drv-path)])
+          out-attr (fn [o] (ctx-string (get out-paths o) [(str "!" o "!" drv-path)]))
+          sub-drv (fn [o]
+                    (attrset-value
+                     {"type" "derivation"
+                      "name" name
+                      "drvPath" drv-ctx
+                      "outputName" o
+                      "outPath" (out-attr o)}))
+          first-o (first outputs)
+          with-outputs (reduce (fn [acc o] (assoc acc o (sub-drv o)))
+                                (:entries forced)
+                                outputs)]
+      (attrset-value
+       (assoc with-outputs
+              "type" "derivation"
+              "drvPath" drv-ctx
+              "outPath" (out-attr first-o)
+              "outputName" first-o)))
 
     ;; ---- Combinators ----
     :optional
@@ -2533,6 +2764,11 @@
    "parseDrvName" (bi :parseDrvName 1)
    "unsafeDiscardStringContext" (bi :unsafeDiscardStringContext 1)
    "unsafeDiscardOutputDependency" (bi :unsafeDiscardOutputDependency 1)
+   "hasContext" (bi :hasContext 1)
+   "getContext" (bi :getContext 1)
+   "appendContext" (bi :appendContext 2)
+   "derivation" (bi :derivation 1)
+   "derivationStrict" (bi :derivationStrict 1)
    "toFile" (bi :toFile 2)
    "attrNames" (bi :attrNames 1)
    "attrValues" (bi :attrValues 1)
@@ -3375,6 +3611,13 @@
     (cond
       (or (nil? value) (boolean? value) (number? value) (string? value))
       value
+
+      ;; Context has no representation at the canonical output boundary
+      ;; (plain values / canonical JSON) -- content only, matching real
+      ;; Nix's own --json output of e.g. a derivation's outPath (context is
+      ;; tracked and gated throughout evaluation, dropped only here).
+      (ctx-string? value)
+      (:value value)
 
       (vector? value)
       (mapv realize-value value)

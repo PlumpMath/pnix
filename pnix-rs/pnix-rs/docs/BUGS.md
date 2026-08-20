@@ -20,12 +20,40 @@ toJSON/문자열 보간/`string+`/bool/`?`/`rec`/`with`는 이미 구현됐지�
   `IMPLEMENTATION.md` §3 참고. typeOf/isPath/JSON 투영/canonical print/
   동등성을 관통하는 새 값 타입 추가라 범위가 크다 — **mirror/gate 수요가
   생기면 그때 추가**한다는 게 SCOPE_LOCK의 결정이었고 아직 유효하다.
-- **string-context 값이 없다.** context-carrying string(파생물 추적용)이
-  아예 표현 불가 — `unsafeDiscardStringContext` 같은 빌트인은 이름만
-  있고 진짜 context가 없으니 사실상 no-op. proposal 0010이 `hashString`
-  등에서 이 갭을 명시: "clj/hy는 hash data context가 버려지고 algorithm
-  context는 거부됨을 검증하지만, rs는 애초에 그 값을 표현 못 해서 검증
-  대상이 없다."
+- ~~string-context 값이 없다~~ — **정정(2026-08-20): 더 이상 사실이
+  아니다.** pnix-clj(오라클)/pnix-clr의 태그된-맵 설계를 그대로 이식해
+  구현했다 — `PxVal`에 새 variant를 추가하지 않고, `PxVal::Attrs`를
+  `__pnix_value_kind = "string-context"` 센티널 키로 태그하는 방식
+  (`PxVal::Bytes`가 이미 쓰던 "특수 값 모양, 지정된 표면만 이해, 나머지는
+  fail-closed"라는 선례를 그대로 따름). `hasContext`/`getContext`/
+  `appendContext`/`unsafeDiscardStringContext`/`unsafeDiscardOutputDependency`
+  + `builtins.derivation`/`derivationStrict`/`placeholder`가 전부 실제로
+  동작한다. `+`/`${...}` 보간/동등성/순서 비교는 항상 context-aware(언어
+  연산자라 게이트 대상이 아님); 그 외 빌트인은 고정 allowlist
+  (`px_context_aware_builtin`, pnix-clj의 `context-aware-builtins`를 이름
+  그대로 이식)에 없으면 top-level contextful 인자에 fail-closed
+  (`px_builtin_exec`의 단일 chokepoint에서 얕은 스캔 — 강제되지 않은 list
+  원소 안에 숨은 context는 오라클과 동일하게 통과함, 더 엄격하게 만들지
+  않음). pure-simulation 알려진 한계(모두 pnix-clj/pnix-cljs와 동일한
+  선상의 문서화된 제한이지 이 호스트만의 결함이 아님):
+  - 의사(pseudo) 해시 — 실제 Nix store 해시와 바이트 호환 아님, 다른 pnix
+    호스트의 해시와도 호환 아님(각 호스트가 독립적으로 시뮬레이션).
+  - `derivation`이 만드는 `d.<output>`는 축약된(비순환) 파생물 attrset —
+    실제 Nix의 `d.out == d` self-reference는 이 plain-`Attrs` 값 모델로는
+    표현 불가.
+  - `appendContext`는 pnix-clj가 정의한 단순화된 스코프(path/allOutputs/
+    outputs 세 종류의 정보만) 그대로.
+  - fail-closed 게이트는 얕다(shallow) — 의도적으로, 오라클 행동과
+    일치시키기 위해서다.
+  - **`.` select가 pnix-clj 오라클과 의도적으로 다르다**: 오라클은
+    `eval-select`가 `attrset-value?`가 아니라 맨 `map?`을 써서 ctx-string
+    맵을 실제 attrset처럼 취급해 `a.string`이 raw 표현("hello")을 그대로
+    새어 나오게 한다(`?`/`//`는 같은 오라클에서도 올바르게 막혀 있음 —
+    `eval-select` 한 함수만의 우연한 누락으로 보임). pnix-cljs 포트는
+    애초에 별개 레코드 타입을 써서 이 누락을 재현하지 않았고, pnix-rs도
+    그 판단을 따라 `.` select에서 ctx-string을 명시적으로 거부한다(실제
+    Nix도 문자열에 `.`를 쓰면 타입 에러) — 유일하게 의도적으로 오라클과
+    다른 지점.
 - **URI 리터럴이 없다.**
 - **중첩 동적 attr 경로가 없다** — `a.${x}.b = 1;`처럼 attrpath 중간에
   동적 세그먼트가 오는 형태. **단일** 동적 키(`{ "${x}" = 1; }`, c10

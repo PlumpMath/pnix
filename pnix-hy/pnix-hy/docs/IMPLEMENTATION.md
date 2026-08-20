@@ -98,7 +98,7 @@ diff).
 | and | O | O | O | O | O |
 | any | O | O | O | O | O |
 | append | O | O | O | O | O |
-| appendContext | O | - | - | - | O |
+| appendContext | O | O | O | O | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
 | atan2 | O | O | O | O | O |
@@ -127,8 +127,8 @@ diff).
 | count | O | - | - | - | - |
 | currentSystem | - | - | - | - | O |
 | deepSeq | O | O | O | O | O |
-| derivation | O | - | - | - | O |
-| derivationStrict | O | - | - | - | O |
+| derivation | O | O | O | O | O |
+| derivationStrict | O | O | O | O | O |
 | dirOf | O | O | O | O | O |
 | div | O | O | O | O | O |
 | drop | O | O | O | O | O |
@@ -166,7 +166,7 @@ diff).
 | getAttrFromPath | O | O | O | O | O |
 | getAttrFromPathOr | O | O | O | O | O |
 | getAttrs | - | - | - | - | O |
-| getContext | O | - | - | - | O |
+| getContext | O | O | O | O | O |
 | getEnv | O | O | O | O | O |
 | getName | O | O | O | O | O |
 | getVersion | O | O | O | O | O |
@@ -174,7 +174,7 @@ diff).
 | gt | O | O | O | O | O |
 | hasAttr | O | O | O | O | O |
 | hasAttrByPath | O | O | O | O | O |
-| hasContext | O | - | - | - | O |
+| hasContext | O | O | O | O | O |
 | hasInfix | O | O | O | O | O |
 | hasPrefix | O | O | O | O | O |
 | hasSuffix | O | O | O | O | O |
