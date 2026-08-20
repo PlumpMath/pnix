@@ -17,7 +17,8 @@
   (:require [clojure.core.server :as server]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [pnix-clj.core :as core]))
+            [pnix-clj.core :as core]
+            [pnix-clj.evaluator :as evaluator]))
 
 (def lane-classification
   {:lane :experimental
@@ -53,6 +54,7 @@
     (nil? v)                         "null"
     (boolean? v)                     (str v)
     (string? v)                      (pr-str v)
+    (evaluator/ctx-string? v)        (pr-str (evaluator/string-content v))
     (number? v)                      (str v)
     (and (map? v) (= :closure (:kind v))) "«lambda»"
     (and (map? v) (= :builtin (:kind v))) (str "«builtin " (name (:name v)) "»")

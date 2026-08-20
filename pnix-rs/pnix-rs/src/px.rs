@@ -10322,6 +10322,25 @@ fn px_to_json_ctx(v: &PxVal, ctx: &mut Vec<String>) -> Result<String, String> {
             }
             Ok(format!("[{}]", parts.join(",")))
         }
+        // __toString wins over outPath (oracle: toJSON { __toString = ..;
+        // outPath = "/x"; } uses __toString); called with self, result
+        // must be string-like, its context (if any) is kept.
+        PxVal::Attrs(fields) if px_attrs_find(fields, "__toString").is_some() => {
+            let to_string_fn = px_attrs_find(fields, "__toString").unwrap().clone();
+            let sv = px_apply(&to_string_fn, v.clone())?;
+            let forced = px_force(&sv)?;
+            if matches!(forced, PxVal::Str(_)) || px_is_ctx_string(&forced) {
+                px_to_json_ctx(&forced, ctx)
+            } else {
+                Err(String::from("px: toJSON __toString result is not a string"))
+            }
+        }
+        // An attrset with outPath serializes as that path (oracle: toJSON
+        // { outPath = "/x"; other = 1; } is "\"/x\""), so derivations
+        // become their store path with context kept.
+        PxVal::Attrs(fields) if px_attrs_find(fields, "outPath").is_some() => {
+            px_to_json_ctx(px_attrs_find(fields, "outPath").unwrap(), ctx)
+        }
         PxVal::Attrs(fields) => {
             let mut remaining = Vec::new();
             for (name, value) in fields.iter() {

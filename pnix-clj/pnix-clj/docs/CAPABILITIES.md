@@ -82,7 +82,7 @@ check whether something already exists before implementing it.
   translation-validation trust value-roundtrip weval wiki wiki-check
   witness witnessed-run
 
-## Builtins (194)
+## Builtins (196)
 
   abort abs add addErrorContext all and
   any append appendContext assertMsg atan2 attrByPath
@@ -102,21 +102,21 @@ check whether something already exists before implementing it.
   init intersectAttrs intersectLists isAttrs isBool isFloat
   isFunction isInt isList isNull isPath isString
   keys langVersion last le length lessThan
-  listToAttrs ln lt map mapAttrs mapAttrs'
-  mapAttrsRecursive mapAttrsToList match max merge min
-  mod mul nameValuePair neg nixVersion not
-  null optional optionalAttrs optionalString optionals or
-  parseDrvName partition pathExists pipe placeholder pnixMounts
-  pow product range readDir readFile recursiveUpdate
-  removeAttrs removePrefix removeSuffix replaceStrings replicate reverseList
-  seq set sin sort split splitString
-  splitVersion sqrt storeDir storePath stringLength stringToCharacters
-  sub substring subtractLists sum tail take
-  throw toFile toInt toJSON toLower toPath
-  toString toUpper toXML trace true tryEval
-  typeOf unique unsafeDiscardOutputDependency unsafeDiscardStringContext unsafeGetAttrPos updateManyAttrs
-  values warn when zip zipAttrs zipAttrsWith
-  zipLists zipListsWith
+  listToAttrs ln log lt map mapAttrs
+  mapAttrs' mapAttrsRecursive mapAttrsToList match max merge
+  min mod mul nameValuePair neg nixVersion
+  not null optional optionalAttrs optionalString optionals
+  or parseDrvName partition pathExists pipe placeholder
+  pnixMounts pow product range readDir readFile
+  recursiveUpdate removeAttrs removePrefix removeSuffix replaceStrings replicate
+  reverseList seq set sin sort split
+  splitString splitVersion sqrt storeDir storePath stringLength
+  stringToCharacters sub substring subtractLists sum tail
+  take tan throw toFile toInt toJSON
+  toLower toPath toString toUpper toXML trace
+  true tryEval typeOf unique unsafeDiscardOutputDependency unsafeDiscardStringContext
+  unsafeGetAttrPos updateManyAttrs values warn when zip
+  zipAttrs zipAttrsWith zipLists zipListsWith
 
 ## Unprefixed default scope
 

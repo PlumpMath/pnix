@@ -1105,6 +1105,22 @@
       (vector? value)
       (mapv #(realize-value-with-context collected %) value)
 
+      ;; __toString wins over outPath (oracle: toJSON { __toString = ..;
+      ;; outPath = "/x"; } uses __toString); called with self, result must
+      ;; be string-like, its context (if any) is kept.
+      (and (attrset? value) (contains? (:entries value) "__toString"))
+      (let [sv (force-value (apply-callable (get (:entries value) "__toString") value))]
+        (if (or (string? sv) (ctx-string? sv))
+          (realize-value-with-context collected sv)
+          (outcome/fail! :eval :type-error
+                         {:operation "toJSON" :reason "__toString-not-string"})))
+
+      ;; An attrset with outPath serializes as that path (oracle: toJSON
+      ;; { outPath = "/x"; other = 1; } is "\"/x\""), so derivations become
+      ;; their store path with context kept.
+      (and (attrset? value) (contains? (:entries value) "outPath"))
+      (realize-value-with-context collected (get (:entries value) "outPath"))
+
       (attrset? value)
       (into {}
             (map (fn [[k v]] [k (realize-value-with-context collected v)]))

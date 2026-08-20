@@ -9,7 +9,7 @@
 (declare evaluate-expression evaluate-tail equal-values equal-values*
          equal-values-in-container ordered-less checked-integer
          evaluation-failure! force-cell integer-value? json-parse-value
-         to-json-value string-text)
+         to-json-value string-text apply-value value-cell)
 (declare materialize)
 
 (defrecord ClosureValue [parameter body environment])
@@ -558,6 +558,24 @@
                                       (to-json-value item active collected))
                                     value)))
              "]"))
+
+      ;; __toString wins over outPath (oracle: toJSON { __toString = ..;
+      ;; outPath = "/x"; } uses __toString); called with self, result must
+      ;; be string-like, its context (if any) is kept.
+      (and (instance? AttrsetValue value) (contains? (:fields value) "__toString"))
+      (let [to-string-fn (force-cell (get (:fields value) "__toString"))
+            sv (force-cell (apply-value to-string-fn (value-cell value)))]
+        (if (or (string? sv) (ctx-string? sv))
+          (to-json-value sv active collected)
+          (evaluation-failure! "type-error"
+                               {"operation" "toJSON"
+                                "detail_class" "__toString-not-string"})))
+
+      ;; An attrset with outPath serializes as that path (oracle: toJSON
+      ;; { outPath = "/x"; other = 1; } is "\"/x\""), so derivations become
+      ;; their store path with context kept.
+      (and (instance? AttrsetValue value) (contains? (:fields value) "outPath"))
+      (to-json-value (get (:fields value) "outPath") active collected)
 
       (instance? AttrsetValue value)
       (to-json-active
