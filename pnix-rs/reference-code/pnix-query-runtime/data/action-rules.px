@@ -1,0 +1,114 @@
+# 범용 .px 액션 규칙 엔진 (hot-reloadable)
+#
+# 구조: generators + data tables → Rust action_engine이 expand
+# .px 파일은 "무엇"을 선언하고, Rust는 "어떻게 조합할지"만 담당
+#
+# pnix full eval이 doghouse에 연결되면 let/in + builtins.map으로 교체 예정
+# 현재는 px_loader 한계로 flat attrset + list 구조 사용
+{
+  # ── 삼각함수 테이블 ──
+  # generator가 각 함수 × [도, 라디안] 조합을 자동 생성
+  trig-functions = [
+    { ko = "사인"; fn = "sin"; }
+    { ko = "코사인"; fn = "cos"; }
+    { ko = "탄젠트"; fn = "tan"; }
+    { ko = "아크사인"; fn = "asin"; inverse = "true"; }
+    { ko = "아크코사인"; fn = "acos"; inverse = "true"; }
+    { ko = "아크탄젠트"; fn = "atan"; inverse = "true"; }
+  ];
+
+  # ── 산술 연산 테이블 ──
+  # generator: 각 op의 ko + verbs 전부 패턴으로 자동 확장
+  arithmetic-ops = [
+    { ko = "더하기"; op = "+"; symbol = "+"; verbs = ["더해줘" "더하면" "합하면"]; }
+    { ko = "빼기"; op = "-"; symbol = "-"; verbs = ["빼줘" "빼면"]; }
+    { ko = "곱하기"; op = "*"; symbol = "×"; verbs = ["곱해줘" "곱하면"]; }
+    { ko = "나누기"; op = "/"; symbol = "÷"; verbs = ["나눠줘" "나누면"]; }
+  ];
+
+  # 기호 산술 패턴 (2^10, 3*5 등)
+  symbol-arithmetic = [
+    { symbol = "^"; op = "power"; }
+    { symbol = "+"; op = "+"; }
+    { symbol = "-"; op = "-"; }
+    { symbol = "*"; op = "*"; }
+  ];
+
+  # ── 단항 연산 테이블 ──
+  unary-ops = [
+    { id = "sqrt"; patterns = ["루트 %num%" "제곱근 %num%"]; response = "√%num% = %result%"; }
+    { id = "factorial"; patterns = ["%num% 팩토리얼"]; response = "%num%! = %result%"; }
+    { id = "abs"; patterns = ["%num%의 절대값" "절대값 %num%"]; response = "|%num%| = %result%"; }
+  ];
+
+  # ── 로그 테이블 ──
+  log-functions = [
+    { ko = "로그"; en = "log"; base = "10"; }
+    { ko = "자연로그"; en = "ln"; base = "e"; }
+  ];
+
+  # ── 단위 변환 패턴 (조사 변형 자동 생성) ──
+  # generator가 를/을 × 로/으로 조합을 생성
+  unit-convert-particles = {
+    object-particles = ["를" "을"];
+    direction-particles = ["로" "으로"];
+  };
+
+  # ── 백분율 패턴 ──
+  percentage-patterns = {
+    forward = ["%base%의 %pct%%"];
+    reverse = ["%pct%%의 %base%"];
+  };
+
+  # ── 거듭제곱 패턴 ──
+  power-patterns = ["%base%의 %exp%제곱" "%base%의 %exp%승"];
+
+  # ── 조합/순열 (nCr, nPr) ──
+  combinatorics-ops = [
+    { id = "combination"; ko = "조합"; patterns = ["%n%C%r%" "%n%개 중 %r%개 조합" "%n%개 중 %r%개 선택"]; }
+    { id = "permutation"; ko = "순열"; patterns = ["%n%P%r%" "%n%개 중 %r%개 순열" "%n%개에서 %r%개 나열"]; }
+  ];
+
+  # ── 정수론 (GCD, LCM) ──
+  number-theory-ops = [
+    { id = "gcd"; patterns = ["%a%와 %b%의 최대공약수" "%a%과 %b%의 최대공약수"]; response = "gcd(%a%, %b%) = %result%"; }
+    { id = "lcm"; patterns = ["%a%와 %b%의 최소공배수" "%a%과 %b%의 최소공배수"]; response = "lcm(%a%, %b%) = %result%"; }
+  ];
+
+  # ── 진법 변환 ──
+  base-conversion-ops = [
+    { id = "to-binary"; base = "2"; suffix = "₂"; patterns = ["%num%를 2진법으로" "%num%을 2진법으로" "%num%를 이진법으로" "%num%을 이진법으로"]; }
+    { id = "to-octal"; base = "8"; suffix = "₈"; patterns = ["%num%를 8진법으로" "%num%을 8진법으로" "%num%를 팔진법으로"]; }
+    { id = "to-hex"; base = "16"; suffix = "₁₆"; patterns = ["%num%를 16진법으로" "%num%을 16진법으로" "%num%를 십육진법으로"]; }
+  ];
+
+  # ── 나머지 ──
+  modulo-patterns = ["%a%를 %b%로 나눈 나머지" "%a%을 %b%로 나눈 나머지" "%a% mod %b%"];
+
+  # ── 통계 연산 ──
+  statistics-ops = [
+    { id = "mean"; ko = "평균"; patterns = ["평균 %nums%" "%nums%의 평균" "%nums% 평균"]; }
+    { id = "median"; ko = "중앙값"; patterns = ["중앙값 %nums%" "%nums%의 중앙값" "%nums% 중앙값"]; }
+    { id = "mode"; ko = "최빈값"; patterns = ["최빈값 %nums%" "%nums%의 최빈값"]; }
+    { id = "variance"; ko = "분산"; patterns = ["분산 %nums%" "%nums%의 분산"]; }
+    { id = "stddev"; ko = "표준편차"; patterns = ["표준편차 %nums%" "%nums%의 표준편차"]; }
+  ];
+
+  # ── 온도 변환 (비선형 — 별도 action) ──
+  temperature-ops = [
+    { id = "celsius-to-fahrenheit"; patterns = ["섭씨 %num%도를 화씨로" "%num%도를 화씨로" "섭씨 %num%도 화씨"]; direction = "c-to-f"; }
+    { id = "fahrenheit-to-celsius"; patterns = ["화씨 %num%도를 섭씨로" "%num%도를 섭씨로" "화씨 %num%도 섭씨"]; direction = "f-to-c"; }
+  ];
+
+  # ── 응답 템플릿 (한국어) ──
+  # ${fn}, ${symbol} 등은 Rust generator가 치환
+  templates = {
+    trig-degree = "${fn}(${num}°) = ${result}";
+    trig-radian = "${fn}(${num}) = ${result} rad";
+    arithmetic = "${a} ${symbol} ${b} = ${result}";
+    unit-convert = "${num}${from} = ${result} ${to}";
+    percentage = "${base}의 ${pct}% = ${result}";
+    power = "${base}^${exp} = ${result}";
+    log = "${fn}(${num}) = ${result}";
+  };
+}

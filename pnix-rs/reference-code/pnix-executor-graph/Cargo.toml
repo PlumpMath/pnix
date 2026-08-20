@@ -1,0 +1,70 @@
+[package]
+name = "pnix-executor-graph"
+version.workspace = true
+edition = "2021"
+description = "FxCore Graph Applicator - applies meaning graphs to backend runtimes"
+default-run = "pnix"
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "pnix-executor-graph"
+path = "src/main.rs"
+
+[[bin]]
+name = "pnix"
+path = "src/bin/pnix.rs"
+
+[features]
+default = ["telemetry", "nix-store"]
+llvm = ["pnix-runtime-llvm/llvm"]
+proptest = []
+seto-ffi = ["pnix-runtime-legacy/seto-ffi"]
+# V01: Async runtime support (experimental)
+async-runtime = ["pnix-runtime-api/async-runtime"]
+telemetry = ["pnix-runtime-legacy/telemetry"]
+nix-store = ["pnix-runtime-legacy/nix-store"]
+# DOGHOUSE-DEPRECATION (2026-06-01): doghouse-core 의존은 opt-in feature 로만
+# 남겨둔 임시 surface. default OFF 라 doghouse-core 는 빌드 안 된다. puck/doghouse
+# 연결 coding-memory store 경로는 pnixc-meta substrate 로 대체될 예정 →
+# 그때 이 feature + doghouse-core dep 통째로 제거. (CLAUDE.md 2026-05-31 SUPERSEDE)
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+reqwest = { workspace = true, features = ["blocking"] }
+tokio.workspace = true
+pnix-hash = { path = "../pnix-hash" }
+tempfile = "3"
+pnix-runtime-api = { path = "../pnix-runtime-api" }
+pnix-runtime-legacy = { path = "../pnix-runtime-legacy", default-features = false }
+pnix-runtime-ct = { path = "../pnix-runtime-ct" }
+pnix-runtime-llvm = { path = "../pnix-runtime-llvm" }
+freecat-runtime-ui = { path = "../freecat-runtime-ui" }
+pnix-runtime-kernel = { path = "../pnix-runtime-kernel" }
+draw-ir = { path = "../draw-ir" }
+pnix-core = { path = "../pnix-core" }
+pnix-fxcore-types = { path = "../pnix-fxcore-types" }
+pnix-ir-adapter = { path = "../pnix-ir-adapter" }
+pnix-backend-legacy = { path = "../pnix-backend-legacy" }
+xml-x3d-core = { path = "../xml-x3d-core" }
+pnix-live = { path = "../pnix-live" }
+pnix-runtime-supervisor = { path = "../pnix-runtime-supervisor" }
+pnix-lsp = { path = "../pnix-lsp" }
+pnix-query-runtime = { path = "../pnix-query-runtime" }
+
+[dev-dependencies]
+proptest.workspace = true
+# Phase 145++++++++++(zzzzd-0.6): real pnixc-meta + relay boundary + pnix
+# CLI end-to-end test uses redb directly to seed and to assert byte-level
+# substrate effect after the action completes.
+redb = "4"  # lock=2.6.3
+
+# 2026-06-02: doghouse-core 삭제됨. 남은 #[cfg(feature = "doghouse")] dead 블록은
+# feature 가 더 이상 정의되지 않아 영구 OFF (절대 컴파일 안 됨 = 책임은 pnixc-meta).
+# 활성화 불가하므로 landmine 아님. unexpected_cfgs warning 만 known-off 로 정리.
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(feature, values("doghouse"))']

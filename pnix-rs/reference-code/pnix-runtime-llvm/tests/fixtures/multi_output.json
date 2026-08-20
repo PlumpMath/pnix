@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "version": "fxcore@0.1",
+    "stage": 3
+  },
+  "name": "multi_out",
+  "types": [],
+  "inputs": [
+    { "name": "a", "ty": "Int" }
+  ],
+  "morphisms": [
+    {
+      "name": "extern:pair",
+      "input": "Int",
+      "output": "Int",
+      "inputs": [
+        { "name": "a", "ty": "Int" }
+      ],
+      "outputs": [
+        { "name": "x", "ty": "Int" },
+        { "name": "y", "ty": "Int" }
+      ],
+      "effect": "pure"
+    },
+    {
+      "name": "add",
+      "input": "Int",
+      "output": "Int",
+      "inputs": [
+        { "name": "lhs", "ty": "Int" },
+        { "name": "rhs", "ty": "Int" }
+      ],
+      "outputs": [
+        { "name": "out", "ty": "Int" }
+      ],
+      "effect": "pure"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "pair",
+      "uses": "extern:pair",
+      "kind": "normal"
+    },
+    {
+      "name": "result",
+      "uses": "add",
+      "kind": "normal"
+    }
+  ],
+  "edges": [
+    {
+      "from": "input",
+      "to": "pair",
+      "from_input": "a",
+      "to_port": "a"
+    },
+    {
+      "from": "pair",
+      "to": "result",
+      "from_port": "x",
+      "to_port": "lhs"
+    },
+    {
+      "from": "pair",
+      "to": "result",
+      "from_port": "y",
+      "to_port": "rhs"
+    }
+  ],
+  "scopes": []
+}

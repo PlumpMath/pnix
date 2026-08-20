@@ -1,0 +1,142 @@
+# Category Theory 구조 정의 (1급 연산 원리).
+# ontology의 검색/유추/검증/문장생성의 핵심 규칙.
+# hot-reload: .px 편집 → 즉시 반영.
+{
+  # ── Categories (의미 해석 공간) ────────────────────────
+  categories = [
+    { id = "Physics.Classical"; description = "고전 역학"; }
+    { id = "Physics.Relativity"; description = "특수/일반 상대론"; }
+    { id = "Physics.Quantum"; description = "양자역학"; }
+    { id = "Physics.Thermodynamics"; description = "열역학"; }
+    { id = "Physics.Electromagnetism"; description = "전자기학"; }
+    { id = "Math.Arithmetic"; description = "산술"; }
+    { id = "Math.Algebra"; description = "대수"; }
+    { id = "Math.Calculus"; description = "미적분"; }
+    { id = "Math.LinearAlgebra"; description = "선형대수"; }
+    { id = "Language.Korean"; description = "한국어 의미"; }
+    { id = "Code.Python"; description = "Python 코드"; }
+  ];
+
+  # ── Functors (context 간 번역 = ontology.lift) ────────
+  # from → to: 어떤 context의 개념을 다른 context로 lift
+  # preserves: 보존되는 것
+  # loses: 잃어지는 것 (LossPolicy)
+  functors = [
+    {
+      id = "classical-to-relativity";
+      from = "Physics.Classical";
+      to = "Physics.Relativity";
+      preserves = ["에너지 보존" "운동량 보존"];
+      loses = ["갈릴레이 변환 대칭" "절대 시간"];
+      object-map = [
+        { from = "질량"; to = "상대론적 질량 (γm)"; }
+        { from = "운동량 p=mv"; to = "상대론적 운동량 p=γmv"; }
+        { from = "운동에너지 ½mv²"; to = "상대론적 에너지 γmc²-mc²"; }
+      ];
+    }
+    {
+      id = "classical-to-quantum";
+      from = "Physics.Classical";
+      to = "Physics.Quantum";
+      preserves = ["에너지 보존" "확률 보존"];
+      loses = ["궤적 확정성" "동시 측정 가능성"];
+      object-map = [
+        { from = "에너지 E"; to = "해밀토니안 연산자 Ĥ"; }
+        { from = "운동량 p"; to = "운동량 연산자 -iℏ∇"; }
+        { from = "위치 x"; to = "위치 연산자 x̂"; }
+      ];
+    }
+    {
+      id = "physics-to-korean";
+      from = "Physics.*";
+      to = "Language.Korean";
+      preserves = ["의미 관계" "인과 구조"];
+      loses = ["수학적 정밀도" "단위 표기"];
+      note = "물리 공식을 한국어 문장으로 변환하는 functor";
+    }
+    {
+      id = "physics-to-code";
+      from = "Physics.*";
+      to = "Code.Python";
+      preserves = ["계산 정확도" "변수 관계"];
+      loses = ["물리적 직관" "단위 의미"];
+      note = "물리 공식을 Python 코드로 변환하는 functor";
+    }
+  ];
+
+  # ── Natural Transformations (duality) ─────────────────
+  # 두 functor 사이의 구조 보존 변환
+  dualities = [
+    {
+      id = "differentiation-integration";
+      description = "미분과 적분의 adjunction";
+      left = "differentiate";
+      right = "integrate";
+      relation = "adjunction";
+      note = "미적분학의 기본정리: ∫(df/dx)dx = f(x) + C";
+    }
+    {
+      id = "give-receive";
+      description = "주다와 받다의 duality";
+      left = "Giving";
+      right = "Receiving";
+      relation = "duality";
+      note = "semantic-effect의 관점 전환: agent↔recipient";
+    }
+    {
+      id = "force-acceleration";
+      description = "힘과 가속도의 correspondence";
+      left = "force";
+      right = "acceleration";
+      via = "F=ma (mass as morphism)";
+      relation = "correspondence";
+    }
+  ];
+
+  # ── Diagram Commute Rules (검증) ──────────────────────
+  # 두 경로로 계산해서 같은 결과가 나오는지 확인하는 규칙
+  commute-diagrams = [
+    {
+      id = "force-via-momentum";
+      description = "힘을 두 경로로 계산";
+      path-a = ["mass" "F=ma" "force"];
+      path-b = ["mass" "p=mv" "momentum" "F=dp/dt" "force"];
+      must-equal = "true";
+    }
+    {
+      id = "energy-conservation";
+      description = "에너지 보존: 운동+위치 = 전체";
+      path-a = ["kinetic-energy" "+" "potential-energy"];
+      path-b = ["total-energy"];
+      must-equal = "true";
+    }
+  ];
+
+  # ── Composition Rules (유추 생성) ─────────────────────
+  # morphism A→B와 B→C가 있으면 A→C를 자동 합성
+  composition-enabled = "true";
+  max-composition-depth = "3";
+
+  # held에서 missing object를 찾을 때:
+  # morphism의 domain을 따라가서 검색 방향을 결정
+  held-search-strategy = "morphism-domain-chase";
+
+  # ── Held hints (CT domain chase) ──────────────────────
+  # term 키워드 → 필요한 context 힌트
+  held-hints = [
+    { keyword = "로렌츠"; hint = "이 개념을 이해하려면 '광속(c)'과 '속도(v)' context가 필요하다."; context = "Physics.Relativity"; }
+    { keyword = "상대"; hint = "이 개념을 이해하려면 '고전역학'에서의 CT lift가 필요하다."; context = "Physics.Relativity"; }
+    { keyword = "양자"; hint = "이 개념을 이해하려면 '플랑크상수(h)'와 '파동함수' context가 필요하다."; context = "Physics.Quantum"; }
+    { keyword = "열역"; hint = "이 개념을 이해하려면 '온도(T)'와 '엔트로피(S)' context가 필요하다."; context = "Physics.Thermodynamics"; }
+    { keyword = "전자기"; hint = "이 개념을 이해하려면 '전하(q)'와 '전류(I)' context가 필요하다."; context = "Physics.Electromagnetism"; }
+    { keyword = "미분"; hint = "'함수'와 '변수' 개념이 필요하다."; context = "Math.Calculus"; }
+    { keyword = "적분"; hint = "'함수'와 '구간' 개념이 필요하다. 미분의 adjunction."; context = "Math.Calculus"; }
+    { keyword = "벡터"; hint = "'크기'와 '방향' 성분이 필요하다."; context = "Math.LinearAlgebra"; }
+    { keyword = "행렬"; hint = "'행'과 '열' 구조가 필요하다."; context = "Math.LinearAlgebra"; }
+    { keyword = "통계"; hint = "'확률'과 '분포' 개념이 필요하다."; context = "Math.Statistics"; }
+    { keyword = "중력"; hint = "'질량'과 '거리' 개념이 필요하다."; context = "Physics.Gravity"; }
+    { keyword = "파동"; hint = "'진동수'와 '파장' 개념이 필요하다."; context = "Physics.Wave"; }
+    { keyword = "확률"; hint = "'사건'과 '표본공간' 개념이 필요하다."; context = "Math.Probability"; }
+    { keyword = "함수"; hint = "'정의역'과 '치역' 개념이 필요하다."; context = "Math.Analysis"; }
+  ];
+}

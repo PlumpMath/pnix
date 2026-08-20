@@ -1,0 +1,246 @@
+# absorb-policy.px — 검색 결과 흡수 정책 데이터 (hot-reloadable)
+#
+# emergent search 결과를 ontology에 흡수할지 판단하는 기준.
+# doghouse Rust 인터프리터가 이 데이터를 읽어서 판단 로직을 적용.
+# 판단 로직 자체는 이 데이터의 값에 의해 결정됨 — Rust에 하드코딩 없음.
+{
+  # 흡수 최소 기준
+  thresholds = {
+    min-confidence = "0.3";
+    min-quality-score = "0.5";
+    min-definition-length = "20";
+    max-definition-length = "500";
+    preferred-definition-min = "50";
+    preferred-definition-max = "200";
+  };
+
+  # 출처 신뢰도 등급 — 도메인 패턴 → (tier, score, label)
+  source-tiers = [
+    { pattern = ".edu"; tier = "A"; score = "0.9"; label = "학술기관"; }
+    { pattern = ".go.kr"; tier = "A"; score = "0.85"; label = "정부기관"; }
+    { pattern = ".ac.kr"; tier = "A"; score = "0.85"; label = "대학"; }
+    { pattern = "blog.naver.com"; tier = "C"; score = "0.5"; label = "네이버블로그"; }
+    { pattern = "tistory.com"; tier = "C"; score = "0.5"; label = "티스토리"; }
+    { pattern = "velog.io"; tier = "C"; score = "0.55"; label = "벨로그"; }
+  ];
+
+  # 정의 추출 우선순위 — 이 패턴이 포함된 문장을 정의로 선택
+  definition-patterns = [
+    "란," "이란," "란 " "이란 "  # "X란, Y이다" 형태
+    "이다." "입니다."             # 서술형 정의
+  ];
+
+  # 품질 가중치 — 전체 품질 = confidence * w1 + def_quality * w2 + source_quality * w3
+  quality-weights = {
+    confidence = "0.4";
+    definition = "0.3";
+    source = "0.3";
+  };
+
+  # batch 184 (2026-04-16): 정의 길이 밴드 → 품질 점수 규칙.
+  # Rust 쪽에서 `if def_len < min ... else if def_len > max ... else if in preferred range ... else ...`
+  # hardcode 로 쓰던 0.3 / 0.6 / 1.0 / 0.8 밴드를 `.px` owner 로 이관.
+  # 각 entry 의 when 은 다음 canonical 값 중 하나:
+  #   - "below-min"              (definition length < thresholds.min-definition-length)
+  #   - "above-max"              (definition length > thresholds.max-definition-length)
+  #   - "in-preferred-range"     (preferred-definition-min <= def len <= preferred-definition-max)
+  #   - "otherwise"              (위 어디에도 해당하지 않음 — fallback)
+  definition-quality-bands = [
+    { when = "below-min"; quality = "0.3"; }
+    { when = "above-max"; quality = "0.6"; }
+    { when = "in-preferred-range"; quality = "1.0"; }
+    { when = "otherwise"; quality = "0.8"; }
+  ];
+
+  # batch 184: unknown source fallback (source-tiers 에 match 되는 항목이 없을 때).
+  unknown-source = {
+    score = "0.3";
+    label = "기타(D)";
+  };
+
+  # batch 184: 출처 집합이 비어 있을 때 (sources 배열 길이 0) 사용하는 label.
+  empty-source-label = "없음";
+
+  # 흡수 거부 사유 (이 중 하나라도 해당하면 거부)
+  reject-patterns = [
+    "동음이의" "disambiguation" "모호성" "다른 뜻"
+  ];
+
+  # canonical-reason-keys / canonical-warning-keys — `evaluateAbsorption` 이
+  # 반환할 수 있는 reason / warning 키 enum 목록 (ratchet/문서화용).
+  # Rust / fixture 가 반환값이 이 집합 안에 있는지 확인할 때 쓴다. 실제 텍스트
+  # 조립은 evaluateAbsorption lambda 안에서 string interpolation 으로 수행된다.
+  canonical-reason-keys = [
+    "accept"
+    "reject-low-confidence"
+    "reject-low-quality"
+  ];
+  canonical-warning-keys = [
+    "definition-below-min"
+    "definition-above-max"
+    "definition-outside-preferred"
+    "source-quality-low"
+    "no-sources"
+  ];
+
+  # output-fragment-envelope — puck webview 에 `OutputFragment` 로 전달되는
+  # absorb outcome 의 producer / contract / route / visibility / kind 정본.
+  # Rust adapter 는 이 값들을 그대로 fragment 필드에 채우고, content 본문은
+  # evaluateAbsorption 이 만든 `org-body` 를 `content_org` 로 싣는다.
+  output-fragment-envelope = {
+    producer = "pnix";
+    producer-contract = "v1";
+    producer-route = "pnix.output.absorb-outcome";
+    kind = "absorb-outcome";
+    visibility = "dev";
+  };
+
+  # evaluateAbsorption — emergent search 결과의 흡수 가능 여부 + quality score
+  # + 사용자용 reason/warnings 텍스트 + OutputFragment `.org` body 를 계산하는
+  # `.px eval owner`. puck Rust `absorb_search_result` 가 pnix-eval library 로
+  # 이 lambda 를 호출한다. URL pattern matching 은 pnix-eval 에서 어려워 Rust
+  # 가 source-tiers 를 먼저 lookup 해 source-scores: [Float] 로 pre-compute 해
+  # payload 로 넘긴다. 수치 threshold / weight / band quality 도 Rust 가
+  # string→Float 로 parse 해 payload 에 실어 보낸다.
+  #
+  # payload shape:
+  #   { confidence: Float,
+  #     definition-length: Int,
+  #     source-scores: [Float],
+  #     thresholds: { min-confidence, min-quality-score, min-definition-length,
+  #                   max-definition-length, preferred-definition-min,
+  #                   preferred-definition-max } (전부 Float/Int),
+  #     weights: { confidence, definition, source } (Float),
+  #     bands: [ { when: String, quality: Float } ] }
+  # 반환:
+  #   { proof, used-px-owner, allow: Bool, quality-score: Float,
+  #     def-quality: Float, avg-source: Float, band-when: String,
+  #     reason: String (canonical-reason-keys 중 하나),
+  #     reason-text: String (string interpolation 으로 렌더된 완성 문구),
+  #     warnings: [String] (canonical-warning-keys 부분집합),
+  #     warnings-text: [String] (각 warning 키의 완성 문구),
+  #     org-body: String (OutputFragment `content_org` 본문) }
+  # 구현 note: `builtins.foldl'` + `builtins.replaceStrings` 는 pnixc --eval 에
+  # 서 "evaluation environment dropped" / "missing from item value" 버그가
+  # 있어 둘 다 쓰지 않는다. band lookup 은 `builtins.filter` + `builtins.head`,
+  # source-sum 은 named recursive lambda, reason/warning 텍스트는 Nix string
+  # interpolation + if/else 체인으로 inline 조립한다. warnings 리스트의 text
+  # 버전도 같은 if/else 를 concat 으로 더해 만든다 (`builtins.map` 은 정상
+  # 동작하지만 `.text` 조립을 한 곳에 모아두는 편이 읽기 쉽다).
+  evaluateAbsorption = payload: (
+    let
+      band-when = (
+        if payload.definition-length < payload.thresholds.min-definition-length then "below-min"
+        else if payload.definition-length > payload.thresholds.max-definition-length then "above-max"
+        else if payload.definition-length >= payload.thresholds.preferred-definition-min
+                && payload.definition-length <= payload.thresholds.preferred-definition-max
+          then "in-preferred-range"
+        else "otherwise"
+      );
+      matched-bands = builtins.filter (b: b.when == band-when) payload.bands;
+      def-quality = if (builtins.length matched-bands) > 0
+        then (builtins.head matched-bands).quality
+        else 0.0;
+      source-count = builtins.length payload.source-scores;
+      source-sum = (
+        let sum = xs: if (builtins.length xs) == 0 then 0.0
+          else (builtins.head xs) + sum (builtins.tail xs);
+        in sum payload.source-scores
+      );
+      avg-source = if source-count == 0 then 0.0 else source-sum / source-count;
+      quality-score = payload.confidence * payload.weights.confidence
+                      + def-quality * payload.weights.definition
+                      + avg-source * payload.weights.source;
+      allow = quality-score >= payload.thresholds.min-quality-score
+              && payload.confidence >= payload.thresholds.min-confidence;
+
+      # reason key — allow 이면 "accept", 아니면 가장 먼저 실패한 기준.
+      # confidence 실패가 quality 실패보다 우선이다 (source-level vs
+      # aggregate 구분).
+      reason = (
+        if allow then "accept"
+        else if payload.confidence < payload.thresholds.min-confidence
+          then "reject-low-confidence"
+        else "reject-low-quality"
+      );
+
+      # warnings keys — allow/reject 와 독립적으로 평가.
+      warn-def-below = payload.definition-length < payload.thresholds.min-definition-length;
+      warn-def-above = payload.definition-length > payload.thresholds.max-definition-length;
+      warn-def-outside = (!warn-def-below) && (!warn-def-above)
+        && (payload.definition-length < payload.thresholds.preferred-definition-min
+            || payload.definition-length > payload.thresholds.preferred-definition-max);
+      warn-no-sources = source-count == 0;
+      warn-source-low = source-count > 0 && avg-source < 0.5;
+      warnings = (
+        (if warn-def-below then [ "definition-below-min" ] else [])
+        ++ (if warn-def-above then [ "definition-above-max" ] else [])
+        ++ (if warn-def-outside then [ "definition-outside-preferred" ] else [])
+        ++ (if warn-no-sources then [ "no-sources" ] else [])
+        ++ (if warn-source-low then [ "source-quality-low" ] else [])
+      );
+
+      # percent 문자열 — float 0..1 → "85" / "33.7" 형태. pnixc 에서 `builtins.
+      # floor` 가 없어 정수 반올림 대신 raw toString 을 쓴다. 대부분의 경우
+      # Float 이 정수값이면 "85" 로 나오고, 아니면 소수점 한두 자리로 나온다.
+      pct = n: builtins.toString (n * 100.0);
+
+      # reason-text — if/else 체인 owner. string interpolation 으로 값 삽입.
+      reason-text = (
+        if reason == "accept" then "흡수 가능 — 품질 ${pct quality-score}%"
+        else if reason == "reject-low-confidence"
+          then "검색 신뢰도 ${pct payload.confidence}% 가 기준 ${pct payload.thresholds.min-confidence}% 미만"
+        else if reason == "reject-low-quality"
+          then "품질 점수 ${pct quality-score}% 가 기준 ${pct payload.thresholds.min-quality-score}% 미만"
+        else reason
+      );
+
+      # warnings-text — 같은 if/else 체인으로 평가한 뒤 warnings 와 동일 순서
+      # 로 concat.
+      warnings-text = (
+        (if warn-def-below
+          then [ "정의가 너무 짧습니다 (${builtins.toString payload.definition-length}자, 최소 ${builtins.toString payload.thresholds.min-definition-length}자)" ]
+          else [])
+        ++ (if warn-def-above
+          then [ "정의가 너무 깁니다 (${builtins.toString payload.definition-length}자, 최대 ${builtins.toString payload.thresholds.max-definition-length}자)" ]
+          else [])
+        ++ (if warn-def-outside
+          then [ "정의 길이가 권장 범위 밖입니다 (${builtins.toString payload.definition-length}자, 권장 ${builtins.toString payload.thresholds.preferred-definition-min}–${builtins.toString payload.thresholds.preferred-definition-max}자)" ]
+          else [])
+        ++ (if warn-no-sources
+          then [ "출처 정보가 없습니다" ]
+          else [])
+        ++ (if warn-source-low
+          then [ "출처 신뢰도가 낮습니다 (${pct avg-source}%)" ]
+          else [])
+      );
+
+      # org-body — OutputFragment `content_org` 본문. 제목 / 사유 / 품질 /
+      # 경고 순서로 조립. 경고가 비어 있으면 warn-lines 도 빈 문자열.
+      warn-lines = (
+        if (builtins.length warnings-text) == 0 then ""
+        else "\n" + builtins.concatStringsSep "\n"
+          (builtins.map (w: "- 경고: " + w) warnings-text)
+      );
+      title = if allow then "* 흡수 결과 (accept)" else "* 흡수 결과 (reject)";
+      org-body =
+        title + "\n"
+        + "- 사유: " + reason-text + "\n"
+        + "- 품질: ${pct quality-score}% (신뢰도 ${pct payload.confidence}%, 정의 ${pct def-quality}%, 출처 ${pct avg-source}%)"
+        + warn-lines;
+    in {
+      proof = "absorb-policy-evaluateAbsorption";
+      used-px-owner = true;
+      allow = allow;
+      quality-score = quality-score;
+      def-quality = def-quality;
+      avg-source = avg-source;
+      band-when = band-when;
+      reason = reason;
+      reason-text = reason-text;
+      warnings = warnings;
+      warnings-text = warnings-text;
+      org-body = org-body;
+    }
+  );
+}

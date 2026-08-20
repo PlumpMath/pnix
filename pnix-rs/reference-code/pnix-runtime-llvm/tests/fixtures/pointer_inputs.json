@@ -1,0 +1,58 @@
+{
+  "meta": {
+    "version": "fxcore@0.1",
+    "stage": 2
+  },
+  "name": "ptr_inputs",
+  "types": [],
+  "inputs": [
+    {"name": "s", "ty": "String"},
+    {"name": "l", "ty": "List"},
+    {"name": "a", "ty": "AttrSet"}
+  ],
+  "morphisms": [
+    {
+      "name": "concat",
+      "input": "String",
+      "output": "String",
+      "inputs": [
+        {"name": "lhs", "ty": "String"},
+        {"name": "rhs", "ty": "String"}
+      ],
+      "outputs": [
+        {"name": "out", "ty": "String"}
+      ],
+      "effect": "pure"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "n1",
+      "uses": "concat",
+      "kind": "Normal",
+      "optional": false,
+      "scope": null,
+      "priority": 0,
+      "cost": null
+    }
+  ],
+  "edges": [
+    {
+      "from": "input",
+      "to": "n1",
+      "from_input": "s",
+      "from_port": null,
+      "to_port": "lhs",
+      "cond": null
+    },
+    {
+      "from": "input",
+      "to": "n1",
+      "from_input": "s",
+      "from_port": null,
+      "to_port": "rhs",
+      "cond": null
+    }
+  ],
+  "scopes": []
+}

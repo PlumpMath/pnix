@@ -1,0 +1,23 @@
+[package]
+name = "pnix-runtime-kernel"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+autobenches = false
+
+[features]
+default = []
+seto-pack = ["pnix-seto-pack"]
+seto-pack-json = ["seto-pack", "pnix-seto-pack/serde_json"]
+manual-bench = []
+
+[dependencies]
+pnix-runtime-api = { path = "../pnix-runtime-api" }
+pnix-fxcore-types = { path = "../pnix-fxcore-types" }
+pnix-core = { path = "../pnix-core" }
+pnix-seto-pack = { path = "../pnix-seto-pack", optional = true }
+
+[[bench]]
+name = "pack_loading"
+harness = false
+required-features = ["manual-bench"]

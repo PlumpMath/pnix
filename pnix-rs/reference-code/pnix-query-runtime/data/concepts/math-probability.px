@@ -1,0 +1,166 @@
+# 확률통계 (Probability and Statistics)
+[
+  {
+    term-ko = "확률";
+    definition-ko = "사건이 일어날 가능성을 0과 1 사이의 실수로 나타낸 것. 콜모고로프 공리계에 의해 정의되며, P(Ω) = 1, P(∅) = 0, 서로 배반인 사건의 확률은 합으로 주어진다";
+    formal-name-en = "probability";
+    formal-symbol = "P";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["조건부확률" "기대값" "정규분포"];
+    formula = "0 ≤ P(A) ≤ 1";
+    category = "확률통계";
+  }
+  {
+    term-ko = "평균";
+    definition-ko = "자료 값들의 합을 자료의 개수로 나눈 값(산술평균). 확률변수 X의 경우 기대값 E[X]에 해당하며, 분포의 중심 위치를 나타낸다";
+    formal-name-en = "mean";
+    formal-symbol = "μ";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["중앙값" "기대값" "분산"];
+    formula = "μ = (1/n) Σᵢ xᵢ";
+    category = "확률통계";
+  }
+  {
+    term-ko = "중앙값";
+    definition-ko = "자료를 크기 순으로 정렬했을 때 정중앙에 위치하는 값. 이상치(outlier)에 강건하며, 비대칭 분포에서 평균보다 대표값으로 적합할 수 있다";
+    formal-name-en = "median";
+    formal-symbol = "";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["평균" "분산"];
+    category = "확률통계";
+  }
+  {
+    term-ko = "분산";
+    definition-ko = "확률변수가 기대값으로부터 떨어진 정도의 제곱 평균. Var(X) = E[(X - μ)²] = E[X²] - (E[X])²이며, 산포도의 기본 측도이다";
+    formal-name-en = "variance";
+    formal-symbol = "σ²";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["표준편차" "평균" "기대값"];
+    formula = "σ² = E[(X - μ)²]";
+    category = "확률통계";
+  }
+  {
+    term-ko = "표준편차";
+    definition-ko = "분산의 양의 제곱근. 원래 자료와 같은 단위를 가지며, 자료가 평균으로부터 평균적으로 얼마나 떨어져 있는지를 나타낸다";
+    formal-name-en = "standard deviation";
+    formal-symbol = "σ";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["분산" "평균" "정규분포"];
+    formula = "σ = √(σ²)";
+    category = "확률통계";
+  }
+  {
+    term-ko = "정규분포";
+    definition-ko = "평균 μ와 분산 σ²로 매개변수화되는 연속 확률분포. 확률밀도함수가 종 모양의 대칭 곡선이며, 중심극한정리에 의해 통계학의 핵심 분포이다";
+    formal-name-en = "normal distribution";
+    formal-symbol = "N(μ, σ²)";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["평균" "표준편차" "분산" "확률"];
+    formula = "f(x) = (1/σ√(2π)) exp(-(x-μ)²/(2σ²))";
+    category = "확률통계";
+  }
+  {
+    term-ko = "이항분포";
+    definition-ko = "성공 확률 p인 베르누이 시행을 n번 독립적으로 반복할 때 성공 횟수 X의 분포. P(X=k) = C(n,k) pᵏ(1-p)ⁿ⁻ᵏ이며, E[X] = np, Var(X) = np(1-p)이다";
+    formal-name-en = "binomial distribution";
+    formal-symbol = "B(n, p)";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["확률" "정규분포" "기대값" "분산"];
+    formula = "P(X=k) = C(n,k) · pᵏ · (1-p)ⁿ⁻ᵏ";
+    category = "확률통계";
+  }
+  {
+    term-ko = "기대값";
+    definition-ko = "확률변수의 가능한 값들을 확률로 가중 평균한 것. 이산의 경우 E[X] = Σ xᵢP(xᵢ), 연속의 경우 E[X] = ∫ xf(x)dx이다. 장기적 평균 결과를 나타낸다";
+    formal-name-en = "expected value";
+    formal-symbol = "E[X]";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["평균" "분산" "확률"];
+    formula = "E[X] = Σ xᵢ · P(X = xᵢ)";
+    category = "확률통계";
+  }
+  {
+    term-ko = "조건부확률";
+    definition-ko = "사건 B가 일어났다는 조건 하에서 사건 A가 일어날 확률. P(A|B) = P(A∩B)/P(B) (P(B) > 0)로 정의되며, 베이즈 정리의 기초이다";
+    formal-name-en = "conditional probability";
+    formal-symbol = "P(A|B)";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["확률" "기대값"];
+    formula = "P(A|B) = P(A ∩ B) / P(B)";
+    category = "확률통계";
+  }
+  {
+    term-ko = "이항정리";
+    definition-ko = "(a+b)ⁿ을 전개하는 공식. 이항계수 C(n,k)를 사용하여 각 항의 계수를 결정한다. 파스칼의 삼각형과 관련된다";
+    formal-name-en = "binomial theorem";
+    formal-symbol = "";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["조합" "이항분포" "파스칼"];
+    formula = "(a+b)ⁿ = Σₖ₌₀ⁿ C(n,k)·aⁿ⁻ᵏ·bᵏ";
+    category = "확률통계";
+  }
+  {
+    term-ko = "순열";
+    definition-ko = "n개에서 r개를 순서 있게 뽑는 경우의 수. P(n,r) = n!/(n-r)!이다";
+    formal-name-en = "permutation";
+    formal-symbol = "P(n,r)";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["조합" "팩토리얼" "경우의수"];
+    formula = "P(n,r) = n! / (n-r)!";
+    category = "확률통계";
+  }
+  {
+    term-ko = "조합";
+    definition-ko = "n개에서 r개를 순서 없이 뽑는 경우의 수. C(n,r) = n!/(r!(n-r)!)이다";
+    formal-name-en = "combination";
+    formal-symbol = "C(n,r)";
+    context = "Math.Probability";
+    domain = "수학";
+    related-concepts = ["순열" "팩토리얼" "이항정리"];
+    formula = "C(n,r) = n! / (r! · (n-r)!)";
+    category = "확률통계";
+  }
+  {
+    term-ko = "표본";
+    definition-ko = "모집단에서 추출한 부분 집합. 통계적 추론의 기초이며, 표본 크기가 클수록 모집단을 잘 대표한다";
+    formal-name-en = "sample";
+    formal-symbol = "";
+    context = "Math.Statistics";
+    domain = "수학";
+    related-concepts = ["모집단" "표본평균" "신뢰구간"];
+    category = "확률통계";
+  }
+  {
+    term-ko = "표본평균";
+    definition-ko = "표본에 속한 관측값들의 산술평균. 모평균의 불편추정량이며, 중심극한정리에 의해 정규분포에 근사한다";
+    formal-name-en = "sample mean";
+    formal-symbol = "x̄";
+    context = "Math.Statistics";
+    domain = "수학";
+    related-concepts = ["표본" "평균" "중심극한정리" "신뢰구간"];
+    formula = "x̄ = (Σxᵢ) / n";
+    category = "확률통계";
+  }
+  {
+    term-ko = "신뢰구간";
+    definition-ko = "모수가 포함될 것으로 기대되는 구간. 95% 신뢰구간이면 반복 표본추출 시 100번 중 약 95번은 모수를 포함한다";
+    formal-name-en = "confidence interval";
+    formal-symbol = "";
+    context = "Math.Statistics";
+    domain = "수학";
+    related-concepts = ["표본평균" "표준편차" "정규분포"];
+    formula = "x̄ ± z·σ/√n";
+    category = "확률통계";
+  }
+]

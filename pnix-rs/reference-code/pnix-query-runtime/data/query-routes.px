@@ -1,0 +1,332 @@
+[
+  {
+    route = "concept-definition-lookup";
+    query-context = "Doghouse.QueryModel.ConceptDefinition";
+    include-hop-knowledge = "true";
+    default-preview = "5";
+    kernel-direct-fact-predicates = ["definition-ko" "formal-symbol" "formula"];
+    # batch 76 (2026-04-15): doghouse store 의 concept_dialogue_envelope_from_store
+    # 가 `"interp.concept.direct.{term}"` / `"interp.concept.rich.{term}"` 로
+    # interpretation id 를 만들어서 `ontology-selected-interpretation` fact obj
+    # 가 `"interp.concept."` prefix 를 갖는다. kernel 도 같은 prefix 를 써야
+    # store test `starts_with("interp.concept.")` 가 primary flip 에서 통과한다.
+    kernel-direct-interpretation-id = "interp.concept.direct.${term}";
+    kernel-rich-interpretation-id = "interp.concept.rich.${term}";
+    # ontology evaluation policy weights (override defaults per route)
+    policy-coverage = "1.0";
+    policy-coherence = "1.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "concept-predicate-lookup";
+    query-context = "Doghouse.QueryModel.Predicate";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    # batch 74 (2026-04-15): doghouse store 의 predicate_dialogue_envelope_from_store
+    # 가 `format!("interp.predicate.{term}.{fact_predicate}")` 로 쓰므로
+    # kernel 도 동일 format 으로 parity. step 4.3 predicate primary flip 의
+    # `ontology-selected-interpretation` fact obj parity 포인트다.
+    kernel-interpretation-id = "interp.predicate.${term}.${predicate}";
+    policy-coverage = "1.5";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.3";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "cross-concept-comparison";
+    query-context = "Doghouse.QueryModel.CrossConcept";
+    include-hop-knowledge = "true";
+    default-preview = "4";
+    # batch 86 (2026-04-15): cross-concept lane kernel primary flip 준비.
+    # store 의 ontology selection 이 `interp.cross.direct.{term_a}.{term_b}` /
+    # `interp.cross.rich.{term_a}.{term_b}` 를 사용하므로 kernel 도 같은
+    # template 을 써야 primary flip 후 `ontology-selected-interpretation`
+    # parity 가 맞는다.
+    kernel-direct-interpretation-id = "interp.cross.direct.${term_a}.${term_b}";
+    kernel-rich-interpretation-id = "interp.cross.rich.${term_a}.${term_b}";
+    policy-coverage = "1.3";
+    policy-coherence = "1.2";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "concept-domain-listing";
+    query-context = "Doghouse.QueryModel.DomainListing";
+    include-hop-knowledge = "false";
+    default-preview = "8";
+    # batch 85 (2026-04-15): domain listing lane kernel primary flip 준비.
+    # store 의 ontology selection 이 `interp.domain.list.direct.${domain}` /
+    # `interp.domain.list.rich.${domain}` 를 사용하므로 kernel 도 같은 template
+    # 을 써야 primary flip 후 `ontology-selected-interpretation` parity 가 맞는다.
+    kernel-direct-interpretation-id = "interp.domain.list.direct.${domain}";
+    kernel-rich-interpretation-id = "interp.domain.list.rich.${domain}";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.6";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "sentence-semantic-analysis";
+    query-context = "Doghouse.SentenceAnalysis";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    # batch 87 (2026-04-15): single-clause sentence-analysis lane kernel primary flip 준비.
+    kernel-direct-interpretation-id = "interp.sentence.direct.${mood}";
+    kernel-rich-interpretation-id = "interp.sentence.rich.${mood}";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "multi-clause-analysis";
+    query-context = "Doghouse.MultiClause";
+    include-hop-knowledge = "false";
+    default-preview = "4";
+    # batch 90 (2026-04-15): multi-clause sentence-analysis lane kernel primary flip 준비.
+    kernel-direct-interpretation-id = "interp.multiclause.direct.${relation}.${clause_count}";
+    kernel-rich-interpretation-id = "interp.multiclause.rich.${relation}.${clause_count}";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "ontology-invert-causal-inverse";
+    query-context = "Doghouse.QueryModel.InvertCausal";
+    include-hop-knowledge = "true";
+    default-preview = "3";
+    # batch 88 (2026-04-15): why / invert lane kernel primary flip 준비.
+    # standalone kernel `answer_why(...)` 가 production data 에서도 route spec 을
+    # 가져올 수 있도록 causal-inverse route 를 실데이터 query-routes.px 에 추가.
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "ontology-invert-evidence-inverse";
+    query-context = "Doghouse.QueryModel.InvertEvidence";
+    include-hop-knowledge = "true";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "ontology-invert-counterfactual";
+    query-context = "Doghouse.QueryModel.InvertCounterfactual";
+    include-hop-knowledge = "true";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "ontology-invert-contradiction-detect";
+    query-context = "Doghouse.QueryModel.InvertContradiction";
+    include-hop-knowledge = "true";
+    default-preview = "4";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "ontology-invert-alternative";
+    query-context = "Doghouse.QueryModel.InvertAlternative";
+    include-hop-knowledge = "true";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "concept-continuation-elaborate";
+    query-context = "Doghouse.QueryModel.ContinuationElaborate";
+    include-hop-knowledge = "true";
+    default-preview = "4";
+    policy-coverage = "1.4";
+    policy-coherence = "0.0";
+    policy-loss = "1.3";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "concept-continuation-example";
+    query-context = "Doghouse.QueryModel.ContinuationExample";
+    include-hop-knowledge = "true";
+    default-preview = "4";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "concept-continuation-related";
+    query-context = "Doghouse.QueryModel.ContinuationRelated";
+    include-hop-knowledge = "true";
+    default-preview = "5";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "physics-formula-computation";
+    query-context = "Doghouse.QueryModel.PhysicsFormulaComputation";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "equation-solve";
+    query-context = "Doghouse.QueryModel.EquationSolve";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "calculus-differentiate";
+    query-context = "Doghouse.QueryModel.CalculusDifferentiate";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "calculus-integrate";
+    query-context = "Doghouse.QueryModel.CalculusIntegrate";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "vector-computation";
+    query-context = "Doghouse.QueryModel.VectorComputation";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "ast-computation";
+    query-context = "Doghouse.QueryModel.ExpressionComputation";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "lightweight-korean-dialogue";
+    query-context = "Doghouse.QueryModel.LightDialogue";
+    include-hop-knowledge = "false";
+    default-preview = "2";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "lightweight-korean-dialogue-handoff";
+    query-context = "Doghouse.QueryModel.LightDialogueHandoff";
+    include-hop-knowledge = "false";
+    default-preview = "3";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "lightweight-korean-dialogue-held";
+    query-context = "Doghouse.QueryModel.LightDialogueHeld";
+    include-hop-knowledge = "false";
+    default-preview = "2";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+  }
+  {
+    route = "recipe-os-handoff";
+    query-context = "Doghouse.QueryModel.RecipeOS";
+    include-hop-knowledge = "false";
+    default-preview = "1";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+    # OS 작업 요청 → recipe-os.px에서 handoff 생성
+    # 트리거: "열어줘" "실행해줘" "찾아줘" "클립보드" "알림" "프로세스"
+    recipe-source = "recipe-os.px";
+  }
+  {
+    route = "coding-agent-handoff";
+    query-context = "Doghouse.QueryModel.CodingAgent";
+    include-hop-knowledge = "false";
+    default-preview = "1";
+    policy-coverage = "0.0";
+    policy-coherence = "0.0";
+    policy-loss = "0.0";
+    policy-cost = "0.0";
+    policy-accept-threshold = "0.0";
+    # coding-agent typed artifact handoff:
+    # 사용자 utterance 가 *.px 분류기로 coding-agent intent 로 분류되면 doghouse 는
+    # 자기 redb store 의 `coding_artifacts` family table 에서 가장 최근 typed
+    # `coding.request` (또는 family 안의 다른 latest) artifact 를 retrieve 해서
+    # envelope output_fragments 로 carry 한다.
+    #
+    # 헌법 §16 정렬: doghouse 는 typed artifact 를 *생성/실행* 하지 않는다.
+    # artifact 의 정본 owner 는 *client (puck-cli / freecat-cli)* 의
+    # `pnix-executor-graph::cli::build_coding_agent_request_with_probe` 다.
+    # client 가 자기 cwd / git probe 로 emit 한 artifact 를 doghouse store 의
+    # `append_coding_memory_artifact` 로 push 한 뒤, 사용자 dialogue lane 이
+    # 그것을 retrieve 해 typed surface 로 보여준다. server 측 git subprocess /
+    # file system scan 0.
+    artifact-family = "coding.request";
+    artifact-owner = "puck-cli|freecat-cli";
+    store-table = "coding_artifacts_by_family";
+  }
+]

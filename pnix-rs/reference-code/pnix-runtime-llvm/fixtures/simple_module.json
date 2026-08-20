@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "replay_hash": "test_hash_12345",
+    "version": "1.0"
+  },
+  "name": "simple_module",
+  "types": [],
+  "inputs": [
+    {
+      "name": "value",
+      "ty": "Int"
+    }
+  ],
+  "morphisms": [
+    {
+      "name": "add",
+      "inputs": [{"name": "a", "ty": "Int"}],
+      "outputs": [{"name": "sum", "ty": "Int"}],
+      "effect": "pure"
+    }
+  ],
+  "nodes": [
+    {
+      "name": "result",
+      "uses": "add",
+      "kind": "Normal"
+    }
+  ],
+  "edges": [
+    {
+      "from": "input",
+      "to": "result",
+      "from_input": "value",
+      "from_port": null,
+      "to_port": null,
+      "cond": null
+    }
+  ],
+  "scopes": []
+}

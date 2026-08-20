@@ -1,0 +1,161 @@
+# 대화 응답 템플릿 (hot-reloadable)
+# 딱딱한 fact 나열 대신 자연스러운 한국어 대화체
+{
+  # 개념 정의 응답
+  concept-response = {
+    with-formula = "${term}은(는) ${definition} 공식은 ${formula}이다.";
+    without-formula = "${term}은(는) ${definition}";
+    with-related = " 관련 개념으로 ${related}이(가) 있다.";
+    unknown = "'${term}'에 대해서는 아직 정확한 정의가 없다. 더 구체적으로 물어봐 줄래?";
+  };
+
+  # 계산 응답
+  computation-response = {
+    result = "계산 결과는 ${result}이다.";
+    unit-convert = "${from_value} ${from_unit}은(는) ${result} ${to_unit}이다.";
+    percentage = "${base}의 ${pct}%는 ${result}이다.";
+  };
+
+  # 대화 맥락 참조
+  context-response = {
+    follow-up = "${prev_topic}에 대해 더 알려주자면, ${answer}";
+    clarify = "어떤 맥락에서 ${term}을(를) 물어보는 건지? 예를 들어 ${suggestions}";
+    confirm = "맞다. ${confirmation}";
+  };
+
+  # 문장 분석 응답
+  sentence-response = {
+    single = "${verb} 행동을 분석했다. ${roles_desc}";
+    multi-clause = "${clause_count}개 절로 이루어진 문장이다. ${clauses_desc}";
+    negated = "${subject}은(는) ${verb}을(를) 하지 않았다.";
+  };
+
+  # 인사/잡담 패턴
+  greeting-patterns = ["안녕" "안녕하세요" "하이" "반가워" "헬로"];
+  greeting-response = "안녕! 수학, 물리, 화학, 생물 관련 질문이나, 한국어 문장 분석을 할 수 있다. 뭘 알고 싶어?";
+
+  farewell-patterns = ["잘가" "바이" "수고" "고마워" "감사"];
+  farewell-response = "고마워! 또 궁금한 거 있으면 물어봐.";
+
+  # 맥락 대명사 매핑
+  context-pronouns = ["그거" "그것" "이거" "이것" "저거" "그건" "이건"];
+
+  # batch 185 (2026-04-16): `build_output_fragments` 가 생성하는
+  # `response-document` fragment 의 `.org` 본문 template.
+  # Rust 는 prefix match + `${content}` / `${count}` 치환만 수행한다.
+  # 이전에는 conversation.rs 가 "* Ontology Response\n", "** Q: ", "- Facts: "
+  # 같은 literal 을 하드코딩했다.
+  #
+  # 주의: 이 템플릿은 doghouse-core 쪽 legacy `build_output_fragments` path 용
+  # 이다. pnix-query-runtime 의 `response-document-schema` (kernel-base-facts.px)
+  # 와는 별개로 존재한다 — 두 path 가 수렴되면 한쪽으로 통일된다.
+  response-document-org-title = "* Ontology Response";
+  response-document-org-facts-count-template = "- Facts: ${count}";
+  response-document-org-transcript-user-prefix = "user: ";
+  response-document-org-transcript-doghouse-prefix = "doghouse: ";
+  response-document-org-q-line-template = "** Q: ${content}";
+  response-document-org-answer-line-template = "${content}";
+
+  # 후속 질문은 하드코딩이 아니라 ontology 파이프라인이 처리한다.
+  # 이전 context fact + 현재 발화 → ontology.lift → evaluate → select
+  # 여기는 대화 UI 표현만 담당.
+
+  # 못 알아들었을 때
+  fallback-response = "정확히 무슨 뜻인지 모르겠다. 좀 더 구체적으로 물어봐 줄래? 예를 들어 '미분은 뭐야?', '3 더하기 5', '영희가 사과를 줬다' 같이.";
+
+  # pnix-query-runtime kernel 응답 조립 템플릿.
+  # Rust는 section/part 리스트를 읽고 generic condition 평가 + ${...} 치환만 수행한다.
+  kernel-definition-section = {
+    join-with = ". ";
+    suffix = ".";
+    parts = [
+      { when = "always"; template = "${term}: ${definition}"; }
+      { when = "always"; field-non-empty = "unit-ko"; template = "단위는 ${unit}"; }
+      { when = "always"; field-non-empty = "formal-name-en"; template = "영어 이름은 ${formal-en}"; }
+      { when = "always"; field-non-empty = "formal-symbol"; template = "기호는 ${symbol}"; }
+      { when = "always"; field-non-empty = "formula"; template = "공식은 ${formula}"; }
+      {
+        when = "always";
+        list-non-empty = "related-concepts";
+        template = "관련 개념으로 ${related}이(가) 있다";
+      }
+      {
+        when = "always";
+        scope-is = "detailed";
+        template = "연결 지식으로 ${connected}이(가) 있다";
+      }
+    ];
+  };
+
+  kernel-why-section = {
+    join-with = " ";
+    suffix = "";
+    parts = [
+      { when = "always"; field-non-empty = "why"; template = "'${term}'이(가) 그런 이유: ${why}"; }
+      { when = "always"; field-non-empty = "boundary-conditions"; template = "경계 조건: ${boundary}"; }
+      { when = "always"; template = "truth-regime: ${regime}"; }
+    ];
+  };
+
+  kernel-property-section = {
+    join-with = "";
+    suffix = "";
+    parts = [
+      {
+        when = "always";
+        values-state = "empty";
+        template = "${term}의 ${label}는 지금 ontology에 없다.";
+      }
+      { when = "always"; values-state = "present"; template = "${term}의 ${label}: ${values}"; }
+    ];
+  };
+
+  # batch 74 (2026-04-15): P5.5 step 4.3 envelope shaping parity — per-predicate
+  # empty response override.
+  #
+  # doghouse store 의 `ConceptPredicateQuery::empty_response` (conversation.rs L1567)
+  # 는 predicate 별로 sentence structure 가 다르다:
+  #   - unit-ko  → "{term}에는 별도의 단위가 정의되어 있지 않다."
+  #   - formula  → "{term}에는 별도의 공식이 정의되어 있지 않다."
+  #   - inverse-of → "{term}에는 역연산이 정의되어 있지 않다."
+  # generic `kernel-property-section` empty template (`${term}의 ${label}는
+  # 지금 ontology에 없다.`) 는 이 sentence 들과 contains() substring parity 가
+  # 안 맞아서 store test 가 회귀한다. 이 map 이 predicate 별 override 를 owner.
+  #
+  # loader 계약:
+  #   - attrset of {predicate-key -> template-string}
+  #   - predicate-key 는 query-classifiers.px 의 predicate-classifiers.predicate
+  #     값과 매칭되어야 한다 (loader 는 placeholder 만 검증)
+  #   - ${term} placeholder 만 허용
+  #   - key 가 없으면 kernel-property-section 의 empty template fallback
+  kernel-property-empty-by-predicate = {
+    unit-ko = "${term}에는 별도의 단위가 정의되어 있지 않다.";
+    formula = "${term}에는 별도의 공식이 정의되어 있지 않다.";
+    inverse-of = "${term}에는 역연산이 정의되어 있지 않다.";
+  };
+
+  # kernel route summary — finalize_response에 전달되는 내부 요약 레이블.
+  # 사용자 표면에 노출되진 않지만 ontology trace/note에 들어가므로 .px가 정본.
+  #
+  # batch 72 (2026-04-15): P5.5 step 4 envelope shaping parity — property lane.
+  # property summary 에 `${label}` placeholder 추가. label 은 predicate
+  # classifier 의 `label-ko` (e.g., "단위", "공식", "기호", "역연산") 로
+  # 치환된다. doghouse store 의 predicate envelope summary 가
+  # `"...'{term}'의 {label}를 조회했다."` 형식으로 label 을 포함하는데,
+  # 이 parity 가 맞아야 향후 primary delegation 이 test contract 를
+  # 회귀 없이 통과할 수 있다.
+  # batch 75 (2026-04-15): P5.5 step 4.4 concept lane shaping parity (summary 시작).
+  # definition route summary 에 "온톨로지" 문자열 포함 + `${term}` placeholder
+  # 유지. doghouse store 의 concept envelope summary 가
+  # `"doghouse가 저장된 온톨로지에서 '{term}'(...)의 엄밀한 한글 정의를
+  # 조회하여 응답했다."` 형식이라 `contains("온톨로지")` 같은 store test
+  # assertion 과 parity 를 맞추려면 kernel 의 definition summary 도 동일
+  # 문자열을 포함해야 한다. domain / category placeholder 확장은 별도 batch
+  # 에서 (ConceptDefinition scalar_fields 의 category 접근 plumbing 필요).
+  kernel-route-summary = {
+    definition = "pnix standalone kernel이 저장된 온톨로지에서 '${term}'의 정의를 조회하여 응답했다.";
+    property = "pnix standalone kernel이 '${term}'의 ${label} 속성 질의를 처리했다.";
+    why = "pnix standalone kernel이 '${term}' why 질의를 처리했다.";
+    held = "pnix standalone kernel이 질의를 held로 남겼다.";
+  };
+}

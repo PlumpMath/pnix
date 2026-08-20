@@ -1,0 +1,78 @@
+# Handoff template manifest (정본).
+# 각 template의 메타데이터를 정의하고, content-file이 .px 템플릿을 가리킨다.
+# conversation.rs가 이 파일을 로드하여 store에 등록한다.
+[
+  {
+    id = "pnix.math.arithmetic.safe-handoff";
+    purpose = "safe arithmetic execution handoff";
+    execution-owner = "puck/freecat";
+    visibility = "safe-handoff";
+    parameters = ["expression" "lhs" "operator" "rhs"];
+    tags = ["math" "arithmetic" "safe-handoff"];
+    korean-label = "산술 계산 handoff";
+  }
+  {
+    id = "pnix.physics.newton-force.safe-handoff";
+    purpose = "safe newton-force execution handoff";
+    execution-owner = "puck/freecat";
+    visibility = "safe-handoff";
+    parameters = ["mass" "acceleration" "unit"];
+    tags = ["physics" "newton-force" "safe-handoff"];
+    korean-label = "뉴턴 힘 계산 handoff";
+  }
+  # M1 Recipe OS handoffs
+  {
+    id = "pnix.recipe.app.launch";
+    purpose = "앱 실행 handoff";
+    execution-owner = "puck/os";
+    visibility = "safe-handoff";
+    parameters = ["name"];
+    tags = ["recipe" "os" "launch"];
+    korean-label = "앱 실행";
+  }
+  {
+    id = "pnix.recipe.file.search";
+    purpose = "파일 검색 handoff";
+    execution-owner = "puck/os";
+    visibility = "safe-handoff";
+    parameters = ["query"];
+    tags = ["recipe" "os" "search"];
+    korean-label = "파일 검색";
+  }
+  {
+    id = "pnix.recipe.clipboard";
+    purpose = "클립보드 접근 handoff";
+    execution-owner = "puck/os";
+    visibility = "safe-handoff";
+    parameters = [];
+    tags = ["recipe" "os" "clipboard"];
+    korean-label = "클립보드";
+  }
+  {
+    id = "pnix.recipe.app.list";
+    purpose = "설치된 앱 목록 handoff";
+    execution-owner = "puck/os";
+    visibility = "safe-handoff";
+    parameters = [];
+    tags = ["recipe" "os" "list"];
+    korean-label = "앱 목록";
+  }
+  {
+    id = "pnix.recipe.notify";
+    purpose = "시스템 알림 handoff";
+    execution-owner = "puck/os";
+    visibility = "safe-handoff";
+    parameters = ["title" "body"];
+    tags = ["recipe" "os" "notify"];
+    korean-label = "알림";
+  }
+  {
+    id = "pnix.recipe.process.list";
+    purpose = "프로세스 목록 handoff";
+    execution-owner = "puck/os";
+    visibility = "safe-handoff";
+    parameters = [];
+    tags = ["recipe" "os" "process"];
+    korean-label = "프로세스 목록";
+  }
+]

@@ -1,0 +1,25 @@
+[package]
+name = "pnix-runtime-supervisor"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+description = "Local UDS supervisor for pnix process control-plane builtins"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+pnix-hash = { path = "../pnix-hash" }
+clap = { version = "4.6", features = ["derive"] }
+libc = "0.2"
+rustls = "0.23.41"
+ed25519-dalek = { version = "2.2", default-features = false, features = ["std"] }
+freecat-engine-abi = { path = "../freecat-engine-abi" }
+freecat-engine-runtime = { path = "../freecat-engine-runtime" }
+pnix-core = { path = "../pnix-core" }
+pnix-m-pnix = { path = "../pnix-m-pnix" }
+
+[[bin]]
+name = "pnix-supervisor"
+path = "src/bin/pnix-supervisor.rs"

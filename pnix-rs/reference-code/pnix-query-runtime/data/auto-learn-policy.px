@@ -1,0 +1,176 @@
+# OWNER-LAW NOTE (2026-05-10):
+#   pnix 는 LLM 없이 작동하는 self-sufficient deterministic AI 지능
+#   (CLAUDE.md OWNER-LAW CONSTITUTION). 이 file 의 comment / data 에
+#   substrate 안 LLM 자리 가정 (LLM as candidate sensor / peer /
+#   primary input / contribution organ) 이 남아있어도 모두 owner-law
+#   위반으로 *superseded*. 외부 LLM output 은 untrusted external prose
+#   일 뿐 substrate enumeration category 가 아님. legacy framing
+#   history retention.
+#
+# 자동 학습 정책 (정본).
+# held judgement 발생 시 자동으로 지식을 확장하는 루프의 정책.
+# hot-reload: 서버 실행 중 편집 → 즉시 반영.
+{
+  enabled = "false";
+
+  # ── 자동 학습된 fact의 생애주기 ──────────────────────
+  # 자동 학습 fact의 초기 status
+  initial-status = "Candidate";
+
+  # ⚠️ 순환 검증 방지: Candidate fact는 다른 fact의 검증 근거로 쓸 수 없다.
+  # 검증 시 include_candidate = false로 Accepted만 참조.
+  verification-only-accepted = "true";
+
+  # Candidate → Accepted 자동 승격 조건:
+  # 독립된 소스 2개 이상에서 교차 검증되어야 승격 (단순 참조 횟수가 아님)
+  auto-promote-independent-sources = "2";
+
+  # 추가: N번 이상 질의에서 정상 참조도 필요
+  auto-promote-after-references = "3";
+
+  # 자동 승격 없이 인간 검토 필요한 context
+  require-human-review = ["Medicine.*" "Law.*" "Finance.*"];
+
+  # batch 206: 한글 정의 문장 marker (auto_learn.rs 이관).
+  definition-sentence-markers = ["란" "이다" "이란"];
+
+  # ── 검색 소스 ───────────────────────────────────────
+  # ── 수학 검색 소스 ───────────────────────────────────
+  math-sources = [
+    {
+      id = "legal-provenance-required-math";
+      type = "gate";
+      url = "pnix://legal-provenance-required/math";
+      trust = "0.0";
+      note = "External math auto-learn is disabled until a source-specific legal provenance receipt passes the SQLite deny gate.";
+    }
+  ];
+
+  # ── 물리 검색 소스 ───────────────────────────────────
+  physics-sources = [
+    {
+      id = "legal-provenance-required-physics";
+      type = "gate";
+      url = "pnix://legal-provenance-required/physics";
+      trust = "0.0";
+      note = "External physics auto-learn is disabled until a source-specific legal provenance receipt passes the SQLite deny gate.";
+    }
+  ];
+
+  # ── 코드/tool 검색 소스 (수학/물리 검증용) ──────────
+  tool-sources = [
+    {
+      id = "legal-provenance-required-tool";
+      type = "gate";
+      url = "pnix://legal-provenance-required/tool";
+      trust = "0.0";
+      note = "External code/tool auto-learn is disabled until source code license provenance is proven per artifact.";
+    }
+  ];
+
+  # ── tool 실행 검증 ──────────────────────────────────
+  # 학습한 공식/코드를 실제 실행해서 값을 검증
+  tool-verification = [
+    {
+      context-match = "Math.*";
+      tool = "pnix-symbolic";
+      method = "eval-and-compare";
+    }
+    {
+      context-match = "Physics.*";
+      tool = "pnix-symbolic";
+      method = "dimension-check-then-eval";
+    }
+    {
+      context-match = "Code.Python.*";
+      tool = "python-sandbox";
+      method = "execute-and-capture";
+    }
+  ];
+
+  # ── held reason → 검색 쿼리 변환 규칙 ──────────────
+  query-templates = [
+    {
+      held-pattern = "context가 없다";
+      query-template = "{missing-context} 기본 개념 공식 정의";
+    }
+    {
+      held-pattern = "공식이 없다";
+      query-template = "{subject} formula equation";
+    }
+    {
+      held-pattern = "solver가 없다";
+      query-template = "{subject} python solve algorithm";
+    }
+    {
+      held-pattern = "단위가 없다";
+      query-template = "{subject} SI unit dimension";
+    }
+  ];
+
+  # ── 분야별 허용/차단 ────────────────────────────────
+  allowed-contexts = [
+    "Math.*"
+    "Physics.*"
+    "Code.Python.*"
+    "Code.Rust.*"
+    "FrameNet.*"
+    "Chemistry.Basic.*"
+  ];
+
+  blocked-contexts = [
+    "Medicine.Diagnosis.*"
+    "Medicine.Prescription.*"
+    "Law.Criminal.*"
+    "Finance.Trading.*"
+  ];
+
+  # ── 제한 ────────────────────────────────────────────
+  daily-learn-limit = "100";
+  max-search-per-held = "3";
+  max-tool-execution-timeout-ms = "5000";
+
+  # 검색 결과 최소 confidence (이 이하면 skip)
+  min-search-confidence = "0.5";
+  # 정의 최소 길이 (이 이하면 skip)
+  min-definition-length = "10";
+
+  # ── retry 정책 ──────────────────────────────────────
+  max-retry = "2";
+  retry-backoff-ms = "1000";
+
+  # ── 학습 완료 알림 ─────────────────────────────────
+  # puck notification JSON 파일에 알림을 쓴다.
+  notification-enabled = "true";
+  notification-template = "%term% 자동 학습 완료 (%confidence%)";
+
+  # ── 학습 이력 ──────────────────────────────────────
+  # 학습 결과를 event log JSON 파일에 append 한다.
+  event-log-enabled = "true";
+  event-log-file = "data/auto-learn-events.jsonl";
+
+  # batch 255 (2026-04-18): held fact → 검색 쿼리 fallback 템플릿.
+  # `auto_learn.rs::analyze_held_facts` 가 held reason 별 query-templates 와
+  # 별개로, 기본 fallback 으로 사용하는 한글 템플릿. placeholder 는
+  # `{subject}` / `{object}` 만 허용한다. 문자열 조립은 Rust 의 단순 replace
+  # 이고 도메인 문구는 여기서만 바꾼다.
+  suggested-query-template = "{subject} {object} 정의 공식";
+
+  # ── 외부 prose lowering (legacy "LLM 정제" 키 owner-law 위반으로 제거됨 2026-05-10) ─
+  # OWNER-LAW: pnix substrate 안에 LLM extraction 자리 없음. 외부 prose 는
+  # untrusted external source 로만 들어오고 deterministic lowering 만 허용.
+  # 외부 prose 결과는 Accepted 가 될 수 없고 Candidate / Held 만 가능.
+  external-prose-lowering = "deterministic-only";
+  external-prose-status = "Candidate";
+  external-prose-accepted-disabled = "true";
+  owner-law-required-for-promotion = "true";
+
+  # ── 자동 생성 .px 파일 위치 ─────────────────────────
+  output-dir = "data/auto-learned";
+
+  # ── 선제적 학습 ─────────────────────────────────────
+  # 최근 N일간 같은 context에서 held가 M번 이상이면 선제 학습
+  proactive-learning = "true";
+  proactive-held-threshold = "3";
+  proactive-window-days = "7";
+}

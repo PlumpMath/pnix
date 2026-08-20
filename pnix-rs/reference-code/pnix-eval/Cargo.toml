@@ -1,0 +1,34 @@
+[package]
+name = "pnix-eval"
+version.workspace = true
+edition = "2021"
+description = "Lightweight pure pnix expression evaluator — meta-circular runtime core"
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+pnix-core = { path = "../pnix-core" }
+pnix-hanim-core = { path = "../pnix-hanim-core" }
+pnix-mathml-core = { path = "../pnix-mathml-core" }
+pnix-openmath-core = { path = "../pnix-openmath-core" }
+pnix-svg-core = { path = "../pnix-svg-core" }
+xml-x3d-core = { path = "../xml-x3d-core" }
+pnix-xml-core = { path = "../pnix-xml-core" }
+# evaluator 코어 코드가 직접 이 crate에 들어온다.
+# pnix-runtime-legacy 의존 없음 — 반대로 pnix-runtime-legacy가 이 crate에 의존.
+serde = { workspace = true }
+serde_json = "1"
+regex = "1"
+pnix-hash = { path = "../pnix-hash" }
+pnix-toml = { path = "../pnix-toml" }
+
+[features]
+default = []
+# process builtins (ProcessSpawn 등) — pnix-runtime-supervisor 필요
+# process-builtins = ["dep:pnix-runtime-supervisor"]
+# domain builtins (x3d/mathml schema 등) — domain crate 필요
+# domain-builtins = ["dep:xml-x3d-core", ...]
