@@ -16,8 +16,10 @@
 착수할 수 있는 일이 아니라서).
 
 나머지 미착수 방향(트레이트 solving, 3차 Futamura 사영 완주, Nix builtin
-표면 완전 수렴, 경로/string-context 값 등)은 전부 proposal로 등록돼
-있거나 명시적으로 "수요 발생 시" 조건이 붙은 로드맵이라
+raw-surface 완전 수렴, POSIX ERE leftmost-longest 완전 정합, 중첩 동적
+attr 경로 등 — 경로/string-context 값/URI 리터럴/JSON float
+canonicalization은 2026-08-20 기준 전부 구현 완료로 옮겨짐)은 전부
+proposal로 등록돼 있거나 명시적으로 "수요 발생 시" 조건이 붙은 로드맵이라
 [`docs/PLANS.md`](PLANS.md)에 있다.
 
 ## 다음 작업을 찾으려면

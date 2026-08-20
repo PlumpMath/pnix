@@ -137,6 +137,10 @@ fn value_to_expr(v: &px::PxVal) -> Option<px::PxExpr> {
             Some(px::PxExpr::Attrs(out))
         }
         px::PxVal::Closure { .. } | px::PxVal::Builtin { .. } => None,
+        // Round-trips through the same `:path:`-marked Var the parser
+        // already produces for a literal; re-evaluating it resolves back to
+        // an equal PxVal::Path (px_normalize_path is idempotent).
+        px::PxVal::Path(p) => Some(px::PxExpr::Var(format!(":path:{}", p))),
     }
 }
 

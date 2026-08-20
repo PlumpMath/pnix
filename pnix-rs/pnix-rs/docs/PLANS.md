@@ -23,8 +23,8 @@
 |---|---|---|---|---|
 | 1 | **full 3차 사영** — feature-rich specialiser 자기적용 (bounded cogen DONE; full은 연구 지평) | 연구 프론티어 | pnix-rs tower/bta | [0004](proposals/0004-hand-written-cogen.md) |
 | 2 | **P6 v9+** — 트레이트 solving / 클로저 projection (수요 시) | 기계적 확장 | pnix-rs rust_mirror | [0001](proposals/0001-rust-ast-projection.md) |
-| 3 | **runtime 표면(수요 시)** — 경로 값, URI 리터럴, 중첩 동적 attr 경로, POSIX ERE 전체, JSON float exponent canonicalization, 비유한 float canonical-print (string-context 값은 2026-08-20에 구현 완료 — `docs/IMPLEMENTATION.md` §의 string-context 절, `docs/BUGS.md` §1 참고) | 기계적 확장 | pnix-rs px | [0006](proposals/0006-runtime-surface-on-demand.md) |
-| 4 | **Nix builtin 표면 완전 수렴** — raw presence 전체, path 값, canonical JSON float(지수 표기/무한대 인코딩/에러 클래스/Nix 버전 정책) (string-context 값/`derivation`/`derivationStrict`/`placeholder`는 2026-08-20에 구현 완료) | 기계적 확장 | pnix-rs px / builtin overlay | [0010](proposals/0010-builtin-surface-convergence.md) |
+| 3 | **runtime 표면(수요 시)** — 중첩 동적 attr 경로, POSIX ERE의 leftmost-longest 완전 정합(backtracking 엔진 구조상 남은 두 갭, `docs/BUGS.md` §1 참고) (경로 값/URI 리터럴/JSON float exponent canonicalization/string-context 값은 2026-08-20 기준 구현 완료 — `docs/IMPLEMENTATION.md` §1의 경로(Path) 값 절, `docs/BUGS.md` §1 참고. 비유한 float의 canonical **print**(px_print, toJSON과는 별개)가 유효한 px 소스가 아닌 문제는 여전히 open) | 기계적 확장 | pnix-rs px | [0006](proposals/0006-runtime-surface-on-demand.md) |
+| 4 | **Nix builtin 표면 완전 수렴** — raw presence 전체(남은 유일한 항목) (path 값/canonical JSON float/string-context 값/`derivation`/`derivationStrict`/`placeholder`는 2026-08-20에 구현 완료) | 기계적 확장 | pnix-rs px / builtin overlay | [0010](proposals/0010-builtin-surface-convergence.md) |
 | 5 | **full S=L** + stage-polymorphic | 연구 지평 | pnix-rs tower | [0007](proposals/0007-research-frontier-index.md) |
 | 6 | research open — step-level bisimulation · CompCert류 certified compilation · N-레벨 collapsing tower [incremental·proof-carrying·finite reflective tower는 이미 DONE] · poly-optimizations(sharing/eta/let-insertion) 명시 게이트 미구현 | 후속 리서치 | pnix-rs tower | [0007](proposals/0007-research-frontier-index.md) |
 | ext | 자매 lane(pnix-clj/pnix-hy) TSV 파일-대-파일 비교 | external 대기 | pnix-rs cross-host | [0007](proposals/0007-research-frontier-index.md) — 상세 상태는 [`docs/BUGS.md`](BUGS.md) §4 |
@@ -49,7 +49,7 @@
 | [0007](proposals/0007-research-frontier-index.md) | 연구 프론티어 인덱스 | 인덱스(다수 항목 DONE, 일부 open) | deep-research가 다루지 못한 후속 리서치 대상(bisimulation, N-레벨 collapsing tower 등)을 한 곳에 등록 |
 | [0008](proposals/0008-peer-engine-adapter.md) | peer-engine adapter | v1 DONE(2026-07-03, `src/engine.rs`) | rs-meta의 Rust translation-validation 결과를 pnix-hy/clj류 peer engine이 이해할 공통 `.px` verdict 봉투로 매핑 — rs-meta는 여전히 pnix를 모름 |
 | [0009](proposals/0009-canonical-rust-ir.md) | canonical Rust IR + hash | v0 DONE(2026-07-03) | peer-engine verdict에 포맷 불변 content-address(`ir_hash`)를 채워 TV 실패 위치 추적/캐시 키로 쓸 수 있게 |
-| [0010](proposals/0010-builtin-surface-convergence.md) | builtin surface convergence | phase 1-2 DONE(2026-07-10), raw-surface/path·context/canonical-float 수렴은 open | Nix 118종 대비 rs 77→91종으로 좁힘, checked i64/mixed int-float/hashString을 `nix-instantiate 2.34.7` 오라클에 pin — REGISTRY.md 원본에는 목록이 빠져 있었음(2026-08-20 발견, 여기 추가) |
+| [0010](proposals/0010-builtin-surface-convergence.md) | builtin surface convergence | phase 1-2 DONE(2026-07-10), path·context·canonical-float 수렴 DONE(2026-08-20), raw-surface 수렴만 open | Nix 118종 대비 rs 77→91종으로 좁힘, checked i64/mixed int-float/hashString을 `nix-instantiate 2.34.7` 오라클에 pin — REGISTRY.md 원본에는 목록이 빠져 있었음(2026-08-20 발견, 여기 추가) |
 
 ## 3. 연구 프론티어(0007)가 다루지 못한 부분 — 후속 리서치 대상
 

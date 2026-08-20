@@ -15,11 +15,14 @@
 toJSON/문자열 보간/`string+`/bool/`?`/`rec`/`with`는 이미 구현됐지만
 아래는 여전히 진짜 갭).
 
-- **경로(path) 값 타입이 없다.** `builtins.typeOf ./x`가 `"path"`가 아니라
-  `"string"`을 돌려주고 `builtins.isPath`는 `false`. 상세 원인·비교는
-  `IMPLEMENTATION.md` §3 참고. typeOf/isPath/JSON 투영/canonical print/
-  동등성을 관통하는 새 값 타입 추가라 범위가 크다 — **mirror/gate 수요가
-  생기면 그때 추가**한다는 게 SCOPE_LOCK의 결정이었고 아직 유효하다.
+- ~~경로(path) 값 타입이 없다~~ — **정정(2026-08-20): 더 이상 사실이
+  아니다.** `PxVal::Path(String)`이 생겼다 — `typeOf`/`isPath`/`dirOf`/
+  `baseNameOf`/`toPath`/`==`/`<`/`+`/`toJSON`/`toXML`/`${...}` 보간/
+  rust-mirror/specialize 전부 갱신됨. 상세는 `IMPLEMENTATION.md` §1
+  "경로(Path) 값" 절. 알아둘 만한 설계 선택: cur_dir(파일 위치)로
+  절대화하지 않는다 — pnix-clj 오라클도 리터럴 텍스트만
+  정규화하고 절대화는 안 하는 걸 확인하고 따름(실제 Nix는 절대화하는데,
+  이건 `nix-instantiate`로 교차검증해서 확인한 의도적 divergence).
 - ~~string-context 값이 없다~~ — **정정(2026-08-20): 더 이상 사실이
   아니다.** pnix-clj(오라클)/pnix-clr의 태그된-맵 설계를 그대로 이식해
   구현했다 — `PxVal`에 새 variant를 추가하지 않고, `PxVal::Attrs`를
@@ -54,17 +57,38 @@ toJSON/문자열 보간/`string+`/bool/`?`/`rec`/`with`는 이미 구현됐지�
     그 판단을 따라 `.` select에서 ctx-string을 명시적으로 거부한다(실제
     Nix도 문자열에 `.`를 쓰면 타입 에러) — 유일하게 의도적으로 오라클과
     다른 지점.
-- **URI 리터럴이 없다.**
+- ~~URI 리터럴이 없다~~ — **정정(2026-08-20): 애초에 사실이 아니었다.**
+  손대 보니 `px_uri_scheme_char`/`px_uri_body_char`/`px_uri_end`/
+  `PxTok::Uri`가 이미 완전히 구현돼 있었고(실제 Nix 렉서 규칙과 정확히
+  일치), substrate-check(`phase3_uri_literals`)/px-check 양쪽 다 이미
+  통과 중이었다 — 이 항목은 낡은 기록이었을 뿐, 코드 변경 없음.
 - **중첩 동적 attr 경로가 없다** — `a.${x}.b = 1;`처럼 attrpath 중간에
   동적 세그먼트가 오는 형태. **단일** 동적 키(`{ "${x}" = 1; }`, c10
   corpus)는 2026-07-02에 이미 개방됐음 — 헷갈리지 말 것, 이건 그것보다
   더 일반적인 형태의 이야기다.
-- **POSIX ERE 전체 정합이 없다** — `match`/`split` 등 정규식 빌트인은
-  있지만 POSIX ERE 스펙 전체를 따르지는 않는다.
-- **JSON float exponent canonicalization이 없다** — `toJSON`이 지수
-  표기(`1e10` 등)를 Nix와 동일하게 정규화하지 않는다. proposal 0010이
-  명시: "exponent spelling/shortest-roundtrip, direct non-finite encoding,
-  common error classes, Nix-version policy remain B1 work."
+- **POSIX ERE 완전한 leftmost-longest 정합은 없다(2026-08-20 대부분 축소됨)**
+  — `*`/`+`가 그룹(괄호 하위표현식)에도 적용되고 구간 반복
+  `{m}`/`{m,}`/`{m,n}`도 이제 있다(`rx_repeat_group_try`/
+  `try_parse_interval`, `src/px.rs`). 남은 진짜 갭 2개, 둘 다 backtracking
+  엔진이라 구조적으로 안고 가는 것(POSIX-longest DFA로 다시 쓰지 않는 한
+  못 고침, `nix-instantiate`로 확인해보니 **실제 Nix 자체도 이 두 갭에서
+  POSIX-longest가 아니라 이 엔진과 같은 backtracking-첫-성공-승 방식**이라
+  일부는 갭이 아니라 오라클과 이미 일치): (1) 그룹 반복 횟수가 초기 그리디
+  전진 후 백오프될 때, 그 그룹 안에 중첩된 캡처는 백오프된 실제 반복
+  횟수가 아니라 그리디 전진이 남긴 마지막 값을 그대로 유지한다(드문
+  케이스). (2) 반복자 아래 중첩된 alternation(`(a|ab)*` 류)의 분기 선택은
+  진짜 POSIX 최장 매치가 아니라 backtracking 순서를 따른다 — 단
+  `nix-instantiate`로 직접 확인한 결과 실제 Nix도 이 정확한 동작을 보인다
+  (`builtins.match "(a|ab)(c|bcd)(d*)" "abcd"`가 두 엔진 다
+  `[ "a" "bcd" "" ]`).
+- ~~JSON float exponent canonicalization이 없다~~ — **정정(2026-08-20):
+  둘 다 이미 맞았거나 사소한 메시지 문제였다.** 비유한 float(NaN/inf)은
+  이미 `toJSON`에서 에러였다(다만 메시지가 뭉뚱그려져 있어서
+  `px_json_float_text`로 NaN/+inf/-inf를 구분하는 메시지로 교체). 유한
+  float의 지수 표기(Rust `{:?}`)는 실측해보니 이미 유효한 JSON 숫자
+  문법이었다(지수에 `+` 안 붙임; JSON 문법상 지수 앞에 소수부가 필수가
+  아니라 `1e300` 자체가 이미 유효한 JSON 숫자라 별도 정규화가 필요
+  없었음) — 코드 변경 불필요, proposal 0010의 우려는 실제로는 기우였다.
 - **비유한 float(inf/NaN)의 canonical print가 유효한 px 소스가 아니다** —
   "print한 값을 다시 파싱하면 같은 값"이라는 이 프로젝트의 P1 성질에서
   유일한 예외(pnix-hy의 repr도 동일 예외를 가짐). `toJSON`/rust-mirror는
@@ -136,7 +160,10 @@ presence/behavior 정합을 상당히 좁혔지만, 스스로 이렇게 열어�
 
 > Raw-surface, path/context, and canonical-float convergence remain open.
 
-즉 위 §1의 path/string-context/JSON float 갭들과 겹치는 부분이 이
-proposal의 다음 단계다 — 로드맵으로서의 우선순위/설계 방향은
+(원문 인용은 그대로 둔다 — proposal 0010 문서 자체는 손대지 않음. 실제
+현황은 **path/context/canonical-float 세 갈래 다 2026-08-20 기준 해소**:
+string-context는 같은 날짜 앞선 세션에서, path 값 타입/JSON float
+메시지는 이 절 작업에서. raw-surface 수렴(Nix 118종 대비 남은 builtin
+격차)만 여전히 열려 있음.) 로드맵으로서의 우선순위/설계 방향은
 [`docs/PLANS.md`](PLANS.md)를 볼 것(이건 "결정된 제한"이 아니라 "아직
 설계 안 된 다음 단계"라 PLANS.md 쪽 성격에 더 가깝다).

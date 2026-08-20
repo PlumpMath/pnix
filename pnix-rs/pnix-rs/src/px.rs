@@ -180,6 +180,19 @@ pub enum PxVal {
     /// everything else is HELD fail-closed. A concat whose result is valid
     /// UTF-8 returns to Str.
     Bytes(Vec<u8>),
+    /// A path literal (`./x`, `../x`, `/x`) or the result of a path-producing
+    /// operation (path+path/path+string concat, `dirOf`, `toPath`). Stored
+    /// as a plain `String` (this codebase already prefers `String` over
+    /// `std::path::PathBuf` for its other host-side path handling) holding
+    /// the LEXICALLY NORMALIZED text (`px_normalize_path`), so equality/
+    /// ordering can compare the stored strings directly and never need to
+    /// re-normalize. Unlike real Nix, a relative literal is NOT resolved to
+    /// an absolute filesystem path against its containing file — it keeps
+    /// its normalized relative text (`./a/b`), matching how this seed's
+    /// `import` already treats path text as file-relative only at the
+    /// point it is actually used (`readFile`/`pathExists`/import
+    /// resolution), not at construction.
+    Path(String),
     /// Rc payload: lists/attrsets share structure on clone (persistent-value
     /// model, same shape as rs-meta's own Val — tower m3 perf boundary fix).
     List(Rc<Vec<PxVal>>),
@@ -3548,6 +3561,12 @@ pub fn px_eval_outcome(expr: &PxExpr, env: &Vec<PxFrame>) -> Result<PxVal, PxErr
                         let v = px_force_outcome(&px_eval_outcome(e, env)?)?;
                         match &v {
                             PxVal::Str(s) => out.push_str(s),
+                            // `${./p}` interpolation coerces via a fake
+                            // store-path string, not the path's own literal
+                            // text (see px_fake_store_path_for) -- a
+                            // deliberately different, simpler mechanism than
+                            // the context-carrying coercions right below it.
+                            PxVal::Path(p) => out.push_str(&px_fake_store_path_for(p)),
                             _ if px_is_ctx_string(&v) => {
                                 if let Some(content) = px_string_like_content(&v) {
                                     out.push_str(&content);
@@ -3844,8 +3863,13 @@ fn px_lookup_outcome(name: &str, env: &Vec<PxFrame>) -> Result<PxVal, PxError> {
     if name == "lib" {
         return Ok(px_lib_attrset());
     }
-    // Path literals `./x` parse as `:path:./x` vars; resolve to string paths
-    // so builtins.readFile/pathExists work under px-eval -c (no import expand).
+    // Path literals `./x` parse as `:path:./x` vars. An occurrence consumed
+    // by `import`/`scopedImport` is spliced away by px_expand_imports before
+    // eval ever sees it; every other occurrence (a bare path literal used as
+    // an ordinary expression, or ANY path literal at all under `-c` inline
+    // mode, which skips expansion entirely) resolves here to a real
+    // `PxVal::Path`, normalized the same way every other path construction
+    // site is.
     if name.starts_with(":path:") {
         let mut out = String::new();
         let mut i = 0usize;
@@ -3855,7 +3879,7 @@ fn px_lookup_outcome(name: &str, env: &Vec<PxFrame>) -> Result<PxVal, PxError> {
             }
             i += 1;
         }
-        return Ok(PxVal::Str(out));
+        return Ok(PxVal::Path(px_normalize_path(&out)));
     }
     // D14 parity: real Nix binds a fixed subset of builtins UNPREFIXED at
     // the top level (shadowable by let, checked before with-scopes).
@@ -4062,6 +4086,58 @@ fn px_binary_outcome(op: &PxOp, l: &PxVal, r: &PxVal) -> Result<PxVal, PxError> 
                 "px: unsupported string operation",
             ))),
         },
+        // Path arithmetic (oracle-pinned): `+` concatenates the RAW text of
+        // both operands (no `/` inserted -- Nix's own path arithmetic does
+        // not insert a separator either, relying on normalization to
+        // collapse whatever the literal text produces) and normalizes the
+        // result, so `./a + ./../b` collapses to `./b` rather than staying
+        // as the literal `./a./../b`. Ordering compares the normalized text.
+        (PxVal::Path(a), PxVal::Path(b)) => match op {
+            PxOp::Add => {
+                let mut combined = String::new();
+                combined.push_str(a);
+                combined.push_str(b);
+                Ok(PxVal::Path(px_normalize_path(&combined)))
+            }
+            PxOp::Eq => Ok(PxVal::Bool(a == b)),
+            PxOp::Ne => Ok(PxVal::Bool(a != b)),
+            PxOp::Lt => Ok(PxVal::Bool(a < b)),
+            PxOp::Le => Ok(PxVal::Bool(a <= b)),
+            PxOp::Gt => Ok(PxVal::Bool(a > b)),
+            PxOp::Ge => Ok(PxVal::Bool(a >= b)),
+            _ => Err(px_error_type(String::from(
+                "px: unsupported path operation",
+            ))),
+        },
+        // path + string -> path (string coerces via its raw content). A
+        // context-bearing right-hand side is caught earlier by the
+        // ctx-string guard above (it matches on either side being the
+        // Attrs-tagged ctx-string shape) and fails closed there, so this
+        // arm only ever sees a plain, context-free string.
+        (PxVal::Path(p), PxVal::Str(s)) => match op {
+            PxOp::Add => {
+                let mut combined = String::new();
+                combined.push_str(p);
+                combined.push_str(s);
+                Ok(PxVal::Path(px_normalize_path(&combined)))
+            }
+            _ => Err(px_error_type(String::from(
+                "px: unsupported operands path and string",
+            ))),
+        },
+        // string + path -> string (Nix coerces the path to its text; the
+        // left string's own context, if any, is unaffected).
+        (PxVal::Str(s), PxVal::Path(p)) => match op {
+            PxOp::Add => {
+                let mut combined = String::new();
+                combined.push_str(s);
+                combined.push_str(p);
+                Ok(PxVal::Str(combined))
+            }
+            _ => Err(px_error_type(String::from(
+                "px: unsupported operands string and path",
+            ))),
+        },
         (PxVal::List(a), PxVal::List(b)) => match op {
             PxOp::Eq => Ok(PxVal::Bool(
                 px_val_eq(l, r).map_err(px_error_unsupported)?,
@@ -4146,6 +4222,7 @@ fn px_attrs_has(fields: &[(String, PxVal)], name: &str) -> bool {
 fn px_as_path_str(v: &PxVal) -> Result<String, String> {
     match v {
         PxVal::Str(s) => Ok(s.clone()),
+        PxVal::Path(p) => Ok(p.clone()),
         other => Err(format!("px: expected a path/string, got {}", px_kind(other))),
     }
 }
@@ -4258,6 +4335,8 @@ fn px_to_xml_value(v: &PxVal, depth: usize) -> Result<String, String> {
         PxVal::Bool(false) => Ok(format!("{}<bool>false</bool>", ind)),
         PxVal::Null => Ok(format!("{}<null />", ind)),
         PxVal::Str(s) => Ok(format!("{}<string>{}</string>", ind, px_xml_escape(&s))),
+        // toXML has no distinct path tag; serialize its text like a string.
+        PxVal::Path(p) => Ok(format!("{}<string>{}</string>", ind, px_xml_escape(&p))),
         PxVal::Bytes(b) => {
             let mut s = String::new();
             for x in b.iter() {
@@ -4733,6 +4812,51 @@ fn px_hex_prefix32(hex: &str) -> String {
         i += 1;
     }
     prefix
+}
+
+/// Last path segment (the part after the final `/`), or the whole string
+/// when there is no `/` at all -- same split rule `baseNameOf` uses.
+fn px_path_basename(p: &str) -> String {
+    let mut last: i64 = -1;
+    let mut i = 0i64;
+    for c in p.chars() {
+        if c == '/' {
+            last = i;
+        }
+        i += 1;
+    }
+    if last < 0 {
+        return String::from(p);
+    }
+    let mut tail = String::new();
+    let mut j = 0i64;
+    for c in p.chars() {
+        if j > last {
+            tail.push(c);
+        }
+        j += 1;
+    }
+    tail
+}
+
+/// A bare path interpolated into a string (`"${./p}"`) does not stay a
+/// literal path -- real Nix "copies the path to the store" and splices the
+/// resulting store path text in. pnix has no on-disk store, so this
+/// fabricates a deterministic-looking `/nix/store/<hash>-<basename>` string
+/// the same way `derivation`'s pseudo store paths are built (a sha256 of a
+/// tagged canonical string, truncated to 32 hex chars) -- NOT
+/// byte-compatible with a real Nix store path, purely a simulation so
+/// downstream string operations on the interpolated text have the expected
+/// shape. Unlike `toString`/`dirOf`/etc, which keep working on the real
+/// normalized path text, this coercion is specific to the `${...}`
+/// interpolation surface.
+fn px_fake_store_path_for(p: &str) -> String {
+    let hex = px_sha256_hex(sha_utf8_bytes(&format!("path:{}", p)));
+    format!(
+        "/nix/store/{}-{}",
+        px_hex_prefix32(&hex),
+        px_path_basename(p)
+    )
 }
 
 /// Walk a deep-forced derivation input and report whether a function value
@@ -5486,6 +5610,7 @@ fn px_to_string_coerce(v: &PxVal) -> Result<PxVal, String> {
     match &v {
         PxVal::Int(n) => Ok(PxVal::Str(format!("{}", n))),
         PxVal::Str(s) => Ok(PxVal::Str(s.clone())),
+        PxVal::Path(p) => Ok(PxVal::Str(p.clone())),
         PxVal::Null => Ok(PxVal::Str(String::new())),
         PxVal::Bool(b) => {
             if *b {
@@ -5542,6 +5667,9 @@ fn px_to_string_coerce_ctx(v: &PxVal, ctx: &mut Vec<String>) -> Result<String, S
     match &v {
         PxVal::Int(n) => Ok(format!("{}", n)),
         PxVal::Str(s) => Ok(s.clone()),
+        // toString on a path returns its own (normalized) text -- unlike
+        // `${...}` interpolation, it does NOT fabricate a store path.
+        PxVal::Path(p) => Ok(p.clone()),
         _ if px_is_ctx_string(&v) => {
             ctx.extend(px_string_like_context(&v));
             Ok(px_string_like_content_or_empty(&v))
@@ -5824,13 +5952,23 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
         }
     } else if name == "toPath" {
         match &args[0] {
-            PxVal::Str(s) => Ok(PxVal::Str(px_to_path_string(s)?)),
-            // Lexically normalize the content; the context (if any) is kept
-            // unchanged (oracle-pinned: toPath does not touch context).
+            // toPath returns a real Path value now (real Nix: `builtins.toPath
+            // : string -> path`); context cannot ride on a Path, so a
+            // context-bearing argument is rejected rather than silently
+            // dropping its dependency marker (same stance the `+` operator
+            // takes for path + context-bearing string below).
+            PxVal::Str(s) => Ok(PxVal::Path(px_to_path_string(s)?)),
+            PxVal::Path(p) => Ok(PxVal::Path(p.clone())),
             _ if px_is_ctx_string(&args[0]) => {
+                let context = px_string_like_context(&args[0]);
+                if !context.is_empty() {
+                    return Err(format!(
+                        "px: toPath: string has context, refusing to silently drop it \
+                         (use builtins.unsafeDiscardStringContext first)"
+                    ));
+                }
                 let content = px_string_like_content_or_empty(&args[0]);
-                let normalized = px_to_path_string(&content)?;
-                Ok(px_ctx_string(normalized, px_string_like_context(&args[0])))
+                Ok(PxVal::Path(px_to_path_string(&content)?))
             }
             other => Err(format!(
                 "px: toPath expects a string, got {}",
@@ -6033,10 +6171,7 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
         full_ctx.extend(extra);
         Ok(px_ctx_string(content, full_ctx))
     } else if name == "isPath" {
-        // The seed value model has no path variant. This is exact for every
-        // currently representable value, including toPath (which Nix returns
-        // as a string); path literals outside import remain a held frontier.
-        Ok(PxVal::Bool(false))
+        Ok(PxVal::Bool(matches!(&args[0], PxVal::Path(_))))
     } else if name == "toString" {
         let mut ctx: Vec<String> = Vec::new();
         let content = px_to_string_coerce_ctx(&args[0], &mut ctx)?;
@@ -6832,6 +6967,7 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             PxVal::Null => "null",
             PxVal::Str(_) => "string",
             PxVal::Bytes(_) => "string",
+            PxVal::Path(_) => "path",
             PxVal::List(_) => "list",
             PxVal::Attrs(_) if px_is_ctx_string(&args[0]) => "string",
             PxVal::Attrs(_) => "set",
@@ -6874,6 +7010,39 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                     Ok(PxVal::Str(String::from("/")))
                 } else {
                     Ok(PxVal::Str(head))
+                }
+            }
+            // A Path input: baseNameOf still returns a plain string (Nix:
+            // `baseNameOf : (path | string) -> string`), but dirOf returns
+            // a Path (its "directory of" is still path-shaped).
+            PxVal::Path(p) => {
+                let mut last: i64 = -1;
+                let mut i = 0i64;
+                for c in p.chars() {
+                    if c == '/' {
+                        last = i;
+                    }
+                    i += 1;
+                }
+                let mut head = String::new();
+                let mut tail = String::new();
+                let mut j = 0i64;
+                for c in p.chars() {
+                    if j < last {
+                        head.push(c);
+                    } else if j > last {
+                        tail.push(c);
+                    }
+                    j += 1;
+                }
+                if name == "baseNameOf" {
+                    Ok(PxVal::Str(if last < 0 { p.clone() } else { tail }))
+                } else if last < 0 {
+                    Ok(PxVal::Path(px_normalize_path(".")))
+                } else if last == 0 {
+                    Ok(PxVal::Path(px_normalize_path("/")))
+                } else {
+                    Ok(PxVal::Path(px_normalize_path(&head)))
                 }
             }
             other => Err(format!("px: {} expects a string, got {}", name, px_kind(other))),
@@ -6987,7 +7156,7 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             _ => Err(String::from("px: replaceStrings expects (list, list, string)")),
         }
     } else if name == "foldl" {
-        // pnix-eval extension: alias of foldl' (reference = pnix-clj).
+        // alias of foldl' (reference: pnix-clj).
         let mut acc = args[1].clone();
         match &args[2] {
             PxVal::List(items) => {
@@ -8564,6 +8733,9 @@ fn px_val_eq_mode(a: &PxVal, b: &PxVal, allow_identity: bool) -> Result<bool, St
         (PxVal::Bool(x), PxVal::Bool(y)) => Ok(*x == *y),
         (PxVal::Null, PxVal::Null) => Ok(true),
         (PxVal::Str(x), PxVal::Str(y)) => Ok(x == y),
+        // Every PxVal::Path is normalized at construction, so plain string
+        // comparison here already IS normalized-path comparison.
+        (PxVal::Path(x), PxVal::Path(y)) => Ok(x == y),
         (PxVal::Bytes(_), PxVal::Str(_))
         | (PxVal::Str(_), PxVal::Bytes(_))
         | (PxVal::Bytes(_), PxVal::Bytes(_)) => {
@@ -8715,6 +8887,7 @@ fn px_val_lt(a: &PxVal, b: &PxVal) -> Result<bool, String> {
         (PxVal::Float(x), PxVal::Int(y)) => Ok(*x < (*y as f64)),
         (PxVal::Float(x), PxVal::Float(y)) => Ok(x < y),
         (PxVal::Str(x), PxVal::Str(y)) => Ok(x < y),
+        (PxVal::Path(x), PxVal::Path(y)) => Ok(x < y),
         // Context-bearing strings order by content only (context never
         // participates), matching pnix-clj's `pnix-less-than-result`.
         (PxVal::Attrs(_), _) | (_, PxVal::Attrs(_))
@@ -8751,14 +8924,37 @@ fn px_val_lt(a: &PxVal, b: &PxVal) -> Result<bool, String> {
 
 
 // ---- builtins.match / builtins.split (oracle-pinned 2026-07-08) -------------
-// POSIX-ERE SUBSET engine, floor-gated to what the K1 kernel actually uses:
-// literals+escapes, `.`, classes [a-z0-9_'-] incl. negation, greedy * + ? on
-// SINGLE-CHAR nodes, groups with capture + alternation (quantifier-free
-// except `?`), ^ $. Backtracking-greedy == POSIX longest on these patterns
-// (no alternation under a quantifier). Unsupported syntax errors fail-closed.
-// match: full-anchored; null on no match; capture list otherwise (null for an
-// unmatched optional group). split: scan; empty match consumes one char into
-// the next piece (oracle: split "x*" "ab" == ["" [] "a" [] "b" [] ""]).
+// POSIX-ERE-flavored engine (backtracking, first-successful-alternative --
+// NOT a POSIX-leftmost-longest DFA; live cross-checked against
+// `nix-instantiate` and real Nix's own regex backend isn't POSIX-longest
+// either, e.g. `builtins.match "(a|ab)(c|bcd)(d*)" "abcd"` picks the FIRST
+// alternative that leads to an overall match on both, `[ "a" "bcd" "" ]` --
+// so backtracking-first-match is the oracle-observed behavior here, not a
+// gap against it). Supports: literals+escapes (backslash always takes the
+// next char literally -- no `\d`/`\w`/`\s` shorthand, POSIX ERE has none),
+// `.`, bracket expressions incl. negation/ranges/named `[:class:]`, groups
+// with capture + alternation, `^`/`$` anchors (true start/end of the whole
+// subject, evaluated wherever they sit in the pattern -- inside a group or
+// an alternation branch works the same as at the top level), and
+// 2026-08-20's addition: `*`/`+`/`?` now apply to ANY operand including a
+// parenthesized group (not just a single char/class/`.`), plus
+// bounded-repetition intervals `{m}`/`{m,}`/`{m,n}` (desugared at parse
+// time into mandatory copies + `?`/`*`, so the matcher itself only ever
+// sees Star/Plus/Opt -- see try_parse_interval). `{` is a RESERVED
+// character here, same as real Nix's own backend (cross-checked live:
+// `a{`, `a{,3}`, `a{x}`, `a{}`, and a bare `{3}` with no operand all raise
+// "invalid regular expression" there too) -- there is no literal-`{`
+// fallback for anything short of a complete `{m}`/`{m,}`/`{m,n}`. KNOWN,
+// DELIBERATELY OUT-OF-SCOPE LIMITATION: when a successful match must back
+// off a Group repetition's count after an initial greedy walk, a capture
+// nested inside that group keeps whichever repetition the greedy walk
+// left behind rather than recomputing it for the backed-off count -- true
+// correctness there needs re-running the matched span, out of scope for
+// this backtracking (not leftmost-longest) engine. Unsupported syntax
+// errors fail-closed. match: full-anchored; null on no match; capture list
+// otherwise (null for an unmatched optional/zero-repetition group). split:
+// scan; empty match consumes one char into the next piece (oracle: split
+// "x*" "ab" == ["" [] "a" [] "b" [] ""]).
 
 #[derive(Clone, Debug)]
 enum RxNode {
@@ -8895,6 +9091,84 @@ impl RxParser {
         self.pos >= self.pat.len()
     }
 
+    /// POSIX ERE bounded-repetition interval: `{m}` / `{m,}` / `{m,n}`,
+    /// `self.pos` pointing at the `{`. Returns `(min, max)` (`max == None`
+    /// for the unbounded `{m,}` form) and leaves `self.pos` just past the
+    /// closing `}` on success. `{` is a RESERVED character in this
+    /// dialect, same as real Nix's own regex backend (cross-checked live
+    /// against `nix-instantiate`: `a{`, `a{,3}`, `a{x}`, `a{}`, and a bare
+    /// `{3}` with no operand ALL raise "invalid regular expression" there,
+    /// there is no literal-`{` fallback for a malformed interval) -- so
+    /// every non-well-formed shape here is a hard parse error, never a
+    /// silent fall-through to treating `{` as an ordinary character. A
+    /// literal `{` still works when escaped (`\{`), same as any other
+    /// metacharacter.
+    fn try_parse_interval(&mut self) -> Result<(usize, Option<usize>), String> {
+        let mut j = self.pos + 1;
+        let mut min_digits = String::new();
+        while matches!(self.char_at(j), Some(d) if d.is_ascii_digit()) {
+            min_digits.push(self.char_at(j).ok_or(String::from("px: regex: broken parser state"))?);
+            j += 1;
+        }
+        if min_digits.is_empty() {
+            return Err(String::from("px: regex: invalid interval"));
+        }
+        let min_i64: i64 = match min_digits.parse::<i64>() {
+            Ok(v) => v,
+            Err(_) => return Err(String::from("px: regex: invalid interval")),
+        };
+        let max_i64: Option<i64> = if self.char_at(j) == Some(',') {
+            j += 1;
+            let mut max_digits = String::new();
+            while matches!(self.char_at(j), Some(d) if d.is_ascii_digit()) {
+                max_digits.push(self.char_at(j).ok_or(String::from("px: regex: broken parser state"))?);
+                j += 1;
+            }
+            if max_digits.is_empty() {
+                None
+            } else {
+                match max_digits.parse::<i64>() {
+                    Ok(v) => Some(v),
+                    Err(_) => return Err(String::from("px: regex: invalid interval")),
+                }
+            }
+        } else {
+            Some(min_i64)
+        };
+        if self.char_at(j) != Some('}') {
+            return Err(String::from("px: regex: invalid interval"));
+        }
+        // This engine desugars an interval into that many literal AST-node
+        // copies (see the `{`-handling call site) rather than a real
+        // engine's counted-repeat primitive. Live cross-check against
+        // `nix-instantiate`: real Nix accepts `a{1000000}` (matches
+        // instantly, `null` against too-short input) but rejects
+        // `a{4294967296}` ("invalid regular expression") -- so 1,000,000
+        // is set here as a cap that stays inside real Nix's own observed
+        // working range while still bounding this engine's materialized
+        // copy count well short of the multi-GB territory a 32-bit-plus
+        // count would hit.
+        let rx_interval_cap: i64 = 1000000;
+        if min_i64 > rx_interval_cap || matches!(max_i64, Some(hi) if hi > rx_interval_cap) {
+            return Err(String::from(
+                "px: regex: interval count too large",
+            ));
+        }
+        if let Some(hi) = max_i64 {
+            if hi < min_i64 {
+                return Err(String::from(
+                    "px: regex: interval min exceeds max",
+                ));
+            }
+        }
+        self.pos = j + 1;
+        let max: Option<usize> = match max_i64 {
+            Some(hi) => Some(hi as usize),
+            None => None,
+        };
+        Ok((min_i64 as usize, max))
+    }
+
     fn parse_alts(&mut self) -> Result<Vec<Vec<RxNode>>, String> {
         let mut alts = Vec::new();
         alts.push(self.parse_seq()?);
@@ -8994,7 +9268,12 @@ impl RxParser {
                 let e = self.cur().ok_or(String::from("px: regex: dangling escape"))?;
                 self.pos += 1;
                 RxNode::Ch(e)
-            } else if c == '*' || c == '+' || c == '?' {
+            } else if c == '*' || c == '+' || c == '?' || c == '{' {
+                // `{` is reserved even with no preceding operand (cross-
+                // checked live against real Nix: a bare `{3}` errors
+                // "invalid regular expression", it is not treated as a
+                // literal `{` -- same reserved-metacharacter stance as
+                // `*`/`+`/`?` here).
                 return Err(String::from("px: regex: quantifier without operand"));
             } else {
                 self.pos += 1;
@@ -9003,11 +9282,11 @@ impl RxParser {
             let node = if self.pos < self.pat.len() {
                 let q = self.cur().ok_or(String::from("px: regex: broken parser state"))?;
                 if q == '*' || q == '+' {
-                    if !rx_single_ok(&node) {
-                        return Err(String::from(
-                            "px: regex: held: * / + on a group is not in the seed",
-                        ));
-                    }
+                    // `*`/`+` used to be held for anything but a single-char
+                    // node (Ch/Any/Class); RxNode::Star/Plus now also cover
+                    // a Group operand via rx_repeat_group_try (rx_seq_try),
+                    // so any atom (including a parenthesized group) may be
+                    // repeated.
                     self.pos += 1;
                     if q == '*' {
                         RxNode::Star(Box::new(node))
@@ -9017,6 +9296,33 @@ impl RxParser {
                 } else if q == '?' {
                     self.pos += 1;
                     RxNode::Opt(Box::new(node))
+                } else if q == '{' {
+                    // Bounded repetition `{m}`/`{m,}`/`{m,n}`: desugar into
+                    // `m` mandatory copies plus either `(n-m)` optional
+                    // copies (bounded) or a trailing `*` (unbounded `{m,}`)
+                    // -- reuses Star/Opt/plain-node repetition rather than
+                    // adding a new RxNode variant or a counted-loop
+                    // primitive to the matcher. try_parse_interval already
+                    // errors (does not fall back to a literal `{`) on
+                    // anything short of a well-formed interval.
+                    let (min, max) = self.try_parse_interval()?;
+                    let mut k = 0usize;
+                    while k < min {
+                        out.push(node.clone());
+                        k += 1;
+                    }
+                    match max {
+                        Some(hi) => {
+                            while k < hi {
+                                out.push(RxNode::Opt(Box::new(node.clone())));
+                                k += 1;
+                            }
+                        }
+                        None => {
+                            out.push(RxNode::Star(Box::new(node.clone())));
+                        }
+                    }
+                    continue;
                 } else {
                     node
                 }
@@ -9043,6 +9349,63 @@ fn ivset(v: &Vec<i64>, i: usize, x: i64) -> Vec<i64> {
         j += 1;
     }
     out
+}
+
+/// Star/Plus of a MULTI-CHAR operand (typically a parenthesized Group; the
+/// single-char case -- Ch/Any/Class -- keeps its own faster scan-ahead path
+/// in RxNode::Star/Plus below). Greedy: walk `child` forward as many times
+/// as it will match, recording each repetition's end offset, then hand the
+/// rest of `seq` the LONGEST chain first and back off one repetition at a
+/// time (down to `min_reps`) exactly like the single-char case already
+/// does, just generalized to a possibly-variable-width child. A repetition
+/// that consumes zero characters stops the walk immediately (matching a
+/// sub-pattern that can match empty forever would never terminate
+/// otherwise). KNOWN LIMITATION: capture groups nested inside `child` keep
+/// whichever repetition's captures the initial greedy walk left behind even
+/// when the eventual successful match backs off to fewer repetitions --
+/// true POSIX capture semantics for that backtracked case would need
+/// re-running the matched span, which is out of scope for this
+/// backtracking (not leftmost-longest-DFA) engine.
+fn rx_repeat_group_try(
+    child: &RxNode,
+    seq: &Vec<RxNode>,
+    i: usize,
+    s: &Vec<char>,
+    pos: usize,
+    gs: &mut Vec<i64>,
+    ge: &mut Vec<i64>,
+    min_reps: usize,
+) -> i64 {
+    let single = vec![child.clone()];
+    let mut ends: Vec<usize> = Vec::new();
+    let mut cur = pos;
+    loop {
+        let stepped = rx_seq_try(&single, 0, s, cur, gs, ge);
+        if stepped < 0 {
+            break;
+        }
+        let stepped_u = stepped as usize;
+        ends.push(stepped_u);
+        if stepped_u <= cur {
+            break;
+        }
+        cur = stepped_u;
+    }
+    let mut k = ends.len();
+    loop {
+        if k < min_reps {
+            return -1;
+        }
+        let end_pos = if k == 0 { pos } else { ends[k - 1] };
+        let r = rx_seq_try(seq, i + 1, s, end_pos, gs, ge);
+        if r >= 0 {
+            return r;
+        }
+        if k == 0 {
+            return -1;
+        }
+        k -= 1;
+    }
 }
 
 /// Match `seq[i..]` at `pos`; on success return the end position (>= 0),
@@ -9127,7 +9490,7 @@ fn rx_seq_try(
             *ge = sge;
             rx_seq_try(seq, i + 1, s, pos, gs, ge)
         }
-        RxNode::Star(child) => {
+        RxNode::Star(child) if rx_single_ok(child) => {
             let mut max = 0usize;
             while pos + max < s.len() && rx_single_match(child, s[pos + max]) {
                 max += 1;
@@ -9142,7 +9505,7 @@ fn rx_seq_try(
             }
             -1
         }
-        RxNode::Plus(child) => {
+        RxNode::Plus(child) if rx_single_ok(child) => {
             let mut max = 0usize;
             while pos + max < s.len() && rx_single_match(child, s[pos + max]) {
                 max += 1;
@@ -9157,6 +9520,11 @@ fn rx_seq_try(
             }
             -1
         }
+        // Star/Plus of a multi-char operand (a Group, e.g. `(ab)*`/`(a|bc)+`):
+        // rx_single_match can't test it one char at a time, so this walks the
+        // whole child pattern per repetition instead (rx_repeat_group_try).
+        RxNode::Star(child) => rx_repeat_group_try(child, seq, i, s, pos, gs, ge, 0),
+        RxNode::Plus(child) => rx_repeat_group_try(child, seq, i, s, pos, gs, ge, 1),
         node => {
             if pos < s.len() && rx_single_match(node, s[pos]) {
                 rx_seq_try(seq, i + 1, s, pos + 1, gs, ge)
@@ -10230,6 +10598,32 @@ fn px_json_escape(s: &str) -> String {
     out
 }
 
+/// A finite float serializes as its own Rust-Debug text. Rust's `{:?}`
+/// formatting for `f64` only ever emits characters JSON's own `number`
+/// grammar already accepts: an optional leading `-`, digits, an optional
+/// `.digits` fraction, and an optional `e`/`E` exponent whose sign (when
+/// present at all) is `-` only -- e.g. `1e300`/`1e-300`, never a `+` before
+/// the exponent digits. JSON's grammar does not require a fraction before
+/// an exponent (`1e300` round-trips as a valid JSON number on its own), so
+/// no separate canonicalization pass is needed for the finite case. A
+/// non-finite float (NaN / +inf / -inf) has NO JSON number representation
+/// at all -- JSON's grammar has no token for it -- so this is a hard,
+/// specific error rather than silently emitting `NaN`/`Infinity` (both
+/// invalid JSON) or dropping the value.
+fn px_json_float_text(f: f64) -> Result<String, String> {
+    if f - f == 0.0 {
+        return Ok(format!("{:?}", f));
+    }
+    let kind = if f != f {
+        "NaN"
+    } else if f > 0.0 {
+        "+inf"
+    } else {
+        "-inf"
+    };
+    Err(format!("px: cannot serialize float {} as JSON", kind))
+}
+
 pub fn px_to_json(v: &PxVal) -> Result<String, String> {
     // Force to WHNF first; the recursive calls on fields/items force nested
     // thunks in turn, giving Nix's deep-forcing toJSON semantics. A genuinely
@@ -10238,16 +10632,13 @@ pub fn px_to_json(v: &PxVal) -> Result<String, String> {
     match &v {
         PxVal::Null => Ok(String::from("null")),
         PxVal::Int(n) => Ok(format!("{}", n)),
-        PxVal::Float(f) => {
-            let x = *f;
-            if x - x == 0.0 {
-                Ok(format!("{:?}", f))
-            } else {
-                Err(String::from("px: toJSON of non-finite float"))
-            }
-        }
+        PxVal::Float(f) => px_json_float_text(*f),
         PxVal::Bool(b) => Ok(format!("{}", b)),
         PxVal::Str(s) => Ok(format!("\"{}\"", px_json_escape(s))),
+        // A path serializes as its own (normalized) text, same as toString
+        // -- unlike `${...}` interpolation, toJSON does not fabricate a
+        // store path.
+        PxVal::Path(p) => Ok(format!("\"{}\"", px_json_escape(p))),
         // Canonical/CLI output boundary: a contextful string serializes as
         // its content only — context has no representation in canonical
         // JSON (matches real Nix's own `--json` output of e.g. a
@@ -10301,16 +10692,10 @@ fn px_to_json_ctx(v: &PxVal, ctx: &mut Vec<String>) -> Result<String, String> {
     match &v {
         PxVal::Null => Ok(String::from("null")),
         PxVal::Int(n) => Ok(format!("{}", n)),
-        PxVal::Float(f) => {
-            let x = *f;
-            if x - x == 0.0 {
-                Ok(format!("{:?}", f))
-            } else {
-                Err(String::from("px: toJSON of non-finite float"))
-            }
-        }
+        PxVal::Float(f) => px_json_float_text(*f),
         PxVal::Bool(b) => Ok(format!("{}", b)),
         PxVal::Str(s) => Ok(format!("\"{}\"", px_json_escape(s))),
+        PxVal::Path(p) => Ok(format!("\"{}\"", px_json_escape(p))),
         PxVal::Attrs(_) if px_is_ctx_string(&v) => {
             ctx.extend(px_string_like_context(&v));
             Ok(format!("\"{}\"", px_json_escape(&px_string_like_content_or_empty(&v))))
@@ -10373,6 +10758,7 @@ pub fn px_kind(v: &PxVal) -> String {
         PxVal::Null => String::from("null"),
         PxVal::Str(_) => String::from("string"),
         PxVal::Bytes(_) => String::from("string"),
+        PxVal::Path(_) => String::from("path"),
         PxVal::List(_) => String::from("list"),
         PxVal::Closure { .. } => String::from("lambda"),
         PxVal::Builtin { .. } => String::from("builtin"),
@@ -10416,6 +10802,8 @@ pub fn px_print(v: &PxVal) -> String {
         PxVal::Null => String::from("null"),
         PxVal::Str(s) => format!("\"{}\"", px_escape_string(s)),
         PxVal::Bytes(b) => format!("<raw-bytes:{}>", b.len()),
+        // Nix prints paths unquoted, unlike strings.
+        PxVal::Path(p) => p.clone(),
         PxVal::Closure { .. } => String::from("<lambda>"),
         PxVal::Builtin { .. } => String::from("<builtin>"),
         // printing forces (like Nix's `:p`); recurse on the forced value so
@@ -10507,6 +10895,66 @@ fn px_str_lt(a: &str, b: &str) -> bool {
 
 /// One-call entrypoint: parse + evaluate + canonical print.
 /// Parse + evaluate, returning the VALUE (callers needing data, not text).
+
+/// Lexically normalize a path VALUE's text the same way Nix collapses a
+/// path's segments at construction: a `.` segment vanishes, a `..` segment
+/// cancels the previous real segment when there is one to cancel. When
+/// there is nothing left to cancel, a relative path keeps the `..` (it
+/// cannot be resolved without knowing what it is relative to), while an
+/// absolute path just drops it (it can never climb above `/`). Every
+/// `PxVal::Path` is normalized at the moment it is built (bare literal,
+/// `+` concat, `toPath`, `dirOf`) so `==`/`<` can compare the stored
+/// strings directly without re-normalizing.
+fn px_normalize_path(s: &str) -> String {
+    let is_abs = s.starts_with("/");
+    let mut segs: Vec<String> = Vec::new();
+    for seg in s.split("/") {
+        if seg == "" || seg == "." {
+            // collapses "//" and "./" markers -- contribute nothing
+        } else if seg == ".." {
+            let can_pop = match segs.last() {
+                Some(last) => last != "..",
+                None => false,
+            };
+            if can_pop {
+                segs.pop();
+            } else if !is_abs {
+                segs.push(String::from(".."));
+            }
+            // absolute + nothing to cancel: can't go above root, drop it
+        } else {
+            segs.push(String::from(seg));
+        }
+    }
+    if is_abs {
+        let mut out = String::from("/");
+        let mut i = 0usize;
+        while i < segs.len() {
+            if i > 0 {
+                out.push('/');
+            }
+            out.push_str(&segs[i]);
+            i += 1;
+        }
+        return out;
+    }
+    if segs.is_empty() {
+        return String::from(".");
+    }
+    let mut out = String::new();
+    if segs[0] != ".." {
+        out.push_str("./");
+    }
+    let mut i = 0usize;
+    while i < segs.len() {
+        if i > 0 {
+            out.push('/');
+        }
+        out.push_str(&segs[i]);
+        i += 1;
+    }
+    out
+}
 
 /// Normalize `dir/rel` (handling `./` and `../`) into a `./a/b.px` key.
 fn px_path_join(dir: &str, rel: &str) -> String {
@@ -10713,9 +11161,13 @@ pub fn px_expand_imports(
             })
         }
         PxExpr::Var(n) => {
-            if n.starts_with(":path:") {
-                return Err(format!("px: path literal outside import: {}", n));
-            }
+            // A `:path:`-marked var that was NOT consumed as an `import`/
+            // `scopedImport` target above is a bare path literal used as an
+            // ordinary expression (`./x.px` outside `import`). It stays a
+            // `:path:`-marked Var here; px_eval's variable lookup resolves
+            // the marker into a real `PxVal::Path` (see the `:path:` arm
+            // there) -- the same resolution `-c`/inline mode already needs
+            // since it never runs this expansion pass at all.
             Ok(PxExpr::Var(n.clone()))
         }
         PxExpr::Int(v) => Ok(PxExpr::Int(*v)),
@@ -11028,6 +11480,9 @@ pub fn px_value_has_opaque(v: &PxVal) -> bool {
         PxVal::Bool(_) => false,
         PxVal::Null => false,
         PxVal::Str(_) => false,
+        // A path is plain text with a canonical normalized form, same tier
+        // as a string -- not opaque.
+        PxVal::Path(_) => false,
         // raw bytes: data, but with no canonical text form — mirror
         // roundtrip claims stay held rather than lossless.
         PxVal::Bytes(_) => true,

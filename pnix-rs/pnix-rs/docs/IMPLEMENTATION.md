@@ -29,12 +29,44 @@ AST 순회 유틸 — `PxExpr`에 새 variant를 추가하면 이 파일들도 �
   참고).
 - **파서**: `px_lex` 출력을 재귀 하강으로 소비. `PxExpr` enum이 AST.
 - **값 표현**: `PxVal` enum — `Int(i64)`, `Float(f64)`, `Str(String)`,
-  `Bytes(Vec<u8>)`(비UTF-8 raw bytes 중간값), `List(Rc<Vec<PxVal>>)`,
-  `Closure{param,body,env}`, `Builtin{name,args}`(커링), `Attrs(Rc<Vec<(String,PxVal)>>)`.
-  **경로는 별도 값 타입이 아니다** — `./x` 같은 리터럴은 렉서 단계에서만
-  의미 있고(`import` 인자로만), 그 외 위치에서 쓰면 "path literal outside
-  import" 에러. `builtins.typeOf ./x`는 `"path"`가 아니라 그냥 문자열처럼
-  샌다(§3 다른 호스트와 차이점 참고 — clr/clj/hy는 진짜 Path 타입 있음).
+  `Bytes(Vec<u8>)`(비UTF-8 raw bytes 중간값), `Path(String)`(2026-08-20부터
+  — 아래 참고), `List(Rc<Vec<PxVal>>)`, `Closure{param,body,env}`,
+  `Builtin{name,args}`(커링), `Attrs(Rc<Vec<(String,PxVal)>>)`.
+- **경로(Path) 값 (2026-08-20)**: `./x`/`../x`/`/x` 같은 리터럴은 이제
+  `import`/`scopedImport` 인자 위치 밖에서도 진짜 `PxVal::Path(String)`
+  값이다 — clj/clr처럼 `PathBuf`가 아니라 이 파일이 이미 다른 값 종류에
+  쓰던 대로 plain `String`을 택함(substrate-check로 조기 확인, `PathBuf`
+  대신이라 문제 없었음). 렉서의 `PathLit` 토큰은 그대로 파서에서
+  `Var(":path:<literal>")`로 마킹되고(변경 없음), 새로 바뀐 건 이 마킹이
+  **소비되지 않고 끝까지 남았을 때**의 처리뿐이다 — 예전엔
+  `px_expand_imports`(파일 모드)가 이걸 하드 에러로 처리했지만, 이제는
+  마킹을 그대로 통과시켜서 평가 시점의 변수 조회 fallback이
+  `px_normalize_path`로 정규화한 `PxVal::Path`를 만든다(`-c` 인라인 모드는
+  애초에 `px_expand_imports`를 안 거치므로 같은 fallback을 이미 타고
+  있었음 — 두 모드가 이제 완전히 통일된 경로 하나로 수렴). **cur_dir로
+  절대화하지 않는다** — 상대 리터럴은 정규화된 상대 텍스트(`./a/b`)를
+  그대로 유지한다. 이건 실제 Nix(파일 위치 기준 절대 경로로 만듦)와는
+  다르지만, pnix-clj 오라클도 같은
+  선택(리터럴 텍스트만 정규화, cur_dir 조인 없음)을 하는 걸 직접 확인하고
+  따른 것 — `nix-instantiate`로 교차검증해서 실제 Nix와는 다르다는 것도
+  확인함(의도적 divergence, `docs/BUGS.md`에는 안 남김 — 오라클이 합의한
+  설계라 "버그"가 아니라 이 host들의 공유된 설계 선택). 정규화
+  (`px_normalize_path`, `src/px.rs`)는 `.`/`..` 세그먼트를 real Nix처럼
+  접는다(절대 경로는 루트 위로 못 올라가서 `..`를 버림, 상대 경로는 접을 게
+  없으면 `..`를 그대로 유지). `+` 연산(path+path/path+string/string+path)은
+  두 피연산자의 표시 텍스트를 **구분자 없이** 이어붙인 뒤 정규화하는데,
+  이것도 오라클(pnix-clj) 같은 "구분자 없는 raw concat"
+  방식이라 그대로 이식(`./a + ./b` → `./a./b`처럼 직관과 다르게 보일 수
+  있지만 오라클 확인됨). `"${./p}"` 문자열 보간은 이 정규화된 텍스트가
+  아니라 **가짜 store path**(`/nix/store/<sha256 앞 32자>-<basename>`)로
+  치환된다 — 실제 Nix의 "store에 복사하고 store path를 보간"을 흉내낸
+  것으로, `toString`/`dirOf` 등 다른 모든 경로 소비자는 원래 텍스트를 그대로
+  쓰는 것과 대조적인, 의도적으로 분리된 별개 메커니즘(derivation 절이 이미
+  쓰던 `px_sha256_hex`/pseudo-hash 인프라 재사용). `isPath`/`typeOf`
+  (`"path"`)/`dirOf`(Path 유지)/`baseNameOf`(항상 문자열)/`toPath`(이제
+  `PxVal::Path` 반환)/`==`/`<`(정규화된 문자열 직접 비교, 생성 시점에 이미
+  정규화됐으므로 별도 재정규화 불필요)/`toJSON`/`toXML`/rust-mirror 투영/
+  specialize의 값→AST 역투영까지 전부 반영(§4 역사 표 참고).
 - **환경/스코프**: `env: Vec<PxFrame>`, `PxFrame`은 `Rec`(재귀 let, memo
   포함) / `Bind{name,value}` / `With(PxVal)`. 조회는 innermost 프레임부터,
   `With`는 다른 프레임 다 실패한 뒤에만 확인(오라클: `let a=2; in with
@@ -349,13 +381,9 @@ diff).
 
 ## 3. 다른 호스트와 알려진 차이점
 
-- **경로(path) 값 타입이 없다.** clr/clj/hy는 `builtins.typeOf ./x`가
-  `"path"`를 돌려주는 진짜 Path 값 타입이 있다. rs는 경로 리터럴이
-  `import`/`scopedImport` 인자 위치에서만 의미 있고, 그 외에서 쓰면
-  "path literal outside import" 에러 — 일반 값으로 저장/전달 불가.
-  cljs도 마찬가지로 없음(단, cljs는 `import`에서조차 파서가 경로 토큰을
-  직접 소비하는 방식이라 rs와는 다른 이유로 없음). 언젠가 일반 Path
-  타입을 만들 거면 이게 제일 큰 선행 작업.
+- ~~경로(path) 값 타입이 없다~~ — **정정(2026-08-20): 더 이상 사실이
+  아니다.** clj/clr처럼 진짜 `PxVal::Path` 값 타입이 생겼다(§1 "경로(Path)
+  값" 절 참고). cljs는 여전히 없음(별개 프로젝트, rs가 상관할 일 아님).
 - **`import`가 "AST를 그 자리에 붙여넣는" 방식.** clr/clj/cljs/hy는
   import마다 독립된 평가 호출(그 파일만의 새 환경에서 시작)을 한다. rs는
   대상 파일의 파싱된 AST를 호출부에 구조적으로 치환한다 — 2026-08-19
@@ -461,6 +489,7 @@ pnix-rs 자체는 대부분 오늘(§4-오늘) 있었음):
 |---|---|
 | (미커밋 — 검토 대기) | **string-context + derivation 구현** (proposal 0006/0010이 명시적으로 open으로 남겨뒀던 두 갭 중 string-context 쪽 해소). pnix-clj(오라클)/pnix-cljs(이식 선례)의 설계를 pnix-rs 관용구로 이식: `PxVal::Bytes` 선례를 따라 새 variant 없이 태그된 `PxVal::Attrs`(`__pnix_value_kind = "string-context"`)로 표현, `px_builtin_exec` 단일 chokepoint에서 고정 allowlist 기반 얕은 fail-closed 게이트, `+`/`${...}`/`==`/`<`는 언어 연산자라 항상 context-aware. 신규 빌트인 5개(`hasContext`/`getContext`/`appendContext`/`derivation`/`derivationStrict`) + 기존 25개 이상 빌트인(`toString`/`toJSON`/`stringLength`/`substring`/`concatStrings(Sep)`/`concatMapStrings`/`replaceStrings`/`match`/`split`/`toUpper`/`toLower`/`hasPrefix`/`hasSuffix`/`hasInfix`/`removePrefix`/`removeSuffix`/`toInt`/`stringToCharacters`/`splitString`/`toPath`/`hashString`/`unsafeDiscardStringContext`/`unsafeDiscardOutputDependency`/`typeOf`/`isString`/`isAttrs`)에 context 전파/인식 로직 추가. 캐노니컬 출력 경계(`px_print`/`px_to_json`)는 context를 벗겨 content만 방출(실제 Nix `--json`과 동일 — context는 텍스트에 표현되지 않는 메타데이터). `pnix-clj` 라이브 오라클 대비 30여 항목 교차검증 배터리 전부 일치; 유일한 의도적 발산은 `.` select(오라클의 `eval-select`가 `attrset-value?`가 아니라 맨 `map?`을 써서 ctx-string 내부 표현이 새는 것으로 확인됐는데, 이건 오라클 자신의 대상함수 하나짜리 누락으로 보여 pnix-cljs의 별개-레코드-타입 판단을 따라 재현하지 않음 — `docs/BUGS.md` §1 참고). `rs-meta` 인터프리트 서브셋에서 새로 걸린 제약: `Option::unwrap_or_default` 미지원(명시 `match`로 대체), `char` 리터럴 `starts_with`(문자열 리터럴로 대체 — 08-19에 이미 알려진 제약과 동일 종류), 패턴 안 `mut` 바인딩(`Some((x, mut y))`) 미지원, 인덱싱을 거친 튜플 필드 대입(`acc[idx].1 = v`)과 그 필드에 대한 메서드 호출(`acc[idx].3.push(v)`) 둘 다 미지원(둘 다 "로컬 변수로 꺼내 수정 후 되쓰기"로 우회) — 전부 `substrate-check`로 실제 잡아냈고, 이 파일이 이미 쓰던 명시-루프 관용구를 그대로 따라 우회함. `capabilities-check`/`registry-check`/전체 `check` 34+1개 게이트 재검증 PASS(`capabilities-check`는 재생성 전 1회만 FAIL — 드리프트 게이트가 실제로 작동함을 확인한 것). |
 | (미커밋 — 검토 대기) | 08-19에 "B1 숫자 모델 미결정"으로 held 묶었던 확장 수학 빌트인 10개(`sin cos tan sqrt exp ln log abs pow mod`)를 실구현. 다른 4개 호스트(clj/clr/cljs/hy)가 이미 전부 동작하는 구현을 갖고 있던 4/5 합의 사례였음이 재확인되어 hold 해제 — "B1 숫자 모델" 우려는 실제로는 언어 전체 int/float 승격 정책에 관한 것이었지, 이 단순 단항/이항 float 함수들을 막을 이유는 아니었다. rs-meta의 인터프리트 Rust 부분집합은 f64 메서드 디스패치가 아예 없어서(`substrate-check`가 `src/px.rs` 전체를 rs-meta bootstrap으로 해석하는데, `interp.rs`의 `call_method`는 i64 계열만 숫자 메서드 타깃으로 인식) `.sin()`/`.sqrt()`/`.exp()`/`.ln()`/`.powf()` 같은 표준 라이브러리 호출을 못 쓴다 — 이 파일이 이미 같은 이유로 쓰던 관례(`px_bit_op`의 bit-by-bit AND/OR/XOR, `px_round_to_int`의 cast-and-adjust ceil/floor)를 그대로 따라 순수 산술(Newton's method 제곱근, 2*ln2/2*pi 범위축소 + Taylor 급수)로 직접 구현(`px_math_sqrt`/`px_math_exp`/`px_math_ln`/`px_math_sin`/`px_math_cos`/`px_math_tan`/`px_math_atan`/`px_math_atan2`, `px.rs`의 `px_num_f64` 옆). `abs`/`pow`/`mod`는 기존 `add`/`sub`/`mul`/`div` 관례(int⊕int는 checked 정수 유지, 오버플로우 에러; 그 외는 float)를 그대로 따름. 같은 변경에서 신규 `atan2`(오라클: pnix-hy, 커링 순서 `atan2 y x`)와 `builtins.mapAttrs'`(오라클: pnix-clj — `f name value`가 `{ name; value; }` 쌍을 돌려주고 결과 이름으로 재-키잉, 충돌 시 first-name-wins는 `listToAttrs`와 동일 규칙)도 추가. |
+| (미커밋 — 검토 대기) | **경로(Path) 값 타입 + JSON float 메시지 + POSIX ERE 확장** (proposal 0006/0010이 open으로 남겨뒀던 나머지 갭들 대부분 해소). (1) `PxVal::Path(String)` 신설 — §1 "경로(Path) 값" 절 참고, `isPath`/`typeOf`/`dirOf`/`baseNameOf`/`toPath`/`==`/`<`/`+`/`toJSON`/`toXML`/`${...}` 보간/rust-mirror/specialize 전부 갱신. (2) URI 리터럴은 손대 보니 **이미 완전히 구현돼 있었다** — `px_uri_scheme_char`/`px_uri_body_char`/`px_uri_end`(실제 Nix 렉서 규칙 `[A-Za-z][A-Za-z0-9+.-]*:[A-Za-z0-9%/?:@&=+$,_.!~*'-]+`와 정확히 일치)와 `PxTok::Uri`가 이미 있었고 `phase3_uri_literals`(substrate-check)/URI 관련 px-check 케이스가 이미 통과 중이었음 — `docs/BUGS.md`/`docs/IMPLEMENTATION.md` §3의 "URI 리터럴이 없다"는 낡은 기록이었을 뿐, 코드 변경 없음. (3) `toJSON`의 비유한 float(NaN/+inf/-inf) 처리는 이미 에러를 내고 있었다(`x - x == 0.0` 유한성 체크가 이미 있었음) — 다만 메시지가 뭉뚱그려져 있어서 `px_json_float_text` 공용 헬퍼로 빼고 NaN/+inf/-inf를 구분하는 메시지로 교체. 유한 float의 지수 표기(`{:?}`)는 이미 유효한 JSON 숫자 문법(지수에 `+` 안 붙임, 소수부 없는 지수 표기도 JSON 문법상 유효)이었음을 실측 확인, 코드 변경 불필요. (4) POSIX ERE 엔진(`rx_compile`/`rx_at`, `src/px.rs`)의 실제 갭 2개를 닫음 — `*`/`+`가 단일 문자 노드에서만 허용되던 제약을 그룹(괄호 하위표현식)까지 확장(새 `rx_repeat_group_try`: 그리디 전진 후 반복 횟수를 하나씩 백오프, 중첩 캡처는 마지막 성공 반복의 값을 유지 — 백오프가 실제로 일어나는 드문 경우의 캡처 정확성은 의도적 미해결, 진짜 POSIX 정확성은 leftmost-longest 오토마톤이 필요해서 범위 밖), 그리고 구간 반복 `{m}`/`{m,}`/`{m,n}`을 파싱 시점에 필수 복사본 + `?`/`*`로 desugar하는 방식으로 신규 추가(`try_parse_interval`). `nix-instantiate`를 라이브 오라클로 교차검증해서 중요한 설계 결정 2개를 뒤집음 — 처음엔 "불완전한 `{...}`는 그냥 리터럴 `{`로 취급"(GNU grep -E 스타일)으로 짰다가, 실제 Nix가 `a{`/`a{,3}`/`a{x}`/`a{}`/무피연산자 `{3}` 전부를 하드 에러로 낸다는 걸 확인하고 리터럴 폴백을 전부 제거함(이스케이프한 `\{`는 여전히 리터럴로 동작); 구간 카운트 상한도 처음엔 4096으로 뒀다가 실제 Nix가 `a{1000000}`은 받아주고(즉시 매치 시도, `null`) `a{4294967296}`은 거부하는 걸 확인하고 100만으로 올림(이 엔진은 구간을 실제 AST 노드 복사본 개수로 desugar하므로 진짜 O(1) counted-repeat인 실제 엔진보다는 낮은 상한이 여전히 필요). 같은 오라클로 `(a\|ab)(c\|bcd)(d*)`류 패턴에서 실제 Nix 자체도 POSIX-leftmost-longest가 아니라 backtracking-첫-성공-승 방식이라는 것도 확인 — 이 엔진의 기존 "알려진 한계" 주석이 실은 오라클과 이미 일치하는 동작이었음이 드러나 주석을 정정. `substrate-check`에서 `let x: T;` 뒤늦은 대입, 함수 안 `const`, `.parse::<usize>()`(i64/f64만 지원) 셋 다 새로 걸림 — 전부 이 파일이 이미 쓰던 관용구(값-생성 `if`/`match` 식, `let` 상수 대용, i64 파싱 후 캐스팅)로 우회. `substrate-check`/`px-check`/전체 `check` 재검증 PASS. |
 
 ## 5. 게이트 레지스트리 (중복개발 방지용, 옛 REGISTRY.md §1 편입)
 

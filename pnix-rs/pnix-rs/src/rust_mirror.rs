@@ -106,6 +106,10 @@ fn value_to_rust_string_expr(v: &px::PxVal, needs_escape: &mut bool) -> Result<S
         }
         px::PxVal::Closure { .. } => Err(String::from("held: opaque leaf (lambda)")),
         px::PxVal::Builtin { .. } => Err(String::from("held: opaque leaf (builtin)")),
+        // px_print renders a path unquoted (unlike a string); project the
+        // same plain (Rust-escaped) literal, with no surrounding quotes in
+        // the recomposed text.
+        px::PxVal::Path(p) => Ok(format!("{}.to_string()", rust_str_literal(p))),
     }
 }
 
