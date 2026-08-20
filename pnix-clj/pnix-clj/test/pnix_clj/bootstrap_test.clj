@@ -5628,11 +5628,15 @@
     (is (= :audit-only-no-behavior-change (:policy fixture-report)))
     (is (= 254 (:source-count fixture-report)))
     (is (= 243 (:strict-ok fixture-report)))
-    (is (= 0 (:strict-violation fixture-report)))
+    ;; mirror-error/non-bool-if ("if 1 then 2 else 3") is a deliberate
+    ;; strict-typing violation fixture (added alongside division-by-zero/
+    ;; not-callable/abort-called 2026-08-21) -- it is meant to trip this
+    ;; classifier, not pass it.
+    (is (= 1 (:strict-violation fixture-report)))
     ;; The classifier has no :held bucket -- rows are :strict-ok,
     ;; :strict-violation, or fall through to :failed.
     (is (= 0 (:held fixture-report)))
-    (is (= 0 (:violation-count fixture-report)))
+    (is (= 1 (:violation-count fixture-report)))
     (is (= {:ground-truth-oracle 20
             :mirror-pair 204
             :mirror-error 8

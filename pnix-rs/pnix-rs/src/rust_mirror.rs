@@ -89,6 +89,13 @@ fn value_to_rust_string_expr(v: &px::PxVal, needs_escape: &mut bool) -> Result<S
             // side recomposes the same canonical text.
             let mut sorted: Vec<(String, &px::PxVal)> = Vec::new();
             for (k, val) in fields.iter() {
+                // __pnix_attr_pos is unsafeGetAttrPos's internal per-field
+                // position side-table (px.rs's px_is_attr_pos_key); px_print
+                // hides it from canonical text, so the projected Rust
+                // program must hide it too or the 3-way check never agrees.
+                if k == "__pnix_attr_pos" {
+                    continue;
+                }
                 sorted.push((k.clone(), val));
             }
             sorted.sort_by(|a, b| a.0.cmp(&b.0));

@@ -399,7 +399,8 @@ fn px_split_attr_pos(fields: &[(String, PxVal)]) -> (Vec<(String, PxVal)>, Optio
     (user, pos)
 }
 
-fn px_join_attr_pos(mut user: Vec<(String, PxVal)>, pos: Option<PxVal>) -> PxVal {
+fn px_join_attr_pos(user: Vec<(String, PxVal)>, pos: Option<PxVal>) -> PxVal {
+    let mut user = user;
     match pos {
         Some(p) => {
             user.push((String::from(PX_ATTR_POS_KEY), p));
@@ -976,8 +977,8 @@ fn px_lex_push(toks: &mut Vec<PxTok>, offs: &mut Vec<usize>, tok: PxTok, off: us
 
 fn px_lex(src: &str) -> Result<(Vec<PxTok>, Vec<usize>), String> {
     let chars = src.chars().collect::<Vec<char>>();
-    let mut toks = Vec::new();
-    let mut offs = Vec::new();
+    let mut toks: Vec<PxTok> = Vec::new();
+    let mut offs: Vec<usize> = Vec::new();
     let mut i = 0usize;
     while i < chars.len() {
         let c = chars[i];
@@ -3514,9 +3515,10 @@ fn px_is_attr_pos_key(name: &str) -> bool {
 }
 
 fn px_expr_attrs_with_pos(
-    mut fields: Vec<(String, PxExpr)>,
+    fields: Vec<(String, PxExpr)>,
     pos_fields: Vec<(String, PxExpr)>,
 ) -> PxExpr {
+    let mut fields = fields;
     if pos_fields.is_empty() {
         PxExpr::Attrs(fields)
     } else {

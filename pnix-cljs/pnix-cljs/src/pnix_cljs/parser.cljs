@@ -20,7 +20,11 @@
 
 (defn source-position
   "Nix/hy oracle: {file; line; column} from a 0-based source offset.
-  Inline eval uses the same `<pnix-px>` file label as pnix-hy."
+  Inline eval uses the same `<pnix-px>` file label as pnix-hy. `line`/
+  `column` are host integers (js/BigInt) -- real Nix's line/column are
+  ints, not floats (oracle-confirmed:
+  `typeOf (unsafeGetAttrPos ...).line` == \"int\"), and this file's own
+  integer literals (e.g. `42n` in the test suite) are bigint-backed."
   [parser offset]
   (let [source (str (:source @parser))
         n (count source)
@@ -29,7 +33,7 @@
         line (inc (count (re-seq #"\n" prefix)))
         line-start (.lastIndexOf prefix "\n")
         column (if (neg? line-start) (inc clamped) (- clamped line-start))]
-    {"file" "<pnix-px>" "line" line "column" column}))
+    {"file" "<pnix-px>" "line" (js/BigInt line) "column" (js/BigInt column)}))
 
 (defn current-token [parser]
   (let [{:keys [tokens index]} @parser]
@@ -89,20 +93,24 @@
 
 (defn nest-attr-path
   "Desugar a.b.c = v into nested attrset fields rooted at a.
-  `segments` is a vector of {:name :offset} maps so each nested attr
-  keeps the source position of that path segment (hy/Nix
-  unsafeGetAttrPos)."
+  `segments` is a vector of {:name :offset} maps. Every nesting level
+  shares the position of the FIRST segment of the whole dotted path --
+  oracle-confirmed (nix-instantiate/nix eval) real Nix threads a single
+  `pos` (the start of the attrpath) through every nested ExprAttrs it
+  builds for `a.b.c = v;`, it does not give each segment its own
+  position."
   [parser segments value]
-  (let [head (first segments)
-        pos (source-position parser (:offset head))]
-    (if (= 1 (count segments))
-      {:name (:name head) :pos pos :value value}
-      (let [nested (nest-attr-path parser (rest segments) value)]
-        {:name (:name head)
-         :pos pos
-         :value {:op :attrset
-                 :recursive false
-                 :fields [nested]}}))))
+  (let [pos (source-position parser (:offset (first segments)))]
+    (letfn [(nest [segs]
+              (let [name (:name (first segs))]
+                (if (= 1 (count segs))
+                  {:name name :pos pos :value value}
+                  {:name name
+                   :pos pos
+                   :value {:op :attrset
+                           :recursive false
+                           :fields [(nest (rest segs))]}})))]
+      (nest segments))))
 
 (defn attrset-literal?
   [expression]
