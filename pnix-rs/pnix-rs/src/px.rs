@@ -2335,6 +2335,81 @@ impl PxParser {
         }
     }
 
+    /// Parse ONE segment of a dotted attrset-binding path (`k1.k2...kn = v`,
+    /// used inside `parse_attrset_literal`). A segment is a plain ident /
+    /// keyword-name (static) or a possibly-interpolated string / bare
+    /// `${ expr }` (dynamic) -- exactly the key vocabulary this file's key
+    /// match already accepted for a lone (non-dotted) key. D21: reusing it
+    /// for EVERY segment of a dotted path (not just a solitary first/only
+    /// key) is what lets a dynamic segment appear anywhere in the path
+    /// (`a.${x}.c = 1;`), ported from pnix-clj's `parse-attr-path`/`seg`.
+    /// Returns `(parts, is_dynamic)`; `is_dynamic` mirrors this file's
+    /// existing `any_dynamic` convention -- true for ANY quoted-string or
+    /// `${...}` segment, even a non-interpolated string (matches the
+    /// pre-existing single-key behavior, unchanged by this feature).
+    fn parse_attr_path_segment(&mut self) -> Result<(Vec<PxStrPart>, bool), String> {
+        match self.toks.get(self.pos).cloned() {
+            Some(PxTok::Ident(name)) => {
+                self.pos += 1;
+                Ok((vec![PxStrPart::Lit(name)], false))
+            }
+            Some(PxTok::Str(parts)) => {
+                self.pos += 1;
+                let mut out: Vec<PxStrPart> = Vec::new();
+                for (is_sub, text) in &parts {
+                    if *is_sub {
+                        out.push(PxStrPart::Sub(px_parse(text)?));
+                    } else if !text.is_empty() {
+                        out.push(PxStrPart::Lit(text.clone()));
+                    }
+                }
+                Ok((out, true))
+            }
+            Some(PxTok::Null) => {
+                self.pos += 1;
+                Ok((vec![PxStrPart::Lit(String::from("null"))], false))
+            }
+            Some(PxTok::True) => {
+                self.pos += 1;
+                Ok((vec![PxStrPart::Lit(String::from("true"))], false))
+            }
+            Some(PxTok::False) => {
+                self.pos += 1;
+                Ok((vec![PxStrPart::Lit(String::from("false"))], false))
+            }
+            Some(PxTok::KwAssert) => {
+                self.pos += 1;
+                Ok((vec![PxStrPart::Lit(String::from("assert"))], false))
+            }
+            Some(PxTok::DollarBrace) => {
+                self.pos += 1;
+                let e = self.parse_expr()?;
+                self.eat(PxTok::RBrace)?;
+                Ok((vec![PxStrPart::Sub(e)], true))
+            }
+            _ => Err(format!(
+                "px parse: expected attrset key, found {}",
+                self.cur_desc()
+            )),
+        }
+    }
+
+    /// Does the token at `idx` start a valid attr-path segment? Used to
+    /// decide whether a `.` continues a dotted attrpath (and should be
+    /// consumed) or belongs to something else entirely.
+    fn token_starts_attr_path_segment(&self, idx: usize) -> bool {
+        match self.toks.get(idx) {
+            Some(PxTok::Ident(_)) => true,
+            Some(PxTok::Str(_)) => true,
+            Some(PxTok::Null) => true,
+            Some(PxTok::True) => true,
+            Some(PxTok::False) => true,
+            Some(PxTok::KwAssert) => true,
+            Some(PxTok::DollarBrace) => true,
+            _ => false,
+        }
+    }
+
     /// Attrset literal `{ ... }` (current token must be `{`). With
     /// `keep_inherit_marks`, inherit-clause fields keep their `:`-marked
     /// Var values so the `rec` desugar can capture them from the OUTER scope
@@ -2408,84 +2483,53 @@ impl PxParser {
                             continue;
                         }
                     }
-                    // Nested static path `foo.bar.baz = v` desugars to nested
-                    // attrsets via merge_attr_field (Nix attrpath assignment).
-                    let mut nested_path: Vec<String> = Vec::new();
-                    let key_parts: Vec<PxStrPart> = match self.toks.get(self.pos).cloned() {
-                        Some(PxTok::Ident(name)) => {
-                            self.pos += 1;
-                            nested_path.push(name.clone());
-                            while self.peek_is(PxTok::Dot) {
-                                // stop if `.` starts a float or is not followed by ident
-                                if let Some(PxTok::Ident(n2)) = self.toks.get(self.pos + 1).cloned() {
-                                    self.pos += 1; // Dot
-                                    self.pos += 1; // Ident
-                                    nested_path.push(n2);
-                                } else {
-                                    break;
-                                }
-                            }
-                            vec![PxStrPart::Lit(nested_path[0].clone())]
-                        }
-                        Some(PxTok::Str(parts)) => {
-                            self.pos += 1;
-                            any_dynamic = true;
-                            let mut out = Vec::new();
-                            for (is_sub, text) in &parts {
-                                if *is_sub {
-                                    out.push(PxStrPart::Sub(px_parse(text)?));
-                                } else if !text.is_empty() {
-                                    out.push(PxStrPart::Lit(text.clone()));
-                                }
-                            }
-                            out
-                        }
-                        // keyword-named keys: Nix allows { null = ...; }
-                        // (and quoted "true"/"false"); accept the literal
-                        // tokens as plain key names here.
-                        Some(PxTok::Null) => {
-                            self.pos += 1;
-                            vec![PxStrPart::Lit(String::from("null"))]
-                        }
-                        Some(PxTok::True) => {
-                            self.pos += 1;
-                            vec![PxStrPart::Lit(String::from("true"))]
-                        }
-                        Some(PxTok::False) => {
-                            self.pos += 1;
-                            vec![PxStrPart::Lit(String::from("false"))]
-                        }
-                        Some(PxTok::KwAssert) => {
-                            self.pos += 1;
-                            vec![PxStrPart::Lit(String::from("assert"))]
-                        }
-                        Some(PxTok::DollarBrace) => {
-                            // bare dynamic key `${e} = v;` (Nix core) —
-                            // rides the existing dynamic-key listToAttrs
-                            // desugar as a single Sub part.
-                            self.pos += 1;
-                            let e = self.parse_expr()?;
-                            self.eat(PxTok::RBrace)?;
-                            any_dynamic = true;
-                            vec![PxStrPart::Sub(e)]
-                        }
-                        _ => {
-                            return Err(format!(
-                                "px parse: expected attrset key, found {}",
-                                self.cur_desc()
-                            ))
-                        }
-                    };
+                    // Dotted attrpath `k1.k2...kn = v` desugars to nested
+                    // single-entry attrsets (Nix attrpath assignment; a
+                    // static-first-segment prefix later re-merges siblings
+                    // via merge_attr_field). D21: EVERY segment -- first or
+                    // trailing -- may independently be static or dynamic
+                    // (`a.${x}.c = 1;`, not just a lone top-level dynamic
+                    // key), ported from pnix-clj's parse-attr-path/seg.
+                    let (first_parts, first_dynamic) = self.parse_attr_path_segment()?;
+                    if first_dynamic {
+                        any_dynamic = true;
+                    }
+                    let mut seg_parts_list: Vec<Vec<PxStrPart>> = Vec::new();
+                    let mut seg_dynamic_list: Vec<bool> = Vec::new();
+                    seg_parts_list.push(first_parts.clone());
+                    seg_dynamic_list.push(first_dynamic);
+                    while self.peek_is(PxTok::Dot)
+                        && self.token_starts_attr_path_segment(self.pos + 1)
+                    {
+                        self.pos += 1; // Dot
+                        let (seg_parts, seg_dynamic) = self.parse_attr_path_segment()?;
+                        seg_parts_list.push(seg_parts);
+                        seg_dynamic_list.push(seg_dynamic);
+                    }
+                    let key_parts: Vec<PxStrPart> = first_parts;
                     self.eat(PxTok::Assign)?;
                     let value0 = self.parse_expr()?;
                     self.eat(PxTok::Semi)?;
-                    // Wrap nested path foo.bar = v as foo = { bar = v; }
+                    // Wrap trailing segments foo.bar = v as foo = { bar = v; }
+                    // (static segment) or foo = builtins.listToAttrs
+                    // [ { name = bar; value = v; } ] (dynamic segment,
+                    // D21: px_wrap_dynamic_attr reuses the same desugar a
+                    // lone dynamic key already gets, applied at this
+                    // nested position instead of the top level).
                     let mut value = value0;
-                    if nested_path.len() > 1 {
-                        let mut i = nested_path.len();
-                        while i > 1 {
-                            i -= 1;
-                            value = PxExpr::Attrs(vec![(nested_path[i].clone(), value)]);
+                    let mut i = seg_parts_list.len();
+                    while i > 1 {
+                        i -= 1;
+                        let seg_parts = seg_parts_list[i].clone();
+                        let seg_dynamic = seg_dynamic_list[i];
+                        if seg_dynamic {
+                            value = px_wrap_dynamic_attr(seg_parts, value);
+                        } else {
+                            let name = match seg_parts.first() {
+                                Some(PxStrPart::Lit(s)) => s.clone(),
+                                _ => return Err(String::from("px parse: empty attrset key")),
+                            };
+                            value = PxExpr::Attrs(vec![(name, value)]);
                         }
                     }
                     entries.push((key_parts, value));
@@ -3283,6 +3327,79 @@ fn px_is_attrs_lit(e: &PxExpr) -> bool {
     }
 }
 
+/// Build `builtins.listToAttrs [ <pairs> ]` -- the shape
+/// `parse_attrset_literal`'s any-dynamic-key branch already desugars a
+/// dynamic-keyed attrset literal to. Shared by that branch and by D21's
+/// nested-dynamic-attrpath-segment desugar (`px_wrap_dynamic_attr`) so both
+/// produce byte-identical output for the same semantics.
+fn px_make_list_to_attrs(pairs: Vec<PxExpr>) -> PxExpr {
+    PxExpr::Apply {
+        func: Box::new(PxExpr::Select {
+            base: Box::new(PxExpr::Var(String::from("builtins"))),
+            name: String::from("listToAttrs"),
+        }),
+        arg: Box::new(PxExpr::List(pairs)),
+    }
+}
+
+/// Wrap `value` as the sole entry of a single-key dynamic attrset literal
+/// keyed by `key_parts` (`builtins.listToAttrs [ { name = <key_parts>;
+/// value = <value>; } ]`). D21: this is how a DYNAMIC non-first segment of
+/// a dotted attrpath (`a.${x}.c = v` — the `${x}` segment) nests `v`,
+/// mirroring exactly how a static non-first segment nests it via a plain
+/// `PxExpr::Attrs` literal (ported semantics from pnix-clj's
+/// `path->nested`, adapted to this file's listToAttrs-desugar machinery
+/// instead of a literal-with-dynamic-key AST node, which this file's
+/// `PxExpr::Attrs` cannot represent).
+fn px_wrap_dynamic_attr(key_parts: Vec<PxStrPart>, value: PxExpr) -> PxExpr {
+    px_make_list_to_attrs(vec![PxExpr::Attrs(vec![
+        (String::from("name"), PxExpr::Str(key_parts)),
+        (String::from("value"), value),
+    ])])
+}
+
+/// If `e` is exactly the shape `px_make_list_to_attrs` produces
+/// (`builtins.listToAttrs [ .. ]`), return its pair list. Lets
+/// `merge_attr_field` recognize a nested-dynamic-segment desugar as
+/// mergeable with a sibling instead of hard-erroring "duplicate attrset
+/// key" -- D21's trickiest interaction: a STATIC-first-segment sibling
+/// (`a.b = 1;`) must still merge with a binding whose value is a
+/// dynamic-segment desugar (`a.${x}.c = 2;`) under the same static key `a`,
+/// exactly like pnix-clj's merge-attr-bindings (the static prefix merges at
+/// parse time; the dynamic segment itself passes through unresolved to
+/// runtime, where this file's existing listToAttrs first-wins divergence
+/// applies on an actual collision -- see docs/BUGS.md §3).
+fn px_dynamic_pairs(e: &PxExpr) -> Option<Vec<PxExpr>> {
+    match e {
+        PxExpr::Apply { func, arg } => match func.as_ref() {
+            PxExpr::Select { base, name } if name == "listToAttrs" => match base.as_ref() {
+                PxExpr::Var(v) if v == "builtins" => match arg.as_ref() {
+                    PxExpr::List(items) => Some(items.clone()),
+                    _ => None,
+                },
+                _ => None,
+            },
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Convert a literal attrset's static fields into `{name=..;value=..;}`
+/// pairs, the element shape `builtins.listToAttrs` expects. Used by
+/// `merge_attr_field`'s D21 fallback to fold a literal-Attrs side into the
+/// same pair-list shape as the dynamic side before concatenating.
+fn px_attrs_to_dynamic_pairs(fields: &Vec<(String, PxExpr)>) -> Vec<PxExpr> {
+    let mut out: Vec<PxExpr> = Vec::new();
+    for (k, v) in fields {
+        out.push(PxExpr::Attrs(vec![
+            (String::from("name"), PxExpr::Str(vec![PxStrPart::Lit(k.clone())])),
+            (String::from("value"), v.clone()),
+        ]));
+    }
+    out
+}
+
 /// Add `(name, value)` to `fields`, implementing Nix's duplicate-key rule:
 /// if the key already exists AND both the existing and the new value are
 /// attrset literals, RECURSIVELY MERGE their bindings (so `a = {x=1;}; a =
@@ -3314,7 +3431,33 @@ fn merge_attr_field(
                 out.push((k, PxExpr::Attrs(merged)));
                 merged_flag = true;
             } else {
-                return Err(format!("px parse: duplicate attrset key {}", name));
+                // D21: not a literal<->literal merge, but one (or both)
+                // sides may still be a nested-dynamic-attrpath-segment
+                // desugar (builtins.listToAttrs [...]) -- concatenate pair
+                // lists instead of hard-erroring (earlier-defined side's
+                // pairs first, so a real collision resolves via this
+                // file's existing first-wins divergence, docs/BUGS.md §3).
+                let v_pairs = match &v {
+                    PxExpr::Attrs(x) => Some(px_attrs_to_dynamic_pairs(x)),
+                    _ => px_dynamic_pairs(&v),
+                };
+                let value_pairs = match &value {
+                    PxExpr::Attrs(x) => Some(px_attrs_to_dynamic_pairs(x)),
+                    _ => px_dynamic_pairs(&value),
+                };
+                match (v_pairs, value_pairs) {
+                    (Some(vp0), Some(np)) => {
+                        let mut vp = vp0;
+                        for p in np {
+                            vp.push(p);
+                        }
+                        out.push((k, px_make_list_to_attrs(vp)));
+                        merged_flag = true;
+                    }
+                    _ => {
+                        return Err(format!("px parse: duplicate attrset key {}", name));
+                    }
+                }
             }
         } else {
             out.push((k, v));

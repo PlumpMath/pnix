@@ -238,6 +238,11 @@ fn px_corpus() -> Vec<(&'static str, &'static str, &'static str)> {
             "runtime/corpus/seed_get_set.px",
             "{ a = 9; b = 1; }",
         ),
+        (
+            "seed_nested_dynamic_attr",
+            "runtime/corpus/seed_nested_dynamic_attr.px",
+            "3",
+        ),
     ]
 }
 

@@ -1,0 +1,8 @@
+# Nested dynamic attrpath segment (D21, ported from pnix-clj's
+# parse-attr-path/path->nested): a dynamic key can appear ANYWHERE in a
+# dotted attrset-binding path, not just as a lone top-level key.
+# `a.${x}.c = 2;` desugars to `a = { ${x} = { c = 2; }; };` -- a static
+# sibling `a.b = 1;` under the same top-level key `a` still merges with it
+# via merge_attr_field's dynamic-pairs fallback (oracle-verified against
+# pnix-clj: `let x = "y"; in { a.b = 1; a.${x}.c = 2; }.a.y.c` => 2).
+let x = "y"; in { a.b = 1; a.${x}.c = 2; }.a.y.c + { a.b = 1; a.${x}.c = 2; }.a.b
