@@ -1,0 +1,37 @@
+[package]
+name = "pnix-core"
+version.workspace = true
+edition = "2021"
+description = "pnix compiler core - semantic interpretation only, no execution"
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = []
+# Stage 2: Partial Self-Hosting
+# 활성화하면 generated/ 모듈의 자동 생성 코드를 사용
+self_hosted_meta = []
+proptest = []
+# OWNER-LAW (2026-05-11): legacy `pub mod llm` namespace gate.
+# pnix substrate has no LLM seat (CLAUDE.md OWNER-LAW CONSTITUTION). The
+# legacy module folder `crates/pnix-core/src/llm/` was migrated from
+# `pnix-old/pnix_llm` and contains pure type definitions (no LLM API calls).
+# Default builds DO NOT export `pnix_core::llm::*` and do NOT re-export
+# `LlmError`/`LlmResult`. Downstream callers that still need the legacy
+# names must opt in via this feature; the long-term plan is to rename to
+# `language_meta` / `intent_meta` / `text_template` and delete the gate.
+legacy-llm-names = []
+
+[dependencies]
+pnix-fxcore-types = { path = "../pnix-fxcore-types" }
+serde.workspace = true
+serde_json.workspace = true
+pnix-hash = { path = "../pnix-hash" }
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true
