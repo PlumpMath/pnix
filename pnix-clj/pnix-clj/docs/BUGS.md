@@ -83,11 +83,15 @@ map이다. 실제 Nix의 `d.out == d`처럼 파생물이 자기 자신을 순환
 lazy thunk bridge가 필요한데(같은 아키텍처 벽), 지금은 정직하게 held로
 남겨뒀다.
 
-### `.px` 에러는 reason taxonomy가 얕다
+### `.px` 에러 taxonomy는 언어 코어만 class로 맞춰 있다
 
-`.px` 내부 런타임의 `mk_error`는 메시지 하나(+ catchable 플래그)만 담는다.
-다른 레인들처럼 구조화된 reason 키를 비교할 방법이 아직 없어서, `.px`
-내부 에러의 "왜 held인지"를 크로스레인으로 비교하기 어렵다.
+`.px` `mk_error_as`는 `failure.class`(+ 빈 아닌 `evidence.reason`)를
+실어 호스트 machine class와 비교한다. 코어 언어 에러(unknown-variable /
+attribute-missing / assertion-failed / division-by-zero / not-callable /
+non-boolean-condition / abort-builtin-called / interpolation)는
+`mirror-error` 8건으로 핀돼 있다. 나머지 `mk_error` 기본값
+(`unsupported-expression`, 모듈-스키마 검증 메시지)은 아직 메시지 위주라
+크로스레인 비교가 안 된다 — 필요할 때마다 kind를 늘린다.
 
 ### 예전 `LANE_CLASSIFICATION.md`/`SCOPE_LOCK.md`/`clj-meta-separation.md`/
 `docs/GENERATOR_DECISION.md`/`docs/HOST_IMPORT.md`/`docs/META_CIRCULAR_AUDIT.md`/

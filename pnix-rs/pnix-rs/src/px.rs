@@ -367,6 +367,9 @@ pub fn px_attrs(fields: Vec<(String, PxVal)>) -> PxVal {
 
 /// Binary search over the sorted-fields invariant.
 fn px_attrs_find<'a>(fields: &'a [(String, PxVal)], name: &str) -> Option<&'a PxVal> {
+    if px_is_attr_pos_key(name) {
+        return None;
+    }
     let mut lo = 0usize;
     let mut hi = fields.len();
     while lo < hi {
@@ -381,6 +384,29 @@ fn px_attrs_find<'a>(fields: &'a [(String, PxVal)], name: &str) -> Option<&'a Px
         }
     }
     None
+}
+
+fn px_split_attr_pos(fields: &[(String, PxVal)]) -> (Vec<(String, PxVal)>, Option<PxVal>) {
+    let mut user = Vec::new();
+    let mut pos = None;
+    for (k, v) in fields.iter() {
+        if px_is_attr_pos_key(k) {
+            pos = Some(v.clone());
+        } else {
+            user.push((k.clone(), v.clone()));
+        }
+    }
+    (user, pos)
+}
+
+fn px_join_attr_pos(mut user: Vec<(String, PxVal)>, pos: Option<PxVal>) -> PxVal {
+    match pos {
+        Some(p) => {
+            user.push((String::from(PX_ATTR_POS_KEY), p));
+            px_attrs(user)
+        }
+        None => px_attrs(user),
+    }
 }
 
 // ---- string context (pure simulation of Nix string context) ---------------
@@ -943,12 +969,19 @@ fn px_parse_float_lexeme(text: &str) -> Result<f64, String> {
     Ok(f)
 }
 
-fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
+fn px_lex_push(toks: &mut Vec<PxTok>, offs: &mut Vec<usize>, tok: PxTok, off: usize) {
+    toks.push(tok);
+    offs.push(off);
+}
+
+fn px_lex(src: &str) -> Result<(Vec<PxTok>, Vec<usize>), String> {
     let chars = src.chars().collect::<Vec<char>>();
     let mut toks = Vec::new();
+    let mut offs = Vec::new();
     let mut i = 0usize;
     while i < chars.len() {
         let c = chars[i];
+        let start = i;
         if c == ' ' || c == '\n' || c == '\t' || c == '\r' {
             i += 1;
         } else if c == '#' {
@@ -1025,7 +1058,7 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
             }
             parts.push((false, lit));
             let stripped = px_strip_indented(&parts);
-            toks.push(PxTok::Str(stripped));
+            px_lex_push(&mut toks, &mut offs, PxTok::Str(stripped), start);
         } else if c == '"' {
             i += 1;
             let mut parts: Vec<(bool, String)> = Vec::new();
@@ -1098,30 +1131,30 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
                 }
             }
             parts.push((false, lit));
-            toks.push(PxTok::Str(parts));
+            px_lex_push(&mut toks, &mut offs, PxTok::Str(parts), start);
         } else if c == '(' {
-            toks.push(PxTok::LParen);
+            px_lex_push(&mut toks, &mut offs, PxTok::LParen, start);
             i += 1;
         } else if c == ')' {
-            toks.push(PxTok::RParen);
+            px_lex_push(&mut toks, &mut offs, PxTok::RParen, start);
             i += 1;
         } else if c == '{' {
-            toks.push(PxTok::LBrace);
+            px_lex_push(&mut toks, &mut offs, PxTok::LBrace, start);
             i += 1;
         } else if c == '}' {
-            toks.push(PxTok::RBrace);
+            px_lex_push(&mut toks, &mut offs, PxTok::RBrace, start);
             i += 1;
         } else if c == '[' {
-            toks.push(PxTok::LBracket);
+            px_lex_push(&mut toks, &mut offs, PxTok::LBracket, start);
             i += 1;
         } else if c == ']' {
-            toks.push(PxTok::RBracket);
+            px_lex_push(&mut toks, &mut offs, PxTok::RBracket, start);
             i += 1;
         } else if c == ';' {
-            toks.push(PxTok::Semi);
+            px_lex_push(&mut toks, &mut offs, PxTok::Semi, start);
             i += 1;
         } else if c == ':' {
-            toks.push(PxTok::Colon);
+            px_lex_push(&mut toks, &mut offs, PxTok::Colon, start);
             i += 1;
         } else if c == '.'
             && ((i + 1 < chars.len() && chars[i + 1] == '/')
@@ -1139,7 +1172,7 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
                 p.push(chars[i]);
                 i += 1;
             }
-            toks.push(PxTok::PathLit(p));
+            px_lex_push(&mut toks, &mut offs, PxTok::PathLit(p), start);
         } else if c == '/'
             && !matches!(toks.last(), Some(PxTok::Int(_)) | Some(PxTok::Float(_)))
             && i + 1 < chars.len()
@@ -1164,7 +1197,7 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
                 p.push(chars[i]);
                 i += 1;
             }
-            toks.push(PxTok::PathLit(p));
+            px_lex_push(&mut toks, &mut offs, PxTok::PathLit(p), start);
         } else if c == '.' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
             let mut digits = String::from("0.");
             i += 1;
@@ -1187,99 +1220,99 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
                     i += 1;
                 }
             }
-            toks.push(PxTok::Float(px_parse_float_lexeme(&digits)?));
+            px_lex_push(&mut toks, &mut offs, PxTok::Float(px_parse_float_lexeme(&digits)?), start);
         } else if c == '.' {
             if i + 2 < chars.len() && chars[i + 1] == '.' && chars[i + 2] == '.' {
                 // `...` ellipsis (attrset-pattern "accept extra keys")
-                toks.push(PxTok::Ellipsis);
+                px_lex_push(&mut toks, &mut offs, PxTok::Ellipsis, start);
                 i += 3;
             } else {
-                toks.push(PxTok::Dot);
+                px_lex_push(&mut toks, &mut offs, PxTok::Dot, start);
                 i += 1;
             }
         } else if c == ',' {
-            toks.push(PxTok::Comma);
+            px_lex_push(&mut toks, &mut offs, PxTok::Comma, start);
             i += 1;
         } else if c == '@' {
-            toks.push(PxTok::At);
+            px_lex_push(&mut toks, &mut offs, PxTok::At, start);
             i += 1;
         } else if c == '+' {
             if i + 1 < chars.len() && chars[i + 1] == '+' {
-                toks.push(PxTok::PlusPlus);
+                px_lex_push(&mut toks, &mut offs, PxTok::PlusPlus, start);
                 i += 2;
             } else {
-                toks.push(PxTok::Plus);
+                px_lex_push(&mut toks, &mut offs, PxTok::Plus, start);
                 i += 1;
             }
         } else if c == '-' {
-            toks.push(PxTok::Minus);
+            px_lex_push(&mut toks, &mut offs, PxTok::Minus, start);
             i += 1;
         } else if c == '*' {
-            toks.push(PxTok::Star);
+            px_lex_push(&mut toks, &mut offs, PxTok::Star, start);
             i += 1;
         } else if c == '/' {
             if i + 1 < chars.len() && chars[i + 1] == '/' {
-                toks.push(PxTok::SlashSlash);
+                px_lex_push(&mut toks, &mut offs, PxTok::SlashSlash, start);
                 i += 2;
             } else {
-                toks.push(PxTok::Slash);
+                px_lex_push(&mut toks, &mut offs, PxTok::Slash, start);
                 i += 1;
             }
         } else if c == '=' {
             if i + 1 < chars.len() && chars[i + 1] == '=' {
-                toks.push(PxTok::EqEq);
+                px_lex_push(&mut toks, &mut offs, PxTok::EqEq, start);
                 i += 2;
             } else {
-                toks.push(PxTok::Assign);
+                px_lex_push(&mut toks, &mut offs, PxTok::Assign, start);
                 i += 1;
             }
         } else if c == '!' {
             if i + 1 < chars.len() && chars[i + 1] == '=' {
-                toks.push(PxTok::Ne);
+                px_lex_push(&mut toks, &mut offs, PxTok::Ne, start);
                 i += 2;
             } else {
                 // Logical NOT (Nix `!`, prec 8). Desugared to `if` at parse.
-                toks.push(PxTok::Not);
+                px_lex_push(&mut toks, &mut offs, PxTok::Not, start);
                 i += 1;
             }
         } else if c == '$' && i + 1 < chars.len() && chars[i + 1] == '{' {
             // Expression-level `${` — dynamic attr name (Nix `.${e}` select /
             // `{ ${e} = v; }` keys already handled in strings; this is the
             // SELECT position). Closed by the ordinary RBrace token.
-            toks.push(PxTok::DollarBrace);
+            px_lex_push(&mut toks, &mut offs, PxTok::DollarBrace, start);
             i += 2;
         } else if c == '?' {
             // Nix has-attr operator (prec 4, between apply and ++).
-            toks.push(PxTok::Question);
+            px_lex_push(&mut toks, &mut offs, PxTok::Question, start);
             i += 1;
         } else if c == '&' {
             if i + 1 < chars.len() && chars[i + 1] == '&' {
-                toks.push(PxTok::AndAnd);
+                px_lex_push(&mut toks, &mut offs, PxTok::AndAnd, start);
                 i += 2;
             } else {
                 return Err(String::from("px: unexpected '&'"));
             }
         } else if c == '|' {
             if i + 1 < chars.len() && chars[i + 1] == '|' {
-                toks.push(PxTok::OrOr);
+                px_lex_push(&mut toks, &mut offs, PxTok::OrOr, start);
                 i += 2;
             } else {
                 return Err(String::from("px: unexpected '|'"));
             }
         } else if c == '<' {
             if i + 1 < chars.len() && chars[i + 1] == '=' {
-                toks.push(PxTok::Le);
+                px_lex_push(&mut toks, &mut offs, PxTok::Le, start);
                 i += 2;
             } else {
-                toks.push(PxTok::Lt);
+                px_lex_push(&mut toks, &mut offs, PxTok::Lt, start);
                 i += 1;
             }
         } else if c == '>' {
             if i + 1 < chars.len() && chars[i + 1] == '=' {
-                toks.push(PxTok::Ge);
+                px_lex_push(&mut toks, &mut offs, PxTok::Ge, start);
                 i += 2;
             } else {
-                toks.push(PxTok::Gt);
+                px_lex_push(&mut toks, &mut offs, PxTok::Gt, start);
                 i += 1;
             }
         } else if c.is_ascii_digit() {
@@ -1291,7 +1324,7 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
             if i < chars.len() && chars[i] == '.' {
                 if digits.len() > 1 && digits.starts_with("0") {
                     match digits.parse::<i64>() {
-                        Ok(n) => toks.push(PxTok::Int(n)),
+                        Ok(n) => px_lex_push(&mut toks, &mut offs, PxTok::Int(n), start),
                         Err(_) => return Err(format!("px: bad integer {}", digits)),
                     }
                     continue;
@@ -1317,12 +1350,12 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
                         i += 1;
                     }
                 }
-                toks.push(PxTok::Float(px_parse_float_lexeme(&digits)?));
+                px_lex_push(&mut toks, &mut offs, PxTok::Float(px_parse_float_lexeme(&digits)?), start);
             } else {
                 match digits.parse::<i64>() {
-                    Ok(n) => toks.push(PxTok::Int(n)),
+                    Ok(n) => px_lex_push(&mut toks, &mut offs, PxTok::Int(n), start),
                     Err(_) if digits == "9223372036854775808" => {
-                        toks.push(PxTok::IntMinMagnitude)
+                        px_lex_push(&mut toks, &mut offs, PxTok::IntMinMagnitude, start)
                     }
                     Err(_) => return Err(format!("px: bad integer {}", digits)),
                 }
@@ -1330,7 +1363,7 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
         } else if c.is_ascii_alphabetic() || c == '_' {
             if let Some(end) = px_uri_end(&chars, i) {
                 let uri = chars[i..end].iter().collect::<String>();
-                toks.push(PxTok::Uri(uri));
+                px_lex_push(&mut toks, &mut offs, PxTok::Uri(uri), start);
                 i = end;
                 continue;
             }
@@ -1346,33 +1379,33 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
                 i += 1;
             }
             if word == "let" {
-                toks.push(PxTok::KwLet);
+                px_lex_push(&mut toks, &mut offs, PxTok::KwLet, start);
             } else if word == "in" {
-                toks.push(PxTok::KwIn);
+                px_lex_push(&mut toks, &mut offs, PxTok::KwIn, start);
             } else if word == "if" {
-                toks.push(PxTok::KwIf);
+                px_lex_push(&mut toks, &mut offs, PxTok::KwIf, start);
             } else if word == "then" {
-                toks.push(PxTok::KwThen);
+                px_lex_push(&mut toks, &mut offs, PxTok::KwThen, start);
             } else if word == "else" {
-                toks.push(PxTok::KwElse);
+                px_lex_push(&mut toks, &mut offs, PxTok::KwElse, start);
             } else if word == "true" {
-                toks.push(PxTok::True);
+                px_lex_push(&mut toks, &mut offs, PxTok::True, start);
             } else if word == "false" {
-                toks.push(PxTok::False);
+                px_lex_push(&mut toks, &mut offs, PxTok::False, start);
             } else if word == "null" {
-                toks.push(PxTok::Null);
+                px_lex_push(&mut toks, &mut offs, PxTok::Null, start);
             } else if word == "with" {
-                toks.push(PxTok::KwWith);
+                px_lex_push(&mut toks, &mut offs, PxTok::KwWith, start);
             } else if word == "assert" {
-                toks.push(PxTok::KwAssert);
+                px_lex_push(&mut toks, &mut offs, PxTok::KwAssert, start);
             } else {
-                toks.push(PxTok::Ident(word));
+                px_lex_push(&mut toks, &mut offs, PxTok::Ident(word), start);
             }
         } else {
             return Err(format!("px: unexpected character {}", c));
         }
     }
-    Ok(toks)
+    Ok((toks, offs))
 }
 
 // ---- parser -----------------------------------------------------------------
@@ -1391,10 +1424,53 @@ fn px_lex(src: &str) -> Result<Vec<PxTok>, String> {
 
 struct PxParser {
     toks: Vec<PxTok>,
+    offs: Vec<usize>,
     pos: usize,
+    src: String,
 }
 
 impl PxParser {
+    fn cur_off(&self) -> usize {
+        match self.offs.get(self.pos) {
+            Some(o) => *o,
+            None => self.src.len(),
+        }
+    }
+
+    fn source_line_column(&self, offset: usize) -> (i64, i64) {
+        let chars = self.src.chars().collect::<Vec<char>>();
+        let n = chars.len();
+        let clamped = if offset > n { n } else { offset };
+        let mut line = 1i64;
+        let mut last_nl: i64 = -1;
+        let mut i = 0usize;
+        while i < clamped {
+            if chars[i] == '\n' {
+                line += 1;
+                last_nl = i as i64;
+            }
+            i += 1;
+        }
+        let column = if last_nl < 0 {
+            clamped as i64 + 1
+        } else {
+            clamped as i64 - last_nl
+        };
+        (line, column)
+    }
+
+    fn position_expr(&self, offset: usize) -> PxExpr {
+        let (line, column) = self.source_line_column(offset);
+        PxExpr::Attrs(vec![
+            (
+                String::from("file"),
+                PxExpr::Str(vec![PxStrPart::Lit(String::from("<pnix-px>"))]),
+            ),
+            (String::from("line"), PxExpr::Int(line)),
+            (String::from("column"), PxExpr::Int(column)),
+        ])
+    }
+
     fn cur_desc(&self) -> String {
         match self.toks.get(self.pos) {
             Some(t) => format!("{:?}", t),
@@ -2425,7 +2501,7 @@ impl PxParser {
                 // `builtins.listToAttrs [ { name = <key>; value = <v>; } .. ]`
                 // (m3b machinery; runtime first-wins on duplicates — Nix
                 // eval-errors instead, recorded divergence).
-                let mut entries: Vec<(Vec<PxStrPart>, PxExpr)> = Vec::new();
+                let mut entries: Vec<(Vec<PxStrPart>, PxExpr, usize, bool)> = Vec::new();
                 let mut any_dynamic = false;
                 while !self.peek_is(PxTok::RBrace) {
                     // `inherit a b c;` — the plain Nix inherit clause. Each
@@ -2466,6 +2542,8 @@ impl PxParser {
                                         entries.push((
                                             vec![PxStrPart::Lit(n.clone())],
                                             value,
+                                            0,
+                                            true,
                                         ));
                                     }
                                     _ => {
@@ -2490,21 +2568,26 @@ impl PxParser {
                     // trailing -- may independently be static or dynamic
                     // (`a.${x}.c = 1;`, not just a lone top-level dynamic
                     // key), ported from pnix-clj's parse-attr-path/seg.
+                    let first_off = self.cur_off();
                     let (first_parts, first_dynamic) = self.parse_attr_path_segment()?;
                     if first_dynamic {
                         any_dynamic = true;
                     }
                     let mut seg_parts_list: Vec<Vec<PxStrPart>> = Vec::new();
                     let mut seg_dynamic_list: Vec<bool> = Vec::new();
+                    let mut seg_offs: Vec<usize> = Vec::new();
                     seg_parts_list.push(first_parts.clone());
                     seg_dynamic_list.push(first_dynamic);
+                    seg_offs.push(first_off);
                     while self.peek_is(PxTok::Dot)
                         && self.token_starts_attr_path_segment(self.pos + 1)
                     {
                         self.pos += 1; // Dot
+                        let seg_off = self.cur_off();
                         let (seg_parts, seg_dynamic) = self.parse_attr_path_segment()?;
                         seg_parts_list.push(seg_parts);
                         seg_dynamic_list.push(seg_dynamic);
+                        seg_offs.push(seg_off);
                     }
                     let key_parts: Vec<PxStrPart> = first_parts;
                     self.eat(PxTok::Assign)?;
@@ -2529,19 +2612,36 @@ impl PxParser {
                                 Some(PxStrPart::Lit(s)) => s.clone(),
                                 _ => return Err(String::from("px parse: empty attrset key")),
                             };
-                            value = PxExpr::Attrs(vec![(name, value)]);
+                            let pos = self.position_expr(seg_offs[i]);
+                            value = px_expr_attrs_with_pos(
+                                vec![(name.clone(), value)],
+                                vec![(name, pos)],
+                            );
                         }
                     }
-                    entries.push((key_parts, value));
+                    entries.push((key_parts, value, first_off, first_dynamic));
                 }
                 self.eat(PxTok::RBrace)?;
                 if !any_dynamic {
                     let mut fields: Vec<(String, PxExpr)> = Vec::new();
-                    for (key_parts, value) in entries {
+                    let mut top_pos: Vec<(String, PxExpr)> = Vec::new();
+                    for (key_parts, value, first_off, first_dynamic) in entries {
                         let name = match key_parts.first() {
                             Some(PxStrPart::Lit(s)) => s.clone(),
                             _ => return Err(String::from("px parse: empty attrset key")),
                         };
+                        if !first_dynamic {
+                            let mut already = false;
+                            for (k, _) in top_pos.iter() {
+                                if *k == name {
+                                    already = true;
+                                }
+                            }
+                            if !already {
+                                let pos = self.position_expr(first_off);
+                                top_pos.push((name.clone(), pos));
+                            }
+                        }
                         fields = merge_attr_field(fields, name, value)?;
                     }
                     if !keep_inherit_marks {
@@ -2555,10 +2655,10 @@ impl PxParser {
                             })
                             .collect();
                     }
-                    return Ok(PxExpr::Attrs(fields));
+                    return Ok(px_expr_attrs_with_pos(fields, top_pos));
                 }
                 let mut pairs = Vec::new();
-                for (key_parts, value) in entries {
+                for (key_parts, value, _first_off, _first_dynamic) in entries {
                     let value = match value {
                         PxExpr::Var(n) if n.starts_with(":") => {
                             PxExpr::Var(strip_inherit_mark(&n))
@@ -3407,6 +3507,24 @@ fn px_attrs_to_dynamic_pairs(fields: &Vec<(String, PxExpr)>) -> Vec<PxExpr> {
 /// down to `attribute 'a.x' already defined`); otherwise the duplicate is a
 /// hard error, exactly as `nix-instantiate` reports. rs-meta subset: index
 /// loop, no tuple-match, no rest-patterns.
+const PX_ATTR_POS_KEY: &str = "__pnix_attr_pos";
+
+fn px_is_attr_pos_key(name: &str) -> bool {
+    name == PX_ATTR_POS_KEY
+}
+
+fn px_expr_attrs_with_pos(
+    mut fields: Vec<(String, PxExpr)>,
+    pos_fields: Vec<(String, PxExpr)>,
+) -> PxExpr {
+    if pos_fields.is_empty() {
+        PxExpr::Attrs(fields)
+    } else {
+        fields.push((String::from(PX_ATTR_POS_KEY), PxExpr::Attrs(pos_fields)));
+        PxExpr::Attrs(fields)
+    }
+}
+
 fn merge_attr_field(
     fields: Vec<(String, PxExpr)>,
     name: String,
@@ -3638,8 +3756,13 @@ fn build_select_or(base: PxExpr, names: &Vec<String>, default: &PxExpr, idx: usi
 }
 
 pub fn px_parse(src: &str) -> Result<PxExpr, String> {
-    let toks = px_lex(src)?;
-    let mut p = PxParser { toks, pos: 0 };
+    let (toks, offs) = px_lex(src)?;
+    let mut p = PxParser {
+        toks,
+        offs,
+        pos: 0,
+        src: String::from(src),
+    };
     let expr = p.parse_expr()?;
     if p.pos != p.toks.len() {
         return Err(format!("px parse: trailing tokens at {}", p.cur_desc()));
@@ -4084,7 +4207,9 @@ fn px_binary_outcome(op: &PxOp, l: &PxVal, r: &PxVal) -> Result<PxVal, PxError> 
             // confirmed: `?` on a ctx-string is false, unlike `.` select,
             // which the clj oracle itself leaks through — pnix-rs instead
             // follows the cleaner cljs port here and refuses the leak).
-            PxVal::Attrs(fields) if px_is_real_attrset(l) => fields.iter().any(|(k, _)| k == name),
+            PxVal::Attrs(fields) if px_is_real_attrset(l) => {
+                fields.iter().any(|(k, _)| k == name && !px_is_attr_pos_key(k))
+            }
             _ => false,
         }));
     }
@@ -4317,32 +4442,48 @@ fn px_binary_outcome(op: &PxOp, l: &PxVal, r: &PxVal) -> Result<PxVal, PxError> 
             )),
             PxOp::Update => {
                 // Both sides sorted (proposal 0002): single merge pass,
-                // right side wins on collisions.
+                // right side wins on collisions. Positions merge as their
+                // own attrset (right wins per attribute name).
+                let (ua, pa) = px_split_attr_pos(a);
+                let (ub, pb) = px_split_attr_pos(b);
                 let mut out = Vec::new();
                 let mut i = 0usize;
                 let mut j = 0usize;
-                while i < a.len() && j < b.len() {
-                    if a[i].0 == b[j].0 {
-                        out.push((b[j].0.clone(), b[j].1.clone()));
+                while i < ua.len() && j < ub.len() {
+                    if ua[i].0 == ub[j].0 {
+                        out.push((ub[j].0.clone(), ub[j].1.clone()));
                         i += 1;
                         j += 1;
-                    } else if px_str_lt(&a[i].0, &b[j].0) {
-                        out.push((a[i].0.clone(), a[i].1.clone()));
+                    } else if px_str_lt(&ua[i].0, &ub[j].0) {
+                        out.push((ua[i].0.clone(), ua[i].1.clone()));
                         i += 1;
                     } else {
-                        out.push((b[j].0.clone(), b[j].1.clone()));
+                        out.push((ub[j].0.clone(), ub[j].1.clone()));
                         j += 1;
                     }
                 }
-                while i < a.len() {
-                    out.push((a[i].0.clone(), a[i].1.clone()));
+                while i < ua.len() {
+                    out.push((ua[i].0.clone(), ua[i].1.clone()));
                     i += 1;
                 }
-                while j < b.len() {
-                    out.push((b[j].0.clone(), b[j].1.clone()));
+                while j < ub.len() {
+                    out.push((ub[j].0.clone(), ub[j].1.clone()));
                     j += 1;
                 }
-                Ok(PxVal::Attrs(Rc::new(out)))
+                let pos = match (pa, pb) {
+                    (Some(lpos), Some(rpos)) => match (lpos, rpos) {
+                        (PxVal::Attrs(lf), PxVal::Attrs(rf)) => Some(px_binary_outcome(
+                            &PxOp::Update,
+                            &PxVal::Attrs(lf),
+                            &PxVal::Attrs(rf),
+                        )?),
+                        (_, rpos) => Some(rpos),
+                    },
+                    (None, Some(p)) => Some(p),
+                    (Some(p), None) => Some(p),
+                    (None, None) => None,
+                };
+                Ok(px_join_attr_pos(out, pos))
             }
             _ => Err(px_error_type(String::from(
                 "px: unsupported attrset operation",
@@ -4500,7 +4641,9 @@ fn px_to_xml_value(v: &PxVal, depth: usize) -> Result<String, String> {
             let mut out = format!("{}<attrs>\n", ind);
             let mut names = Vec::new();
             for (k, _v) in fields.iter() {
-                names.push(k.clone());
+                if !px_is_attr_pos_key(k) {
+                    names.push(k.clone());
+                }
             }
             let sorted = px_sort_strings(names);
             for n in sorted {
@@ -5364,8 +5507,9 @@ pub fn px_builtin_names() -> Vec<&'static str> {
         // implementation (see px_builtin_exec). `mapAttrsToList`/`zipAttrs`
         // already existed as dispatch targets (reachable only via lib before
         // now); this tranche makes them public builtins.* names too.
-        // Skipped (cross-host disagreement, see commit message):
-        // `pnixMounts`, `unsafeGetAttrPos`.
+        // `pnixMounts` is still skipped (not a Nix builtin; host-local).
+        // `unsafeGetAttrPos` is implemented (hy/Nix {file;line;column}).
+        "unsafeGetAttrPos",
         "cons",
         "append",
         "drop",
@@ -5719,6 +5863,7 @@ fn px_builtin_arity(name: &str) -> usize {
         || name == "ge"
         || name == "get"
         || name == "appendContext"
+        || name == "unsafeGetAttrPos"
     {
         2
     } else if name == "replaceStrings" || name == "foldl" || name == "foldr"
@@ -6586,7 +6731,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             PxVal::Attrs(fields) => {
                 let mut names = Vec::new();
                 for (k, _v) in fields.iter() {
-                    names.push(k.clone());
+                    if !px_is_attr_pos_key(k) {
+                        names.push(k.clone());
+                    }
                 }
                 let sorted = px_sort_strings(names);
                 let mut out = Vec::new();
@@ -6601,6 +6748,31 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
         match (&args[0], &args[1]) {
             (PxVal::Str(k), PxVal::Attrs(fields)) => Ok(PxVal::Bool(px_attrs_has(fields.as_ref(), k))),
             _ => Err(String::from("px: hasAttr expects (string, attrset)")),
+        }
+    } else if name == "unsafeGetAttrPos" {
+        match (&args[0], &args[1]) {
+            (PxVal::Str(attr), PxVal::Attrs(fields)) => {
+                let pos = px_split_attr_pos(fields).1;
+                match pos {
+                    Some(p) => match px_force(&p)? {
+                        PxVal::Attrs(pos_fields) => {
+                            match px_attrs_find(pos_fields.as_ref(), attr) {
+                                Some(v) => px_force(v),
+                                None => Ok(PxVal::Null),
+                            }
+                        }
+                        _ => Ok(PxVal::Null),
+                    },
+                    None => Ok(PxVal::Null),
+                }
+            }
+            (_, PxVal::Attrs(_)) => Err(String::from(
+                "px: unsafeGetAttrPos first argument must be a string",
+            )),
+            (PxVal::Str(_), _) => Err(String::from(
+                "px: unsafeGetAttrPos second argument must be an attrset",
+            )),
+            _ => Err(String::from("px: unsafeGetAttrPos expects (string, attrset)")),
         }
 
     // ---- runtime-gap closure (2026-07-09), each oracle-pinned first ----
@@ -6660,7 +6832,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             PxVal::Attrs(fields) => {
                 let mut names = Vec::new();
                 for (k, _v) in fields.iter() {
-                    names.push(k.clone());
+                    if !px_is_attr_pos_key(k) {
+                        names.push(k.clone());
+                    }
                 }
                 let sorted = px_sort_strings(names);
                 let mut out = Vec::new();
@@ -6680,6 +6854,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             PxVal::Attrs(fields) => {
                 let mut out = Vec::new();
                 for (k, v) in fields.iter() {
+                    if px_is_attr_pos_key(k) {
+                        continue;
+                    }
                     let with_name = px_defer_apply(
                         args[0].clone(),
                         PxVal::Str(k.clone()),
@@ -6700,6 +6877,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             PxVal::Attrs(fields) => {
                 let mut out: Vec<(String, PxVal)> = Vec::new();
                 for (k, v) in fields.iter() {
+                    if px_is_attr_pos_key(k) {
+                        continue;
+                    }
                     let with_name = px_defer_apply(args[0].clone(), PxVal::Str(k.clone()));
                     let pair = px_defer_apply(with_name, v.clone());
                     match px_force(&pair)? {
@@ -8913,6 +9093,9 @@ fn px_val_eq_mode(a: &PxVal, b: &PxVal, allow_identity: bool) -> Result<bool, St
         }
         (PxVal::Attrs(xs), PxVal::Attrs(ys)) => {
             // Sorted invariant (proposal 0002): positional zip compare.
+            // Positions are metadata and must not participate in equality.
+            let xs = px_split_attr_pos(xs).0;
+            let ys = px_split_attr_pos(ys).0;
             if xs.len() != ys.len() {
                 return Ok(false);
             }
@@ -10802,7 +10985,9 @@ pub fn px_to_json(v: &PxVal) -> Result<String, String> {
         PxVal::Attrs(fields) => {
             let mut remaining = Vec::new();
             for (name, value) in fields.iter() {
-                remaining.push((name.clone(), px_to_json(value)?));
+                if !px_is_attr_pos_key(name) {
+                    remaining.push((name.clone(), px_to_json(value)?));
+                }
             }
             let mut parts = Vec::new();
             while !remaining.is_empty() {
@@ -10872,7 +11057,9 @@ fn px_to_json_ctx(v: &PxVal, ctx: &mut Vec<String>) -> Result<String, String> {
         PxVal::Attrs(fields) => {
             let mut remaining = Vec::new();
             for (name, value) in fields.iter() {
-                remaining.push((name.clone(), px_to_json_ctx(value, ctx)?));
+                if !px_is_attr_pos_key(name) {
+                    remaining.push((name.clone(), px_to_json_ctx(value, ctx)?));
+                }
             }
             let mut parts = Vec::new();
             while !remaining.is_empty() {
@@ -10979,7 +11166,9 @@ pub fn px_print(v: &PxVal) -> String {
         PxVal::Attrs(fields) => {
             let mut remaining = Vec::new();
             for (name, value) in fields.iter() {
-                remaining.push((name.clone(), px_print(value)));
+                if !px_is_attr_pos_key(name) {
+                    remaining.push((name.clone(), px_print(value)));
+                }
             }
             let mut out = String::from("{ ");
             while !remaining.is_empty() {
@@ -11423,7 +11612,7 @@ pub fn px_run(src: &str) -> Result<String, String> {
 
 /// Token count facet for mirror records.
 pub fn px_tokens(src: &str) -> Result<usize, String> {
-    let toks = px_lex(src)?;
+    let (toks, _offs) = px_lex(src)?;
     Ok(toks.len())
 }
 
@@ -11606,7 +11795,9 @@ pub fn px_emit(e: &PxExpr) -> String {
             }
             let mut out = String::from("{ ");
             for (name, value) in fields {
-                out.push_str(&format!("{} = {}; ", name, px_emit(value)));
+                if !px_is_attr_pos_key(name) {
+                    out.push_str(&format!("{} = {}; ", name, px_emit(value)));
+                }
             }
             out.push('}');
             out

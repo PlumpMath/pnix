@@ -82,10 +82,50 @@
               echo "# Cookbook: ../HOST_IMPORT.md § hy"
             '';
           };
+
+          # Proof-Python host join (NOT the HM science-stack join).
+          # PATH python/hy here are proofPython (Hy 1.3.1 pin) + pnix_hy on
+          # PYTHONPATH. Daily numpy/pandas python stays in ~/dot-nix/dev/{py,cuda}
+          # as HM `pnix-hy-host`. Do not put both joins on PATH — `python` clashes.
+          # writeShellScriptBin: HM-safe (no ShellCheck/GHC).
+          site = "${pnix-hy}/${python.sitePackages}";
+          pnix-hy-python-cmd = pkgs.writeShellScriptBin "pnix-hy-python" ''
+            export PNIX_HY_PYTHON="${proofPython}/bin/python"
+            export PNIX_HY_LIBRARY="${site}"
+            export PNIX_HY_HOME="''${PNIX_HY_HOME:-${self}}"
+            export PYTHONPATH="${site}''${PYTHONPATH:+:$PYTHONPATH}"
+            exec "${proofPython}/bin/python" "$@"
+          '';
+          pnix-hy-hy-cmd = pkgs.writeShellScriptBin "pnix-hy-hy" ''
+            export PNIX_HY_PYTHON="${proofPython}/bin/python"
+            export PNIX_HY_LIBRARY="${site}"
+            export PNIX_HY_HOME="''${PNIX_HY_HOME:-${self}}"
+            export PYTHONPATH="${site}''${PYTHONPATH:+:$PYTHONPATH}"
+            exec "${proofPython}/bin/hy" "$@"
+          '';
+          pnix-hy-proof-host = pkgs.symlinkJoin {
+            name = "pnix-hy-proof-host";
+            paths = [
+              proofPython
+              pnix-hy
+              pnix-hy-python-cmd
+              pnix-hy-hy-cmd
+            ];
+            postBuild = ''
+              rm -f "$out/bin/python" "$out/bin/python3" "$out/bin/hy"
+              ln -s pnix-hy-python "$out/bin/python"
+              ln -s pnix-hy-python "$out/bin/python3"
+              ln -s pnix-hy-hy "$out/bin/hy"
+            '';
+            meta = {
+              description = "proofPython + pnix_hy PATH join (not the HM science-stack pnix-hy-host)";
+              mainProgram = "pnix-hy-python";
+            };
+          };
         in
         {
           default = pnix-hy;
-          inherit pnix-hy hy proofPython pnix-hy-library;
+          inherit pnix-hy hy proofPython pnix-hy-library pnix-hy-proof-host;
           pnix-hy-refs = pnix-hy-library;
         });
 
@@ -142,6 +182,10 @@
           pnix-hy-refs = {
             type = "app";
             program = "${p.pnix-hy-refs}/bin/pnix-hy-library";
+          };
+          pnix-hy-proof-host = {
+            type = "app";
+            program = "${p.pnix-hy-proof-host}/bin/pnix-hy-python";
           };
         });
 

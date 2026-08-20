@@ -166,9 +166,32 @@
     (reset! frame entries)
     [frame environment]))
 
+(defn- source-position-value
+  "Nix/hy oracle: {file; line; column} from a 0-based offset into context source."
+  [context offset]
+  (let [source (str (or (:source context) ""))
+        n (count source)
+        clamped (max 0 (min (long (or offset 0)) n))
+        prefix (subs source 0 clamped)
+        line (inc (count (re-seq #"\n" prefix)))
+        line-start (or (str/last-index-of prefix "\n") -1)
+        column (if (neg? line-start) (inc clamped) (- clamped line-start))
+        file (let [f (str (or (:file context) ""))]
+               (if (or (empty? f)
+                       (= f "seed.px")
+                       (.EndsWith f "seed.px")
+                       (.EndsWith f "pnix-clr-inline.px"))
+                 "<pnix-px>"
+                 f))]
+    {:pnix/type :attrset
+     :entries {"file" file "line" line "column" column}}))
+
 (defn- attrset-value
-  [entries]
-  {:pnix/type :attrset :entries entries})
+  ([entries]
+   (attrset-value entries nil))
+  ([entries positions]
+   (cond-> {:pnix/type :attrset :entries entries}
+     (seq positions) (assoc :positions positions))))
 
 (defn- attrset?
   [value]
@@ -2446,7 +2469,8 @@
     :merge
     (let [left (require-attrset (first args) "merge")
           right (require-attrset (second args) "merge")]
-      (attrset-value (merge (:entries left) (:entries right))))
+      (attrset-value (merge (:entries left) (:entries right))
+                     (merge (:positions left) (:positions right))))
 
     :genAttrs
     (let [names (force-list-items (list-value (first args) "genAttrs"))
@@ -2541,7 +2565,12 @@
                updates)))
 
     :unsafeGetAttrPos
-    nil
+    (let [attr-name (force-value (first args))
+          attrs (require-attrset (second args) "unsafeGetAttrPos")]
+      (when-not (string? attr-name)
+        (outcome/fail! :eval :type-error
+                       {:operation "unsafeGetAttrPos" :expected "string"}))
+      (get (:positions attrs) attr-name))
 
     :seq
     (do (force-value (first args)) (second args))
@@ -3195,7 +3224,8 @@
                 (eval-ast* left-ast environment context) "//")
           right (require-attrset
                  (eval-ast* right-ast environment context) "//")]
-      (attrset-value (merge (:entries left) (:entries right))))
+      (attrset-value (merge (:entries left) (:entries right))
+                     (merge (:positions left) (:positions right))))
 
     (= operator :concat)
     (let [left (force-value (eval-ast* left-ast environment context))
@@ -3545,8 +3575,16 @@
                             [(resolve-entry-key name) value-ast]))
                      (:entries ast))
                [frame _] (recursive-frame static-entries environment context)]
-           (attrset-value @frame))
-         (attrset-value (bind-entries (:entries ast) environment))))
+           (attrset-value @frame
+                          (into {}
+                                (map (fn [[k off]]
+                                       [k (source-position-value context off)]))
+                                (:positions ast))))
+         (attrset-value (bind-entries (:entries ast) environment)
+                        (into {}
+                              (map (fn [[k off]]
+                                     [k (source-position-value context off)]))
+                              (:positions ast)))))
 
      :let
      (let [[_ recursive-environment]
@@ -3593,6 +3631,7 @@
                     ast (parser/parse-source source)
                     context {:root (host/canonical-path root)
                              :file path
+                             :source source
                              :modules modules}]
                 (eval-ast* ast (root-environment) context))
              :resolution
@@ -3617,6 +3656,7 @@
         ast (parser/parse-source source)
         context {:root (host/canonical-path root)
                  :file path
+                 :source source
                  :modules modules}
         scoped-environment (vec (cons (atom (:entries scope)) (root-environment)))]
     (eval-ast* ast scoped-environment context)))
@@ -3670,6 +3710,7 @@
     #(let [ast (parser/parse-source source)
            context {:root (host/canonical-path root)
                     :file (host/canonical-path file)
+                    :source source
                     :modules (atom {})}]
        (realize-value (eval-ast* ast (root-environment) context))))))
 

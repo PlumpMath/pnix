@@ -35,13 +35,15 @@
 
 ### Host 환경 / 패키징 (dot-nix, 2026-08-13~)
 
-- [ ] **단일 인터프리터 스토리 정리**: proofPython(Hy pin) vs kimchi
-  python-with-packages가 여전히 두 갈래다 — 순수 pnix 평가용 "the" host와
-  과학 스택(numpy 등)용 host를 어느 쪽으로 문서화할지 정리 필요. 정본:
-  `docs/IMPLEMENTATION.md` §7.1 / monorepo `HOST_DEV_ENV.md`.
-- [ ] **(optional) `packages.pnix-hy-host`를 flake에서 직접 노출**: 지금은
-  각 home-manager 트리가 매번 `symlinkJoin`을 재구현해야 한다 — flake
-  output으로 한 번만 만들어두면 소비자가 재구현할 필요가 없어진다.
+- [x] **단일 인터프리터 스토리 정리** (2026-08-21). proofPython(flake Hy pin,
+  `PNIX_HY_PYTHON` / 게이트·투영) vs `~/dot-nix/dev/{py,cuda}`
+  `python-with-packages`(일상 PATH `python`, numpy 등). 과학 스택 정본은
+  그 두 모듈이지 다른 트리 이름이 아니다. HM `pnix-hy-host`는 조인만.
+  정본: [`IMPLEMENTATION.md`](IMPLEMENTATION.md) §7.1,
+  monorepo [`HOST_DEV_ENV.md`](../../../HOST_DEV_ENV.md).
+- [x] **flake `packages.pnix-hy-proof-host` 노출** (2026-08-21). 이름은
+  HM `pnix-hy-host`와 다르게 확정. proofPython + `pnix_hy` PATH join.
+  과학 스택 join은 계속 HM `pnix-hy-host`. 둘을 한 profile에 넣지 말 것.
 
 ---
 

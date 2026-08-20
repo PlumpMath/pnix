@@ -173,9 +173,10 @@ gate receipt가 통과해야 한다. C2 builder는 C1 admission을 필수 첫 �
 
 ## Open target
 
-Compiler Stage3--15/N, compiler self-reproduction, IL fixed point, raw
-reproducibility, broad ClojureCLR compatibility/replacement, standalone
-lineage replay, PNIX product/common-compiler integration, cross-host canonical
-equivalence, CLR host promotion은 open으로 남는다. PNIX-agnostic C3 Stage2
-artifact를 닫아도 그 claim이 true가 되지 않는다. 필요한 순서와 distinct
-receipt는 `STAGE15_N_ROADMAP.md`에 정의된다.
+Compiler Stage1–N + self-reproduction 게이트는 `STATUS.md` Closed claims대로
+닫혔고 각각 `promotion/allowed?=false`다. 남은 open: 일반 CLR IL fixed
+point, broad ClojureCLR compatibility/replacement, PNIX product/common-compiler
+integration, cross-host canonical equivalence, CLR host promotion. C3 Stage2
+artifact를 닫는 것만으로 그 claim이 true가 되지 않는 것과 같이, 이후
+stage 게이트를 닫아도 promotion은 따로다. 설계 기록은
+`STAGE15_N_ROADMAP.md`, 정본은 `STATUS.md`.

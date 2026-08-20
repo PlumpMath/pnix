@@ -496,7 +496,18 @@
    "hash-string-unsupported-algorithm" :hash-string-unsupported-algorithm
    "hash-string-data-not-string" :hash-string-data-not-string
    "infinite-recursion" :cycle-detected
-   "cycle-detected" :cycle-detected})
+   "cycle-detected" :cycle-detected
+   "abort-builtin-called" :abort-builtin-called
+   "throw-argument-not-string" :throw-argument-not-string
+   "abort-argument-not-string" :abort-argument-not-string
+   "unexpected-lambda-pattern-arg" :unexpected-lambda-pattern-arg
+   "function-args-target-not-callable" :function-args-target-not-callable
+   "head-of-empty-list" :head-of-empty-list
+   "tail-of-empty-list" :tail-of-empty-list
+   "last-of-empty-list" :last-of-empty-list
+   "init-of-empty-list" :init-of-empty-list
+   "effect-denied" :effect-denied
+   "invalid-guest-value" :invalid-guest-value})
 
 (defn- canonical-runtime-error-class
   [value]

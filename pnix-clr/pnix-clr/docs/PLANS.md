@@ -24,8 +24,8 @@
     때 이게 목표 모양일 가능성이 높음.
   - clj: `{start; end; span;}`(바이트 오프셋) — clj 자신의 todo.md에 이미
     "line/column 추적 인프라가 생길 때까지의 임시방편"이라고 적어둠.
-  - **clr (여기)**: 항상 `null` — 위치 추적 자체를 아직 안 함. `evaluator.clj`
-    `:unsafeGetAttrPos` 케이스가 파서 span을 안 들고 있음.
+  - **clr (여기)**: 2026-08-20에 `{file; line; column}` 구현됨 (hy
+    오라클과 동일: 리터럴 바인딩 위치, 생성된 attrset은 null).
   - cljs: 빌트인 이름은 등록돼있는데 호출하면 "not-callable" 에러 — 이름만
     있고 실제 구현이 없는 죽은 항목.
   - rs: 아예 등록 안 됨.

@@ -9,7 +9,7 @@
    :source "missing"
    :expected-reason :unbound-var
    :expected-eval-reason :unbound-var
-   :expected-runtime-reason :px-runtime-run-error
+   :expected-runtime-reason :unknown-variable
    :expected-runtime-phase "eval"
    :expected-runtime-ast-tag "Var"
    :expected-error-contains "unknown variable"}
@@ -17,7 +17,7 @@
    :source "{ a = 1; }.b"
    :expected-reason :missing-attr
    :expected-eval-reason :missing-attr
-   :expected-runtime-reason :px-runtime-run-error
+   :expected-runtime-reason :attribute-missing
    :expected-runtime-phase "eval"
    :expected-runtime-ast-tag "Select"
    :expected-error-contains "Select missing attr"}
@@ -25,7 +25,7 @@
    :source "assert false; 1"
    :expected-reason :assertion-failed
    :expected-eval-reason :assertion-failed
-   :expected-runtime-reason :px-runtime-run-error
+   :expected-runtime-reason :assertion-failed
    :expected-runtime-phase "eval"
    :expected-runtime-ast-tag "Assert"
    :expected-error-contains "assertion failed"}
@@ -33,10 +33,43 @@
    :source "\"value=${1}\""
    :expected-reason :string-interpolation-coercion-failed
    :expected-eval-reason :string-interpolation-coercion-failed
-   :expected-runtime-reason :px-runtime-run-error
+   :expected-runtime-reason :string-interpolation-coercion-failed
    :expected-runtime-phase "eval"
    :expected-runtime-ast-tag "Binary"
-   :expected-error-contains "cannot coerce value to string in interpolation"}]}
+   :expected-error-contains "cannot coerce value to string in interpolation"}
+  {:name "division-by-zero"
+   :source "1 / 0"
+   :expected-reason :eval-binary-failed
+   :expected-eval-reason :eval-binary-failed
+   :expected-error-class :division-by-zero
+   :expected-runtime-reason :division-by-zero
+   :expected-runtime-phase "eval"
+   :expected-runtime-ast-tag "Binary"
+   :expected-error-contains "division by zero"}
+  {:name "not-callable"
+   :source "1 2"
+   :expected-reason :call-target-not-callable
+   :expected-eval-reason :call-target-not-callable
+   :expected-runtime-reason :not-callable
+   :expected-runtime-phase "eval"
+   :expected-runtime-ast-tag "Apply"
+   :expected-error-contains "not a function"}
+  {:name "non-bool-if"
+   :source "if 1 then 2 else 3"
+   :expected-reason :non-bool-if-condition
+   :expected-eval-reason :non-bool-if-condition
+   :expected-runtime-reason :non-boolean-condition
+   :expected-runtime-phase "eval"
+   :expected-runtime-ast-tag "If"
+   :expected-error-contains "not a boolean"}
+  {:name "abort-called"
+   :source "abort \"x\""
+   :expected-reason :abort-builtin-called
+   :expected-eval-reason :abort-builtin-called
+   :expected-runtime-reason :abort-builtin-called
+   :expected-runtime-phase "eval"
+   :expected-runtime-ast-tag "Apply"
+   :expected-error-contains "abort:"}]}
 ;; NOTE (reclassification, see rec-forward-reference-taxonomy.md):
 ;; `rec { x = y; y = 1; }.x` used to live here as an "error" case, but it is a
 ;; VALID forward reference (Nix = 1). It only appeared to be an accepted error

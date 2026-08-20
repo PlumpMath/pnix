@@ -36,6 +36,9 @@
     :cycle-detected :import-cycle :import-module-not-found
     :primitive-contract-violation :attribute-missing
     :invalid-attrset-binding :duplicate-attrset-binding
+    :throw-argument-not-string :abort-argument-not-string
+    :unexpected-lambda-pattern-arg :function-args-target-not-callable
+    :head-of-empty-list :tail-of-empty-list :last-of-empty-list :init-of-empty-list
     :invalid-effect-request :effect-request-schema-mismatch
     :effect-request-version-mismatch :effect-operation-registry-mismatch
     :unknown-effect-operation :invalid-effect-args
@@ -47,7 +50,13 @@
    :select-target-not-attrset :type-error
    :call-target-not-callable :not-callable
    :infinite-recursion :cycle-detected
-   :duplicate-attr :duplicate-attrset-binding})
+   :duplicate-attr :duplicate-attrset-binding
+   :non-bool-if-condition :non-boolean-condition
+   :non-bool-assert-condition :non-boolean-condition
+   :non-bool-and-operand :non-boolean-condition
+   :non-bool-or-operand :non-boolean-condition
+   :non-bool-implies-operand :non-boolean-condition
+   :non-bool-not-operand :non-boolean-condition})
 
 (defn- machine-phase
   [phase reason]

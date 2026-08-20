@@ -5,8 +5,10 @@
 ## Peer-floor 선언
 
 **clr-meta**는 `pnix-clr` 아래의 PNIX-agnostic ClojureCLR host bootstrap이다.
-practical peer floor는 **product substrate**에 대해 다른 host meta와 맞으며,
-정직한 Stage3–15/N ladder는 여전히 open:
+practical peer floor는 **product substrate**에 대해 다른 host meta와 맞는다.
+Compiler Stage1–N + self-reproduction 게이트는 아래 Closed claims대로
+닫혔고, 각각 `promotion/allowed? = false`다. 일반 CLR IL fixed point /
+broad ClojureCLR replacement / host promotion은 Open claims로 남는다:
 
 | Peer | Peer floor | clr-meta 대응 |
 |---|---|---|
@@ -16,8 +18,10 @@ practical peer floor는 **product substrate**에 대해 다른 host meta와 맞�
 | ClojureScript host | fixed-point compiler | Stage2 same-source recompile (full IL fixed point 아님) |
 
 Meta-first 순서: `pnix-clr` 전에 `clr-meta`. Artifact builder + hash-bound
-load path closed. Stage3–15/N은 roadmap (`STAGE15_N_ROADMAP.md`)으로 남으며,
-clj/rs/cljs에서 Stage15 replacement를 주장하지 않는 것과 같은 honesty.
+load path closed. Stage 설계 기록은 `STAGE15_N_ROADMAP.md`에 있고, 게이트
+receipt는 이 문서 Closed claims가 정본이다. clj/rs/cljs에서 Stage15
+replacement를 주장하지 않는 것과 같은 honesty — 게이트가 닫혀도
+`promotion/allowed? = false`.
 
 ## Closed claims
 

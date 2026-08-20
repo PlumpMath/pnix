@@ -150,9 +150,10 @@ checked 산술 경계는 호스트 수치 API보다 의도적으로 좁다: oper
 ClojureCLR 정수용 ABI 경계를 세우지 않는다. 아직 주장하지 않는 것:
 
 - 완전한 mature JVM-host 언어 또는 연구 표면;
-- 컴파일러 Stage3--15/N, ClojureCLR 컴파일러 self-reproduction, 또는 IL fixed
-  point (checked-Int64 Stage1과 별도 selfhost-family C2 Stage1/C3 Stage2는 닫혔으나
-  `pnix-clr`는 후자를 제품 컴파일러로 소비하지 않음);
+- 일반 CLR IL fixed point, host promotion, 또는 광범위 ClojureCLR 대체.
+  `clr-meta` Compiler Stage1–N + self-reproduction 게이트는
+  `promotion/allowed?=false`로 닫혀 있다(`clr-meta/STATUS.md`) — 제품 러너가
+  그 사다리를 컴파일러로 소비하지는 않는다;
 - 독립 빌드 간 byte-identical raw AOT 재현;
 - 광범위 ClojureCLR 명령/언어/런타임/생태계 호환 또는 ClojureCLR 대체;
 - 단독 source-free 배포 (기동 검증이 현재 live plan과 source closure에 묶이고
@@ -172,9 +173,9 @@ ClojureCLR 정수용 ABI 경계를 세우지 않는다. 아직 주장하지 않�
 명목 ClojureCLR 타입이며, 이 평가기 슬라이스에 통합된 것은 `Done`과 `Failed`뿐이다.
 guest attrset이 이를 위조할 수 없다. JVM 평가기 fallback은 없다.
 
-현재 evaluator/artifact/C3 Stage2 경계에서 Stage3--15/N 및 최종 profile-bounded
-ClojureCLR 대체까지의 순서는 `clr-meta/STAGE15_N_ROADMAP.md`에 기록된다.
-그 로드맵은 목표이지 receipt가 아니다.
+`clr-meta` Stage 설계 기록은 `clr-meta/STAGE15_N_ROADMAP.md`, 게이트 정본은
+`clr-meta/STATUS.md`다. 남은 열린 주장은 host promotion / broad ClojureCLR
+대체 / 일반 IL fixed point다.
 
 ## 레이아웃
 
@@ -223,11 +224,9 @@ builtins.typeOf 1.2
 builtins.tryEval (1 + 2)
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":{"success":true,"value":3}}
 
-# builtins.trace "여기까지 실행됨" 42
->> Execution error (IndexOutOfRangeException) at pnix-clr.outcome/capture (NO_FILE:0).
->> Index was outside the bounds of the array.
->> Full report at:
->> /var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/clojure-b28e336e-af9c-4018-8bdb-7e0bcb37f5fb.edn
+builtins.trace "여기까지 실행됨" 42
+>> trace: 여기까지 실행됨
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":42}
 
 ## 안되는것/사용방법?: builtins.toXML
 
@@ -361,20 +360,14 @@ lib.optionalAttrs true { a = 1; }
 lib.when false "foo"
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":null}
 
-# builtins.id 42
->> Execution error (IndexOutOfRangeException) at pnix-clr.outcome/capture (NO_FILE:0).
->> Index was outside the bounds of the array.
->> Full report at:
->> /var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/clojure-9f7d6c8e-fde8-4f5c-9e7c-0098413d1ff8.edn
+builtins.id 42
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":42}
 
 lib.const "foo" "bar"
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":"foo"}
 
-# builtins.flip (a: b: a - b) 3 10
->> Execution error (IndexOutOfRangeException) at pnix-clr.outcome/capture (NO_FILE:0).
->> Index was outside the bounds of the array.
->> Full report at:
->> /var/folders/20/drddxc8x52x63llrn6kbfvw00000gn/T/clojure-d53e398f-03fe-478c-8d75-1b5301114afe.edn
+builtins.flip (a: b: a - b) 3 10
+>> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":7}
 
 builtins.pipe 2 [ (x: x + 3) (x: x * 2) ]
 >> {"host":"pnix-clr","outcome_kind":"done","schema":"pnix-clr.cli-result.v1","value":10}

@@ -86,6 +86,15 @@ nix run .#hy-meta-python        # python REPL (sys.path에 ./hy-meta + 저장소
 패키지: `.#pnix-hy`(CLI), `.#hy`(공식 `github:hylang/hy` 태그 `1.3.1`, `flake.lock`에 고정),
 `.#proofPython`(python 3.11 + Hy 1.3.1).
 
+**인터프리터 두 갈래:** 제품 게이트/투영의 Python은 flake `proofPython`(Hy pin,
+`PNIX_HY_PYTHON`)이다. flake `packages.pnix-hy-proof-host`는 그 pin +
+`pnix_hy` PATH join (`python`/`hy`/`pnix-hy-python`). 일상 PATH `python`(numpy
+등)은 `~/dot-nix/dev/py`의 `python-with-packages`(nvidia면
+`~/dot-nix/dev/cuda`의 `python-cuda-env`)이고, HM `pnix-hy-host`가 거기에
+`pnix_hy`를 조인한다. 두 join을 한 PATH에 넣지 말 것. CORE `import pnix_hy`는
+Hy/과학 스택 없이 python ≥3.11이면 된다. 표:
+[`pnix-hy/docs/IMPLEMENTATION.md`](pnix-hy/docs/IMPLEMENTATION.md) §7.1.
+
 **두 종류의 명령 — 이게 중요하다:**
 
 | | 어디서 되나 | 필요 |

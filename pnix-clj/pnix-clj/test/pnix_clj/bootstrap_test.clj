@@ -2045,11 +2045,11 @@
         row-by-id (into {} (map (juxt :source-id identity) rows))]
     (is (= :mirror-pair-report (:kind report)))
     (is (= :mirror-pair-fixture-set (:fixture-kind report)))
-    (is (= 199 (:fixture-count report)))
-    (is (= 199 (:accepted report)))
+    (is (= 204 (:fixture-count report)))
+    (is (= 204 (:accepted report)))
     (is (= 0 (:rejected report)))
     (is (= 0 (:held report)))
-    (is (= 199 (:mirror-pair-ready-count report)))
+    (is (= 204 (:mirror-pair-ready-count report)))
     (is (= 0 (:mirror-pair-not-ready-count report)))
     (is (nil? (:first-frontier report)))
     (is (every? :ready? rows))
@@ -2243,6 +2243,11 @@
                        :mirror-pair/lazy-map-attrs-prime-result-attrnames
                        :mirror-pair/lazy-zip-attrs-with-result-attrnames
                        :mirror-pair/lazy-map-identity-head
+                       :mirror-pair/lazy-map-inspect-head
+                       :mirror-pair/eq-list-length-mismatch-no-force
+                       :mirror-pair/eq-attrset-key-mismatch-no-force
+                       :mirror-pair/eq-list-prefix-unequal-no-force
+                       :mirror-pair/eq-attrset-sorted-key-unequal-no-force
                        :mirror-pair/lazy-filter-true-head
                        :mirror-pair/lazy-concat-map-identity-head
                        :mirror-pair/lazy-sort-constant-comparator-length-two
@@ -2278,9 +2283,9 @@
     ;; rec-forward-reference was reclassified out of this error-agreement corpus
     ;; (see docs/IMPLEMENTATION.md §9); it is a valid forward reference,
     ;; not an error the lanes agree on. Genuine error cases remain here.
-    (is (= 4 (:fixture-count report)))
-    (is (= 4 (:total report)))
-    (is (= 4 (:accepted report)))
+    (is (= 8 (:fixture-count report)))
+    (is (= 8 (:total report)))
+    (is (= 8 (:accepted report)))
     (is (= 0 (:rejected report)))
     (is (= 0 (:held report)))
     (is (nil? (:first-frontier report)))
@@ -2331,7 +2336,22 @@
     (is (= "Binary"
            (get-in row-by-id
                    [:mirror-error/interpolation-int-coercion
-                    :observed :runtime-mirror-ast-tag])))))
+                    :observed :runtime-mirror-ast-tag])))
+    (is (= :eval-binary-failed
+           (get-in row-by-id
+                   [:mirror-error/division-by-zero :observed :eval-reason])))
+    (is (= :division-by-zero
+           (get-in row-by-id
+                   [:mirror-error/division-by-zero :observed :eval-error-class])))
+    (is (= :call-target-not-callable
+           (get-in row-by-id
+                   [:mirror-error/not-callable :observed :eval-reason])))
+    (is (= :non-bool-if-condition
+           (get-in row-by-id
+                   [:mirror-error/non-bool-if :observed :eval-reason])))
+    (is (= :abort-builtin-called
+           (get-in row-by-id
+                   [:mirror-error/abort-called :observed :eval-reason])))))
 
 (deftest clojure-projection-report-validates-reader-term-shape-in-px
   (let [report (report-artifact/report-for :clojure-projection)
@@ -3122,6 +3142,38 @@
       (is (= :ok (:status elem-result)))
       (is (= 7 (:value elem-result))))))
 
+(deftest evaluator-lazy-fold-map-inspect
+  ;; Selector/shape slices (length, attrNames, ignored-input fold) already
+  ;; land in mirror-pair. This slice inspects VALUES: map's per-element thunk
+  ;; is forced only at the selected index; foldl'/foldr that read the element
+  ;; force it, while an operator that ignores the element still does not.
+  (testing "map inspects only the forced result slot"
+    (is (= 2 (:value (pnix/eval-source
+                      "builtins.head (builtins.map (x: x + 1) [ 1 (1 / 0) ])"))))
+    (is (= 2 (:value (pnix/eval-source
+                      "builtins.elemAt (builtins.map (x: x + 1) [ 1 (1 / 0) 3 ]) 0"))))
+    (is (= :failed
+           (:status (pnix/eval-source
+                     "builtins.elemAt (builtins.map (x: x + 1) [ 1 (1 / 0) ]) 1"))))
+    (is (= 2 (:value (pnix/eval-source
+                      "builtins.length (builtins.map (x: x + 1) [ 1 (1 / 0) ])")))))
+  (testing "foldl' that reads the element forces it; ignoring it does not"
+    (is (= 6 (:value (pnix/eval-source
+                      "builtins.foldl' (acc: x: acc + x) 0 [ 1 2 3 ]"))))
+    (is (= :failed
+           (:status (pnix/eval-source
+                     "builtins.foldl' (acc: x: acc + x) 0 [ 1 (1 / 0) ]"))))
+    (is (= 0 (:value (pnix/eval-source
+                      "builtins.foldl' (acc: x: acc) 0 [ 1 (1 / 0) ]")))))
+  (testing "foldr that reads the element forces it; ignoring it does not"
+    (is (= 6 (:value (pnix/eval-source
+                      "builtins.foldr (x: acc: acc + x) 0 [ 1 2 3 ]"))))
+    (is (= :failed
+           (:status (pnix/eval-source
+                     "builtins.foldr (x: acc: acc + x) 0 [ 1 (1 / 0) ]"))))
+    (is (= 0 (:value (pnix/eval-source
+                      "builtins.foldr (x: acc: acc) 0 [ 1 (1 / 0) ]"))))))
+
 (deftest evaluator-select-or-default
   ;; Nix ExprSelect attrPath: continuous `.a.b.c or d` is ONE select — `or`
   ;; catches a miss at ANY path segment. Parenthesized intermediates are
@@ -3681,12 +3733,47 @@
       (is (= :string-list-builtin-non-string-element
              (:reason (pnix/eval-source
                        "builtins.concatStringsSep \",\" [1 2]")))))
-    (testing "not-yet-context-aware builtins stay held at the frontier"
-      (is (= :string-context-frontier
-             (:reason (pnix/eval-source (str L "builtins.baseNameOf s")))))
-      (is (= :string-context-frontier
-             (:reason (pnix/eval-source
-                       (str L "builtins.concatMapStringsSep \",\" (x: x) [ s ]"))))))
+    (testing "baseNameOf/dirOf keep context on the path prefix/basename"
+      (is (= "Hello"
+             (:value (pnix/eval-source
+                      (str L "builtins.unsafeDiscardStringContext"
+                           " (builtins.baseNameOf s)")))))
+      (is (= {"/p1" {"path" true}}
+             (:value (pnix/eval-source
+                      (str L "builtins.getContext (builtins.baseNameOf s)")))))
+      (is (= "/a/b"
+             (:value (pnix/eval-source
+                      (str "builtins.unsafeDiscardStringContext"
+                           " (builtins.dirOf (builtins.appendContext \"/a/b/c\""
+                           " { \"/p1\" = { path = true; }; }))")))))
+      (is (= {"/p1" {"path" true}}
+             (:value (pnix/eval-source
+                      (str "builtins.getContext (builtins.dirOf"
+                           " (builtins.appendContext \"/a/b/c\""
+                           " { \"/p1\" = { path = true; }; }))"))))))
+    (testing "concatMapStringsSep joins mapped contents and unions contexts"
+      (is (= "Hello,World"
+             (:value (pnix/eval-source
+                      (str L "builtins.unsafeDiscardStringContext"
+                           " (builtins.concatMapStringsSep \",\" (x: x) [ s t ])")))))
+      (is (= {"/p1" {"path" true} "/p2" {"path" true}}
+             (:value (pnix/eval-source
+                      (str L "builtins.getContext"
+                           " (builtins.concatMapStringsSep \",\" (x: x) [ s t ])"))))))
+    (testing "optionalString true keeps context; false is empty and context-free"
+      (is (= true
+             (:value (pnix/eval-source
+                      (str L "builtins.hasContext (builtins.optionalString true s)")))))
+      (is (= "Hello"
+             (:value (pnix/eval-source
+                      (str L "builtins.unsafeDiscardStringContext"
+                           " (builtins.optionalString true s)")))))
+      (is (= "" (:value (pnix/eval-source
+                         (str L "builtins.optionalString false s")))))
+      (is (= false
+             (:value (pnix/eval-source
+                      (str L "builtins.hasContext"
+                           " (builtins.optionalString false s)"))))))
     (testing "replaceStrings carries source context plus USED replacement contexts"
       (is (= {"/p1" {"path" true} "/p2" {"path" true}}
              (:value (pnix/eval-source
@@ -4014,6 +4101,24 @@
              (:value (pnix/eval-source
                       (str "builtins.unsafeDiscardStringContext (" M ").dev.outPath")))
              "-t-dev"))
+        (testing "all over sub-derivations and interpolated ctx-strings"
+          (is (= true
+                 (:value (pnix/eval-source
+                          (str "let d = " M "; in builtins.all"
+                               " (x: x.type == \"derivation\") [ d.out d.dev ]")))))
+          (is (= true
+                 (:value (pnix/eval-source
+                          (str "let d = " M "; in builtins.all"
+                               " (x: builtins.hasContext x.outPath) [ d.out d.dev ]")))))
+          (is (= true
+                 (:value (pnix/eval-source
+                          (str "let d = " M "; in builtins.all"
+                               " (s: builtins.hasContext s)"
+                               " [ \"${d.out}\" \"${d.dev}\" ]")))))
+          (is (= false
+                 (:value (pnix/eval-source
+                          (str "let d = " M "; in builtins.all"
+                               " (x: x.outputName == \"out\") [ d.out d.dev ]"))))))
         (is (str/ends-with?
              (:value (pnix/eval-source
                       (str "builtins.unsafeDiscardStringContext (" M ").out.outPath")))
@@ -5418,18 +5523,22 @@
     (testing "equality compares content only (context ignored, like Nix)"
       (is (= true (:value (pnix/eval-source (str "(" mk ") == \"a\"")))))
       (is (= false (:value (pnix/eval-source (str "(" mk ") == \"b\""))))))
-    (testing "non-context-aware builtins are held, not silently wrong"
-      ;; stringLength/substring/concatStringsSep graduated to the allowlist in
-      ;; the context-aware batch (see evaluator-context-aware-string-builtins);
-      ;; these two are still at the frontier.
-      ;; graduated so far: length/predicates/substring/case/concat/replace/
-      ;; match/split/toJSON/toString/stringToCharacters/splitString/fromJSON +
-      ;; structural list ops; these remain at the frontier.
-      (is (= :string-context-frontier
-             (:reason (pnix/eval-source (str "builtins.baseNameOf (" mk ")")))))
-      (is (= :string-context-frontier
-             (:reason (pnix/eval-source
-                       (str "let s = " mk "; in builtins.concatMapStringsSep \",\" (x: x) [ s ]"))))))
+    (testing "baseNameOf and concatMapStringsSep graduated off the frontier"
+      (is (= "a"
+             (:value (pnix/eval-source
+                      (str "builtins.unsafeDiscardStringContext"
+                           " (builtins.baseNameOf (" mk "))")))))
+      (is (= true
+             (:value (pnix/eval-source
+                      (str "builtins.hasContext (builtins.baseNameOf (" mk "))")))))
+      (is (= "a"
+             (:value (pnix/eval-source
+                      (str "let s = " mk "; in builtins.unsafeDiscardStringContext"
+                           " (builtins.concatMapStringsSep \",\" (x: x) [ s ])")))))
+      (is (= {"/nix/store/p1" {"path" true}}
+             (:value (pnix/eval-source
+                      (str "let s = " mk "; in builtins.getContext"
+                           " (builtins.concatMapStringsSep \",\" (x: x) [ s ])"))))))
     (testing "argument type errors are held"
       (is (= :has-context-argument-not-string
              (:reason (pnix/eval-source "builtins.hasContext 5"))))
@@ -5517,31 +5626,31 @@
         all-source-rows (strict-audit/source-rows)]
     (is (= :strict-audit-report (:kind fixture-report)))
     (is (= :audit-only-no-behavior-change (:policy fixture-report)))
-    (is (= 245 (:source-count fixture-report)))
-    (is (= 238 (:strict-ok fixture-report)))
+    (is (= 254 (:source-count fixture-report)))
+    (is (= 243 (:strict-ok fixture-report)))
     (is (= 0 (:strict-violation fixture-report)))
     ;; The classifier has no :held bucket -- rows are :strict-ok,
     ;; :strict-violation, or fall through to :failed.
     (is (= 0 (:held fixture-report)))
     (is (= 0 (:violation-count fixture-report)))
     (is (= {:ground-truth-oracle 20
-            :mirror-pair 199
-            :mirror-error 4
+            :mirror-pair 204
+            :mirror-error 8
             :stage7-core 5
             :import-module 1
             :forward-reference 6
             :rust-grounded 10}
            (:source-family-counts fixture-report)))
-    (is (= 278 (count all-source-rows)))
+    (is (= 287 (count all-source-rows)))
     (is (some #(= :px-runtime (:source-family %)) all-source-rows))))
 
 (deftest strict-gate-runs-current-strict-ok-fixtures
   (let [gate (strict-audit/strict-gate-report {:include-runtime? false})]
     (is (= :strict-gate-report (:kind gate)))
-    (is (= 245 (:classified-source-count gate)))
-    (is (= 238 (:strict-ok-source-count gate)))
-    (is (= 238 (:checked gate)))
-    (is (= 238 (:ok gate)))
+    (is (= 254 (:classified-source-count gate)))
+    (is (= 243 (:strict-ok-source-count gate)))
+    (is (= 243 (:checked gate)))
+    (is (= 243 (:ok gate)))
     (is (= 0 (:failed gate)))
     (is (nil? (:first-failed gate)))))
 
@@ -5551,13 +5660,13 @@
     (is (= :pnix-clj.evaluation-determinism.v0 (:schema report)))
     (is (= :repeat-parse-eval-hash-stability (:policy report)))
     (is (= 2 (:runs-per-source report)))
-    (is (= 245 (:source-count report)))
-    (is (= 245 (:stable report)))
+    (is (= 254 (:source-count report)))
+    (is (= 254 (:stable report)))
     (is (= 0 (:unstable report)))
     (is (nil? (:first-unstable report)))
     (is (= {:ground-truth-oracle 20
-            :mirror-pair 199
-            :mirror-error 4
+            :mirror-pair 204
+            :mirror-error 8
             :stage7-core 5
             :import-module 1
             :forward-reference 6
@@ -5573,7 +5682,7 @@
     (is (= :pnix-evaluation-coverage-report (:kind report)))
     (is (= :pnix-clj.evaluation-coverage.v0 (:schema report)))
     (is (= :dynamic-evaluator-coverage (:policy report)))
-    (is (= 245 (:source-count report)))
+    (is (= 254 (:source-count report)))
     (is (pos? (get-in report [:summary :op :covered])))
     (is (pos? (get-in report [:summary :builtin :covered])))
     (is (pos? (get-in report [:summary :binary-operator :covered])))
@@ -6139,7 +6248,35 @@
     (is (= false (:value (pnix/eval-source "{ a = 1; } == { b = 1; }"))))
     (is (= false (:value (pnix/eval-source "[1] == [1 2]"))))
     (is (= false (:value (pnix/eval-source "true == 1"))))
-    (is (= true (:value (pnix/eval-source "null == null"))))))
+    (is (= true (:value (pnix/eval-source "null == null")))))
+  (testing "equality error-boundary: shape mismatch does not force; same shape does"
+    ;; list length / attrset key-set differ → false without forcing slots
+    (is (= false (:value (pnix/eval-source "[ (1 / 0) ] == [ 1 2 ]"))))
+    (is (= false (:value (pnix/eval-source "{ a = 1 / 0; } == { b = 1; }"))))
+    ;; same shape forces the compared slot
+    (is (= :failed (:status (pnix/eval-source "[ (1 / 0) ] == [ 1 ]"))))
+    (is (= :failed (:status (pnix/eval-source "{ a = 1 / 0; } == { a = 1; }"))))
+    ;; lists: first unequal element short-circuits; first equal then error forces
+    (is (= false (:value (pnix/eval-source "[ 1 (1 / 0) ] == [ 2 (1 / 0) ]"))))
+    (is (= :failed (:status (pnix/eval-source "[ 1 (1 / 0) ] == [ 1 2 ]"))))
+    ;; attrsets: Nix compares keys in sorted-name order, so an earlier unequal
+    ;; key (`a`) short-circuits without forcing a later erroring slot (`z`).
+    ;; clj-meta lowering used to walk a hash-set of keys and force `z` first.
+    (let [unequal "{ a = 1; z = 1 / 0; } == { a = 2; z = 1; }"
+          force-a "{ a = 1 / 0; z = 1; } == { a = 1; z = 2; }"
+          force-z "{ a = 1; z = 1 / 0; } == { a = 1; z = 2; }"]
+      (doseq [src [unequal]]
+        (let [row (pnix/verify-source src)]
+          (is (= false (get-in row [:eval-result :value])) src)
+          (is (= false (:value (machine/eval-source src))) src)
+          (is (= false (get-in row [:clj-meta-result :value])) src)
+          (is (= false (get-in row [:px-runtime :value])) src)))
+      (doseq [src [force-a force-z]]
+        (let [row (pnix/verify-source src)]
+          (is (= :failed (get-in row [:eval-result :status])) src)
+          (is (= :failed (:status (machine/eval-source src))) src)
+          (is (= :failed (get-in row [:clj-meta-result :status])) src)
+          (is (= :failed (get-in row [:px-runtime :status])) src))))))
 
 (deftest evaluator-implication-operator
   ;; `->` is logical implication (!a || b): lowest precedence, right

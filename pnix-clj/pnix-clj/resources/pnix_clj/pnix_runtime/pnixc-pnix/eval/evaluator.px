@@ -90,7 +90,7 @@ let
       __pnix_model_domain = "pnix.machine.eval-error-model.v1";
       phase = "eval";
       class = errorClass;
-      evidence = { };
+      evidence = { reason = errorClass; };
     };
   };
   mk_error = mk_error_as "unsupported-expression";
@@ -406,14 +406,14 @@ let
     if is_error v then v
     else if builtins.isString v
     then mk_catchable_error ("throw: " + ctx_content v)
-    else mk_error "eval: throw argument is not a string";
+    else mk_error_as "throw-argument-not-string" "eval: throw argument is not a string";
 
   abort_value = m:
     let v = force_value m; in
     if is_error v then v
     else if builtins.isString v
-    then mk_error ("abort: " + ctx_content v)
-    else mk_error "eval: abort argument is not a string";
+    then mk_error_as "abort-builtin-called" ("abort: " + ctx_content v)
+    else mk_error_as "abort-argument-not-string" "eval: abort argument is not a string";
 
   stringDirOf = s:
     let
@@ -506,7 +506,7 @@ let
     let m = force_value arg;
     in if is_error m then m
     else if !(builtins.isAttrs m) || is_closure m || is_path m || is_thunk m then
-      mk_error "eval: pattern lambda argument is not an attrset"
+      mk_error_as "type-error" "eval: pattern lambda argument is not an attrset"
     else
       let missing = builtins.foldl'
             (acc: field:
@@ -523,7 +523,7 @@ let
             extras = builtins.filter (k: !(builtins.elem k names))
                        (builtins.attrNames m);
         in if !(f ? ellipsis && f.ellipsis) && builtins.length extras > 0 then
-          mk_error ("eval: unexpected pattern argument `"
+          mk_error_as "unexpected-lambda-pattern-arg" ("eval: unexpected pattern argument `"
                     + builtins.head extras + "`")
         else
           let env0 = closureEnv f
@@ -550,7 +550,7 @@ let
                   f.formals)
          else if is_closure f || is_meta_builtin f || is_lazy_native f
                  || builtins.isFunction f then {}
-         else mk_error "eval: functionArgs target is not a function"
+         else mk_error_as "function-args-target-not-callable" "eval: functionArgs target is not a function"
     else mk_error ("eval: unknown meta builtin `" + b.name + "`");
 
   applyValue = f: arg:
@@ -662,10 +662,10 @@ let
     pnixUmount = name: builtins.pnixUmount name;
     pnixRun = name: args: builtins.pnixRun name args;
     pnixMounts = mk_error "eval: builtins.pnixMounts is a pnix extension, not Nix builtin coverage";
-    pathExists = path: mk_error "eval: builtins.pathExists purity-gated (path-exists effect disabled)";
-    readFile = path: mk_error "eval: builtins.readFile purity-gated (file-read effect disabled)";
-    readDir = path: mk_error "eval: builtins.readDir purity-gated (directory-read effect disabled)";
-    getEnv = name: mk_error "eval: builtins.getEnv purity-gated (env-read effect disabled)";
+    pathExists = path: mk_error_as "effect-denied" "eval: builtins.pathExists purity-gated (path-exists effect disabled)";
+    readFile = path: mk_error_as "effect-denied" "eval: builtins.readFile purity-gated (file-read effect disabled)";
+    readDir = path: mk_error_as "effect-denied" "eval: builtins.readDir purity-gated (directory-read effect disabled)";
+    getEnv = name: mk_error_as "effect-denied" "eval: builtins.getEnv purity-gated (env-read effect disabled)";
     # ── curried wrappers for N-arg host builtins ──
     add = a: b: builtins.add a b;
     sub = a: b: builtins.sub a b;
@@ -965,7 +965,7 @@ let
       deep_force_value (builtins.elemAt xs (n - 1));
     init = xs:
       let n = builtins.length xs; in
-      if n == 0 then mk_error "init of empty list"
+      if n == 0 then mk_error_as "init-of-empty-list" "init of empty list"
       else builtins.take (n - 1) xs;
     unique = xs:
       let
@@ -1239,7 +1239,7 @@ let
   # 2026-06-11 S8 verdict).
   eval = ast: env:
     if !(builtins.isAttrs ast) || !(ast ? tag) then
-      mk_error "eval: input is not a parser AST node (missing `tag`)"
+      mk_error_as "invalid-guest-value" "eval: input is not a parser AST node (missing `tag`)"
     else
       let t = ast.tag; in
       if t == "Var" then
@@ -1394,7 +1394,7 @@ let
          && !(is_path scope)
          && !(is_thunk scope) then
       eval ast.body (env // { "${withScopesKey}" = [ scope ] ++ with_scopes env; })
-    else mk_error "eval: with expression is not an attrset";
+    else mk_error_as "type-error" "eval: with expression is not an attrset";
 
   # pnix-clj bootstrap slice (2026-06-29): evaluate user `let`
   # bindings without relying on the host evaluator's lazy recursive
@@ -1702,7 +1702,7 @@ let
     else if builtins.isList base then force_value (builtins.elemAt base idx)
     else if builtins.isAttrs base && builtins.isString idx
       then force_value (builtins.getAttr idx base)
-    else mk_error "eval: Index target unsupported";
+    else mk_error_as "type-error" "eval: Index target unsupported";
 
   # ── public entry ────────────────────────────────────────────────
   run = source:
@@ -1729,6 +1729,7 @@ let
           phase = "parse";
           ast_tag = null;
           error = parsed.error;
+          error_class = if parsed ? failure then parsed.failure.class else null;
           result = parsed;
         }
       else if !(builtins.isAttrs parsed) || !(parsed ? tag) then
@@ -1737,7 +1738,8 @@ let
           phase = "parse";
           ast_tag = null;
           error = "run: parser returned non-AST shape";
-          result = mk_error "run: parser returned non-AST shape";
+          error_class = "invalid-guest-value";
+          result = mk_error_as "invalid-guest-value" "run: parser returned non-AST shape";
         }
       else
         let value = deep_force_value (eval parsed initialEnv); in
@@ -1747,6 +1749,7 @@ let
             phase = "eval";
             ast_tag = parsed.tag;
             error = value.error;
+            error_class = if value ? failure then value.failure.class else null;
             result = value;
           }
         else

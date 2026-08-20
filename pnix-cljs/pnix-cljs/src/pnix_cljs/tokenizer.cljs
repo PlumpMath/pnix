@@ -267,6 +267,8 @@
 ;; and pnix-hy's lexers.
 (defn absolute-path-start? [source index tokens]
   (and (= "/" (character source index))
+       ;; `//` is the attrset-merge operator, never a path literal.
+       (not= "/" (character source (inc index)))
        (not (contains? #{:integer :float} (:kind (peek tokens))))))
 
 (defn path-character? [value]

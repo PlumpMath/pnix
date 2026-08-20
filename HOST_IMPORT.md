@@ -6,10 +6,10 @@
 
 | 호스트 | 쿡북 |
 |--------|------|
-| clj | [pnix-clj/pnix-clj/docs/HOST_IMPORT.md](pnix-clj/pnix-clj/docs/HOST_IMPORT.md) |
-| cljs | [pnix-cljs/HOST_IMPORT.md](pnix-cljs/HOST_IMPORT.md) |
+| clj | [pnix-clj/pnix-clj/docs/IMPLEMENTATION.md](pnix-clj/pnix-clj/docs/IMPLEMENTATION.md) §11 |
+| cljs | [pnix-cljs/pnix-cljs/docs/IMPLEMENTATION.md](pnix-cljs/pnix-cljs/docs/IMPLEMENTATION.md) §3 |
 | hy | 본 문서 § hy (패키지 자체가 라이브러리) |
-| rs | 본 문서 § rs + `pnix-rs/include/pnix_rs.h` |
+| rs | 본 문서 § rs + [pnix-rs IMPLEMENTATION.md](pnix-rs/pnix-rs/docs/IMPLEMENTATION.md) §7 |
 | clr | [pnix-clr/csharp/Pnix.Clr/README.md](pnix-clr/csharp/Pnix.Clr/README.md) |
 
 HM 경로 헬퍼: `pnix-<host>-library` / `pnix-<host>-refs` (`~/dot-nix/dev/PNIX-HOSTS.md` 참고).
@@ -93,6 +93,12 @@ from pnix_hy import install_pnix_import_hook
 HM PATH bin `pnix-hy-hy`는 **순수 Hy 인터프리터**이며 `pnix_hy`용 `PYTHONPATH`를 가짐.
 둘을 동일시하지 말 것.
 
+일상 PATH `python`은 `~/dot-nix/dev/{py,cuda}`의 과학 스택
+(`python-with-packages`)이다. 게이트/투영의 Hy pin은 flake `proofPython`
+(`PNIX_HY_PYTHON`). flake `packages.pnix-hy-proof-host`는 그 pin +
+`pnix_hy` PATH join — HM `pnix-hy-host`와 다른 이름. 섞지 말 것 —
+[`HOST_DEV_ENV.md`](HOST_DEV_ENV.md) § Hy 인터프리터 두 갈래.
+
 ```bash
 python -c 'import pnix_hy as ph; print(ph.eval_file("prog.px"))'
 pnix-hy-library
@@ -103,7 +109,7 @@ pnix-hy-pnix
 
 ## rs (Rust)
 
-Cargo 패턴: [pnix-rs/docs/CARGO_HOST_IMPORT.md](pnix-rs/docs/CARGO_HOST_IMPORT.md).
+Cargo 패턴: [pnix-rs/pnix-rs/docs/IMPLEMENTATION.md](pnix-rs/pnix-rs/docs/IMPLEMENTATION.md) §7 (옛 `docs/CARGO_HOST_IMPORT.md` 흡수).
 
 
 ```rust

@@ -15,6 +15,20 @@
 (defrecord ClosureValue [parameter body environment])
 (defrecord BuiltinValue [operation arguments])
 (defrecord AttrsetValue [fields])
+
+(defn attr-positions
+  [attrs]
+  (or (:attr-positions (meta attrs)) {}))
+
+(defn position-attrset
+  "Lift a parser {file,line,column} map into a guest attrset value.
+  Fields are plain values (force-cell is identity on non-cells)."
+  [pos]
+  (when pos
+    (->AttrsetValue
+     {"file" (get pos "file")
+      "line" (get pos "line")
+      "column" (get pos "column")})))
 (defrecord ByteStringValue [bytes])
 (defrecord Cell [expression environment state])
 ;; A real path value (2026-08-20 addition -- this host previously had no Path
@@ -3165,7 +3179,14 @@
                      (apply-value3 f acc (first remaining)
                                    (get (:fields attrs) (first remaining))))))))
 
-      :unsafeGetAttrPos nil
+      :unsafeGetAttrPos
+      (if (< (count arguments) 2)
+        (->BuiltinValue :unsafeGetAttrPos arguments)
+        (let [attr-name (require-string-arg (nth arguments 0) "unsafeGetAttrPos")
+              attrs (force-cell (nth arguments 1))]
+          (when-not (instance? AttrsetValue attrs)
+            (evaluation-failure! "type-error" {"operation" "unsafeGetAttrPos"}))
+          (get (attr-positions attrs) (string-text attr-name))))
 
       :seq
       (if (< (count arguments) 2)
@@ -3990,7 +4011,10 @@
                                        {"operation" "list-concat"}))
         :update (if (and (instance? AttrsetValue left)
                          (instance? AttrsetValue right))
-                  (->AttrsetValue (merge (:fields left) (:fields right)))
+                  (let [merged (->AttrsetValue (merge (:fields left) (:fields right)))
+                        positions (merge (attr-positions left) (attr-positions right))]
+                    (cond-> merged
+                      (seq positions) (with-meta {:attr-positions positions})))
                   (evaluation-failure! "type-error"
                                        {"operation" "attrset-update"}))
         :equal (equal-values left right)
@@ -4033,9 +4057,16 @@
                     resolved-fields)
         field-environment (if recursive?
                             (merge environment cells)
-                            environment)]
+                            environment)
+        positions
+        (into {}
+              (keep (fn [{:keys [resolved-name pos name-expression]}]
+                      (when (and pos resolved-name (nil? name-expression))
+                        [resolved-name (position-attrset pos)])))
+              resolved-fields)]
     (reset! environment-reference field-environment)
-    (->AttrsetValue cells)))
+    (cond-> (->AttrsetValue cells)
+      (seq positions) (with-meta {:attr-positions positions}))))
 
 (defn cached-let-environment [expression environment]
   (session-cached

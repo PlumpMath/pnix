@@ -59,12 +59,15 @@
 
 (defn- expected-error-alignments
   [case receipt runtime-receipt]
-  (let [expected-class (get {:unbound-var :unknown-variable
-                             :missing-attr :attribute-missing
-                             :call-target-not-callable :not-callable
-                             :infinite-recursion :cycle-detected}
-                            (:expected-eval-reason case)
-                            (:expected-eval-reason case))]
+  (let [expected-class (or (:expected-error-class case)
+                           (get {:unbound-var :unknown-variable
+                                 :missing-attr :attribute-missing
+                                 :call-target-not-callable :not-callable
+                                 :infinite-recursion :cycle-detected
+                                 :non-bool-if-condition :non-boolean-condition
+                                 :non-bool-assert-condition :non-boolean-condition}
+                                (:expected-eval-reason case)
+                                (:expected-eval-reason case)))]
   [(match-row :top-status (:status receipt) :failed)
    (match-row :top-reason (:reason receipt) (:expected-reason case))
    (match-row :eval-status (get-in receipt [:eval-result :status]) :failed)
@@ -83,6 +86,9 @@
    (match-row :px-runtime-status
               (get-in receipt [:px-runtime :status])
               :failed)
+   (match-row :px-runtime-reason
+              (get-in receipt [:px-runtime :reason])
+              expected-class)
    (match-row :px-runtime-error-class
               (get-in receipt [:px-runtime :error :class])
               expected-class)
@@ -98,6 +104,9 @@
    (match-row :runtime-mirror-ast-tag
               (get runtime-receipt "ast_tag")
               (:expected-runtime-ast-tag case))
+   (match-row :runtime-mirror-error-class
+              (get runtime-receipt "error_class")
+              (name expected-class))
    (contains-row :runtime-mirror-error
                  (get runtime-receipt "error")
                  (:expected-error-contains case))]))

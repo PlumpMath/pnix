@@ -191,8 +191,8 @@ in {
 빌드 중에 `pkgs.python3`을 참조해도 원본 그대로 쓴다. 같은 패턴을
 `cargo`/`rustc`(rs), `node`/`clojurescript`(cljs), `clojure-clr`(clr)에도
 반복한다 — 언어별 세부 env var(`PNIX_HY_HOME`, `PNIX_RS_LIB_DIR`,
-`NODE_PATH`, `PNIX_CLR_ROOT` 등)는 각 호스트의 `README.md`/`HOST_IMPORT.md`
-참고.
+`NODE_PATH`, `PNIX_CLR_ROOT` 등)는 각 호스트의 `README.md`와 루트
+[HOST_IMPORT.md](HOST_IMPORT.md) 참고.
 
 ### 3) 공통 함정
 

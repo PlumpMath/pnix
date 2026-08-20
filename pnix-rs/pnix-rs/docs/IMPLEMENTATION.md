@@ -366,7 +366,7 @@ diff).
 | unsafeAddOutputName | - | - | - | - | O |
 | unsafeDiscardOutputDependency | O | O | O | O | O |
 | unsafeDiscardStringContext | O | O | O | O | O |
-| unsafeGetAttrPos | O | O | O | - | O |
+| unsafeGetAttrPos | O | O | O | O | O |
 | updateManyAttrs | O | O | O | O | O |
 | values | O | O | O | O | O |
 | warn | O | O | O | O | O |
@@ -399,9 +399,9 @@ diff).
   `-e` 인라인 모드에서도 import가 실패하는 게 똑같지만 이유가 다르다
   (clr은 파일 컨텍스트가 없어서 명시적으로 거부; rs는 애초에 모듈 맵이
   안 채워짐).
-- **`pnixMounts`, `unsafeGetAttrPos`**: 5개 호스트 다 설계가 안 끝난
-  상태. 자세한 내용과 방향 아이디어는 [`docs/PLANS.md`](PLANS.md)의
-  "pnixMounts / unsafeGetAttrPos" 절.
+- **`pnixMounts`**: 아직 설계가 안 끝난 상태. `unsafeGetAttrPos`는
+  2026-08-20에 hy와 같은 `{file; line; column}`으로 구현됨. `pnixMounts`
+  방향은 [`docs/PLANS.md`](PLANS.md).
 - **context 있는 문자열에 `.` select를 쓰면 clj 오라클과 다르게 동작한다
   (의도적).** clj는 `eval-select`가 `attrset-value?`가 아니라 맨 `map?`을
   써서 ctx-string의 내부 표현이 `a.string` 같은 select로 그대로 샌다

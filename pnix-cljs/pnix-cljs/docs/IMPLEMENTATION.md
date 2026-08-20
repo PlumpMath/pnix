@@ -421,7 +421,7 @@ diff).
 | unsafeAddOutputName | - | - | - | - | O |
 | unsafeDiscardOutputDependency | O | O | O | O | O |
 | unsafeDiscardStringContext | O | O | O | O | O |
-| unsafeGetAttrPos | O | O | O | - | O |
+| unsafeGetAttrPos | O | O | O | O | O |
 | updateManyAttrs | O | O | O | O | O |
 | values | O | O | O | O | O |
 | warn | O | O | O | O | O |

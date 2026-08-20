@@ -39,10 +39,11 @@
 도입 경위는 [`IMPLEMENTATION.md`](IMPLEMENTATION.md) §9, 그 작업이 남긴
 시뮬레이션 한계는 아래 새 절 참고.)
 
-`builtins.unsafeGetAttrPos`는 이름은 등록돼 있지만 실제 구현이 없어
-호출하면 "not-callable" 에러가 난다 — 이름만 있고 죽어있는 등록이다.
-다른 호스트와 통일할 방향은 [`PLANS.md`](PLANS.md)의 `unsafeGetAttrPos`
-항목에 정리해뒀다.
+`builtins.unsafeGetAttrPos`는 2026-08-20에 구현됐다. 리터럴 attrset
+바인딩은 hy/Nix와 같은 `{ file; line; column }`을 돌려주고, 생성된
+attrset(`listToAttrs` 등)과 없는 속성은 `null`이다. 인라인 평가의
+`file`은 `"<pnix-px>"`. 파서가 아직 line/column을 토큰에 싣지 않던
+시절의 죽은 등록이 아니다.
 
 ## 문자열 컨텍스트(string context) / `derivation` 시뮬레이션 한계 (2026-08-20, 버그 아님)
 

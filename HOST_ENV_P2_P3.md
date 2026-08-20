@@ -50,10 +50,10 @@
 
 | 호스트 | 작업 | 우선순위 | 상태 |
 |--------|------|----------|------|
-| clj | `docs/HOST_IMPORT.md`를 정본으로 유지; API 성장 시에만 확장 | low | 문서 착지 |
+| clj | `IMPLEMENTATION.md` §11을 정본으로 유지; API 성장 시에만 확장 | low | 문서 착지 (옛 `docs/HOST_IMPORT.md` 흡수) |
 | hy | `__all__` 고정; 선택 py.typed | low | **py.typed 착지** (PEP 561 마커) |
 | cljs | scoped require 검증; 로컬 export 착지; npm 게시 **폐기** | — | **export+smoke** |
-| rs | CARGO_HOST_IMPORT.md 완료; 헤더 C ABI semver 정책 주석 | low | **ABI 주석 + version pin 노트 착지**; full semver 프로세스는 아직 P3 |
+| rs | IMPLEMENTATION.md §7 (옛 CARGO_HOST_IMPORT.md) 완료; 헤더 C ABI semver 정책 주석 | low | **ABI 주석 + version pin 노트 착지**; full semver 프로세스는 아직 P3 |
 | clr | 로컬 nupkg pack 완료; nuget.org **폐기** (로컬 피드만) | — | — |
 
 ### P2.5 push 시 전용 host-import 워크플로

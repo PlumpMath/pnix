@@ -301,7 +301,7 @@ diff).
 | unsafeAddOutputName | - | - | - | - | O |
 | unsafeDiscardOutputDependency | O | O | O | O | O |
 | unsafeDiscardStringContext | O | O | O | O | O |
-| unsafeGetAttrPos | O | O | O | - | O |
+| unsafeGetAttrPos | O | O | O | O | O |
 | updateManyAttrs | O | O | O | O | O |
 | values | O | O | O | O | O |
 | warn | O | O | O | O | O |
@@ -332,11 +332,9 @@ diff).
 - **import가 처음부터 제일 완성도 높았다** — 다른 4개 호스트가 오늘 각자
   다른 이유로 절대경로/scopedImport를 새로 만들거나 고쳐야 했던 것과
   대조적으로, 이 호스트는 그대로 기준(oracle) 역할을 했다.
-- **`unsafeGetAttrPos`가 Nix 스펙과 일치하는 유일한 호스트** —
-  `{file; line; column;}` 모양을 이미 정확히 돌려준다(다른 4개는 각자
-  다른 이유로 부정확/부재). 5개 호스트를 나중에 통일할 때 이 구현이
-  목표 모양이 될 가능성이 높다 — `docs/PLANS.md` "unsafeGetAttrPos 통일"
-  참고.
+- **`unsafeGetAttrPos`는 `{file; line; column;}` Nix 스펙 모양.**
+  2026-08-20에 cljs/clr/rs도 같은 모양을 구현했다. clj만 아직
+  `{start; end; span;}` 바이트 오프셋 임시 모양.
 
 ## 4. 범위 선언 (SCOPE LOCK)
 
@@ -617,6 +615,34 @@ PYTHONPATH, link path, NODE_PATH, DLL HintPath 같은 것).
   본체는 사용자가 직접 작성하는 미래 작업, 여기 host-local import 작업을
   막지 않는다.
 
+#### 인터프리터 두 갈래 (2026-08-21 정리)
+
+Hy 쪽 “the host python”은 하나가 아니다. 제품 pin과 일상 과학 스택을
+섞지 말 것. 과학 스택의 정본은 **`~/dot-nix/dev/py`** 와 (nvidia면)
+**`~/dot-nix/dev/cuda`** 이지, 다른 트리 이름이 아니다.
+
+| 갈래 | 어디서 | 무엇이 들어있나 | 무엇을 위해 |
+|------|--------|-----------------|-------------|
+| **proofPython** | `pnix-hy/flake.nix` `packages.proofPython` | python 3.11 + flake-pin Hy 1.3.1 + pytest | `--check` / `--gate` / 투영 / `PNIX_HY_PYTHON`. 제품 게이트의 Hy pin |
+| **python-with-packages** | `~/dot-nix/dev/py/default.nix` (CPU) 또는 `~/dot-nix/dev/cuda/default.nix` (`python-cuda-env`, nvidia) | numpy/pandas 등 과학 스택 + 그 모듈이 끌어오는 Hy | 일상 PATH `python`. `import numpy` 가 되는 쪽 |
+
+HM `pnix-hy-host`(`dev/py/default.nix`)가 둘을 **조인만** 한다:
+
+- PATH `python` / `python3` → `python-with-packages` (과학 스택) + `PYTHONPATH`에 `pnix_hy`
+- PATH `hy` 와 env `PNIX_HY_PYTHON` → proofPython (Hy pin). 과학 env 안의 더 오래된 Hy에 안 묶인다
+- `pkgs.python311` / `python3Packages` 전역 오버레이 금지 — join만
+
+순수 pnix 평가(CORE `import pnix_hy` / `eval_file` / `safe_eval`)는 Hy도
+과학 스택도 필요 없다. python ≥ 3.11이면 된다. 게이트·투영만 proofPython을
+요구한다. numpy가 필요한 세션은 PATH `python`(host-main join)을 쓰고,
+`--check`/`--gate`는 flake `proofPython` / `PNIX_HY_PYTHON`을 쓴다.
+
+flake는 과학 스택을 소유하지 않는다(numpy는 `~/dot-nix/dev/{py,cuda}`).
+그래서 flake join 이름은 **`packages.pnix-hy-proof-host`** 다 (HM
+`pnix-hy-host`와 다른 이름). PATH `python`/`hy`는 proofPython + `pnix_hy`.
+일상 과학 host-main은 HM `pnix-hy-host`가 정본. 둘을 같은 profile에 넣지
+말 것 (`python` 이름 충돌).
+
 ### 7.2 hy 호스트 — 랜딩된 상태 (2026-08-14)
 
 1. **이중 축 문서**: `HOST_DEV_ENV.md`, 호스트 `AGENTS.md`/`README.md`.
@@ -624,8 +650,8 @@ PYTHONPATH, link path, NODE_PATH, DLL HintPath 같은 것).
    (`python`/`hy`)를 통해 잡힘.
 3. **호스트-언어 `.px` import**: `pnix_hy.eval_file`(= `run_px`); 패키지 설치.
 4. **환경변수**: `PNIX_HY_HOME`, `PNIX_HY_LIBRARY`, `PNIX_HY_PYTHON`.
-5. **공개 API**: `import pnix_hy` — `__all__` + `HOST_IMPORT.md`가 현재
-   계약(어떤 서브모듈이 host-library API로 안정적인지). `pnix_hy/py.typed`
+5. **공개 API**: `import pnix_hy` — `__all__` + 루트 `HOST_IMPORT.md` § hy가
+   현재 계약(어떤 서브모듈이 host-library API로 안정적인지). `pnix_hy/py.typed`
    + setuptools package-data로 타입 힌트 배포(2026-08-14). 더 상세한 stub은
    외부 소비자가 필요해지면 그때 추가.
 

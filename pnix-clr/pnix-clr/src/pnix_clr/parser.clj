@@ -45,21 +45,38 @@
   [ast]
   (and (map? ast) (= :attrset (:op ast))))
 
+(defn- binding-segment-name
+  [segment]
+  (if (and (map? segment) (contains? segment :name) (not (:pnix/dynamic-attr segment)))
+    (:name segment)
+    segment))
+
+(defn- binding-segment-offset
+  [segment]
+  (when (and (map? segment) (contains? segment :offset))
+    (:offset segment)))
+
 (defn- nest-attr-path
   "Desugar `a.b.c = v` into nested attrset literals rooted at `a`.
-  Dynamic key segments are only supported as a single-segment path."
+  Dynamic key segments are only supported as a single-segment path.
+  Static segments may carry `:offset` so unsafeGetAttrPos can recover
+  {file; line; column}."
   [segments value]
   (if (= 1 (count segments))
-    [(first segments) value]
+    (let [seg (first segments)]
+      [(binding-segment-name seg) value])
     (do
       (when (some #(and (map? %) (:pnix/dynamic-attr %)) segments)
         (outcome/fail! :parse :syntax-error
                        {:reason "dynamic-attr-in-nested-path"}))
       (let [[head & tail] segments
-            [child-key child-value] (nest-attr-path tail value)]
-        [head {:op :attrset
-               :recursive? false
-               :entries {child-key child-value}}]))))
+            [child-key child-value] (nest-attr-path tail value)
+            child-off (binding-segment-offset (first tail))]
+        [(binding-segment-name head)
+         {:op :attrset
+          :recursive? false
+          :entries {child-key child-value}
+          :positions (when child-off {child-key child-off})}]))))
 
 (defn- merge-attr-field
   "Merge `(name, value)` into entries. Attrset literals merge recursively
@@ -76,7 +93,8 @@
                 :entries (reduce (fn [acc [k v]]
                                    (merge-attr-field acc k v offset))
                                  (:entries existing)
-                                 (:entries value))})
+                                 (:entries value))
+                :positions (merge (:positions existing) (:positions value))})
         (outcome/fail! :parse :syntax-error
                        {:reason "duplicate-attribute"
                         :attribute name
@@ -141,10 +159,16 @@
 
 (defn- parse-attr-binding-path
   [state]
-  (loop [path [(parse-attr-name state)]]
-    (if (accept! state :dot)
-      (recur (conj path (parse-attr-name state)))
-      path)))
+  (loop [path []]
+    (let [tok (token-at state)
+          offset (:offset tok)
+          name (parse-attr-name state)
+          segment (if (dynamic-attr-key? name)
+                    name
+                    {:name name :offset offset})]
+      (if (accept! state :dot)
+        (recur (conj path segment))
+        (conj path segment)))))
 
 (defn- parse-inherit-names
   "Parse `name ... ;` after `inherit` or `inherit (expr)`. Returns
@@ -187,24 +211,31 @@
 (defn- parse-attrset
   [state recursive?]
   (expect! state :lbrace)
-  (loop [entries {}]
+  (loop [entries {}
+         positions {}]
     (if (accept! state :rbrace)
-      {:op :attrset :recursive? recursive? :entries entries}
+      {:op :attrset :recursive? recursive? :entries entries
+       :positions positions}
       (if (= :inherit (:kind (token-at state)))
-        (let [inherited (parse-inherit state)
-              offset (:offset (token-at state))]
+        (let [inherited (parse-inherit state)]
           (recur (reduce (fn [acc [attr-name value]]
-                           (merge-attr-field acc attr-name value offset))
+                           (merge-attr-field acc attr-name value
+                                             (:offset (token-at state))))
                          entries
-                         inherited)))
-        (let [name-token (token-at state)
-              path (parse-attr-binding-path state)
+                         inherited)
+                 positions))
+        (let [path (parse-attr-binding-path state)
               _ (expect! state :assign)
               value (parse-expression state)
               _ (expect! state :semicolon)
-              [attr-name nested-value] (nest-attr-path path value)]
+              [attr-name nested-value] (nest-attr-path path value)
+              offset (binding-segment-offset (first path))]
           (recur (merge-attr-field entries attr-name nested-value
-                                   (:offset name-token))))))))
+                                   (or offset 0))
+                 (if (and (string? attr-name) offset
+                          (not (contains? positions attr-name)))
+                   (assoc positions attr-name offset)
+                   positions)))))))
 
 (defn- parse-list-item
   [state]

@@ -843,9 +843,12 @@
       (let [lhs-keys (set (keys lhs))
             rhs-keys (set (keys rhs))]
         (and (= lhs-keys rhs-keys)
+             ;; Nix Attrs are sorted by name; compare in that order so an
+             ;; earlier unequal key can short-circuit without forcing a
+             ;; later erroring slot (same boundary as evaluator nix-equal).
              (every? (fn [k]
                        (nix-equal (get lhs k) (get rhs k) true))
-                     lhs-keys)))
+                     (sort lhs-keys))))
 
       :else
       (= lhs rhs)))))

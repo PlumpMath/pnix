@@ -46,4 +46,4 @@ cd pnix-clr
 
 ## 관련
 - `csharp/examples/HelloPnix/`
-- 모노레포 `HOST_IMPORT.md` § clr
+- 모노레포 `HOST_IMPORT.md` + `csharp/Pnix.Clr/README.md`

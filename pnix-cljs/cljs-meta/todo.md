@@ -265,7 +265,9 @@ NODE_PATH, DLL HintPath). 실제 packaging 형식이 필요한 것은 아래 제
 
 **아직 열림:**
 
-1. ~~Node require entry 문서화~~ → `../HOST_IMPORT.md` + flake install의
+1. ~~Node require entry 문서화~~ →
+   [`../pnix-cljs/docs/IMPLEMENTATION.md`](../pnix-cljs/docs/IMPLEMENTATION.md)
+   §3 (옛 `HOST_IMPORT.md`) + flake install의
    scoped `lib/node_modules/@plumpmath/pnix-cljs` (2026-08-14).
 2. 선택 npm 패키지 publish — 호스트 프로젝트가 nix store `NODE_PATH`에
    의존하지 않도록.

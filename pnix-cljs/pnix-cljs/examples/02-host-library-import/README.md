@@ -40,4 +40,4 @@ cd pnix-cljs
 
 ## 관련
 - 모노레포 `examples/host-import/cljs/`
-- 모노레포 `HOST_IMPORT.md` § cljs
+- 모노레포 `HOST_IMPORT.md` + `pnix-cljs/docs/IMPLEMENTATION.md` §3

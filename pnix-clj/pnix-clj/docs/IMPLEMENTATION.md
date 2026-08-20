@@ -291,7 +291,7 @@ diff).
 | unsafeAddOutputName | - | - | - | - | O |
 | unsafeDiscardOutputDependency | O | O | O | O | O |
 | unsafeDiscardStringContext | O | O | O | O | O |
-| unsafeGetAttrPos | O | O | O | - | O |
+| unsafeGetAttrPos | O | O | O | O | O |
 | updateManyAttrs | O | O | O | O | O |
 | values | O | O | O | O | O |
 | warn | O | O | O | O | O |
@@ -348,7 +348,7 @@ checklist 작업, evidence-store SPINE 구축, 407 커밋 앞서 있었다는
 |---|---|
 | 2026-07-01 | Nix-conformance 하드닝 라운드: `rec`/`let` 전방 참조 lift(§9), 연산자 strict-audit Phase A-D, lazy attrset/list 값 코어 슬라이스, `run-mirror` 싱글톤화, interop deny-by-default 게이팅 — 13개 빌트인/의미론 버그 + rec 전방참조 수정 |
 | 2026-07-02 | 🗼 메타서큘러 로드맵 M1–M6 전체 완료: `specialize`(Futamura 1차 투영, JVM 바이트코드까지), `tower/run-tower`(4-기판 단일 진입점), `synthesize`(역방향 투영), `capabilities`(능력 인덱스+drift 게이트), `safe-eval`(순도 샌드박스), `cached-eval`(content-addressed 캐시) |
-| 2026-07-03 | F1·F2 랜딩: Futamura 2차 투영(cogen-free, `pnix-clj.futamura`) + Jones-optimality 측정 증인; string-context/derivation/import를 전 레인(evaluator/clj-meta lowering/`.px`)으로 확장 |
+| 2026-07-03 | F1·F2 랜딩: Futamura 2차 투영(cogen-free, `pnix-clj.futamura`) + Jones-optimality 측정 증인; string-context/derivation/import를 전 레인(evaluator/clj-meta lowering/`.px`)으로 확장. F7 3차 투영도 같은 cogen-free curried 경로로 이후 게이트됨(WIKI `f7-cogen-collapse`) |
 | 2026-07-04 | 증거-저장소 spine(§8) 전체 구축 — `docs/SPINE_ROADMAP.md`의 계획(§3 CAS term store부터 §15 witness capstone까지)을 clean-rewrite로 실행, `cas.clj`/`store.clj`/`reflect.clj`/`snapshot.clj`/`purity.clj`/`search.clj`/`mirror_chain.clj`/`witness.clj`/`witnessed_run.clj`/`self_mod_gate.clj`/`persist.clj` 랜딩 |
 | 2026-07-07~08 | F8 weval-스타일 IR-level PE 스파이크 랜딩(`pnix-clj.weval`); 게이트 리포트 캐시 랜딩(13종 리포트 1-JVM 통합); `/deep-research`로 남은 백로그 판정 — splice leniency 기각(현재 동작이 정답), D1c 연기, conformance Phase D 연기, F7b 보류(§10, PLANS.md 참고) |
 | 2026-07-01~08 | `pnix-clj.generate`(observational-equivalence 후보 생성기, §10) + `self-improve`/`self-mod-gate`/`synthesize` EXPERIMENTAL 레인 랜딩 — self-* 루프의 첫 정직한 벽돌 |
@@ -390,6 +390,7 @@ checklist 작업, evidence-store SPINE 구축, 407 커밋 앞서 있었다는
 | 커밋 | 무엇을 |
 |---|---|
 | (미커밋) | §2 표에서 clj가 빠져 있던 5개 빌트인 중 `log`/`tan`을 hy 기준 시맨틱으로 신규 구현(`Math/log`·`Math/tan`, sin/cos/ln과 동일한 패턴); `nixVersion`/`storeDir`/`langVersion`은 조사해보니 `init` 커밋부터 이미 구현돼 있었고 §2 표만 stale했던 것으로 판명 — 표만 정정. `log`/`tan`은 `finish-builtin`의 메인 `case`(3400줄대)에 넣으면 JVM 메서드 바이트코드 64KB 한도(`Method code too large!`)를 넘겨 컴파일이 깨져서, 정확히 이 문제를 피하려고 이미 존재하던 `finish-extra-builtin`(2831줄, 별도 메서드로 분리된 오버플로 빌트인 처리) 쪽에 대신 추가함 |
+| (미커밋) | F4(`form-analysis`)는 이미 랜딩돼 있어 TODO만 정합. `baseNameOf`/`dirOf`/`concatMapStringsSep`/`optionalString`/`all`/`any`를 string-context allowlist에 넣고 컨텍스트를 유지. fold/map inspect + `==` error-boundary(리스트는 길이, attrset은 키셋·이름 정렬 순) 감사; 레인 전원이 동의하는 행만 mirror-pair로 승격. clj-meta lowering `nix-equal`이 attrset 키를 해시셋 순으로 돌아 `z`를 `a`보다 먼저 강제하던 것을 이름 정렬 순으로 맞춤. `.px` 언어 에러에 `failure.class`를 달고 mirror-error 8건이 호스트 machine class와 비교 |
 
 이번에 배운 것: `finish-builtin`의 메인 `case`는 이미 JVM 메서드 크기
 한도에 바짝 붙어 있다 — 새 산술/문자열류 빌트인을 여기 늘리기 전에 반드시
@@ -767,9 +768,9 @@ frontier-lift 작업으로 남아 있다(R1 스코프 밖).
 ## 10. self-* 루프 candidate generator
 
 (이 절은 예전 `docs/GENERATOR_DECISION.md`를 흡수한 것 — 2026-08-20 문서
-통합. 결정은 `/deep-research`로 합성됐고, 1번 항목은 이미 `pnix-clj.generate`
-/`pnix-clj.cegis`로 랜딩해 §6의 EXPERIMENTAL 레인에 있다. 나머지 순서
-항목(CEGIS refinement, Knuth-Bendix 가지치기, refinement-type 레인,
+통합. 결정은 `/deep-research`로 합성됐고, enumerator(`pnix-clj.generate`)와
+CEGIS refinement(`pnix-clj.cegis`)는 이미 랜딩해 §6의 EXPERIMENTAL 레인에
+있다. 나머지 순서 항목(Knuth-Bendix 가지치기, refinement-type 레인,
 library-learning)은 아직 안 지어졌다 — [`docs/PLANS.md`](PLANS.md) 참고.)
 
 self-* 루프에서 빠져 있던 조각은 이미 증인(`run-witnessed`) + 게이트

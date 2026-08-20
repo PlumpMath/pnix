@@ -153,11 +153,14 @@
        (= "path" (get v "__pnix_value_kind"))
        (string? (get v "path"))))
 
+(declare ctx-string? string-content)
+
 (defn- path-or-string
   [v]
-  (if (path-value? v)
-    (get v "path")
-    (str v)))
+  (cond
+    (path-value? v) (get v "path")
+    (ctx-string? v) (string-content v)
+    :else (str v)))
 
 ;; --- String context (pure simulation of Nix string context) ------------------
 ;;
@@ -1554,7 +1557,10 @@
                 (if (or (not= (count a) (count b))
                         (not= (set (keys a)) (set (keys b))))
                   {:status :ok :value false}
-                  (loop [ks (keys a)]
+                  ;; Nix Attrs are sorted by name; compare in that order so an
+                  ;; earlier unequal key can short-circuit without forcing a
+                  ;; later erroring slot (the equality error-boundary).
+                  (loop [ks (sorted-attr-keys a)]
                     (if (seq ks)
                       (let [k (first ks)
                             r (nix-equal-result (get a k) (get b k) true)]
@@ -2065,9 +2071,11 @@
     :hasPrefix :hasSuffix :hasInfix :toUpper :toLower :replaceStrings
     :match :split :toJSON :fromJSON :stringToCharacters :splitString
     :removePrefix :removeSuffix :toInt :concatStrings :concatMapStrings
-    ;; structural list/element operations pass contextful strings through
-    ;; untouched, so they are safe by construction
-    :head :tail :elemAt :last :init :length :elem})
+    :baseNameOf :dirOf :concatMapStringsSep :optionalString
+    ;; predicates over a list (bool result; context cannot leak) and
+    ;; structural list/element operations that pass contextful strings
+    ;; through untouched are safe by construction
+    :all :any :head :tail :elemAt :last :init :length :elem})
 
 (defn- utf8-length
   "★B4 DECIDED (owner 2026-07-09): the BYTE string model — Nix counts UTF-8
@@ -2880,11 +2888,45 @@
 
     ;; String-typed builtins that used (str v) / path-or-string coerce and
     ;; produced wrong VALUEs (dirOf 1 => ".", baseNameOf 1 => "1", etc.).
-    (:dirOf :baseNameOf)
+    ;; Full implementations live here (not finish-builtin) so context
+    ;; propagation does not blow the JVM method-size limit.
+    :dirOf
     (let [v (first args)]
-      (when-not (or (string-like? v) (path-value? v))
+      (if-not (or (string-like? v) (path-value? v))
         (err/failed :builtin :path-string-arg-not-string
-                    {:builtin name :arg v})))
+                    {:builtin name :arg v})
+        (let [path? (path-value? v)
+              s (path-or-string v)
+              i (str/last-index-of s "/")
+              cut (cond
+                    (nil? i) "."
+                    (zero? i) "/"
+                    :else (subs s 0 i))]
+          {:status :ok
+           :value (cond
+                    path? (path-value cut)
+                    (ctx-string? v) (ctx-string cut (string-ctx v))
+                    :else cut)})))
+
+    :baseNameOf
+    ;; Oracle: baseNameOf "/" = "" (not null). Strip trailing slashes (except
+    ;; root) then take the segment after the last '/'. Context rides along
+    ;; (Nix prim_baseNameOf mkString(baseName, context)).
+    (let [v (first args)]
+      (if-not (or (string-like? v) (path-value? v))
+        (err/failed :builtin :path-string-arg-not-string
+                    {:builtin name :arg v})
+        (let [raw (path-or-string v)
+              s (loop [t (str raw)]
+                  (if (and (> (count t) 1) (str/ends-with? t "/"))
+                    (recur (subs t 0 (dec (count t))))
+                    t))
+              i (str/last-index-of s "/")
+              cut (if (nil? i) s (subs s (inc i)))]
+          {:status :ok
+           :value (if (ctx-string? v)
+                    (ctx-string cut (string-ctx v))
+                    cut)})))
 
     (:parseDrvName :splitVersion)
     (when-not (string-like? (first args))
@@ -3411,6 +3453,39 @@
                 (recur (rest remaining) (assoc out attr-name values)))
               {:status :ok :value out})))))
 
+    :optionalString
+    ;; if cond then string else "" — true branch returns the string unchanged
+    ;; (context kept); false branch is lazy and context-free.
+    (if (first args)
+      (let [s-result (force-value (second args))]
+        (if (not= :ok (:status s-result))
+          s-result
+          (or (audit-string-arg name :s (:value s-result))
+              {:status :ok :value (:value s-result)})))
+      {:status :ok :value ""})
+
+    :concatMapStringsSep
+    ;; concatMapStringsSep sep f xs = concatStringsSep sep (map f xs).
+    ;; Context-aware: separator context plus every mapped result's context
+    ;; union onto the output (a context-free result stays a plain String).
+    (let [[sep f xs] args]
+      (or (audit-string-arg name :separator sep)
+          (audit-list-arg name :xs xs)
+          (loop [remaining xs
+                 out []
+                 ctxs (vec (string-ctx sep))]
+            (if (seq remaining)
+              (let [result (apply-callable f (first remaining))]
+                (if (= :ok (:status result))
+                  (let [v (:value result)]
+                    (recur (rest remaining)
+                           (conj out (pnix-to-string (string-content v)))
+                           (into ctxs (string-ctx v))))
+                  result))
+              {:status :ok
+               :value (ctx-string (str/join (str (string-content sep)) out)
+                                  ctxs)}))))
+
     ;; log/tan land here (not in finish-builtin's main case) purely to stay
     ;; under the JVM method-size limit — same math-builtin shape as
     ;; sin/cos/ln/exp/sqrt there (Math/<fn> on a coerced double).
@@ -3641,20 +3716,10 @@
                                       "set")
                 :else "unknown")}
 
-      :baseNameOf
-      ;; Oracle: baseNameOf "/" = "" (not null). Clojure (str/split "/" #"/")
-      ;; drops empties → (last []) = nil. Strip trailing slashes (except root)
-      ;; then take the segment after the last '/'.
-      {:status :ok
-       :value (let [raw (path-or-string (first args))
-                    s (loop [t (str raw)]
-                        (if (and (> (count t) 1) (str/ends-with? t "/"))
-                          (recur (subs t 0 (dec (count t))))
-                          t))
-                    i (str/last-index-of s "/")]
-                (if (nil? i) s (subs s (inc i))))}
+      ;; baseNameOf/dirOf/pathExists/readFile/readDir/getEnv handled in
+      ;; finish-extra-builtin
 
-      ;; pathExists/readFile/readDir/getEnv handled in finish-extra-builtin
+
 
       :pnixMounts
       (err/failed :builtin
@@ -3979,17 +4044,7 @@
                       {:status :ok :value default}))))
               (force-value cur)))))
 
-      :dirOf
-      {:status :ok
-       :value (let [arg (first args)
-                    path? (path-value? arg)
-                    s (path-or-string arg)
-                    i (str/last-index-of s "/")]
-                ((if path? path-value identity)
-                 (cond
-                   (nil? i) "."
-                   (zero? i) "/"
-                   :else (subs s 0 i))))}
+      ;; dirOf handled in finish-extra-builtin
 
       :mapAttrsToList
       ;; mapAttrsToList f attrs: (f key value) for each attr, in sorted-key order.
@@ -4189,14 +4244,7 @@
         (catch Throwable _
           (err/failed :builtin :to-int-failed {:builtin name :value (first args)})))
 
-      :optionalString
-      (if (first args)
-        (let [s-result (force-value (second args))]
-          (if (not= :ok (:status s-result))
-            s-result
-            (or (audit-string-arg name :s (:value s-result))
-                {:status :ok :value (str (:value s-result))})))
-        {:status :ok :value ""})
+      ;; optionalString handled in finish-extra-builtin
 
       :removePrefix
       (let [[pre s] args
@@ -4218,19 +4266,7 @@
                       (subs s 0 (- (count s) (count suf)))
                       s)}))
 
-      :concatMapStringsSep
-      ;; concatMapStringsSep sep f xs = concatStringsSep sep (map f xs)
-      (let [[sep f xs] args]
-        (or (audit-string-arg name :separator sep)
-            (audit-list-arg name :xs xs)
-            (loop [remaining xs
-                   out []]
-              (if (seq remaining)
-                (let [result (apply-callable f (first remaining))]
-                  (if (= :ok (:status result))
-                    (recur (rest remaining) (conj out (pnix-to-string (:value result))))
-                    result))
-                {:status :ok :value (str/join (str sep) out)}))))
+      ;; concatMapStringsSep handled in finish-extra-builtin
 
       :min
       {:status :ok :value (min (first args) (second args))}

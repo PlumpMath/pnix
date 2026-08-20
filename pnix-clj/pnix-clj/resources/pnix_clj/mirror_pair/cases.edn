@@ -387,6 +387,21 @@
   {:name "lazy-map-identity-head"
    :source "builtins.head (builtins.map (x: x) [ 1 (1 / 0) ])"
    :oracle-result {:status :ok :value 1}}
+  {:name "lazy-map-inspect-head"
+   :source "builtins.head (builtins.map (x: x + 1) [ 1 (1 / 0) ])"
+   :oracle-result {:status :ok :value 2}}
+  {:name "eq-list-length-mismatch-no-force"
+   :source "[ (1 / 0) ] == [ 1 2 ]"
+   :oracle-result {:status :ok :value false}}
+  {:name "eq-attrset-key-mismatch-no-force"
+   :source "{ a = 1 / 0; } == { b = 1; }"
+   :oracle-result {:status :ok :value false}}
+  {:name "eq-list-prefix-unequal-no-force"
+   :source "[ 1 (1 / 0) ] == [ 2 (1 / 0) ]"
+   :oracle-result {:status :ok :value false}}
+  {:name "eq-attrset-sorted-key-unequal-no-force"
+   :source "{ a = 1; z = 1 / 0; } == { a = 2; z = 1; }"
+   :oracle-result {:status :ok :value false}}
   {:name "lazy-filter-true-head"
    :source "builtins.head (builtins.filter (x: true) [ 1 (1 / 0) ])"
    :oracle-result {:status :ok :value 1}}

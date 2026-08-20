@@ -327,7 +327,7 @@ diff).
 | unsafeAddOutputName | - | - | - | - | O |
 | unsafeDiscardOutputDependency | O | O | O | O | O |
 | unsafeDiscardStringContext | O | O | O | O | O |
-| unsafeGetAttrPos | O | O | O | - | O |
+| unsafeGetAttrPos | O | O | O | O | O |
 | updateManyAttrs | O | O | O | O | O |
 | values | O | O | O | O | O |
 | warn | O | O | O | O | O |
@@ -491,7 +491,10 @@ generation 0, 1, 2는 focused nested interpreter를 증명한다. Compiler
 Stage1, Stage2, 또는 Stage15/N을 증명하지 않는다. 그 nested interpreter를
 15 self-extension으로 확장하는 것은 현재 CLR 스택을 소진하며, open host
 resource limitation이지 `Held` 결과 또는 stage receipt가 아니다.
-**clr-meta meta floor는 C3 Stage2로 남음; Stage3–15/N은 여전히 open.**
+**clr-meta Compiler Stage1–N + self-reproduction 게이트는
+`promotion/allowed?=false`로 닫힘** (`../clr-meta/STATUS.md`). 이 제품은
+그 사다리를 컴파일러로 소비하지 않으며, 일반 IL fixed point / host
+promotion은 주장하지 않는다.
 
 **admit 안 된 항목(범위 밖, 의도된 제외) 전체 목록은 [`BUGS.md`](BUGS.md)
 §1 참고** — 이것들은 버그가 아니라 여기 넣지 않기로 한 것들이다.

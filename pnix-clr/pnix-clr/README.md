@@ -89,9 +89,11 @@ nine-namespace artifact plan is unchanged.
   offsets or string-context tracking.
 - **Fetch:** best-effort only; offline or missing `git`/`curl` can fail or
   stub a store path.
-- Still **not** established host promotion, Stage8–15/N compiler closure,
-  full nixpkgs `lib`, or `pnix.primitive-abi.v1` enforcement. Minimal pattern
-  lambdas and `//`/`++` are live on this host (see corpus gap map).
+- Still **not** established: host promotion, full nixpkgs `lib`, or
+  `pnix.primitive-abi.v1` enforcement. `clr-meta` Stage1–N gates are closed
+  with `promotion/allowed?=false` and are not this product's compiler.
+  Minimal pattern lambdas and `//`/`++` are live on this host (see corpus
+  gap map).
 
 The bootstrap surface remains fail-closed. The README at `../README.md`
 records the exact non-claims. This host owns parsing/evaluation machinery,
@@ -109,13 +111,10 @@ guest programs.
 Still unclaimed: full self-host fixed point, derivation host ABI surface,
 module-compile stack closure, BigInt, and host promotion.
 
-The artifact manifest deliberately records
-`compiler_stage15_n=false`, `compiler_self_reproduction=false`, and
-`il_fixed_point=false`. The host AOT output hashes detect drift and tampering
-within this dependency contract, but no two-build raw DLL reproducibility gate
-has closed. The current artifact also does not establish Compiler Stage1--15/N,
-broad ClojureCLR compatibility/replacement, PNIX common compiler/PIR
-integration, or CLR host promotion. Evaluator generations 0..2 belong to the
-separate focused `clr-meta` interpreter lane and are not compiler stages; its
-live 15-extension attempt currently exhausts the CLR stack. The clr-meta
-meta-floor remains **C3 Stage2**; Stage3–15 are still open.
+This product artifact does not *promote* Compiler Stage1–15/N, compiler
+self-reproduction, or a general IL fixed point. `clr-meta` has closed those
+compiler-selfhost gates with `promotion/allowed?=false` (see
+`../clr-meta/STATUS.md`); this host does not consume that ladder as a product
+compiler. Evaluator generations 0..2 belong to the separate focused `clr-meta`
+interpreter lane and are not compiler stages. Unclaimed remain: host
+promotion, broad ClojureCLR replacement, PNIX common compiler/PIR.

@@ -15,8 +15,21 @@
 (defn attribute-name-token? [token]
   (contains? attribute-name-kinds (:kind token)))
 
-(defn parser-state [tokens]
-  (atom {:tokens tokens :index 0}))
+(defn parser-state [tokens source]
+  (atom {:tokens tokens :index 0 :source (or source "")}))
+
+(defn source-position
+  "Nix/hy oracle: {file; line; column} from a 0-based source offset.
+  Inline eval uses the same `<pnix-px>` file label as pnix-hy."
+  [parser offset]
+  (let [source (str (:source @parser))
+        n (count source)
+        clamped (max 0 (min (or offset 0) n))
+        prefix (subs source 0 clamped)
+        line (inc (count (re-seq #"\n" prefix)))
+        line-start (.lastIndexOf prefix "\n")
+        column (if (neg? line-start) (inc clamped) (- clamped line-start))]
+    {"file" "<pnix-px>" "line" line "column" column}))
 
 (defn current-token [parser]
   (let [{:keys [tokens index]} @parser]
@@ -75,16 +88,21 @@
     {:name-expression expression}))
 
 (defn nest-attr-path
-  "Desugar a.b.c = v into nested attrset fields rooted at a."
-  [segments value]
-  (if (= 1 (count segments))
-    {:name (first segments) :value value}
-    (let [head (first segments)
-          nested (nest-attr-path (rest segments) value)]
-      {:name head
-       :value {:op :attrset
-               :recursive false
-               :fields [nested]}})))
+  "Desugar a.b.c = v into nested attrset fields rooted at a.
+  `segments` is a vector of {:name :offset} maps so each nested attr
+  keeps the source position of that path segment (hy/Nix
+  unsafeGetAttrPos)."
+  [parser segments value]
+  (let [head (first segments)
+        pos (source-position parser (:offset head))]
+    (if (= 1 (count segments))
+      {:name (:name head) :pos pos :value value}
+      (let [nested (nest-attr-path parser (rest segments) value)]
+        {:name (:name head)
+         :pos pos
+         :value {:op :attrset
+                 :recursive false
+                 :fields [nested]}}))))
 
 (defn attrset-literal?
   [expression]
@@ -107,6 +125,7 @@
                  (attrset-literal? next-value))
           (assoc fields existing-idx
                  {:name name
+                  :pos (or (:pos existing) (:pos field))
                   :value {:op :attrset
                           :recursive (boolean (or (:recursive existing-value)
                                                   (:recursive next-value)))
@@ -124,13 +143,13 @@
     (when-not (attribute-name-token? first-token)
       (parse-failure! parser "invalid-attribute-name" {}))
     (advance! parser)
-    (loop [path [(:value first-token)]]
+    (loop [path [{:name (:value first-token) :offset (:offset first-token)}]]
       (if (match! parser :dot)
         (let [part (current-token parser)]
           (when-not (attribute-name-token? part)
             (parse-failure! parser "invalid-attribute-name" {}))
           (advance! parser)
-          (recur (conj path (:value part))))
+          (recur (conj path {:name (:value part) :offset (:offset part)})))
         path))))
 
 (defn parse-attrset [parser recursive?]
@@ -160,6 +179,7 @@
                                         {"name" name}))
                       (recur (conj inherited-fields
                                    {:name name
+                                    :pos (source-position parser (:offset name-token))
                                     :lexical-inherit (nil? source)
                                     :value (if source
                                              {:op :select
@@ -178,7 +198,7 @@
                   _ (expect! parser :equal)
                   value (parse-expression parser)
                   _ (expect! parser :semicolon)
-                  field (nest-attr-path path value)]
+                  field (nest-attr-path parser path value)]
               (recur (merge-attr-fields parser fields field)))))))))
 
 (defn parse-list-element [parser]
@@ -535,6 +555,7 @@
                      name (:value name-token)]
                  (recur (conj inherited-bindings
                               {:name name
+                               :pos (source-position parser (:offset name-token))
                                :lexical-inherit (nil? source)
                                :value (if source
                                         {:op :select
@@ -546,7 +567,7 @@
           (let [value (parse-expression parser)]
             (expect! parser :semicolon)
             (recur (merge-attr-fields parser bindings
-                                      (nest-attr-path path value)))))))))
+                                      (nest-attr-path parser path value)))))))))
 
 (defn parse-expression [parser]
   (case (:kind (current-token parser))
@@ -559,7 +580,7 @@
       (parse-or parser))))
 
 (defn parse [source]
-  (let [parser (parser-state (tokenizer/tokenize source))
+  (let [parser (parser-state (tokenizer/tokenize source) source)
         expression (parse-expression parser)]
     (when-not (= :eof (:kind (current-token parser)))
       (parse-failure! parser "trailing-input" {}))

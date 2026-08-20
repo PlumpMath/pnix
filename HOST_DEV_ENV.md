@@ -3,7 +3,7 @@
 **대상:** 사람, Claude/Codex 세션, `~/dot-nix` 또는 호스트 flake를 연결하는 모든 이.
 세 번째 명명 체계를 발명하기 전에 이 문서를 읽을 것.
 
-**최종 갱신:** 2026-08-14 (1일차 체크리스트 + 잔여 컷 닫힘)  
+**최종 갱신:** 2026-08-21 (Hy 인터프리터 두 갈래: proofPython vs `dev/{py,cuda}`)  
 **HM 미러:** `~/dot-nix/dev/PNIX-HOSTS.md` (PATH 패키지, ShellCheck 규칙)  
 **상태:** 이중 축 + host-import + **로컬** 라이브러리 피드는 일상 사용에
 **충분히 닫혀 있음**. 선택 제품 트랙: [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md).
@@ -77,6 +77,8 @@ nix run .#pnix-<host>-pnix     # pnix-main REPL
 nix run .#gate
 nix run .#pnix-<host>-library  # 라이브러리 경로 printer (전 호스트)
 nix run .#pnix-<host>-refs     # library printer 별칭 (정의된 곳)
+# hy 추가: packages.pnix-hy-proof-host = proofPython + pnix_hy PATH join
+#   (HM pnix-hy-host 과학 스택 join과 다른 이름)
 # rs 추가: packages.pnix-rs-library = 실제 rlib/dylib/header
 # clr 추가: pnix-clr-library가 디스크에 export 트리 materialize
 ```
@@ -100,8 +102,8 @@ raw `writeShellApplication` → ShellCheck/GHC 금지).
 
 | 호스트 | 호스트 언어에서 |
 |--------|-----------------|
-| clj | `(pnix-clj.core/eval-file "x.px")` — 공개 API: [docs/HOST_IMPORT.md](pnix-clj/pnix-clj/docs/HOST_IMPORT.md) |
-| cljs | `require('@plumpmath/pnix-cljs')` → `evalFile` / `evalSource` ([HOST_IMPORT.md](pnix-cljs/HOST_IMPORT.md)) |
+| clj | `(pnix-clj.core/eval-file "x.px")` — 공개 API: [IMPLEMENTATION.md §11](pnix-clj/pnix-clj/docs/IMPLEMENTATION.md) |
+| cljs | `require('@plumpmath/pnix-cljs')` → `evalFile` / `evalSource` ([IMPLEMENTATION.md §3](pnix-cljs/pnix-cljs/docs/IMPLEMENTATION.md)) |
 | hy | `import pnix_hy as ph; ph.eval_file("x.px")` (= `run_px`) |
 | rs | `pnix_rs::eval_file("x.px")` / C ABI `pnix_rs_eval` |
 | clr | `Pnix.Clr.Eval.File("x.px")` 또는 `pnix-clr x.px` (JSON CLI 결과) |
@@ -146,7 +148,7 @@ NODE_PATH에 lib/node_modules 및/또는 share/ 포함 필요
 # require('@plumpmath/pnix-cljs')  또는  require('pnix-cljs-module.js')
 ```
 
-상세: [pnix-cljs/HOST_IMPORT.md](pnix-cljs/HOST_IMPORT.md).
+상세: [pnix-cljs IMPLEMENTATION.md §3](pnix-cljs/pnix-cljs/docs/IMPLEMENTATION.md).
 
 ### HY 라이브러리 레이아웃 (제품)
 
@@ -197,7 +199,7 @@ dot-nix는 `dev/{clj,cljs,py,rs,cs}/` 아래 (1)–(6)을 구현. PATH만으로 
 |--------|-------------|
 | clj | `pnix-clj/CLAUDE.md`, `pnix-clj/README.md`, `pnix-clj/pnix-clj/todo.md` (host import) |
 | cljs | `pnix-cljs/CLAUDE.md`, `pnix-cljs/README.md`, `pnix-cljs/cljs-meta/todo.md` |
-| hy | `pnix-hy/CLAUDE.md`, `pnix-hy/README.md`, `pnix-hy/pnix-hy/todo.md` |
+| hy | `pnix-hy/CLAUDE.md`, `pnix-hy/README.md`, `pnix-hy/pnix-hy/docs/TODO.md` |
 | rs | `pnix-rs/CLAUDE.md`, `pnix-rs/README.md`, `pnix-rs/pnix-rs/todo.md` |
 | clr | `pnix-clr/CLAUDE.md`, `pnix-clr/README.md`, `pnix-clr/csharp/Pnix.Clr/README.md`, `pnix-clr/clr-meta/todo.md` |
 
@@ -214,6 +216,26 @@ HM 패키징 진실: `~/dot-nix/dev/PNIX-HOSTS.md`.
 
 이름은 같지만 **같은 프로그램이 아님**. 문서에서는
 “`pnix-hy-host` 경유 bare `hy`” vs “flake app `pnix-hy-hy` REPL 모드”로 구분.
+
+### Hy 인터프리터 두 갈래
+
+일상 `python`과 제품 게이트 Python은 다르다. 과학 스택은
+`~/dot-nix/dev/py`(CPU) / `~/dot-nix/dev/cuda`(nvidia, `python-cuda-env`)의
+`python-with-packages`다.
+
+| 갈래 | 정본 | 역할 |
+|------|------|------|
+| **proofPython** | `pnix-hy/flake.nix` `packages.proofPython` | Hy 1.3.1 pin. `PNIX_HY_PYTHON`, `--check`/`--gate`/투영 |
+| **python-with-packages** | `~/dot-nix/dev/{py,cuda}` | numpy 등. HM PATH `python`이 실행하는 인터프리터 |
+| **pnix-hy-proof-host** | flake `packages.pnix-hy-proof-host` | proofPython + `pnix_hy` PATH join. HM `pnix-hy-host`가 **아님** |
+
+HM `pnix-hy-host`는 조인만 한다: PATH `python` = 과학 스택 + `pnix_hy`
+`PYTHONPATH`; PATH `hy` / `PNIX_HY_PYTHON` = proofPython. `pkgs.python311`
+전역 오버라이드 금지. CORE `import pnix_hy`는 아무 python ≥3.11이면 되고,
+numpy가 필요하면 host-main `python`, 게이트는 proofPython / flake
+`pnix-hy-proof-host`. 두 join을 한 profile에 넣지 말 것.
+
+자세한 표: [`pnix-hy/pnix-hy/docs/IMPLEMENTATION.md`](pnix-hy/pnix-hy/docs/IMPLEMENTATION.md) §7.1.
 
 ## 스모크 (방향)
 

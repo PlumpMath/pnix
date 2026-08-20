@@ -7,26 +7,9 @@
 
 ## 언어 정합성 / 레인 커버리지
 
-- **builtin-by-builtin laziness exactness 감사 계속.** 현재 selector/shape/
-  equality/force-boundary 슬라이스는 끝났지만, 값을 실제로 inspect하는
-  fold/map류와 equality error-boundary receipt는 아직 감사 전이다. 모든
-  레인이 동의할 때만 `mirror-pair` 또는 전용 receipt로 승격할 것.
-  ([`IMPLEMENTATION.md`](IMPLEMENTATION.md) §1 laziness 설계 참고.)
-- **`.px` 에러 reason taxonomy 확장.** 현재 한계는 [`BUGS.md`](BUGS.md)
-  "알려진 한계" 참고 — `mk_error`가 메시지 하나만 담아 다른 레인과 구조적
-  비교가 안 된다. 필요할 때마다 kind를 늘릴 것.
-- **String context 커버리지 마무리 확인.** `baseNameOf`/`dirOf`/
-  `concatMapStringsSep`/`optionalString`이 다른 문자열 빌트인들처럼
-  context-aware인지 재점검할 것(대부분의 문자열 빌트인은 이미 처리됨,
-  이 넷만 미확인 상태로 남아있었다). `all`이 sub-derivation을 담은
-  리스트를 순회할 때 context 처리가 맞는지도 확인.
 - **Rust-grounded/투영 코퍼스 확장.** 현재 10/10 Rust-grounded fixture와
   stage7 core 5/5는 전부 accepted. 새 fixture 배치가 들어오면 파서/평가기/
   lowering 확장을 이어서 진행할 것.
-- **F4 · tools.analyzer.jvm AST-pass substrate 노출.** clj-meta가 이미
-  `tools.analyzer.jvm`을 쓰고 있으니, 이를 재사용 가능한 pass 레인으로
-  노출하는 작업 — Clojure-on-Clojure AST + 커스텀 pass pipeline(Python/Hy엔
-  대응물이 없는 Clojure/JVM 고유 능력). 아직 착수 전.
 
 ## Machine fragment (M-series)
 
@@ -37,8 +20,8 @@
 
 ## 호스트 라이브러리 제품 폴리시
 
-([`IMPLEMENTATION.md`](IMPLEMENTATION.md) §11 참고 — 공개 API 표면은 이미
-`docs/HOST_IMPORT.md` 흡수분으로 문서화됨.)
+([`IMPLEMENTATION.md`](IMPLEMENTATION.md) §11 참고 — 공개 API 표면.
+옛 `docs/HOST_IMPORT.md`는 그 절로 흡수됐다.)
 
 - **공개 Maven/local jar 좌표(선택).** 지금은 `bin/export-pnix-clj-library`
   로컬 export만 있다. 프로젝트가 monorepo 경로를 `local/root`로 잡지 않고도
@@ -54,3 +37,24 @@
 - **F8 weval-style IR-level PE** — 스파이크로 랜딩 완료
   ([`IMPLEMENTATION.md`](IMPLEMENTATION.md) §4 역사 표, `pnix-clj.weval`).
 - **게이트 리포트 캐시** — 랜딩 완료(13종 리포트 1-JVM 통합).
+- **F4 · tools.analyzer.jvm AST-pass substrate** — 랜딩 완료
+  (`pnix-clj.form-analysis`, `analyze-form`, 게이트
+  `form-analysis-ast-pass-lane` / `synthesize-form-analysis-convergence`,
+  example 38, WIKI `f4-analyzer-pass-lane`). Clojure-on-Clojure AST +
+  host-interop / pure-core 분류; Python/Hy 대응물 없는 JVM 고유 레인.
+- **String context 네 빌트인 + `all`** — `baseNameOf`/`dirOf`/
+  `concatMapStringsSep`/`optionalString`을 context-aware allowlist에
+  넣었고, `all`/`any`는 bool 결과라 컨텍스트가 새지 않아 같이 허용.
+  서브 derivation 리스트와 보간 ctx-string 리스트 둘 다 게이트됨.
+- **fold/map inspect + equality error-boundary** — 값을 읽는 fold/map은
+  해당 슬롯만 강제; `==`는 길이/키셋이 다르면 슬롯을 안 보고, 같은
+  모양이면 강제. Attrset는 Nix처럼 이름 정렬 순으로 비교(앞 키가
+  다르면 뒤 에러 슬롯을 안 봄). 레인 전원이 동의하는 행만
+  `mirror-pair`로 승격. clj-meta lowering `nix-equal`도 이제 이름 정렬
+  순으로 비교한다 — `{ a = 1; z = 1/0; } == { a = 2; z = 1; }`가 4레인
+  동의.
+- **`.px` 에러 reason taxonomy** — `mk_error_as`가 `failure.class`를
+  실어 호스트 machine class와 비교한다. 언어 에러 사이트(throw/abort/
+  with/index/pattern/init/purity-gated)를 class로 분류했고,
+  `runMirror.error_class`와 mirror-error 8건이 레인 class를 핀한다.
+  모듈-스키마/`unsupported-expression` 잔여는 필요할 때마다 kind를 늘릴 것.

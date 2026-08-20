@@ -19,8 +19,9 @@ generation 0/1/2 등 — **그 자체만으로** Compiler Stage15/N,
 self-reproduction, IL fixed point, 또는 Trusting-Trust를 증명한 것으로
 주장하지 않는다. 이건 각 기능의 "여전히 진행 중"인 상태를 정직하게
 유지하기 위한 전역 가드레일이다. `clr-meta` 쪽 정확한 Stage 진행 상태는
-`clr-meta/STATUS.md` / `clr-meta/STAGE15_N_ROADMAP.md` 참고(현재
-meta-floor: C3 Stage2 닫힘, Stage3–15/N은 open).
+`clr-meta/STATUS.md` / `clr-meta/STAGE15_N_ROADMAP.md` 참고(Stage1–N +
+self-reproduction 게이트는 `promotion/allowed?=false`로 닫힘. 일반 IL
+fixed point / host promotion은 open).
 
 ## 1. 의도적으로 범위 밖(버그 아님) — `SCOPE_LOCK.md` "범위 밖" 원문 기반
 
@@ -38,9 +39,10 @@ admit 절차를 따라 새로 admit해야 하는 것들이지, 지금 코드에�
 - Hangul/NL/dictionary/agent/domain 콘텐츠 없음
 - 완전한 mature JVM-host parity, IL fixed-point self-hosting, 게이트가
   존재하기 전 established tri-host membership 주장 없음
-- Compiler Stage2–15/N, compiler self-reproduction, byte-identical raw
-  AOT rebuild, 또는 CLR IL fixed point 없음(새로 admit된 compiler 성장은
-  exact C2 selfhost-family Compiler Stage1 artifact뿐)
+- 이 **제품**은 Compiler Stage2–15/N / compiler self-reproduction /
+  일반 CLR IL fixed point를 promotion하지 않는다. `clr-meta` 쪽 해당
+  게이트는 `promotion/allowed?=false`로 닫혀 있다
+  (`../clr-meta/STATUS.md`). 제품 러너가 그 사다리를 컴파일러로 쓰지는 않음
 - broad ClojureCLR language/command/runtime/ecosystem compatibility 또는
   교체 없음; `bin/clojure-clr`는 현재 generation 2를 통한 focused `-e`와
   single-file profile만 admit하며 explicit bootstrap trust root가 host

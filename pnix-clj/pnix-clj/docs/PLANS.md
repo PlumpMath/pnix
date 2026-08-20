@@ -60,31 +60,27 @@ impure이므로 같은 seam 뒤에서 시뮬레이션만. Full Tvix도 store를 
 ## self-* generator 후속 순서 (§10에서 이어짐)
 
 [`IMPLEMENTATION.md`](IMPLEMENTATION.md) §10의 observational-equivalence
-bottom-up enumerator(`pnix-clj.generate`)는 이미 랜딩했다. `/deep-research`
-결정이 제시한 나머지 순서는 아직 안 지어졌다:
+bottom-up enumerator(`pnix-clj.generate`)와 CEGIS refinement
+(`pnix-clj.cegis`, WIKI `generator-cegis`)는 이미 랜딩했다. `/deep-research`
+결정이 제시한 **나머지** 순서는 아직 안 지어졌다:
 
-1. **CEGIS refinement**(Smyth/Burst 스타일) — `run-witnessed` +
-   `property-fuzzer` counterexample를 되먹여 예제 집합을 강화하고
-   재-enumerate(angelic → analyze → strengthen → retry). 강한 verifier를
-   generator 드라이버로.
-2. **Canonical equivalence-reduction pruning**(Knuth-Bendix) — 평가 전
+1. **Canonical equivalence-reduction pruning**(Knuth-Bendix) — 평가 전
    후보를 구문적으로 가지치기, 기존 정규 형태(α-canonical + arith-proof
    polynomial + bool-proof truth-table)를 정규형 oracle로(~80% 가지치기
    목표).
-3. **Synquid refinement-type 합성** — 증명 가능하지만 수동 논리 명세가
+2. **Synquid refinement-type 합성** — 증명 가능하지만 수동 논리 명세가
    필요해 self-improve 루프에 자율 공급 불가. 명세 소스에서
    proven-by-construction 후보를 원할 때 재검토.
-4. **Library-learning / LLM**(DreamCoder/babble/LILO) — 휴리스틱, corpus
+3. **Library-learning / LLM**(DreamCoder/babble/LILO) — 휴리스틱, corpus
    또는 모델이 필요. 이후 배율기이지 첫 벽돌이 아니다.
 
-## F7 — self-generating cogen 증명 앵커 (아직 무의미, F1의 cogen이 실제로
-지어져야 의미 생김)
+## F7 — self-generating cogen 증명 앵커 (랜딩됨, 여기 두지 말 것)
 
-Glück Thm 1의 구조적 동등성 검사를 tower의 증명-운반 속성으로 기계화하는
-작업. F1(Futamura 2차 투영)이 **cogen-free** 접근(Latifi DLS'19 — 고전적
-self-applicable PE 없이)으로 이미 랜딩했기 때문에, 3차 투영(cogen)은
-"stated, not built"로 정직하게 남아 있다 — F7은 그 cogen이 실제로 지어질
-때만 의미가 생기는 후속 작업이다.
+3차 Futamura 투영은 cogen-free curried 경로로 이미 있다
+(`pnix-clj.futamura`, WIKI `f7-cogen-collapse`). Glück PEPM'09 collapse는
+그 구성에 대해 by-construction으로 기계화됐고, 고전적 self-application
+정리는 아니다. F7b(call-by-need self-applicable specializer)만 위 절의
+open research로 남는다.
 
 ## 증거-저장소 spine의 `origin/main` 포트 — 모호(moot)
 
@@ -103,30 +99,23 @@ self-applicable PE 없이)으로 이미 랜딩했기 때문에, 3차 투영(coge
 공통 이식 가능 `.px` 라이브러리 트랙은 미룬 상태다 — 호스트-로컬 임포트
 작업을 그것 때문에 막지 않는다.
 
-## 미래 아이디어 — pnixMounts / unsafeGetAttrPos 통일 (아직 예정 없음,
-2026-08-19)
+## 미래 아이디어 — pnixMounts / unsafeGetAttrPos 모양 통일 (아직 예정 없음,
+2026-08-20)
 
-지금은 만들지 않는다. 기본 언어 기능(5개 호스트가 실제로 똑같이 동작해야
-하는 핵심 부분)이 production 수준으로 완전히 갖춰지기 전까지는, 여기 적힌
-건 전부 방향 제시용 메모일 뿐 확정된 설계가 아니다. 나중에 필요해지면
-아래 단서를 참고해서 5개 호스트를 통일시키고 어디에 응용할지 결정한다.
+지금은 만들지 않는다. `pnixMounts`는 Nix 빌트인이 아니고 이 제품에 발명하지
+않는다. `unsafeGetAttrPos` 자체는 5개 호스트에 이미 있다 — 남은 건 clj의
+`{start; end; span;}`을 hy/cljs/clr/rs의 `{file; line; column;}`로 맞추는
+일인데, 착수 확정 전이다.
 
-### unsafeGetAttrPos
+### unsafeGetAttrPos 모양
 
 - Nix 실제 스펙: 속성이 정의된 위치를 `{ file; line; column; }` 모양으로
   돌려준다.
-- 2026-08-19 5개 호스트 감사 결과:
-  - hy: `{file; line; column;}` — Nix 스펙과 일치하는 모양. 나중에 통일할
-    때 이게 목표 모양일 가능성이 높음.
-  - **clj (여기)**: `{start; end; span;}`(바이트 오프셋) —
-    [`IMPLEMENTATION.md`](IMPLEMENTATION.md)에 이미 "until file/line/column
-    tracking exists"라고 적어둔 그대로, 임시방편이었다. line/column 추적
-    인프라(파서가 지금 바이트 오프셋만 들고 있음)가 생기면 hy 모양으로
-    바꿀 수 있다.
-  - clr: 항상 `null` — 위치 추적 자체를 아직 안 함.
-  - cljs: 빌트인 이름은 등록돼있는데 호출하면 "not-callable" 에러 — 이름만
-    있고 실제 구현이 없는 죽은 항목.
-  - rs: 아예 등록 안 됨.
+- 2026-08-20 5개 호스트 상태:
+  - hy / cljs / clr / rs: `{file; line; column;}` (인라인 파일 라벨
+    `"<pnix-px>"`, 생성 attrset은 null).
+  - **clj (여기)**: `{start; end; span;}`(바이트 오프셋) — 파서가 아직
+    line/column을 안 들고 있다. 인프라가 생기면 hy 모양으로 바꿀 수 있다.
 - 방향 아이디어(확정 아님): line/column 추적은 이 빌트인 하나만을 위한 게
   아니라 에러 메시지 품질 전반에 같이 쓸 수 있는 인프라다 — 파싱/평가 에러가
   지금은 대부분 바이트 오프셋만 주는데, 실제 Nix처럼 "파일:줄:컬럼"으로
