@@ -43,3 +43,51 @@
 호출하면 "not-callable" 에러가 난다 — 이름만 있고 죽어있는 등록이다.
 다른 호스트와 통일할 방향은 [`PLANS.md`](PLANS.md)의 `unsafeGetAttrPos`
 항목에 정리해뒀다.
+
+## 문자열 컨텍스트(string context) / `derivation` 시뮬레이션 한계 (2026-08-20, 버그 아님)
+
+[`IMPLEMENTATION.md`](IMPLEMENTATION.md) §8에서 이식한 문자열 컨텍스트
+추적 + `derivation`/`derivationStrict`는 **순수 시뮬레이션**이다 — 실제
+Nix 빌드 시스템과 바이트 단위로 호환되게 만들려는 시도가 아니다. 참고로
+삼은 다른 pnix 호스트(문자열 컨텍스트를 이미 갖춘 유일한 호스트)도 같은
+스코프의 시뮬레이션이고, 이 호스트는 그 설계를 그대로 이식했다 — 아래
+항목은 전부 의도된 한계지 고쳐야 할 버그가 아니다:
+
+- **의사(pseudo) 해시, 진짜 Nix 해시 아님.** `derivation-paths`가 만드는
+  `/nix/store/<hash>-<name>` 경로는 forced 입력 attrs의 canonical JSON
+  텍스트를 sha256한 것 — 실제 `nix-instantiate`가 만드는 `.drv` 파일
+  구조를 해시하는 진짜 Nix 알고리즘과 다르다. 같은 pnix 프로그램은
+  항상 같은 경로를 내지만(결정적), 그 경로 문자열 자체는 실제 Nix가 낼
+  경로와 절대 같지 않다.
+- **`d.out == d` 자기참조가 표현 안 됨.** 실제 Nix에서 `derivation {...}`가
+  낸 attrset `d`는 `d.out`이 `d` 자기 자신(첫 출력이 "out"일 때)이지만,
+  이 호스트(그리고 참고로 삼은 호스트)의 값 모델은 순수 레코드/맵이라
+  진짜 순환 참조를 만들 수 없다 — `d.out`은 `d`와 같은 타입/모양이지만
+  별개의, 축소된(`type`/`name`/`drvPath`/`outPath`/`outputName`만 있는)
+  하위-attrset이다. `d.out.out`처럼 더 파고들면 없는 속성이라 에러난다
+  (실제 Nix라면 계속 자기 자신을 가리킴).
+- **`appendContext`/`getContext`가 얕은 스코프.** 어떤 store-path에
+  의존하는지, 그리고 `path`/`allOutputs`/`outputs` 세 가지 컨텍스트
+  "종류" 구분까지는 추적하지만, 실제 Nix가 갖는 더 풍부한 세부 정보(예:
+  `outputs` 종류가 가리키는 각 출력이 실제로 존재하는 유효한 파생물
+  출력인지 검증하는 것 등)는 검증하지 않는다 — 문자열만 넣으면 그대로
+  인코딩/디코딩된다.
+- **`ctx-string-in-args?` fail-closed 게이트는 얕은 스캔이다.**
+  최상위 인자 + 벡터 인자 한 단계까지만 보고, 아직 강제평가 안 된 `Cell`
+  뒤에 숨은 리스트 원소는 못 본다. 오라클로 직접 확인한 실제 동작:
+  컨텍스트 있는 문자열이 `sort`/`filter` 같은 non-allowlisted 빌트인의
+  리스트 인자 **안에 중첩**돼 있으면 거부되지 않고 그냥 통과한다(참고
+  구현도 동일) — 게이트가 신뢰성 있게 잡는 건 바로 그 자리에 스칼라로
+  전달된 컨텍스트 문자열뿐이다. 오라클과 동일한 동작이라 이 호스트만의
+  결함이 아니고, 일부러 더 엄격하게 만들지 않았다(오라클과 정확히 같은
+  강도로 fail-closed하도록).
+- **`toJSON`이 attrset을 `__toString`/`outPath`로 강제 변환하지 않는다
+  (이번 작업 이전부터 있던, 무관한 사전 존재 격차).** 실제 Nix와 참고
+  구현은 `toJSON { outPath = "/x"; ... }`를 `"/x"`(문자열)로 직렬화하지만,
+  이 호스트의 `to-json-value`는 attrset을 항상 순수 JSON 객체로
+  직렬화한다 — `derivation` 결과처럼 `outPath`가 있는 attrset을 통째로
+  `toJSON`에 넘기면 실제 Nix와 다른 모양이 나온다. 이번 작업은
+  `ContextStringValue` 인식만 `to-json-value`에 추가했고, 이 attrset
+  강제변환 격차는 문자열 컨텍스트와 무관한 기존 동작이라 손대지 않았다
+  — 고치려면 `to-json-value`의 `AttrsetValue` 분기에 `__toString`/
+  `outPath` 우선순위 코어스를 추가해야 한다.

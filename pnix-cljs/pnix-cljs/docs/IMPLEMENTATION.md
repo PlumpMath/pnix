@@ -61,7 +61,8 @@ substrate)이라 여기서 다시 설명 안 하고 링크만 한다.
 |---|---|
 | [`TODO.md`](TODO.md) | 지금 당장 픽업 가능한 열린 작업(없으면 "현재 활성 작업 없음"이라고 명시) |
 | [`BUGS.md`](BUGS.md) | 알려진 버그/한계 + 의도적으로 안 고치는 항목(SCOPE_LOCK 제외 목록 포함) |
-| [`PLANS.md`](PLANS.md) | 아직 확정 안 된 미래 설계 방향(pnixMounts/unsafeGetAttrPos 통일, CAPABILITIES.md 생성기 등) |
+| [`PLANS.md`](PLANS.md) | 아직 확정 안 된 미래 설계 방향(pnixMounts/unsafeGetAttrPos 통일 등) |
+| [`CAPABILITIES.md`](CAPABILITIES.md) | 코드에서 자동 생성된 능력 인덱스(`src/pnix_cljs/capabilities.cljs`, `pnix-cljs capabilities`/`capabilities-check`) — 손 편집 금지, §7 참고 |
 | [`pnix-cljs/pnix-cljs/examples/README.md`](../examples/README.md), [`FOUNDATION_PATH.md`](../examples/FOUNDATION_PATH.md) | 예제 00~17 카탈로그 + 온보딩용 추천 읽기 순서 |
 | [`cljs-meta/README.md`](../../cljs-meta/README.md), [`cljs-meta/STATUS.md`](../../cljs-meta/STATUS.md) | cljs-meta(자매 프로젝트, ClojureScript self-host 컴파일 substrate)의 소개 + peer-floor 상태(다른 호스트들의 meta floor와 동등한 지점이 뭔지 진술) |
 | [`cljs-meta/FIXED-POINT.md`](../../cljs-meta/FIXED-POINT.md) | stage0→stage3 self-recompile fixed-point 빌드, trust root, 게이트 요구사항 |
@@ -211,7 +212,7 @@ diff).
 | and | O | O | O | O | O |
 | any | O | O | O | O | O |
 | append | O | O | O | O | O |
-| appendContext | O | - | - | - | O |
+| appendContext | O | - | O | - | O |
 | assert | - | - | - | - | O |
 | assertMsg | O | O | O | O | O |
 | atan2 | O | O | O | O | O |
@@ -240,8 +241,8 @@ diff).
 | count | O | - | - | - | - |
 | currentSystem | - | - | - | - | O |
 | deepSeq | O | O | O | O | O |
-| derivation | O | - | - | - | O |
-| derivationStrict | O | - | - | - | O |
+| derivation | O | - | O | - | O |
+| derivationStrict | O | - | O | - | O |
 | dirOf | O | O | O | O | O |
 | div | O | O | O | O | O |
 | drop | O | O | O | O | O |
@@ -279,7 +280,7 @@ diff).
 | getAttrFromPath | O | O | O | O | O |
 | getAttrFromPathOr | O | O | O | O | O |
 | getAttrs | - | - | - | - | O |
-| getContext | O | - | - | - | O |
+| getContext | O | - | O | - | O |
 | getEnv | O | O | O | O | O |
 | getName | O | O | O | O | O |
 | getVersion | O | O | O | O | O |
@@ -287,7 +288,7 @@ diff).
 | gt | O | O | O | O | O |
 | hasAttr | O | O | O | O | O |
 | hasAttrByPath | O | O | O | O | O |
-| hasContext | O | - | - | - | O |
+| hasContext | O | - | O | - | O |
 | hasInfix | O | O | O | O | O |
 | hasPrefix | O | O | O | O | O |
 | hasSuffix | O | O | O | O | O |
@@ -501,6 +502,8 @@ evaluator, 빌트인, cljs-meta self-host substrate, 예제, 문서 전부를
 | 커밋 | 무엇을 |
 |---|---|
 | (커밋 전) | cross-host 빌트인 프레즌스 매트릭스에서 빠진 6개 중 `log`/`tan` 신규 구현(수학 빌트인, `ln`/`sin`/`cos` 바로 옆에 동일한 등록+dispatch 패턴으로 추가)과 `mapAttrs'` 신규 구현(유일한 참고 구현인 pnix-clj `evaluator.clj`의 알고리즘을 이식 — `f name value`로 `{ name; value; }` pair를 받아 반환된 `name`으로 결과 attrset을 재구성하는, `mapAttrs`와 달리 키를 바꿀 수 있는 변형, 중복 결과 이름은 `listToAttrs`와 동일하게 첫 항목이 우선). `nixVersion`은 이미 등록은 돼 있었지만 값이 `"2.34.7"`로 틀려 있던 걸 `"2.18.0-pnix"`(pnix-rs/pnix-hy와 일치)로 정정. `storeDir`/`langVersion`은 이미 올바른 값으로 등록돼 있어서 코드 변경 없음 — 애초에 프레즌스 매트릭스(§4)가 stale했던 케이스였다. |
+| (커밋 전) | `docs/CAPABILITIES.md` 자동 생성기 신설(§7) — `src/pnix_cljs/capabilities.cljs`가 `evaluator/builtins-value`를 직접 introspect(189개 키), `pnix-cljs.main`에 `capabilities`/`capabilities-check` 서브커맨드 추가, `bin/pnix-cljs-gate`에 drift 게이트로 편입. pnix-clj/pnix-hy/pnix-rs 세 호스트가 이미 갖고 있던 패턴을 이 호스트에 맞춰 이식(rs의 단일-문서 스코프를 참고, clj의 큰 네임스페이스 reflection 방식은 이 호스트 규모에 안 맞아 채택 안 함). |
+| (커밋 전) | 문자열 컨텍스트(string context) 추적 + `derivation`/`derivationStrict` 신규 구현(§8). `appendContext`/`getContext`/`hasContext` 신규, `unsafeDiscardStringContext`/`unsafeDiscardOutputDependency`를 죽은 `:identity` alias에서 실제 구현으로 교체, `+`/문자열 보간/약 20개 문자열 빌트인에 컨텍스트 전파 배선. 유일한 참고 구현(다른 JVM 호스트의 `evaluator.clj`)의 설계를 이 호스트 자체 관용구(레코드, 예외 기반 `evaluation-failure!`, `Cell`/`force-cell` 지연평가)로 이식 — JVM 전용 코드는 한 줄도 복사하지 않음(§ pnix-cljs 영구 규칙). |
 
 ## 7. 이 문서가 코드와 어긋나지 않게 유지하는 법
 
@@ -513,12 +516,185 @@ evaluator, 빌트인, cljs-meta self-host substrate, 예제, 문서 전부를
   ```
   `import`/`scopedImport`는 이 호스트에서 예약 키워드라 이 스크립트가
   못 잡아서 손으로 `*` 표시가 남아있다(§4 상단 각주).
-- **정직하게 밝혀야 할 gap**: clj/hy/rs 세 호스트는 각각
-  `docs/CAPABILITIES.md`(+clj는 `LANE_REGISTRY.md`/`WIKI.md`까지)라는
-  **코드에서 자동 생성되고 drift-게이트로 보호되는** 능력 인덱스를
-  갖고 있다(생성 명령 실행 → 결과가 코드와 다르면 게이트 실패). **이
-  호스트(pnix-cljs)와 pnix-clr은 그런 문서가 아직 없다** — 이 문서를
-  포함해 `TODO.md`/`BUGS.md`/`PLANS.md` 전부 사람이 손으로 쓰고
-  갱신하는 문서라서, 코드가 바뀌어도 자동으로는 안 어긋난다는 보장이
-  없다. 이건 "미래 아이디어"가 아니라 **참고할 작동하는 구현이 이미
-  3개 있는 실제 백로그 항목**이다 — [`PLANS.md`](PLANS.md)에 적어뒀다.
+- **`docs/CAPABILITIES.md`는 자동 생성이다** (2026-08-20, §1에 링크됨) —
+  이 점에서는 이 문서(`IMPLEMENTATION.md`)와 다르다. 생성기는
+  `src/pnix_cljs/capabilities.cljs`: `builtin-public-names`가
+  `evaluator/builtins-value`의 `:fields` 키 집합을 직접 introspect하므로
+  빌트인이 추가/삭제되면 재생성 결과가 자동으로 따라간다(손 typed 목록이
+  아님). 재생성: `node pnix-cljs/dist/pnix-cljs.js capabilities >
+  pnix-cljs/docs/CAPABILITIES.md`. drift 게이트:
+  `node pnix-cljs/dist/pnix-cljs.js capabilities-check`(재생성 결과를
+  메모리에서 만들어 커밋된 파일과 diff, 다르면 비영 종료) — `bin/pnix-cljs-gate`
+  가 매 실행마다 이걸 돌린다. 이걸로 pnix-clj/pnix-hy/pnix-rs 세 호스트가
+  이미 갖고 있던 "코드에서 자동 파생되고 drift-게이트로 보호되는 능력
+  인덱스" 패턴을 이 호스트도 갖추게 됐다(pnix-clr은 별도 트리라 이 문서가
+  다루는 범위 밖 — 그쪽 상태는 그쪽 문서 참고).
+- **이 문서(`IMPLEMENTATION.md`)와 `TODO.md`/`BUGS.md`/`PLANS.md` 자체는
+  여전히 자동 생성이 아니다** — 사람이 손으로 쓰고 갱신하므로, 코드가
+  바뀌어도 자동으로는 안 어긋난다는 보장이 없다. §4 빌트인 표도 같은 이유로
+  자동 생성이 아니다(바로 위 항목 참고) — `docs/CAPABILITIES.md`의
+  presence 목록과는 성격이 다르다(§4는 5개 호스트 비교용 스냅샷, `CAPABILITIES.md`는
+  이 호스트 단독의 항상-최신 presence 인벤토리).
+
+## 8. 문자열 컨텍스트(string context) + `derivation` — 2026-08-20
+
+Nix의 실제 의미론: 문자열이 **컨텍스트**(그 문자열을 쓰기 전에 realize돼야
+하는 store-path 의존성의 집합)를 실어 나를 수 있다 — `derivation`의
+`outPath`/`drvPath`, `builtins.appendContext`가 만들어낸다. 이 호스트에는
+2026-08-20 이전까지 이 개념이 전혀 없었다(`appendContext`/`getContext`/
+`hasContext`도 없었음). 다른 JVM 기반 호스트의 순수-시뮬레이션 설계(값
+표현, fail-closed 게이트, derivation 계산)를 이 호스트 자체 관용구로
+포팅했다 — JVM 전용 코드는 옮기지 않고, 설계만 참고했다.
+
+### 값 표현 — `ContextStringValue` 레코드
+
+`src/pnix_cljs/evaluator.cljs` 최상단(`ByteStringValue` 바로 옆)에
+`(defrecord ContextStringValue [content context])`을 새로 추가했다.
+**레코드**를 골랐다(참고 구현은 문자열 키 태그 맵을 씀) — 이 호스트는
+`AttrsetValue`/`ClosureValue`/`BuiltinValue`/`ByteStringValue`가 전부
+레코드라 그게 이 파일 고유의 관용구이고, 참고 구현이 태그 맵을 쓰는 이유
+중 하나(Path 값 타입과 표현을 맞추려는 것)가 이 호스트엔 아예 해당 안
+된다(§5 — 이 호스트엔 Path 값 타입이 없음, 경로는 그냥 문자열). 핵심
+함수:
+
+- `ctx-string content context` — 생성자. **컨텍스트가 비어 있으면
+  `content`를 그대로 반환**해서 컨텍스트-free 문자열은 이 기능 이전과
+  완전히 동일한 표현/비용을 유지한다(대부분의 문자열 연산이 여기 해당).
+  `content`가 `ByteStringValue`(비UTF-8 원시 바이트)인데 컨텍스트가
+  비어있지 않으면 거부(`type-error`/`raw-bytes-with-context`) — 두 특수
+  표현이 섞이는 조합에는 의미를 부여하지 않는다.
+- `ctx-string?`, `string-content`(언랩, 다른 값엔 그대로 통과 — 아무 값에나
+  걸어도 안전), `string-ctx`(컨텍스트 벡터, 컨텍스트-free면 `[]`).
+- 기존 `string-value?`/`string-bytes`/`string-text` 세 함수를 확장해서
+  `ContextStringValue`를 투명하게 인식/언랩하게 만들었다 — 이 세 함수가
+  파일 전체에서 "이게 문자열인가/바이트를 달라/텍스트를 달라"의 공용
+  창구라서, 여기 세 곳만 넓히면 **fail-closed 게이트를 통과한** 빌트인
+  대부분이 별도 코드 없이 컨텍스트를 올바르게 다룬다(아래 참고).
+
+### fail-closed 게이트 — `context-aware-builtins` / `ctx-string-in-args?`
+
+`invoke-builtin`(`{:keys [...]}` 아닌, `[builtin argument]` 받는 큰
+`case`) 진입부에 게이트를 심었다: 누적된 `arguments`에 컨텍스트 있는
+문자열이 하나라도 있는데 그 빌트인 이름이 `context-aware-builtins`
+집합에 없으면 즉시 `type-error`(`detail_class`
+`"string-context-frontier"`)로 거부한다 — **컨텍스트를 아직 배우지 않은
+빌트인이 조용히 컨텍스트를 버리거나 망가뜨리는 일이 없게** 하는 것이 이
+설계 전체의 핵심. `context-aware-builtins`는 참고 구현의 동일 집합을
+그대로 이름만 옮긴 고정 목록(그 목록 중 `count`처럼 이 호스트에 아직 없는
+빌트인 이름은 그냥 빠짐). `ctx-string-in-args?`도 참고 구현과 똑같이
+**얕은** 스캔이다(최상위 + 벡터 인자 한 단계, 아직 강제평가 안 된 `Cell`
+뒤에 숨은 원소는 못 봄) — 강제로 더 깊이 스캔하지 않은 이유는 §"검증
+결과"의 `sort`/`filter` 항목 참고.
+
+### 전파 지점
+
+- **문자열 보간** (`evaluate-string-segments`/`evaluate-indented-string`):
+  각 조각을 평가해 `string?`면 그대로, `ctx-string?`면 컨텐츠를 꺼내고
+  컨텍스트를 모으고, 그 외 타입은 여전히 `type-error`. 최종 결과는
+  `(ctx-string 합친텍스트 모은컨텍스트)` — 컨텍스트가 하나도 없으면 이전과
+  바이트 단위로 동일. indented-string은 컨텐츠에만 들여쓰기 정규화를 적용한
+  뒤 컨텍스트를 다시 씌운다.
+- **문자열 `+`** (`numeric-binary`의 `:add` 분기): 언어 연산자라서
+  `invoke-builtin` 게이트를 아예 거치지 않는다 — `+`는 항상 컨텍스트를
+  이해한다(오른쪽/왼쪽 컨텍스트 합집합).
+- **컨텍스트-보존 빌트인 약 20개**: `toString`/`toJSON`(컬렉트용 `volatile!`
+  누산기를 재귀 호출에 실어 나름), `substring`/`toUpper`/`toLower`/
+  `stringToCharacters`/`removePrefix`/`removeSuffix`(원본 문자열의 전체
+  컨텍스트를 그대로 유지 — substring 기반 의미론이라 컨텍스트를 자르지
+  않음), `concatStrings`/`concatMapStrings`/`concatStringsSep`/
+  `replaceStrings`(컨텍스트 합집합, replaceStrings는 실제 **사용된**
+  교체 문자열의 컨텍스트만), `match`/`split`(정규식 인자가 컨텍스트 있으면
+  거부, 대상 문자열은 컨텍스트 있어도 되지만 결과는 컨텍스트-free),
+  `hashString`(다이제스트는 컨텍스트-free), `toPath`(정규화된 경로에
+  컨텍스트 유지), `stringLength`/`hasPrefix`/`hasSuffix`/`hasInfix`/
+  `splitString`/`toInt`(이미 컨텍스트-aware해진 `string-bytes`/
+  `string-text` 덕분에 별도 코드 변경 없이 자동으로 맞게 동작).
+- `nix-to-string`(범용 coerceMore 강제변환 유틸, `toString`/`trace`/
+  `concatStrings`류가 공유)은 **1-arity 호출에서는 여전히
+  `ContextStringValue`를 거부**한다 — 아직 컨텍스트-aware하게 안 바뀐
+  호출부(`warn`, `optionalString`, `concatMapStringsSep`)를 위한 심층
+  백스톱. 컨텍스트-aware 호출부는 `collected` volatile을 명시적으로 넘기는
+  2-arity로 부른다.
+
+### 4개 직접 조작 빌트인
+
+`appendContext`/`getContext`/`hasContext`/`unsafeDiscardStringContext`를
+신규 등록(`unsafeDiscardStringContext`와 `unsafeDiscardOutputDependency`는
+전부터 이름은 등록돼 있었지만 죽은 `:identity` alias였다 — 이번에 실제
+구현으로 교체).
+
+- `appendContext s ctxAttrs`(문자열이 먼저, 컨텍스트 attrset이 둘째 — 오라클
+  확인됨) — 각 경로 키의 info attrset을 Nix 인코딩 컨텍스트 원소로 해석:
+  `path = true` → `"<p>"`, `allOutputs = true` → `"=<p>"`, `outputs =
+  [o..]` → `"!o!<p>"`. **빈 info attrset(`{}`)은 아무 것도 안 붙인다**
+  (오라클 확인).
+- `getContext s` — Nix 인코딩 컨텍스트 원소를 경로별 info attrset으로
+  역-디코딩(`"<p>"` → `{path=true;}`, `"!o!<p>"` → `{outputs=[o..];}`,
+  `"=<p>"` → `{allOutputs=true;}`, 같은 경로에 여러 종류가 섞이면 한 키로
+  합침).
+- `hasContext s` — `(ctx-string? s)`.
+- `unsafeDiscardStringContext s` — 컨텍스트를 버리고 순수 컨텐츠만 반환.
+- `unsafeDiscardOutputDependency s` — `"!"`/`"="`로 시작하는 (출력 의존)
+  컨텍스트 원소만 걸러내고 순수 경로 원소는 남긴다.
+
+이 넷 다 "어떤 의존성인지"만 추적하는 순수-시뮬레이션 스코프다 — 실제
+Nix의 `path`/`allOutputs`/`outputs` 종류 구분보다는 얕지만, `getContext`가
+디코딩한 결과 shape는 그 세 종류를 다 구분해서 보여준다(오라클과 구조
+일치 확인됨).
+
+### `derivation` / `derivationStrict` / `placeholder`
+
+`derivation-core`(검증 + realize) → `derivation-paths`(결정적 **의사**
+해시 — 진짜 Nix 해시 아님, forced 속성의 canonical JSON 텍스트를 sha256)
+→ 두 빌트인:
+
+- `derivationStrict attrs` → `drvPath`(컨텍스트 `["=<drvPath>"]`) + 출력당
+  하나씩(컨텍스트 `["!<output>!<drvPath>"]`)인 attrset.
+- `derivation attrs` → 입력 attrs 전체 + `type`/`name`/`drvPath`/
+  `outPath`/`outputName`(첫 출력 기준) + 출력당 하나씩 "축소된"
+  하위-derivation attrset(`type`/`name`/`drvPath`/`outPath`/`outputName`만
+  — 실제 Nix의 `d.out == d` 자기참조는 순수 레코드/맵 값 모델로는 표현이
+  안 됨, 의도된 시뮬레이션 한계, `BUGS.md` 참고).
+- `placeholder output` — 컨텍스트 없는 결정적 의사-해시 문자열(출력 이름은
+  반드시 순수 `string?`여야 함 — 컨텍스트 있는 인자는 그냥 거부).
+- `storePath` — 순수 평가기라 store 접근 불가, 항상 거부(기존 동작
+  그대로, 이번에 allowlist에만 추가).
+
+검증(§ 아래)에서 clj 오라클과 실제 값(경로 텍스트 자체는 의사-해시라
+다름) 구조를 대조 확인.
+
+### 출력 경계 — `materialize`
+
+`evaluator/materialize`(canonical JSON 투영의 입구)에 `ctx-string?` 분기를
+추가: 컨텍스트 있는 문자열은 **순수 컨텐츠로 materialize**된다(컨텍스트는
+버려짐) — 이건 "조용히 컨텍스트를 버리는 버그"가 아니라, 진짜 Nix의
+`--json` 출력이 `derivation`의 `outPath` 등을 그냥 평범한 JSON 문자열로
+찍는 것과 같은, **평가 도중이 아니라 canonical 출력 경계 한 곳**에서의
+의도된 설계다. 평가 중에는 이 문서에 적은 모든 전파/게이트가 그대로
+적용된다 — 버려지는 건 오직 값이 canonical JSON으로 나가는 마지막
+순간뿐.
+
+### 검증 결과 (2026-08-20)
+
+동일 클래스의 JVM 기반 참고 구현(문자열 컨텍스트를 이미 갖춘 유일한
+호스트)에 같은 질의를 돌려 구조/값을 대조하는 방식으로 검증했다:
+`appendContext`/`getContext`/`hasContext`/`unsafeDiscardStringContext`의
+기본 왕복, `getContext (a + b)` 컨텍스트 합집합, 문자열 보간의 컨텍스트
+전파, `derivation`/`derivationStrict`의 `outPath`/`drvPath`/`outputName`
+shape(다중 출력 포함), `toJSON`/`concatStringsSep`/`replaceStrings`의
+컨텍스트 합집합, `match`/`fromJSON`의 컨텍스트 거부, `stringToCharacters`의
+문자당 전체 컨텍스트 유지 — 전부 오라클과 구조 일치(경로 텍스트 자체는
+의사-해시라 바이트 단위로는 다름, 의도된 차이).
+
+**fail-closed 실제 동작(오라클로 확인, 처음 예상과 다름)**: 컨텍스트 있는
+문자열이 `sort`/`filter` 같은 non-allowlisted 빌트인의 **리스트 인자 안에
+중첩**돼 있으면 — 얕은 스캔이 강제평가 안 된 리스트 원소를 못 보기 때문에
+— 실제로는 거부되지 **않고 그냥 통과**한다(오라클도 동일하게 통과시킴,
+직접 대조 확인). 게이트가 신뢰성 있게 잡는 건 **바로 그 자리에 스칼라로
+온** 컨텍스트 문자열이다(`parseDrvName`/`getEnv`에 직접 넘기면 확실히
+거부됨, 오라클과 일치). 이 호스트는 오라클의 이 얕은-스캔 동작을 정확히
+그대로 재현했다 — 오라클보다 더 엄격하게 만들지 않았다(§ 위
+`ctx-string-in-args?`).
+
+알려진 한계(고칠 버그 아님, 의도된 시뮬레이션 범위)는 `BUGS.md`에
+정리했다.

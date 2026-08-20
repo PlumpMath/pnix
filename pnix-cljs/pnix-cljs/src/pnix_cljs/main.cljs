@@ -1,6 +1,7 @@
 (ns pnix-cljs.main
   (:require [clojure.string :as string]
             [cljs.nodejs :as nodejs]
+            [pnix-cljs.capabilities :as capabilities]
             [pnix-cljs.core :as core]
             [pnix-cljs.evaluator :as evaluator]
             [pnix-cljs.node-loader :as node-loader]))
@@ -9,7 +10,7 @@
 
 (defn usage! []
   (binding [*print-fn* *print-err-fn*]
-    (println "usage: pnix-cljs -e SOURCE | pnix-cljs FILE | pnix-cljs --repl")))
+    (println "usage: pnix-cljs -e SOURCE | pnix-cljs FILE | pnix-cljs --repl | pnix-cljs capabilities | pnix-cljs capabilities-check")))
 
 (defn render
   "Render a PNIX value in Nix surface notation, the same shape the other hosts'
@@ -82,15 +83,28 @@
     :else nil))
 
 (defn -main [& argv]
-  (if (= ["--repl"] (vec argv))
-    (repl!)
-    (if-let [{:keys [source module-context]} (source-from (vec argv))]
-    (let [projection (core/projection source module-context)]
-      (println (core/canonical-json projection))
-      (when (= "failed" (get projection "outcome_kind"))
-        (set! (.-exitCode js/process) 1)))
-    (do
-      (usage!)
-      (set! (.-exitCode js/process) 2)))))
+  (let [args (vec argv)]
+    (cond
+      (= ["--repl"] args) (repl!)
+
+      (= ["capabilities"] args)
+      (.write (.-stdout js/process) (capabilities/capabilities-doc))
+
+      (= ["capabilities-check"] args)
+      (let [{:keys [pass message]} (capabilities/capabilities-check)]
+        (println "[capabilities-check (docs drift gate)]")
+        (println message)
+        (when-not pass
+          (set! (.-exitCode js/process) 1)))
+
+      :else
+      (if-let [{:keys [source module-context]} (source-from args)]
+        (let [projection (core/projection source module-context)]
+          (println (core/canonical-json projection))
+          (when (= "failed" (get projection "outcome_kind"))
+            (set! (.-exitCode js/process) 1)))
+        (do
+          (usage!)
+          (set! (.-exitCode js/process) 2))))))
 
 (set! *main-cli-fn* -main)

@@ -222,6 +222,55 @@
   [value]
   (and (map? value) (= :raw-bytes (:pnix/type value))))
 
+;; --- String context (pure simulation of Nix string context) ----------------
+;;
+;; A Nix string carries a context: the set of store-path dependencies that
+;; must be realized before the string may be used. Context-free strings stay
+;; plain CLR Strings (zero representation change for every existing program);
+;; a string only becomes the tagged map below when its context is non-empty
+;; (created today by builtins.appendContext, and by derivation drvPath/
+;; outPath). Uses the same {:pnix/type ...} tagged-map idiom as path-value/
+;; raw-bytes-value above, so it is a first-class peer of those value kinds
+;; rather than a bolted-on representation. `:value` holds the plain content
+;; string (never a raw-bytes value: mixing raw, invalid-UTF-8 bytes with a
+;; context has no representable meaning here and ctx-string below refuses
+;; it); `:context` holds a sorted, deduplicated vector of context elements
+;; (plain strings, Nix-encoded: a bare store path, "!<output>!<drvPath>", or
+;; "=<drvPath>"). Consumers that were not taught to handle a contextful
+;; string are denied fail-closed (see `context-aware-builtins` /
+;; `ctx-string-in-args?` below) instead of silently mangling or dropping
+;; context.
+(defn- ctx-string
+  "Build a pnix string with context. Returns the plain content unchanged when
+  the context is empty, so context-free results stay indistinguishable from
+  ordinary strings (identical representation and cost to before this feature
+  existed)."
+  [content context]
+  (let [context (vec (sort (distinct (map str context))))]
+    (if (empty? context)
+      content
+      {:pnix/type :string-context :value (str content) :context context})))
+
+(defn- ctx-string?
+  [value]
+  (and (map? value) (= :string-context (:pnix/type value))))
+
+(defn- string-content
+  "Character content of a string-like value; any other value passes through
+  unchanged, so this is safe to call generically."
+  [value]
+  (if (ctx-string? value) (:value value) value))
+
+(defn- string-ctx
+  "The context vector of a string-like value; [] for anything else (plain
+  strings, raw-bytes, or non-string values alike)."
+  [value]
+  (if (ctx-string? value) (:context value) []))
+
+(defn- string-like?
+  [value]
+  (or (string? value) (ctx-string? value)))
+
 (def ^:private utf8-strict
   (System.Text.UTF8Encoding. false true))
 
@@ -229,12 +278,21 @@
   (System.Text.Encoding/UTF8))
 
 (defn- as-utf8-bytes
-  "UTF-8 byte view of a string or raw-bytes value (Nix byte string model)."
+  "UTF-8 byte view of a string, contextful string, or raw-bytes value (Nix
+  byte string model). Transparently unwraps a contextful string's content --
+  this helper is only ever reached for a builtin already vetted by the
+  string-context frontier gate (context-aware-builtins), so silently
+  operating on the content here does not bypass that gate; it is what makes
+  builtins like stringLength/hashString context-correct with no further
+  change to their bodies."
   [value operation]
   (let [value (force-value value)]
     (cond
       (string? value)
       (.GetBytes utf8-lenient ^String value)
+
+      (ctx-string? value)
+      (.GetBytes utf8-lenient ^String (:value value))
 
       (raw-bytes? value)
       (:bytes value)
@@ -398,6 +456,13 @@
        (and (nil? left) (nil? right)) true
        (and (boolean? left) (boolean? right)) (= left right)
        (and (string? left) (string? right)) (= left right)
+
+       ;; Nix string equality compares character content only; a context
+       ;; rides along but does not participate in ==.
+       (or (ctx-string? left) (ctx-string? right))
+       (and (string-like? left) (string-like? right)
+            (= (string-content left) (string-content right)))
+
        (and (integer? left) (integer? right)) (= left right)
        (and (or (integer? left) (float-value? left))
             (or (integer? right) (float-value? right)))
@@ -451,41 +516,61 @@
                      {:operation operation :expected "path-or-string"}))))
 
 (defn- nix-to-string
-  [value]
-  (let [value (force-value value)]
-    (cond
-      (string? value) value
-      (raw-bytes? value)
-      ;; Best-effort: ISO-8859-1 round-trip keeps single-byte slices as 1:1
-      ;; chars for display; hashString uses the raw bytes, not this path.
-      (.GetString (System.Text.Encoding/GetEncoding "ISO-8859-1")
-                  (:bytes value))
-      (nil? value) ""
-      (true? value) "1"
-      (false? value) ""
-      (integer? value) (str value)
-      (float-value? value)
-      (nix-float-str value)
-      (path-value? value) (:value value)
-      (vector? value)
-      (str/join " " (map nix-to-string value))
-      (attrset? value)
-      (cond
-        (contains? (:entries value) "__toString")
-        (nix-to-string
-         (apply-callable (force-value (get (:entries value) "__toString"))
-                         value))
-        (contains? (:entries value) "outPath")
-        (nix-to-string (force-value (get (:entries value) "outPath")))
-        :else
-        (outcome/fail! :eval :type-error
-                       {:operation "toString" :expected "coercible"}))
-      (or (closure? value) (builtin? value))
-      (outcome/fail! :eval :type-error
-                     {:operation "toString" :expected "coercible"})
-      :else
-      (outcome/fail! :eval :type-error
-                     {:operation "toString" :expected "coercible"}))))
+  "Nix `toString` coercion (coerceMore). Arity-1 is the general-purpose
+  coercion used throughout this file by call sites that have NOT been made
+  context-aware: it REJECTS a contextful string with a `string-context-
+  frontier` type-error, acting as a deep backstop so context is never
+  silently dropped by code that never learned about it. Call sites that HAVE
+  been made context-aware (:toString, :trace, :concatStringsSep,
+  :concatStrings, :concatMapStrings) pass a `collected` volatile explicitly
+  and get full recursive coercion through lists/attrset outPath/__toString
+  chains, unioning every contextful string's context onto `collected`
+  instead of rejecting."
+  ([value] (nix-to-string value nil))
+  ([value collected]
+   (let [value (force-value value)]
+     (cond
+       (ctx-string? value)
+       (if collected
+         (do (vswap! collected into (:context value))
+             (:value value))
+         (outcome/fail! :eval :type-error
+                        {:operation "toString"
+                         :reason "string-context-frontier"}))
+
+       (string? value) value
+       (raw-bytes? value)
+       ;; Best-effort: ISO-8859-1 round-trip keeps single-byte slices as 1:1
+       ;; chars for display; hashString uses the raw bytes, not this path.
+       (.GetString (System.Text.Encoding/GetEncoding "ISO-8859-1")
+                   (:bytes value))
+       (nil? value) ""
+       (true? value) "1"
+       (false? value) ""
+       (integer? value) (str value)
+       (float-value? value)
+       (nix-float-str value)
+       (path-value? value) (:value value)
+       (vector? value)
+       (str/join " " (map #(nix-to-string % collected) value))
+       (attrset? value)
+       (cond
+         (contains? (:entries value) "__toString")
+         (nix-to-string
+          (apply-callable (force-value (get (:entries value) "__toString"))
+                          value)
+          collected)
+         (contains? (:entries value) "outPath")
+         (nix-to-string (force-value (get (:entries value) "outPath")) collected)
+         :else
+         (outcome/fail! :eval :type-error
+                        {:operation "toString" :expected "coercible"}))
+       (or (closure? value) (builtin? value))
+       (outcome/fail! :eval :type-error
+                      {:operation "toString" :expected "coercible"})
+       :else
+       (outcome/fail! :eval :type-error
+                      {:operation "toString" :expected "coercible"})))))
 
 (defn- values-equal?
   "Same algebra as deep-equal? (including shared-slot identity)."
@@ -961,11 +1046,96 @@
           (recur (rest remaining) right (conj wrong item)))))))
 
 ;; ---------------------------------------------------------------------------
+;; String context frontier
+;; ---------------------------------------------------------------------------
+
+(def ^:private context-aware-builtins
+  "Builtins allowed to receive a contextful string argument. Everything else
+  is denied by default (a `string-context-frontier` type-error) so context
+  is never silently dropped or mangled by a builtin that was never taught to
+  propagate it. This is a fixed, oracle-verified set -- ported by name from
+  the pnix-clj/pnix-cljs reference string-context designs, not reinvented;
+  every one of these names already exists as a pnix-clr builtin (cross-
+  checked against `builtins-entries` below) except hasContext/getContext/
+  appendContext/derivation/derivationStrict, newly added alongside this set."
+  #{:hasContext :getContext :hashString :unsafeDiscardStringContext
+    :unsafeDiscardOutputDependency :appendContext :toPath
+    :toString :typeOf :isString :isAttrs :isList :isInt :isFloat :isBool
+    :isNull :isFunction :seq :deepSeq :trace :id :eq
+    :derivation :derivationStrict :placeholder :storePath
+    :stringLength :substring :concatStringsSep
+    :hasPrefix :hasSuffix :hasInfix :toUpper :toLower :replaceStrings
+    :match :split :toJSON :fromJSON :stringToCharacters :splitString
+    :removePrefix :removeSuffix :toInt :concatStrings :concatMapStrings
+    ;; structural list/element operations pass contextful strings through
+    ;; untouched (they never inspect string content), so they are safe by
+    ;; construction; they are gated too only because the shallow scan below
+    ;; also looks one level into a vector argument (e.g. `head [ctx ..]`).
+    :head :tail :elemAt :last :init :length :elem})
+
+(defn- ctx-string-in-args?
+  "Shallow scan (top level + one level into vectors) for contextful strings
+  among accumulated builtin args. An element still hidden behind an unforced
+  thunk is opaque here -- this mirrors the reference design's own shallow
+  scan exactly, including its limits (oracle-confirmed: a contextful string
+  buried inside an unforced list element passed to e.g. sort/filter is NOT
+  caught by this scan either, in pnix-clj/pnix-cljs or here)."
+  [args]
+  (boolean
+   (some (fn [a]
+           (or (ctx-string? a)
+               (and (vector? a) (some ctx-string? a))))
+         args)))
+
+(defn- realize-value-with-context
+  "Like `realize-value` (the final output-boundary projection, defined
+  below), but for :toJSON specifically: a contextful string strips to its
+  content and unions its context onto `collected` instead of erroring, so
+  the JSON *string* toJSON returns can itself carry context forward (oracle:
+  toJSON keeps context). Otherwise identical walk/errors to realize-value."
+  [collected value]
+  (let [value (force-value value)]
+    (cond
+      (ctx-string? value)
+      (do (vswap! collected into (:context value)) (:value value))
+
+      (or (nil? value) (boolean? value) (number? value) (string? value))
+      value
+
+      (vector? value)
+      (mapv #(realize-value-with-context collected %) value)
+
+      (attrset? value)
+      (into {}
+            (map (fn [[k v]] [k (realize-value-with-context collected v)]))
+            (:entries value))
+
+      (path-value? value)
+      (:value value)
+
+      (raw-bytes? value)
+      (.GetString (System.Text.Encoding/GetEncoding "ISO-8859-1")
+                  (:bytes value))
+
+      (or (closure? value) (builtin? value))
+      (outcome/fail! :eval :type-error
+                     {:operation "toJSON" :reason "function-not-json-serializable"})
+
+      :else
+      (outcome/fail! :eval :type-error
+                     {:operation "toJSON" :reason "unsupported-value"}))))
+
+;; ---------------------------------------------------------------------------
 ;; Builtin execution
 ;; ---------------------------------------------------------------------------
 
 (defn- exec-builtin
   [{:keys [name args]}]
+  (when (and (ctx-string-in-args? args)
+             (not (contains? context-aware-builtins name)))
+    (outcome/fail! :eval :type-error
+                   {:operation (clojure.core/name name)
+                    :reason "string-context-frontier"}))
   (case name
     ;; ---- Core ----
     :typeOf
@@ -973,6 +1143,7 @@
       (cond
         (nil? v) "null"
         (path-value? v) "path"
+        (ctx-string? v) "string"
         (string? v) "string"
         (boolean? v) "bool"
         (integer? v) "int"
@@ -1010,9 +1181,12 @@
                    {:message (nix-to-string (first args))})
 
     :trace
+    ;; Allowlisted: a contextful message is printed by its content (the
+    ;; context is irrelevant to trace's stderr output, and the pass-through
+    ;; second arg is unaffected either way).
     (do
       (binding [*out* *err*]
-        (println (str "trace: " (nix-to-string (first args)))))
+        (println (str "trace: " (nix-to-string (first args) (volatile! [])))))
       (force-value (second args)))
 
     :warn
@@ -1022,10 +1196,18 @@
       (force-value (second args)))
 
     :toString
-    (nix-to-string (first args))
+    ;; Full context-aware coercion: strings keep their context, list
+    ;; elements' contexts are collected, attrsets coerce via __toString
+    ;; (called with self) then outPath.
+    (let [collected (volatile! [])]
+      (ctx-string (nix-to-string (first args) collected) @collected))
 
     :toJSON
-    (json/write-json (realize-value (first args)))
+    ;; Oracle: toJSON KEEPS context -- the JSON string carries the union of
+    ;; every embedded contextful string's context.
+    (let [collected (volatile! [])
+          stripped (realize-value-with-context collected (first args))]
+      (ctx-string (json/write-json stripped) @collected))
 
     :toXML
     (str "<?xml version='1.0' encoding='utf-8'?>\n"
@@ -1362,9 +1544,13 @@
     ;; ---- Strings ----
     :substring
     ;; Byte offsets over UTF-8 (Nix). Off-boundary cuts yield raw-bytes.
+    ;; Context-aware: Nix keeps the ENTIRE original context on a substring
+    ;; (context is not sliced); a raw-bytes cut of a contextful string has
+    ;; no representable meaning and is held.
     (let [start (integer-value (first args) "substring")
           len (integer-value (second args) "substring")
-          bs (as-utf8-bytes (nth args 2) "substring")
+          orig (force-value (nth args 2))
+          bs (as-utf8-bytes orig "substring")
           n (alength bs)
           start (if (neg? start) 0 start)
           start (if (> start n) n start)
@@ -1374,16 +1560,31 @@
           slice (byte-array (int (- end start)))]
       (when (pos? (alength slice))
         (System.Array/Copy bs (int start) slice 0 (alength slice)))
-      (decode-utf8-or-raw slice))
+      (let [decoded (decode-utf8-or-raw slice)]
+        (if (ctx-string? orig)
+          (if (raw-bytes? decoded)
+            (outcome/fail! :eval :type-error
+                           {:operation "substring"
+                            :reason "raw-bytes-with-context"})
+            (ctx-string decoded (:context orig)))
+          decoded)))
 
     :stringLength
     (i64 (alength (as-utf8-bytes (first args) "stringLength")))
 
     :concatStringsSep
-    (let [sep (string-value (first args) "concatStringsSep")
-          xs (force-list-items
-              (list-value (second args) "concatStringsSep"))]
-      (str/join sep (map nix-to-string xs)))
+    ;; Context-aware: contents join, contexts of the separator and every
+    ;; element union (a context-free result stays a plain String).
+    (let [sep-raw (force-value (first args))]
+      (when-not (string-like? sep-raw)
+        (outcome/fail! :eval :type-error
+                       {:operation "concatStringsSep" :expected "string"}))
+      (let [collected (volatile! (vec (string-ctx sep-raw)))
+            sep (string-content sep-raw)
+            xs (force-list-items
+                (list-value (second args) "concatStringsSep"))
+            joined (str/join sep (map #(nix-to-string % collected) xs))]
+        (ctx-string joined @collected)))
 
     :concatMapStringsSep
     (let [sep (string-value (first args) "concatMapStringsSep")
@@ -1395,84 +1596,127 @@
                      xs)))
 
     :replaceStrings
+    ;; Context-aware: needles match on content; the result carries the
+    ;; original string's context plus the context of every replacement
+    ;; actually USED (unused pairs contribute nothing).
     (let [froms (force-list-items
                  (list-value (first args) "replaceStrings"))
           tos (force-list-items
                (list-value (second args) "replaceStrings"))
-          s (string-value (nth args 2) "replaceStrings")]
-      (when-not (and (every? string? froms) (every? string? tos)
+          s (force-value (nth args 2))]
+      (when-not (and (every? string-like? froms) (every? string-like? tos)
+                     (string-like? s)
                      (= (count froms) (count tos)))
         (outcome/fail! :eval :type-error
                        {:operation "replaceStrings"}))
-      ;; Loop bound is INCLUSIVE of i = (count s): an empty `from` matches
-      ;; at every position including the end, so
-      ;; replaceStrings [""] ["x"] "ab" must reach "xaxbx", not "xaxb".
-      (loop [i 0
-             out ""]
-        (if (> i (count s))
-          out
-          (let [matched
-                (loop [j 0]
-                  (if (>= j (count froms))
-                    nil
-                    (let [f (nth froms j)]
-                      (if (<= (+ i (count f)) (count s))
-                        (if (or (zero? (count f))
-                                (= f (subs s i (+ i (count f)))))
-                          j
-                          (recur (inc j)))
-                        (recur (inc j))))))]
-            (if (nil? matched)
-              (if (< i (count s))
-                (recur (inc i) (str out (subs s i (inc i))))
-                out)
-              (let [f (nth froms matched)
-                    t (nth tos matched)]
-                (if (zero? (count f))
-                  (if (< i (count s))
-                    (recur (inc i) (str out t (subs s i (inc i))))
-                    (str out t))
-                  (recur (+ i (count f)) (str out t)))))))))
+      (let [from-contents (mapv string-content froms)
+            content (string-content s)
+            n (count content)
+            used-ctx (volatile! (vec (string-ctx s)))
+            emit-str (fn [t] (vswap! used-ctx into (string-ctx t)) (string-content t))]
+        ;; Loop bound is INCLUSIVE of i = n: an empty `from` matches at every
+        ;; position including the end, so replaceStrings [""] ["x"] "ab" must
+        ;; reach "xaxbx", not "xaxb".
+        (ctx-string
+         (loop [i 0
+                out ""]
+           (if (> i n)
+             out
+             (let [matched
+                   (loop [j 0]
+                     (if (>= j (count from-contents))
+                       nil
+                       (let [f (nth from-contents j)]
+                         (if (<= (+ i (count f)) n)
+                           (if (or (zero? (count f))
+                                   (= f (subs content i (+ i (count f)))))
+                             j
+                             (recur (inc j)))
+                           (recur (inc j))))))]
+               (if (nil? matched)
+                 (if (< i n)
+                   (recur (inc i) (str out (subs content i (inc i))))
+                   out)
+                 (let [f (nth from-contents matched)
+                       t (nth tos matched)]
+                   (if (zero? (count f))
+                     (if (< i n)
+                       (recur (inc i) (str out (emit-str t) (subs content i (inc i))))
+                       (str out (emit-str t)))
+                     (recur (+ i (count f)) (str out (emit-str t))))))))
+         @used-ctx)))
 
     :removePrefix
-    (let [prefix (string-value (first args) "removePrefix")
-          s (string-value (second args) "removePrefix")]
-      (if (str/starts-with? s prefix)
-        (subs s (count prefix))
-        s))
+    ;; substring-based lib semantics: the result keeps s's whole context; a
+    ;; contextful prefix argument only affects the comparison.
+    (let [prefix (force-value (first args))
+          s (force-value (second args))]
+      (when-not (and (string-like? prefix) (string-like? s))
+        (outcome/fail! :eval :type-error
+                       {:operation "removePrefix" :expected "string"}))
+      (let [pre (string-content prefix) sc (string-content s)]
+        (if (str/starts-with? sc pre)
+          (ctx-string (subs sc (count pre)) (string-ctx s))
+          s)))
 
     :removeSuffix
-    (let [suffix (string-value (first args) "removeSuffix")
-          s (string-value (second args) "removeSuffix")]
-      (if (str/ends-with? s suffix)
-        (subs s 0 (- (count s) (count suffix)))
-        s))
+    (let [suffix (force-value (first args))
+          s (force-value (second args))]
+      (when-not (and (string-like? suffix) (string-like? s))
+        (outcome/fail! :eval :type-error
+                       {:operation "removeSuffix" :expected "string"}))
+      (let [suf (string-content suffix) sc (string-content s)]
+        (if (str/ends-with? sc suf)
+          (ctx-string (subs sc 0 (- (count sc) (count suf))) (string-ctx s))
+          s)))
 
     :hasPrefix
-    (let [prefix (string-value (first args) "hasPrefix")
-          s (string-value (second args) "hasPrefix")]
-      (str/starts-with? s prefix))
+    ;; Content-based predicate: context does not affect the answer.
+    (let [prefix (force-value (first args))
+          s (force-value (second args))]
+      (when-not (and (string-like? prefix) (string-like? s))
+        (outcome/fail! :eval :type-error
+                       {:operation "hasPrefix" :expected "string"}))
+      (str/starts-with? (string-content s) (string-content prefix)))
 
     :hasSuffix
-    (let [suffix (string-value (first args) "hasSuffix")
-          s (string-value (second args) "hasSuffix")]
-      (str/ends-with? s suffix))
+    (let [suffix (force-value (first args))
+          s (force-value (second args))]
+      (when-not (and (string-like? suffix) (string-like? s))
+        (outcome/fail! :eval :type-error
+                       {:operation "hasSuffix" :expected "string"}))
+      (str/ends-with? (string-content s) (string-content suffix)))
 
     :splitString
-    (let [sep (string-value (first args) "splitString")
-          s (string-value (second args) "splitString")]
-      (if (empty? sep)
-        (mapv str s)
-        (let [parts (System.Text.RegularExpressions.Regex/Split
-                     s
-                     (System.Text.RegularExpressions.Regex/Escape sep))]
-          (vec parts))))
+    ;; builtins.split-based: pieces come back context-free (oracle).
+    (let [sep-raw (force-value (first args))
+          s-raw (force-value (second args))]
+      (when-not (and (string-like? sep-raw) (string-like? s-raw))
+        (outcome/fail! :eval :type-error
+                       {:operation "splitString" :expected "string"}))
+      (let [sep (string-content sep-raw)
+            s (string-content s-raw)]
+        (if (empty? sep)
+          (mapv str s)
+          (let [parts (System.Text.RegularExpressions.Regex/Split
+                       s
+                       (System.Text.RegularExpressions.Regex/Escape sep))]
+            (vec parts)))))
 
     :toLower
-    (.ToLowerInvariant ^String (string-value (first args) "toLower"))
+    ;; Case conversion keeps the context.
+    (let [v (force-value (first args))]
+      (when-not (string-like? v)
+        (outcome/fail! :eval :type-error
+                       {:operation "toLower" :expected "string"}))
+      (ctx-string (.ToLowerInvariant ^String (string-content v)) (string-ctx v)))
 
     :toUpper
-    (.ToUpperInvariant ^String (string-value (first args) "toUpper"))
+    (let [v (force-value (first args))]
+      (when-not (string-like? v)
+        (outcome/fail! :eval :type-error
+                       {:operation "toUpper" :expected "string"}))
+      (ctx-string (.ToUpperInvariant ^String (string-content v)) (string-ctx v)))
 
     :boolToString
     (let [v (force-value (first args))]
@@ -1482,21 +1726,35 @@
       (if v "true" "false"))
 
     :match
-    (let [pattern (string-value (first args) "match")
-          s (string-value (second args) "match")]
-      (regex-match pattern s))
+    ;; Oracle: a contextful REGEX is an error; captured groups from a
+    ;; contextful subject are context-free strings.
+    (let [pattern (force-value (first args))
+          s (force-value (second args))]
+      (when (ctx-string? pattern)
+        (outcome/fail! :eval :type-error
+                       {:operation "match" :reason "regex-argument-has-context"}))
+      (when-not (and (string-like? pattern) (string-like? s))
+        (outcome/fail! :eval :type-error {:operation "match" :expected "string"}))
+      (regex-match (string-content pattern) (string-content s)))
 
     :split
-    (let [pattern (string-value (first args) "split")
-          s (string-value (second args) "split")]
-      (regex-split pattern s))
+    ;; Same oracle result as match -- a contextful regex errors; pieces and
+    ;; capture groups from a contextful subject come back context-free.
+    (let [pattern (force-value (first args))
+          s (force-value (second args))]
+      (when (ctx-string? pattern)
+        (outcome/fail! :eval :type-error
+                       {:operation "split" :reason "regex-argument-has-context"}))
+      (when-not (and (string-like? pattern) (string-like? s))
+        (outcome/fail! :eval :type-error {:operation "split" :expected "string"}))
+      (regex-split (string-content pattern) (string-content s)))
 
     ;; ---- Predicates ----
     :isAttrs (attrset? (force-value (first args)))
     :isBool (boolean? (force-value (first args)))
     :isInt (integer? (force-value (first args)))
     :isFloat (float-value? (force-value (first args)))
-    :isString (string? (force-value (first args)))
+    :isString (string-like? (force-value (first args)))
     :isList (vector? (force-value (first args)))
     :isNull (nil? (force-value (first args)))
     :isFunction (callable? (force-value (first args)))
@@ -1629,10 +1887,22 @@
                         "version" (subs s (inc idx))})))
 
     :unsafeDiscardStringContext
-    (force-value (first args))
+    (let [v (force-value (first args))]
+      (when-not (string-like? v)
+        (outcome/fail! :eval :type-error
+                       {:operation "unsafeDiscardStringContext" :expected "string"}))
+      (string-content v))
 
     :unsafeDiscardOutputDependency
-    (force-value (first args))
+    ;; Drops only the OUTPUT-dependency context elements (Nix-encoded "!o!p"
+    ;; and "=p"); plain path elements are kept.
+    (let [v (force-value (first args))]
+      (when-not (string-like? v)
+        (outcome/fail! :eval :type-error
+                       {:operation "unsafeDiscardOutputDependency" :expected "string"}))
+      (ctx-string (string-content v)
+                  (remove #(or (str/starts-with? % "!") (str/starts-with? % "="))
+                          (string-ctx v))))
 
     ;; ---- Combinators ----
     :optional
@@ -1779,7 +2049,15 @@
 
     :toPath
     ;; Lexical absolute-path normalization; returns a string (Nix toPath).
-    (let [s (path-or-string (first args) "toPath")]
+    ;; Context-aware: a contextful input's context rides along unchanged
+    ;; onto the normalized result.
+    (let [arg (force-value (first args))
+          s (cond
+              (string? arg) arg
+              (ctx-string? arg) (:value arg)
+              (path-value? arg) (:value arg)
+              :else (outcome/fail! :eval :type-error
+                                   {:operation "toPath" :expected "path-or-string"}))]
       (when-not (str/starts-with? s "/")
         (outcome/fail! :eval :type-error
                        {:operation "toPath"
@@ -1791,8 +2069,11 @@
                               (= part "..") (if (seq out) (pop out) out)
                               :else (conj out part)))
                           []
-                          (str/split s #"/"))]
-        (str "/" (str/join "/" parts))))
+                          (str/split s #"/"))
+            normalized (str "/" (str/join "/" parts))]
+        (if (ctx-string? arg)
+          (ctx-string normalized (:context arg))
+          normalized)))
 
     :hashString
     ;; UTF-8 / raw-bytes → lowercase hex. Supported: md5 sha1 sha256 sha512.
@@ -2099,7 +2380,13 @@
       (mapv (fn [i x] (thunk #(apply-callable2 f (i64 i) x))) (iterate inc 1) xs))
 
     :stringToCharacters
-    (mapv str (string-value (first args) "stringToCharacters"))
+    ;; substring-based lib semantics: each character carries the source's
+    ;; full context.
+    (let [v (force-value (first args))]
+      (when-not (string-like? v)
+        (outcome/fail! :eval :type-error
+                       {:operation "stringToCharacters" :expected "string"}))
+      (mapv #(ctx-string (str %) (string-ctx v)) (string-content v)))
 
     :groupBy
     (let [f (force-value (first args))
@@ -2148,22 +2435,35 @@
     (last (str/split (string-value (first args) "baseNameOf") #"/"))
 
     :toInt
-    (try
-      (i64 (Int64/Parse (str/trim (string-value (first args) "toInt"))))
-      (catch System.Exception _
-        (outcome/fail! :eval :type-error {:operation "toInt" :reason "not-an-integer"})))
+    ;; Oracle: a contextful string is accepted; the parsed integer carries
+    ;; nothing.
+    (let [v (force-value (first args))]
+      (when-not (string-like? v)
+        (outcome/fail! :eval :type-error {:operation "toInt" :expected "string"}))
+      (try
+        (i64 (Int64/Parse (str/trim (string-content v))))
+        (catch System.Exception _
+          (outcome/fail! :eval :type-error {:operation "toInt" :reason "not-an-integer"}))))
 
     :hasInfix
-    (str/includes? (string-value (second args) "hasInfix")
-                   (string-value (first args) "hasInfix"))
+    (let [needle (force-value (first args))
+          s (force-value (second args))]
+      (when-not (and (string-like? needle) (string-like? s))
+        (outcome/fail! :eval :type-error {:operation "hasInfix" :expected "string"}))
+      (str/includes? (string-content s) (string-content needle)))
 
     :concatMapStrings
     (let [f (force-value (first args))
-          xs (list-value (second args) "concatMapStrings")]
-      (apply str (map (fn [x] (nix-to-string (apply-callable f x))) xs)))
+          xs (list-value (second args) "concatMapStrings")
+          collected (volatile! [])
+          joined (apply str (map (fn [x] (nix-to-string (apply-callable f x) collected)) xs))]
+      (ctx-string joined @collected))
 
     :concatStrings
-    (apply str (map nix-to-string (list-value (first args) "concatStrings")))
+    (let [xs (list-value (first args) "concatStrings")
+          collected (volatile! [])
+          joined (apply str (map #(nix-to-string % collected) xs))]
+      (ctx-string joined @collected))
 
     :placeholder
     ;; Deterministic context-free placeholder for an output name, replaced at
@@ -2410,6 +2710,19 @@
    "addErrorContext" (bi :addErrorContext 2)
    "genericClosure" (bi :genericClosure 1)})
 
+(defn builtin-names
+  "Sorted names from the live `builtins-entries` registration table above
+  (functions, arity-0 value constants like `nixVersion`/`true`, everything
+  wired into the root builtins attrset -- except the self-referential
+  `builtins` name, which `make-builtins` below adds separately and is not
+  part of this table). This is the single introspection point
+  `pnix-clr.main/capabilities-doc` uses to render docs/CAPABILITIES.md's
+  builtin presence list, so a name added to or removed from
+  `builtins-entries` is picked up automatically the next time the doc is
+  regenerated -- nobody hand-types this list."
+  []
+  (->> (builtins-entries) keys sort vec))
+
 (defn- make-builtins
   []
   (let [base (builtins-entries)
@@ -2569,10 +2882,22 @@
     (let [left (force-value (eval-ast* left-ast environment context))
           right (force-value (eval-ast* right-ast environment context))]
       (cond
-        (or (string? left) (string? right)
-            (path-value? left) (path-value? right)
-            (raw-bytes? left) (raw-bytes? right))
+        (or (raw-bytes? left) (raw-bytes? right)
+            (path-value? left) (path-value? right))
         (str (nix-to-string left) (nix-to-string right))
+
+        ;; String concatenation carries context: contents join, contexts of
+        ;; both operands union (a context-free result stays a plain String,
+        ;; matching every other `+` result byte-for-byte). `+` is a binary
+        ;; operator, not a builtin, so it is never subject to the
+        ;; string-context-frontier gate below -- it is unconditionally
+        ;; context-aware, same as the reference hosts.
+        (or (string? left) (string? right) (ctx-string? left) (ctx-string? right))
+        (let [collected (volatile! [])
+              joined (str (nix-to-string left collected)
+                          (nix-to-string right collected))]
+          (ctx-string joined @collected))
+
         (and (integer? left) (integer? right))
         (checked-add left right)
         (and (or (integer? left) (float-value? left))
@@ -2666,10 +2991,13 @@
                (or (integer? right) (float-value? right)))
           (cmp-num (float-double left) (float-double right))
 
-          (and (string? left) (string? right))
-          ;; Nix byte-order: ordinal (UTF-16 code units ≈ UTF-8 for BMP).
+          (and (string-like? left) (string-like? right))
+          ;; Nix byte-order: ordinal (UTF-16 code units ≈ UTF-8 for BMP). `<`
+          ;; is a binary operator, not a builtin, so (like `+`) it is never
+          ;; subject to the string-context-frontier gate -- content compares
+          ;; unconditionally, context along for the ride but not consulted.
           (cmp-ord (System.String/Compare
-                    (str left) (str right)
+                    (string-content left) (string-content right)
                     System.StringComparison/Ordinal))
 
           ;; List lexicographic compare (numeric-mixed / nonfinite / strings).
@@ -2703,9 +3031,9 @@
                       (recur (rest xs) (rest ys))
                       (cmp-num da db)))
 
-                  (and (string? a) (string? b))
+                  (and (string-like? a) (string-like? b))
                   (let [c (System.String/Compare
-                           (str a) (str b)
+                           (string-content a) (string-content b)
                            System.StringComparison/Ordinal)]
                     (if (zero? c)
                       (recur (rest xs) (rest ys))
@@ -2741,18 +3069,51 @@
      :float (:value ast)
      :string (:value ast)
      :string-interp
-     (apply str
-            (map (fn [part]
-                   (let [value (force-value (eval-ast* part environment context))]
-                     (cond
-                       (string? value) value
-                       (integer? value) (str value)
-                       (float-value? value) (nix-float-str value)
-                       (boolean? value) (if value "1" "")
-                       (nil? value) ""
-                       (path-value? value) (:value value)
-                       :else (str value))))
-                 (:parts ast)))
+     ;; Context-aware: a contextful chunk's context is unioned onto the
+     ;; result (a context-free template stays a plain String as before).
+     ;; Interpolating a bare path value also adds that path itself as a
+     ;; context element (Nix: "${./foo}" makes the string depend on it).
+     ;; An attrset chunk coerces via __toString (called with itself) then
+     ;; outPath, same as toString/coerceMore, so a derivation's `outPath`
+     ;; can be pulled in through "${drv}" directly.
+     (let [collected (volatile! [])
+           part->string
+           (fn part->string [value]
+             (let [value (force-value value)]
+               (cond
+                 (ctx-string? value)
+                 (do (vswap! collected into (:context value)) (:value value))
+
+                 (string? value) value
+                 (integer? value) (str value)
+                 (float-value? value) (nix-float-str value)
+                 (boolean? value) (if value "1" "")
+                 (nil? value) ""
+
+                 (path-value? value)
+                 (do (vswap! collected conj (:value value)) (:value value))
+
+                 (attrset? value)
+                 (cond
+                   (contains? (:entries value) "__toString")
+                   (part->string
+                    (apply-callable
+                     (force-value (get (:entries value) "__toString")) value))
+                   (contains? (:entries value) "outPath")
+                   (part->string (force-value (get (:entries value) "outPath")))
+                   :else
+                   (outcome/fail! :eval :type-error
+                                  {:operation "string-interpolation"
+                                   :expected "coercible"}))
+
+                 :else
+                 (outcome/fail! :eval :type-error
+                                {:operation "string-interpolation"
+                                 :expected "coercible"}))))
+           joined (apply str
+                         (map #(part->string (eval-ast* % environment context))
+                              (:parts ast)))]
+       (ctx-string joined @collected))
      :path (path-value (:value ast))
      :var (lookup-value environment (:name ast))
 

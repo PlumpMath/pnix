@@ -64,20 +64,13 @@
 통일시키는 작업은 기본 언어 기능이 production 수준으로 완전히 갖춰진 다음,
 필요에 의해 결정한다.
 
-## 실제 백로그 — CAPABILITIES.md 자동 생성기 없음 (2026-08-19)
+## (해결됨) CAPABILITIES.md 자동 생성기 — 2026-08-20
 
-위 항목과 달리 이건 "아직 예정 없음" 메모가 아니라 **참고할 작동하는
-구현이 이미 3개 있는** 실제 gap이다. clj(`docs/CAPABILITIES.md` +
-`capabilities.clj`, `clojure -M:capabilities`로 재생성, drift 게이트
-있음), hy(`docs/CAPABILITIES.md` + `pnix_hy/capabilities.py`,
-`pnix-hy-project --capabilities`), rs(`docs/CAPABILITIES.md` +
-`capabilities` 서브커맨드, `capabilities-check` 게이트) 셋 다 코드에서
-자동 파생되고 drift가 나면 게이트가 잡는 능력 인덱스를 갖고 있다.
-
-이 호스트(pnix-cljs)와 pnix-clr만 이게 없다 — 지금 있는
-`IMPLEMENTATION.md`/`TODO.md`/`BUGS.md`/`PLANS.md` 같은 문서는 전부
-사람이 손으로 쓰고 갱신하는 것이라 코드가 바뀌어도 자동으로 어긋난다는
-걸 보장 못 한다. 만들 때는 이 3개 호스트의 패턴(CLI 서브커맨드가 소스를
-훑어 `docs/CAPABILITIES.md`를 재생성 + 그 결과와 실제 파일을 비교하는
-drift 게이트)을 그대로 참고하면 된다 — 자세한 배경은
-[`IMPLEMENTATION.md`](IMPLEMENTATION.md) §7.
+이전엔 이 자리에 "clj/hy/rs 3개 호스트엔 있는데 이 호스트와 pnix-clr만
+없다"는 실제 백로그 항목이 있었다. 2026-08-20에 pnix-cljs 쪽은 해결됨:
+`src/pnix_cljs/capabilities.cljs`가 `evaluator/builtins-value`를 직접
+introspect해서 `docs/CAPABILITIES.md`를 생성하고, `pnix-cljs.main`의
+`capabilities`/`capabilities-check` 서브커맨드 + `bin/pnix-cljs-gate`에
+게이트로 박혀 있다. 자세한 내용은 [`IMPLEMENTATION.md`](IMPLEMENTATION.md)
+§1·§7과 [`CAPABILITIES.md`](CAPABILITIES.md) 자체 참고. (pnix-clr은 별도
+트리라 이 항목과 무관 — 거기는 그쪽 문서에서 다룬다.)

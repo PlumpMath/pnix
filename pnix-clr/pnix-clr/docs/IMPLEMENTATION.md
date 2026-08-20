@@ -64,6 +64,7 @@
 
 | 문서 | 다루는 것 |
 |---|---|
+| [`docs/CAPABILITIES.md`](CAPABILITIES.md) | **자동 생성**(손 편집 금지) — CLI 명령 표면/188개 빌트인 presence 인벤토리. `bin/pnix-clr capabilities`로 재생성, drift 게이트 `bin/pnix-clr capabilities-check`가 어긋나면 잡음(`bin/pnix-clr-gate`에 연결됨). 이 문서 §2 빌트인 표는 5개 호스트를 나란히 비교하려고 수동으로 만든 별개의 스냅샷이다(§9 참고) |
 | [`TODO.md`](TODO.md) | 지금 당장 손댈 수 있는, 확정된 개별 작업 항목 |
 | [`BUGS.md`](BUGS.md) | 알려진 버그/제한사항, 그리고 의도적으로 admit 안 한 것(버그 아님) |
 | [`PLANS.md`](PLANS.md) | 아직 방향이 확정 안 된 미래 아이디어/로드맵 |
@@ -392,6 +393,7 @@ root/file 컨텍스트 추적)이 5개 중 제일 견고했다. rs가 나중에 
 |---|---|
 | (미커밋, 리뷰 대기) | 크로스호스트 빌트인 presence matrix diff에서 빠진 6개 추가: `log`(`ln`과 동일하게 자연로그, `Math/Log`), `tan`(`sin`/`cos`와 같은 모양, `Math/Tan`), `mapAttrs'`(pnix-clj가 유일한 레퍼런스 — `f name value`가 `{ name; value; }` 쌍을 반환, 반환된 name으로 새 attrset을 키잉하고 중복 name은 first-wins(`listToAttrs`와 동일한 tie-break); name은 즉시 force, value는 thunk로 lazy 유지). 그리고 이미 등록돼 있었지만 매트릭스가 놓친 것 2개도 정정: `nixVersion` 값이 `"2.34.7"`로 잘못돼 있던 걸 rs/hy와 맞춰 `"2.18.0-pnix"`로 고침(`storeDir`/`langVersion`은 값도 이미 맞았음 — 매트릭스 자동추출 스크립트가 `(bi :name arity)` 패턴만 잡고 plain-value 등록은 못 잡아서 `-`로 잘못 표시됐던 것, §2 표 자체가 stale). |
 | (미커밋, 리뷰 대기) | `bin/pnix-clr-identity-gate`가 이 문서(§4/§9)의 정당한 크로스호스트 인용("pnix-clj" 문자열)을 "stale JVM-host identity 누수"로 오탐지하던 것 수정 — 2026-08-20 문서 통합 때 §4 역사 표/§9 백로그 항목이 pnix-clj를 이름으로 인용하게 되면서 생긴 회귀. `clr-meta/STATUS.md`/`todo.md`에 이미 있던 것과 같은 파일 allowlist 패턴을 `docs/{IMPLEMENTATION,BUGS,PLANS,TODO}.md`/`AGENTS.md`에도 적용해서 게이트가 다시 PASS하도록 고침. |
+| (미커밋, 리뷰 대기) | `docs/CAPABILITIES.md` 자동 생성기 신설(PLANS.md §2 해결) — `pnix-clr.evaluator/builtin-names`(신규 public, `builtins-entries` 등록 테이블을 직접 introspect)와 `pnix-clr.main`의 신규 `capabilities`/`capabilities-check` 서브커맨드 + `capabilities-doc`/`cli-commands`; `bin/pnix-clr`의 인자 재작성 로직이 `-e`/`--production-outcome`처럼 이 두 bare 서브커맨드도 특별 취급하도록 수정(안 그러면 caller-relative 파일 경로로 잘못 재작성됨); `bin/pnix-clr-gate`에 drift 게이트로 연결. clj/hy/rs 패턴 참고, pnix-clr 스코프(namespace 8개 고정)에 맞춰 새 namespace 없이 기존 evaluator.clj/main.clj에 얹음. |
 
 ## 5. 범위 — 뭐가 admit됐고 뭐가 아직 open인가
 
@@ -782,16 +784,14 @@ dotnet run --project csharp/examples/HelloPnix -c Release -f net10.0 -- --inproc
   ```
   `import`/`scopedImport`는 이 호스트에서 예약 키워드라 이 스크립트가
   못 잡아서 손으로 `*` 표시가 남아있다(§2 상단 각주).
-- **정직하게 밝혀야 할 gap**: clj/hy/rs 세 호스트는 각각
-  `docs/CAPABILITIES.md`(+clj는 `LANE_REGISTRY.md`/`WIKI.md`까지)라는
-  **코드에서 자동 생성되고 drift-게이트로 보호되는** 능력 인덱스를
-  갖고 있다(생성 명령 실행 → 결과가 코드와 다르면 게이트 실패). **이
-  호스트(pnix-clr)와 pnix-cljs는 그런 문서가 아직 없다** — 이 문서 §6
-  (CLI 허용 표면), clr-meta의 각종 `STAGE*_DESIGN.md` 등은 전부 사람이
-  손으로 쓰고 손으로 갱신하는 문서라서, 코드가 바뀌어도 자동으로는 안
-  어긋난다는 보장이 없다. 이건 새로 뭔가를 만들어야 할 "미래 아이디어"가
-  아니라 **참고할 작동하는 구현이 이미 3개나 있는 실제 백로그 항목**이다
-  (`pnix-clj/pnix-clj/docs/CAPABILITIES.md` + `capabilities.clj`,
-  `pnix-hy/pnix-hy/docs/CAPABILITIES.md` + `pnix_hy/capabilities.py`,
-  `pnix-rs/pnix-rs/docs/CAPABILITIES.md` + `capabilities` 서브커맨드가
-  전부 패턴 참고용으로 존재). [`PLANS.md`](PLANS.md)에 적어뒀다.
+- **§1이 가리키는 `docs/CAPABILITIES.md`는 진짜 자동 생성+drift-게이트다
+  (2026-08-20 해결).** clj/hy/rs 세 호스트가 갖고 있던, 코드에서 자동
+  생성되고 drift-게이트로 보호되는 능력 인덱스를 이 호스트도 이제 갖고
+  있다: `bin/pnix-clr capabilities`가 `pnix-clr.evaluator/builtin-names`
+  (root `builtins-entries` 등록 테이블 직접 introspect)와
+  `pnix-clr.main/cli-commands`에서 [`CAPABILITIES.md`](CAPABILITIES.md)를
+  렌더링하고, `bin/pnix-clr capabilities-check`가 커밋된 파일과 diff해서
+  어긋나면 비영 종료한다(`bin/pnix-clr-gate`에 연결). §6(CLI 허용 표면)이
+  다루는 건 `bin/clojure-clr`/`bin/clr-meta`의 표면이고, 이건 별개로
+  여전히 사람이 손으로 쓰는 문서다 — 혼동하지 말 것. **pnix-cljs는 아직
+  이 문서가 없다.** 자세한 경위는 [`PLANS.md`](PLANS.md) §2.

@@ -65,26 +65,20 @@
 통일시키는 작업은 기본 언어 기능이 production 수준으로 완전히 갖춰진 다음,
 필요에 의해 결정한다.
 
-## 2. 실제 백로그 — CAPABILITIES.md 자동 생성기 없음 (2026-08-19)
+## 2. 해결됨 — CAPABILITIES.md 자동 생성기 없음 (2026-08-19 제기, 2026-08-20 해결)
 
 (원본: `pnix-clr/pnix-clr/todo.md`. 2026-08-20 이 문서로 통합, 옛
 `todo.md`는 삭제됨.)
 
-위 두 항목과 달리 이건 "아직 예정 없음" 메모가 아니라 **참고할 작동하는
-구현이 이미 3개 있는** 실제 gap이다. clj(`docs/CAPABILITIES.md` +
-`capabilities.clj`, `clojure -M:capabilities`로 재생성, drift 게이트
-있음), hy(`docs/CAPABILITIES.md` + `pnix_hy/capabilities.py`,
-`pnix-hy-project --capabilities`), rs(`docs/CAPABILITIES.md` +
-`capabilities` 서브커맨드, `capabilities-check` 게이트) 셋 다 코드에서
-자동 파생되고 drift가 나면 게이트가 잡는 능력 인덱스를 갖고 있다.
-
-이 호스트(pnix-clr)와 pnix-cljs만 이게 없다 — `IMPLEMENTATION.md` §6(구
-`docs/CLOJURE_CLR_ADMITTED_SURFACE.md`) 같은 지금 있는 문서는 전부 사람이
-손으로 쓰고 갱신하는 것이라 코드가 바뀌어도 자동으로 어긋난다는 걸 보장
-못 한다. 만들 때는 이 3개 호스트의 패턴(CLI 서브커맨드가 소스를 훑어
-`docs/CAPABILITIES.md`를 재생성 + 그 결과와 실제 파일을 비교하는 drift
-게이트)을 그대로 참고하면 된다 — 자세한 배경은
-[`IMPLEMENTATION.md`](IMPLEMENTATION.md) §9.
+clj/hy/rs 세 호스트를 참고해서 이 호스트에도 만들었다: `bin/pnix-clr
+capabilities`가 `pnix-clr.evaluator/builtin-names`(root `builtins-entries`
+등록 테이블에서 직접 introspect, 손으로 옮겨 적지 않음)와 `pnix-clr.main/
+cli-commands`에서 [`CAPABILITIES.md`](CAPABILITIES.md)를 렌더링하고,
+`bin/pnix-clr capabilities-check`가 drift 게이트로 `bin/pnix-clr-gate`에
+연결돼 있다. 자세한 배경은 [`IMPLEMENTATION.md`](IMPLEMENTATION.md) §9,
+생성기 구현은 `pnix-clr/src/pnix_clr/main.clj`
+(`capabilities-doc`/`capabilities-check!`)와
+`pnix-clr/src/pnix_clr/evaluator.clj`(`builtin-names`) 참고.
 
 ## 3. 프로세스 내 평가기 스파이크 — 언제 experimental 딱지를 뗄지 (미정)
 

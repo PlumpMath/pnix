@@ -100,23 +100,6 @@ PATH 우선순위로 끼워 넣는** 방식으로 통합하는, 실전에서 쓰
 }
 ```
 
-**로컬에서 편집 중인 체크아웃을 커밋/푸시 없이 바로 반영**하려면 (다른
-세션이 `~/pnix`를 계속 고치고 있을 때 유용) `flake.lock`을 로컬 경로로
-오버라이드한다:
-
-```bash
-cd ~/your-system-flake-dir
-nix flake lock \
-  --override-input pnix-clj  path:$HOME/pnix/pnix-clj \
-  --override-input pnix-hy   path:$HOME/pnix/pnix-hy \
-  --override-input pnix-rs   path:$HOME/pnix/pnix-rs \
-  --override-input pnix-cljs path:$HOME/pnix/pnix-cljs \
-  --override-input pnix-clr  path:$HOME/pnix/pnix-clr
-```
-
-`path:` input은 **git이 추적하는 파일만** 본다 — 새 파일을 추가했다면 평가
-전에 `git add` 해야 flake가 그 파일을 본다.
-
 ### 2) 두 가지 "오버라이드" 방식 — 언제 어느 쪽인가
 
 호스트 CLI를 시스템 전역에 배선하는 방법은 둘로 나뉜다. **어느 쪽을 쓸지는

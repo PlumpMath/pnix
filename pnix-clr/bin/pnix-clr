@@ -46,6 +46,12 @@ resolve_cli_args() {
         out+=("$1")
         shift
         ;;
+      # Bare (non-`.px`) subcommand tokens, not FILE.px operands -- must not
+      # be rewritten into caller-relative paths like the catch-all below does.
+      capabilities|capabilities-check)
+        out+=("$1")
+        shift
+        ;;
       *)
         out+=("$(absolute_from_caller "$1")")
         shift

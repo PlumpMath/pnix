@@ -9,7 +9,7 @@
 (declare evaluate-expression evaluate-tail equal-values equal-values*
          equal-values-in-container ordered-less checked-integer
          evaluation-failure! force-cell integer-value? json-parse-value
-         to-json-value)
+         to-json-value string-text)
 (declare materialize)
 
 (defrecord ClosureValue [parameter body environment])
@@ -17,6 +17,58 @@
 (defrecord AttrsetValue [fields])
 (defrecord ByteStringValue [bytes])
 (defrecord Cell [expression environment state])
+
+;; --- String context (pure simulation of Nix string context) ----------------
+;;
+;; A Nix string carries a context: the set of store-path dependencies that
+;; must be realized before the string is used. Context-free strings stay
+;; plain JS strings (zero representation change, zero cost for the
+;; overwhelming majority of string operations); a string only becomes a
+;; ContextStringValue when its context is non-empty (created today by
+;; builtins.appendContext, and by derivation drvPath/outPath). The value
+;; representation here is a defrecord alongside the existing
+;; ClosureValue/BuiltinValue/AttrsetValue/ByteStringValue records, which is
+;; this file's own idiom for a tagged value kind (this host has no Path
+;; value type -- paths are plain strings here -- so there is no existing
+;; "tagged map" precedent to match instead; the defrecord form is the
+;; natural fit given this file's own precedent). `content` is always a
+;; plain JS string, never a ByteStringValue: raw invalid-UTF-8 bytes cannot
+;; carry context (mixing the two is rejected by the `ctx-string` constructor
+;; below).
+(defrecord ContextStringValue [content context])
+
+(defn ctx-string?
+  [value]
+  (instance? ContextStringValue value))
+
+(defn ctx-string
+  "Build a pnix string with context. Returns `content` unchanged when the
+  context is empty, so context-free results stay indistinguishable from
+  ordinary strings/ByteStringValues (identical representation and cost to
+  before this feature existed). Rejects wrapping a ByteStringValue (raw,
+  invalid-UTF-8 bytes) with a non-empty context: that combination has no
+  representable meaning here."
+  [content context]
+  (let [context (vec (sort (distinct (map str context))))]
+    (if (empty? context)
+      content
+      (if (instance? ByteStringValue content)
+        (evaluation-failure! "type-error"
+                             {"operation" "string-context"
+                              "detail_class" "raw-bytes-with-context"})
+        (->ContextStringValue content context)))))
+
+(defn string-content
+  "Character content of a string-like value; any other value passes through
+  unchanged, so this is safe to call on anything."
+  [value]
+  (if (ctx-string? value) (:content value) value))
+
+(defn string-ctx
+  "The context vector of a string-like value; [] for anything else (plain
+  strings, ByteStringValue, or non-string values alike)."
+  [value]
+  (if (ctx-string? value) (:context value) []))
 
 (def module-context-key ::module-context)
 (def force-dependency-key ::force-dependency)
@@ -32,12 +84,14 @@
 
 (defn string-value? [value]
   (or (string? value)
-      (instance? ByteStringValue value)))
+      (instance? ByteStringValue value)
+      (ctx-string? value)))
 
 (defn string-bytes [value]
-  (if (instance? ByteStringValue value)
-    (:bytes value)
-    (.encode utf8-encoder value)))
+  (cond
+    (instance? ByteStringValue value) (:bytes value)
+    (ctx-string? value) (string-bytes (:content value))
+    :else (.encode utf8-encoder value)))
 
 (defn equal-bytes? [left right]
   (and (= (.-length left) (.-length right))
@@ -147,9 +201,16 @@
                              {"detail_class" "invalid-pattern"})))))
 
 (defn match-value [pattern value]
-  (when-not (and (string? pattern) (string? value))
+  ;; Oracle: a contextful REGEX is rejected; captured groups from a
+  ;; contextful SUBJECT come back context-free (Nix collects but drops the
+  ;; subject's context on match results), so only the subject's content is
+  ;; ever consulted here.
+  (when (ctx-string? pattern)
+    (evaluation-failure! "type-error"
+                         {"operation" "match" "detail_class" "string-context-frontier"}))
+  (when-not (and (string? pattern) (string-value? value))
     (evaluation-failure! "type-error" {"operation" "match"}))
-  (let [result (.exec (compile-regex pattern true) value)]
+  (let [result (.exec (compile-regex pattern true) (string-text value))]
     (when result
       (loop [index 1
              captures []]
@@ -161,9 +222,15 @@
                          (if (undefined? capture) nil capture)))))))))
 
 (defn split-value [pattern value]
-  (when-not (and (string? pattern) (string? value))
+  ;; Same oracle rule as match-value: a contextful regex errors; pieces and
+  ;; capture groups from a contextful subject come back context-free.
+  (when (ctx-string? pattern)
+    (evaluation-failure! "type-error"
+                         {"operation" "split" "detail_class" "string-context-frontier"}))
+  (when-not (and (string? pattern) (string-value? value))
     (evaluation-failure! "type-error" {"operation" "split"}))
-  (let [regex (try
+  (let [value (string-text value)
+        regex (try
                 (js/RegExp. (translate-posix-pattern pattern) "g")
                 (catch :default cause
                   (if (true? (get (ex-data cause) "pnix_error"))
@@ -211,7 +278,15 @@
                  (= (count from-values) (count to-values))
                  (string-value? value))
     (evaluation-failure! "type-error" {"operation" "replaceStrings"}))
-  (let [from-bytes
+  (let [forced-to
+        (mapv (fn [entry]
+                (let [entry (force-cell entry)]
+                  (if (string-value? entry)
+                    entry
+                    (evaluation-failure! "type-error"
+                                         {"operation" "replaceStrings"}))))
+              to-values)
+        from-bytes
         (mapv (fn [entry]
                 (let [entry (force-cell entry)]
                   (if (string-value? entry)
@@ -219,16 +294,13 @@
                     (evaluation-failure! "type-error"
                                          {"operation" "replaceStrings"}))))
               from-values)
-        to-bytes
-        (mapv (fn [entry]
-                (let [entry (force-cell entry)]
-                  (if (string-value? entry)
-                    (string-bytes entry)
-                    (evaluation-failure! "type-error"
-                                         {"operation" "replaceStrings"}))))
-              to-values)
+        to-bytes (mapv string-bytes forced-to)
         source (string-bytes value)
-        source-length (.-length source)]
+        source-length (.-length source)
+        ;; Context-aware: the result keeps `value`'s own context plus the
+        ;; context of every replacement actually USED (unused `to` entries
+        ;; contribute nothing).
+        used-ctx (volatile! (vec (string-ctx value)))]
     (loop [index 0
            output []]
       (let [match-index
@@ -243,10 +315,13 @@
           (let [needle (nth from-bytes match-index)
                 replacement (nth to-bytes match-index)
                 needle-length (.-length needle)]
+            (vswap! used-ctx into (string-ctx (nth forced-to match-index)))
             (if (zero? needle-length)
               (if (= index source-length)
-                (decode-byte-string
-                 (concatenate-byte-arrays (conj output replacement)))
+                (ctx-string
+                 (decode-byte-string
+                  (concatenate-byte-arrays (conj output replacement)))
+                 @used-ctx)
                 (recur (inc index)
                        (conj output
                              replacement
@@ -255,7 +330,8 @@
                      (conj output replacement))))
 
           (= index source-length)
-          (decode-byte-string (concatenate-byte-arrays output))
+          (ctx-string (decode-byte-string (concatenate-byte-arrays output))
+                      @used-ctx)
 
           :else
           (recur (inc index)
@@ -446,15 +522,25 @@
     (finally
       (.delete active identity))))
 
-(defn to-json-value [value active]
+(defn to-json-value
+  "Serialize `value` to a JSON text fragment. `collected` is a volatile
+  accumulating the union of every ContextStringValue's context encountered
+  along the way -- toJSON KEEPS context (oracle), unlike most other
+  JSON-adjacent code in this file."
+  [value active collected]
   (if (instance? Cell value)
     (to-json-active active value
-                    #(to-json-value (force-cell value) active))
+                    #(to-json-value (force-cell value) active collected))
     (cond
       (nil? value) "null"
       (boolean? value) (if value "true" "false")
       (integer-value? value) (str value)
       (number? value) (nix-json-float value)
+
+      (ctx-string? value)
+      (do (vswap! collected into (:context value))
+          (js/JSON.stringify (:content value)))
+
       (string? value) (js/JSON.stringify value)
 
       (instance? ByteStringValue value)
@@ -469,7 +555,7 @@
              (apply str
                     (interpose ","
                                (map (fn [item]
-                                      (to-json-value item active))
+                                      (to-json-value item active collected))
                                     value)))
              "]"))
 
@@ -485,7 +571,8 @@
                                  ":"
                                  (to-json-value
                                   (get (:fields value) name)
-                                  active)))
+                                  active
+                                  collected)))
                           (sorted-field-names (:fields value)))))
              "}"))
 
@@ -494,7 +581,9 @@
                            {"operation" "toJSON"}))))
 
 (defn to-json [value]
-  (to-json-value value (js/Set.)))
+  (let [collected (volatile! [])
+        body (to-json-value value (js/Set.) collected)]
+    (ctx-string body @collected)))
 
 (defn integer-value? [value]
   (js* "typeof ~{} === 'bigint'" value))
@@ -596,22 +685,38 @@
                            lines)))))
 
 (defn evaluate-string-segments [segments environment]
-  (apply str
-         (map (fn [segment]
-                (if (= :text (:kind segment))
-                  (:value segment)
-                  (let [value (evaluate-expression (:value segment)
-                                                   environment)]
-                    (if (string? value)
-                      value
-                      (evaluation-failure!
-                       "type-error"
-                       {"operation" "string-interpolation"})))))
-              segments)))
+  ;; Context-aware: a contextful interpolated segment interpolates as its
+  ;; content, and the template's result carries the union of every segment's
+  ;; context (plain literal text segments contribute nothing). ctx-string
+  ;; collapses to a plain string when nothing carried context, so
+  ;; context-free templates stay byte-identical to before this feature.
+  (let [collected (volatile! [])
+        text (apply str
+                    (map (fn [segment]
+                           (if (= :text (:kind segment))
+                             (:value segment)
+                             (let [value (evaluate-expression (:value segment)
+                                                              environment)]
+                               (cond
+                                 (string? value) value
+
+                                 (ctx-string? value)
+                                 (do (vswap! collected into (:context value))
+                                     (:content value))
+
+                                 :else
+                                 (evaluation-failure!
+                                  "type-error"
+                                  {"operation" "string-interpolation"})))))
+                         segments))]
+    (ctx-string text @collected)))
 
 (defn evaluate-indented-string [segments environment]
-  (normalize-indented-string
-   (evaluate-string-segments segments environment)))
+  (let [result (evaluate-string-segments segments environment)]
+    (if (ctx-string? result)
+      (ctx-string (normalize-indented-string (:content result))
+                  (:context result))
+      (normalize-indented-string result))))
 
 (defn evaluate-attribute-name [field environment]
   (if (contains? field :name)
@@ -792,8 +897,17 @@
   (if (and (= operation :add)
            (string-value? left)
            (string-value? right))
-    (decode-byte-string
-     (concatenate-byte-arrays [(string-bytes left) (string-bytes right)]))
+    ;; String `+` concat carries context: contents join at the byte level
+    ;; exactly as before, and the result's context is the union of both
+    ;; operands' (ctx-string collapses to a plain value when both are
+    ;; context-free, so this is a no-op change for the overwhelming majority
+    ;; of `+` uses). This is a language operator, not a builtin dispatched
+    ;; through invoke-builtin, so it is never gated by context-aware-builtins
+    ;; -- `+` always understands context.
+    (ctx-string
+     (decode-byte-string
+      (concatenate-byte-arrays [(string-bytes left) (string-bytes right)]))
+     (into (vec (string-ctx left)) (string-ctx right)))
     (let [left (require-number left)
           right (require-number right)]
       (if (and (integer-value? left) (integer-value? right))
@@ -915,43 +1029,63 @@
     :else
     (evaluation-failure! "type-error" {"operation" "abs"})))
 
-(defn nix-to-string [value]
-  (cond
-    (string-value? value) value
-    (integer-value? value) (str value)
-    (number? value) (cond
-                      (js/Number.isNaN value) "nan"
-                      (= js/Number.POSITIVE_INFINITY value) "inf"
-                      (= js/Number.NEGATIVE_INFINITY value) "-inf"
-                      (and (zero? value)
-                           (= js/Number.NEGATIVE_INFINITY (/ 1 value)))
-                      "-0.000000"
-                      :else (.toFixed value 6))
-    (true? value) "1"
-    (or (false? value) (nil? value)) ""
+(defn nix-to-string
+  "Nix `toString` coercion (coerceMore). 1-arity is the general-purpose
+  coercion used throughout this file by callers that have NOT been made
+  context-aware (trace's non-allowlisted sibling `warn`, optionalString,
+  concatMapStringsSep, ...): it REJECTS a ContextStringValue, acting as a
+  deep backstop so context is never silently dropped by code that never
+  learned about it. Call sites
+  that HAVE been made context-aware (:toString, :trace, :concatStrings,
+  :concatMapStrings) pass a `collected` volatile explicitly and get full
+  recursive coercion through lists/attrset outPath chains, unioning every
+  ContextStringValue's context onto `collected` instead of rejecting."
+  ([value] (nix-to-string value nil))
+  ([value collected]
+   (cond
+     (ctx-string? value)
+     (if collected
+       (do (vswap! collected into (:context value))
+           (:content value))
+       (evaluation-failure! "type-error"
+                            {"operation" "toString"
+                             "detail_class" "string-context-frontier"}))
 
-    (vector? value)
-    (let [strings (mapv #(nix-to-string (force-cell %)) value)]
-      (decode-byte-string
-       (concatenate-byte-arrays
-        (vec
-         (mapcat (fn [[index string-value]]
-                   (if (zero? index)
-                     [(string-bytes string-value)]
-                     [(.encode utf8-encoder " ")
-                      (string-bytes string-value)]))
-                 (map-indexed vector strings))))))
+     (string-value? value) value
+     (integer-value? value) (str value)
+     (number? value) (cond
+                        (js/Number.isNaN value) "nan"
+                        (= js/Number.POSITIVE_INFINITY value) "inf"
+                        (= js/Number.NEGATIVE_INFINITY value) "-inf"
+                        (and (zero? value)
+                             (= js/Number.NEGATIVE_INFINITY (/ 1 value)))
+                        "-0.000000"
+                        :else (.toFixed value 6))
+     (true? value) "1"
+     (or (false? value) (nil? value)) ""
 
-    (instance? AttrsetValue value)
-    (let [fields (:fields value)]
-      (if (contains? fields "outPath")
-        (nix-to-string (force-cell (get fields "outPath")))
-        (evaluation-failure! "type-error"
-                             {"operation" "toString"})))
+     (vector? value)
+     (let [strings (mapv #(nix-to-string (force-cell %) collected) value)]
+       (decode-byte-string
+        (concatenate-byte-arrays
+         (vec
+          (mapcat (fn [[index string-value]]
+                    (if (zero? index)
+                      [(string-bytes string-value)]
+                      [(.encode utf8-encoder " ")
+                       (string-bytes string-value)]))
+                  (map-indexed vector strings))))))
 
-    :else
-    (evaluation-failure! "type-error"
-                         {"operation" "toString"})))
+     (instance? AttrsetValue value)
+     (let [fields (:fields value)]
+       (if (contains? fields "outPath")
+         (nix-to-string (force-cell (get fields "outPath")) collected)
+         (evaluation-failure! "type-error"
+                              {"operation" "toString"})))
+
+     :else
+     (evaluation-failure! "type-error"
+                          {"operation" "toString"}))))
 
 (def catchable-evaluation-classes
   #{"assertion-failed" "explicit-throw"})
@@ -1035,9 +1169,11 @@
     (evaluation-failure! "type-error" {"operation" operation})))
 
 (defn string-text [value]
-  (if (instance? ByteStringValue value)
+  (cond
+    (instance? ByteStringValue value)
     (.decode (js/TextDecoder. "utf-8") (:bytes value))
-    value))
+    (ctx-string? value) (string-text (:content value))
+    :else value))
 
 (defn bytes-has-prefix? [source prefix]
   (and (<= (.-length prefix) (.-length source))
@@ -1601,8 +1737,142 @@
                (map-indexed vector strings)))))))
 
 
+(defn derivation-uncoercible?
+  "Walk a deep-forced derivation input and report whether a function occurs
+  anywhere inside it (functions cannot be part of a derivation attrset)."
+  [value]
+  (cond
+    (or (instance? ClosureValue value) (instance? BuiltinValue value)) true
+    (vector? value) (boolean (some derivation-uncoercible? value))
+    (instance? AttrsetValue value)
+    (boolean (some derivation-uncoercible? (vals (:fields value))))
+    :else false))
+
+(defn force-deep
+  "Recursively force a value: every Cell, including those nested inside
+  vectors or AttrsetValue fields, is realized. Used to validate and
+  canonicalize a derivation's input attrset."
+  [value]
+  (let [value (force-cell value)]
+    (cond
+      (vector? value) (mapv force-deep value)
+
+      (instance? AttrsetValue value)
+      (->AttrsetValue
+       (into {} (map (fn [[k v]] [k (force-deep v)])) (:fields value)))
+
+      :else value)))
+
+(defn derivation-paths
+  "Deterministic PSEUDO drvPath and per-output store paths for a deep-forced
+  derivation input -- a pure-simulation hash of the forced attrs, not a real
+  Nix hash. Non-\"out\" outputs get the Nix-style \"-<output>\" name suffix
+  (oracle: /nix/store/<h>-t vs /nix/store/<h>-t-dev)."
+  [forced name outputs]
+  ;; derivation-uncoercible? has already ruled out functions by the time this
+  ;; runs (see derivation-core), so to-json-value's function/type-error
+  ;; branches cannot fire here; only a raw invalid-UTF-8 ByteStringValue
+  ;; somewhere in the attrs could still throw, an accepted edge-case limit.
+  (let [canonical (to-json-value forced (js/Set.) (volatile! []))
+        salted-hash (fn [salt]
+                      (subs (hash-bytes "sha256"
+                                       (.encode utf8-encoder (str salt canonical)))
+                            0 32))]
+    {:drv-path (str "/nix/store/" (salted-hash "drv:") "-" name ".drv")
+     :out-paths (into {}
+                      (map (fn [o]
+                             [o (str "/nix/store/" (salted-hash (str "out:" o ":"))
+                                     "-" name (when (not= o "out") (str "-" o)))]))
+                      outputs)}))
+
+(defn derivation-core
+  "Validate and realize a derivation input attrset for `derivation`/
+  `derivationStrict`: name/system/builder required, name a plain string,
+  outputs defaulting to [\"out\"] and otherwise a non-empty vector of
+  distinct strings, no function anywhere in the (deep-forced) attrs. Returns
+  {:forced :name :outputs :drv-path :out-paths} or throws."
+  [builtin-name attrs]
+  (when-not (instance? AttrsetValue attrs)
+    (evaluation-failure! "type-error"
+                         {"operation" builtin-name
+                          "detail_class" "argument-not-attrset"}))
+  (let [forced (force-deep attrs)
+        fields (:fields forced)
+        missing (first (remove #(contains? fields %) ["name" "system" "builder"]))]
+    (when missing
+      (evaluation-failure! "type-error"
+                           {"operation" builtin-name
+                            "detail_class" "missing-required-attr"
+                            "attr" missing}))
+    (let [name-v (get fields "name")]
+      (when-not (string? name-v)
+        (evaluation-failure! "type-error"
+                             {"operation" builtin-name
+                              "detail_class" "name-not-plain-string"}))
+      (when (derivation-uncoercible? forced)
+        (evaluation-failure! "type-error"
+                             {"operation" builtin-name
+                              "detail_class" "attr-not-coercible"}))
+      (let [outputs (if (contains? fields "outputs") (get fields "outputs") ["out"])]
+        (when-not (and (vector? outputs)
+                       (seq outputs)
+                       (every? string? outputs)
+                       (= (count outputs) (count (distinct outputs))))
+          (evaluation-failure! "type-error"
+                               {"operation" builtin-name
+                                "detail_class" "invalid-outputs"}))
+        (let [{:keys [drv-path out-paths]} (derivation-paths forced name-v outputs)]
+          {:forced forced
+           :name name-v
+           :outputs outputs
+           :drv-path drv-path
+           :out-paths out-paths})))))
+
+(def context-aware-builtins
+  "Builtins allowed to receive a contextful string. Everything else is denied
+  by default (a `type-error` with detail_class string-context-frontier) so
+  context is never silently dropped or mangled by a builtin that was never
+  taught to handle it. This is a fixed, oracle-verified set (the reference
+  string-context design's `context-aware-builtins`) -- ported by name, not
+  reinvented. A few names the reference list carries do not (yet) exist as
+  builtins here and are intentionally omitted (see the IMPLEMENTATION.md
+  string-context section for the list)."
+  #{:hasContext :getContext :hashString :unsafeDiscardStringContext
+    :unsafeDiscardOutputDependency :appendContext :toPath
+    :toString :typeOf :isString :isAttrs :isList :isInt :isFloat :isBool
+    :isNull :isFunction :seq :deepSeq :trace :id :eq
+    :derivation :derivationStrict :placeholder :storePath
+    :stringLength :substring :concatStringsSep
+    :hasPrefix :hasSuffix :hasInfix :toUpper :toLower :replaceStrings
+    :match :split :toJSON :fromJSON :stringToCharacters :splitString
+    :removePrefix :removeSuffix :toInt :concatStrings :concatMapStrings
+    :head :tail :elemAt :last :init :length :elem})
+
+(defn ctx-string-in-args?
+  "Shallow scan (top level + one level into vectors) for contextful strings
+  in accumulated builtin args. Elements still hidden behind an unforced Cell
+  are opaque here -- this mirrors the reference design's own shallow scan
+  exactly, including its limits: the oracle-verified real behavior is that a
+  contextful string buried inside an unforced list element passed to e.g.
+  `sort`/`filter` is NOT caught by this scan (confirmed empirically against
+  the oracle -- see IMPLEMENTATION.md); only directly-supplied scalar
+  arguments are reliably caught. Matching that shallow scan, rather than a
+  deeper eager-forcing one, keeps this host's fail-closed behavior identical
+  to the oracle's instead of stricter than it."
+  [args]
+  (boolean
+   (some (fn [a]
+           (or (ctx-string? a)
+               (and (vector? a) (some ctx-string? a))))
+         args)))
+
 (defn invoke-builtin [builtin argument]
   (let [arguments (conj (:arguments builtin) argument)]
+    (when (and (ctx-string-in-args? arguments)
+               (not (contains? context-aware-builtins (:operation builtin))))
+      (evaluation-failure! "type-error"
+                           {"operation" (name (:operation builtin))
+                            "detail_class" "string-context-frontier"}))
     (case (:operation builtin)
       :identity argument
       :parseDrvName (parse-derivation-name argument)
@@ -1684,10 +1954,105 @@
                     (instance? BuiltinValue argument)) "lambda"
                 :else (evaluation-failure! "type-error"
                                            {"operation" "typeOf"}))
-      :toString (nix-to-string argument)
-      :toPath (if (and (string? argument)
-                       (.startsWith argument "/"))
+      :hasContext
+      (if (string-value? argument)
+        (ctx-string? argument)
+        (evaluation-failure! "type-error" {"operation" "hasContext"}))
+
+      :getContext
+      ;; Decode the Nix-encoded context elements back into per-path info
+      ;; attrsets and merge kinds on the same path (oracle: nix-instantiate
+      ;; 2.34.7 -- plain "<p>" -> { path = true; }, "!o!<drv>" -> { outputs =
+      ;; [o..]; }, "=<drv>" -> { allOutputs = true; }; mixed kinds merge on
+      ;; one key). Pure-simulation scope: WHICH dependency + which kind, not
+      ;; the fuller real-Nix detail.
+      (if-not (string-value? argument)
+        (evaluation-failure! "type-error" {"operation" "getContext"})
+        (->AttrsetValue
+         (into {}
+               (map (fn [[path info]]
+                      [path (->AttrsetValue info)]))
+               (reduce
+                (fn [acc entry]
+                  (cond
+                    (str/starts-with? entry "=")
+                    (assoc-in acc [(subs entry 1) "allOutputs"] true)
+
+                    (str/starts-with? entry "!")
+                    (let [bang (.indexOf entry "!" 1)]
+                      (if (pos? bang)
+                        (let [output (subs entry 1 bang)
+                              path (subs entry (inc bang))]
+                          (update-in acc [path "outputs"]
+                                     (fn [outs]
+                                       (vec (sort (distinct
+                                                   (conj (or outs []) output)))))))
+                        (assoc-in acc [entry "path"] true)))
+
+                    :else
+                    (assoc-in acc [entry "path"] true)))
+                {}
+                (string-ctx argument)))))
+
+      :unsafeDiscardStringContext
+      (if (string-value? argument)
+        (string-content argument)
+        (evaluation-failure! "type-error"
+                             {"operation" "unsafeDiscardStringContext"}))
+
+      :unsafeDiscardOutputDependency
+      (if (string-value? argument)
+        (ctx-string (string-content argument)
+                    (remove #(or (str/starts-with? % "!")
+                                 (str/starts-with? % "="))
+                            (string-ctx argument)))
+        (evaluation-failure! "type-error"
+                             {"operation" "unsafeDiscardOutputDependency"}))
+
+      :appendContext
+      ;; appendContext s ctxAttrs: interpret each key's info attrset into
+      ;; Nix-encoded context elements -- path=true -> "<p>", allOutputs=true
+      ;; -> "=<p>", outputs=[o..] -> "!o!<p>". An EMPTY info attrset
+      ;; contributes nothing (oracle: hasContext (appendContext s { p = {};
+      ;; }) is false).
+      (if (< (count arguments) 2)
+        (->BuiltinValue :appendContext arguments)
+        (let [s (nth arguments 0)
+              ctx-attrs (nth arguments 1)]
+          (when-not (string-value? s)
+            (evaluation-failure! "type-error" {"operation" "appendContext"}))
+          (when-not (instance? AttrsetValue ctx-attrs)
+            (evaluation-failure! "type-error" {"operation" "appendContext"}))
+          (ctx-string
+           (string-content s)
+           (into (vec (string-ctx s))
+                 (mapcat
+                  (fn [k]
+                    (let [info (force-cell (get (:fields ctx-attrs) k))]
+                      (when-not (instance? AttrsetValue info)
+                        (evaluation-failure! "type-error"
+                                             {"operation" "appendContext"}))
+                      (let [fields (:fields info)]
+                        (concat
+                         (when (force-cell (get fields "path")) [k])
+                         (when (force-cell (get fields "allOutputs")) [(str "=" k)])
+                         (when (contains? fields "outputs")
+                           (map #(str "!" (force-cell %) "!" k)
+                                (force-cell (get fields "outputs"))))))))
+                  (sorted-field-names (:fields ctx-attrs)))))))
+
+      :toString (let [collected (volatile! [])]
+                  (ctx-string (nix-to-string argument collected) @collected))
+      :toPath (cond
+                (and (string? argument) (.startsWith argument "/"))
                 (normalize-absolute-path argument)
+
+                (and (ctx-string? argument)
+                     (.startsWith (:content argument) "/"))
+                (ctx-string (normalize-absolute-path (:content argument))
+                            (:context argument))
+
+                :else
                 (evaluation-failure! "type-error"
                                      {"operation" "toPath"}))
       :stringLength (if (string-value? argument)
@@ -1718,10 +2083,15 @@
                                         (if (> candidate size)
                                           size
                                           candidate)))]
-                       (decode-byte-string
-                        (.slice bytes
-                                (js/Number first-byte)
-                                (js/Number end-byte))))))
+                       ;; Nix keeps the ENTIRE original context on a
+                       ;; substring (context is not sliced along with the
+                       ;; content).
+                       (ctx-string
+                        (decode-byte-string
+                         (.slice bytes
+                                 (js/Number first-byte)
+                                 (js/Number end-byte)))
+                        (string-ctx value)))))
       :concatStringsSep
       (if (< (count arguments) 2)
         (->BuiltinValue :concatStringsSep arguments)
@@ -1737,15 +2107,19 @@
             (when-not (every? string-value? strings)
               (evaluation-failure! "type-error"
                                    {"operation" "concatStringsSep"}))
-            (decode-byte-string
-             (concatenate-byte-arrays
-              (vec
-               (mapcat (fn [[index value]]
-                         (if (zero? index)
-                           [(string-bytes value)]
-                           [(string-bytes separator)
-                            (string-bytes value)]))
-                       (map-indexed vector strings))))))))
+            ;; Context-aware: contents join exactly as before; the separator's
+            ;; and every element's context union onto the output.
+            (ctx-string
+             (decode-byte-string
+              (concatenate-byte-arrays
+               (vec
+                (mapcat (fn [[index value]]
+                          (if (zero? index)
+                            [(string-bytes value)]
+                            [(string-bytes separator)
+                             (string-bytes value)]))
+                        (map-indexed vector strings)))))
+             (into (vec (string-ctx separator)) (mapcat string-ctx) strings)))))
       :concatLists
       (if-not (vector? argument)
         (evaluation-failure! "type-error"
@@ -2100,11 +2474,14 @@
                        argument)))
 
       :trace
+      ;; Allowlisted: a contextful message is printed by its content (the
+      ;; context is irrelevant to trace's output, and the *return* value --
+      ;; arguments[1] -- is passed through untouched, so nothing is dropped).
       (if (< (count arguments) 2)
         (->BuiltinValue :trace arguments)
         (do
           (binding [*print-fn* *print-err-fn*]
-            (println (str "trace: " (nix-to-string (nth arguments 0)))))
+            (println (str "trace: " (nix-to-string (nth arguments 0) (volatile! [])))))
           (nth arguments 1)))
 
       :warn
@@ -2227,6 +2604,8 @@
                                 (nth arguments 2)))
 
       :removePrefix
+      ;; substring-based lib semantics: the result keeps `value`'s whole
+      ;; context; a contextful prefix argument only affects the comparison.
       (if (< (count arguments) 2)
         (->BuiltinValue :removePrefix arguments)
         (let [prefix (require-string-arg (nth arguments 0) "removePrefix")
@@ -2234,8 +2613,9 @@
               prefix-bytes (string-bytes prefix)
               value-bytes (string-bytes value)]
           (if (bytes-has-prefix? value-bytes prefix-bytes)
-            (decode-byte-string
-             (.slice value-bytes (.-length prefix-bytes)))
+            (ctx-string
+             (decode-byte-string (.slice value-bytes (.-length prefix-bytes)))
+             (string-ctx value))
             value)))
 
       :removeSuffix
@@ -2246,10 +2626,12 @@
               suffix-bytes (string-bytes suffix)
               value-bytes (string-bytes value)]
           (if (bytes-has-suffix? value-bytes suffix-bytes)
-            (decode-byte-string
-             (.slice value-bytes
-                     0
-                     (- (.-length value-bytes) (.-length suffix-bytes))))
+            (ctx-string
+             (decode-byte-string
+              (.slice value-bytes
+                      0
+                      (- (.-length value-bytes) (.-length suffix-bytes))))
+             (string-ctx value))
             value)))
 
       :hasPrefix
@@ -2275,12 +2657,12 @@
 
       :toLower
       (if (string-value? argument)
-        (.toLowerCase (string-text argument))
+        (ctx-string (.toLowerCase (string-text argument)) (string-ctx argument))
         (evaluation-failure! "type-error" {"operation" "toLower"}))
 
       :toUpper
       (if (string-value? argument)
-        (.toUpperCase (string-text argument))
+        (ctx-string (.toUpperCase (string-text argument)) (string-ctx argument))
         (evaluation-failure! "type-error" {"operation" "toUpper"}))
 
       :boolToString
@@ -2693,8 +3075,10 @@
           (mapv (fn [i x] (value-cell (apply-value2 f (js/BigInt i) x)))
                 (iterate inc 1) xs)))
       :stringToCharacters
+      ;; substring-based, and substring keeps the WHOLE context -- so every
+      ;; character carries the source's full context.
       (let [s (require-string-arg argument "stringToCharacters")]
-        (mapv str (string-text s)))
+        (mapv #(ctx-string (str %) (string-ctx s)) (string-text s)))
       :groupBy
       (if (< (count arguments) 2)
         (->BuiltinValue :groupBy arguments)
@@ -2752,27 +3136,87 @@
          (string-text (require-string-arg (nth arguments 1) "hasInfix"))
          (string-text (require-string-arg (nth arguments 0) "hasInfix"))))
       :concatMapStrings
+      ;; concatMapStrings f xs = concatStrings (map f xs); context-aware --
+      ;; the contexts of the mapped results union onto the output.
       (if (< (count arguments) 2)
         (->BuiltinValue :concatMapStrings arguments)
         (let [f (nth arguments 0) xs (nth arguments 1)]
           (when-not (vector? xs)
             (evaluation-failure! "type-error" {"operation" "concatMapStrings"}))
-          (decode-byte-string
-           (concatenate-byte-arrays
-            (mapv (fn [x] (string-bytes (nix-to-string (apply-value f x)))) xs)))))
+          (let [collected (volatile! [])]
+            (ctx-string
+             (decode-byte-string
+              (concatenate-byte-arrays
+               (mapv (fn [x] (string-bytes (nix-to-string (apply-value f x) collected))) xs)))
+             @collected))))
       :concatStrings
+      ;; Context-aware: contents join exactly as before, element contexts
+      ;; union onto the output.
       (if-not (vector? argument)
         (evaluation-failure! "type-error" {"operation" "concatStrings"})
-        (decode-byte-string
-         (concatenate-byte-arrays
-          (mapv (fn [x] (string-bytes (nix-to-string (force-cell x)))) argument))))
+        (let [collected (volatile! [])]
+          (ctx-string
+           (decode-byte-string
+            (concatenate-byte-arrays
+             (mapv (fn [x] (string-bytes (nix-to-string (force-cell x) collected))) argument)))
+           @collected)))
+
+      :derivationStrict
+      ;; Low-level derivation primitive: drvPath plus one attr per output
+      ;; (oracle: attrNames = ["dev" "drvPath" "out"] for outputs=["out"
+      ;; "dev"]), each carrying its own string context -- drvPath allOutputs
+      ;; ("=<drvPath>"), an output path its own output ("!<o>!<drvPath>").
+      (let [{:keys [drv-path out-paths outputs]}
+            (derivation-core "derivationStrict" argument)]
+        (->AttrsetValue
+         (reduce (fn [acc o]
+                   (assoc acc o
+                          (ctx-string (get out-paths o)
+                                      [(str "!" o "!" drv-path)])))
+                 {"drvPath" (ctx-string drv-path [(str "=" drv-path)])}
+                 outputs)))
+
+      :derivation
+      ;; High-level wrapper (in Nix a nix-lang wrapper over derivationStrict):
+      ;; the input attrs merged with type/name/drvPath/outPath/outputName,
+      ;; plus one attr per output. outPath/outputName follow the FIRST
+      ;; output (oracle: outputs=["dev" "out"] -> outputName="dev"). Each
+      ;; d.<o> is a NON-cyclic reduced derivation attrset (type/name/
+      ;; drvPath/outPath/outputName only) -- real Nix's d.out == d
+      ;; self-reference has no representation in this plain-record value
+      ;; model; a documented simulation limit (see BUGS.md).
+      (let [{:keys [forced drv-path out-paths outputs name]}
+            (derivation-core "derivation" argument)
+            drv-ctx (ctx-string drv-path [(str "=" drv-path)])
+            out-attr (fn [o]
+                       (ctx-string (get out-paths o) [(str "!" o "!" drv-path)]))
+            sub-drv (fn [o]
+                      (->AttrsetValue
+                       {"type" "derivation"
+                        "name" name
+                        "drvPath" drv-ctx
+                        "outputName" o
+                        "outPath" (out-attr o)}))
+            first-o (first outputs)]
+        (->AttrsetValue
+         (assoc (reduce (fn [acc o] (assoc acc o (sub-drv o)))
+                        (:fields forced)
+                        outputs)
+                "type" "derivation"
+                "drvPath" drv-ctx
+                "outPath" (out-attr first-o)
+                "outputName" first-o)))
 
       :placeholder
       ;; Deterministic context-free placeholder for an output name, replaced
-      ;; at build time in real Nix. Pseudo hash, not byte-compatible with Nix.
-      (let [output (string-text (require-string-arg argument "placeholder"))
-            hex (hash-bytes "sha256" (.encode utf8-encoder (str "pnix-output:" output)))]
-        (str "/" (subs hex 0 32)))
+      ;; at build time in real Nix. Pseudo hash, not byte-compatible with
+      ;; Nix. The output name must be a PLAIN string: a contextful argument
+      ;; is rejected outright, not silently unwrapped -- an output name is
+      ;; never itself a context-bearing value.
+      (if-not (string? argument)
+        (evaluation-failure! "type-error" {"operation" "placeholder"})
+        (let [hex (hash-bytes "sha256" (.encode utf8-encoder (str "pnix-output:" argument)))]
+          (str "/" (subs hex 0 32))))
       :storePath
       (evaluation-failure! "type-error" {"operation" "storePath" "reason" "pure-evaluator-no-store"})
       :pnixMounts
@@ -2837,6 +3281,8 @@
                 "concatMapStringsSep" (->BuiltinValue :concatMapStringsSep [])
                 "concatStringsSep" (->BuiltinValue :concatStringsSep [])
                 "const" (->BuiltinValue :const [])
+                "derivation" (->BuiltinValue :derivation [])
+                "derivationStrict" (->BuiltinValue :derivationStrict [])
                 "div" (->BuiltinValue :div [])
                 "elem" (->BuiltinValue :elem [])
                 "elemAt" (->BuiltinValue :elemAt [])
@@ -2859,6 +3305,9 @@
                 "getAttrFromPath" (->BuiltinValue :getAttrFromPath [])
                 "getName" (->BuiltinValue :getName [])
                 "getVersion" (->BuiltinValue :getVersion [])
+                "getContext" (->BuiltinValue :getContext [])
+                "hasContext" (->BuiltinValue :hasContext [])
+                "appendContext" (->BuiltinValue :appendContext [])
                 "hasAttr" (->BuiltinValue :hasAttr [])
                 "hasAttrByPath" (->BuiltinValue :hasAttrByPath [])
                 "hasPrefix" (->BuiltinValue :hasPrefix [])
@@ -2934,8 +3383,8 @@
                 "tryEval" (->BuiltinValue :tryEval [])
                 "typeOf" (->BuiltinValue :typeOf [])
                 "unique" (->BuiltinValue :unique [])
-                "unsafeDiscardOutputDependency" (->BuiltinValue :identity [])
-                "unsafeDiscardStringContext" (->BuiltinValue :identity [])
+                "unsafeDiscardOutputDependency" (->BuiltinValue :unsafeDiscardOutputDependency [])
+                "unsafeDiscardStringContext" (->BuiltinValue :unsafeDiscardStringContext [])
                 "updateManyAttrs" (->BuiltinValue :updateManyAttrs [])
                 "warn" (->BuiltinValue :warn [])
                 "when" (->BuiltinValue :when [])
@@ -3629,6 +4078,14 @@
                        "class" "invalid-guest-value"
                        "evidence" {"kind" "string"
                                    "detail_class" "invalid-utf8"}}))
+
+      ;; A contextful string materializes to its plain content: context has
+      ;; no representation in the canonical output boundary (plain values /
+      ;; canonical JSON), matching real Nix's own --json output of e.g. a
+      ;; derivation's outPath (content only, context dropped at this
+      ;; boundary specifically -- NOT inside evaluation, where it is tracked
+      ;; and gated throughout).
+      (ctx-string? value) (:content value)
 
       (vector? value)
       (mapv materialize value)
