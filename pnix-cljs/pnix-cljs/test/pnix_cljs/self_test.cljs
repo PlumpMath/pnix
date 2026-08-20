@@ -52,7 +52,14 @@
    ["[ ./a ./b ]" "done" ["./a" "./b"]]
    ["let p = ./a; in builtins.typeOf (builtins.dirOf p)" "done" "path"]
    ["./a - ./b" "failed" nil]
-   ["./a + 1" "failed" nil]])
+   ["./a + 1" "failed" nil]
+   ;; inherit / dotted attrpath positions (Nix {file;line;column})
+   ["let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos \"x\" s).column"
+    "done" (js/BigInt "11")]
+   ["let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos \"x\" s).file"
+    "done" "<pnix-px>"]
+   ["let s = {\n  a.b = 1;\n}; in (builtins.unsafeGetAttrPos \"b\" (s.a)).column"
+    "done" (js/BigInt "3")]])
 
 (defn -main [& _]
   (doseq [[source expected-kind expected-value] cases]

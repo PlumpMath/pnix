@@ -696,6 +696,18 @@ fn cmd_px_check() -> ExitCode {
             failed += 1;
         }
     }
+    match px::px_run(
+        "let x = 1;\ns = {\n  inherit x;\n};\nin builtins.unsafeGetAttrPos \"x\" s",
+    ) {
+        Ok(v) if v == "{ column = 11; file = \"<pnix-px>\"; line = 3; }" => {
+            println!("  ok   inherit attr pos (Nix line/column)");
+            passed += 1;
+        }
+        other => {
+            println!("  FAIL inherit attr pos: {:?}", other);
+            failed += 1;
+        }
+    }
     // Audit #2 regression: float literals are valid APPLY arguments and
     // JSON leaves (finite only).
     match px::px_run("(x: x * 2.0) 3.5") {
@@ -780,6 +792,26 @@ fn cmd_px_check() -> ExitCode {
         }
     }
     let no_modules: Vec<(String, String)> = Vec::new();
+    match px::px_run_value_with_modules(
+        "let s = {\n  a = 1;\n}; in builtins.unsafeGetAttrPos \"a\" s",
+        &no_modules,
+        "./abs/demo.px",
+    ) {
+        Ok(v) => {
+            let rendered = px::px_print(&v);
+            if rendered == "{ column = 3; file = \"/abs/demo.px\"; line = 2; }" {
+                println!("  ok   file-eval attr pos uses module path");
+                passed += 1;
+            } else {
+                println!("  FAIL file-eval attr pos: {:?}", rendered);
+                failed += 1;
+            }
+        }
+        other => {
+            println!("  FAIL file-eval attr pos: {:?}", other);
+            failed += 1;
+        }
+    }
     let dead_missing = px::px_run_value_with_modules(
         "if false then import ./missing.px else 42",
         &no_modules,

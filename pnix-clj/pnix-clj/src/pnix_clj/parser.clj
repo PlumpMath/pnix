@@ -695,7 +695,10 @@
   stays unmergeable at parse (evaluated at construction, D20 checks apply)."
   [source {:keys [path path-spans value]}]
   (let [[k & ks] path
-        [span & spans] path-spans]
+        span (first path-spans)
+        ;; Nix threads the first attrpath segment's pos through every nested
+        ;; ExprAttrs for `a.b.c = v` (cljs/hy oracle).
+        rest-spans (when (seq ks) (vec (repeat (count ks) span)))]
     {:key k
      :key-span span
      :value (if (empty? ks)
@@ -703,7 +706,7 @@
               (ast source :attrset nil
                    {:attrs [(path->nested
                              source
-                             {:path (vec ks) :path-spans (vec spans) :value value})]
+                             {:path (vec ks) :path-spans rest-spans :value value})]
                     :recursive false
                     :span (ast-span value)}))}))
 

@@ -17,15 +17,10 @@
 
 - Nix 실제 스펙: 속성이 정의된 위치를 `{ file; line; column; }` 모양으로
   돌려준다.
-- 2026-08-19 5개 호스트 감사 결과:
-  - hy: `{file; line; column;}` — Nix 스펙과 일치하는 모양. 나중에 통일할
-    때 이게 목표 모양일 가능성이 높음.
-  - clj: `{start; end; span;}`(바이트 오프셋) — clj 자신의 todo.md에 이미
-    "line/column 추적 인프라가 생길 때까지의 임시방편"이라고 적어둠.
-  - clr: 2026-08-20에 `{file; line; column}` 구현됨.
-  - **cljs (여기)**: 2026-08-20에 `{file; line; column}` 구현됨
-    (hy 오라클과 동일). 생성된 attrset은 `null`.
-  - rs: 2026-08-20에 `{file; line; column}` 구현됨.
+- 2026-08-21 기준 5개 호스트 모두 `{file; line; column;}` (인라인 파일
+  라벨 `"<pnix-px>"`, 생성 attrset은 `null`, `inherit` 이름은 inherit 절
+  위치). clj는 2026-08-21에 파서 span에서 변환. **cljs (여기)** 는
+  2026-08-20에 hy 오라클과 같은 모양.
 - 방향 아이디어(확정 아님): line/column 추적은 이 빌트인 하나만을 위한 게
   아니라 에러 메시지 품질 전반에 같이 쓸 수 있는 인프라다 — 파싱/평가 에러가
   지금은 대부분 바이트 오프셋(`:offset`)만 주는데, 실제 Nix처럼

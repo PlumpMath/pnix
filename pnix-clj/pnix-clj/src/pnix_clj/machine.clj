@@ -1003,7 +1003,9 @@
                 :reason :machine-parse-failed
                 :error {:phase :parse :class :syntax-error}}
         (not= :ok (:status ok)) ok
-        :else (run-ast (:ast ok))))))
+        :else (binding [ev/*source-text* (str source)
+                        ev/*source-file* "<pnix-px>"]
+                (run-ast (:ast ok)))))))
 
 ;; ── report (M7g — the :machine report-artifact capability) ───────────────
 

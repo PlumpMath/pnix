@@ -99,23 +99,16 @@ open research로 남는다.
 공통 이식 가능 `.px` 라이브러리 트랙은 미룬 상태다 — 호스트-로컬 임포트
 작업을 그것 때문에 막지 않는다.
 
-## 미래 아이디어 — pnixMounts / unsafeGetAttrPos 모양 통일 (아직 예정 없음,
-2026-08-20)
+## 미래 아이디어 — pnixMounts (아직 예정 없음, 2026-08-21)
 
 지금은 만들지 않는다. `pnixMounts`는 Nix 빌트인이 아니고 이 제품에 발명하지
-않는다. `unsafeGetAttrPos` 자체는 5개 호스트에 이미 있다 — 남은 건 clj의
-`{start; end; span;}`을 hy/cljs/clr/rs의 `{file; line; column;}`로 맞추는
-일인데, 착수 확정 전이다.
+않는다.
 
 ### unsafeGetAttrPos 모양
 
-- Nix 실제 스펙: 속성이 정의된 위치를 `{ file; line; column; }` 모양으로
-  돌려준다.
-- 2026-08-20 5개 호스트 상태:
-  - hy / cljs / clr / rs: `{file; line; column;}` (인라인 파일 라벨
-    `"<pnix-px>"`, 생성 attrset은 null).
-  - **clj (여기)**: `{start; end; span;}`(바이트 오프셋) — 파서가 아직
-    line/column을 안 들고 있다. 인프라가 생기면 hy 모양으로 바꿀 수 있다.
+- Nix 실제 스펙: `{ file; line; column; }`. **5개 호스트 모두 이 모양**
+  (clj는 2026-08-21에 파서 span에서 변환). 인라인 파일 라벨 `"<pnix-px>"`.
+  생성 attrset은 null. `inherit` 이름은 inherit 절의 위치를 쓴다.
 - 방향 아이디어(확정 아님): line/column 추적은 이 빌트인 하나만을 위한 게
   아니라 에러 메시지 품질 전반에 같이 쓸 수 있는 인프라다 — 파싱/평가 에러가
   지금은 대부분 바이트 오프셋만 주는데, 실제 Nix처럼 "파일:줄:컬럼"으로

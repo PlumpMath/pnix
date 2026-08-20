@@ -1428,6 +1428,7 @@ struct PxParser {
     offs: Vec<usize>,
     pos: usize,
     src: String,
+    file: String,
 }
 
 impl PxParser {
@@ -1462,10 +1463,15 @@ impl PxParser {
 
     fn position_expr(&self, offset: usize) -> PxExpr {
         let (line, column) = self.source_line_column(offset);
+        let file = if self.file.is_empty() {
+            String::from("<pnix-px>")
+        } else {
+            self.file.clone()
+        };
         PxExpr::Attrs(vec![
             (
                 String::from("file"),
-                PxExpr::Str(vec![PxStrPart::Lit(String::from("<pnix-px>"))]),
+                PxExpr::Str(vec![PxStrPart::Lit(file)]),
             ),
             (String::from("line"), PxExpr::Int(line)),
             (String::from("column"), PxExpr::Int(column)),
@@ -2531,6 +2537,7 @@ impl PxParser {
                             while !self.peek_is(PxTok::Semi) {
                                 match self.toks.get(self.pos).cloned() {
                                     Some(PxTok::Ident(n)) => {
+                                        let off = self.cur_off();
                                         self.pos += 1;
                                         got_any = true;
                                         let value = match &from {
@@ -2543,8 +2550,8 @@ impl PxParser {
                                         entries.push((
                                             vec![PxStrPart::Lit(n.clone())],
                                             value,
-                                            0,
-                                            true,
+                                            off,
+                                            false,
                                         ));
                                     }
                                     _ => {
@@ -2613,7 +2620,7 @@ impl PxParser {
                                 Some(PxStrPart::Lit(s)) => s.clone(),
                                 _ => return Err(String::from("px parse: empty attrset key")),
                             };
-                            let pos = self.position_expr(seg_offs[i]);
+                            let pos = self.position_expr(first_off);
                             value = px_expr_attrs_with_pos(
                                 vec![(name.clone(), value)],
                                 vec![(name, pos)],
@@ -3757,19 +3764,29 @@ fn build_select_or(base: PxExpr, names: &Vec<String>, default: &PxExpr, idx: usi
     }
 }
 
-pub fn px_parse(src: &str) -> Result<PxExpr, String> {
+pub fn px_parse_in(src: &str, file: &str) -> Result<PxExpr, String> {
     let (toks, offs) = px_lex(src)?;
+    let file_label = if file.is_empty() {
+        String::from("<pnix-px>")
+    } else {
+        String::from(file)
+    };
     let mut p = PxParser {
         toks,
         offs,
         pos: 0,
         src: String::from(src),
+        file: file_label,
     };
     let expr = p.parse_expr()?;
     if p.pos != p.toks.len() {
         return Err(format!("px parse: trailing tokens at {}", p.cur_desc()));
     }
     Ok(expr)
+}
+
+pub fn px_parse(src: &str) -> Result<PxExpr, String> {
+    px_parse_in(src, "<pnix-px>")
 }
 
 // ---- evaluator ----------------------------------------------------------------
@@ -11577,7 +11594,14 @@ pub fn px_run_value_with_modules(
     modules: &Vec<(String, String)>,
     cur_key: &str,
 ) -> Result<PxVal, String> {
-    let ast = px_parse(src)?;
+    let file = if cur_key.len() > 1 && cur_key.starts_with('.') {
+        &cur_key[1..]
+    } else if cur_key.is_empty() {
+        "<pnix-px>"
+    } else {
+        cur_key
+    };
+    let ast = px_parse_in(src, file)?;
     let dir = px_key_dir(cur_key);
     let mut stack: Vec<String> = vec![String::from(cur_key)];
     let expanded = px_expand_imports(&ast, modules, &dir, &mut stack)?;

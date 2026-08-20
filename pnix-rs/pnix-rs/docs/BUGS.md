@@ -169,20 +169,10 @@ ceil/floor)를 그대로 따라 손으로 짰다). `atan2`(pnix-hy 오라클 고
   admission(`granted: &[String]`)은 **lane 내부 admission 규율**일 뿐,
   프로세스 샌드박싱이나 파일시스템 격리 같은 OS 수준 보장은 하지 않는다.
   P5 interop 설계 당시부터의 명시 미주장.
-- **`unsafeGetAttrPos`의 `file` 필드는 항상 `"<pnix-px>"`다 — 실제 eval
-  대상 파일 경로가 아니다.** (2026-08-21, Grok 커밋 `6f9049c` 감사 중
-  발견) `line`/`column`은 정확하다(오라클 pnix-hy와 실측 대조 완료 —
-  multi-line 소스에서 `{line=4; column=3;}` 등 정확히 일치). 원인은
-  구조적: rs는 `{file;line;column}` 리터럴을 **파싱 시점**에
-  `position_expr`(px.rs, `PxParser::position_expr`)에서 미리 구워
-  넣는데, `px_parse(src: &str)`는 파일 경로를 아예 모른다(10곳 넘는
-  호출부 중 다수가 `tower::reify`/self-test처럼 파일 개념 자체가 없는
-  합성 문자열이라 시그니처 확장이 간단하지 않음). pnix-hy/pnix-clr은
-  반대로 **eval 시점**(실제 파일 경로를 아는 context)에 위치 문자열을
-  만들어서 이 문제가 없다 — rs만 구조가 다르다. 버그라기보다 v0
-  경계지만, 고쳐지지 않은 상태로 남아 있다는 걸 명시한다: `pnix-rs
-  px-eval -f real/file.px`로 얻은 `unsafeGetAttrPos`도 `file`은 항상
-  `"<pnix-px>"`.
+- **인라인/`px_parse` 경로의 `unsafeGetAttrPos.file`은 `"<pnix-px>"`다.**
+  파일 eval(`-f` / `px_run_value_with_modules`)은 `px_parse_in`이 모듈
+  키에서 경로를 굽는다. `tower::reify` 등 합성 문자열은 파일 개념이
+  없어서 인라인 라벨을 유지한다.
 - **cross-host 파일-대-파일 자동 비교는 아직 미가동.** `pnix-rs
   export-oracles`로 `proof/oracles-rs.tsv`를 만들고 `cross-host-check`로
   자기 정합(drift/스키마/기대값)은 검증하지만, pnix-clj/pnix-hy 쪽에

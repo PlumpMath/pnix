@@ -6,12 +6,10 @@
 
 ## 현재 활성 작업 없음
 
-2026-08-20 기준 열린 작업이 없다. `CAPABILITIES.md` 자동 생성기는
-2026-08-20에 완료됐다([`CAPABILITIES.md`](CAPABILITIES.md),
-[`IMPLEMENTATION.md`](IMPLEMENTATION.md) §1·§7). `pnixMounts`/
-`unsafeGetAttrPos` 통일은 방향은 잡혀 있지만 착수 시점이 확정되지 않은
-항목이라 [`PLANS.md`](PLANS.md)에 있다 — 실제로 집어서 진행하기로
-결정되면 그때 이 파일로 옮겨온다.
+2026-08-21 기준 열린 작업이 없다. `CAPABILITIES.md` 자동 생성기는
+2026-08-20에 완료됐다. `unsafeGetAttrPos` 모양은 5개 호스트가
+`{file; line; column}`으로 맞춰졌다. `pnixMounts`는 아직
+[`PLANS.md`](PLANS.md)에 있다.
 
 관련 문서: [`IMPLEMENTATION.md`](IMPLEMENTATION.md) (뭐가 어떻게 구현돼
 있는지), [`BUGS.md`](BUGS.md) (알려진 버그·의도된 제한), [`PLANS.md`](PLANS.md)

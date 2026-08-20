@@ -88,6 +88,20 @@
               (source-result
                "let x = 5; in (rec { inherit x; y = x; }).y"))))))
 
+(deftest unsafe-get-attr-pos-inherit-and-dotted
+  (testing "inherit name keeps the inherit-clause position"
+    (let [src (str "let x = 1;\n"
+                   "s = {\n"
+                   "  inherit x;\n"
+                   "};\n"
+                   "in builtins.unsafeGetAttrPos \"x\" s")]
+      (is (= 3 (result-value (source-result (str "(" src ").line")))))
+      (is (= 11 (result-value (source-result (str "(" src ").column")))))))
+  (testing "dotted attrpath shares the first-segment position"
+    (is (= 3 (result-value
+              (source-result
+               "let s = {\n  a.b = 1;\n}; in (builtins.unsafeGetAttrPos \"b\" (s.a)).column"))))))
+
 (deftest unsupported-and-import-errors-are-failed
   (let [missing (source-result "import ./definitely-missing.px")
         escaped-root (source-result "import ../../../outside-root.px")

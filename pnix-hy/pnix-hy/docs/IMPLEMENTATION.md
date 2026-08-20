@@ -333,8 +333,7 @@ diff).
   다른 이유로 절대경로/scopedImport를 새로 만들거나 고쳐야 했던 것과
   대조적으로, 이 호스트는 그대로 기준(oracle) 역할을 했다.
 - **`unsafeGetAttrPos`는 `{file; line; column;}` Nix 스펙 모양.**
-  2026-08-20에 cljs/clr/rs도 같은 모양을 구현했다. clj만 아직
-  `{start; end; span;}` 바이트 오프셋 임시 모양.
+  2026-08-21 기준 5개 호스트 모두 이 모양 (clj는 파서 span에서 변환).
 
 ## 4. 범위 선언 (SCOPE LOCK)
 

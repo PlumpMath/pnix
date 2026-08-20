@@ -400,8 +400,9 @@ diff).
   (clr은 파일 컨텍스트가 없어서 명시적으로 거부; rs는 애초에 모듈 맵이
   안 채워짐).
 - **`pnixMounts`**: 아직 설계가 안 끝난 상태. `unsafeGetAttrPos`는
-  2026-08-20에 hy와 같은 `{file; line; column}`으로 구현됨. `pnixMounts`
-  방향은 [`docs/PLANS.md`](PLANS.md).
+  2026-08-20에 hy와 같은 `{file; line; column}`으로 구현됨. 인라인/`px_parse`
+  의 `file`은 `"<pnix-px>"`; `-f` 파일 eval은 `px_parse_in`이 모듈 키에서
+  실제 경로를 굽는다. `pnixMounts` 방향은 [`docs/PLANS.md`](PLANS.md).
 - **context 있는 문자열에 `.` select를 쓰면 clj 오라클과 다르게 동작한다
   (의도적).** clj는 `eval-select`가 `attrset-value?`가 아니라 맨 `map?`을
   써서 ctx-string의 내부 표현이 `a.string` 같은 select로 그대로 샌다

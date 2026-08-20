@@ -6332,22 +6332,33 @@
     (is (= 99 (:value (pnix/eval-source "builtins.addErrorContext \"ctx\" 99"))))))
 
 (deftest evaluator-unsafe-get-attr-pos-surfaces-parser-spans
-  (testing "direct attr key positions are retained"
-    (is (= {"span" [32 33] "start" 32 "end" 33}
+  (testing "direct attr key positions are Nix {file; line; column}"
+    (is (= {"file" "<pnix-px>" "line" 2 "column" 3}
            (:value (pnix/eval-source
-                    "builtins.unsafeGetAttrPos \"a\" { a = 1; }")))))
-  (testing "nested dotted attr path positions are retained on nested attrsets"
-    (is (= {"span" [35 36] "start" 35 "end" 36}
+                    "let s = {\n  a = 1;\n}; in builtins.unsafeGetAttrPos \"a\" s")))))
+  (testing "nested dotted attr path shares the first-segment position (Nix)"
+    (is (= {"file" "<pnix-px>" "line" 2 "column" 3}
            (:value (pnix/eval-source
-                    "builtins.unsafeGetAttrPos \"b\" ({ a.b = 1; }.a)")))))
+                    "let s = {\n  a.b = 1;\n}; in builtins.unsafeGetAttrPos \"a\" s"))))
+    (is (= {"file" "<pnix-px>" "line" 2 "column" 3}
+           (:value (pnix/eval-source
+                    "let s = {\n  a.b = 1;\n}; in builtins.unsafeGetAttrPos \"b\" (s.a)")))))
+  (testing "inherit name keeps the inherit-clause position"
+    (is (= {"file" "<pnix-px>" "line" 3 "column" 11}
+           (:value (pnix/eval-source
+                    (str "let x = 1;\n"
+                         "s = {\n"
+                         "  inherit x;\n"
+                         "};\n"
+                         "in builtins.unsafeGetAttrPos \"x\" s"))))))
   (testing "missing or synthetic position returns null"
     (is (nil? (:value (pnix/eval-source
                        "builtins.unsafeGetAttrPos \"z\" { a = 1; }"))))))
 
 (deftest evaluator-cur-pos-surfaces-var-parser-span
-  (is (= {"span" [0 8] "start" 0 "end" 8}
+  (is (= {"file" "<pnix-px>" "line" 1 "column" 1}
          (:value (pnix/eval-source "__curPos"))))
-  (is (= {"span" [8 16] "start" 8 "end" 16}
+  (is (= {"file" "<pnix-px>" "line" 1 "column" 9}
          (:value (pnix/eval-source "let p = __curPos; in p")))))
 
 (deftest evaluator-tostring-coercion

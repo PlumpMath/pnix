@@ -273,6 +273,15 @@
 (def ^:dynamic *import-origin*
   nil)
 
+(def ^:dynamic *source-text*
+  "Source string of the currently evaluating module; used to turn parser
+  byte spans into Nix {file; line; column}."
+  "")
+
+(def ^:dynamic *source-file*
+  "File label for source-position. Inline eval uses \"<pnix-px>\"."
+  "<pnix-px>")
+
 (def import-context-key
   "Reserved evaluator-env key carrying a module's normalized origin target.
   Closures and thunks capture their env, so this preserves relative-import
@@ -1139,15 +1148,32 @@
   [attrs]
   (vec (sort (keys attrs))))
 
+(defn- position-file-label
+  []
+  (let [f (str (or *source-file* *import-origin* ""))]
+    (if (or (empty? f)
+            (= f "<pnix-px>")
+            (.endsWith f "pnix-clj-inline.px"))
+      "<pnix-px>"
+      f)))
+
 (defn source-position
-  "The __curPos value for a source span. Public: the derived abstract machine
-  mirrors the evaluator's :var special case (which wins even over a lexical
-  shadow — bug-for-bug parity) through this one definition."
+  "Nix/hy {file; line; column} from a parser byte span into *source-text*.
+  Public: the derived abstract machine mirrors the evaluator's :var special
+  case (which wins even over a lexical shadow) through this one definition."
   [span]
   (when span
-    {"span" (vec span)
-     "start" (first span)
-     "end" (second span)}))
+    (let [source (str (or *source-text* ""))
+          n (count source)
+          start (long (or (first span) 0))
+          clamped (max 0 (min start n))
+          prefix (subs source 0 clamped)
+          line (inc (count (re-seq #"\n" prefix)))
+          line-start (or (str/last-index-of prefix "\n") -1)
+          column (if (neg? line-start) (inc clamped) (- clamped line-start))]
+      {"file" (position-file-label)
+       "line" line
+       "column" column})))
 
 (defn- attr-positions
   [attrs]
@@ -4652,9 +4678,8 @@
                      :builtin :scopedImport})))
 
       :unsafeGetAttrPos
-      ;; Return the parser span for an attr when it is still available on the
-      ;; attrset metadata. Nix uses file/line/column; this lane currently exposes
-      ;; byte/char offsets as a stable span receipt and returns null when absent.
+      ;; Return {file; line; column} for an attr when the parser span is still
+      ;; on the attrset metadata (Nix/hy shape). Null when absent.
       (let [[attr attrs] args]
         (if-not (attrset-value? attrs)
           (err/failed :builtin

@@ -301,17 +301,20 @@
      (let [{:keys [status ast] :as parsed} (parse-source source)]
        (if (= :ok status)
          (normalize-runtime-result
-          (assoc (if (seq evaluator/*import-modules*)
-                   (binding [evaluator/*import-resolver* in-memory-import-resolver]
-                     (if (seq evaluator/*import-context*)
-                       (eval-ast-lane
-                        ast
-                        (assoc evaluator/default-env
-                               evaluator/import-context-key
-                               (last evaluator/*import-context*)))
-                       (eval-ast-lane ast)))
-                   (eval-ast-lane ast))
-                 :parse-result parsed))
+          (binding [evaluator/*source-text* (str source)
+                    evaluator/*source-file* (or evaluator/*import-origin*
+                                                "<pnix-px>")]
+            (assoc (if (seq evaluator/*import-modules*)
+                     (binding [evaluator/*import-resolver* in-memory-import-resolver]
+                       (if (seq evaluator/*import-context*)
+                         (eval-ast-lane
+                          ast
+                          (assoc evaluator/default-env
+                                 evaluator/import-context-key
+                                 (last evaluator/*import-context*)))
+                         (eval-ast-lane ast)))
+                     (eval-ast-lane ast))
+                   :parse-result parsed)))
          parsed)))))
 
 (defn eval-file
