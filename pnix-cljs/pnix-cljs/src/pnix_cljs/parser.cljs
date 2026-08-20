@@ -199,6 +199,12 @@
     :left-bracket (parse-selection parser)
     :left-brace (parse-selection parser)
     :rec (parse-selection parser)
+    ;; Same reasoning as :integer/:string/etc above: without this, `:path`
+    ;; would fall through to the default `parse-expression` branch, which
+    ;; (once :path is in `atom-starts`, below) would misparse `[ ./a ./b ]`
+    ;; as a single-element list containing the application `(./a) (./b)`
+    ;; instead of a two-element list.
+    :path (parse-selection parser)
     (parse-expression parser)))
 
 (defn parse-list [parser]
@@ -250,6 +256,13 @@
                         {:op :scoped-import
                          :scope scope-expression
                          :path (:value path-token)}))
+      ;; A bare path literal used as an ordinary expression (`./x` outside
+      ;; `import`/`scopedImport`) -- previously had no case here at all, so
+      ;; any occurrence fell through to the `expected-expression` failure
+      ;; below (a path literal was consumable ONLY by the :import/
+      ;; :scopedImport cases above, which consume the :path TOKEN directly
+      ;; and never reach this generic case).
+      :path (do (advance! parser) {:op :path :value (:value token)})
       :left-paren (do
                     (advance! parser)
                     (let [expression (parse-expression parser)]
@@ -284,9 +297,12 @@
       expression)))
 
 (def atom-starts
+  ;; :path added so a bare path literal can be a function-call argument
+  ;; (`builtins.isPath ./x`) -- previously absent, so that was a parse
+  ;; failure (path tokens were consumable ONLY by :import/:scopedImport).
   #{:integer :float :string :interpolated-string :indented-string :uri
     :true :false :null :identifier
-    :import :scopedImport :left-paren :left-bracket :left-brace :rec})
+    :import :scopedImport :left-paren :left-bracket :left-brace :rec :path})
 
 (defn parse-application [parser]
   (loop [expression (parse-selection parser)]

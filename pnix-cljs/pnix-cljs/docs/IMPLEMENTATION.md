@@ -20,16 +20,22 @@ AST), `evaluator.cljs`(값 표현 + 평가기 + 빌트인, 가장 큼), `module.
   2026-08-19 추가 — pnix-clr의 `path-start?` 규칙을 그대로 참고: 숫자
   토큰 바로 뒤만 나눗셈, 그 외는 경로).
 - **파서**: `atom-starts`(어떤 토큰 종류가 함수 적용 인자를 시작할 수
-  있는지)에 `:path`가 **없다** — 그래서 `builtins.isPath ./x`처럼 경로를
-  일반 함수 인자로 못 쓴다(§5). `parse-primary`도 `:path` 토큰을 일반
-  식(expression)으로 변환하는 case가 아예 없음 — 경로 토큰은 **오직
-  `import`/`scopedImport` 문법 안에서만** 파서가 직접 소비한다(각각
-  `{:op :import :path "..."}`, `{:op :scoped-import :scope <ast> :path
-  "..."}`로, 문자열 그대로 AST에 박힘 — 평가 시점에 다시 해석 안 함).
+  있는지)에 `:path`가 있다(2026-08-20 추가, §9) — `builtins.isPath ./x`
+  처럼 경로를 일반 함수 인자로 쓸 수 있다. `parse-primary`도 `:path` 토큰을
+  `{:op :path :value "..."}` 식으로 변환하는 case가 있다(같은 날 추가).
+  `parse-list-element`에도 별도로 `:path` 케이스가 있음 — `:integer`/
+  `:string` 등과 같은 이유로, 없으면 `[ ./a ./b ]`가 기본(default) 분기인
+  `parse-expression`으로 떨어져서 `(./a) (./b)` 함수 적용 하나로
+  오파싱된다. `import`/`scopedImport` 문법은 이것과 **별개**다 — 그 둘은
+  여전히 파서가 `:path` 토큰을 직접 소비해서 `{:op :import :path "..."}`,
+  `{:op :scoped-import :scope <ast> :path "..."}`로, 문자열 그대로 AST에
+  박는다(평가 시점에 다시 해석 안 함) — `parse-primary`의 일반 `:path`
+  case에는 도달하지 않는, 이 두 예약어 자체의 전용 파싱 경로.
 - **값 표현**: 레코드 — `AttrsetValue{fields}`, `ClosureValue{...}`,
-  `ByteStringValue{bytes}`(비UTF-8 중간값). **경로 값 타입 없음**(rs와
-  같은 부류, clr/clj/hy와 다름) — `import`/`scopedImport` 밖에서 경로를
-  값으로 쓸 방법이 아예 없다(§5).
+  `ByteStringValue{bytes}`(비UTF-8 중간값), `ContextStringValue{content
+  context}`(§8), `PathValue{text}`(2026-08-20 추가, §9 — `text`는 항상
+  `normalize-path`로 정규화된 텍스트). `import`/`scopedImport` 밖에서도
+  이제 경로를 값으로 쓸 수 있다.
 - **환경/스코프**: `environment`는 **평범한 Clojure 맵**(`{name -> cell}`,
   clr의 프레임 체인이나 rs의 `Vec<PxFrame>`보다 단순). 지연 평가는
   `Cell`/`force-cell`(레코드 + memo). `module-context-key`라는 특수 키를
@@ -430,19 +436,22 @@ diff).
 
 ## 5. 다른 호스트와 알려진 차이점
 
-- **경로가 일반 값이 아니다.** `import`/`scopedImport` 문법 안에서만
-  파서가 경로 토큰을 직접 소비한다 — `builtins.isPath ./x`,
-  `let p = ./foo; in p` 같은 건 전부 파싱 에러. 언젠가 일반 Path 값
-  타입을 만들려면 `tokenizer.cljs`의 `:path` 토큰을 `parser.cljs`의
-  `parse-primary`에서도 받아들이게 하고, `evaluator.cljs`에 Path 값
-  표현을 새로 만들어야 함 — 2026-08-19에 `scopedImport`를 붙일 때 이
-  경로를 시도했다가(atom-starts에 `:path` 추가) 되돌린 적 있음(정확히는
-  `parse-primary`가 `:path`를 처리할 준비가 안 돼서 "expected-expression"
-  에러로 이어짐 — 절반만 고치면 오히려 더 헷갈리는 상태가 됨을 확인).
-- **`import`/`scopedImport`는 파서가 경로를 문자열 그대로 삼킴** — clr/clj
-  는 경로를 일반 AST 식으로 평가해서 얻지만(그래서 동적으로 계산된 경로도
-  이론상 가능), cljs는 파서 단계에서 리터럴 경로 토큰만 받는다(동적 경로
-  `import (if cond then ./a.px else ./b.px)` 같은 건 안 됨).
+- **경로가 일반 값이 아니었던 시기가 있었다(2026-08-20에 해소, §9).**
+  `import`/`scopedImport` 문법 밖에서 경로 토큰을 값으로 쓰는 게 전부
+  파싱 에러였다 — 이제는 `PathValue`가 생겨서 `builtins.isPath ./x`,
+  `let p = ./foo; in p` 둘 다 정상 동작한다. §9에 전체 설계/포팅 근거가
+  있다.
+- **경로 리터럴이 현재 파일 디렉터리로 절대화되지 않는다.** 실제 Nix는
+  상대 경로 리터럴을 그 파일의 디렉터리 기준 절대 경로로 만들지만, 이
+  호스트는 (다른 두 호스트와 함께, 오라클로 교차검증된) 리터럴 텍스트를
+  그대로 유지한다 — `./a + ./b` 같은 연산도 cur-dir을 절대 모른 채 순수
+  텍스트 이어붙이기+정규화로만 처리한다. §9 참고.
+- **`import`/`scopedImport`는 파서가 경로를 문자열 그대로 삼킴** — 다른
+  두 호스트는 경로를 일반 AST 식으로 평가해서 얻지만(그래서 동적으로
+  계산된 경로도 이론상 가능), cljs는 파서 단계에서 리터럴 경로 토큰만
+  받는다(동적 경로 `import (if cond then ./a.px else ./b.px)` 같은 건 안
+  됨) — `PathValue`를 값으로 쓸 수 있게 된 것과는 별개로, 이 제약은 그대로
+  남아 있다.
 - **환경이 프레임 체인이 아니라 평범한 맵.** clr(`[frame ...]`)이나
   rs(`Vec<PxFrame>`)보다 구조가 단순해서 스코프 주입(`load-module-scoped`)
   이 그냥 `merge` 한 줄로 끝난다 — clr처럼 새 프레임을 cons하거나 rs처럼
@@ -504,6 +513,7 @@ evaluator, 빌트인, cljs-meta self-host substrate, 예제, 문서 전부를
 | (커밋 전) | cross-host 빌트인 프레즌스 매트릭스에서 빠진 6개 중 `log`/`tan` 신규 구현(수학 빌트인, `ln`/`sin`/`cos` 바로 옆에 동일한 등록+dispatch 패턴으로 추가)과 `mapAttrs'` 신규 구현(유일한 참고 구현인 pnix-clj `evaluator.clj`의 알고리즘을 이식 — `f name value`로 `{ name; value; }` pair를 받아 반환된 `name`으로 결과 attrset을 재구성하는, `mapAttrs`와 달리 키를 바꿀 수 있는 변형, 중복 결과 이름은 `listToAttrs`와 동일하게 첫 항목이 우선). `nixVersion`은 이미 등록은 돼 있었지만 값이 `"2.34.7"`로 틀려 있던 걸 `"2.18.0-pnix"`(pnix-rs/pnix-hy와 일치)로 정정. `storeDir`/`langVersion`은 이미 올바른 값으로 등록돼 있어서 코드 변경 없음 — 애초에 프레즌스 매트릭스(§4)가 stale했던 케이스였다. |
 | (커밋 전) | `docs/CAPABILITIES.md` 자동 생성기 신설(§7) — `src/pnix_cljs/capabilities.cljs`가 `evaluator/builtins-value`를 직접 introspect(189개 키), `pnix-cljs.main`에 `capabilities`/`capabilities-check` 서브커맨드 추가, `bin/pnix-cljs-gate`에 drift 게이트로 편입. pnix-clj/pnix-hy/pnix-rs 세 호스트가 이미 갖고 있던 패턴을 이 호스트에 맞춰 이식(rs의 단일-문서 스코프를 참고, clj의 큰 네임스페이스 reflection 방식은 이 호스트 규모에 안 맞아 채택 안 함). |
 | (커밋 전) | 문자열 컨텍스트(string context) 추적 + `derivation`/`derivationStrict` 신규 구현(§8). `appendContext`/`getContext`/`hasContext` 신규, `unsafeDiscardStringContext`/`unsafeDiscardOutputDependency`를 죽은 `:identity` alias에서 실제 구현으로 교체, `+`/문자열 보간/약 20개 문자열 빌트인에 컨텍스트 전파 배선. 유일한 참고 구현(다른 JVM 호스트의 `evaluator.clj`)의 설계를 이 호스트 자체 관용구(레코드, 예외 기반 `evaluation-failure!`, `Cell`/`force-cell` 지연평가)로 이식 — JVM 전용 코드는 한 줄도 복사하지 않음(§ pnix-cljs 영구 규칙). |
+| (커밋 전) | **Path 값 타입 신설**(§9) — 이 호스트가 5개 호스트 중 마지막까지 진짜 Path 값이 없던 곳이었다(`builtins.isPath`가 하드코딩 `false`). `PathValue{text}` 레코드, `normalize-path`/`make-path`(생성 시점 정규화), `path-add`(`+` 연산), `parser.cljs`의 `parse-primary`/`atom-starts`/`parse-list-element`에 `:path` 케이스 추가(경로 리터럴이 이제 `import`/`scopedImport` 밖에서도 값이 됨), `typeOf`/`isPath`/`dirOf`/`baseNameOf`/`toPath`/`==`/`<`/`toJSON`/`toXML`/`toString`/문자열 보간/`materialize`/`readFile`류(`path-string`) 전부 배선. |
 
 ## 7. 이 문서가 코드와 어긋나지 않게 유지하는 법
 
@@ -698,3 +708,181 @@ shape(다중 출력 포함), `toJSON`/`concatStringsSep`/`replaceStrings`의
 
 알려진 한계(고칠 버그 아님, 의도된 시뮬레이션 범위)는 `BUGS.md`에
 정리했다.
+
+## 9. Path 값 타입 — 2026-08-20
+
+2026-08-20 이전까지 이 호스트는 5개 호스트 중 유일하게 진짜 Path 값이
+없었다: `builtins.isPath`가 하드코딩된 `false`였고, 경로 리터럴 토큰은
+`import`/`scopedImport` 문법에서만 파서가 직접 소비했다(§1/§5 옛 서술).
+바로 앞서 같은 날 이식된 문자열 컨텍스트 작업(§8)의 값-표현/전파 관용구를
+그대로 재사용해서 같은 자리에 Path 값 타입을 채웠다.
+
+### 값 표현 — `PathValue` 레코드
+
+`src/pnix_cljs/evaluator.cljs` 최상단(다른 레코드들 옆)에
+`(defrecord PathValue [text])`를 추가했다. **plain-string-backed**를
+골랐다(다른 두 호스트 중 한쪽은 순수 문자열, 다른 쪽은 문자열 키 태그
+맵) — 이 파일 고유의 관용구가 이미 새 태그 값 종류엔 레코드
+(`ContextStringValue`, §8)라서 그걸 그대로 따랐고, 태그 맵과 달리
+`PathValue`는 진짜 attrset과 절대 혼동되지 않는다(맵이 아니므로 `map?`류
+검사에 안 걸림). `text` 필드는 **항상** `normalize-path`로 정규화된 텍스트
+— 생성 지점(리터럴, `+` 연결, `toPath`, `dirOf`)마다 매번 정규화해서
+`==`/`<`가 저장된 텍스트를 재정규화 없이 바로 비교할 수 있게 했다.
+
+- `path-value?` — 술어.
+- `normalize-path` — `.`/`..` 세그먼트를 real Nix처럼 접는다: `.`은
+  사라지고, `..`는 접을 대상이 있으면 이전 세그먼트를 지운다. 접을 게
+  없으면 상대 경로는 `..`를 그대로 유지(뭘 기준으로 하는지 모르니 못
+  풀어냄), 절대 경로는 그냥 버림(루트 위로는 못 올라감). **cur-dir로
+  절대화하지 않는다** — 상대 리터럴은 정규화된 상대 텍스트(`./a/b`)를
+  그대로 유지한다. 이건 실제 Nix(파일 위치 기준 절대 경로로 만듦)와는
+  다르지만, 다른 두 호스트도 같은 선택(리터럴 텍스트만 정규화, cur_dir
+  조인 없음)을 하는 걸 오라클로 직접 확인하고 따른 것 — 의도적
+  divergence, `BUGS.md`에는 이미 다른 두 호스트가 공유하는 설계 선택으로
+  기록돼 있으므로 이 호스트 몫만 추가.
+- `make-path` — 모든 `PathValue` 생성이 거쳐야 하는 단일 관문(`(->PathValue
+  (normalize-path s))`).
+
+### 파서 — 경로 리터럴이 이제 진짜 식(expression)이다
+
+- `parser.cljs`의 `parse-primary`에 `:path` case를 추가:
+  `{:op :path :value (:value token)}`.
+- `atom-starts`에 `:path`를 추가 — `builtins.isPath ./x`처럼 함수 적용
+  인자로 쓸 수 있게 됐다.
+- `parse-list-element`에도 **별도로** `:path (parse-selection parser)`를
+  추가해야 했다 — 이게 없으면 `:path`는 이 함수의 default 분기인
+  `parse-expression`(완전한 식 문법, 이항 연산자 포함)으로 떨어지는데,
+  `atom-starts`에 `:path`가 들어간 뒤라서 `[ ./a ./b ]`의 첫 원소를 파싱할
+  때 `./a`를 `./b`에 함수 적용하는 것으로 오파싱해버린다(2원소 리스트가
+  아니라 1원소 리스트가 됨). `:integer`/`:string` 등 다른 원자 토큰들이
+  이미 이 함수 안에서 `parse-selection`(원자 + `.` 선택만, 연산자 없음)을
+  쓰는 것과 같은 이유로 `:path`도 나란히 추가.
+- `import`/`scopedImport`는 **영향 없음** — 그 둘은 여전히 자기 case 안에서
+  `:path` 토큰을 직접 소비해 `{:op :import ...}`/`{:op :scoped-import
+  ...}`를 만들고, `parse-primary`의 새 일반 `:path` case에는 도달하지
+  않는다(오프-경로 순서: `:import`/`:scopedImport`가 별개 case로 먼저
+  매치됨). `evaluator.cljs`도 마찬가지로 `evaluate-expression`에 새
+  `:path` case를 추가했을 뿐, `:import`/`:scoped-import` case는 손대지
+  않았다.
+
+### 전파 지점
+
+- **`+`** (`numeric-binary`, `path-add`로 분리): Path+Path/Path+String은
+  두 피연산자의 **표시 텍스트를 구분자 없이** 이어붙인 뒤
+  `normalize-path`로 정규화(`./a + ./../b`가 `./a./../b`라는 리터럴이
+  아니라 `./b`로 접힘). String+Path는 반대 방향으로 코어스하지만 결과가
+  **평범한 문자열**(Path 아님). 오직 **컨텍스트 없는 plain 문자열**만
+  Path와 섞일 수 있다 — `ByteStringValue`나 컨텍스트 있는
+  `ContextStringValue`가 섞이면 Path에 컨텍스트를 실을 자리가 없으므로
+  `toPath`와 같은 fail-closed 태도로 거부(`"unsupported-path-operand"`).
+- **`${...}` 문자열 보간** (`evaluate-string-segments`): 경로 자신의
+  리터럴 텍스트를 그대로 삽입하지 **않는다** — 실제 Nix가 "경로를 store에
+  복사하고 그 store path를 보간"하는 걸 흉내내서, `fake-store-path-for`가
+  §8의 `derivation-paths`/`hash-bytes`와 같은 의사-해시 관용구
+  (`sha256` 앞 32자 + basename)로 `/nix/store/<hash>-<basename>` 문자열을
+  만들어 삽입한다. **주의**: 이 대체 텍스트는 `collected`(문자열
+  컨텍스트)에 아무것도 얹지 않는다 — 이건 참고로 삼은 다른 호스트의
+  최근 구현을 그대로 옮긴 것이고, 실제로는 "이 문자열이 이 경로에
+  의존한다"는 진짜 의존성 정보가 여기서 빠지는 셈이라 잠재적 gap으로 보인다
+  (아래 "판단 콜" 참고 — 일부러 고치지 않고 참고 구현 그대로 포팅함).
+- **`==`/`<`**(`equal-values*`/`ordered-less`): `PathValue`는 생성
+  시점에 이미 정규화돼 있으므로 저장된 `text`를 바이트 단위로 비교하는
+  것만으로 충분(`equal-bytes?`/`compare-bytes`, 이 파일이 문자열 비교에
+  이미 쓰던 것과 동일한 헬퍼). Path와 다른 타입을 섞으면(`==`는 false,
+  `<`는 type-error) — 문자열/숫자/리스트/attrset과 같은 기존 패턴 그대로.
+- **`typeOf`/`isPath`**: `typeOf`가 `"path"`를 반환하도록, `isPath`가
+  하드코딩 `false`이던 걸 `(path-value? argument)`로 교체.
+- **`dirOf`/`baseNameOf`**: `dirOf`는 Path 입력이면 Path를 반환(헤드
+  텍스트를 다시 `make-path`로 정규화), 문자열 입력이면 기존 문자열 전용
+  경로를 그대로 유지(둘 다 오라클 검증). `baseNameOf`는 입력이 Path든
+  문자열이든 **항상 평범한 문자열**을 반환(오라클 확인, 두 호스트 모두
+  동일).
+- **`toPath`**: 이제 평범한 문자열이 아니라 진짜 `PathValue`를 반환한다.
+  **`string -> path`라는 실제 Nix 시그니처를 그대로 유지** — Path 인자
+  자체를 넣으면 type-error(다른 두 호스트 중 하나가 더 관대하게 Path
+  패스스루도 받아주지만, 나머지 한쪽 오라클로 직접 확인한 결과
+  `builtins.toPath ./x`가 거기서도 에러였다 — 그래서 실제 Nix 시그니처
+  + 오라클 둘 다에 맞춰 **거부**를 선택). 컨텍스트 있는 문자열 인자도
+  거부(전엔 컨텍스트를 그대로 유지한 채 통과시켰는데, 이제 결과가
+  Path라서 컨텍스트를 실을 자리가 없어졌다 — 조용히 버리는 대신
+  `"string-context-frontier"`로 명시적 거부).
+- **`toString`**(`nix-to-string`) / **`toJSON`**(`to-json-value`) /
+  **`toXML`**(`to-xml-value`) / **`materialize`**(canonical 출력 경계):
+  전부 Path를 **자기 자신의 정규화된 텍스트**로 직렬화한다(`${...}` 보간과
+  달리 의사 store path를 안 만듦). `toXML`만 `<string>`을 재사용하지 않고
+  **전용 `<path value="..." />` 태그**를 쓴다(다른 두 호스트 중 하나도
+  전용 태그를 쓰는 걸 오라클로 확인, 이 파일 자체의 `value="..."` leaf
+  속성 관용구와도 맞음).
+- **`readFile`/`readDir`/`pathExists`**(`path-string`): 이제 Path 인자를
+  받을 수 있다 — 전엔 경로 리터럴이 애초에 함수 인자가 될 수 없어서 도달
+  불가능했던 코드 경로.
+
+### 판단 콜 — 참고 구현들이 서로 다른 지점
+
+여러 참고 구현을 대조하다 서로 갈리는 지점이 몇 군데 있었다. 여기서
+내린 선택과 근거:
+
+1. **`${...}` 보간의 컨텍스트 미추적.** 위에 적었듯, 가장 최근에 참고한
+   구현은 의사 store path로 치환하되 컨텍스트에 아무것도 안 얹는다. 더
+   오래된 다른 참고 구현은 반대로 경로의 리터럴 텍스트 자체를 그대로
+   삽입하면서 그 텍스트 자체를 컨텍스트 원소로 얹는다(진짜 의존성 추적).
+   이 호스트는 **가장 최근 구현을 그대로 포팅**했다 — 이번 포팅이 그
+   구현을 "이걸 그대로 이식하라"는 명시적 지시로 받았고, 스스로 판단해
+   설계를 하나 더 얹는 대신 명시된 참고를 충실히 재현하는 쪽을 택했다.
+   다만 이건 실제로 gap일 수 있어 보인다(문자열 컨텍스트 기능 전체의
+   존재 이유가 의존성 추적인데, 의사 store path 치환은 그 추적에서
+   빠짐) — 나중에 다시 볼 가치가 있는 지점으로 남겨둔다.
+2. **`toPath`의 Path 인자 처리.** 위에 적었듯 두 참고 구현이 갈려서,
+   실제 Nix 시그니처(`string -> path`)와 오라클로 실측 확인한 쪽 모두에
+   맞춰 거부를 선택했다.
+3. **`toJSON`의 출력 모양.** 오래된 쪽 참고 구현은 Path를 JSON으로 찍을
+   때 내부 태그 맵 표현이 그대로 새어나가는 것처럼 보였다(경로 값이
+   `{"__pnix_value_kind":"path","path":"./a/b"}`로 직렬화됨 — 실제 Nix의
+   `--json`이 경로를 평범한 문자열로 찍는 것과 다름, 아마 그쪽의 버그).
+   이 호스트는 실제 Nix 동작 + 최근 참고 구현 둘 다와 일치하는 **평범한
+   JSON 문자열**(`"./a/b"`)을 택했다.
+
+### 검증 결과 (2026-08-20)
+
+`node pnix-cljs/dist/pnix-cljs.js -e 'EXPR'`로 아래 전부 확인(오라클과 구조
+일치, 위 "판단 콜" 3곳만 의도된 차이):
+
+```
+builtins.typeOf ./foo                          -> "path"
+builtins.isPath ./foo                           -> true
+builtins.isPath "not-a-path"                     -> false
+(./a) + (./b)                                    -> "./a./b"
+./a + "b"                                        -> "./ab"
+"a" + ./b                                        -> "a./b"
+builtins.dirOf ./a/b/c                           -> "./a/b"
+builtins.baseNameOf ./a/b/c                      -> "c"
+./a == ./a                                       -> true
+./a == ./../x/a                                  -> false
+let p = ./world; in "hello ${p}"                 -> "hello /nix/store/<hash>-world"
+builtins.toPath "/x/y"                           -> "/x/y" (typeOf "path")
+builtins.toPath ./x/y                            -> 실패(type-error)
+builtins.toJSON ./a/b                            -> "\"./a/b\""
+builtins.toXML ./a/b                             -> <path value="./a/b" />
+builtins.toString ./a/b                          -> "./a/b"
+./a/../../b                                      -> "../b"
+/a/../../b                                       -> "/b"
+[ ./a ./b ]                                      -> 2원소 리스트 (오파싱 아님)
+./a - ./b, ./a + 1                               -> 둘 다 type-error
+```
+
+기존 게이트(`bin/pnix-cljs-gate --rebuild`, `bin/pnix-cljs-identity-gate`)
+전부 그린 — 특히 `import`/`scopedImport`(직접 재현 테스트로 추가 확인,
+회귀 없음)와 `derivation`/`placeholder`의 의사-해시 경로(§8의
+`hash-bytes`/`derivation-paths`를 `fake-store-path-for`가 그대로 재사용,
+회귀 없음). `test/pnix_cljs/self_test.cljs`에 위 검증 항목 상당수를
+회귀 방지용으로 추가.
+
+### 이 seed에서 새로 발생한 제한
+
+`BUGS.md`에 정리(아래는 요약):
+
+- 경로 리터럴 안 `${...}` 동적 보간(`./a/${x}`)은 지원 안 함(렉서가 경로
+  문자로 `{`/`}`를 애초에 인정 안 함) — 다른 참고 구현들도 마찬가지로 이
+  구문에서 에러가 나는 걸 오라클로 확인, 이 호스트만의 새 제한이 아님.
+- `${...}` 보간의 의사 store path가 문자열 컨텍스트에 안 얹힘(위 "판단
+  콜" 1번) — 참고 구현을 충실히 재현한 결과지만 잠재적 gap.

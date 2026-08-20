@@ -30,7 +30,29 @@
    ["builtins.filterAttrsRecursive (name: value: name == \"license\") { meta = { license = \"MIT\"; }; }"
     "done" {}]
    ["builtins.filterAttrsRecursive (name: value: name == \"keep\" || name == \"meta\") { meta = { license = \"MIT\"; }; keep = 1; }"
-    "done" {"keep" (js/BigInt "1") "meta" {}}]])
+    "done" {"keep" (js/BigInt "1") "meta" {}}]
+   ;; Path value type (2026-08-20 addition)
+   ["builtins.typeOf ./foo" "done" "path"]
+   ["builtins.isPath ./foo" "done" true]
+   ["builtins.isPath \"not-a-path\"" "done" false]
+   ["(./a) + (./b)" "done" "./a./b"]
+   ["./a + \"b\"" "done" "./ab"]
+   ["\"a\" + ./b" "done" "a./b"]
+   ["builtins.dirOf ./a/b/c" "done" "./a/b"]
+   ["builtins.baseNameOf ./a/b/c" "done" "c"]
+   ["./a == ./a" "done" true]
+   ["./a == ./../x/a" "done" false]
+   ["builtins.toPath \"/x/y\"" "done" "/x/y"]
+   ["builtins.typeOf (builtins.toPath \"/x/y\")" "done" "path"]
+   ["builtins.toPath ./x/y" "failed" nil]
+   ["builtins.toJSON ./a/b" "done" "\"./a/b\""]
+   ["builtins.toString ./a/b" "done" "./a/b"]
+   ["./a/../../b" "done" "../b"]
+   ["/a/../../b" "done" "/b"]
+   ["[ ./a ./b ]" "done" ["./a" "./b"]]
+   ["let p = ./a; in builtins.typeOf (builtins.dirOf p)" "done" "path"]
+   ["./a - ./b" "failed" nil]
+   ["./a + 1" "failed" nil]])
 
 (defn -main [& _]
   (doseq [[source expected-kind expected-value] cases]

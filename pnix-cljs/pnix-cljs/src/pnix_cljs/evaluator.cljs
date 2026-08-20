@@ -9,7 +9,7 @@
 (declare evaluate-expression evaluate-tail equal-values equal-values*
          equal-values-in-container ordered-less checked-integer
          evaluation-failure! force-cell integer-value? json-parse-value
-         to-json-value string-text apply-value value-cell)
+         to-json-value string-text apply-value value-cell fake-store-path-for)
 (declare materialize)
 
 (defrecord ClosureValue [parameter body environment])
@@ -17,6 +17,19 @@
 (defrecord AttrsetValue [fields])
 (defrecord ByteStringValue [bytes])
 (defrecord Cell [expression environment state])
+;; A real path value (2026-08-20 addition -- this host previously had no Path
+;; value type at all: `builtins.isPath` was hardcoded `false` and a path
+;; literal token was consumed ONLY by `import`/`scopedImport` syntax; a bare
+;; path expression like `./x` used anywhere else was a PARSE failure, not a
+;; value. `text` is always the NORMALIZED path text (see `normalize-path`
+;; below) -- plain-string-backed, matching pnix-rs's `PxVal::Path(String)`
+;; choice (`pnix-rs/src/px.rs`) rather than a sibling host's tagged-map
+;; design (a plain map with a sentinel `"__pnix_value_kind"` field): this
+;; file's own precedent for a new tagged value kind is already the
+;; defrecord form (`ContextStringValue` below), so a defrecord is the
+;; natural fit here too, and unlike a tagged-map path value, PathValue is
+;; never confused with a genuine attrset since it isn't a plain map.
+(defrecord PathValue [text])
 
 ;; --- String context (pure simulation of Nix string context) ----------------
 ;;
@@ -69,6 +82,64 @@
   strings, ByteStringValue, or non-string values alike)."
   [value]
   (if (ctx-string? value) (:context value) []))
+
+;; --- Path values -------------------------------------------------------------
+;;
+;; Ported from pnix-rs's `px_normalize_path`/`PxVal::Path` construction
+;; invariant (`pnix-rs/src/px.rs`), itself checked against another host
+;; oracle's path-literal/`+` behavior (no cur-dir absolutization, no
+;; separator inserted on concat). See docs/IMPLEMENTATION.md for the full
+;; writeup.
+
+(defn path-value?
+  [value]
+  (instance? PathValue value))
+
+(defn normalize-path
+  "Lexically collapse `.`/`..` segments the way Nix collapses a path's
+  segments at construction: a `.` segment vanishes, and a `..` segment
+  cancels the previous real segment when there is one to cancel. When there
+  is nothing left to cancel, a relative path keeps the `..` (it cannot be
+  resolved without knowing what it is relative to), while an absolute path
+  just drops it (it can never climb above `/`). This does NOT absolutize a
+  relative path against any current-directory -- pnix-cljs paths stay
+  literal relative text, matching a shared (oracle-checked) divergence from
+  real Nix that pnix-rs and another host both independently converged on.
+  Every PathValue is normalized at
+  the moment it is built (bare literal, `+` concat, `toPath`, `dirOf`) so
+  `==`/`<` can compare the stored text directly without re-normalizing."
+  [s]
+  (let [absolute? (.startsWith s "/")
+        segments
+        (reduce (fn [result segment]
+                  (cond
+                    (or (= segment "") (= segment ".")) result
+
+                    (= segment "..")
+                    (if (and (seq result) (not= (peek result) ".."))
+                      (pop result)
+                      (if absolute? result (conj result "..")))
+
+                    :else (conj result segment)))
+                []
+                (.split s "/"))]
+    (cond
+      absolute?
+      (str "/" (apply str (interpose "/" segments)))
+
+      (empty? segments)
+      "."
+
+      :else
+      (str (when (not= (first segments) "..") "./")
+           (apply str (interpose "/" segments))))))
+
+(defn make-path
+  "The single chokepoint every PathValue must pass through: normalizes `s`
+  (see `normalize-path`) at construction time so later comparisons never
+  need to re-normalize."
+  [s]
+  (->PathValue (normalize-path s)))
 
 (def module-context-key ::module-context)
 (def force-dependency-key ::force-dependency)
@@ -541,6 +612,11 @@
       (do (vswap! collected into (:context value))
           (js/JSON.stringify (:content value)))
 
+      ;; A path serializes as its own (normalized) text, same as toString --
+      ;; unlike `${...}` interpolation, toJSON does not fabricate a store
+      ;; path.
+      (path-value? value) (js/JSON.stringify (:text value))
+
       (string? value) (js/JSON.stringify value)
 
       (instance? ByteStringValue value)
@@ -721,6 +797,25 @@
                                  (ctx-string? value)
                                  (do (vswap! collected into (:context value))
                                      (:content value))
+
+                                 ;; `"${p}"` on a bare path does NOT splice
+                                 ;; the path's own literal text -- real Nix
+                                 ;; copies the path to the store and
+                                 ;; interpolates the resulting store path.
+                                 ;; pnix-cljs has no on-disk store, so this
+                                 ;; fabricates a deterministic pseudo store
+                                 ;; path the same way `derivation`'s pseudo
+                                 ;; output paths are built. Ported from
+                                 ;; pnix-rs's `PxVal::Path` interpolation arm
+                                 ;; (`src/px.rs`) -- note it does NOT union
+                                 ;; anything onto `collected` either (the
+                                 ;; fabricated text is not tracked as a
+                                 ;; context dependency), which is a real,
+                                 ;; deliberately-preserved gap: ported as-is
+                                 ;; rather than silently "fixed" here, see
+                                 ;; docs/IMPLEMENTATION.md.
+                                 (path-value? value)
+                                 (fake-store-path-for (:text value))
 
                                  :else
                                  (evaluation-failure!
@@ -911,10 +1006,44 @@
                                               (nil? value) "null"
                                               :else "other")}})))
 
+(defn path-add
+  "`+` on at least one Path operand (oracle-pinned, ported from pnix-rs's
+  `PxVal::Path` arms in `px_binary_outcome`, `src/px.rs`): Path+Path and
+  Path+String concatenate the RAW display text of both operands -- NO `/`
+  separator is inserted, relying on `normalize-path` (via `make-path`) to
+  collapse whatever the literal text produces, so `./a + ./../b` collapses
+  to `./b` rather than staying as the literal `./a./../b`. String+Path
+  coerces the other direction and stays a plain STRING (Nix resolves a
+  path argument via the filesystem for `path + string`, but this
+  simulation just joins the stored text either way). Only a PLAIN string
+  (not ByteStringValue, not a context-bearing ContextStringValue) coerces on
+  the string side -- a context-bearing operand has nowhere to carry its
+  context on a Path result, so it fails closed here exactly like
+  `builtins.toPath` does, rather than silently dropping the dependency
+  marker. Anything else paired with a Path (number/bool/list/attrset/null/
+  raw bytes) is a type error."
+  [left right]
+  (cond
+    (and (path-value? left) (path-value? right))
+    (make-path (str (:text left) (:text right)))
+
+    (and (path-value? left) (string? right))
+    (make-path (str (:text left) right))
+
+    (and (string? left) (path-value? right))
+    (str left (:text right))
+
+    :else
+    (evaluation-failure! "type-error"
+                         {"operation" "+"
+                          "detail_class" "unsupported-path-operand"})))
+
 (defn numeric-binary [operation left right]
-  (if (and (= operation :add)
-           (string-value? left)
-           (string-value? right))
+  (cond
+    (and (= operation :add) (or (path-value? left) (path-value? right)))
+    (path-add left right)
+
+    (and (= operation :add) (string-value? left) (string-value? right))
     ;; String `+` concat carries context: contents join at the byte level
     ;; exactly as before, and the result's context is the union of both
     ;; operands' (ctx-string collapses to a plain value when both are
@@ -926,6 +1055,8 @@
      (decode-byte-string
       (concatenate-byte-arrays [(string-bytes left) (string-bytes right)]))
      (into (vec (string-ctx left)) (string-ctx right)))
+
+    :else
     (let [left (require-number left)
           right (require-number right)]
       (if (and (integer-value? left) (integer-value? right))
@@ -1069,6 +1200,10 @@
                             {"operation" "toString"
                              "detail_class" "string-context-frontier"}))
 
+     ;; toString on a path returns its own (normalized) text -- unlike
+     ;; `${...}` interpolation, it does NOT fabricate a store path.
+     (path-value? value) (:text value)
+
      (string-value? value) value
      (integer-value? value) (str value)
      (number? value) (cond
@@ -1139,6 +1274,25 @@
     (.update hasher (js/Array.from bytes))
     (apply str (map byte-hex (.digest hasher)))))
 
+(defn fake-store-path-for
+  "A bare path interpolated into a string (`\"${p}\"`) does not stay its own
+  literal text -- real Nix copies the path to the store and splices the
+  resulting store path in. pnix-cljs has no on-disk store, so this
+  fabricates a deterministic-looking `/nix/store/<hash>-<basename>` string
+  the same way `derivation`'s pseudo store paths are built below
+  (`derivation-paths`) -- a sha256 of a tagged string, truncated to 32 hex
+  chars, reusing this file's own `hash-bytes` pseudo-hash infrastructure
+  rather than inventing a second one. NOT byte-compatible with a real Nix
+  store path, purely a simulation so downstream string operations on the
+  interpolated text have the expected shape. Unlike `toString`/`dirOf`/etc,
+  which keep working on the path's own normalized text, this coercion is
+  specific to the `${...}` interpolation surface. Ported from pnix-rs's
+  `px_fake_store_path_for` (`src/px.rs`)."
+  [path-text]
+  (let [hex (hash-bytes "sha256" (.encode utf8-encoder (str "path:" path-text)))
+        basename (last (str/split path-text #"/"))]
+    (str "/nix/store/" (subs hex 0 32) "-" basename)))
+
 (defn parse-derivation-name [value]
   (when-not (string? value)
     (evaluation-failure! "type-error" {"operation" "parseDrvName"}))
@@ -1169,6 +1323,12 @@
 
 (defn path-string [value operation]
   (cond
+    ;; readFile/readDir/pathExists take `path | string` in real Nix; a bare
+    ;; path expression reaches here now that path literals are real values
+    ;; (previously unreachable, since a bare `./x` argument was a parse
+    ;; failure before this file had a Path value type).
+    (path-value? value) (:text value)
+
     (string-value? value)
     (let [s (if (instance? ByteStringValue value)
               (.decode (js/TextDecoder. "utf-8") (:bytes value))
@@ -1321,6 +1481,12 @@
       (number? value) (str "<float>" value "</float>")
       (string-value? value)
       (str "<string value=\"" (escape-xml (string-text value)) "\" />")
+      ;; Distinct `<path>` tag (oracle: another host's toXML also gives
+      ;; paths their own tag rather than reusing `<string>`), consistent
+      ;; with this file's own `value="..."` leaf-attribute idiom used above
+      ;; for bool/string.
+      (path-value? value)
+      (str "<path value=\"" (escape-xml (:text value)) "\" />")
       (vector? value)
       (str "<list>"
            (apply str (map to-xml-value value))
@@ -1958,12 +2124,13 @@
       :isInt (integer-value? argument)
       :isList (vector? argument)
       :isNull (nil? argument)
-      :isPath false
+      :isPath (path-value? argument)
       :isString (string-value? argument)
       :typeOf (cond
                 (integer-value? argument) "int"
                 (number? argument) "float"
                 (boolean? argument) "bool"
+                (path-value? argument) "path"
                 (string-value? argument) "string"
                 (nil? argument) "null"
                 (vector? argument) "list"
@@ -2061,14 +2228,22 @@
 
       :toString (let [collected (volatile! [])]
                   (ctx-string (nix-to-string argument collected) @collected))
+      ;; builtins.toPath : string -> path (real Nix signature -- a Path
+      ;; argument is itself a type error here, oracle-confirmed against
+      ;; another host: `builtins.toPath ./x` fails there too, so this does
+      ;; NOT mirror pnix-rs's more permissive Path-passthrough choice). Now
+      ;; returns a real PathValue rather than a plain string. A
+      ;; context-bearing string argument is rejected outright rather than
+      ;; silently dropping its dependency marker -- a Path cannot carry
+      ;; context, matching the same fail-closed stance `path-add` takes.
       :toPath (cond
                 (and (string? argument) (.startsWith argument "/"))
-                (normalize-absolute-path argument)
+                (make-path (normalize-absolute-path argument))
 
-                (and (ctx-string? argument)
-                     (.startsWith (:content argument) "/"))
-                (ctx-string (normalize-absolute-path (:content argument))
-                            (:context argument))
+                (ctx-string? argument)
+                (evaluation-failure! "type-error"
+                                     {"operation" "toPath"
+                                      "detail_class" "string-context-frontier"})
 
                 :else
                 (evaluation-failure! "type-error"
@@ -3136,12 +3311,26 @@
       :splitVersion
       (vec (str/split
             (string-text (require-string-arg argument "splitVersion")) #"[.\-]"))
+      ;; dirOf : path | string -> path | string -- a Path input routes
+      ;; through the identical head-extraction logic and stays Path-shaped
+      ;; (re-normalized via `make-path`, matching pnix-rs); a string input
+      ;; is unchanged from before this file had a Path value type.
       :dirOf
-      (let [s (string-text (require-string-arg argument "dirOf"))
-            i (str/last-index-of s "/")]
-        (cond (nil? i) "." (zero? i) "/" :else (subs s 0 i)))
+      (if (path-value? argument)
+        (let [s (:text argument)
+              i (str/last-index-of s "/")]
+          (make-path (cond (nil? i) "." (zero? i) "/" :else (subs s 0 i))))
+        (let [s (string-text (require-string-arg argument "dirOf"))
+              i (str/last-index-of s "/")]
+          (cond (nil? i) "." (zero? i) "/" :else (subs s 0 i))))
+      ;; baseNameOf : path | string -> string -- always a plain string
+      ;; result (oracle-confirmed across every host checked), regardless of
+      ;; whether the input was a Path or a string.
       :baseNameOf
-      (last (str/split (string-text (require-string-arg argument "baseNameOf")) #"/"))
+      (let [s (if (path-value? argument)
+                (:text argument)
+                (string-text (require-string-arg argument "baseNameOf")))]
+        (last (str/split s #"/")))
       :toInt
       (let [s (str/trim (string-text (require-string-arg argument "toInt")))]
         (if (re-matches #"-?\d+" s)
@@ -3689,6 +3878,14 @@
         (or (string-value? left) (string-value? right))
         false
 
+        ;; Every PathValue is normalized at construction, so plain text
+        ;; comparison here already IS normalized-path comparison.
+        (and (path-value? left) (path-value? right))
+        (equal-bytes? (string-bytes (:text left)) (string-bytes (:text right)))
+
+        (or (path-value? left) (path-value? right))
+        false
+
         (and (numeric-value? left) (numeric-value? right))
         (if (or (number? left) (number? right))
           (= (as-double left) (as-double right))
@@ -3742,6 +3939,9 @@
       (cond
         (and (string-value? left) (string-value? right))
         (< (compare-bytes (string-bytes left) (string-bytes right)) 0)
+
+        (and (path-value? left) (path-value? right))
+        (< (compare-bytes (string-bytes (:text left)) (string-bytes (:text right))) 0)
 
         (and (numeric-value? left) (numeric-value? right))
         (if (or (number? left) (number? right))
@@ -3950,6 +4150,14 @@
     :boolean (:value expression)
     :null nil
     :variable (lookup environment (:name expression))
+    ;; A bare path literal used as an ordinary expression (`./x` outside
+    ;; `import`/`scopedImport`) -- previously unreachable here at all
+    ;; (parse-primary had no :path case, so this was a PARSE failure, not an
+    ;; eval-time value). `import`/`scopedImport` are unaffected: those
+    ;; consume the `:path` TOKEN directly at parse time into their own
+    ;; `{:op :import :path "..."}` / `{:op :scoped-import :path "..."}` AST
+    ;; shape, which never reaches this `:path` case.
+    :path (make-path (:value expression))
     :import (load-module (:path expression) environment)
     :scoped-import (load-module-scoped (:path expression)
                                        (evaluate-expression (:scope expression)
@@ -4104,6 +4312,12 @@
       ;; boundary specifically -- NOT inside evaluation, where it is tracked
       ;; and gated throughout).
       (ctx-string? value) (:content value)
+
+      ;; A path materializes to its own (normalized) text, same as toString/
+      ;; toJSON -- the canonical/machine-outcome boundary has no distinct
+      ;; representation for "path" vs "string" (matches real Nix's own JSON
+      ;; output, which also renders both as plain JSON strings).
+      (path-value? value) (:text value)
 
       (vector? value)
       (mapv materialize value)

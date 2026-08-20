@@ -2452,6 +2452,15 @@
                         (ctx-string? v)
                         (do (vswap! collected into (string-ctx v))
                             (string-content v))
+                        ;; A path value serializes as its plain path text,
+                        ;; not the internal tagged-map representation (real
+                        ;; Nix: toJSON ./a/b -> "./a/b"; this branch was
+                        ;; missing so a path fell through to the generic
+                        ;; attrset-value? branch below and leaked its raw
+                        ;; __pnix_value_kind/path keys, 2026-08-20 found via
+                        ;; the pnix-cljs Path port's oracle comparison).
+                        (path-value? v)
+                        (get v "path")
                         (vector? v) (mapv strip v)
                         ;; __toString wins over outPath (oracle:
                         ;; toJSON { __toString = ..; outPath = "/x"; } uses
