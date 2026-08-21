@@ -94,15 +94,13 @@ Nix 2.34.8 파일 모드로 직접 확인한 결과:
 - `inherit x;` / `inherit (s) a;` — inherit 절의 이름 위치를 반환한다.
   hy/clj/cljs/clr/rs 인터프리터와 같다.
 - `builtins.mapAttrs (k: v: v) { a = 1; }` — `null`. pnix 5 호스트와 같다.
-- `builtins.listToAttrs [{ name = "a"; value = 1; }]` — Nix는 위치를 남긴다
-  (pnix는 `null`. 기존 `*-generated-null` fixture는 `--expr` 오라클).
-- `builtins.removeAttrs { a = 1; b = 2; } ["b"]` — Nix는 남은 키의 원래
-  위치를 유지. pnix는 `null`.
-- `{ a = 1; } // { b = 2; }` / 같은 키 override — Nix는 기여한 쪽 바인딩
-  위치. hy `//` 는 위치를 버린다.
+- `builtins.listToAttrs [{ name = "a"; value = 1; }]` — pair의 `value` 키
+  위치(Nix 파일 모드와 같음).
+- `builtins.removeAttrs` — 남은 키의 원래 위치.
+- `{ a = 1; } // { b = 2; }` / 같은 키 override — 기여한 쪽 바인딩 위치.
+- `builtins.mapAttrs (k: v: v) { a = 1; }` — `null` (Nix와 같음).
 
-`mapAttrs`만 "생성 attrset → null"이 Nix와 같다. listToAttrs/removeAttrs/`//`
-수렴은 별 슬라이스(5 호스트). `--expr`을 오라클로 쓰지 말 것.
+`--expr`을 위치 오라클로 쓰지 말 것.
 
 ## 5. 감사에서 발견됐지만 이후 해결된 항목 (참고용, 현재는 문제 없음)
 

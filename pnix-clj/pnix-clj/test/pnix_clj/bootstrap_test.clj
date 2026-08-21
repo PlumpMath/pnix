@@ -6353,7 +6353,21 @@
                          "in builtins.unsafeGetAttrPos \"x\" s"))))))
   (testing "missing or synthetic position returns null"
     (is (nil? (:value (pnix/eval-source
-                       "builtins.unsafeGetAttrPos \"z\" { a = 1; }"))))))
+                       "builtins.unsafeGetAttrPos \"z\" { a = 1; }")))))
+  (testing "listToAttrs copies the pair's value-binding position (Nix file-mode)"
+    (is (= 70 (:value (pnix/eval-source
+                      "(builtins.unsafeGetAttrPos \"a\" (builtins.listToAttrs [ { name = \"a\"; value = 1; } ])).column")))))
+  (testing "removeAttrs keeps remaining key positions"
+    (is (= 3 (:value (pnix/eval-source
+                     "(builtins.unsafeGetAttrPos \"a\" (builtins.removeAttrs {\n  a = 1; b = 2;\n} [\"b\"])).column")))))
+  (testing "update // keeps contributing binding positions"
+    (is (= 3 (:value (pnix/eval-source
+                     "(builtins.unsafeGetAttrPos \"a\" ({\n  a = 1;\n} // { b = 2; })).column"))))
+    (is (= 3 (:value (pnix/eval-source
+                     "(builtins.unsafeGetAttrPos \"a\" ({ a = 1; } // {\n  a = 2;\n})).column")))))
+  (testing "mapAttrs drops positions (Nix file-mode)"
+    (is (nil? (:value (pnix/eval-source
+                       "builtins.unsafeGetAttrPos \"a\" (builtins.mapAttrs (k: v: v) { a = 1; })")))))))
 
 (deftest evaluator-cur-pos-surfaces-var-parser-span
   (is (= {"file" "<pnix-px>" "line" 1 "column" 1}

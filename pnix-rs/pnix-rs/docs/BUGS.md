@@ -89,9 +89,9 @@ toJSON/문자열 보간/`string+`/bool/`?`/`rec`/`with`는 이미 구현됐지�
   동적 **첫** 세그먼트 뒤의 점 이어짐도 이제 열렸다(`${x}.c = 1;`, 이전엔
   단일 동적 키만 가능했음) — pnix-clj의 `parse-attr-path`가 첫/후속 세그먼트를
   구분하지 않는 것과 동일하게 자연히 따라온 결과. `let` 바인딩
-  (`parse_let`)의 동일한 형태(`let a.${x}.c = 1; in ...`)는 이번 스코프에
-  포함되지 않았다 — 여전히 정적 세그먼트만 지원하는 예전 루프 그대로이며,
-  별도 후속 과제로 남아있다.
+  (`parse_let`)도 같은 동적 세그먼트 경로를 쓴다 (`let a.${x}.c = 1; in
+  ...`). 동적 첫 세그먼트는 Nix와 같이 "dynamic attributes not allowed
+  in let"이다.
 - **POSIX ERE 완전한 leftmost-longest 정합은 없다(2026-08-20 대부분 축소됨)**
   — `*`/`+`가 그룹(괄호 하위표현식)에도 적용되고 구간 반복
   `{m}`/`{m,}`/`{m,n}`도 이제 있다(`rx_repeat_group_try`/

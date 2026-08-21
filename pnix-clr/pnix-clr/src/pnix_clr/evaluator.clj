@@ -1458,21 +1458,25 @@
              (:entries attrs))))
 
     :listToAttrs
-    (let [xs (list-value (first args) "listToAttrs")]
-      (attrset-value
-       (reduce (fn [acc row]
-                 (let [row (require-attrset row "listToAttrs")
-                       n (force-value (get (:entries row) "name"))
-                       v (get (:entries row) "value")]
-                   (when-not (string? n)
-                     (outcome/fail! :eval :type-error
-                                    {:operation "listToAttrs"
-                                     :expected "name-string"}))
-                   (if (contains? acc n)
-                     acc
-                     (assoc acc n v))))
-               {}
-               xs)))
+    (let [xs (list-value (first args) "listToAttrs")
+          [entries positions]
+          (reduce (fn [[acc pos] row]
+                    (let [row (require-attrset row "listToAttrs")
+                          n (force-value (get (:entries row) "name"))
+                          v (get (:entries row) "value")]
+                      (when-not (string? n)
+                        (outcome/fail! :eval :type-error
+                                       {:operation "listToAttrs"
+                                        :expected "name-string"}))
+                      (if (contains? acc n)
+                        [acc pos]
+                        [(assoc acc n v)
+                         (if-let [vp (get (:positions row) "value")]
+                           (assoc pos n vp)
+                           pos)])))
+                  [{} {}]
+                  xs)]
+      (attrset-value entries positions))
 
     :removeAttrs
     (let [attrs (require-attrset (first args) "removeAttrs")
@@ -1480,7 +1484,9 @@
       (when-not (every? string? names)
         (outcome/fail! :eval :type-error
                        {:operation "removeAttrs" :expected "string-list"}))
-      (attrset-value (apply dissoc (:entries attrs) names)))
+      (let [entries (apply dissoc (:entries attrs) names)]
+        (attrset-value entries
+                       (select-keys (:positions attrs) (keys entries)))))
 
     :recursiveUpdate
     (recursive-update (first args) (second args))
@@ -2570,7 +2576,8 @@
       (when-not (string? attr-name)
         (outcome/fail! :eval :type-error
                        {:operation "unsafeGetAttrPos" :expected "string"}))
-      (get (:positions attrs) attr-name))
+      (when (contains? (:entries attrs) attr-name)
+        (get (:positions attrs) attr-name)))
 
     :seq
     (do (force-value (first args)) (second args))

@@ -708,6 +708,40 @@ fn cmd_px_check() -> ExitCode {
             failed += 1;
         }
     }
+    match px::px_run("let x = \"b\"; a.${x}.c = 1; in a.b.c") {
+        Ok(v) if v == "1" => {
+            println!("  ok   let nested dynamic attrpath");
+            passed += 1;
+        }
+        other => {
+            println!("  FAIL let nested dynamic attrpath: {:?}", other);
+            failed += 1;
+        }
+    }
+    match px::px_run(
+        "(builtins.unsafeGetAttrPos \"a\" (builtins.listToAttrs [ { name = \"a\"; value = 1; } ])).column",
+    ) {
+        Ok(v) if v == "70" => {
+            println!("  ok   listToAttrs copies value-binding pos");
+            passed += 1;
+        }
+        other => {
+            println!("  FAIL listToAttrs attr pos: {:?}", other);
+            failed += 1;
+        }
+    }
+    match px::px_run(
+        "(builtins.unsafeGetAttrPos \"a\" (builtins.removeAttrs {\n  a = 1; b = 2;\n} [\"b\"])).column",
+    ) {
+        Ok(v) if v == "3" => {
+            println!("  ok   removeAttrs keeps remaining pos");
+            passed += 1;
+        }
+        other => {
+            println!("  FAIL removeAttrs attr pos: {:?}", other);
+            failed += 1;
+        }
+    }
     // Audit #2 regression: float literals are valid APPLY arguments and
     // JSON leaves (finite only).
     match px::px_run("(x: x * 2.0) 3.5") {

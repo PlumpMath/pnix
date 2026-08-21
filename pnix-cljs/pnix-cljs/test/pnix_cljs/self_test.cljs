@@ -59,7 +59,13 @@
    ["let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos \"x\" s).file"
     "done" "<pnix-px>"]
    ["let s = {\n  a.b = 1;\n}; in (builtins.unsafeGetAttrPos \"b\" (s.a)).column"
-    "done" (js/BigInt "3")]])
+    "done" (js/BigInt "3")]
+   ["(builtins.unsafeGetAttrPos \"a\" (builtins.listToAttrs [ { name = \"a\"; value = 1; } ])).column"
+    "done" (js/BigInt "70")]
+   ["(builtins.unsafeGetAttrPos \"a\" (builtins.removeAttrs {\n  a = 1; b = 2;\n} [\"b\"])).column"
+    "done" (js/BigInt "3")]
+   ["builtins.unsafeGetAttrPos \"a\" (builtins.mapAttrs (k: v: v) { a = 1; })"
+    "done" nil]])
 
 (defn -main [& _]
   (doseq [[source expected-kind expected-value] cases]

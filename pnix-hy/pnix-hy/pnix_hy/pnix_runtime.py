@@ -1832,7 +1832,8 @@ def replace_strings_value(froms: Any, tos: Any, text: Any) -> str:
 
 
 def list_to_attrs_value(xs: Any) -> dict[str, Any]:
-    out: dict[str, Any] = {}
+    # Nix file-mode: the result key's pos is the pair's `value` binding pos.
+    out = AttrSet()
     for item in list_value(xs, "builtins.listToAttrs list"):
         entry = attrset_value(item, "builtins.listToAttrs element")
         name = string_value(entry.get("name"), "builtins.listToAttrs name")
@@ -1840,6 +1841,9 @@ def list_to_attrs_value(xs: Any) -> dict[str, Any]:
             pnix_error("builtins.listToAttrs element is missing `value`")
         if name not in out:
             out[name] = entry["value"]
+            value_pos = getattr(entry, "attr_positions", {}).get("value")
+            if value_pos is not None:
+                out.attr_positions[name] = value_pos
     return out
 
 
@@ -1874,7 +1878,13 @@ def remove_attrs_value(attrs: Any, names: Any) -> dict[str, Any]:
         if not is_string_value(name):
             pnix_error(f"builtins.removeAttrs: name-list element at index {index} is not a string, got {_type_of(name)}")
         remove.add(str(name))
-    return {key: value for key, value in source.items() if key not in remove}
+    kept = {key: value for key, value in source.items() if key not in remove}
+    positions = {
+        key: pos
+        for key, pos in getattr(source, "attr_positions", {}).items()
+        if key in kept
+    }
+    return AttrSet(kept, attr_positions=positions)
 
 
 def attr_by_path_value(path: Any, default: Any, attrs: Any) -> Any:
@@ -4003,8 +4013,12 @@ def merge_attrsets(lhs: Any, rhs: Any) -> Any:
         return right
     if right is None:
         return left
-    merged = dict(attrset_value(left, "left side of //"))
-    merged.update(attrset_value(right, "right side of //"))
+    left_set = attrset_value(left, "left side of //")
+    right_set = attrset_value(right, "right side of //")
+    positions = dict(getattr(left_set, "attr_positions", {}))
+    positions.update(getattr(right_set, "attr_positions", {}))
+    merged = AttrSet(left_set, attr_positions=positions)
+    merged.update(right_set)
     return merged
 
 
@@ -8196,12 +8210,17 @@ HY_AST_EVALUATOR_SOURCE = r'''
 	          (pnix-error "builtins.listToAttrs element is missing `value`")
 	          None)
 	        (if (not (in name out))
-	          (setv (get out name) (get entry "value"))
+	          (do
+	            (setv (get out name) (get entry "value"))
+	            (setv vp (.get (attrset-positions entry) "value" None))
+	            (if (!= vp None)
+	              (setv (get (attrset-positions out) name) vp)
+	              None))
 	          None)
 	        (list-to-attrs-items items (+ i 1) out))))
 
 	  (defn list-to-attrs-builtin [xs]
-	    (list-to-attrs-items (list-value xs "builtins.listToAttrs list") 0 {}))
+	    (list-to-attrs-items (list-value xs "builtins.listToAttrs list") 0 (make-attrset)))
 
 	  (defn names-to-remove [items i out]
 	    (if (>= i (len items))
@@ -8220,7 +8239,12 @@ HY_AST_EVALUATOR_SOURCE = r'''
 	      (do
 	        (setv key (get keys i))
 	        (if (not (in key (get out "__remove__")))
-	          (setv (get out key) (get attrs key))
+	          (do
+	            (setv (get out key) (get attrs key))
+	            (setv vp (.get (attrset-positions attrs) key None))
+	            (if (!= vp None)
+	              (setv (get (attrset-positions out) key) vp)
+	              None))
 	          None)
 	        (remove-attrs-copy attrs keys (+ i 1) out))))
 
@@ -8246,7 +8270,8 @@ HY_AST_EVALUATOR_SOURCE = r'''
 	      (if (not (isinstance namelist list))
 	        (pnix-error (+ "builtins.removeAttrs: second argument must be list of strings, got " (type-of namelist)))
 	        None)
-	      (setv out {"__remove__" (names-to-remove namelist 0 [])})
+	      (setv out (make-attrset))
+	      (setv (get out "__remove__") (names-to-remove namelist 0 []))
 	      (setv copied (remove-attrs-copy source (list (.keys source)) 0 out))
 	      (.pop copied "__remove__")
 	      copied))
@@ -8692,8 +8717,13 @@ HY_AST_EVALUATOR_SOURCE = r'''
         (= r None) l
         True
           (do
-            (setv merged (.copy (attrset-value l "left side of //")))
-            (.update merged (attrset-value r "right side of //"))
+            (setv ls (attrset-value l "left side of //"))
+            (setv rs (attrset-value r "right side of //"))
+            (setv merged (make-attrset))
+            (.update merged ls)
+            (.update (attrset-positions merged) (attrset-positions ls))
+            (.update merged rs)
+            (.update (attrset-positions merged) (attrset-positions rs))
             merged))))
 
   (defn marker-string? [value]
@@ -14214,7 +14244,8 @@ RUST_EVAL_CORPUS: list[dict[str, Any]] = [
     {"name": "rs-unsafeGetAttrPos-line", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).line', "expect": 2},
     {"name": "rs-unsafeGetAttrPos-column", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).column', "expect": 3},
     {"name": "rs-unsafeGetAttrPos-nested-column", "source": '(builtins.unsafeGetAttrPos "b" ({ a.b = 1; }.a)).column', "expect": 35},
-    {"name": "rs-unsafeGetAttrPos-generated-null", "source": 'builtins.unsafeGetAttrPos "a" (builtins.listToAttrs [ { name = "a"; value = 1; } ])', "expect": None},
+    {"name": "rs-unsafeGetAttrPos-generated-null", "source": 'builtins.unsafeGetAttrPos "a" (builtins.mapAttrs (k: v: v) { a = 1; })', "expect": None},
+    {"name": "rs-unsafeGetAttrPos-listToAttrs-value-column", "source": '(builtins.unsafeGetAttrPos "a" (builtins.listToAttrs [ { name = "a"; value = 1; } ])).column', "expect": 70},
     {"name": "rs-unsafeGetAttrPos-inherit-line", "source": 'let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos "x" s).line', "expect": 3},
     {"name": "rs-unsafeGetAttrPos-inherit-column", "source": 'let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos "x" s).column', "expect": 11},
     {"name": "rs-builtins-map", "source": "builtins.map (x: x * 2) [1 2 3]", "expect": [2, 4, 6]},
@@ -16641,7 +16672,11 @@ SELF_TEST_CASES = [
     {"name": "builtin-unsafeGetAttrPos-line", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).line', "expect": 2},
     {"name": "builtin-unsafeGetAttrPos-column", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).column', "expect": 3},
     {"name": "builtin-unsafeGetAttrPos-nested-column", "source": '(builtins.unsafeGetAttrPos "b" ({ a.b = 1; }.a)).column', "expect": 35},
-    {"name": "builtin-unsafeGetAttrPos-generated-null", "source": 'builtins.unsafeGetAttrPos "a" (builtins.listToAttrs [ { name = "a"; value = 1; } ])', "expect": None},
+    {"name": "builtin-unsafeGetAttrPos-generated-null", "source": 'builtins.unsafeGetAttrPos "a" (builtins.mapAttrs (k: v: v) { a = 1; })', "expect": None},
+    {"name": "builtin-unsafeGetAttrPos-listToAttrs-value-column", "source": '(builtins.unsafeGetAttrPos "a" (builtins.listToAttrs [ { name = "a"; value = 1; } ])).column', "expect": 70},
+    {"name": "builtin-unsafeGetAttrPos-removeAttrs-column", "source": '(builtins.unsafeGetAttrPos "a" (builtins.removeAttrs {\n  a = 1; b = 2;\n} ["b"])).column', "expect": 3},
+    {"name": "builtin-unsafeGetAttrPos-update-left-column", "source": '(builtins.unsafeGetAttrPos "a" ({\n  a = 1;\n} // { b = 2; })).column', "expect": 3},
+    {"name": "builtin-unsafeGetAttrPos-update-override-column", "source": '(builtins.unsafeGetAttrPos "a" ({ a = 1; } // {\n  a = 2;\n})).column', "expect": 3},
     {"name": "builtin-unsafeGetAttrPos-inherit-line", "source": 'let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos "x" s).line', "expect": 3},
     {"name": "builtin-unsafeGetAttrPos-inherit-column", "source": 'let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos "x" s).column', "expect": 11},
     {"name": "builtin-unsafeGetAttrPos-inherit-from-column", "source": 'let s = { a = 1; }; in (builtins.unsafeGetAttrPos "a" { inherit (s) a; }).column', "expect": 69},

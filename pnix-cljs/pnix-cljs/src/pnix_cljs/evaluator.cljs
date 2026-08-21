@@ -1643,9 +1643,13 @@
     (evaluation-failure! "type-error" {"operation" "removeAttrs"}))
   (when-not (vector? names)
     (evaluation-failure! "type-error" {"operation" "removeAttrs"}))
-  (let [remove-set (into #{} (map (fn [c] (string-text (force-cell c))) names))]
-    (->AttrsetValue
-     (into {} (remove (fn [[k _]] (contains? remove-set k)) (:fields attrs))))))
+  (let [remove-set (into #{} (map (fn [c] (string-text (force-cell c))) names))
+        fields (into {} (remove (fn [[k _]] (contains? remove-set k)) (:fields attrs)))
+        positions (into {}
+                        (filter (fn [[k _]] (contains? fields k))
+                                (attr-positions attrs)))]
+    (cond-> (->AttrsetValue fields)
+      (seq positions) (with-meta {:attr-positions positions}))))
 
 (defn intersect-attrs-value [e1 e2]
   (when-not (and (instance? AttrsetValue e1) (instance? AttrsetValue e2))
@@ -2655,30 +2659,37 @@
       :listToAttrs (if-not (vector? argument)
                      (evaluation-failure! "type-error"
                                           {"operation" "listToAttrs"})
-                     (->AttrsetValue
-                      (reduce
-                       (fn [fields row-cell]
-                         (let [row (force-cell row-cell)]
-                           (when-not (instance? AttrsetValue row)
-                             (evaluation-failure! "type-error"
-                                                  {"operation" "listToAttrs"}))
-                           (when-not (and (contains? (:fields row) "name")
-                                          (contains? (:fields row) "value"))
-                             (evaluation-failure! "type-error"
-                                                  {"operation" "listToAttrs"}))
-                           (let [attribute
-                                 (force-cell (get (:fields row) "name"))]
-                             (when-not (string? attribute)
-                               (evaluation-failure!
-                                "type-error"
-                                {"operation" "listToAttrs"}))
-                             (if (contains? fields attribute)
-                               fields
-                               (assoc fields
-                                      attribute
-                                      (get (:fields row) "value"))))))
-                       {}
-                       argument)))
+                     (let [built
+                           (reduce
+                            (fn [{:keys [fields positions]} row-cell]
+                              (let [row (force-cell row-cell)]
+                                (when-not (instance? AttrsetValue row)
+                                  (evaluation-failure! "type-error"
+                                                       {"operation" "listToAttrs"}))
+                                (when-not (and (contains? (:fields row) "name")
+                                               (contains? (:fields row) "value"))
+                                  (evaluation-failure! "type-error"
+                                                       {"operation" "listToAttrs"}))
+                                (let [attribute
+                                      (force-cell (get (:fields row) "name"))]
+                                  (when-not (string? attribute)
+                                    (evaluation-failure!
+                                     "type-error"
+                                     {"operation" "listToAttrs"}))
+                                  (if (contains? fields attribute)
+                                    {:fields fields :positions positions}
+                                    {:fields (assoc fields
+                                                    attribute
+                                                    (get (:fields row) "value"))
+                                     :positions
+                                     (if-let [vp (get (attr-positions row) "value")]
+                                       (assoc positions attribute vp)
+                                       positions)}))))
+                            {:fields {} :positions {}}
+                            argument)]
+                       (cond-> (->AttrsetValue (:fields built))
+                         (seq (:positions built))
+                         (with-meta {:attr-positions (:positions built)}))))
 
       :trace
       ;; Allowlisted: a contextful message is printed by its content (the
@@ -3186,7 +3197,9 @@
               attrs (force-cell (nth arguments 1))]
           (when-not (instance? AttrsetValue attrs)
             (evaluation-failure! "type-error" {"operation" "unsafeGetAttrPos"}))
-          (get (attr-positions attrs) (string-text attr-name))))
+          (let [name (string-text attr-name)]
+            (when (contains? (:fields attrs) name)
+              (get (attr-positions attrs) name)))))
 
       :seq
       (if (< (count arguments) 2)

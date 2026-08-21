@@ -1920,27 +1920,50 @@ impl PxParser {
                     continue;
                 }
             }
-            // Nested static path `a.b = v` desugars to `a = { b = v; }`,
-            // same as attrset literals (parse_attrset_literal / merge_attr_field).
-            let mut path = vec![self.ident()?];
-            while self.peek_is(PxTok::Dot) {
-                if let Some(PxTok::Ident(n2)) = self.toks.get(self.pos + 1).cloned() {
-                    self.pos += 1; // Dot
-                    self.pos += 1; // Ident
-                    path.push(n2);
-                } else {
-                    break;
-                }
+            // Nested attrpath `a.b = v` / `a.${x}.c = v` desugars like
+            // attrset literals. A dynamic FIRST segment is Nix's
+            // "dynamic attributes not allowed in let".
+            let (first_parts, first_dynamic) = self.parse_attr_path_segment()?;
+            if first_dynamic {
+                return Err(String::from(
+                    "px parse: dynamic attributes not allowed in let",
+                ));
+            }
+            let first_name = match first_parts.first() {
+                Some(PxStrPart::Lit(s)) => s.clone(),
+                _ => return Err(String::from("px parse: empty let binding key")),
+            };
+            let mut seg_parts_list: Vec<Vec<PxStrPart>> = Vec::new();
+            let mut seg_dynamic_list: Vec<bool> = Vec::new();
+            seg_parts_list.push(first_parts);
+            seg_dynamic_list.push(false);
+            while self.peek_is(PxTok::Dot)
+                && self.token_starts_attr_path_segment(self.pos + 1)
+            {
+                self.pos += 1;
+                let (seg_parts, seg_dynamic) = self.parse_attr_path_segment()?;
+                seg_parts_list.push(seg_parts);
+                seg_dynamic_list.push(seg_dynamic);
             }
             self.eat(PxTok::Assign)?;
             let mut value = self.parse_expr()?;
             self.eat(PxTok::Semi)?;
-            let mut i = path.len();
+            let mut i = seg_parts_list.len();
             while i > 1 {
                 i -= 1;
-                value = PxExpr::Attrs(vec![(path[i].clone(), value)]);
+                if seg_dynamic_list[i] {
+                    value = px_wrap_dynamic_attr(seg_parts_list[i].clone(), value);
+                } else {
+                    let name = match seg_parts_list[i].first() {
+                        Some(PxStrPart::Lit(s)) => s.clone(),
+                        _ => {
+                            return Err(String::from("px parse: empty let binding key"))
+                        }
+                    };
+                    value = PxExpr::Attrs(vec![(name, value)]);
+                }
             }
-            bindings = merge_let_binding(bindings, path[0].clone(), value);
+            bindings = merge_let_binding(bindings, first_name, value);
         }
         self.eat(PxTok::KwIn)?;
         let body = self.parse_expr()?;
@@ -6771,6 +6794,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
     } else if name == "unsafeGetAttrPos" {
         match (&args[0], &args[1]) {
             (PxVal::Str(attr), PxVal::Attrs(fields)) => {
+                if !px_attrs_has(fields.as_ref(), attr) {
+                    return Ok(PxVal::Null);
+                }
                 let pos = px_split_attr_pos(fields).1;
                 match pos {
                     Some(p) => match px_force(&p)? {
@@ -7220,12 +7246,12 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
             _ => Err(String::from("px: elemAt expects (list, int)")),
         }
     } else if name == "listToAttrs" {
-        // Nix semantics (matches the pnix-hy runtime): elements are
-        // { name = <string>; value = <v>; } attrsets; the FIRST occurrence of
-        // a name wins.
+        // Nix: first occurrence of a name wins. The result key's pos is the
+        // pair's `value` binding pos (file-mode nix eval oracle).
         match &args[0] {
             PxVal::List(items) => {
                 let mut out: Vec<(String, PxVal)> = Vec::new();
+                let mut pos_fields: Vec<(String, PxVal)> = Vec::new();
                 for item in items.iter() {
                     match px_force(item)? {
                         PxVal::Attrs(entry) => {
@@ -7233,9 +7259,6 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                             let mut value: Option<PxVal> = None;
                             for (k, v) in entry.iter() {
                                 if k == "name" {
-                                    // the name field must be forced to check it
-                                    // is a string; the value field stays a thunk
-                                    // (kept lazy in the resulting attrset).
                                     match px_force(v)? {
                                         PxVal::Str(s) => name = Some(s.clone()),
                                         other => {
@@ -7252,8 +7275,6 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                             }
                             match (name, value) {
                                 (Some(n), Some(v)) => {
-                                    // Accumulator is pre-invariant (unsorted):
-                                    // linear first-wins check.
                                     let mut seen = false;
                                     let mut k = 0usize;
                                     while k < out.len() {
@@ -7263,6 +7284,20 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                                         k += 1;
                                     }
                                     if !seen {
+                                        match px_split_attr_pos(entry.as_ref()).1 {
+                                            Some(p) => match px_force(&p)? {
+                                                PxVal::Attrs(pf) => {
+                                                    match px_attrs_find(pf.as_ref(), "value") {
+                                                        Some(vp) => {
+                                                            pos_fields.push((n.clone(), vp.clone()))
+                                                        }
+                                                        None => {}
+                                                    }
+                                                }
+                                                _ => {}
+                                            },
+                                            None => {}
+                                        }
                                         out.push((n, v));
                                     }
                                 }
@@ -7281,7 +7316,11 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                         }
                     }
                 }
-                Ok(px_attrs(out))
+                if pos_fields.is_empty() {
+                    Ok(px_attrs(out))
+                } else {
+                    Ok(px_join_attr_pos(out, Some(px_attrs(pos_fields))))
+                }
             }
             other => Err(format!("px: listToAttrs expects a list, got {}", px_kind(other))),
         }
@@ -7397,8 +7436,9 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
     } else if name == "removeAttrs" {
         match (&args[0], &args[1]) {
             (PxVal::Attrs(fields), PxVal::List(names)) => {
+                let (user, pos) = px_split_attr_pos(fields);
                 let mut out = Vec::new();
-                for (k, v) in fields.iter() {
+                for (k, v) in user.iter() {
                     let mut drop = false;
                     for n in names.iter() {
                         let n = px_force(n)?;
@@ -7412,7 +7452,32 @@ fn px_builtin_exec(name: &str, args: &Vec<PxVal>) -> Result<PxVal, String> {
                         out.push((k.clone(), v.clone()));
                     }
                 }
-                Ok(px_attrs(out))
+                let pos_out = match pos {
+                    Some(p) => match px_force(&p)? {
+                        PxVal::Attrs(pf) => {
+                            let mut kept = Vec::new();
+                            for (k, v) in pf.iter() {
+                                let mut present = false;
+                                for (ok, _) in out.iter() {
+                                    if ok == k {
+                                        present = true;
+                                    }
+                                }
+                                if present {
+                                    kept.push((k.clone(), v.clone()));
+                                }
+                            }
+                            if kept.is_empty() {
+                                None
+                            } else {
+                                Some(px_attrs(kept))
+                            }
+                        }
+                        _ => None,
+                    },
+                    None => None,
+                };
+                Ok(px_join_attr_pos(out, pos_out))
             }
             _ => Err(String::from("px: removeAttrs expects (attrset, list)")),
         }

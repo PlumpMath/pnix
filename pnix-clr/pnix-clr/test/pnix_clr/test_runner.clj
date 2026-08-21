@@ -100,7 +100,19 @@
   (testing "dotted attrpath shares the first-segment position"
     (is (= 3 (result-value
               (source-result
-               "let s = {\n  a.b = 1;\n}; in (builtins.unsafeGetAttrPos \"b\" (s.a)).column"))))))
+               "let s = {\n  a.b = 1;\n}; in (builtins.unsafeGetAttrPos \"b\" (s.a)).column")))))
+  (testing "listToAttrs copies the pair's value-binding position"
+    (is (= 70 (result-value
+               (source-result
+                "(builtins.unsafeGetAttrPos \"a\" (builtins.listToAttrs [ { name = \"a\"; value = 1; } ])).column")))))
+  (testing "removeAttrs keeps remaining key positions"
+    (is (= 3 (result-value
+              (source-result
+               "(builtins.unsafeGetAttrPos \"a\" (builtins.removeAttrs {\n  a = 1; b = 2;\n} [\"b\"])).column")))))
+  (testing "mapAttrs drops positions"
+    (is (nil? (result-value
+               (source-result
+                "builtins.unsafeGetAttrPos \"a\" (builtins.mapAttrs (k: v: v) { a = 1; })"))))))
 
 (deftest unsupported-and-import-errors-are-failed
   (let [missing (source-result "import ./definitely-missing.px")

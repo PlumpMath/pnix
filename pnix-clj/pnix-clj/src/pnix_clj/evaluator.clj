@@ -1188,6 +1188,25 @@
              (assoc (attr-positions attrs) key pos)))
     attrs))
 
+(defn- remove-attrs-keeping-pos
+  [attrs names]
+  (let [out (apply dissoc attrs names)
+        pos (select-keys (or (attr-positions attrs) {}) (keys out))]
+    (if (seq pos)
+      (with-meta out (assoc (meta attrs) ::attr-positions pos))
+      (vary-meta out dissoc ::attr-positions))))
+
+(defn- assoc-list-to-attrs-entry
+  [out k row]
+  (let [next (assoc out k (get row "value"))
+        val-pos (get (attr-positions row) "value")]
+    (if val-pos
+      (with-meta next
+        (assoc (meta next)
+               ::attr-positions
+               (assoc (or (attr-positions next) {}) k val-pos)))
+      next)))
+
 (defn- flatten-list-result
   [value]
   (let [r (force-value value)]
@@ -1729,8 +1748,14 @@
                           :side :right
                           :value-type (strict-type right)})
              :else
-             {:status :ok
-              :value (merge left right)})
+             (let [pos (merge (or (attr-positions left) {})
+                              (or (attr-positions right) {}))
+                   merged (merge left right)
+                   valued (if (seq pos)
+                            (with-meta merged
+                              (assoc (meta merged) ::attr-positions pos))
+                            merged)]
+               {:status :ok :value valued}))
       ;; List concatenation: BOTH operands must be lists. Clojure's
       ;; (concat xs nil) treats nil as empty — that is NOT Nix (oracle:
       ;; "expected a list but found null"). Same for string/int right.
@@ -3879,7 +3904,7 @@
                               {:builtin name
                                :names names})
                     {:status :ok
-                     :value (apply dissoc attrs names)})))))))
+                     :value (remove-attrs-keeping-pos attrs names)})))))))
 
       :head
       (let [xs (first args)]
@@ -4524,7 +4549,7 @@
                     (recur (rest remaining)
                            (if (contains? out k)
                              out
-                             (assoc out k (get row "value")))))))))
+                             (assoc-list-to-attrs-entry out k row)))))))
           {:status :ok :value out}))
 
       :catAttrs
@@ -4686,7 +4711,8 @@
                     :unsafe-get-attr-pos-target-not-attrset
                     {:builtin name :target attrs})
           {:status :ok
-           :value (get (attr-positions attrs) attr)}))
+           :value (when (contains? attrs attr)
+                    (get (attr-positions attrs) attr))}))
 
       :filterAttrs
       (let [[pred attrs] args]
