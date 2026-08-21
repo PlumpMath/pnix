@@ -766,11 +766,17 @@ class Parser:
         return str(token.value), token.pos, pos + 1
 
     def parse_path(self, pos: int) -> tuple[list[Any], list[int | None], int]:
+        # Nix (nix-instantiate; verified against real `nix eval --json -f`)
+        # attributes every nesting level of a dotted attrpath (`a.b.c = v;`)
+        # to the position of the FIRST segment, not each segment's own
+        # position. We still parse each segment (needed to advance past the
+        # tokens), but every entry in `positions` shares the first segment's
+        # position so `set_path` picks up the same location at every level.
         part, position, pos = self.parse_path_segment(pos)
         parts = [part]
         positions = [position]
         while self.tok_is(pos, "sym", "."):
-            part, position, pos = self.parse_path_segment(pos + 1)
+            part, _next_position, pos = self.parse_path_segment(pos + 1)
             parts.append(part)
             positions.append(position)
         return parts, positions, pos
@@ -6413,7 +6419,13 @@ HY_AST_EVALUATOR_SOURCE = r'''
 	        (attr-token? t) [(str (get t "value")) (get t "pos") (+ pos 1)]
 	        True (pnix-error "expected attribute name"))))
 
-	  (defn parse-path-tail [tokens pos parts positions]
+	  ;; Nix (nix-instantiate; verified against real `nix eval --json -f`)
+	  ;; attributes every nesting level of a dotted attrpath (`a.b.c = v;`) to
+	  ;; the position of the FIRST segment, not each segment's own position.
+	  ;; We still parse each segment (needed to advance past the tokens), but
+	  ;; `root-position` is threaded through the recursion unchanged so every
+	  ;; entry appended to `positions` is that first segment's position.
+	  (defn parse-path-tail [tokens pos parts positions root-position]
 	    (if (tok-is tokens pos "sym" ".")
 	      (do
 	        (setv segment-pair (parse-path-segment tokens (+ pos 1)))
@@ -6421,7 +6433,8 @@ HY_AST_EVALUATOR_SOURCE = r'''
 	          tokens
 	          (get segment-pair 2)
 	          (+ parts [(get segment-pair 0)])
-	          (+ positions [(get segment-pair 1)])))
+	          (+ positions [root-position])
+	          root-position))
 	      [parts positions pos]))
 
 	  (defn parse-path [tokens pos]
@@ -6431,7 +6444,8 @@ HY_AST_EVALUATOR_SOURCE = r'''
 	        tokens
 	        (get first-pair 2)
 	        [(get first-pair 0)]
-	        [(get first-pair 1)])))
+	        [(get first-pair 1)]
+	        (get first-pair 1))))
 
 	  (defn binding-path-static? [path]
 	    (if (= (len path) 0)
@@ -14190,7 +14204,7 @@ RUST_EVAL_CORPUS: list[dict[str, Any]] = [
     {"name": "rs-curPos-shadow-column", "source": "let __curPos = 1; in __curPos.column", "expect": 22},
     {"name": "rs-unsafeGetAttrPos-line", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).line', "expect": 2},
     {"name": "rs-unsafeGetAttrPos-column", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).column', "expect": 3},
-    {"name": "rs-unsafeGetAttrPos-nested-column", "source": '(builtins.unsafeGetAttrPos "b" ({ a.b = 1; }.a)).column', "expect": 37},
+    {"name": "rs-unsafeGetAttrPos-nested-column", "source": '(builtins.unsafeGetAttrPos "b" ({ a.b = 1; }.a)).column', "expect": 35},
     {"name": "rs-unsafeGetAttrPos-generated-null", "source": 'builtins.unsafeGetAttrPos "a" (builtins.listToAttrs [ { name = "a"; value = 1; } ])', "expect": None},
     {"name": "rs-builtins-map", "source": "builtins.map (x: x * 2) [1 2 3]", "expect": [2, 4, 6]},
     {"name": "rs-builtins-filter", "source": "builtins.filter (x: x > 2) [1 2 3 4 5]", "expect": [3, 4, 5]},
@@ -15417,13 +15431,15 @@ RUST_REGEX_CORPUS: list[dict[str, Any]] = [
 
 
 # Fixtures below read a real, always-present repo file (this project's own
-# todo.md) to exercise hashFile/readFile/pathExists/readDir against actual
-# filesystem I/O. Resolved from this module's own location rather than a
-# bare "todo.md" relative literal, which only worked when the gate happened
-# to be invoked with pnix-hy/ (not the monorepo root, where these corpora
-# are actually run from) as the process cwd.
+# docs/TODO.md -- moved here from the old root todo.md by the 2026-08-20
+# doc-consolidation commit) to exercise hashFile/readFile/pathExists/readDir
+# against actual filesystem I/O. Resolved from this module's own location
+# rather than a bare relative literal, which only worked when the gate
+# happened to be invoked with pnix-hy/ (not the monorepo root, where these
+# corpora are actually run from) as the process cwd.
 _RUST_IO_FIXTURE_DIR = str(Path(__file__).resolve().parents[1])
-_RUST_IO_FIXTURE_TODO = str((Path(__file__).resolve().parents[1] / "todo.md").resolve())
+_RUST_IO_FIXTURE_DOCS_DIR = str((Path(__file__).resolve().parents[1] / "docs").resolve())
+_RUST_IO_FIXTURE_TODO = str((Path(__file__).resolve().parents[1] / "docs" / "TODO.md").resolve())
 
 RUST_PATH_FS_IO_CORPUS: list[dict[str, Any]] = [
     {"name": "rs-path-plus-path-total", "source": "builtins.typeOf (./foo + ./bar)", "expect": "path"},
@@ -15636,12 +15652,12 @@ RUST_PATH_CONTEXT_IO_CORPUS: list[dict[str, Any]] = [
     {"name": "rs-io-readFileType-todo", "source": f'builtins.readFileType "{_RUST_IO_FIXTURE_TODO}"', "expect": "regular"},
     {
         "name": "rs-io-readFile-todo-prefix",
-        "source": f'builtins.hasPrefix "# pnix-hy todo" (builtins.readFile "{_RUST_IO_FIXTURE_TODO}")',
+        "source": f'builtins.hasPrefix "# pnix-hy TODO" (builtins.readFile "{_RUST_IO_FIXTURE_TODO}")',
         "expect": True,
     },
     {
         "name": "rs-io-readDir-current-has-todo",
-        "source": f'builtins.hasAttr "todo.md" (builtins.readDir "{_RUST_IO_FIXTURE_DIR}")',
+        "source": f'builtins.hasAttr "TODO.md" (builtins.readDir "{_RUST_IO_FIXTURE_DOCS_DIR}")',
         "expect": True,
     },
     {"name": "rs-io-toFile-type", "source": 'builtins.typeOf (builtins.toFile "note.txt" "hello")', "expect": "path"},
@@ -16055,7 +16071,8 @@ def rust_corpus_report(cases: list[dict[str, Any]] | None = None) -> dict[str, A
 
 
 SELF_TEST_REPO_DIR = str(Path(__file__).resolve().parents[1])
-SELF_TEST_TODO_PATH = str((Path(__file__).resolve().parents[1] / "todo.md").resolve())
+SELF_TEST_DOCS_DIR = str((Path(__file__).resolve().parents[1] / "docs").resolve())
+SELF_TEST_TODO_PATH = str((Path(__file__).resolve().parents[1] / "docs" / "TODO.md").resolve())
 
 
 SELF_TEST_CASES = [
@@ -16305,13 +16322,13 @@ SELF_TEST_CASES = [
     },
     {
         "name": "io-readDir-repo-has-todo",
-        "source": f'builtins.hasAttr "todo.md" (builtins.readDir "{SELF_TEST_REPO_DIR}")',
+        "source": f'builtins.hasAttr "TODO.md" (builtins.readDir "{SELF_TEST_DOCS_DIR}")',
         "expect": True,
     },
     {"name": "io-readFileType-todo-abs", "source": f'builtins.readFileType "{SELF_TEST_TODO_PATH}"', "expect": "regular"},
     {
         "name": "io-readFile-todo-prefix-abs",
-        "source": f'builtins.hasPrefix "# pnix-hy todo" (builtins.readFile "{SELF_TEST_TODO_PATH}")',
+        "source": f'builtins.hasPrefix "# pnix-hy TODO" (builtins.readFile "{SELF_TEST_TODO_PATH}")',
         "expect": True,
     },
     {
@@ -16591,13 +16608,13 @@ SELF_TEST_CASES = [
     {"name": "builtin-derivationStrict-unnamed", "source": '(builtins.derivationStrict { system = "x"; builder = "x"; }).outPath', "expect": "/pnix-placeholder/derivation/unnamed"},
     {"name": "builtin-pathExists-true", "source": f'builtins.pathExists "{SELF_TEST_TODO_PATH}"', "expect": True},
     {"name": "builtin-pathExists-false", "source": f'builtins.pathExists "{SELF_TEST_TODO_PATH}.missing"', "expect": False},
-    {"name": "builtin-readFile", "source": f'builtins.hasPrefix "# pnix-hy todo" (builtins.readFile "{SELF_TEST_TODO_PATH}")', "expect": True},
+    {"name": "builtin-readFile", "source": f'builtins.hasPrefix "# pnix-hy TODO" (builtins.readFile "{SELF_TEST_TODO_PATH}")', "expect": True},
     {"name": "builtin-readFileType", "source": f'builtins.readFileType "{SELF_TEST_TODO_PATH}"', "expect": "regular"},
-    {"name": "builtin-readDir", "source": f'(builtins.readDir "{SELF_TEST_REPO_DIR}")."todo.md"', "expect": "regular"},
+    {"name": "builtin-readDir", "source": f'(builtins.readDir "{SELF_TEST_DOCS_DIR}")."TODO.md"', "expect": "regular"},
     {"name": "builtin-toFile-readFile", "source": 'builtins.readFile (builtins.toFile "pnix-hy-test.txt" "hello world")', "expect": "hello world"},
     {"name": "builtin-hashString-sha256", "source": 'builtins.hashString "sha256" "hello"', "expect": hashlib.sha256(b"hello").hexdigest()},
     {"name": "builtin-hashFile-readFile-parity", "source": f'builtins.hashFile "sha256" "{SELF_TEST_TODO_PATH}" == builtins.hashString "sha256" (builtins.readFile "{SELF_TEST_TODO_PATH}")', "expect": True},
-    {"name": "builtin-baseNameOf", "source": f'builtins.baseNameOf "{SELF_TEST_TODO_PATH}"', "expect": "todo.md"},
+    {"name": "builtin-baseNameOf", "source": f'builtins.baseNameOf "{SELF_TEST_TODO_PATH}"', "expect": "TODO.md"},
     {"name": "builtin-dirOf", "source": f'builtins.dirOf "{SELF_TEST_TODO_PATH}"', "expect": str(Path(SELF_TEST_TODO_PATH).parent)},
     {"name": "builtin-toPath-isPath", "source": f'builtins.isPath (builtins.toPath "{SELF_TEST_TODO_PATH}")', "expect": False},
     {"name": "builtin-storePath-isPath", "source": f'builtins.isPath (builtins.storePath "{SELF_TEST_TODO_PATH}")', "error": True, "error_contains": "no store"},
@@ -16612,7 +16629,7 @@ SELF_TEST_CASES = [
     {"name": "builtin-curPos-shadow-column", "source": "let __curPos = 1; in __curPos.column", "expect": 22},
     {"name": "builtin-unsafeGetAttrPos-line", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).line', "expect": 2},
     {"name": "builtin-unsafeGetAttrPos-column", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).column', "expect": 3},
-    {"name": "builtin-unsafeGetAttrPos-nested-column", "source": '(builtins.unsafeGetAttrPos "b" ({ a.b = 1; }.a)).column', "expect": 37},
+    {"name": "builtin-unsafeGetAttrPos-nested-column", "source": '(builtins.unsafeGetAttrPos "b" ({ a.b = 1; }.a)).column', "expect": 35},
     {"name": "builtin-unsafeGetAttrPos-generated-null", "source": 'builtins.unsafeGetAttrPos "a" (builtins.listToAttrs [ { name = "a"; value = 1; } ])', "expect": None},
     {"name": "builtin-bool-aliases", "source": "builtins.and true (builtins.not false) && builtins.or false true", "expect": True},
     {"name": "builtin-comparison-aliases", "source": 'builtins.eq "ab" ("a" + "b") && builtins.le 2 2 && builtins.gt 3 2 && builtins.ge 3 3 && builtins.lt 1 2', "expect": True},

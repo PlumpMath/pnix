@@ -11594,14 +11594,14 @@ pub fn px_run_value_with_modules(
     modules: &Vec<(String, String)>,
     cur_key: &str,
 ) -> Result<PxVal, String> {
-    let file = if cur_key.len() > 1 && cur_key.starts_with('.') {
-        &cur_key[1..]
+    let file: String = if cur_key.len() > 1 && cur_key.starts_with(".") {
+        cur_key.chars().skip(1).collect()
     } else if cur_key.is_empty() {
-        "<pnix-px>"
+        String::from("<pnix-px>")
     } else {
-        cur_key
+        String::from(cur_key)
     };
-    let ast = px_parse_in(src, file)?;
+    let ast = px_parse_in(src, &file)?;
     let dir = px_key_dir(cur_key);
     let mut stack: Vec<String> = vec![String::from(cur_key)];
     let expanded = px_expand_imports(&ast, modules, &dir, &mut stack)?;
