@@ -10863,21 +10863,30 @@ HY_AST_EVALUATOR_SOURCE = r'''
         (pnix-error (+ "unsupported AST tag " tag))))
 
   (setv outputs [])
-  (if (> (len raw-sources) 0)
-    (for [source raw-sources]
+  (if (and (> (len raw-asts) 0) (> (len raw-sources) 0))
+    (for [pair (list (zip raw-asts raw-sources))]
       (do
-        (setv current-source source)
-        (.append outputs (realize-value (eval-ast (parse-source source) (initial-env))))))
-    (for [ast raw-asts]
-      (.append outputs (realize-value (eval-ast ast (initial-env))))))
+        (setv current-source (get pair 1))
+        (.append outputs (realize-value (eval-ast (get pair 0) (initial-env))))))
+    (if (> (len raw-sources) 0)
+      (for [source raw-sources]
+        (do
+          (setv current-source source)
+          (.append outputs (realize-value (eval-ast (parse-source source) (initial-env))))))
+      (for [ast raw-asts]
+        (.append outputs (realize-value (eval-ast ast (initial-env)))))))
   (json.dumps outputs))
   (pnix-main))
 '''
 
 
-def hy_runtime_source_for_asts(asts: list[dict[str, Any]]) -> str:
+def hy_runtime_source_for_asts(
+    asts: list[dict[str, Any]], sources: list[str] | None = None
+) -> str:
     asts_json = json.dumps(stable_data(asts), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    sources_json = json.dumps([], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    sources_json = json.dumps(
+        list(sources or []), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     return (
         HY_AST_EVALUATOR_SOURCE.replace("__PNIX_ASTS_JSON__", json.dumps(asts_json))
         .replace("__PNIX_SOURCES_JSON__", json.dumps(sources_json))
@@ -14206,6 +14215,8 @@ RUST_EVAL_CORPUS: list[dict[str, Any]] = [
     {"name": "rs-unsafeGetAttrPos-column", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).column', "expect": 3},
     {"name": "rs-unsafeGetAttrPos-nested-column", "source": '(builtins.unsafeGetAttrPos "b" ({ a.b = 1; }.a)).column', "expect": 35},
     {"name": "rs-unsafeGetAttrPos-generated-null", "source": 'builtins.unsafeGetAttrPos "a" (builtins.listToAttrs [ { name = "a"; value = 1; } ])', "expect": None},
+    {"name": "rs-unsafeGetAttrPos-inherit-line", "source": 'let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos "x" s).line', "expect": 3},
+    {"name": "rs-unsafeGetAttrPos-inherit-column", "source": 'let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos "x" s).column', "expect": 11},
     {"name": "rs-builtins-map", "source": "builtins.map (x: x * 2) [1 2 3]", "expect": [2, 4, 6]},
     {"name": "rs-builtins-filter", "source": "builtins.filter (x: x > 2) [1 2 3 4 5]", "expect": [3, 4, 5]},
     {"name": "rs-builtins-length", "source": "builtins.length [1 2 3 4]", "expect": 4},
@@ -16631,6 +16642,9 @@ SELF_TEST_CASES = [
     {"name": "builtin-unsafeGetAttrPos-column", "source": '(builtins.unsafeGetAttrPos "a" {\n  a = 1;\n}).column', "expect": 3},
     {"name": "builtin-unsafeGetAttrPos-nested-column", "source": '(builtins.unsafeGetAttrPos "b" ({ a.b = 1; }.a)).column', "expect": 35},
     {"name": "builtin-unsafeGetAttrPos-generated-null", "source": 'builtins.unsafeGetAttrPos "a" (builtins.listToAttrs [ { name = "a"; value = 1; } ])', "expect": None},
+    {"name": "builtin-unsafeGetAttrPos-inherit-line", "source": 'let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos "x" s).line', "expect": 3},
+    {"name": "builtin-unsafeGetAttrPos-inherit-column", "source": 'let x = 1;\ns = {\n  inherit x;\n};\nin (builtins.unsafeGetAttrPos "x" s).column', "expect": 11},
+    {"name": "builtin-unsafeGetAttrPos-inherit-from-column", "source": 'let s = { a = 1; }; in (builtins.unsafeGetAttrPos "a" { inherit (s) a; }).column', "expect": 69},
     {"name": "builtin-bool-aliases", "source": "builtins.and true (builtins.not false) && builtins.or false true", "expect": True},
     {"name": "builtin-comparison-aliases", "source": 'builtins.eq "ab" ("a" + "b") && builtins.le 2 2 && builtins.gt 3 2 && builtins.ge 3 3 && builtins.lt 1 2', "expect": True},
     {"name": "builtin-mod", "source": "builtins.mod 17 5", "expect": 2},

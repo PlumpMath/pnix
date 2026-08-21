@@ -218,7 +218,8 @@ def stage_tower(source: str) -> dict[str, Any]:
 def hy_runtime_batch(cases: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     cases = cases or rt.HY_RUNTIME_CORPUS
     asts = [rt.parse(case["source"]) for case in cases]
-    hy_values = hy_mirror.stage7_eval_json(rt.hy_runtime_source_for_asts(asts))
+    sources = [case["source"] for case in cases]
+    hy_values = hy_mirror.stage7_eval_json(rt.hy_runtime_source_for_asts(asts, sources))
     checks = []
     for case, hy_value in zip(cases, hy_values):
         python_value = rt.eval_source(case["source"])

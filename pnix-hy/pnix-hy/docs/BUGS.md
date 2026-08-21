@@ -84,7 +84,27 @@
     구현 안 됐네" 하고 시작하지 말 것 — 다시 하려면 새로운 근거(예:
     검증 방법론이 새로 나옴)가 있어야 proposal로 시작할 수 있다.
 
-## 4. 감사에서 발견됐지만 이후 해결된 항목 (참고용, 현재는 문제 없음)
+## 4. `unsafeGetAttrPos` — Nix 파일 모드와 `--expr`은 다른 오라클이다 (2026-08-21)
+
+`nix eval --expr` / `nix-instantiate -E` 는 origin 파일이 없어서 **모든**
+위치(리터럴 attr 포함)가 `null`이다. 위치 대조는 **파일 모드**로만 한다.
+
+Nix 2.34.8 파일 모드로 직접 확인한 결과:
+
+- `inherit x;` / `inherit (s) a;` — inherit 절의 이름 위치를 반환한다.
+  hy/clj/cljs/clr/rs 인터프리터와 같다.
+- `builtins.mapAttrs (k: v: v) { a = 1; }` — `null`. pnix 5 호스트와 같다.
+- `builtins.listToAttrs [{ name = "a"; value = 1; }]` — Nix는 위치를 남긴다
+  (pnix는 `null`. 기존 `*-generated-null` fixture는 `--expr` 오라클).
+- `builtins.removeAttrs { a = 1; b = 2; } ["b"]` — Nix는 남은 키의 원래
+  위치를 유지. pnix는 `null`.
+- `{ a = 1; } // { b = 2; }` / 같은 키 override — Nix는 기여한 쪽 바인딩
+  위치. hy `//` 는 위치를 버린다.
+
+`mapAttrs`만 "생성 attrset → null"이 Nix와 같다. listToAttrs/removeAttrs/`//`
+수렴은 별 슬라이스(5 호스트). `--expr`을 오라클로 쓰지 말 것.
+
+## 5. 감사에서 발견됐지만 이후 해결된 항목 (참고용, 현재는 문제 없음)
 
 - `hy_mirror._proj_worker_run`/`_stage7_worker_eval`의 `readline()`에
   deadline이 없어 wedged worker가 게이트를 블록할 수 있다는 지적이
@@ -94,7 +114,7 @@
   이유는 순전히 "예전에 알려졌던 이슈가 재발하면 A10 근처를 볼 것"이라는
   포인터용.
 
-## 5. 현재 열려있는 진짜 버그
+## 6. 현재 열려있는 진짜 버그
 
 없음(2026-08-20 기준). 열려있는 작업 항목은 전부 `docs/TODO.md`에 있고,
 그중 실제 "버그 수정" 성격인 건 없다(패키징/문서 성격). 새로 버그를
