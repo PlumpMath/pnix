@@ -4549,7 +4549,7 @@
                     (recur (rest remaining)
                            (if (contains? out k)
                              out
-                             (assoc-list-to-attrs-entry out k row)))))))
+                             (assoc-list-to-attrs-entry out k row))))))))
           {:status :ok :value out}))
 
       :catAttrs

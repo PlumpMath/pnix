@@ -6367,7 +6367,7 @@
                      "(builtins.unsafeGetAttrPos \"a\" ({ a = 1; } // {\n  a = 2;\n})).column")))))
   (testing "mapAttrs drops positions (Nix file-mode)"
     (is (nil? (:value (pnix/eval-source
-                       "builtins.unsafeGetAttrPos \"a\" (builtins.mapAttrs (k: v: v) { a = 1; })")))))))
+                       "builtins.unsafeGetAttrPos \"a\" (builtins.mapAttrs (k: v: v) { a = 1; })"))))))
 
 (deftest evaluator-cur-pos-surfaces-var-parser-span
   (is (= {"file" "<pnix-px>" "line" 1 "column" 1}
