@@ -153,22 +153,23 @@ check whether something already exists before implementing it.
 
 ### pnix-clj.core
 
-  compile-source eval-file eval-source eval-source-strict eval-source-strict-audit
-  eval-source-with-imports lane-classification lower-source parse-source report
-  run-source verify-source
+  call-file compile-source eval-file eval-source eval-source-strict
+  eval-source-strict-audit eval-source-with-imports lane-classification lower-source parse-source
+  report run-source verify-source
 
 ### pnix-clj.evaluator
 
   *coverage* *fuel* *import-context* *import-modules* *import-origin*
   *import-resolver* *pure-eval* *source-file* *source-text* *strict*
-  *strict-audit* ->PxBytes apply-callable assert-condition-violation attr-key-value-result
-  attrset-value? binary-value-result contextual-import-target ctx-string ctx-string?
-  default-env default-env-names eval-ast eval-ast* eval-ast-whnf
-  eval-ast-with-fuel force-normal force-whnf if-condition-violation import-context-key
-  import-resolver-context impure-builtins interpolation-value-result lane-classification lazy-host-fn
-  logical-operand-result make-value-thunk merge-attr-path neg-value-result nix-float-str
-  nix-regex-pattern not-value-result nullary-builtin-result path-value path-value?
-  source-position strict-type string-content string-ctx value-thunk?
+  *strict-audit* ->PxBytes apply-callable apply-callable-host assert-condition-violation
+  attr-key-value-result attrset-value? binary-value-result contextual-import-target ctx-string
+  ctx-string? default-env default-env-names eval-ast eval-ast*
+  eval-ast-whnf eval-ast-with-fuel force-normal force-whnf if-condition-violation
+  import-context-key import-resolver-context impure-builtins interpolation-value-result lane-classification
+  lazy-host-fn logical-operand-result make-value-thunk merge-attr-path neg-value-result
+  nix-float-str nix-regex-pattern not-value-result nullary-builtin-result path-value
+  path-value? source-position strict-type string-content string-ctx
+  value-thunk?
 
 ### pnix-clj.form-analysis
 

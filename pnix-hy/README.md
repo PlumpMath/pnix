@@ -294,7 +294,7 @@ pnix-hy --deployment                             # projection/full = True 확인
   proposal로 시작).
 - `pnix-hy/docs/TODO.md` / `hy-meta/todo.md` — 전체 기능 목록 + 상태.
 
-> 참고: `docs/`의 감사/설계/proposal 문서와 `todo.md`는 코드 식별자·해시·날짜가 섞인 **엔지니어링
+> 참고: `docs/`의 감사/설계/proposal 문서와 `docs/TODO.md`는 코드 식별자·해시·날짜가 섞인 **엔지니어링
 > 기록**이라 영어/혼용으로 둔다(정밀·이력 보존 목적). 사용자용 매뉴얼(이 README와 예제)은 한글이다.
 
 
@@ -562,4 +562,3 @@ lib.assert (1 + 1 == 2) "수학이 잘못됨!"
 
 builtins.assert (1 + 1 == 2) "수학이 잘못됨!"
 >> True
-

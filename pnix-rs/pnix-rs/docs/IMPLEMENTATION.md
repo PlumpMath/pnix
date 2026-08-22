@@ -676,12 +676,15 @@ pnix-rs = { path = "../../../../pnix-rs/pnix-rs", package = "pnix-rs" }
 fn main() {
     println!("{}", pnix_rs::eval("1 + 2").unwrap());
     println!("{}", pnix_rs::eval_file("prog.px").unwrap());
+    println!("{}", pnix_rs::call_file_json("library.px", "double", "[21]").unwrap());
 }
 ```
 
 참고: crate 이름은 `pnix-rs`이고 lib 이름은 `pnix_rs`(`[lib] name =
 "pnix_rs"`, `src/lib.rs` — "Embeddable PNIX runtime library", ABI 버전
-`PNIX_RS_ABI_VERSION = 1`)이므로 `package = "pnix-rs"`가 필요. 인트리 미니
+`call_file`은 raw `PxVal`, `call_file_json`은 JSON-safe pure-data ABI를
+제공한다. C ABI v1은 아직 eval-only다. `PNIX_RS_ABI_VERSION = 1`)이므로
+`package = "pnix-rs"`가 필요. 인트리 미니
 데모: `examples/host-import/rs/pnix-rs-smoke`(`cargo run -q -- ../../hello.px`
 → `3`).
 

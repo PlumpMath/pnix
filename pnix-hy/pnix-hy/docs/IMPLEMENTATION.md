@@ -424,11 +424,10 @@ proposal에 기록.
 - proposal이 수락된 뒤에만 작업이 `docs/TODO.md`로 들어간다.
 - proposal 전체 인덱스(1-2줄 요약 + 상태)는 `docs/PLANS.md`.
 
-### 4.8 OWNER AMENDMENT 2026-07-08 — shared common-.px core admitted IN scope (B6)
+### 4.8 과거 OWNER AMENDMENT 2026-07-08 — 2026-08-22 보류로 대체됨
 
-Owner-authorized proposal per §4.5 (which requires OUT-of-scope items to be
-admitted by an explicit scope + proposal). The **shared common-`.px` core**
-track is now IN scope for this repo:
+2026-07-08에는 §4.5 절차에 따라 shared common-`.px` adapter 트랙을 이
+호스트 범위에 넣었다. 당시 예정했던 범위는 다음이었다:
 
 - loading common `.px` from `../pnix-meta` through the pnix-hy runtime;
 - the cross-repo canonical-result + effect/capability ABI (blockers B1–B3,
@@ -444,10 +443,15 @@ Bound by the constitution (`./AGENTS.md`, symlinked as `CLAUDE.md`):
    surface ahead of the substrate (this repo is attempt #3, not `clj-msv`).
 3. The §4.5 fence REMAINS for everything NOT part of this shared-core track.
 
-This amendment lifts the §4.5 fence for the shared-core track only.
+그러나 최상위 저장소의 2026-08-22 설계 잠금이 이 amendment의 **착수 상태를
+대체한다**. 현재는 다섯 `host-meta`와 `pnix-host` 기본을 먼저 확실히 닫는
+단계이며 `pnix-meta`, 공통 stdlib, mirror/AI 응용, 과거 `.px` 이관은 보류다.
+따라서 이 호스트에서 common-core adapter나 shared corpus growth를 새로
+시작하지 않는다. 저장소 소유자가 미래 `pnix-meta` 단계를 명시적으로 다시
+열면 그때 위 세 항목과 non-regression/meta-first 조건을 재사용한다.
 
 Note: `docs/TODO.md`의 "Host-language import of pnix product library" 절이 이
-트랙의 현재 진행 상태(dot-nix 통합, `PNIX_HY_HOME`/`PNIX_HY_LIBRARY` 등)를
+호스트-로컬 import 상태(dot-nix 통합, `PNIX_HY_HOME`/`PNIX_HY_LIBRARY` 등)를
 다룬다 — §7(호스트 라이브러리로 임베드하기) 참고. `pnix-meta`(공용 `.px`
 라이브러리 본체)는 사용자 본인이 직접 손으로 작성하는 별도 작업이라 이
 저장소의 AI 작업 대상이 아니다.
@@ -647,7 +651,8 @@ flake는 과학 스택을 소유하지 않는다(numpy는 `~/dot-nix/dev/{py,cud
 1. **이중 축 문서**: `HOST_DEV_ENV.md`, 호스트 `AGENTS.md`/`README.md`.
 2. **Host-main**: `PYTHONPATH` + `pnix_hy`가 HM `pnix-hy-host`
    (`python`/`hy`)를 통해 잡힘.
-3. **호스트-언어 `.px` import**: `pnix_hy.eval_file`(= `run_px`); 패키지 설치.
+3. **호스트-언어 `.px` import/call**: `pnix_hy.eval_file`(= `run_px`) +
+   `call_file` / `call_file_json`; 패키지 설치.
 4. **환경변수**: `PNIX_HY_HOME`, `PNIX_HY_LIBRARY`, `PNIX_HY_PYTHON`.
 5. **공개 API**: `import pnix_hy` — `__all__` + 루트 `HOST_IMPORT.md` § hy가
    현재 계약(어떤 서브모듈이 host-library API로 안정적인지). `pnix_hy/py.typed`
@@ -661,7 +666,7 @@ host-env, 2026-08-14). 잔여 선택 작업(P2/P3, product 잔여)은 monorepo
 ### 7.3 로컬 라이브러리 export (2026-08-14)
 
 - `bin/export-pnix-hy-library` → `target/pnix-hy-library/site` + `py.typed`.
-- `bin/pnix-hy-library-smoke` (`eval_file` → 3으로 스모크 테스트).
+- `bin/pnix-hy-library-smoke` (`eval_file` → 3, exported function call → 42).
 - PyPI 아님 — 개인/로컬 `PYTHONPATH` feed 전용.
 
 ### 7.4 pip 설치 (설치 티어)

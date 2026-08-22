@@ -26,6 +26,20 @@ static class Program
                 return 0;
             }
 
+            if (args.Length >= 1 && args[0] == "--call")
+            {
+                if (inProcess || args.Length < 4)
+                {
+                    Console.Error.WriteLine(
+                        "usage: HelloPnix --call FILE.px ENTRY ARGS_JSON (process mode)");
+                    return 2;
+                }
+                var called = Eval.CallFile(args[1], args[2], args[3]).EnsureDone();
+                Console.WriteLine(
+                    called.Value.HasValue ? called.Value.Value.GetRawText() : called.RawJson);
+                return 0;
+            }
+
             var source = args.Length > 0 ? string.Join(" ", args) : "1 + 2";
             var r = inProcess
                 ? Eval.SourceInProcess(source).EnsureDone()

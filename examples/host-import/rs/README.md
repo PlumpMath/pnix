@@ -1,6 +1,6 @@
 # rs host-import 예제
 
-요리책: [`../../pnix-rs/pnix-rs/docs/IMPLEMENTATION.md`](../../pnix-rs/pnix-rs/docs/IMPLEMENTATION.md) §7
+요리책: [`../../../pnix-rs/pnix-rs/docs/IMPLEMENTATION.md`](../../../pnix-rs/pnix-rs/docs/IMPLEMENTATION.md) §7
 
 ## 미니 crate (path dep) — 시작점
 

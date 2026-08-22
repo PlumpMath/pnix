@@ -6,7 +6,7 @@
 핵심 basic 예: [[safe_eval]] · [[explain_pnix]].
 명시적 proof/service API: `pnix_hy.proof.check_action` · `pnix_hy.deploy.deployment_info` (basic top-level export 아님).
 
-counts: symbols=48 · reports=73 · proposals=31
+counts: symbols=50 · reports=73 · proposals=31
 
 ## Public API (`pnix_hy.__all__`)
 
@@ -19,6 +19,8 @@ counts: symbols=48 · reports=73 · proposals=31
 | `__version__` | value | pnix-hy | `pnix_hy` | package version (0.1.0) |
 | `apply_effect_request` | function | interop (boundary) | `pnix_hy.interop` | Compatibility projection of the nominal effect adapter result. |
 | `apply_host_method` | function | interop (boundary) | `pnix_hy.interop` | Invoke a host object's public method across the interop boundary. |
+| `call_file` | function | pnix-hy (runtime, sacred) | `pnix_hy.pnix_runtime` | Call a named, curried function from a `.px` attrset module. |
+| `call_file_json` | function | pnix-hy (runtime, sacred) | `pnix_hy.pnix_runtime` | JSON-safe common host ABI for pure `.px` library entrypoints. |
 | `call_host` | function | interop (boundary) | `pnix_hy.interop` | Invoke a HOST callable from the pnix side, capability-gated. `host_callable` may be a |
 | `call_host_method` | function | interop (boundary) | `pnix_hy.interop` | Invoke a host object's public method across the interop boundary. |
 | `declare_opaque_invariants` | function | interop (boundary) | `pnix_hy.interop` | 0020/I6 (Trustworthy Proxies): declare attributes whose values must NEVER change for the |

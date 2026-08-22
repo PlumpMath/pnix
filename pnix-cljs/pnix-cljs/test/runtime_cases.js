@@ -26,6 +26,8 @@ done("# comment\n20 + 22", 42n);
 done("9223372036854775807", 9223372036854775807n);
 done("-9223372036854775808", -9223372036854775808n);
 done('{ outcome_kind = "done"; }', {outcome_kind: "done"});
+done('builtins.toJSON { outPath = "/x"; other = 1; }', '"/x"');
+done('builtins.toJSON { __toString = self: self.name; name = "n"; outPath = "/x"; }', '"n"');
 
 failed("1 / 0", "division-by-zero");
 failed("9223372036854775807 + 1", "integer-overflow");
@@ -37,6 +39,7 @@ failed("let value = value; in value", "cycle-detected");
 failed("let x = ; in x", "syntax-error");
 failed("@", "syntax-error");
 failed("{ a = 1; a = 2; }", "duplicate-attrset-binding");
+failed('builtins.toJSON { __toString = self: 42; }', "type-error");
 done("(x: x) == (x: x)", false);
 
 const fixture = fs.readFileSync(
@@ -49,6 +52,24 @@ assert.deepEqual(fixtureResult.value, {answer: 42n, selected: 42n});
 assert.equal(
   pnix.evalSourceJson("9223372036854775807"),
   '{"outcome_kind":"done","schema":"pnix.machine.host-outcome.v1","value":9223372036854775807}'
+);
+
+const readinessLibrary = path.join(
+  __dirname,
+  "../examples/production-readiness/library.px"
+);
+assert.equal(pnix.callFileValueJson(readinessLibrary, "double", "[21]"), "42");
+assert.equal(
+  pnix.callFileValueJson(readinessLibrary, "mapDouble", "[[1,2,3]]"),
+  "[2,4,6]"
+);
+assert.deepEqual(
+  pnix.callFile(readinessLibrary, "summarize", "[[1,2,3,4]]"),
+  {
+    schema: "pnix.machine.host-outcome.v1",
+    outcome_kind: "done",
+    value: {count: 4n, total: 10n},
+  }
 );
 
 console.log("pnix-cljs JavaScript runtime matrix: PASS");

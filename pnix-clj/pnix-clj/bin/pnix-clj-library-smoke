@@ -16,7 +16,10 @@ fi
 
 echo "== pnix-clj-library-smoke (local feed only) =="
 
-if [[ ! -f "$out/manifest.json" ]]; then
+if [[ ! -f "$out/manifest.json" ]] || \
+   [[ "$product/src/pnix_clj/core.clj" -nt "$out/manifest.json" ]] || \
+   [[ "$product/src/pnix_clj/evaluator.clj" -nt "$out/manifest.json" ]] || \
+   ! grep -q '(defn call-file' "$out/pnix-clj/src/pnix_clj/core.clj" 2>/dev/null; then
   if [[ "$no_export" -eq 1 ]]; then
     echo "FAIL: missing $out/manifest.json — run export-pnix-clj-library" >&2
     exit 1
@@ -45,9 +48,12 @@ if ! command -v clojure >/dev/null 2>&1; then
   exit 1
 fi
 
-px="$(mktemp "${TMPDIR:-/tmp}/pnix-clj-lib-smoke.XXXXXX.px")"
-trap 'rm -f "$px"' EXIT
+tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/pnix-clj-lib-smoke.XXXXXX")"
+px="$tmp_root/program.px"
+library="$tmp_root/library.px"
+trap 'rm -rf "$tmp_root"' EXIT
 printf '%s\n' '1 + 2' >"$px"
+printf '%s\n' '{ double = x: x * 2; }' >"$library"
 
 # Run from exported product root so local/root ../clj-meta resolves.
 val="$(
@@ -60,6 +66,17 @@ if [[ "$val" != "3" ]]; then
   exit 1
 fi
 echo "  OK  eval-file via exported local/root => 3"
+
+called="$(
+  cd "$out/pnix-clj"
+  clojure -M -e \
+    "(require '[pnix-clj.core :as c]) (print (:value (c/call-file \"$library\" \"double\" [21])))"
+)"
+if [[ "$called" != "42" ]]; then
+  echo "FAIL: call-file via export => '$called' (want 42)" >&2
+  exit 1
+fi
+echo "  OK  call-file via exported local/root => 42"
 
 # Sanity: consumer-deps.edn points at absolute local/root under export.
 if ! grep -q 'local/root' "$out/consumer-deps.edn"; then

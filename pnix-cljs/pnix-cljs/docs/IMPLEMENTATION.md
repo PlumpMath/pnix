@@ -152,6 +152,10 @@ pnix.evalFile('prog.px');
 pnix.evalFileJson('prog.px');
 pnix.evalFileValueJson('prog.px');  // 스모크에 자주 사용: "3"
 pnix.evalFileValue('prog.px');
+
+// attrset 모듈의 curried export; 인자는 JSON 배열, 결과는 canonical JSON
+pnix.callFileValueJson('library.px', 'double', '[21]'); // "42"
+pnix.callFile('library.px', 'mapDouble', '[[1,2,3]]');
 ```
 
 #### 스모크 (`pnix-cljs-host` 있는 HM 프로파일)

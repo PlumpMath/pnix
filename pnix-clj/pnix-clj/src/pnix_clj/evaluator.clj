@@ -5148,6 +5148,20 @@
           {:status :ok
            :value f'})))))
 
+(defn apply-callable-host
+  "Host boundary for applying one PNIX callable to native Clojure data.
+  Curried application preserves PNIX laziness internally; the final result is
+  deep-realized before it crosses back to the host."
+  [callable arguments]
+  (loop [current callable
+         remaining (seq arguments)]
+    (if-not remaining
+      (force-deep current)
+      (let [result (apply-callable current (first remaining))]
+        (if (= :ok (:status result))
+          (recur (:value result) (next remaining))
+          result)))))
+
 (defn- eval-string-template
   [env parts]
   (loop [remaining parts

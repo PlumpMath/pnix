@@ -33,6 +33,15 @@ resolve_cli_args() {
         out+=("$1")
         shift
         ;;
+      --call-json)
+        out+=("$1")
+        shift
+        if [[ $# -lt 3 ]]; then
+          break
+        fi
+        out+=("$(absolute_from_caller "$1")" "$2" "$3")
+        shift 3
+        ;;
       --production-outcome)
         out+=("$1")
         shift

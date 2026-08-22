@@ -13,6 +13,7 @@
   here first, then wire it below."
   [["-e SOURCE" "인라인 SOURCE 평가, CLI JSON projection 출력"]
    ["FILE.px" "파일 평가, CLI JSON projection 출력"]
+   ["--call-json FILE.px ENTRY ARGS_JSON" "`.px` attrset의 curried ENTRY를 JSON 배열 인자로 호출"]
    ["--repl" "대화형 pnix REPL (개발자 진입점, evaluation authority 아님)"]
    ["--production-outcome-self-check" "내장 production-outcome self-check 실행"]
    ["--production-outcome CASES.tsv" "TSV 파일의 production-outcome 케이스 실행"]
@@ -202,6 +203,12 @@
 
       (= ["--repl"] args)
       (repl! host-root)
+
+      (and (= 4 (count args)) (= "--call-json" (first args)))
+      (let [file (host/canonical-path (second args))
+            root (file-root host-root file)]
+        (print-result!
+         (evaluator/call-file root file (nth args 2) (nth args 3))))
 
       (= ["--production-outcome-self-check"] args)
       (production-outcome/-main "--self-check")

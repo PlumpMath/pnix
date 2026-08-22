@@ -13,22 +13,26 @@ if [[ -z "$PY" ]]; then
     /tmp/pnix-hy-py314-venv/bin/python \
     /usr/local/bin/python3.11 \
     /usr/local/opt/python@3.14/bin/python3.14; do
-    if [[ -x "$candidate" ]]; then
+    # An executable alone is not a proof host.  Keep looking when a system
+    # Python exists but lacks the pinned Hy runtime or parser dependency.
+    if [[ -x "$candidate" ]] && \
+       "$candidate" -c 'import hy, funcparserlib' 2>/dev/null; then
       PY="$candidate"
       break
     fi
   done
 fi
 if [[ -z "${PY:-}" ]]; then
-  echo "hy-meta-gate: no Python 3.11/3.14 found; set HY_META_PYTHON" >&2
+  echo "hy-meta-gate: no usable Python 3.11/3.14 proof host found; set HY_META_PYTHON" >&2
+  echo "  the interpreter must import the pinned Hy plus funcparserlib" >&2
   exit 2
 fi
 
-# Ensure Hy 1.3.0 snapshot + deps are importable.
-export PYTHONPATH="${ROOT}/hy-1.3.0${PYTHONPATH:+:$PYTHONPATH}"
+# The proof interpreter carries the flake-pinned Hy 1.3.1 plus dependencies.
+# Native Hy source corpora are materialized separately under ROOT/tests.
 if ! "$PY" -c 'import hy, funcparserlib' 2>/dev/null; then
   echo "hy-meta-gate: need hy + funcparserlib on $PY" >&2
-  echo "  e.g. $PY -m pip install 'funcparserlib~=1.0' && PYTHONPATH=$ROOT/hy-1.3.0" >&2
+  echo "  e.g. $PY -m pip install 'hy==1.3.1' 'funcparserlib~=1.0'" >&2
   echo "  or: /usr/local/bin/python3.11 -m venv /tmp/pnix-hy-py311-venv && ..." >&2
   exit 2
 fi

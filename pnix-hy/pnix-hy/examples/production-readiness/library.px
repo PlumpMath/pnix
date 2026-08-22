@@ -1,0 +1,9 @@
+{
+  version = "pnix-library-seed-v1";
+  double = x: x * 2;
+  mapDouble = values: builtins.map (x: x * 2) values;
+  summarize = values: {
+    count = builtins.length values;
+    total = builtins.foldl' (acc: x: acc + x) 0 values;
+  };
+}

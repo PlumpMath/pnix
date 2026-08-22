@@ -21,6 +21,45 @@
 각 호스트의 `README.md`와 `CLAUDE.md`가 무엇을 주장하고 무엇을 주장하지 않는지 밝힌다 —
 패리티를 가정하기 전에 읽을 것.
 
+## 현재 범위와 계보 (설계 잠금)
+
+개발 순서는 **`host-meta` → `pnix-host` → (나중에) `pnix-meta`**다.
+현재 저장소는 앞의 두 층만 소유한다.
+
+1. 각 `*-meta`는 pnix 의미론을 모르는 독립 호스트 언어 메타순환 기판이어야
+   하며, Stage15/N 또는 그에 대응하는 15-generation fixed-point 증거를 먼저
+   닫는다.
+2. 각 `pnix-*`는 그 호스트 기판 위에 pnix 파서·평가기·호스트 브리지를 만들고,
+   제품 aggregate gate가 meta 증거와 pnix 런타임을 함께 검증한다.
+3. 공통 `.px` stdlib/알고리즘/AI 응용인 **`pnix-meta`는 아직 시작하지 않는다.**
+   기존 mirror 레인은 현재 런타임의 교차검증 증거로만 유지하고, mirror/stdlib
+   응용 확대는 미래 `pnix-meta` 단계의 일이다.
+
+과거 저장소는 런타임 의존성이나 복사 원본이 아니라 실패 원인을 보존한
+읽기 전용 계보다.
+
+| 시도 | 중단 원인 | 현재 규칙 |
+|---|---|---|
+| [`PlumpMath/pnix-old_`](https://github.com/PlumpMath/pnix-old_) | 프로젝트가 지나치게 커지고 `.px` 소유권·배치가 무너져 중복 개발과 방향 전환이 반복됨 | 전체 구조나 `.px`를 맹목적으로 가져오지 않음 |
+| [`PlumpMath/clj-msv`](https://github.com/PlumpMath/clj-msv) | `clj-meta`가 Stage3일 때 pnix/MSV를 서둘러 만들고, `.px`가 소유해야 할 응용 의미를 `.clj`에 계속 구현함 | meta-first; 호스트 코드는 pnix 기계와 브리지만 소유 |
+| [`PlumpMath/pnix-zero`](https://github.com/PlumpMath/pnix-zero) | 올바른 층 분리를 시작했지만 `pnix-meta`에 과거 `.px` 2,663개를 정리 없이 들여오며 다시 범위가 폭증함 | 현 저장소에서 `pnix-meta`를 제외하고 다섯 기본 쌍부터 닫음 |
+| 현재 [`PlumpMath/pnix`](https://github.com/PlumpMath/pnix) | 다섯 `host-meta` + 다섯 `pnix-host`의 기본을 독립적으로 강화 | 새 공통 stdlib/mirror/AI 트랙을 열지 않음 |
+
+현재 host-meta 하한은 모두 닫혀 있다. 이것은 각 호스트 언어 전체를 대체한다는
+주장이 아니라, 각 상태 문서와 receipt가 명명한 범위의 증거다.
+
+pnix-meta 착수 전 실행 계약과 다섯 호스트 공통 예제는
+[`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md) 및
+`./bin/production-readiness-gate`가 정본이다.
+
+| Host meta | 현재 하한 증거 |
+|---|---|
+| `clj-meta` | Stage15 + StageN ([STATUS](pnix-clj/clj-meta/STATUS.md)) |
+| `cljs-meta` | 최소 15 generation + fixed point ([STATUS](pnix-cljs/cljs-meta/STATUS.md)) |
+| `clr-meta` | Compiler Stage15/N + scoped self-reproduction ([STATUS](pnix-clr/clr-meta/STATUS.md)) |
+| `hy-meta` | Stage15/N seed/replay closure ([STATUS](pnix-hy/hy-meta/STATUS.md)) |
+| `rs-meta` | Stage15/N manifest/replay closure ([STATUS](pnix-rs/rs-meta/STATUS.md)) |
+
 ## 호스트 실행
 
 모든 호스트는 Nix flake다. 이 최상위에서는 아무것도 빌드하지 않는다. 관심 있는 호스트로 들어간다.

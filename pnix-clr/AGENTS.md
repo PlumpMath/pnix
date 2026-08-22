@@ -35,25 +35,19 @@ receipt가 아니다. `bin/clojure-clr`는 그 generation-2 tool 위 focused
 fail closed이고, pinned upstream compiler/runtime이 그 아래 explicit
 bootstrap trust root로 남는다.
 
-현재 slice는 experimental net10 bootstrap plus 네 common corpus case와 common
-production basic-outcome contract의 adoption이다. local 게이트가 nominal CLR
-outcome, common 11-case projection, focused dead-import/hasAttr precedence
-동작을 증명한다. 네 번째 case는 admitted PNIX source path에서 비롯된 Int64
-value에 대해서만 checked add/subtract/multiply/divide와 unary negation을
-추가하며, structured overflow failure와 dead overflow expression의 lazy
-avoidance를 포함한다. Float literal, structural equality (lists/attrsets),
-extended builtin surface (math, bitwise, list/attrset helpers — maturity
-pass 2026-08-11)는 동작하지만, 위 checked-I64 보장은 integer만 다룬다;
-general numeric promotion, BigInt semantics, primitive-manifest enforcement,
-mature JVM surface, production request/suspension, compiler Stage1--15/N
-chain, compiler self-reproduction, IL fixed point, raw AOT reproducibility,
-broad ClojureCLR compatibility/replacement, standalone source-free
-distribution, PNIX common-compiler integration, 어떤 cross-host 게이트로의
-membership도 unclaimed로 남는다. `clr-meta`를 먼저 grow·gate한 뒤
-`pnix-clr` slice를 admit한다. 현재 aggregate 게이트가 그 순서와 artifact
-dependency를 강제한다; direct compiler acceleration과 replacement는 미래
-작업으로 남는다. ordered target과 promotion boundary는
-`clr-meta/STAGE15_N_ROADMAP.md` 참조.
+현재 `clr-meta`의 별도 selfhost compiler family는 Compiler Stage1--15/N,
+StageN, scoped compiler self-reproduction/fixed point까지 live gate로 닫혀 있다.
+모든 receipt는 `promotion/allowed?=false`를 유지한다. evaluator generation
+0--2와 이 compiler stage family를 혼동하지 말 것. 닫히지 않은 것은 general
+CLR IL fixed point, broad ClojureCLR compatibility/replacement, standalone
+source-free distribution, PNIX common-compiler integration, host promotion이다.
+
+`pnix-clr` 제품 의존은 operational하다: aggregate gate가 `clr-meta`를 먼저
+검증하고 generic artifact builder가 정확한 8-namespace plan을 AOT로 만든 뒤
+제품이 그 hash-bound artifact만 검증·로드한다. 다만 현재 제품 backend는
+`host-clojureclr-aot`이며 selfhost StageN compiler를 제품 컴파일러로 직접
+소비하지 않는다. direct compiler acceleration/replacement는 미래 작업이다.
+정본은 `clr-meta/STATUS.md`와 `clr-meta/STAGE15_N_ROADMAP.md`다.
 
 failure는 structured로 유지하고 language-error sink로 `Held`를 쓰지 말 것.
 

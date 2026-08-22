@@ -12,8 +12,8 @@
 | **clj** | `pnix-clj/pnix-clj/examples/` | ~94개 슬라이스 | 가장 densest: spine, machine, oracle, AI gate, live oracle, mirror-pair corpus |
 | **hy** | `pnix-hy/pnix-hy/examples/` | ~43 | specialize, cogen, compartment, Jones, stage-ladder, receipt, perf, Hy 구성체 프로젝션, meta-circular tower, 양방향 closure, 호스트 콜러블 호출, opaque 참조 생명주기 등 |
 | **rs** | `pnix-rs/pnix-rs/examples/` | ~28 | 중간: gate, mirror, BTA, embed, Jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/tower-depth/project-health |
-| **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–17 | experimental seed; Node 라이브러리 import + 클로저 + REPL |
-| **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–17 | experimental seed; C# 라이브러리 + in-process opt-in + 클로저 + REPL |
+| **cljs** | `pnix-cljs/pnix-cljs/examples/` | 코어 00–17 + readiness | Node 라이브러리 import + Stage15 fixed-point 조합 |
+| **clr** | `pnix-clr/pnix-clr/examples/` | 코어 00–17 + readiness | C# 라이브러리 + Compiler Stage15/N 조합 |
 
 모노레포 host-import 스모크(제품 카탈로그 아님): `examples/host-import/`.
 
@@ -38,6 +38,7 @@
 | In-process 호스트 eval | — | — | — | — | **05** (opt-in) |
 | builtins / 문법 seed | 다수 | 다수 | gate·eval | **07–09, 11–16** | **07–08, 11–16** |
 | 파일·artifact 게이트 | eval-file 등 | import hook | embed | **08** | **09–10** |
+| pnix-meta 착수 전 공통 floor | **production-readiness** | **production-readiness** | **production-readiness** | **production-readiness** | **production-readiness** |
 
 ## 균형 규칙
 
@@ -46,8 +47,10 @@
    foundation → sandbox → host import → outcome → embed → honesty → meta 경계  
    → (가능하면) builtins / 파일·CLI / 호스트 전용 게이트.
 3. 호스트 전용 깊은 카탈로그는 **실행 가능한 표면 + README**가 있을 때만 늘린다.
-4. 성숙도가 다르다: cljs/clr 예제는 **experimental** 을 밝히고, 인정하지 않은
-   주장(Stage15/N, 다섯 호스트 의미 패리티 등)은 fail-closed로 적는다.
+4. 연구 카탈로그의 깊이는 여전히 다르다. 그러나 다섯 호스트 모두
+   `production-readiness`에서 direct runtime, 같은 `.px` import,
+   PNIX-in-PNIX, host import, host-meta 조합이라는 공통 floor를 실행한다.
+   이것을 다섯 호스트 전체 의미 패리티나 공통 callback ABI로 확대 해석하지 않는다.
 
 ## 호스트별 시작점
 
@@ -59,14 +62,20 @@
 | cljs | `pnix-cljs/pnix-cljs/examples/README.md` + `FOUNDATION_PATH.md` |
 | clr | `pnix-clr/pnix-clr/examples/README.md` + `FOUNDATION_PATH.md` |
 
-최종 갱신: 2026-08-18 (rs: `pnix-rs check`의 34개 등록 게이트 중 아직 예제
+2026-08-22 갱신: 다섯 호스트에 byte-identical `production-readiness` 예제를
+추가했다. cljs-meta의 15-generation fixed point와 clr-meta의 Compiler
+Stage15/N은 이제 별도 meta 증거로 닫혀 있으므로 두 호스트를 experimental
+seed라고 부르거나 Stage15/N 자체를 비주장으로 두던 문구를 제거했다. 제품과
+meta의 identity는 계속 분리하며, callback/opaque ABI 패리티는 주장하지 않는다.
+
+이전 최종 갱신: 2026-08-18 (rs: `pnix-rs check`의 34개 등록 게이트 중 아직 예제
 없던 16개 — jones/welltyped/cogen/attest/verifying-cache/ir-diff/attenuate/
 phase+assumption/certify/cross-host/stage/reflect-tower/explain+
 capabilities+registry — 를 16–28로 채움. hy: `pnix_stage_ladder`/
 `eval_receipt`/`performance_report` 세 CLI 표면(`--stage-ladder`/
 `--receipt`/`--perf`)에 예제가 없던 것을 36–38로 채움. clr/cljs: 각 제품
 런타임의 클로저(커링+캡처 재사용)에 예제가 없던 것을 16으로 채움 —
-clr-meta/cljs-meta 내부(Stage15/N)는 여전히 승격하지 않음(규칙 4). 규칙
+당시 clr-meta/cljs-meta 내부(Stage15/N)는 제품 주장으로 승격하지 않았음. 규칙
 1·3에 따라 clj/hy 슬라이스 복제가 아니라 각 host 자신의 실행 가능한
 표면만 반영 — 5개 host 전부 이번 감사 완료).
 

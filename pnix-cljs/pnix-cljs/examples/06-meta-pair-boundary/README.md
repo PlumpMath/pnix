@@ -13,8 +13,9 @@
 | **pnix-cljs** (이 패키지) | pnix 런타임: parse/eval, Node export |
 | **cljs-meta** (`pnix-cljs/cljs-meta/`) | 호스트 언어 meta / fixed-point 메커니즘 |
 
-이 `examples/` 카탈로그(00~17)는 **product 쪽만** 보여준다. meta 게이트는
-`cljs-meta` 자체 README/bin을 본다.
+번호 카탈로그(00~17)는 **product 쪽**을 보여준다. 별도
+`production-readiness` 예제만 두 identity를 섞지 않은 채 product 실행과
+`cljs-meta` fixed compiler의 증거/실행을 한 드라이버에서 조합한다.
 
 ## 왜 분리하나
 `pnix-cljs`는 pnix 소스를 파싱/평가하고 Node로 export하는 **제품 런타임**이고,
@@ -24,10 +25,11 @@ ClojureScript를 스스로 컴파일할 수 있나")에 답한다. 섞어서 다
 주장인지 불분명해진다.
 
 ## pnix-cljs의 방식
-- 이 카탈로그의 모든 예제는 `dist/pnix-cljs-module.js`(product 절반)만
-  `require`한다.
+- 번호 카탈로그는 `dist/pnix-cljs-module.js`(product 절반)를 사용한다.
+- `production-readiness`는 `cljs-meta` Stage15 fixed compiler를 별도로
+  require하고 두 결과를 각각 검증한다.
 - `16-closures`처럼 cljs-meta 쪽 세부사항이 관련될 때도, 그 경계를 README에
-  명시하고 넘어가지 않는다(Stage15/N을 여기서 승격하지 않음).
+  명시하고 넘어간다. host-meta fixed point를 제품 의미 패리티로 바꾸지 않는다.
 
 ## 어디에 쓰나
 "이 예제가 제품 주장인가 메타 증명 주장인가"를 헷갈릴 때 참고 기준점.

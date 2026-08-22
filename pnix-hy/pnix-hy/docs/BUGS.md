@@ -114,7 +114,27 @@ Nix 2.34.8 파일 모드로 직접 확인한 결과:
 
 ## 6. 현재 열려있는 진짜 버그
 
-없음(2026-08-20 기준). 열려있는 작업 항목은 전부 `docs/TODO.md`에 있고,
-그중 실제 "버그 수정" 성격인 건 없다(패키징/문서 성격). 새로 버그를
-발견하면 여기 새 섹션으로 추가할 것 — 의도적 placeholder(§1/§2/§3)로
-오인하지 말고, 재현 스텝과 함께 기록할 것.
+없음(2026-08-22 기준). 열려있는 작업 항목은 `docs/TODO.md`에 있고,
+의도적 placeholder/한계는 §1/§2/§3에 있다.
+
+### 해결 이력: host compiler `listToAttrs` 위치 보존 (2026-08-22)
+
+수정 전 `PYTHONPATH=. python3 -m pnix_hy.cli --gate`의 Rust-grounded
+corpus가 1272/1273에서 실패했다. 최소 재현은 다음과 같다.
+
+```nix
+(builtins.unsafeGetAttrPos "a"
+  (builtins.listToAttrs [ { name = "a"; value = 1; } ])).column
+```
+
+인터프리터는 Nix 파일 모드와 같은 `70`을 반환했지만 host compiler
+(`run_px_source`)는 `unsafeGetAttrPos`가 `null`을 반환한 뒤
+`select base must be an attrset`으로 실패한다. 원인은 compiler prelude의
+`_listtoattrs`가 위치 메타데이터를 가진 `_A` 대신 일반 `dict`를 만들고,
+pair의 `value` 위치를 결과 키로 복사하지 않는 것이었다. 명시적 sacred
+변경 승인 뒤 `_listtoattrs`가 `_A`를 만들고 first-wins인 첫 이름의
+`value` 위치를 보존하도록 수정했다. 우회용 두 번째 평가기나 CLI-only
+monkey patch는 만들지 않았다. 수정 후 최소 재현의 interpreter/compiler가
+모두 `70`, `--check` 73/73, production `--gate`의 runtime 1243/1243,
+Rust corpus 1273/1273, four-lane mirror 495×4, Stage15/StageN closure가
+모두 PASS했다.

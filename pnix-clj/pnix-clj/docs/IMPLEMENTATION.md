@@ -420,11 +420,13 @@ clj-meta는 **호스트 언어 증명 레인**이다. (이 절은 예전 `SCOPE_
 - witness / receipt / replay
 - clj-meta host reflection / compiler proof lane
 
-공유 common-`.px` 코어 로딩(외부 `../pnix-meta` 루트에서 로드, 공유 정규
-결과 + held reason 방출, 실제 호스트 IO effect/capability 브리지)도 범위
-안이다 — 기존 `eval-source`/`import`/`tower`/`mirror` 레인의 직접 확장으로
-취급한다(소유자 수정, 2026-07-08). 단 이 공유 `.px` core 자체(`pnix-meta`)는
-사람(저장소 소유자)이 직접 작성할 몫이고, 에이전트가 대신 만들 작업이 아니다.
+공유 common-`.px` 코어 로딩 adapter(외부 `../pnix-meta` 루트, 공유 정규
+결과 + held reason, 실제 호스트 IO effect/capability 브리지)는 미래
+`pnix-meta` 단계에서 이 호스트의 범위가 된다. 기존 `eval-source`/`import`/
+`tower`/`mirror` 레인의 직접 확장으로 취급하되 **현재는 착수하지 않는다**.
+공유 `.px` core 자체와 stdlib/mirror 응용은 저장소 소유자가 나중에 별도
+단계로 여는 일이며, 에이전트가 과거 `.px`를 옮기거나 대신 만드는 작업이
+아니다(최상위 `README.md`의 설계 잠금 우선).
 
 ### 범위 밖
 
@@ -804,7 +806,7 @@ observational-equivalence-reduced bottom-up enumerative synthesizer**
 ## 11. 호스트 라이브러리로 embed하기
 
 (이 절은 예전 `docs/HOST_IMPORT.md`를 흡수한 것 — 2026-08-20 문서 통합.
-정본 이중 축 교리: [`../../HOST_DEV_ENV.md`](../../HOST_DEV_ENV.md).)
+정본 이중 축 교리: [`../../../HOST_DEV_ENV.md`](../../../HOST_DEV_ENV.md).)
 
 `clojure` / `pnix-clj-clj`가 아래를 주입한 뒤 호출 프로젝트가 `pnix-clj`를
 호스트 라이브러리로 로드할 때의 공개 API 표면:
@@ -822,7 +824,7 @@ deprecation 주기 없이 바뀔 수 있다.
 
 | 네임스페이스 | 진입점 | 역할 |
 |--------------|--------|------|
-| **`pnix-clj.core`** | `parse-source`, `eval-source`, **`eval-file`**, `eval-source-with-imports`, `eval-source-strict`, `eval-source-strict-audit`, `lower-source` | `.px` 파싱 / 평가(1차 표면) |
+| **`pnix-clj.core`** | `parse-source`, `eval-source`, **`eval-file`**, **`call-file`**, `eval-source-with-imports`, `eval-source-strict`, `eval-source-strict-audit`, `lower-source` | `.px` 파싱 / 평가 / stdlib 함수 호출 |
 | **`pnix-clj.machine-outcome`** | `eval-source-outcome` | 구조화 Done/Failed/Suspended 프로젝션 |
 | **`pnix-clj.convenience`** | 예제용 헬퍼 | core 위 얇은 설탕(신규 코드는 core 우선) |
 
@@ -837,6 +839,10 @@ deprecation 주기 없이 바뀔 수 있다.
 
 ;; 파일(호스트 언어에서 .px 프로그램 임포트)
 (c/eval-file "path/to/prog.px")
+
+;; attrset 모듈의 curried export를 native Clojure data로 호출
+(c/call-file "path/to/library.px" "double" [21])
+;; => {:status :ok, :value 42}
 
 ;; 메모리 임포트만(FS 없음): target-string -> source 맵
 (c/eval-source-with-imports "import ./lib.px" {"./lib.px" "1 + 1"})

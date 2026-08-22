@@ -1,6 +1,6 @@
 # clr-meta 상태 (peer host-meta floor)
 
-마지막 검증: 2026-08-17.
+마지막 검증: 2026-08-22.
 
 ## Peer-floor 선언
 
@@ -25,7 +25,7 @@ replacement를 주장하지 않는 것과 같은 honesty — 게이트가 닫혀
 
 ## Closed claims
 
-이 세션 live-verified (2026-08-07), `./bin/clr-meta-gate eval-only`:
+2026-08-22 aggregate gate에서 live-verified:
 
 ```text
 bootstrap-test (gen0→1→2 self-interpretation)  ready=true
@@ -36,7 +36,8 @@ tool-gate (-e / file gen2 + strict reader)     PASS
   reader-eval / tagged / trailing / map rejected
 ```
 
-문서화된 closed (heavy C1–C3 게이트; 이 세션 full chain 재실행 아님):
+2026-08-22 aggregate gate에서 heavy C1–C3와 Stage1–N 전체 chain도
+fresh-process로 재실행해 closed를 재확인:
 
 ```text
 checked-I64 Compiler Stage1 family
@@ -505,10 +506,11 @@ selfhost-stage1-gate → selfhost-stage2-gate.
 선호. `PATH` 앞에 `pnix-clr/bin`을 두지 **말 것** — 그 tree가 old `rg`
 shim을 실을 수 있다.
 
-## 마지막 run (이 머신, 2026-08-17)
+## 마지막 run (이 머신, 2026-08-22)
 
 | 게이트 | 결과 | 비고 |
 |---|---|---|
+| `../bin/pnix-clr-gate` | **PASS** | meta Stage1–N + 제품 8-DLL artifact + in-process parity 17/17 + pnix-clr 24 tests/235 assertions + production outcome |
 | `./bin/clr-meta-gate eval-only` | **PASS** | ready=true; 20 tests/245 assertions; tool-gate PASS |
 | full C1–C3/Stage1-N chain (`./scripts/clr-meta-gate --no-build`) | **PASS** | 클로저 슬라이스 여분 확인용으로 이번엔 전체 재실행; bootstrap-test~StageN 전부 PASS, exit 0 |
 | `./scripts/clr-meta-compiler-selfhost-stage3-gate` | **PASS** | Stage2→Stage3 + source-hidden replay |

@@ -1,8 +1,9 @@
 # examples — pnix-clr (ClojureCLR / .NET)
 
-> **성숙도:** experimental seed. 여기서는 **인정된 표면**만 다룬다
-> (pnix-main CLI, 로컬 NuGet/라이브러리 export, C# host-main, 선택적 in-process).  
-> Stage15/N, nuget.org 공개 배포, 다섯 호스트 의미 패리티를 **주장하지 않는다**.
+> **성숙도:** pnix-meta 착수 전 공통 floor가 실행된다
+> (pnix-main CLI, 로컬 NuGet/라이브러리 export, C# host-main,
+> PNIX-in-PNIX, 별도 `clr-meta` Compiler Stage15/N). nuget.org 공개 배포,
+> 다섯 호스트 전체 의미 패리티, 공통 callback/opaque ABI는 별도 문제다.
 
 ## 형제 호스트와 규모
 
@@ -10,7 +11,7 @@
 |--------|----------------------|
 | clj / hy | 연구용 dense 카탈로그 |
 | rs | 중간 pillar 카탈로그 |
-| **clr** | **코어 00–17** (이 트리) — 실표면이 있을 때만 확장 |
+| **clr** | **코어 00–17 + production-readiness** (이 트리) |
 
 공유 테마 표: 모노레포 [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
 
@@ -43,6 +44,7 @@
 | [`15-string-and-version`](15-string-and-version/) | substring · concatStringsSep · splitVersion |
 | [`16-closures`](16-closures/) | 커링 클로저의 바깥 바인딩 캡처 + 다회 재호출 |
 | [`17-repl-session`](17-repl-session/) | `--repl` 대화형 pnix REPL 세션 |
+| [`production-readiness`](production-readiness/) | 공통 `.px` import + PNIX-in-PNIX + Compiler Stage15/N 증거 조합 |
 
 ## 실행 (대표)
 
@@ -50,6 +52,7 @@
 cd pnix-clr
 ./bin/build-pnix-clr-artifact   # artifact 없을 때
 ./bin/pnix-clr pnix-clr/examples/00-foundation/program.px
+./pnix-clr/examples/production-readiness/run.sh
 ./bin/pnix-clr-library-smoke    # 로컬 피드만
 ```
 

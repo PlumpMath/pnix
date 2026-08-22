@@ -505,17 +505,16 @@ promotion은 주장하지 않는다.
 artifact를 build하고 negative matrix를 검사하며, seed `pnix-clr` runtime을
 그 artifact를 통해서만 admit한다. Missing 또는 stale artifact 상태는
 infrastructure/configuration 실패이며, source 또는 bootstrap fallback을
-허가하지 않는다. `pnix-clr`는 common `.px`를 load한다. Unsupported language
-input은 nominal structured `Failed` outcome을 반환; `Held`로 안전하게
-만들지 않는다.
+허가하지 않는다. `pnix-clr`는 현재 host-local `.px` 입력과 모듈을 load하며,
+별도 `pnix-meta` common core를 load하지 않는다. Unsupported language input은
+nominal structured `Failed` outcome을 반환; `Held`로 안전하게 만들지 않는다.
 
-목표 순서는 compiler Stage1, self-reproducing Stage2, 반복 Stage3–7
-convergence, Stage8–15/N hardening, 개별 admit ClojureCLR compatibility
-profile, 그다음에서야 bootstrap-hosted focused facade에서 generated
-compiler tool로 더 넓은 compatibility command 이전이다. PNIX
-common-compiler integration과 CLR host promotion은 그 이후 독립적으로
-닫힌다. `clr-meta/STAGE15_N_ROADMAP.md` 참조. 현재 CLR artifact/adoption
-게이트 통과는 증거이지, established host로서의 자동 교체 또는 admission이
+Compiler Stage1--15/N + StageN과 scoped self-reproduction은 이미 닫혔다.
+다음 순서는 개별 ClojureCLR compatibility profile admission, 그다음
+bootstrap-hosted focused facade에서 generated compiler tool로 더 넓은
+compatibility command 이전이다. PNIX common-compiler integration과 CLR host
+promotion은 그 이후 독립적으로 닫힌다. `clr-meta/STAGE15_N_ROADMAP.md` 참조.
+현재 CLR artifact/adoption 게이트 통과는 ClojureCLR 전체 대체나 host promotion이
 아니다.
 
 ## 6. CLI 허용 표면 — `bin/clojure-clr` / `bin/clr-meta`가 오늘 admit하는 것
@@ -681,7 +680,7 @@ echo '(+ 1 2)' > /tmp/t.clj
 통합, 옛 파일은 삭제됨. **제품 기본값이 아님** — 기본값은 여전히 프로세스
 스폰이다.)
 
-**지원 기본값:** `Pnix.Clr.Eval.Source` / `Eval.File` — **프로세스 스폰**
+**지원 기본값:** `Pnix.Clr.Eval.Source` / `Eval.File` / `Eval.CallFile` — **프로세스 스폰**
 `pnix-clr`, JSON CLI 계약.
 **옵트인:** `Eval.SourceInProcess` / `FileInProcess` — **net10.0+** 전용,
 기본값은 여전히 Process.

@@ -75,6 +75,8 @@ import pnix_hy as ph
 
 ph.eval_source("1 + 2")
 ph.eval_file("prog.px")   # run_px 별칭
+ph.call_file("library.px", "double", [21])
+ph.call_file_json("library.px", "mapDouble", "[[1,2,3]]")
 ```
 
 공개 최상위 export: `pnix_hy.__all__` 참고 (`eval_source`, `eval_file`,
@@ -117,6 +119,7 @@ Cargo 패턴: [pnix-rs/pnix-rs/docs/IMPLEMENTATION.md](pnix-rs/pnix-rs/docs/IMPL
 // Native:
 let s = pnix_rs::eval("1 + 2")?;
 let s = pnix_rs::eval_file("prog.px")?;
+let answer = pnix_rs::call_file_json("library.px", "double", "[21]")?;
 ```
 
 ```c
@@ -148,6 +151,7 @@ pnix-rs px-eval -c '1 + 2'
 pnix-clr-refs          # 첫 실행 시 library export 가능
 pnix-clr -e '1 + 2'
 # C#: $PNIX_CLR_LIBRARY/build/Pnix.Clr.props Import 후 Eval.File / Eval.Source
+#      Eval.CallFile("library.px", "double", "[21]")
 ```
 
 ---
@@ -166,3 +170,11 @@ pnix-clr -e '1 + 2'
 | rs | `pnix-rs px-eval -c '1 + 2'` → `3` | ok |
 | clr | `pnix-clr -e '1 + 2'` → JSON value 3 | ok |
 | helpers | `pnix-*-library` / `pnix-rs-refs` / `pnix-clr-refs` | 경로 출력 |
+
+## 공통 pure-data stdlib 호출 경계 (2026-08-22)
+
+다섯 host library는 `.px` attrset이 export한 curried 함수를 호스트에서 직접
+호출한다. 공통 분모는 JSON-safe 값(정수/실수/문자열/bool/null/list/attrset)이며,
+raw closure나 host-object identity는 경계를 넘지 않는다. 이 경계는 미래
+`pnix-meta`의 순수 stdlib 함수를 쓰기 위한 것이고, callback/opaque/effect ABI와
+혼동하지 않는다. 실행 정본은 `./bin/production-readiness-gate`다.

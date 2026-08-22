@@ -1118,6 +1118,33 @@
     :argument-cell argument-cell}
    {}))
 
+(defn call-module-entry
+  "Apply a named, curried function from a raw PNIX attrset module. Arguments
+  cross this common host ABI as JSON so i64 integers remain exact BigInts and
+  host object identity never leaks into PNIX. Returns a raw PNIX value."
+  [module-value entry arguments-json]
+  (let [module-value (force-cell module-value)]
+    (when-not (instance? AttrsetValue module-value)
+      (evaluation-failure! "type-error"
+                           {"operation" "callFile"
+                            "expected" "attrset-module"}))
+    (when-not (string? entry)
+      (evaluation-failure! "type-error"
+                           {"operation" "callFile"
+                            "expected" "string-entry"}))
+    (when-not (contains? (:fields module-value) entry)
+      (evaluation-failure! "attribute-missing" {"attribute" entry}))
+    (let [arguments (from-json-value arguments-json)]
+      (when-not (vector? arguments)
+        (evaluation-failure! "type-error"
+                             {"operation" "callFile"
+                              "expected" "json-array-arguments"}))
+      (reduce (fn [function-value argument]
+                (apply-value (force-cell function-value)
+                             (value-cell argument)))
+              (force-cell (get (:fields module-value) entry))
+              arguments))))
+
 (defn sort-less? [comparator left-cell right-cell]
   (let [partial (apply-value comparator left-cell)
         result (apply-value partial right-cell)]

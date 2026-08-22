@@ -122,6 +122,36 @@ namespace Pnix.Clr
         }
 
         /// <summary>
+        /// Call a named, curried function exported by a <c>.px</c> attrset
+        /// module. <paramref name="argumentsJson"/> must be a JSON array;
+        /// the result uses the ordinary structured <see cref="EvalResult"/>.
+        /// Raw PNIX closures never cross the process boundary.
+        /// </summary>
+        public static EvalResult CallFile(
+            string path,
+            string entry,
+            string argumentsJson,
+            EvalOptions? options = null)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("path is required", nameof(path));
+            if (string.IsNullOrWhiteSpace(entry))
+                throw new ArgumentException("entry is required", nameof(entry));
+            if (argumentsJson is null)
+                throw new ArgumentNullException(nameof(argumentsJson));
+            using (var document = JsonDocument.Parse(argumentsJson))
+            {
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    throw new ArgumentException(
+                        "argumentsJson must contain a JSON array", nameof(argumentsJson));
+            }
+            var full = System.IO.Path.GetFullPath(path);
+            if (!System.IO.File.Exists(full))
+                throw new FileNotFoundException("pnix library file not found", full);
+            return Run(new[] { "--call-json", full, entry, argumentsJson }, options);
+        }
+
+        /// <summary>
         /// Experimental in-process eval (net10+). Loads ClojureCLR + guest AOT
         /// without <c>Process.Start</c>. Requires substrate + artifact paths
         /// (see <c>pnix-clr/docs/IMPLEMENTATION.md</c> §8). Default supported path remains
@@ -176,6 +206,32 @@ namespace Pnix.Clr
             if (!System.IO.File.Exists(full))
                 throw new FileNotFoundException("pnix source file not found", full);
             return RunAsync(new[] { full }, options, ct);
+        }
+
+        /// <summary>Async <see cref="CallFile"/> using the process-spawn API.</summary>
+        public static Task<EvalResult> CallFileAsync(
+            string path,
+            string entry,
+            string argumentsJson,
+            EvalOptions? options = null,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                throw new ArgumentException("path is required", nameof(path));
+            if (string.IsNullOrWhiteSpace(entry))
+                throw new ArgumentException("entry is required", nameof(entry));
+            if (argumentsJson is null)
+                throw new ArgumentNullException(nameof(argumentsJson));
+            using (var document = JsonDocument.Parse(argumentsJson))
+            {
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    throw new ArgumentException(
+                        "argumentsJson must contain a JSON array", nameof(argumentsJson));
+            }
+            var full = System.IO.Path.GetFullPath(path);
+            if (!System.IO.File.Exists(full))
+                throw new FileNotFoundException("pnix library file not found", full);
+            return RunAsync(new[] { "--call-json", full, entry, argumentsJson }, options, ct);
         }
 
         /// <summary>

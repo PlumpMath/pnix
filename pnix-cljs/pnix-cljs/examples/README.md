@@ -1,8 +1,9 @@
 # examples — pnix-cljs (ClojureScript / Node)
 
-> **성숙도:** experimental seed. 여기서는 **인정된 표면**만 다룬다
-> (parse/eval, Node 라이브러리 import, Done/Failed 결과 모양).  
-> 다섯 호스트 패리티, Stage15/N, 완전한 meta-circular 타워를 **주장하지 않는다**.
+> **성숙도:** pnix-meta 착수 전 공통 floor가 실행된다
+> (parse/eval, Node 라이브러리 import, PNIX-in-PNIX, Done/Failed, 그리고
+> 별도 `cljs-meta`의 15-generation fixed point). 다섯 호스트 전체 의미
+> 패리티나 공통 callback/opaque ABI까지 주장하는 것은 아니다.
 
 ## 형제 호스트와 규모
 
@@ -10,7 +11,7 @@
 |--------|----------------------|
 | clj / hy | 연구용 dense 카탈로그 |
 | rs | 중간 pillar 카탈로그 |
-| **cljs** | **코어 00–17** (이 트리) — 실표면이 있을 때만 확장 |
+| **cljs** | **코어 00–17 + production-readiness** (이 트리) |
 
 공유 테마 표: 모노레포 [`examples/EXAMPLES_BALANCE.md`](../../../examples/EXAMPLES_BALANCE.md).
 
@@ -43,6 +44,7 @@
 | [`15-string-and-version`](15-string-and-version/) | substring · concatStringsSep · splitVersion |
 | [`16-closures`](16-closures/) | 커링 클로저의 바깥 바인딩 캡처 + 다회 재호출 |
 | [`17-repl-session`](17-repl-session/) | `--repl` 대화형 pnix REPL 세션 |
+| [`production-readiness`](production-readiness/) | 공통 `.px` import + PNIX-in-PNIX + Stage15 host-meta 조합 |
 
 ## 실행 (대표)
 
@@ -50,6 +52,7 @@
 cd pnix-cljs
 ./bin/build-cljs   # dist 가 없거나 오래됐을 때
 node pnix-cljs/examples/00-foundation/node.js
+node pnix-cljs/examples/production-readiness/run.js
 # 라이브러리 import 스모크 (모노레포):
 #   ./bin/pnix-cljs-library-smoke
 ```

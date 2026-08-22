@@ -330,6 +330,33 @@
               evaluator/*import-origin* canonical]
       (eval-source (slurp canonical)))))
 
+(defn call-file
+  "Call a named, curried function exported by a `.px` attrset module.
+
+  Arguments and successful results are native Clojure data. This is the
+  pure-data stdlib boundary; arbitrary host callback/object interop remains in
+  pnix-clj.interop with its explicit capability contract."
+  [path entry arguments]
+  (let [module-result (eval-file path)]
+    (if (not= :ok (:status module-result))
+      module-result
+      (let [module (:value module-result)
+            entry (str entry)]
+        (cond
+          (not (map? module))
+          {:status :failed
+           :error {:phase :interop :class :module-not-attrset}}
+
+          (not (contains? module entry))
+          {:status :failed
+           :error {:phase :interop
+                   :class :attribute-missing
+                   :evidence {:attribute entry}}}
+
+          :else
+          (normalize-runtime-result
+           (evaluator/apply-callable-host (get module entry) arguments)))))))
+
 (defn eval-source-with-imports
   "Like eval-source but resolves `import <target>` against the supplied
   in-memory module map (target-string -> pnix source). Pure: no filesystem

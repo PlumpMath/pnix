@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Cross-host floor required before pnix-meta (the shared .px stdlib) begins.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+mode="${1:-}"
+if [[ -n "$mode" && "$mode" != "--full" ]]; then
+  echo "usage: $0 [--full]" >&2
+  exit 2
+fi
+
+fixture_names=(direct.px library.px consumer.px self_interpreter.px)
+host_roots=(
+  pnix-clj/pnix-clj
+  pnix-hy/pnix-hy
+  pnix-rs/pnix-rs
+  pnix-cljs/pnix-cljs
+  pnix-clr/pnix-clr
+)
+
+echo "== byte-identical portable .px floor =="
+for name in "${fixture_names[@]}"; do
+  canonical="$root/examples/production-readiness/$name"
+  [[ -f "$canonical" ]] || { echo "missing $canonical" >&2; exit 1; }
+  for host in "${host_roots[@]}"; do
+    copy="$root/$host/examples/production-readiness/$name"
+    cmp -s "$canonical" "$copy" || {
+      echo "fixture drift: $copy" >&2
+      exit 1
+    }
+  done
+  if command -v sha256sum >/dev/null 2>&1; then
+    digest="$(sha256sum "$canonical" | awk '{print $1}')"
+  else
+    digest="$(shasum -a 256 "$canonical" | awk '{print $1}')"
+  fi
+  echo "  PASS $name $digest"
+done
+
+echo "== per-host runtime / PNIX-in-PNIX / host-meta composition =="
+(
+  cd "$root/pnix-clj/pnix-clj"
+  clojure -M examples/production-readiness/run.clj
+)
+(
+  cd "$root/pnix-hy/pnix-hy"
+  PYTHONPATH=. python3 examples/production-readiness/run.py
+)
+(
+  cd "$root/pnix-rs/pnix-rs"
+  ./examples/production-readiness/run.sh
+)
+(
+  cd "$root/pnix-cljs"
+  node pnix-cljs/examples/production-readiness/run.js
+)
+(
+  cd "$root/pnix-clr"
+  ./pnix-clr/examples/production-readiness/run.sh
+)
+
+echo "== installed/public host import surfaces =="
+import_output="$($root/bin/host-import-smoke)"
+printf '%s\n' "$import_output"
+[[ "$import_output" == *"fail=0 skip=0"* ]] || {
+  echo "production readiness requires every public host import; skips are failures" >&2
+  exit 1
+}
+
+if [[ "$mode" == "--full" ]]; then
+  echo "== exported local host libraries =="
+  "$root/bin/host-library-smokes"
+
+  hy_py="${HY_META_PYTHON:-${PNIX_HY_PYTHON:-}}"
+  if [[ -z "$hy_py" ]]; then
+    command -v nix >/dev/null 2>&1 || {
+      echo "--full needs HY_META_PYTHON/PNIX_HY_PYTHON or nix for pnix-hy's pinned proofPython" >&2
+      exit 1
+    }
+    hy_store="$(cd "$root/pnix-hy" && nix build .#proofPython --no-link --print-out-paths | tail -n 1)"
+    hy_py="$hy_store/bin/python"
+  fi
+  [[ -x "$hy_py" ]] || {
+    echo "Hy proof Python is not executable: $hy_py" >&2
+    exit 1
+  }
+  "$hy_py" -c 'import hy, funcparserlib' >/dev/null
+
+  echo "== full host-owned regression gates =="
+  (cd "$root/pnix-clj" && ./clj-meta/bin/clj-meta-gate)
+  (cd "$root/pnix-clj/pnix-clj" && ./bin/pnix-clj-gate)
+  (cd "$root/pnix-hy" && HY_META_PYTHON="$hy_py" ./hy-meta/bin/hy-meta-gate)
+  (cd "$root/pnix-hy/pnix-hy" && PNIX_HY_PYTHON="$hy_py" PYTHONPATH=. "$hy_py" ./bin/pnix-hy --gate)
+  (cd "$root/pnix-rs" && ./rs-meta/bin/rs-meta-gate check)
+  (
+    cd "$root/pnix-rs/pnix-rs"
+    export RS_META_BOOTSTRAP="${RS_META_BOOTSTRAP:-$root/pnix-rs/rs-meta/target/release/bootstrap}"
+    ./target/release/pnix-rs check
+  )
+  (cd "$root/pnix-cljs" && ./bin/pnix-cljs-gate)
+  (cd "$root/pnix-clr" && ./bin/pnix-clr-gate)
+fi
+
+echo "PASS production-readiness floor (pnix-meta remains unimplemented)"

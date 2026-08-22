@@ -3,7 +3,7 @@
 **대상:** 사람, Claude/Codex 세션, `~/dot-nix` 또는 호스트 flake를 연결하는 모든 이.
 세 번째 명명 체계를 발명하기 전에 이 문서를 읽을 것.
 
-**최종 갱신:** 2026-08-21 (Hy 인터프리터 두 갈래: proofPython vs `dev/{py,cuda}`)  
+**최종 갱신:** 2026-08-22 (프로젝트 계보·meta-first·pnix-meta 보류 범위 잠금)
 **HM 미러:** `~/dot-nix/dev/PNIX-HOSTS.md` (PATH 패키지, ShellCheck 규칙)  
 **상태:** 이중 축 + host-import + **로컬** 라이브러리 피드는 일상 사용에
 **충분히 닫혀 있음**. 선택 제품 트랙: [HOST_ENV_P2_P3.md](HOST_ENV_P2_P3.md).
@@ -55,7 +55,9 @@ CI: `.github/workflows/host-import.yml` (레이아웃 + clj/hy/rs 예제 + libra
    호스트 도구는 PATH에 유지; 역 interop용 library env 유지.
 
 역사적 **pnix-meta** “모든 호스트용 하나의 이식 가능 `.px` 코어”는 **이후**
-트랙. PATH 래퍼나 호스트 라이브러리만으로 닫혔다고 주장하지 말 것.
+트랙. 현재는 새 공통 stdlib/mirror/AI 응용이나 과거 `.px` 이관을 시작하지
+않는다. PATH 래퍼나 호스트 라이브러리만으로 pnix-meta가 닫혔다고 주장하지
+말 것. 전체 계보와 순서는 [README.md § 현재 범위와 계보](README.md#현재-범위와-계보-설계-잠금)가 정본이다.
 
 ---
 
@@ -102,11 +104,11 @@ raw `writeShellApplication` → ShellCheck/GHC 금지).
 
 | 호스트 | 호스트 언어에서 |
 |--------|-----------------|
-| clj | `(pnix-clj.core/eval-file "x.px")` — 공개 API: [IMPLEMENTATION.md §11](pnix-clj/pnix-clj/docs/IMPLEMENTATION.md) |
-| cljs | `require('@plumpmath/pnix-cljs')` → `evalFile` / `evalSource` ([IMPLEMENTATION.md §3](pnix-cljs/pnix-cljs/docs/IMPLEMENTATION.md)) |
-| hy | `import pnix_hy as ph; ph.eval_file("x.px")` (= `run_px`) |
-| rs | `pnix_rs::eval_file("x.px")` / C ABI `pnix_rs_eval` |
-| clr | `Pnix.Clr.Eval.File("x.px")` 또는 `pnix-clr x.px` (JSON CLI 결과) |
+| clj | `(pnix-clj.core/eval-file "x.px")`; stdlib 함수 `(call-file "lib.px" "f" [args])` |
+| cljs | `evalFile` / `evalSource`; stdlib 함수 `callFileValueJson(file, entry, argsJson)` |
+| hy | `ph.eval_file("x.px")`; stdlib 함수 `ph.call_file` / `call_file_json` |
+| rs | `pnix_rs::eval_file`; stdlib 함수 `call_file` / `call_file_json`; C ABI는 `pnix_rs_eval` |
+| clr | `Eval.File`; stdlib 함수 `Eval.CallFile(file, entry, argsJson)` / CLI `--call-json` |
 
 ### CLR 라이브러리 레이아웃 (제품)
 
@@ -124,6 +126,7 @@ C#:
 ```csharp
 using Pnix.Clr;
 var r = Eval.File("hello.px").EnsureDone();
+var answer = Eval.CallFile("library.px", "double", "[21]").EnsureDone();
 ```
 
 Guest AOT `*.clj.dll`은 **ClojureCLR 어셈블리**이며 일반 C# API가 아님.
@@ -182,8 +185,11 @@ dot-nix는 `dev/{clj,cljs,py,rs,cs}/` 아래 (1)–(6)을 구현. PATH만으로 
 
 ## 에이전트가 하지 말아야 할 것
 
-- 호스트 자체 게이트/문서가 말하지 않으면 **Stage15/N**, common-compiler,
-  five-host gate 주장 금지 (특히 clr / cljs).
+- 호스트 자체 receipt/게이트가 명명한 범위 밖의 **Stage15/N**, 언어 전체 대체,
+  common-compiler, five-host common-`.px` gate 주장 금지. 현재 meta 하한은
+  [README.md의 증거 표](README.md#현재-범위와-계보-설계-잠금)를 따를 것.
+- `pnix-meta`, 공통 stdlib, mirror/AI 응용을 현재 작업으로 되살리거나 과거
+  저장소의 `.px`를 맹목적으로 복사하지 말 것.
 - 호스트 `*.dll` / rlib / JS share를 **공통** `.px` 패키지로 취급 금지.
 - home-manager on darwin에 `writeShellApplication` 끌어오기 금지 (ShellCheck/GHC).
 - Hy 주입을 위해 `pkgs.python311` / 전체 `python3Packages` 전역 오버라이드 금지
@@ -197,10 +203,10 @@ dot-nix는 `dev/{clj,cljs,py,rs,cs}/` 아래 (1)–(6)을 구현. PATH만으로 
 
 | 호스트 | 여기서 시작 |
 |--------|-------------|
-| clj | `pnix-clj/CLAUDE.md`, `pnix-clj/README.md`, `pnix-clj/pnix-clj/todo.md` (host import) |
-| cljs | `pnix-cljs/CLAUDE.md`, `pnix-cljs/README.md`, `pnix-cljs/cljs-meta/todo.md` |
+| clj | `pnix-clj/CLAUDE.md`, `pnix-clj/README.md`, `pnix-clj/pnix-clj/docs/TODO.md` |
+| cljs | `pnix-cljs/CLAUDE.md`, `pnix-cljs/README.md`, `pnix-cljs/pnix-cljs/docs/TODO.md`, `pnix-cljs/cljs-meta/todo.md` |
 | hy | `pnix-hy/CLAUDE.md`, `pnix-hy/README.md`, `pnix-hy/pnix-hy/docs/TODO.md` |
-| rs | `pnix-rs/CLAUDE.md`, `pnix-rs/README.md`, `pnix-rs/pnix-rs/todo.md` |
+| rs | `pnix-rs/CLAUDE.md`, `pnix-rs/README.md`, `pnix-rs/pnix-rs/docs/TODO.md` |
 | clr | `pnix-clr/CLAUDE.md`, `pnix-clr/README.md`, `pnix-clr/csharp/Pnix.Clr/README.md`, `pnix-clr/clr-meta/todo.md` |
 
 HM 패키징 진실: `~/dot-nix/dev/PNIX-HOSTS.md`.

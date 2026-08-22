@@ -127,11 +127,11 @@
 
 ### A. clj residual / 제품 residual
 
-| 정본 | `pnix-clj/pnix-clj/todo.md` § REMAINING WORK + `docs/REMAINING_DECISION.md` |
+| 정본 | `pnix-clj/pnix-clj/docs/TODO.md` + `docs/PLANS.md` |
 | 규칙 | 새 residual 메뉴 발명 금지; pillar-driven (M-series) 또는 oracle 분기만 |
 | 다음 후보 (소유자 선택) | machine fragment 성장 (pillar일 때); Phase D **연기** |
 | Host-import 상호작용 | 불필요 — `eval-file` / classpath inject 이미 green |
-| **상세** | `pnix-clj/pnix-clj/todo.md` § “Post host-env plan (2026-08-14)” |
+| **상세** | `pnix-clj/pnix-clj/docs/TODO.md` § “언어 정합성 / 레인 커버리지”·“Machine fragment”, `docs/PLANS.md` § “Conformance Phase D” |
 
 #### Oracle D-type 표면 (2026-08-14) — 충분히 닫힘
 
@@ -168,9 +168,9 @@ Machine differential은 같은 값 대수를 추적 (**~220 rows, 0 diverge**).
 
 ### C. 기타 호스트 residual
 
-| hy | `pnix-hy/pnix-hy/todo.md` — gate green; projection polish만 |
-| rs | `pnix-rs/pnix-rs/todo.md` — substrate-check / stage ladder in rs-meta |
-| cljs | monorepo README 기준 corpus admission 아직 열림 |
+| hy | `pnix-hy/pnix-hy/docs/TODO.md`·`docs/PLANS.md` — gate green; 미확정 연구 후보는 PLANS |
+| rs | `pnix-rs/pnix-rs/docs/TODO.md`·`docs/PLANS.md` — 제품 TODO는 비어 있고 substrate/stage 후속은 PLANS·rs-meta |
+| cljs | `pnix-cljs/pnix-cljs/docs/TODO.md`·`docs/PLANS.md` — 제품 TODO는 비어 있고 미확정 방향은 PLANS |
 
 ---
 

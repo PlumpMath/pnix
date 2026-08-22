@@ -82,16 +82,6 @@ Nix 빌드 시스템과 바이트 단위로 호환되게 만들려는 시도가 
   전달된 컨텍스트 문자열뿐이다. 오라클과 동일한 동작이라 이 호스트만의
   결함이 아니고, 일부러 더 엄격하게 만들지 않았다(오라클과 정확히 같은
   강도로 fail-closed하도록).
-- **`toJSON`이 attrset을 `__toString`/`outPath`로 강제 변환하지 않는다
-  (이번 작업 이전부터 있던, 무관한 사전 존재 격차).** 실제 Nix와 참고
-  구현은 `toJSON { outPath = "/x"; ... }`를 `"/x"`(문자열)로 직렬화하지만,
-  이 호스트의 `to-json-value`는 attrset을 항상 순수 JSON 객체로
-  직렬화한다 — `derivation` 결과처럼 `outPath`가 있는 attrset을 통째로
-  `toJSON`에 넘기면 실제 Nix와 다른 모양이 나온다. 이번 작업은
-  `ContextStringValue` 인식만 `to-json-value`에 추가했고, 이 attrset
-  강제변환 격차는 문자열 컨텍스트와 무관한 기존 동작이라 손대지 않았다
-  — 고치려면 `to-json-value`의 `AttrsetValue` 분기에 `__toString`/
-  `outPath` 우선순위 코어스를 추가해야 한다.
 
 ## Path 값 타입 시뮬레이션 한계 (2026-08-20, 버그 아님)
 

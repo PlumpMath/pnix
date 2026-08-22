@@ -3725,3 +3725,26 @@
   [root path]
   (outcome/capture
    #(realize-value (eval-file* root path (atom {})))))
+
+(defn call-file
+  "Call a named, curried function exported by a `.px` attrset module.
+  Arguments cross as a JSON array and the successful result is ordinary CLR
+  data. Raw closures remain inside the evaluator and are never serialized."
+  [root path entry arguments-json]
+  (outcome/capture
+   #(let [module (force-value (eval-file* root path (atom {})))
+          arguments (json/read-json arguments-json)]
+      (when-not (attrset? module)
+        (outcome/fail! :interop :module-not-attrset {}))
+      (when-not (string? entry)
+        (outcome/fail! :interop :type-error {:expected "string-entry"}))
+      (when-not (contains? (:entries module) entry)
+        (outcome/fail! :interop :attribute-missing {:attribute entry}))
+      (when-not (vector? arguments)
+        (outcome/fail! :interop :type-error
+                       {:expected "json-array-arguments"}))
+      (realize-value
+       (reduce (fn [function-value argument]
+                 (apply-callable (force-value function-value) argument))
+               (force-value (get (:entries module) entry))
+               arguments)))))

@@ -72,7 +72,7 @@ The seed evaluator now exposes a builtins/`lib` surface aimed at the same
   `lib.strings` and common aliases (`lib.sum`, `lib.head`, `assertMsg`, …)
 
 Builtins live inside `evaluator.clj` (with IO helpers in `host.clj`) so the
-nine-namespace artifact plan is unchanged.
+eight-namespace artifact plan is unchanged.
 
 ### Admitted language forms (peer-parity slice)
 

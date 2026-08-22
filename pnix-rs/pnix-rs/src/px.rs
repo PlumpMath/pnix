@@ -15,9 +15,10 @@
 //! behavior. That is the dependency between pnix-rs and rs-meta made
 //! falsifiable.
 //!
-//! Still outside the seed (tracked in todo.md): floats, `+` on strings,
-//! boolean `&& || !` operators, `?` has-attr operator, `builtins.toJSON`,
-//! `rec` attrsets, `with`, paths.
+//! The original seed boundary has since widened to include floats, string
+//! concatenation, boolean/has-attr operators, JSON, recursive attrsets,
+//! `with`, and first-class path values. Current implementation status and
+//! intentional limits live in docs/{IMPLEMENTATION,TODO,BUGS,PLANS}.md.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -4099,7 +4100,12 @@ fn px_apply_outcome(f: &PxVal, a: PxVal) -> Result<PxVal, PxError> {
     }
 }
 
-fn px_apply(f: &PxVal, a: PxVal) -> Result<PxVal, String> {
+/// Apply one already-evaluated PNIX callable to one PNIX value.
+///
+/// This is public for the host-library boundary: a host may keep a module
+/// value opaque, select an exported closure, and apply JSON-converted data
+/// without rendering the closure as text or inventing a second evaluator.
+pub fn px_apply(f: &PxVal, a: PxVal) -> Result<PxVal, String> {
     px_apply_outcome(f, a).map_err(px_error_into_diagnostic)
 }
 

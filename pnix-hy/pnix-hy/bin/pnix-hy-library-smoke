@@ -15,7 +15,10 @@ fi
 
 echo "== pnix-hy-library-smoke (local feed only) =="
 
-if [[ ! -f "$out/manifest.json" ]]; then
+if [[ ! -f "$out/manifest.json" ]] || \
+   [[ "$pkg_root/pnix_hy/__init__.py" -nt "$out/manifest.json" ]] || \
+   [[ "$pkg_root/pnix_hy/pnix_runtime.py" -nt "$out/manifest.json" ]] || \
+   ! grep -q 'call_file' "$out/site/pnix_hy/__init__.py" 2>/dev/null; then
   if [[ "$no_export" -eq 1 ]]; then
     echo "FAIL: missing $out/manifest.json — run export-pnix-hy-library" >&2
     exit 1
@@ -36,18 +39,33 @@ fi
 py=python3
 command -v python3 >/dev/null 2>&1 || py=python
 
-px="$(mktemp "${TMPDIR:-/tmp}/pnix-hy-lib-smoke.XXXXXX.px")"
-trap 'rm -f "$px"' EXIT
+tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/pnix-hy-lib-smoke.XXXXXX")"
+px="$tmp_root/program.px"
+library="$tmp_root/library.px"
+trap 'rm -rf "$tmp_root"' EXIT
 printf '%s\n' '1 + 2' >"$px"
+printf '%s\n' '{ double = x: x * 2; }' >"$library"
 
 val="$(
-  PYTHONPATH="$out/site${PYTHONPATH:+:$PYTHONPATH}" \
-    "$py" -c "import pnix_hy as ph; print(ph.eval_file('$px'))"
+  "$py" -c \
+    'import sys; sys.path.insert(0, sys.argv[1]); import pnix_hy as ph; print(ph.eval_file(sys.argv[2]))' \
+    "$out/site" "$px"
 )"
 if [[ "$val" != "3" ]]; then
   echo "FAIL: eval_file via export => '$val' (want 3)" >&2
   exit 1
 fi
-echo "  OK  eval_file via PYTHONPATH export => 3"
+echo "  OK  eval_file via exported site => 3"
+
+called="$(
+  "$py" -c \
+    'import sys; sys.path.insert(0, sys.argv[1]); import pnix_hy as ph; print(ph.call_file(sys.argv[2], "double", [21]))' \
+    "$out/site" "$library"
+)"
+if [[ "$called" != "42" ]]; then
+  echo "FAIL: call_file via export => '$called' (want 42)" >&2
+  exit 1
+fi
+echo "  OK  call_file via exported site => 42"
 
 echo "== summary: PASS (local library only; not PyPI) =="

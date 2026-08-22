@@ -14,8 +14,9 @@ ok() { echo "  OK  $*"; pass=$((pass + 1)); }
 bad() { echo "  FAIL $*"; fail=$((fail + 1)); }
 skp() { echo "  SKIP $*"; skip=$((skip + 1)); }
 
-TMP="$(mktemp /tmp/pnix-import-smoke.XXXX.px)"
-trap 'rm -f "$TMP"' EXIT
+tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/pnix-import-smoke.XXXXXX")"
+TMP="$tmp_root/program.px"
+trap 'rm -rf "$tmp_root"' EXIT
 printf '%s\n' '1 + 2' >"$TMP"
 
 echo "== host-import-smoke =="

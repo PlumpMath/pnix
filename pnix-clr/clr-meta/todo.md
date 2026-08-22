@@ -263,7 +263,7 @@ widening, Stage8, Stage9, Stage10–15/N 각각) — 각 item 자체 항목에�
 
 - Stage1–7 same-source recompile ladder (C0–C3 checkpoints, Stage3–7 게이트).
 - generic `clr-meta` CLR artifact builder / `host-clojureclr-aot` /
-  `pnix-clr` 9-namespace-DLL manifest binding.
+  `pnix-clr` 8-namespace-DLL manifest binding.
 - Trusting-Trust independent mini backend (compiler-side DDC), 8 fixture,
   `bootstrap-test`에 연결.
 - `gen0→1→2` evaluator-generation self-interpretation agreement.

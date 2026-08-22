@@ -1,0 +1,28 @@
+let
+  eval = node:
+    if node.tag == "literal" then node.value
+    else if node.tag == "add" then (eval node.left) + (eval node.right)
+    else if node.tag == "multiply" then (eval node.left) * (eval node.right)
+    else if node.tag == "equal" then (eval node.left) == (eval node.right)
+    else if node.tag == "if" then
+      if (eval node.condition) then eval node.yes else eval node.no
+    else builtins.throw "unsupported pnix self-interpreter node";
+
+  program = {
+    tag = "if";
+    condition = {
+      tag = "equal";
+      left = { tag = "add"; left = { tag = "literal"; value = 19; }; right = { tag = "literal"; value = 2; }; };
+      right = { tag = "literal"; value = 21; };
+    };
+    yes = {
+      tag = "multiply";
+      left = { tag = "add"; left = { tag = "literal"; value = 19; }; right = { tag = "literal"; value = 2; }; };
+      right = { tag = "literal"; value = 2; };
+    };
+    no = { tag = "literal"; value = 0; };
+  };
+in {
+  mode = "pnix-in-pnix";
+  value = eval program;
+}

@@ -15,7 +15,7 @@ fi
 
 echo "== pnix-rs-library-smoke (local feed only) =="
 
-if [[ ! -f "$out/manifest.json" ]]; then
+if [[ ! -f "$out/manifest.json" || "$crate/src/lib.rs" -nt "$out/manifest.json" ]]; then
   if [[ "$no_export" -eq 1 ]]; then
     echo "FAIL: missing $out/manifest.json — run export-pnix-rs-library" >&2
     exit 1
@@ -61,6 +61,19 @@ if command -v cargo >/dev/null 2>&1; then
       exit 1
     fi
     echo "  OK  path-dep pnix-rs-smoke eval_file => 3"
+    tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/pnix-rs-call-smoke.XXXXXX")"
+    trap 'rm -rf "$tmp_root"' EXIT
+    library="$tmp_root/library.px"
+    printf '%s\n' '{ double = x: x * 2; }' >"$library"
+    called="$(
+      cd "$mini"
+      cargo run -q -- --call "$library" double '[21]'
+    )"
+    if [[ "$called" != "42" ]]; then
+      echo "FAIL: path-dep call_file_json => '$called' (want 42)" >&2
+      exit 1
+    fi
+    echo "  OK  path-dep pnix-rs-smoke call_file_json => 42"
   else
     echo "  SKIP path-dep mini crate (not in tree: $mini)"
   fi

@@ -18,11 +18,16 @@ echo "== pnix-clr-library-smoke (local feed only) =="
 need_export=0
 if [[ ! -f "$lib/manifest.json" ]]; then
   need_export=1
+elif [[ "$root/csharp/Pnix.Clr/Eval.cs" -nt "$lib/manifest.json" ]] || \
+     [[ "$root/pnix-clr/src/pnix_clr/evaluator.clj" -nt "$lib/manifest.json" ]] || \
+     [[ "$root/pnix-clr/src/pnix_clr/main.clj" -nt "$lib/manifest.json" ]]; then
+  echo "  source is newer than the exported library — will re-export"
+  need_export=1
 elif ! command -v strings >/dev/null 2>&1; then
   # can't check API symbols; re-export if forced
   :
-elif ! strings "$lib/lib/net10.0/Pnix.Clr.dll" 2>/dev/null | grep -q 'SourceInProcess'; then
-  echo "  exported Pnix.Clr.dll lacks SourceInProcess — will re-export"
+elif ! strings "$lib/lib/net10.0/Pnix.Clr.dll" 2>/dev/null | grep -q 'CallFile'; then
+  echo "  exported Pnix.Clr.dll lacks CallFile — will re-export"
   need_export=1
 fi
 
@@ -59,7 +64,11 @@ if command -v strings >/dev/null 2>&1; then
     echo "FAIL: net10 Pnix.Clr.dll missing FileInProcess after export" >&2
     exit 1
   fi
-  echo "  OK  net10 API includes SourceInProcess / FileInProcess"
+  if ! strings "$lib/lib/net10.0/Pnix.Clr.dll" | grep -q 'CallFile'; then
+    echo "FAIL: net10 Pnix.Clr.dll missing CallFile after export" >&2
+    exit 1
+  fi
+  echo "  OK  net10 API includes SourceInProcess / FileInProcess / CallFile"
 fi
 
 # nupkg layout gate (reuses pack)
@@ -87,6 +96,20 @@ if [[ -x "$root/bin/pnix-clr" ]] && command -v dotnet >/dev/null 2>&1; then
       exit 1
     fi
     echo "  OK  HelloPnix process-spawn => 3"
+  fi
+  readiness_library="$root/pnix-clr/examples/production-readiness/library.px"
+  if [[ -f "$readiness_library" ]]; then
+    called="$(
+      cd "$root"
+      dotnet run --project csharp/examples/HelloPnix -c Release -v q -- \
+        --call "$readiness_library" double '[21]' 2>/dev/null \
+        | awk 'NF{line=$0} END{print line}' | tr -d '[:space:]'
+    )"
+    if [[ "$called" != "42" ]]; then
+      echo "FAIL: HelloPnix CallFile => '$called' (want 42)" >&2
+      exit 1
+    fi
+    echo "  OK  HelloPnix CallFile => 42"
   fi
 fi
 

@@ -1,14 +1,16 @@
 # clr-meta
 
 `clr-meta`는 `pnix-clr` 아래의 PNIX-agnostic ClojureCLR host bootstrap이다.
-네 개의 의도적으로 분리된 메커니즘을 유지한다: focused evaluator
+다섯 개의 의도적으로 분리된 메커니즘을 유지한다: focused evaluator
 self-interpretation witness, profile-qualified direct-IL Compiler Stage1,
 admitted·executable same-language selfhost Compiler Stage1-to-Stage2
-family, generic host-ClojureCLR AOT runtime-artifact builder.
+family와 Stage3--15/N ladder, scoped compiler self-reproduction/fixed point,
+generic host-ClojureCLR AOT runtime-artifact builder.
 
 ## 상태 / primary 게이트
 
-[STATUS.md](STATUS.md) 참조. Primary 게이트: `./bin/clr-meta-gate` (eval-only 또는 full C0–C3 chain).
+[STATUS.md](STATUS.md) 참조. Primary 게이트: `./bin/clr-meta-gate`
+(eval-only 또는 full Compiler Stage1--15/N + StageN chain).
 
 ## Evaluator generation
 
@@ -152,11 +154,23 @@ target을 실행한다. C3 gate receipt가 `stage2_fresh_target_replay=true`의
 grandchild target으로 전달되어, 그 관찰을 general compiler correctness로
 업그레이드하지 않고 one-generation propagation을 증명한다.
 
-C3는 정확히 Compiler Stage2와 source-hidden fresh-target replay를 닫는다.
-Compiler Stage3, self-reproduction, Stage15/N, fixed point, raw PE
-reproducibility, host-free bootstrap, full Clojure surface, ClojureCLR
-replacement, PNIX product/compiler integration, cross-host canonical
-equivalence, host promotion은 false로 남는다.
+C3 receipt 자체는 정확히 Compiler Stage2와 source-hidden fresh-target replay만
+닫는다. Later receipts가 이 역사적 C3 경계를 덮어쓰지 않는다.
+
+## Later compiler ladder (현재 상태)
+
+C3 이후 별도 게이트가 같은 정규 compiler source의 Stage3--7 recompile,
+Stage8 reproducible assembly policy, Stage9 clean-process replay,
+Stage10--15/N 및 StageN policy/replay closure를 닫는다. 별도
+`clr-meta-compiler-self-reproduction-check`는 Stage1--7
+`PersistedAssemblyBuilder` output의 동일 SHA-256 fixed point를 닫는다. 모든
+receipt는 `promotion/allowed?=false`다. 상세와 현재 증거는
+[`STATUS.md`](STATUS.md), 단계 정의는 [`STAGE15_N_ROADMAP.md`](STAGE15_N_ROADMAP.md)를
+따른다.
+
+여전히 false인 것은 general CLR IL fixed point, host-free bootstrap, full
+Clojure surface, broad ClojureCLR replacement, PNIX product/compiler integration,
+cross-host canonical equivalence, host promotion이다.
 
 ## Runtime artifact builder
 
@@ -193,6 +207,9 @@ clr-meta/scripts/clr-meta-compiler-stage1-gate
 clr-meta/scripts/clr-meta-compiler-selfhost-admission-gate
 clr-meta/scripts/clr-meta-compiler-selfhost-stage1-gate
 clr-meta/scripts/clr-meta-compiler-selfhost-stage2-gate
+clr-meta/scripts/clr-meta-compiler-selfhost-stage15-gate
+clr-meta/scripts/clr-meta-compiler-selfhost-stagen-gate
+clr-meta/scripts/clr-meta-compiler-self-reproduction-check
 ./bin/build-pnix-clr-artifact
 clr-meta/scripts/clr-meta-gate
 ```
@@ -201,15 +218,12 @@ clr-meta/scripts/clr-meta-gate
 명명한다. `bin/clojure-clr`는 generation 2를 통한 `-e`와 single-file
 evaluation만 admit하고 broader command profile을 거부하는 focused
 compatibility facade다. 여전히 그 trust root가 host하며, self-reproducing
-`clr-meta` compiler가 뒷받침하지 않는다.
+`clr-meta` compiler가 그 facade의 실행 backend를 맡지는 않는다.
 
-이는 evaluator self-interpretation, exact checked-Int64 expression Compiler
-Stage1 profile, 별도 버전 selfhost kernel source의 complete static admission,
-C2 executable selfhost Stage1 artifact, C3 same-source executable Stage2와
-source-hidden fresh-target replay를 증명한다. Compiler Stage3, compiler
-self-reproduction, Stage15/N, IL fixed point, raw AOT/PE rebuild determinism,
-full Clojure language/command surface, ClojureCLR replacement, unbundled
-lineage의 standalone replay, PNIX semantics/compiler integration, cross-host
-canonical equivalence를 증명하지 않는다. exact current claim은
-`CLR_BOOTSTRAP.md`와 emitted receipt를, ordered open target은
-`STAGE15_N_ROADMAP.md`를 참조.
+이는 evaluator self-interpretation, exact checked-Int64 Compiler Stage1,
+selfhost kernel의 Stage1--15/N + StageN chain, scoped Stage1--7 compiler
+self-reproduction/fixed point를 증명한다. general CLR IL fixed point, full
+Clojure language/command surface, broad ClojureCLR replacement, unbundled
+standalone replay, PNIX semantics/compiler integration, cross-host canonical
+equivalence는 증명하지 않는다. exact current claim은 `STATUS.md`와 emitted
+receipt를, 경계와 후속 순서는 `STAGE15_N_ROADMAP.md`를 참조.

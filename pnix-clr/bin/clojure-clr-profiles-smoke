@@ -54,7 +54,9 @@ else
 fi
 
 # --- tool-eval-multi: multi-form file ---
-multi_tmp="$(mktemp "${TMPDIR:-/tmp}/clojure-clr-multi.XXXXXX.clj")"
+tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/clojure-clr-profiles.XXXXXX")"
+multi_tmp="$tmp_root/multi.clj"
+trap 'rm -rf "$tmp_root"' EXIT
 printf '%s\n' '(+ 1 2)' '(+ 20 22)' >"$multi_tmp"
 if multi_out="$("$root/bin/clojure-clr" --multi-form "$multi_tmp" 2>/dev/null)"; then
   if echo "$multi_out" | grep -q ':profile :tool-eval-multi' \
@@ -66,8 +68,6 @@ if multi_out="$("$root/bin/clojure-clr" --multi-form "$multi_tmp" 2>/dev/null)";
 else
   bad "tool-eval-multi --multi-form failed"
 fi
-rm -f "$multi_tmp"
-
 # --- tool-eval-multi: --multi-e ---
 if multi_e_out="$("$root/bin/clojure-clr" --multi-e $'(+ 1 2)\n(+ 20 22)' 2>/dev/null)"; then
   if echo "$multi_e_out" | grep -q ':value 42'; then

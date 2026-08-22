@@ -15,7 +15,9 @@ pinned ClojureCLR bootstrap trust root
 두 레이어는 의도적으로 분리된다. `clr-meta`는 PNIX 비의존 호스트 기계다.
 제품 소유 `pnix-clr/runtime-artifact.edn` 플랜을 받아 정확한 소스 클로저를 검증하고
 선언된 CLR AOT 아티팩트를 만든다; PNIX 제품 네임스페이스를 하드코딩하지 않는다.
-`pnix-clr`는 그 아티팩트를 검증·로드한다. 직접 컴파일러 가속과 common-compiler 배선은
+`pnix-clr`는 그 아티팩트를 검증·로드한다. `clr-meta`의 selfhost compiler는
+Stage15/N과 scoped fixed point까지 닫혔지만, 현재 제품 backend는 별도
+`host-clojureclr-aot`다. 직접 compiler acceleration과 common-compiler 배선은
 후속 작업이다. pin된 CLR substrate는 업스트림 `Clojure` NuGet 패키지
 (`1.12.3-alpha8`)이며 `clr-bootstrap/`에서 `bin/build-clr`가 게시한다.
 업스트림 컴파일러 소스는 여기에 벤더하지 않는다.
@@ -76,37 +78,20 @@ self-interpretation 레인이며 컴파일러 스테이지가 아니다. 그 중
 15회 self-extension으로 늘리려는 시도는 CLR 스택을 소진한다. 따라서 generation
 수나 그 실험은 컴파일러 Stage15/N 증거가 아니다.
 
-별도로 `clr-meta`는 첫 profile-qualified Compiler Stage1을 닫는다: 정확한
-`System.Int64` 리터럴, dynamic `arg`, checked binary `+`, `-`, `*`를 AOT-seeded
-ClojureCLR 작성 컴파일러가 실행 가능 managed PE로 직접 lower한다. Stage2/self-reproduction이
-아니며 `clojure-clr` 호환 파사드를 넓히지 않는다.
+별도로 `clr-meta`에는 두 compiler family가 있다. 좁고 frozen된 checked-Int64
+Compiler Stage1과, macro-free 정규 compiler kernel을 같은 언어로 재컴파일하는
+selfhost family다. 후자는 C0/C1 admission, 실행 가능한 Stage1/2, Stage3--7
+same-source chain, Stage8 재현 artifact, Stage9 clean-process replay,
+Stage10--15/N과 StageN closure를 live gate로 닫았다. Stage1--7 assembly output의
+scoped self-reproduction/fixed point도 별도 receipt로 닫혔다. 현재 정본은
+[`clr-meta/STATUS.md`](clr-meta/STATUS.md)다.
 
-그 frozen expression family 너머 경로는 별도 버전 `clr-meta` selfhost family에서
-시작한다. C0/C1 게이트는 macro-free 컴파일러 소스 언어와 정확한 low-level support
-ABI를 고정한 뒤, 최종적으로 컴파일해야 할 같은 언어에 대해 정규 컴파일러 소스를
-재귀적으로 허용한다. C2는 명시적 pinned-host B0 경계를 써서 소스-숨김 실행 가능
-Compiler Stage1 PE(27 prepared methods, stack-verified transactional PE sink,
-필수 C1/toolchain closure)를 만든다. 생성된 컴파일러는 신선한 same-language
-타겟을 실행하고 세 frozen mutation anchor를 전파한다. C2 매니페스트는
-`compiler_stage2=false`인 역사적 Stage1 receipt로 남는다.
+이 증거는 general CLR IL fixed point나 ClojureCLR 전체 대체가 아니다. 모든
+stage receipt는 `promotion/allowed?=false`이고, `pnix-clr` 제품 아티팩트는 여전히
+별도 선언 `host-clojureclr-aot` backend를 쓰며 selfhost StageN compiler를 직접
+소비하지 않는다.
 
-C3는 별도 override-style child를 빌드한다: 허용된 Stage1이 동일 정규 커널 소스를
-실행 가능 Stage2로 컴파일한다. child에는 `CompilerStage2.dll`, support triplet,
-자체 hash-bound 매니페스트만 있고 Stage1 PE, C2 매니페스트, 컴파일러 소스,
-ClojureCLR은 제외한다. 별도 C3 게이트는 컴파일러 소스와 부모 아티팩트를 숨기고
-post-Stage2 랜덤 nonce 타겟을 만들어 Stage2로 컴파일한 뒤 두 번째 신선한
-target/support-only 디렉터리에서 실행한다. 이렇게 `clr-meta`는 C3에서
-`compiler_stage2=true`와 `stage2_fresh_target_replay=true`를 닫는다. Stage3,
-compiler self-reproduction, fixed point, raw reproducibility, Stage15/N,
-ClojureCLR 대체, PNIX product/compiler 통합, 크로스호스트 정규 등가는 닫지 않는다.
-특히 현재 `pnix-clr` 제품 아티팩트는 별도 선언 `host-clojureclr-aot` 백엔드를
-쓰며 Stage2 컴파일러를 소비하지 않는다.
-게이트는 37 forms / 36 definitions의 모든 2,237 노드를 계산하고, 33-call support
-ABI와 12 lowering owner를 묶으며, C1 receipt 없이 23 adversarial admission 입력을
-거부한다; 별도 C2 게이트는 16 structured no-output execution 케이스와 4 no-replace
-publication 케이스를 추가한다.
-
-아티팩트 빌드는 정확한 9-namespace 제품 플랜을 소비하고 9개의 `.clj.dll`과
+아티팩트 빌드는 정확한 8-namespace 제품 플랜을 소비하고 8개의 `.clj.dll`과
 `manifest.json`을 낸다. 매니페스트는 `host-clojureclr-aot` 백엔드, `net10.0` 타겟,
 entry namespace, plan digest, ordered source/output rows, 두 closure digests를 기록한다.
 모든 제품 기동에서 `bin/pnix-clr`는 이 정체성을 live plan, source tree, artifact
@@ -465,5 +450,4 @@ builtins.warn "경고: deprecated 함수 사용" "foo"
 
 # builtins.assert (1 + 1 == 2) "수학이 잘못됨!"
 >> {"error":{"class":"syntax-error","evidence":{"actual":"assert","expected":"ident","offset":9,"reason":"unexpected-token"},"phase":"parse"},"host":"pnix-clr","outcome_kind":"failed","schema":"pnix-clr.cli-result.v1"}
-
 

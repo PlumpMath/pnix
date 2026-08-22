@@ -11,6 +11,8 @@
 7. **`06-meta-pair-boundary`** — 제품 절반 vs meta 절반.
 8. **`07`–`10`** — builtins · 파일 평가 · rec/let · JSON 관측 투영.
 9. **`11`–`15`** — 리스트 고차 · with/merge · 패턴 람다 · tryEval · 문자열/버전.
+10. **`production-readiness`** — 동일 `.px` library import, PNIX-in-PNIX,
+    Stage15 `cljs-meta` fixed compiler를 한 실행으로 조합.
 
 더 깊은 specialize / machine / oracle 예제는 다른 host 트리에 있다(이 트리는
 자기완결이라 그쪽을 참조/공유하지 않음 — `../HOST_DEV_ENV.md` 참고).

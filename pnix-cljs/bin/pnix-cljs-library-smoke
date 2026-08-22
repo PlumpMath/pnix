@@ -16,7 +16,9 @@ fi
 
 echo "== pnix-cljs-library-smoke (local feed only) =="
 
-if [[ ! -f "$out/manifest.json" ]]; then
+if [[ ! -f "$out/manifest.json" ]] || \
+   [[ "$product/dist/pnix-cljs-module.js" -nt "$out/manifest.json" ]] || \
+   ! grep -q 'callFileValueJson' "$out/share/pnix-cljs/pnix-cljs-module.js" 2>/dev/null; then
   if [[ "$no_export" -eq 1 ]]; then
     echo "FAIL: missing $out/manifest.json — run export-pnix-cljs-library" >&2
     exit 1
@@ -35,15 +37,22 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-px="$(mktemp "${TMPDIR:-/tmp}/pnix-cljs-lib-smoke.XXXXXX.px")"
-trap 'rm -f "$px"' EXIT
+tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/pnix-cljs-lib-smoke.XXXXXX")"
+px="$tmp_root/program.px"
+library="$tmp_root/library.px"
+trap 'rm -rf "$tmp_root"' EXIT
 printf '%s\n' '1 + 2' >"$px"
+printf '%s\n' '{ double = x: x * 2; }' >"$library"
 
 export NODE_PATH="$out/lib/node_modules:$out/share/pnix-cljs${NODE_PATH:+:$NODE_PATH}"
+scoped_package="$out/lib/node_modules/@plumpmath/pnix-cljs"
+flat_module="$out/share/pnix-cljs/pnix-cljs-module.js"
 
-# Scoped require
+# Require the exact exported package path.  A Nix-provided node wrapper can
+# prepend its own NODE_PATH and otherwise make this local-export smoke test an
+# older installed package instead of the artifact under test.
 scoped="$(
-  node -e "const p=require('@plumpmath/pnix-cljs'); process.stdout.write(String(p.evalFileValueJson(process.argv[1])))" "$px"
+  node -e "const p=require(process.argv[1]); process.stdout.write(String(p.evalFileValueJson(process.argv[2])))" "$scoped_package" "$px"
 )"
 if [[ "$scoped" != "3" ]]; then
   echo "FAIL: scoped require evalFileValueJson => '$scoped' (want 3)" >&2
@@ -51,9 +60,18 @@ if [[ "$scoped" != "3" ]]; then
 fi
 echo "  OK  require('@plumpmath/pnix-cljs') => 3"
 
+called="$(
+  node -e "const p=require(process.argv[1]); process.stdout.write(p.callFileValueJson(process.argv[2], 'double', '[21]'))" "$scoped_package" "$library"
+)"
+if [[ "$called" != "42" ]]; then
+  echo "FAIL: scoped require callFileValueJson => '$called' (want 42)" >&2
+  exit 1
+fi
+echo "  OK  require('@plumpmath/pnix-cljs').callFileValueJson => 42"
+
 # Flat fallback
 flat="$(
-  node -e "const p=require('pnix-cljs-module.js'); process.stdout.write(String(p.evalFileValueJson(process.argv[1])))" "$px"
+  node -e "const p=require(process.argv[1]); process.stdout.write(String(p.evalFileValueJson(process.argv[2])))" "$flat_module" "$px"
 )"
 if [[ "$flat" != "3" ]]; then
   echo "FAIL: flat require => '$flat' (want 3)" >&2

@@ -3,16 +3,17 @@
 ## 쉽게 말하면 (비유)
 모노레포의 다섯 호스트는 전부 "제품 런타임 절반 + 메타 증명 절반"의 쌍이다.
 이 예제는 그 쌍의 **어느 쪽을 이 카탈로그가 다루는지**를 명시적으로 긋는다 —
-`00`–`17`의 모든 명령은 pnix-clr **제품** 쪽만 건드리고, `clr-meta`의
-Stage1–15/N 사다리 쪽은 건드리지 않는다.
+`00`–`17`의 명령은 pnix-clr **제품** 쪽을 다룬다. 별도
+`production-readiness` 드라이버는 제품 runtime과 `clr-meta` evaluator 및
+Compiler Stage15/N receipt를 identity를 섞지 않은 채 조합한다.
 
 | 절반 | 역할 |
 |------|------|
 | **pnix-clr** (이 패키지) | pnix 런타임 + 라이브러리 export + C# host-main |
-| **clr-meta** (`pnix-clr/clr-meta/`) | ClojureCLR meta 컴파일러 사다리 (Stage 설계 문서) |
+| **clr-meta** (`pnix-clr/clr-meta/`) | ClojureCLR meta 컴파일러 Stage1–15/N + fixed-point 증거 |
 
-제품 예제는 여기에 둔다. Stage 사다리 정직성/영수증은 `clr-meta/` 에 있다 —
-이 카탈로그에서 Stage15/N 을 승격하지 않는다.
+제품 예제는 여기에 둔다. Stage 사다리 정직성/영수증의 정본은 `clr-meta/`에
+있고, readiness 예제는 그것을 제품 구현으로 복사하지 않고 소비한다.
 
 ## 왜 분리하나
 `pnix-clr`는 ClojureCLR 위에서 pnix 소스를 파싱/평가하고 C#으로 export하는

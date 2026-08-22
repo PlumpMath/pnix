@@ -11251,13 +11251,16 @@ def _replace(froms,tos,text):
             i+=plen
     return "".join(out)
 def _listtoattrs(xs):
-    out={}
+    out=_A()
     for item in _force(xs):
         d=_force(item)
         if not isinstance(d,dict): raise Exception("builtins.listToAttrs element must be attrset")
         n=_str(d.get("name"),"builtins.listToAttrs name")
         if "value" not in d: raise Exception("builtins.listToAttrs element is missing `value`")
-        if n not in out: out[n]=d["value"]
+        if n not in out:
+            out[n]=d["value"]
+            value_pos=getattr(d,"attr_positions",{}).get("value")
+            if value_pos is not None: out.attr_positions[n]=value_pos
     return out
 def _hasattr(nm,m):
     nm=_force(nm)
@@ -13864,6 +13867,48 @@ def run_px(path: str) -> Any:
         return run_px_source_raw(read_px_file(resolved), ctx, realize=True)
     finally:
         stack.pop()
+
+
+def call_file(path: str | Path, entry: str, arguments: list[Any] | tuple[Any, ...]) -> Any:
+    """Call a named, curried function from a `.px` attrset module.
+
+    The compiled module and closures stay raw inside one compiler namespace;
+    only JSON-safe/native Python data crosses the public boundary. This avoids
+    turning closures into display strings and reuses the normal import loader.
+    """
+    if not isinstance(arguments, (list, tuple)):
+        pnix_error("call_file arguments must be a list or tuple")
+    resolved = Path(path).expanduser().resolve()
+    ctx = runtime_context(
+        {"base_dir": str(resolved.parent),
+         "source_path": str(resolved),
+         "path_literals_absolute": True}
+    )
+    namespace: dict[str, Any] = {}
+    module = run_px_source_raw(
+        read_px_file(resolved),
+        ctx,
+        realize=False,
+        runtime_namespace=namespace,
+    )
+    module = namespace["_force"](module)
+    if not isinstance(module, dict):
+        pnix_error("call_file module must be an attrset")
+    if entry not in module:
+        pnix_error(f"call_file missing entry `{entry}`", error_class="attribute-missing")
+    current = namespace["_force"](module[entry])
+    for argument in arguments:
+        current = namespace["_apply"](current, namespace["_tv"](argument))
+    return namespace["_realize"](current)
+
+
+def call_file_json(path: str | Path, entry: str, arguments_json: str) -> str:
+    """JSON-safe common host ABI for pure `.px` library entrypoints."""
+    arguments = json.loads(arguments_json)
+    if not isinstance(arguments, list):
+        pnix_error("call_file_json arguments must be a JSON array")
+    result = call_file(path, entry, arguments)
+    return json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def import_self_test_cases() -> list[dict[str, Any]]:
